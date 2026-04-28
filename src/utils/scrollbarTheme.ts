@@ -14,10 +14,10 @@ export interface ScrollbarThemeConfig {
 export const scrollbarThemes: Record<string, ScrollbarThemeConfig> = {
   // ── Clinic Clarity (new themes) ───────────────────────────────────────────
   "theme-light": {
-    thumb: "15 118 110", // teal-700
-    track: "240 253 250", // teal-50
-    border: "204 251 241", // teal-100
-    hover: "13 148 136", // teal-600
+    thumb: "3 86 161", // teal-700 (ProCare Blue)
+    track: "240 247 255", // teal-50
+    border: "224 239 254", // teal-100
+    hover: "2 109 199", // teal-600
   },
   "theme-dark": {
     thumb: "45 212 191", // teal-400

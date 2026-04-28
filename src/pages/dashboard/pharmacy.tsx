@@ -44,7 +44,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Chip } from "@/components/ui/chip";
-const Divider = () => <hr className="border-mountain-100 my-2" />;
+const Divider = () => <hr className="border-border-base my-2" />;
 
 function CustomSelect({
   label,
@@ -66,7 +66,7 @@ function CustomSelect({
         </label>
       )}
       <select
-        className={`w-full min-h-[38px] bg-white border border-mountain-200 text-mountain-800 text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow`}
+        className={`w-full min-h-[38px] bg-surface border border-border-base text-text-main text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow`}
         name={name}
         required={required}
         value={value}
@@ -84,7 +84,7 @@ function CustomSelect({
         ))}
       </select>
       {description && (
-        <p className="text-[11.5px] text-mountain-500">{description}</p>
+        <p className="text-[11.5px] text-text-muted/60">{description}</p>
       )}
     </div>
   );
@@ -118,18 +118,18 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${isInvalid
+        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${isInvalid
           ? "border-red-300 focus-within:ring-red-100"
-          : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
-          } focus-within:ring-1 ${disabled || readOnly ? "bg-mountain-50" : ""} ${classNames?.inputWrapper || ""}`}
+          : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
+          } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
       >
         {startContent && (
-          <div className="pl-3 pr-1 text-mountain-500 flex items-center justify-center shrink-0">
+          <div className="pl-3 pr-1 text-text-muted flex items-center justify-center shrink-0">
             {startContent}
           </div>
         )}
         <input
-          className={`flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500 ${classNames?.input || ""}`}
+          className={`flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/40 disabled:text-text-muted/60 ${classNames?.input || ""}`}
           disabled={disabled}
           max={max}
           min={min}
@@ -145,7 +145,7 @@ function CustomInput({
       </div>
       {(description || errorMessage) && (
         <p
-          className={`text-[11.5px] ${isInvalid ? "text-red-500" : "text-mountain-500"}`}
+          className={`text-[11.5px] ${isInvalid ? "text-red-500" : "text-text-muted/60"}`}
         >
           {errorMessage || description}
         </p>
@@ -191,12 +191,12 @@ function SearchSelect({
         </label>
       )}
       <div
-        className={`flex items-center h-[38px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex items-center h-[38px] border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface ${disabled ? "bg-surface-2" : ""}`}
         onClick={() => !disabled && setOpen(true)}
       >
-        <IoSearchOutline className="ml-2.5 w-4 h-4 text-mountain-400 shrink-0" />
+        <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-muted shrink-0" />
         <input
-          className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300 w-full outline-none"
+          className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full outline-none"
           disabled={disabled}
           placeholder={placeholder || `Search…`}
           value={selected && !open ? selected.primary : q}
@@ -208,7 +208,7 @@ function SearchSelect({
         />
         {value && !disabled && (
           <button
-            className="mr-2 text-mountain-400 hover:text-mountain-700"
+            className="mr-2 text-text-muted hover:text-text-main"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -220,20 +220,20 @@ function SearchSelect({
           </button>
         )}
       </div>
-      {hint && <p className="text-[11.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[11.5px] text-text-muted/60">{hint}</p>}
       {open && !disabled && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded max-h-48 overflow-y-auto shadow-sm">
+          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-xl">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-mountain-400">
+              <p className="px-3 py-2 text-[13px] text-text-muted/50">
                 No results
               </p>
             ) : (
               filtered.map((i) => (
                 <button
                   key={i.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-teal-50 ${i.id === value ? "bg-teal-50" : ""}`}
+                  className={`w-full text-left px-3 py-2 hover:bg-surface-2 ${i.id === value ? "bg-surface-2" : ""}`}
                   type="button"
                   onClick={() => {
                     onChange(i.id);
@@ -241,9 +241,9 @@ function SearchSelect({
                     setOpen(false);
                   }}
                 >
-                  <p className="text-[13.5px] text-mountain-800">{i.primary}</p>
+                  <p className="text-[13.5px] text-text-main">{i.primary}</p>
                   {i.secondary && (
-                    <p className="text-[11.5px] text-mountain-400">
+                    <p className="text-[11.5px] text-text-muted/60">
                       {i.secondary}
                     </p>
                   )}
@@ -433,13 +433,13 @@ function StatusBadge({
   type?: "status" | "payment";
 }) {
   const S_COLORS: Record<string, string> = {
-    paid: "bg-health-100 text-health-700 border-health-200",
-    finalized: "bg-teal-100 text-teal-700 border-teal-200",
-    partial: "bg-saffron-100 text-saffron-700 border-saffron-200",
-    unpaid: "bg-red-100 text-red-700 border-red-200",
-    cancelled: "bg-red-100 text-red-700 border-red-200",
-    pending: "bg-mountain-200 text-mountain-800 border-mountain-300",
-    default: "bg-mountain-100 text-mountain-600 border-mountain-200",
+    paid: "bg-green-500/10 text-green-600 border-green-500/20",
+    finalized: "bg-primary/10 text-primary border-primary/20",
+    partial: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
+    unpaid: "bg-red-500/10 text-red-600 border-red-500/20",
+    cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
+    pending: "bg-surface-2 text-text-muted border-border-base",
+    default: "bg-surface-2/50 text-text-muted/60 border-border-base",
   };
   const color = S_COLORS[status] || S_COLORS.default;
 
@@ -458,8 +458,7 @@ export default function PharmacyPage() {
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin =
     userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+    userData?.role === "system-owner";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
@@ -3242,15 +3241,15 @@ export default function PharmacyPage() {
   if (loading) {
     return (
       <div className="flex flex-col gap-5 px-4 pb-12">
-        <div>
-          <h1 className="text-[20px] font-bold text-mountain-900 tracking-tight">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-page-title font-bold text-text-main tracking-tight">
             Pharmacy
           </h1>
-          <p className="text-[12.5px] text-mountain-500 mt-1">
+          <p className="text-[12.5px] text-text-muted">
             Manage medicine purchases and usage
           </p>
         </div>
-        <div className="bg-white border border-mountain-200 rounded flex items-center justify-center py-12 text-[13px] text-mountain-500">
+        <div className="bg-surface border border-border-base rounded flex items-center justify-center py-12 text-[13px] text-text-muted">
           Loading pharmacy data...
         </div>
       </div>
@@ -3262,11 +3261,11 @@ export default function PharmacyPage() {
       <div className="flex flex-col gap-5 px-4 pb-12">
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-[20px] font-bold text-mountain-900 tracking-tight">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-page-title font-bold text-text-main tracking-tight">
               Pharmacy
             </h1>
-            <p className="text-[12.5px] text-mountain-500 mt-1">
+            <p className="text-[12.5px] text-text-muted">
               Manage medicine & item purchases and usage
             </p>
           </div>
@@ -3274,9 +3273,9 @@ export default function PharmacyPage() {
           <div className="flex flex-wrap items-center gap-2">
             {!branchId && isClinicAdmin && branches.length > 0 && (
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-mountain-500">Branch</span>
+                <span className="text-[11px] text-text-muted">Branch</span>
                 <select
-                  className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                  className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                   value={selectedBranchId ?? ""}
                   onChange={(e) => setSelectedBranchId(e.target.value || null)}
                 >
@@ -3308,44 +3307,44 @@ export default function PharmacyPage() {
         {/* Daily Sales Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
-            className={`bg-health-50 border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "daily"
-              ? "border-health-400 shadow-sm ring-1 ring-health-200"
-              : "border-health-200 hover:border-health-300"
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "daily"
+              ? "border-primary shadow-sm ring-1 ring-primary/20"
+              : "border-border-base hover:border-border-strong hover:bg-surface-2"
               }`}
             onClick={() => handleStatCardClick("daily")}
           >
-            <IoStorefrontOutline className="text-health-600 w-6 h-6 mb-2" />
-            <p className="text-xl font-bold text-health-700">
+            <IoStorefrontOutline className="text-primary w-6 h-6 mb-2" />
+            <p className="text-stat-sm font-bold text-text-main">
               NPR {dailySalesTotal.toLocaleString()}
             </p>
-            <p className="text-[12px] text-health-600 mt-0.5">Daily Sales</p>
+            <p className="text-[12px] text-text-muted mt-0.5">Daily Sales</p>
           </div>
 
           <div
-            className={`bg-health-50 border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "paid"
-              ? "border-health-400 shadow-sm ring-1 ring-health-200"
-              : "border-health-200 hover:border-health-300"
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "paid"
+              ? "border-primary shadow-sm ring-1 ring-primary/20"
+              : "border-border-base hover:border-border-strong hover:bg-surface-2"
               }`}
             onClick={() => handleStatCardClick("paid")}
           >
-            <IoCheckmarkCircleOutline className="text-health-600 w-6 h-6 mb-2" />
-            <p className="text-xl font-bold text-health-700">
+            <IoCheckmarkCircleOutline className="text-primary w-6 h-6 mb-2" />
+            <p className="text-stat-sm font-bold text-text-main">
               {paidPaymentsCount}
             </p>
-            <p className="text-[12px] text-health-600 mt-0.5">
+            <p className="text-[12px] text-text-muted mt-0.5">
               Total Paid Payments
             </p>
           </div>
 
           <div
-            className={`bg-red-50 border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "unpaid"
-              ? "border-red-400 shadow-sm ring-1 ring-red-200"
-              : "border-red-200 hover:border-red-300"
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "unpaid"
+              ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
+              : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
               }`}
             onClick={() => handleStatCardClick("unpaid")}
           >
             <IoCloseCircleOutline className="text-red-500 w-6 h-6 mb-2" />
-            <p className="text-xl font-bold text-red-600">
+            <p className="text-stat-sm font-bold text-text-main">
               {unpaidPaymentsCount}
             </p>
             <p className="text-[12px] text-red-500 mt-0.5">
@@ -3355,9 +3354,9 @@ export default function PharmacyPage() {
         </div>
 
         {/* Main content with tabs */}
-        <div className="bg-white border border-mountain-200 rounded overflow-hidden shadow-sm">
+        <div className="bg-surface border border-border-base rounded overflow-hidden shadow-sm">
           {/* Tab Strip */}
-          <div className="flex flex-wrap border-b border-mountain-100 bg-mountain-25">
+          <div className="flex flex-wrap border-b border-border-base bg-surface-2/50">
             {[
               {
                 id: "purchased",
@@ -3403,7 +3402,7 @@ export default function PharmacyPage() {
               <button
                 key={t.id}
                 className={`flex items-center gap-2 px-5 py-3.5 text-[13px] font-medium border-b-2 transition-colors
-                  ${activeTab === t.id ? "border-teal-700 text-teal-700 bg-white" : "border-transparent text-mountain-500 hover:text-teal-600 hover:bg-mountain-50"}`}
+                  ${activeTab === t.id ? "border-primary text-primary bg-surface" : "border-transparent text-text-muted hover:text-primary hover:bg-surface"}`}
                 type="button"
                 onClick={() => setActiveTab(t.id)}
               >
@@ -3418,18 +3417,18 @@ export default function PharmacyPage() {
                 <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex-1 w-full sm:max-w-md relative">
                     <div
-                      className={`flex items-center h-[38px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white`}
+                      className={`flex items-center h-[38px] border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface`}
                     >
-                      <IoSearchOutline className="ml-2.5 w-4 h-4 text-mountain-400 shrink-0" />
+                      <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-muted shrink-0" />
                       <input
-                        className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300 w-full"
+                        className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full"
                         placeholder="Search by purchase no or patient name..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
                       {searchQuery && (
                         <button
-                          className="mr-2 text-mountain-400 hover:text-mountain-700"
+                          className="mr-2 text-text-muted hover:text-text-main"
                           type="button"
                           onClick={() => setSearchQuery("")}
                         >
@@ -3440,13 +3439,13 @@ export default function PharmacyPage() {
                   </div>
                   {activeFilter && (
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-[12px] font-medium">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[12px] font-medium">
                         {activeFilter === "daily" && "Filtered: Daily Sales"}
                         {activeFilter === "paid" && "Filtered: Paid Payments"}
                         {activeFilter === "unpaid" &&
                           "Filtered: Unpaid Payments"}
                         <button
-                          className="hover:text-teal-900 focus:outline-none"
+                          className="hover:text-primary focus:outline-none"
                           onClick={() => setActiveFilter(null)}
                         >
                           <IoCloseOutline className="w-3.5 h-3.5" />
@@ -3463,7 +3462,7 @@ export default function PharmacyPage() {
                         size={48}
                       />
                     </div>
-                    <h3 className="text-lg font-medium text-default-700 mb-2">
+                    <h3 className="text-stat-sm font-medium text-default-700 mb-2">
                       No purchases recorded
                     </h3>
                     <p className="text-default-500 mb-4">
@@ -3482,7 +3481,7 @@ export default function PharmacyPage() {
                         size={48}
                       />
                     </div>
-                    <h3 className="text-lg font-medium text-default-700 mb-2">
+                    <h3 className="text-stat-sm font-medium text-default-700 mb-2">
                       No purchases on this page
                     </h3>
                     <p className="text-default-500 mb-4">
@@ -3497,7 +3496,7 @@ export default function PharmacyPage() {
                         size={48}
                       />
                     </div>
-                    <h3 className="text-lg font-medium text-default-700 mb-2">
+                    <h3 className="text-stat-sm font-medium text-default-700 mb-2">
                       No purchases found
                     </h3>
                     <p className="text-default-500 mb-4">
@@ -3530,10 +3529,10 @@ export default function PharmacyPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="overflow-x-auto border border-mountain-200 rounded">
+                    <div className="overflow-x-auto border border-border-base rounded">
                       <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
-                          <tr className="bg-mountain-50 border-b border-mountain-200">
+                          <tr className="bg-surface-2 border-b border-border-base">
                             {[
                               "PURCHASE NO",
                               "NAME",
@@ -3546,29 +3545,29 @@ export default function PharmacyPage() {
                             ].map((h) => (
                               <th
                                 key={h}
-                                className="px-3 py-2 text-[10.5px] font-semibold text-mountain-500 uppercase tracking-wider"
+                                className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
                               >
                                 {h}
                               </th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-mountain-100 bg-white">
+                        <tbody className="divide-y divide-border-base bg-surface">
                           {paginatedPurchases.map((purchase) => {
                             const courseMeta =
                               getMedicationCourseMeta(purchase);
                             const statusLabel =
                               getMedicationStatusLabel(courseMeta);
                             const rowClassName = courseMeta.isExpired
-                              ? "bg-red-50 hover:bg-red-100 transition-colors"
+                              ? "bg-red-500/5 hover:bg-red-500/10 transition-colors"
                               : courseMeta.isEndingSoon
-                                ? "bg-saffron-50 hover:bg-saffron-100 transition-colors"
-                                : "hover:bg-mountain-25 transition-colors";
+                                ? "bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors"
+                                : "hover:bg-surface-2 transition-colors";
                             const statusColorClass = courseMeta.isExpired
                               ? "text-red-500"
                               : courseMeta.isEndingSoon
-                                ? "text-saffron-600"
-                                : "text-mountain-500";
+                                ? "text-yellow-600"
+                                : "text-text-muted";
 
                             const totalReturnedAmount =
                               typeof purchase.totalReturnedAmount ===
@@ -3586,16 +3585,16 @@ export default function PharmacyPage() {
 
                             return (
                               <tr key={purchase.id} className={rowClassName}>
-                                <td className="px-3 py-2.5 text-[12.5px] font-mono text-mountain-900">
+                                <td className="px-3 py-2.5 text-[12.5px] font-mono text-text-main">
                                   {purchase.purchaseNo}
                                 </td>
-                                <td className="px-3 py-2.5 text-[12.5px] text-mountain-800">
+                                <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                                   {purchase.patientName || "-"}
                                 </td>
                                 <td className="px-3 py-2.5 text-[12.5px]">
                                   {courseMeta.hasDuration ? (
                                     <div className="flex flex-col leading-tight">
-                                      <span className="font-medium text-mountain-800">
+                                      <span className="font-medium text-text-main">
                                         {courseMeta.totalDuration} day
                                         {courseMeta.totalDuration === 1
                                           ? ""
@@ -3611,12 +3610,12 @@ export default function PharmacyPage() {
                                     "-"
                                   )}
                                 </td>
-                                <td className="px-3 py-2.5 text-[12.5px] text-mountain-600">
+                                <td className="px-3 py-2.5 text-[12.5px] text-text-muted">
                                   {purchase.purchaseDate
                                     ? purchase.purchaseDate.toLocaleDateString()
                                     : "-"}
                                 </td>
-                                <td className="px-3 py-2.5 text-[12.5px] font-semibold text-mountain-900">
+                                <td className="px-3 py-2.5 text-[12.5px] font-semibold text-text-main">
                                   {purchase.total
                                     ? `NPR ${purchase.total.toLocaleString()}`
                                     : "NPR 0"}
@@ -3629,19 +3628,19 @@ export default function PharmacyPage() {
                                 </td>
                                 <td className="px-3 py-2.5 text-[12.5px]">
                                   <div className="flex flex-col">
-                                    <span className="font-semibold text-mountain-900">
+                                    <span className="font-semibold text-text-main">
                                       {purchase.netAmount
                                         ? `NPR ${purchase.netAmount.toLocaleString()}`
                                         : "NPR 0"}
                                     </span>
                                     {totalReturnedAmount > 0 && (
-                                      <span className="text-[10.5px] text-saffron-600">
+                                      <span className="text-[10.5px] text-yellow-600">
                                         Ret: NPR{" "}
                                         {totalReturnedAmount.toLocaleString()}
                                       </span>
                                     )}
                                     {totalReturnedAmount > 0 && (
-                                      <span className="text-[10.5px] text-health-600">
+                                      <span className="text-[10.5px] text-primary">
                                         Net: NPR{" "}
                                         {netAfterReturns.toLocaleString()}
                                       </span>
@@ -3651,7 +3650,7 @@ export default function PharmacyPage() {
                                 <td className="px-3 py-2.5">
                                   <div className="flex items-center gap-1.5">
                                     <button
-                                      className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded"
+                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                       title="View"
                                       onClick={() =>
                                         navigate(
@@ -3662,7 +3661,7 @@ export default function PharmacyPage() {
                                       <IoEyeOutline />
                                     </button>
                                     <button
-                                      className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded"
+                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                       title="Edit"
                                       onClick={() =>
                                         navigate(
@@ -3673,7 +3672,7 @@ export default function PharmacyPage() {
                                       <IoCreateOutline />
                                     </button>
                                     <button
-                                      className="p-1.5 text-mountain-500 hover:text-health-600 hover:bg-health-50 rounded"
+                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                       title="Print"
                                       onClick={() =>
                                         window.open(
@@ -3685,7 +3684,7 @@ export default function PharmacyPage() {
                                       <IoPrintOutline />
                                     </button>
                                     <button
-                                      className="p-1.5 text-mountain-500 hover:text-saffron-600 hover:bg-saffron-50 rounded disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-mountain-500"
+                                      className="p-1.5 text-text-muted hover:text-yellow-600 hover:bg-yellow-500/10 rounded disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text-muted"
                                       disabled={netAfterReturns <= 0}
                                       title="Record Return"
                                       onClick={() =>
@@ -3707,7 +3706,7 @@ export default function PharmacyPage() {
 
                     {/* Pagination */}
                     {purchasesTotalPages > 1 && (
-                      <div className="flex items-center justify-between text-[12.5px] text-mountain-600 mt-3">
+                      <div className="flex items-center justify-between text-[12.5px] text-text-muted mt-3">
                         <span>
                           Showing{" "}
                           {(purchasesPage - 1) * purchasesRowsPerPage + 1} to{" "}
@@ -3719,14 +3718,14 @@ export default function PharmacyPage() {
                         </span>
                         <div className="flex gap-1">
                           <button
-                            className="px-2 py-1 border border-mountain-200 rounded hover:bg-mountain-50 disabled:opacity-50 text-mountain-800"
+                            className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                             disabled={purchasesPage === 1}
                             onClick={() => setPurchasesPage((p) => p - 1)}
                           >
                             Prev
                           </button>
                           <button
-                            className="px-2 py-1 border border-mountain-200 rounded hover:bg-mountain-50 disabled:opacity-50 text-mountain-800"
+                            className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                             disabled={purchasesPage === purchasesTotalPages}
                             onClick={() => setPurchasesPage((p) => p + 1)}
                           >
@@ -3751,7 +3750,7 @@ export default function PharmacyPage() {
                         size={48}
                       />
                     </div>
-                    <h3 className="text-lg font-medium text-default-700 mb-2">
+                    <h3 className="text-stat-sm font-medium text-default-700 mb-2">
                       No items added
                     </h3>
                     <p className="text-default-500 mb-4">
@@ -3766,10 +3765,10 @@ export default function PharmacyPage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto border border-mountain-200 rounded">
+                  <div className="overflow-x-auto border border-border-base rounded">
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                       <thead>
-                        <tr className="bg-mountain-50 border-b border-mountain-200">
+                        <tr className="bg-surface-2 border-b border-border-base">
                           {[
                             "ITEM NAME",
                             "DESCRIPTION",
@@ -3780,36 +3779,36 @@ export default function PharmacyPage() {
                           ].map((h) => (
                             <th
                               key={h}
-                              className="px-3 py-2 text-[10.5px] font-semibold text-mountain-500 uppercase tracking-wider"
+                              className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
                             >
                               {h}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-mountain-100 bg-white">
+                      <tbody className="divide-y divide-border-base bg-surface">
                         {items.map((item) => (
                           <tr
                             key={item.id}
-                            className="hover:bg-mountain-25 transition-colors"
+                            className="hover:bg-surface-2 transition-colors"
                           >
-                            <td className="px-3 py-2.5 text-[12.5px] font-medium text-mountain-900">
+                            <td className="px-3 py-2.5 text-[12.5px] font-medium text-text-main">
                               {item.name}
                             </td>
-                            <td className="px-3 py-2.5 text-[12.5px] text-mountain-800">
+                            <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                               {item.description || "-"}
                             </td>
                             <td className="px-3 py-2.5">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-medium bg-teal-50 text-teal-700 border border-teal-200">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-medium bg-primary/10 text-primary border border-primary/20">
                                 {item.category}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-[12.5px] text-mountain-800">
+                            <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                               {item.purchasePrice
                                 ? `NPR ${item.purchasePrice.toLocaleString()}`
                                 : "-"}
                             </td>
-                            <td className="px-3 py-2.5 text-[12.5px] font-semibold text-mountain-900">
+                            <td className="px-3 py-2.5 text-[12.5px] font-semibold text-text-main">
                               {item.salePrice
                                 ? `NPR ${item.salePrice.toLocaleString()}`
                                 : "-"}
@@ -3817,13 +3816,13 @@ export default function PharmacyPage() {
                             <td className="px-3 py-2.5">
                               <div className="flex items-center gap-1.5">
                                 <button
-                                  className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded"
+                                  className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                   title="Edit"
                                 >
                                   <IoCreateOutline />
                                 </button>
                                 <button
-                                  className="p-1.5 text-mountain-500 hover:text-red-600 hover:bg-red-50 rounded"
+                                  className="p-1.5 text-text-muted hover:text-red-600 hover:bg-red-500/10 rounded"
                                   title="Delete"
                                 >
                                   <IoTrashOutline />
@@ -3844,37 +3843,37 @@ export default function PharmacyPage() {
               <div className="py-6 space-y-6">
                 {!selectedSupplierForTransactions && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-health-50 border border-health-200 rounded p-4 flex flex-col items-center">
-                      <IoStorefrontOutline className="text-health-600 w-5 h-5 mb-2" />
-                      <p className="text-lg font-bold text-health-700">
+                    <div className="bg-surface border border-border-base rounded p-4 flex flex-col items-center">
+                      <IoStorefrontOutline className="text-primary w-5 h-5 mb-2" />
+                      <p className="text-stat-sm font-bold text-text-main">
                         NPR{" "}
                         {supplierLedgerStats.totalPurchase.toLocaleString(
                           undefined,
                           { maximumFractionDigits: 2 },
                         )}
                       </p>
-                      <p className="text-[11px] text-health-600 mt-0.5">
+                      <p className="text-[11px] text-text-muted mt-0.5">
                         Total Purchase Amount
                       </p>
                     </div>
 
-                    <div className="bg-health-50 border border-health-200 rounded p-4 flex flex-col items-center">
-                      <IoCheckmarkCircleOutline className="text-health-600 w-5 h-5 mb-2" />
-                      <p className="text-lg font-bold text-health-700">
+                    <div className="bg-surface border border-border-base rounded p-4 flex flex-col items-center">
+                      <IoCheckmarkCircleOutline className="text-primary w-5 h-5 mb-2" />
+                      <p className="text-stat-sm font-bold text-text-main">
                         NPR{" "}
                         {supplierLedgerStats.totalPaid.toLocaleString(
                           undefined,
                           { maximumFractionDigits: 2 },
                         )}
                       </p>
-                      <p className="text-[11px] text-health-600 mt-0.5">
+                      <p className="text-[11px] text-text-muted mt-0.5">
                         Total Paid Amount
                       </p>
                     </div>
 
-                    <div className="bg-red-50 border border-red-200 rounded p-4 flex flex-col items-center">
+                    <div className="bg-surface border border-red-500/20 rounded p-4 flex flex-col items-center">
                       <IoCloseCircleOutline className="text-red-500 w-5 h-5 mb-2" />
-                      <p className="text-lg font-bold text-red-600">
+                      <p className="text-stat-sm font-bold text-red-600">
                         NPR{" "}
                         {supplierLedgerStats.remaining.toLocaleString(
                           undefined,
@@ -3892,11 +3891,11 @@ export default function PharmacyPage() {
                     <div className="flex flex-col sm:flex-row justify-between gap-4">
                       <div className="flex-1 max-w-sm">
                         <div
-                          className={`flex items-center h-[38px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white`}
+                          className={`flex items-center h-[38px] border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface`}
                         >
-                          <IoSearchOutline className="ml-2.5 w-4 h-4 text-mountain-400 shrink-0" />
+                          <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-muted shrink-0" />
                           <input
-                            className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300 w-full"
+                            className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full"
                             placeholder="Search suppliers..."
                             value={supplierSearchQuery}
                             onChange={(e) =>
@@ -3905,22 +3904,22 @@ export default function PharmacyPage() {
                           />
                         </div>
                       </div>
-                      <p className="text-[12.5px] text-mountain-500 pt-2">
+                      <p className="text-[12.5px] text-text-muted pt-2">
                         Select a supplier to view their transaction ledger.
                       </p>
                     </div>
 
-                    <div className="border border-mountain-200 rounded overflow-hidden">
+                    <div className="border border-border-base rounded overflow-hidden">
                       {filteredSupplierSummaries.length === 0 ? (
-                        <div className="text-center py-12 px-4 bg-white">
+                        <div className="text-center py-12 px-4 bg-surface">
                           <IoPeopleOutline
-                            className="mx-auto text-mountain-300 mb-4"
+                            className="mx-auto text-text-muted/40 mb-4"
                             size={48}
                           />
-                          <h3 className="text-[14px] font-semibold text-mountain-900 mb-1">
+                          <h3 className="text-[14px] font-semibold text-text-main mb-1">
                             No supplier data found
                           </h3>
-                          <p className="text-[12.5px] text-mountain-500">
+                          <p className="text-[12.5px] text-text-muted/60">
                             Add suppliers and purchase records to start tracking
                             ledger balances.
                           </p>
@@ -3929,12 +3928,12 @@ export default function PharmacyPage() {
                         <div className="overflow-x-auto">
                           <table className="w-full text-left border-collapse whitespace-nowrap">
                             <thead>
-                              <tr className="bg-mountain-50 border-b border-mountain-200">
+                              <tr className="bg-surface-2 border-b border-border-base">
                                 {["SUPPLIER", "CURRENT BALANCE", "ACTIONS"].map(
                                   (h) => (
                                     <th
                                       key={h}
-                                      className="px-3 py-2 text-[10.5px] font-semibold text-mountain-500 uppercase tracking-wider"
+                                      className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
                                     >
                                       {h}
                                     </th>
@@ -3942,22 +3941,22 @@ export default function PharmacyPage() {
                                 )}
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-mountain-100 bg-white">
+                            <tbody className="divide-y divide-border-base bg-surface">
                               {filteredSupplierSummaries.map((summary) => {
                                 const currentBalance = summary.remaining;
 
                                 return (
                                   <tr
                                     key={summary.supplier.id}
-                                    className="hover:bg-mountain-25 transition-colors"
+                                    className="hover:bg-surface-2 transition-colors"
                                   >
                                     <td className="px-3 py-2.5">
                                       <div className="flex flex-col">
-                                        <span className="text-[12.5px] font-medium text-mountain-900">
+                                        <span className="text-[12.5px] font-medium text-text-main">
                                           {summary.supplier.name}
                                         </span>
                                         {summary.supplier.contactPerson && (
-                                          <span className="text-[10.5px] text-mountain-500">
+                                          <span className="text-[10.5px] text-text-muted">
                                             {summary.supplier.contactPerson}
                                           </span>
                                         )}
@@ -3965,7 +3964,7 @@ export default function PharmacyPage() {
                                     </td>
                                     <td className="px-3 py-2.5">
                                       <span
-                                        className={`text-[12.5px] ${currentBalance > 0 ? "text-red-600 font-semibold" : currentBalance < 0 ? "text-health-600 font-semibold" : "text-mountain-600 font-medium"}`}
+                                        className={`text-[12.5px] ${currentBalance > 0 ? "text-red-600 font-semibold" : currentBalance < 0 ? "text-primary font-semibold" : "text-text-muted font-medium"}`}
                                       >
                                         NPR{" "}
                                         {currentBalance.toLocaleString(
@@ -3976,7 +3975,7 @@ export default function PharmacyPage() {
                                     </td>
                                     <td className="px-3 py-2.5">
                                       <button
-                                        className="text-[12px] font-medium px-3 py-1 bg-white border border-mountain-200 text-mountain-700 rounded hover:bg-mountain-50 hover:text-mountain-900 transition-colors"
+                                        className="text-[12px] font-medium px-3 py-1 bg-surface border border-border-base text-text-main rounded hover:bg-surface-2 hover:text-text-main transition-colors"
                                         type="button"
                                         onClick={() =>
                                           handleSelectSupplierForLedger(
@@ -3998,10 +3997,10 @@ export default function PharmacyPage() {
                   </>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between border-b border-mountain-100 pb-4">
+                    <div className="flex items-center justify-between border-b border-border-base pb-4">
                       <div className="flex items-center gap-4">
                         <button
-                          className="p-1.5 text-mountain-500 hover:text-mountain-800 hover:bg-mountain-100 rounded transition-colors"
+                          className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface-2 rounded transition-colors"
                           type="button"
                           onClick={() => {
                             setSelectedSupplierForTransactions(null);
@@ -4011,11 +4010,11 @@ export default function PharmacyPage() {
                           <IoArrowBackOutline className="w-5 h-5" />
                         </button>
                         <div>
-                          <h3 className="text-[18px] font-semibold text-mountain-900">
+                          <h3 className="text-[18px] font-semibold text-text-main">
                             {selectedSupplierForTransactions.name}
                           </h3>
                           {selectedSupplierForTransactions.contactPerson && (
-                            <p className="text-sm text-default-500">
+                            <p className="text-sm text-text-muted">
                               {selectedSupplierForTransactions.contactPerson}
                             </p>
                           )}
@@ -4065,22 +4064,22 @@ export default function PharmacyPage() {
                     </div>
 
                     {supplierLedgerEntries.length > 0 && (
-                      <Card className="border border-default-200">
+                      <Card className="border border-border-base bg-surface shadow-none">
                         <CardBody>
                           <div className="mb-4">
-                            <p className="text-sm text-default-500">
+                            <p className="text-sm text-text-muted">
                               Current Balance
                             </p>
                             <p
-                              className={`text-2xl font-semibold mt-1 ${supplierLedgerEntries[
+                              className={`text-stat-sm font-semibold mt-1 ${supplierLedgerEntries[
                                 supplierLedgerEntries.length - 1
                               ].balanceAmount > 0
-                                ? "text-danger"
+                                ? "text-red-500"
                                 : supplierLedgerEntries[
                                   supplierLedgerEntries.length - 1
                                 ].balanceAmount < 0
-                                  ? "text-success"
-                                  : "text-default-600"
+                                  ? "text-primary"
+                                  : "text-text-main"
                                 }`}
                             >
                               NPR{" "}
@@ -4095,18 +4094,18 @@ export default function PharmacyPage() {
                       </Card>
                     )}
 
-                    <Card className="border border-default-200">
+                    <Card className="border border-border-base bg-surface shadow-none">
                       <CardBody className="p-0">
                         {supplierLedgerEntries.length === 0 ? (
                           <div className="text-center py-12 px-4">
                             <IoReceiptOutline
-                              className="mx-auto text-default-300 mb-4"
+                              className="mx-auto text-text-muted/40 mb-4"
                               size={48}
                             />
-                            <h3 className="text-lg font-medium text-default-700 mb-1">
+                            <h3 className="text-stat-sm font-medium text-text-main mb-1">
                               No ledger entries
                             </h3>
-                            <p className="text-default-500">
+                            <p className="text-text-muted">
                               No transactions recorded for this supplier yet.
                             </p>
                           </div>
@@ -4114,7 +4113,7 @@ export default function PharmacyPage() {
                           <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse whitespace-nowrap">
                               <thead>
-                                <tr className="bg-mountain-50 border-b border-mountain-200">
+                                <tr className="bg-surface-2 border-b border-border-base">
                                   {[
                                     "BILL NUMBER",
                                     "DATE",
@@ -4125,29 +4124,29 @@ export default function PharmacyPage() {
                                   ].map((h) => (
                                     <th
                                       key={h}
-                                      className="px-3 py-2 text-[10.5px] font-semibold text-mountain-500 uppercase tracking-wider"
+                                      className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
                                     >
                                       {h}
                                     </th>
                                   ))}
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-mountain-100 bg-white">
+                              <tbody className="divide-y divide-border-base bg-surface">
                                 {supplierLedgerEntries.map((entry) => (
                                   <tr
                                     key={entry.id}
-                                    className="hover:bg-mountain-25 transition-colors"
+                                    className="hover:bg-surface-2 transition-colors"
                                   >
                                     <td className="px-3 py-2.5">
-                                      <div className="text-[12.5px] text-mountain-900">
+                                      <div className="text-[12.5px] text-text-main">
                                         {entry.billNumber || (
-                                          <span className="text-mountain-400 italic">
+                                          <span className="text-text-muted/40 italic">
                                             Payment
                                           </span>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-3 py-2.5 text-[12.5px] text-mountain-800">
+                                    <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                                       {entry.transactionDate.toLocaleDateString()}
                                     </td>
                                     <td className="px-3 py-2.5 text-[12.5px]">
@@ -4160,14 +4159,14 @@ export default function PharmacyPage() {
                                           )}
                                         </span>
                                       ) : (
-                                        <span className="text-mountain-400">
+                                        <span className="text-text-muted/40">
                                           —
                                         </span>
                                       )}
                                     </td>
                                     <td className="px-3 py-2.5 text-[12.5px]">
                                       {entry.creditAmount > 0 ? (
-                                        <span className="text-health-600 font-medium">
+                                        <span className="text-primary font-medium">
                                           NPR{" "}
                                           {entry.creditAmount.toLocaleString(
                                             undefined,
@@ -4175,7 +4174,7 @@ export default function PharmacyPage() {
                                           )}
                                         </span>
                                       ) : (
-                                        <span className="text-mountain-400">
+                                        <span className="text-text-muted/40">
                                           —
                                         </span>
                                       )}
@@ -4183,10 +4182,10 @@ export default function PharmacyPage() {
                                     <td className="px-3 py-2.5 text-[12.5px]">
                                       <span
                                         className={`font-semibold ${entry.balanceAmount > 0
-                                          ? "text-red-600"
+                                          ? "text-red-500"
                                           : entry.balanceAmount < 0
-                                            ? "text-health-600"
-                                            : "text-mountain-600"
+                                            ? "text-primary"
+                                            : "text-text-muted"
                                           }`}
                                       >
                                         NPR{" "}
@@ -4198,7 +4197,7 @@ export default function PharmacyPage() {
                                     </td>
                                     <td className="px-3 py-2.5">
                                       <button
-                                        className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded"
+                                        className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                         title="Edit Entry"
                                         type="button"
                                         onClick={() => {
@@ -4241,1087 +4240,724 @@ export default function PharmacyPage() {
             )}
 
             {/* Settings Tab */}
-            {activeTab === "settings" && (
-              <div className="py-6">
-                <div className="max-w-4xl mx-auto space-y-8">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-xl font-semibold">
-                        Pharmacy Settings
-                      </h3>
-                      <p className="text-default-500 mt-1">
-                        Configure tax percentage and payment methods
-                      </p>
-                    </div>
-                    <Button
-                      color="primary"
-                      isDisabled={isSettingsLoading}
-                      isLoading={isSettingsLoading}
-                      startContent={<IoSaveOutline />}
-                      onPress={handleSaveSettings}
-                    >
-                      {isSettingsLoading ? "Saving..." : "Save Settings"}
-                    </Button>
-                  </div>
-
-                  {/* Tax Configuration */}
-                  <Card>
-                    <CardHeader className="bg-default-50 border-b border-default-200">
-                      <h4 className="text-lg font-semibold">
-                        Tax Configuration
-                      </h4>
-                    </CardHeader>
-                    <CardBody className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">Enable Tax</p>
-                          <p className="text-sm text-default-500">
-                            Apply tax to medicine purchases
-                          </p>
-                        </div>
-                        <Switch
-                          isSelected={settingsForm.enableTax}
-                          onValueChange={(value) =>
-                            setSettingsForm((prev) => ({
-                              ...prev,
-                              enableTax: value,
-                            }))
-                          }
-                        />
+            {
+              activeTab === "settings" && (
+                <div className="py-6">
+                  <div className="max-w-4xl mx-auto space-y-8">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-stat-sm font-semibold">
+                          Pharmacy Settings
+                        </h3>
+                        <p className="text-default-500 mt-1">
+                          Configure tax percentage and payment methods
+                        </p>
                       </div>
+                      <Button
+                        color="primary"
+                        isDisabled={isSettingsLoading}
+                        isLoading={isSettingsLoading}
+                        startContent={<IoSaveOutline />}
+                        onPress={handleSaveSettings}
+                      >
+                        {isSettingsLoading ? "Saving..." : "Save Settings"}
+                      </Button>
+                    </div>
 
-                      {settingsForm.enableTax && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Tax Configuration */}
+                    <Card>
+                      <CardHeader className="bg-default-50 border-b border-default-200">
+                        <h4 className="text-stat-sm font-semibold">
+                          Tax Configuration
+                        </h4>
+                      </CardHeader>
+                      <CardBody className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Enable Tax</p>
+                            <p className="text-sm text-default-500">
+                              Apply tax to medicine purchases
+                            </p>
+                          </div>
+                          <Switch
+                            isSelected={settingsForm.enableTax}
+                            onValueChange={(value) =>
+                              setSettingsForm((prev) => ({
+                                ...prev,
+                                enableTax: value,
+                              }))
+                            }
+                          />
+                        </div>
+
+                        {settingsForm.enableTax && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input
+                              description="Default tax percentage for new purchases"
+                              endContent="%"
+                              label="Default Tax Percentage"
+                              placeholder="13"
+                              type="number"
+                              value={
+                                settingsForm.defaultTaxPercentage?.toString() ||
+                                "0"
+                              }
+                              onChange={(e) =>
+                                setSettingsForm((prev) => ({
+                                  ...prev,
+                                  defaultTaxPercentage:
+                                    parseFloat(e.target.value) || 0,
+                                }))
+                              }
+                            />
+                            <Input
+                              description="Display label for tax (e.g., VAT, GST, Tax)"
+                              label="Tax Label"
+                              placeholder="VAT"
+                              value={settingsForm.taxLabel || ""}
+                              onChange={(e) =>
+                                setSettingsForm((prev) => ({
+                                  ...prev,
+                                  taxLabel: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
+                      </CardBody>
+                    </Card>
+
+                    {/* Payment Methods Configuration */}
+                    <Card>
+                      <CardHeader className="bg-default-50 border-b border-default-200">
+                        <div className="flex justify-between items-center w-full">
+                          <div>
+                            <h4 className="text-stat-sm font-semibold">
+                              Payment Methods
+                            </h4>
+                            <p className="text-sm text-default-500">
+                              Manage available payment methods for purchases
+                            </p>
+                          </div>
+                          <Button
+                            color="primary"
+                            startContent={<IoAddOutline />}
+                            variant="flat"
+                            onPress={addPaymentMethodModalState.open}
+                          >
+                            Add Payment Method
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardBody className="space-y-4">
+                        {settingsForm.enabledPaymentMethods?.map((method) => (
+                          <Card
+                            key={method.id}
+                            className="border border-default-200"
+                          >
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="text-stat">{method.icon}</div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2 mb-1">
+                                      <span className="font-medium text-default-900">
+                                        {method.name}
+                                      </span>
+                                      {method.isCustom && (
+                                        <Chip
+                                          color="primary"
+                                          size="sm"
+                                          variant="flat"
+                                        >
+                                          Custom
+                                        </Chip>
+                                      )}
+                                      {method.requiresReference && (
+                                        <Chip
+                                          color="warning"
+                                          size="sm"
+                                          variant="flat"
+                                        >
+                                          Requires Reference
+                                        </Chip>
+                                      )}
+                                    </div>
+                                    {method.description && (
+                                      <p className="text-sm text-default-500">
+                                        {method.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center space-x-4">
+                                  <div className="flex items-center space-x-2">
+                                    <Switch
+                                      isSelected={method.isEnabled}
+                                      onValueChange={(isEnabled) => {
+                                        const updatedMethods =
+                                          settingsForm.enabledPaymentMethods?.map(
+                                            (pm) =>
+                                              pm.id === method.id
+                                                ? { ...pm, isEnabled }
+                                                : pm,
+                                          ) || [];
+
+                                        setSettingsForm((prev) => ({
+                                          ...prev,
+                                          enabledPaymentMethods: updatedMethods,
+                                        }));
+                                      }}
+                                    />
+                                    <span className="text-sm text-default-700">
+                                      Enabled
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      checked={
+                                        settingsForm.defaultPaymentMethod ===
+                                        method.key
+                                      }
+                                      className="h-4 w-4 text-primary focus:ring-primary border-default-300"
+                                      disabled={!method.isEnabled}
+                                      name="defaultPaymentMethod"
+                                      type="radio"
+                                      value={method.key}
+                                      onChange={(e) =>
+                                        setSettingsForm((prev) => ({
+                                          ...prev,
+                                          defaultPaymentMethod: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                    <span className="text-sm text-default-700">
+                                      Default
+                                    </span>
+                                  </div>
+
+                                  <div className="flex space-x-1">
+                                    <Button
+                                      isIconOnly
+                                      color="default"
+                                      size="sm"
+                                      variant="light"
+                                      onPress={() => handleOpenEditModal(method)}
+                                    >
+                                      <IoCreateOutline size={16} />
+                                    </Button>
+
+                                    {method.isCustom && (
+                                      <Button
+                                        isIconOnly
+                                        color="danger"
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() =>
+                                          handleDeletePaymentMethod(method.id)
+                                        }
+                                      >
+                                        <IoTrashOutline size={16} />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardBody>
+                          </Card>
+                        ))}
+
+                        {(!settingsForm.enabledPaymentMethods ||
+                          settingsForm.enabledPaymentMethods.length === 0) && (
+                            <div className="text-center py-8">
+                              <div className="text-default-400 mb-4">
+                                <svg
+                                  className="mx-auto opacity-50"
+                                  fill="none"
+                                  height="48"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  viewBox="0 0 24 24"
+                                  width="48"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <rect
+                                    height="16"
+                                    rx="2"
+                                    ry="2"
+                                    width="22"
+                                    x="1"
+                                    y="4"
+                                  />
+                                  <line x1="1" x2="23" y1="10" y2="10" />
+                                </svg>
+                              </div>
+                              <h3 className="text-stat-sm font-medium text-default-700 mb-2">
+                                No payment methods configured
+                              </h3>
+                              <p className="text-default-500 mb-4">
+                                Add payment methods to enable different payment
+                                options for purchases.
+                              </p>
+                              <Button
+                                color="primary"
+                                startContent={<IoAddOutline />}
+                                onPress={addPaymentMethodModalState.open}
+                              >
+                                Add Your First Payment Method
+                              </Button>
+                            </div>
+                          )}
+                      </CardBody>
+                    </Card>
+
+                    {/* Other Settings */}
+                    <Card>
+                      <CardHeader className="bg-default-50 border-b border-default-200">
+                        <h4 className="text-stat-sm font-semibold">Other Settings</h4>
+                      </CardHeader>
+                      <CardBody className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Enable Discount</p>
+                            <p className="text-sm text-default-500">
+                              Allow discounts on purchases
+                            </p>
+                          </div>
+                          <Switch
+                            isSelected={settingsForm.enableDiscount}
+                            onValueChange={(value) =>
+                              setSettingsForm((prev) => ({
+                                ...prev,
+                                enableDiscount: value,
+                              }))
+                            }
+                          />
+                        </div>
+
+                        {settingsForm.enableDiscount && (
                           <Input
-                            description="Default tax percentage for new purchases"
+                            description="Default discount percentage for new purchases"
                             endContent="%"
-                            label="Default Tax Percentage"
-                            placeholder="13"
+                            label="Default Discount Percentage"
+                            placeholder="0"
                             type="number"
                             value={
-                              settingsForm.defaultTaxPercentage?.toString() ||
+                              settingsForm.defaultDiscountPercentage?.toString() ||
                               "0"
                             }
                             onChange={(e) =>
                               setSettingsForm((prev) => ({
                                 ...prev,
-                                defaultTaxPercentage:
+                                defaultDiscountPercentage:
                                   parseFloat(e.target.value) || 0,
                               }))
                             }
                           />
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input
-                            description="Display label for tax (e.g., VAT, GST, Tax)"
-                            label="Tax Label"
-                            placeholder="VAT"
-                            value={settingsForm.taxLabel || ""}
+                            description="Prefix for purchase numbers"
+                            label="Invoice Prefix"
+                            placeholder="PUR"
+                            value={settingsForm.invoicePrefix || ""}
                             onChange={(e) =>
                               setSettingsForm((prev) => ({
                                 ...prev,
-                                taxLabel: e.target.value,
+                                invoicePrefix: e.target.value,
+                              }))
+                            }
+                          />
+                          <Input
+                            description="Next invoice number in sequence"
+                            label="Next Invoice Number"
+                            placeholder="1001"
+                            type="number"
+                            value={
+                              settingsForm.nextInvoiceNumber?.toString() || "1001"
+                            }
+                            onChange={(e) =>
+                              setSettingsForm((prev) => ({
+                                ...prev,
+                                nextInvoiceNumber:
+                                  parseInt(e.target.value) || 1001,
                               }))
                             }
                           />
                         </div>
-                      )}
-                    </CardBody>
-                  </Card>
+                      </CardBody>
+                    </Card>
+                  </div>
+                </div>
+              )
+            }
 
-                  {/* Payment Methods Configuration */}
-                  <Card>
-                    <CardHeader className="bg-default-50 border-b border-default-200">
-                      <div className="flex justify-between items-center w-full">
-                        <div>
-                          <h4 className="text-lg font-semibold">
-                            Payment Methods
-                          </h4>
-                          <p className="text-sm text-default-500">
-                            Manage available payment methods for purchases
-                          </p>
-                        </div>
-                        <Button
-                          color="primary"
-                          startContent={<IoAddOutline />}
-                          variant="flat"
-                          onPress={addPaymentMethodModalState.open}
-                        >
-                          Add Payment Method
-                        </Button>
+            {/* Stock Book Tab */}
+            {
+              activeTab === "stock_book" && (
+                <div className="py-6 space-y-6">
+                  {!selectedMedicineForStockBook ? (
+                    <>
+                      <div className="flex flex-col sm:flex-row justify-between gap-4">
+                        <Input
+                          className="w-full sm:max-w-xs"
+                          placeholder="Search medicines..."
+                          startContent={
+                            <IoSearchOutline className="text-default-400" />
+                          }
+                          value={stockBookSearchQuery}
+                          onChange={(e) =>
+                            setStockBookSearchQuery(e.target.value)
+                          }
+                        />
+                        <p className="text-xs text-default-400">
+                          Select a medicine to view its transaction history.
+                        </p>
                       </div>
-                    </CardHeader>
-                    <CardBody className="space-y-4">
-                      {settingsForm.enabledPaymentMethods?.map((method) => (
-                        <Card
-                          key={method.id}
-                          className="border border-default-200"
-                        >
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="text-2xl">{method.icon}</div>
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-2 mb-1">
-                                    <span className="font-medium text-default-900">
-                                      {method.name}
-                                    </span>
-                                    {method.isCustom && (
-                                      <Chip
+
+                      <Card className="border border-default-200">
+                        <CardBody className="p-0">
+                          {filteredMedicines.length === 0 ? (
+                            <div className="text-center py-12 px-4">
+                              <IoMedicalOutline
+                                className="mx-auto text-default-300 mb-4"
+                                size={48}
+                              />
+                              <h3 className="text-stat-sm font-medium text-default-700 mb-1">
+                                {stockBookSearchQuery
+                                  ? "No medicines found"
+                                  : "No medicines available"}
+                              </h3>
+                              <p className="text-default-500">
+                                {stockBookSearchQuery
+                                  ? "Try adjusting your search criteria."
+                                  : "Medicines will appear here once added to the system."}
+                              </p>
+                            </div>
+                          ) : (
+                            <Table aria-label="Medicines list">
+                              <TableHeader>
+                                <TableColumn>MEDICINE NAME</TableColumn>
+                                <TableColumn>GENERIC NAME</TableColumn>
+                                <TableColumn>PRICE</TableColumn>
+                                <TableColumn>ACTIONS</TableColumn>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredMedicines.map((medicine) => (
+                                  <TableRow key={medicine.id}>
+                                    <TableCell>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">
+                                          {medicine.name}
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-sm text-default-500">
+                                        {medicine.genericName || "N/A"}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-sm">
+                                        NPR{" "}
+                                        {medicine.price?.toLocaleString() || "0"}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
                                         color="primary"
                                         size="sm"
                                         variant="flat"
+                                        onPress={() =>
+                                          setSelectedMedicineForStockBook(
+                                            medicine,
+                                          )
+                                        }
                                       >
-                                        Custom
-                                      </Chip>
-                                    )}
-                                    {method.requiresReference && (
+                                        View Transactions
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                        </CardBody>
+                      </Card>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <Button
+                            startContent={<IoArrowBackOutline />}
+                            variant="light"
+                            onPress={() => {
+                              setSelectedMedicineForStockBook(null);
+                              setStockTransactions([]);
+                            }}
+                          >
+                            Back to Medicines
+                          </Button>
+                          <div>
+                            <h3 className="text-stat-sm font-semibold">
+                              {selectedMedicineForStockBook.name}
+                            </h3>
+                            {selectedMedicineForStockBook.genericName && (
+                              <p className="text-sm text-default-500">
+                                {selectedMedicineForStockBook.genericName}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Summary Cards */}
+                      {(() => {
+                        const totalSold = selectedMedicinePurchaseDetails.reduce(
+                          (sum, d) => sum + d.quantity,
+                          0,
+                        );
+                        const totalPurchased = stockTransactions
+                          .filter(
+                            (t) =>
+                              t.type === "purchase" || t.type === "adjustment",
+                          )
+                          .reduce((sum, t) => sum + t.quantity, 0);
+
+                        const totalReturned = purchases.reduce((sum, p) => {
+                          const returnQty = (p.returns || []).reduce(
+                            (pSum, r) => {
+                              return (
+                                pSum +
+                                r.items
+                                  .filter(
+                                    (item) =>
+                                      item.medicineId ===
+                                      selectedMedicineForStockBook.id,
+                                  )
+                                  .reduce((iSum, item) => iSum + item.quantity, 0)
+                              );
+                            },
+                            0,
+                          );
+
+                          return sum + returnQty;
+                        }, 0);
+
+                        const netQuantity =
+                          totalPurchased - totalSold + totalReturned;
+
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <Card className="border border-default-200">
+                              <CardBody>
+                                <div className="mb-4">
+                                  <p className="text-sm text-default-500">
+                                    Total Sold
+                                  </p>
+                                  <p className="text-stat-sm font-semibold text-danger mt-1">
+                                    {totalSold}
+                                  </p>
+                                </div>
+                              </CardBody>
+                            </Card>
+                            <Card className="border border-default-200">
+                              <CardBody>
+                                <div className="mb-4">
+                                  <p className="text-sm text-default-500">
+                                    Total Returned
+                                  </p>
+                                  <p className="text-stat-sm font-semibold text-teal-600 mt-1">
+                                    {totalReturned}
+                                  </p>
+                                </div>
+                              </CardBody>
+                            </Card>
+                            <Card className="border border-default-200">
+                              <CardBody>
+                                <div className="mb-4">
+                                  <p className="text-sm text-default-500">
+                                    Total Purchased
+                                  </p>
+                                  <p className="text-stat-sm font-semibold text-success mt-1">
+                                    {totalPurchased}
+                                  </p>
+                                </div>
+                              </CardBody>
+                            </Card>
+                            <Card className="border border-default-200">
+                              <CardBody>
+                                <div className="mb-4">
+                                  <p className="text-sm text-default-500">
+                                    Net Quantity
+                                  </p>
+                                  <p
+                                    className={`text-stat-sm font-semibold mt-1 ${netQuantity > 0
+                                      ? "text-success"
+                                      : netQuantity < 0
+                                        ? "text-danger"
+                                        : "text-default-600"
+                                      }`}
+                                  >
+                                    {netQuantity}
+                                  </p>
+                                </div>
+                              </CardBody>
+                            </Card>
+                          </div>
+                        );
+                      })()}
+
+                      <Card className="border border-default-200">
+                        <CardBody className="p-0">
+                          {isLoadingStockTransactions ? (
+                            <div className="flex justify-center items-center py-12">
+                              <Spinner size="lg" />
+                            </div>
+                          ) : medicineTransactions.length === 0 ? (
+                            <div className="text-center py-12 px-4">
+                              <IoReceiptOutline
+                                className="mx-auto text-default-300 mb-4"
+                                size={48}
+                              />
+                              <h3 className="text-stat-sm font-medium text-default-700 mb-1">
+                                No transactions
+                              </h3>
+                              <p className="text-default-500">
+                                No transactions recorded for this medicine yet.
+                              </p>
+                            </div>
+                          ) : (
+                            <Table aria-label="Medicine transactions">
+                              <TableHeader>
+                                <TableColumn>DATE</TableColumn>
+                                <TableColumn>TYPE</TableColumn>
+                                <TableColumn>PARTY</TableColumn>
+                                <TableColumn>QUANTITY</TableColumn>
+                                <TableColumn>BATCH</TableColumn>
+                                <TableColumn>MANUFACTURER</TableColumn>
+                                <TableColumn>EXPIRY</TableColumn>
+                                <TableColumn>REFERENCE</TableColumn>
+                                <TableColumn>AMOUNT</TableColumn>
+                              </TableHeader>
+                              <TableBody>
+                                {medicineTransactions.map((transaction) => (
+                                  <TableRow key={transaction.id}>
+                                    <TableCell>
+                                      <div className="text-sm">
+                                        {transaction.date instanceof Date &&
+                                          !isNaN(transaction.date.getTime())
+                                          ? format(
+                                            transaction.date,
+                                            "MMM dd, yyyy",
+                                          )
+                                          : "N/A"}
+                                      </div>
+                                      <div className="text-xs text-default-500">
+                                        {transaction.date instanceof Date &&
+                                          !isNaN(transaction.date.getTime())
+                                          ? format(transaction.date, "hh:mm a")
+                                          : "N/A"}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
                                       <Chip
-                                        color="warning"
+                                        color={
+                                          transaction.type === "sale"
+                                            ? "danger"
+                                            : transaction.type === "adjustment"
+                                              ? "warning"
+                                              : transaction.type === "return"
+                                                ? "secondary"
+                                                : "success"
+                                        }
                                         size="sm"
                                         variant="flat"
                                       >
-                                        Requires Reference
-                                      </Chip>
-                                    )}
-                                  </div>
-                                  {method.description && (
-                                    <p className="text-sm text-default-500">
-                                      {method.description}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center space-x-4">
-                                <div className="flex items-center space-x-2">
-                                  <Switch
-                                    isSelected={method.isEnabled}
-                                    onValueChange={(isEnabled) => {
-                                      const updatedMethods =
-                                        settingsForm.enabledPaymentMethods?.map(
-                                          (pm) =>
-                                            pm.id === method.id
-                                              ? { ...pm, isEnabled }
-                                              : pm,
-                                        ) || [];
-
-                                      setSettingsForm((prev) => ({
-                                        ...prev,
-                                        enabledPaymentMethods: updatedMethods,
-                                      }));
-                                    }}
-                                  />
-                                  <span className="text-sm text-default-700">
-                                    Enabled
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center space-x-2">
-                                  <input
-                                    checked={
-                                      settingsForm.defaultPaymentMethod ===
-                                      method.key
-                                    }
-                                    className="h-4 w-4 text-primary focus:ring-primary border-default-300"
-                                    disabled={!method.isEnabled}
-                                    name="defaultPaymentMethod"
-                                    type="radio"
-                                    value={method.key}
-                                    onChange={(e) =>
-                                      setSettingsForm((prev) => ({
-                                        ...prev,
-                                        defaultPaymentMethod: e.target.value,
-                                      }))
-                                    }
-                                  />
-                                  <span className="text-sm text-default-700">
-                                    Default
-                                  </span>
-                                </div>
-
-                                <div className="flex space-x-1">
-                                  <Button
-                                    isIconOnly
-                                    color="default"
-                                    size="sm"
-                                    variant="light"
-                                    onPress={() => handleOpenEditModal(method)}
-                                  >
-                                    <IoCreateOutline size={16} />
-                                  </Button>
-
-                                  {method.isCustom && (
-                                    <Button
-                                      isIconOnly
-                                      color="danger"
-                                      size="sm"
-                                      variant="light"
-                                      onPress={() =>
-                                        handleDeletePaymentMethod(method.id)
-                                      }
-                                    >
-                                      <IoTrashOutline size={16} />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </CardBody>
-                        </Card>
-                      ))}
-
-                      {(!settingsForm.enabledPaymentMethods ||
-                        settingsForm.enabledPaymentMethods.length === 0) && (
-                          <div className="text-center py-8">
-                            <div className="text-default-400 mb-4">
-                              <svg
-                                className="mx-auto opacity-50"
-                                fill="none"
-                                height="48"
-                                stroke="currentColor"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                viewBox="0 0 24 24"
-                                width="48"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <rect
-                                  height="16"
-                                  rx="2"
-                                  ry="2"
-                                  width="22"
-                                  x="1"
-                                  y="4"
-                                />
-                                <line x1="1" x2="23" y1="10" y2="10" />
-                              </svg>
-                            </div>
-                            <h3 className="text-lg font-medium text-default-700 mb-2">
-                              No payment methods configured
-                            </h3>
-                            <p className="text-default-500 mb-4">
-                              Add payment methods to enable different payment
-                              options for purchases.
-                            </p>
-                            <Button
-                              color="primary"
-                              startContent={<IoAddOutline />}
-                              onPress={addPaymentMethodModalState.open}
-                            >
-                              Add Your First Payment Method
-                            </Button>
-                          </div>
-                        )}
-                    </CardBody>
-                  </Card>
-
-                  {/* Other Settings */}
-                  <Card>
-                    <CardHeader className="bg-default-50 border-b border-default-200">
-                      <h4 className="text-lg font-semibold">Other Settings</h4>
-                    </CardHeader>
-                    <CardBody className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">Enable Discount</p>
-                          <p className="text-sm text-default-500">
-                            Allow discounts on purchases
-                          </p>
-                        </div>
-                        <Switch
-                          isSelected={settingsForm.enableDiscount}
-                          onValueChange={(value) =>
-                            setSettingsForm((prev) => ({
-                              ...prev,
-                              enableDiscount: value,
-                            }))
-                          }
-                        />
-                      </div>
-
-                      {settingsForm.enableDiscount && (
-                        <Input
-                          description="Default discount percentage for new purchases"
-                          endContent="%"
-                          label="Default Discount Percentage"
-                          placeholder="0"
-                          type="number"
-                          value={
-                            settingsForm.defaultDiscountPercentage?.toString() ||
-                            "0"
-                          }
-                          onChange={(e) =>
-                            setSettingsForm((prev) => ({
-                              ...prev,
-                              defaultDiscountPercentage:
-                                parseFloat(e.target.value) || 0,
-                            }))
-                          }
-                        />
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                          description="Prefix for purchase numbers"
-                          label="Invoice Prefix"
-                          placeholder="PUR"
-                          value={settingsForm.invoicePrefix || ""}
-                          onChange={(e) =>
-                            setSettingsForm((prev) => ({
-                              ...prev,
-                              invoicePrefix: e.target.value,
-                            }))
-                          }
-                        />
-                        <Input
-                          description="Next invoice number in sequence"
-                          label="Next Invoice Number"
-                          placeholder="1001"
-                          type="number"
-                          value={
-                            settingsForm.nextInvoiceNumber?.toString() || "1001"
-                          }
-                          onChange={(e) =>
-                            setSettingsForm((prev) => ({
-                              ...prev,
-                              nextInvoiceNumber:
-                                parseInt(e.target.value) || 1001,
-                            }))
-                          }
-                        />
-                      </div>
-                    </CardBody>
-                  </Card>
-                </div>
-              </div>
-            )}
-
-            {/* Stock Book Tab */}
-            {activeTab === "stock_book" && (
-              <div className="py-6 space-y-6">
-                {!selectedMedicineForStockBook ? (
-                  <>
-                    <div className="flex flex-col sm:flex-row justify-between gap-4">
-                      <Input
-                        className="w-full sm:max-w-xs"
-                        placeholder="Search medicines..."
-                        startContent={
-                          <IoSearchOutline className="text-default-400" />
-                        }
-                        value={stockBookSearchQuery}
-                        onChange={(e) =>
-                          setStockBookSearchQuery(e.target.value)
-                        }
-                      />
-                      <p className="text-xs text-default-400">
-                        Select a medicine to view its transaction history.
-                      </p>
-                    </div>
-
-                    <Card className="border border-default-200">
-                      <CardBody className="p-0">
-                        {filteredMedicines.length === 0 ? (
-                          <div className="text-center py-12 px-4">
-                            <IoMedicalOutline
-                              className="mx-auto text-default-300 mb-4"
-                              size={48}
-                            />
-                            <h3 className="text-lg font-medium text-default-700 mb-1">
-                              {stockBookSearchQuery
-                                ? "No medicines found"
-                                : "No medicines available"}
-                            </h3>
-                            <p className="text-default-500">
-                              {stockBookSearchQuery
-                                ? "Try adjusting your search criteria."
-                                : "Medicines will appear here once added to the system."}
-                            </p>
-                          </div>
-                        ) : (
-                          <Table aria-label="Medicines list">
-                            <TableHeader>
-                              <TableColumn>MEDICINE NAME</TableColumn>
-                              <TableColumn>GENERIC NAME</TableColumn>
-                              <TableColumn>PRICE</TableColumn>
-                              <TableColumn>ACTIONS</TableColumn>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredMedicines.map((medicine) => (
-                                <TableRow key={medicine.id}>
-                                  <TableCell>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">
-                                        {medicine.name}
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-sm text-default-500">
-                                      {medicine.genericName || "N/A"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-sm">
-                                      NPR{" "}
-                                      {medicine.price?.toLocaleString() || "0"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button
-                                      color="primary"
-                                      size="sm"
-                                      variant="flat"
-                                      onPress={() =>
-                                        setSelectedMedicineForStockBook(
-                                          medicine,
-                                        )
-                                      }
-                                    >
-                                      View Transactions
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </CardBody>
-                    </Card>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <Button
-                          startContent={<IoArrowBackOutline />}
-                          variant="light"
-                          onPress={() => {
-                            setSelectedMedicineForStockBook(null);
-                            setStockTransactions([]);
-                          }}
-                        >
-                          Back to Medicines
-                        </Button>
-                        <div>
-                          <h3 className="text-xl font-semibold">
-                            {selectedMedicineForStockBook.name}
-                          </h3>
-                          {selectedMedicineForStockBook.genericName && (
-                            <p className="text-sm text-default-500">
-                              {selectedMedicineForStockBook.genericName}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Summary Cards */}
-                    {(() => {
-                      const totalSold = selectedMedicinePurchaseDetails.reduce(
-                        (sum, d) => sum + d.quantity,
-                        0,
-                      );
-                      const totalPurchased = stockTransactions
-                        .filter(
-                          (t) =>
-                            t.type === "purchase" || t.type === "adjustment",
-                        )
-                        .reduce((sum, t) => sum + t.quantity, 0);
-
-                      const totalReturned = purchases.reduce((sum, p) => {
-                        const returnQty = (p.returns || []).reduce(
-                          (pSum, r) => {
-                            return (
-                              pSum +
-                              r.items
-                                .filter(
-                                  (item) =>
-                                    item.medicineId ===
-                                    selectedMedicineForStockBook.id,
-                                )
-                                .reduce((iSum, item) => iSum + item.quantity, 0)
-                            );
-                          },
-                          0,
-                        );
-
-                        return sum + returnQty;
-                      }, 0);
-
-                      const netQuantity =
-                        totalPurchased - totalSold + totalReturned;
-
-                      return (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <Card className="border border-default-200">
-                            <CardBody>
-                              <div className="mb-4">
-                                <p className="text-sm text-default-500">
-                                  Total Sold
-                                </p>
-                                <p className="text-2xl font-semibold text-danger mt-1">
-                                  {totalSold}
-                                </p>
-                              </div>
-                            </CardBody>
-                          </Card>
-                          <Card className="border border-default-200">
-                            <CardBody>
-                              <div className="mb-4">
-                                <p className="text-sm text-default-500">
-                                  Total Returned
-                                </p>
-                                <p className="text-2xl font-semibold text-teal-600 mt-1">
-                                  {totalReturned}
-                                </p>
-                              </div>
-                            </CardBody>
-                          </Card>
-                          <Card className="border border-default-200">
-                            <CardBody>
-                              <div className="mb-4">
-                                <p className="text-sm text-default-500">
-                                  Total Purchased
-                                </p>
-                                <p className="text-2xl font-semibold text-success mt-1">
-                                  {totalPurchased}
-                                </p>
-                              </div>
-                            </CardBody>
-                          </Card>
-                          <Card className="border border-default-200">
-                            <CardBody>
-                              <div className="mb-4">
-                                <p className="text-sm text-default-500">
-                                  Net Quantity
-                                </p>
-                                <p
-                                  className={`text-2xl font-semibold mt-1 ${netQuantity > 0
-                                    ? "text-success"
-                                    : netQuantity < 0
-                                      ? "text-danger"
-                                      : "text-default-600"
-                                    }`}
-                                >
-                                  {netQuantity}
-                                </p>
-                              </div>
-                            </CardBody>
-                          </Card>
-                        </div>
-                      );
-                    })()}
-
-                    <Card className="border border-default-200">
-                      <CardBody className="p-0">
-                        {isLoadingStockTransactions ? (
-                          <div className="flex justify-center items-center py-12">
-                            <Spinner size="lg" />
-                          </div>
-                        ) : medicineTransactions.length === 0 ? (
-                          <div className="text-center py-12 px-4">
-                            <IoReceiptOutline
-                              className="mx-auto text-default-300 mb-4"
-                              size={48}
-                            />
-                            <h3 className="text-lg font-medium text-default-700 mb-1">
-                              No transactions
-                            </h3>
-                            <p className="text-default-500">
-                              No transactions recorded for this medicine yet.
-                            </p>
-                          </div>
-                        ) : (
-                          <Table aria-label="Medicine transactions">
-                            <TableHeader>
-                              <TableColumn>DATE</TableColumn>
-                              <TableColumn>TYPE</TableColumn>
-                              <TableColumn>PARTY</TableColumn>
-                              <TableColumn>QUANTITY</TableColumn>
-                              <TableColumn>BATCH</TableColumn>
-                              <TableColumn>MANUFACTURER</TableColumn>
-                              <TableColumn>EXPIRY</TableColumn>
-                              <TableColumn>REFERENCE</TableColumn>
-                              <TableColumn>AMOUNT</TableColumn>
-                            </TableHeader>
-                            <TableBody>
-                              {medicineTransactions.map((transaction) => (
-                                <TableRow key={transaction.id}>
-                                  <TableCell>
-                                    <div className="text-sm">
-                                      {transaction.date instanceof Date &&
-                                        !isNaN(transaction.date.getTime())
-                                        ? format(
-                                          transaction.date,
-                                          "MMM dd, yyyy",
-                                        )
-                                        : "N/A"}
-                                    </div>
-                                    <div className="text-xs text-default-500">
-                                      {transaction.date instanceof Date &&
-                                        !isNaN(transaction.date.getTime())
-                                        ? format(transaction.date, "hh:mm a")
-                                        : "N/A"}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Chip
-                                      color={
-                                        transaction.type === "sale"
-                                          ? "danger"
+                                        {transaction.type === "sale"
+                                          ? "Sale"
                                           : transaction.type === "adjustment"
-                                            ? "warning"
+                                            ? "Adjustment"
                                             : transaction.type === "return"
-                                              ? "secondary"
-                                              : "success"
-                                      }
-                                      size="sm"
-                                      variant="flat"
-                                    >
-                                      {transaction.type === "sale"
-                                        ? "Sale"
-                                        : transaction.type === "adjustment"
-                                          ? "Adjustment"
-                                          : transaction.type === "return"
-                                            ? "Return"
-                                            : "Purchase"}
-                                    </Chip>
-                                  </TableCell>
-                                  <TableCell>{transaction.party}</TableCell>
-                                  <TableCell>
-                                    <span
-                                      className={`font-medium ${transaction.quantity < 0
-                                        ? "text-danger"
-                                        : "text-success"
-                                        }`}
-                                    >
-                                      {transaction.quantity > 0 ? "+" : ""}
-                                      {transaction.quantity}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    {transaction.batchNumber ? (
-                                      <span className="text-sm text-default-600">
-                                        {transaction.batchNumber}
+                                              ? "Return"
+                                              : "Purchase"}
+                                      </Chip>
+                                    </TableCell>
+                                    <TableCell>{transaction.party}</TableCell>
+                                    <TableCell>
+                                      <span
+                                        className={`font-medium ${transaction.quantity < 0
+                                          ? "text-danger"
+                                          : "text-success"
+                                          }`}
+                                      >
+                                        {transaction.quantity > 0 ? "+" : ""}
+                                        {transaction.quantity}
                                       </span>
-                                    ) : (
-                                      <span className="text-default-400">
-                                        —
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {transaction.manufacturer ? (
-                                      <span className="text-sm text-default-600">
-                                        {transaction.manufacturer}
-                                      </span>
-                                    ) : (
-                                      <span className="text-default-400">
-                                        —
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {transaction.expiryDate ? (
-                                      <div className="text-sm">
-                                        {format(
-                                          transaction.expiryDate,
-                                          "MMM dd, yyyy",
-                                        )}
-                                        {transaction.expiryDate <
-                                          new Date() && (
-                                            <Chip
-                                              className="ml-1"
-                                              color="danger"
-                                              size="sm"
-                                              variant="flat"
-                                            >
-                                              Expired
-                                            </Chip>
-                                          )}
-                                      </div>
-                                    ) : (
-                                      <span className="text-default-400">
-                                        —
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-sm text-default-500">
-                                      {transaction.reference}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    {transaction.amount > 0 ? (
-                                      <span className="text-sm">
-                                        NPR{" "}
-                                        {transaction.amount.toLocaleString(
-                                          undefined,
-                                          {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          },
-                                        )}
-                                      </span>
-                                    ) : (
-                                      <span className="text-default-400">
-                                        —
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </CardBody>
-                    </Card>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Daily Report Tab */}
-            {activeTab === "daily_sales_report" && (
-              <div className="py-6">
-                <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <Input
-                      className="w-48"
-                      label="Select Date"
-                      type="date"
-                      value={dailyReportDate}
-                      variant="bordered"
-                      onChange={(e) => setDailyReportDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      color="success"
-                      isDisabled={isExportingDailyReport}
-                      isLoading={isExportingDailyReport}
-                      startContent={<IoDownloadOutline size={20} />}
-                      variant="flat"
-                      onPress={async () => {
-                        setIsExportingDailyReport(true);
-                        try {
-                          const { exportPharmacyDailyReportToExcel } =
-                            await import("@/utils/reportExports");
-                          const dailyPurchases = getDailyReportPurchases();
-                          const selectedDate = new Date(dailyReportDate);
-
-                          exportPharmacyDailyReportToExcel(
-                            dailyPurchases,
-                            selectedDate,
-                            clinic?.name,
-                          );
-                        } catch (error) {
-                          console.error("Error exporting to Excel:", error);
-                          addToast({
-                            title: "Export Failed",
-                            description:
-                              "Failed to export daily report. Please try again.",
-                            color: "danger",
-                          });
-                        } finally {
-                          setIsExportingDailyReport(false);
-                        }
-                      }}
-                    >
-                      Export Excel
-                    </Button>
-                    <Button
-                      color="danger"
-                      isDisabled={isExportingDailyReport}
-                      isLoading={isExportingDailyReport}
-                      startContent={<IoDocumentTextOutline size={20} />}
-                      variant="flat"
-                      onPress={async () => {
-                        setIsExportingDailyReport(true);
-                        try {
-                          const { exportPharmacyDailyReportToPDF } =
-                            await import("@/utils/reportExports");
-                          const dailyPurchases = getDailyReportPurchases();
-                          const selectedDate = new Date(dailyReportDate);
-
-                          exportPharmacyDailyReportToPDF(
-                            dailyPurchases,
-                            selectedDate,
-                            clinic?.name,
-                          );
-                        } catch (error) {
-                          console.error("Error exporting to PDF:", error);
-                          addToast({
-                            title: "Export Failed",
-                            description:
-                              "Failed to export daily report. Please try again.",
-                            color: "danger",
-                          });
-                        } finally {
-                          setIsExportingDailyReport(false);
-                        }
-                      }}
-                    >
-                      Export PDF
-                    </Button>
-                  </div>
-                </div>
-
-                {(() => {
-                  const summary = getDailyReportSummary();
-                  const dailyPurchases = getDailyReportPurchases();
-
-                  return (
-                    <>
-                      {/* Summary Cards */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  Total Sales
-                                </p>
-                                <p className="text-2xl font-semibold text-default-900 mt-1">
-                                  NPR{" "}
-                                  {summary.totalSales.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    },
-                                  )}
-                                </p>
-                              </div>
-                              <IoWalletOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  Total Items
-                                </p>
-                                <p className="text-2xl font-semibold text-default-900 mt-1">
-                                  {summary.totalItems}
-                                </p>
-                              </div>
-                              <IoMedicalOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  Total No. of Sales
-                                </p>
-                                <p className="text-2xl font-semibold text-default-900 mt-1">
-                                  {summary.totalPurchases}
-                                </p>
-                              </div>
-                              <IoReceiptOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  No of sales (Paid)
-                                </p>
-                                <p className="text-2xl font-semibold text-success mt-1">
-                                  {summary.paidCount}
-                                </p>
-                              </div>
-                              <IoCheckmarkCircleOutline
-                                className="text-success"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <p className="text-sm text-default-500">
-                                  Total Stock
-                                </p>
-                                {isLoadingStockSummary ? (
-                                  <Spinner className="mt-1" size="sm" />
-                                ) : totalStock === null ? (
-                                  <p className="text-lg font-semibold text-default-400 mt-1">
-                                    Data not available
-                                  </p>
-                                ) : (
-                                  <p className="text-2xl font-semibold text-default-900 mt-1">
-                                    {totalStock.toLocaleString()}
-                                  </p>
-                                )}
-                                <p className="text-xs text-default-400 mt-1">
-                                  {totalStock !== null
-                                    ? `End of day ${format(new Date(dailyReportDate), "MMM dd, yyyy")}`
-                                    : `Sold Today: ${summary.totalItems}`}
-                                </p>
-                              </div>
-                              <IoStorefrontOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                      </div>
-
-                      {/* Daily Purchases Table */}
-                      {dailyPurchases.length === 0 ? (
-                        <Card>
-                          <CardBody>
-                            <div className="text-center py-12">
-                              <div className="text-default-400 mb-4">
-                                <IoReceiptOutline
-                                  className="mx-auto opacity-50"
-                                  size={48}
-                                />
-                              </div>
-                              <h3 className="text-lg font-medium text-default-700 mb-2">
-                                No sales recorded
-                              </h3>
-                              <p className="text-default-500">
-                                No purchases found for{" "}
-                                {format(
-                                  new Date(dailyReportDate),
-                                  "MMMM dd, yyyy",
-                                )}
-                                .
-                              </p>
-                            </div>
-                          </CardBody>
-                        </Card>
-                      ) : (
-                        <Card>
-                          <CardBody className="p-0">
-                            <Table aria-label="Daily sales table">
-                              <TableHeader>
-                                <TableColumn>PURCHASE NO</TableColumn>
-                                <TableColumn>DATE</TableColumn>
-                                <TableColumn>PATIENT NAME</TableColumn>
-                                <TableColumn>ITEMS</TableColumn>
-                                <TableColumn>TOTAL</TableColumn>
-                                <TableColumn>DISCOUNT</TableColumn>
-                                <TableColumn>TAX</TableColumn>
-                                <TableColumn>NET AMOUNT</TableColumn>
-                                <TableColumn>PAYMENT STATUS</TableColumn>
-                                <TableColumn>PAYMENT TYPE</TableColumn>
-                              </TableHeader>
-                              <TableBody>
-                                {dailyPurchases.map((purchase) => {
-                                  const purchaseDate =
-                                    purchase.purchaseDate instanceof Date
-                                      ? purchase.purchaseDate
-                                      : new Date(purchase.purchaseDate);
-
-                                  return (
-                                    <TableRow key={purchase.id}>
-                                      <TableCell>
-                                        <div className="font-medium">
-                                          {purchase.purchaseNo}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
+                                    </TableCell>
+                                    <TableCell>
+                                      {transaction.batchNumber ? (
+                                        <span className="text-sm text-default-600">
+                                          {transaction.batchNumber}
+                                        </span>
+                                      ) : (
+                                        <span className="text-default-400">
+                                          —
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {transaction.manufacturer ? (
+                                        <span className="text-sm text-default-600">
+                                          {transaction.manufacturer}
+                                        </span>
+                                      ) : (
+                                        <span className="text-default-400">
+                                          —
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {transaction.expiryDate ? (
                                         <div className="text-sm">
-                                          {format(purchaseDate, "MMM dd, yyyy")}
-                                        </div>
-                                        <div className="text-xs text-default-500">
-                                          {format(purchaseDate, "hh:mm a")}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        {purchase.patientName || (
-                                          <span className="text-default-400 italic">
-                                            Walk-in Customer
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        <div className="text-sm">
-                                          {purchase.items.length} item
-                                          {purchase.items.length !== 1
-                                            ? "s"
-                                            : ""}
-                                        </div>
-                                        <div className="text-xs text-default-500">
-                                          Qty:{" "}
-                                          {purchase.items.reduce(
-                                            (sum, item) => sum + item.quantity,
-                                            0,
+                                          {format(
+                                            transaction.expiryDate,
+                                            "MMM dd, yyyy",
                                           )}
+                                          {transaction.expiryDate <
+                                            new Date() && (
+                                              <Chip
+                                                className="ml-1"
+                                                color="danger"
+                                                size="sm"
+                                                variant="flat"
+                                              >
+                                                Expired
+                                              </Chip>
+                                            )}
                                         </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        NPR{" "}
-                                        {purchase.total.toLocaleString(
-                                          undefined,
-                                          {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          },
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {purchase.discount > 0 ? (
-                                          <span className="text-default-600">
-                                            NPR{" "}
-                                            {purchase.discount.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
-                                          </span>
-                                        ) : (
-                                          <span className="text-default-400">
-                                            —
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {purchase.taxAmount > 0 ? (
-                                          <span className="text-default-600">
-                                            NPR{" "}
-                                            {purchase.taxAmount.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
-                                          </span>
-                                        ) : (
-                                          <span className="text-default-400">
-                                            —
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        <span className="font-semibold text-default-900">
+                                      ) : (
+                                        <span className="text-default-400">
+                                          —
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-sm text-default-500">
+                                        {transaction.reference}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      {transaction.amount > 0 ? (
+                                        <span className="text-sm">
                                           NPR{" "}
-                                          {purchase.netAmount.toLocaleString(
+                                          {transaction.amount.toLocaleString(
                                             undefined,
                                             {
                                               minimumFractionDigits: 2,
@@ -5329,427 +4965,798 @@ export default function PharmacyPage() {
                                             },
                                           )}
                                         </span>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Chip
-                                          color={
-                                            purchase.paymentStatus === "paid"
-                                              ? "success"
-                                              : purchase.paymentStatus ===
-                                                "unpaid" ||
-                                                purchase.paymentStatus ===
-                                                "pending"
-                                                ? "danger"
-                                                : purchase.paymentStatus ===
-                                                  "partial"
-                                                  ? "warning"
-                                                  : "default"
-                                          }
-                                          size="sm"
-                                          variant="flat"
-                                        >
-                                          {purchase.paymentStatus
-                                            .charAt(0)
-                                            .toUpperCase() +
-                                            purchase.paymentStatus.slice(1)}
-                                        </Chip>
-                                      </TableCell>
-                                      <TableCell>
-                                        <span className="text-sm text-default-600">
-                                          {purchase.paymentType || "N/A"}
+                                      ) : (
+                                        <span className="text-default-400">
+                                          —
                                         </span>
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                          </CardBody>
-                        </Card>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Daily Purchases Report Tab */}
-            {activeTab === "daily_purchases_report" && (
-              <div className="py-6">
-                <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <Input
-                      className="w-48"
-                      label="Select Date"
-                      type="date"
-                      value={dailyPurchasesReportDate}
-                      variant="bordered"
-                      onChange={(e) =>
-                        setDailyPurchasesReportDate(e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      color="success"
-                      isDisabled={isExportingDailyPurchasesReport}
-                      isLoading={isExportingDailyPurchasesReport}
-                      startContent={<IoDownloadOutline size={20} />}
-                      variant="flat"
-                      onPress={async () => {
-                        setIsExportingDailyPurchasesReport(true);
-                        try {
-                          const { exportDailyPurchasesReportToExcel } =
-                            await import("@/utils/reportExports");
-                          const selectedDate = new Date(
-                            dailyPurchasesReportDate,
-                          );
-
-                          exportDailyPurchasesReportToExcel(
-                            [],
-                            selectedDate,
-                            clinic?.name,
-                            medicines,
-                            refillTransactions,
-                          );
-                        } catch (error) {
-                          console.error("Error exporting to Excel:", error);
-                          addToast({
-                            title: "Export Failed",
-                            description:
-                              "Failed to export daily purchases report. Please try again.",
-                            color: "danger",
-                          });
-                        } finally {
-                          setIsExportingDailyPurchasesReport(false);
-                        }
-                      }}
-                    >
-                      Export Excel
-                    </Button>
-                    <Button
-                      color="danger"
-                      isDisabled={isExportingDailyPurchasesReport}
-                      isLoading={isExportingDailyPurchasesReport}
-                      startContent={<IoDocumentTextOutline size={20} />}
-                      variant="flat"
-                      onPress={async () => {
-                        setIsExportingDailyPurchasesReport(true);
-                        try {
-                          const { exportDailyPurchasesReportToPDF } =
-                            await import("@/utils/reportExports");
-                          const selectedDate = new Date(
-                            dailyPurchasesReportDate,
-                          );
-
-                          exportDailyPurchasesReportToPDF(
-                            [],
-                            selectedDate,
-                            clinic?.name,
-                            medicines,
-                            refillTransactions,
-                          );
-                        } catch (error) {
-                          console.error("Error exporting to PDF:", error);
-                          addToast({
-                            title: "Export Failed",
-                            description:
-                              "Failed to export daily purchases report. Please try again.",
-                            color: "danger",
-                          });
-                        } finally {
-                          setIsExportingDailyPurchasesReport(false);
-                        }
-                      }}
-                    >
-                      Export PDF
-                    </Button>
-                  </div>
-                </div>
-
-                {(() => {
-                  const summary = getDailyPurchasesReportSummary();
-
-                  return (
-                    <>
-                      {/* Summary Cards */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  Total Purchase Cost
-                                </p>
-                                <p className="text-2xl font-semibold text-default-900 mt-1">
-                                  NPR{" "}
-                                  {summary.totalPurchaseCost.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    },
-                                  )}
-                                </p>
-                              </div>
-                              <IoWalletOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  Total Medicines
-                                </p>
-                                <p className="text-2xl font-semibold text-default-900 mt-1">
-                                  {summary.totalMedicines}
-                                </p>
-                              </div>
-                              <IoMedicalOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  Total Quantity
-                                </p>
-                                <p className="text-2xl font-semibold text-default-900 mt-1">
-                                  {summary.totalQuantity}
-                                </p>
-                              </div>
-                              <IoStorefrontOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                        <Card>
-                          <CardBody className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-default-500">
-                                  Avg Cost/Medicine
-                                </p>
-                                <p className="text-2xl font-semibold text-default-900 mt-1">
-                                  NPR{" "}
-                                  {summary.averageCostPerMedicine.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    },
-                                  )}
-                                </p>
-                              </div>
-                              <IoReceiptOutline
-                                className="text-primary"
-                                size={24}
-                              />
-                            </div>
-                          </CardBody>
-                        </Card>
-                      </div>
-
-                      {/* Daily Purchases Report Table */}
-                      {refillTransactions.length === 0 &&
-                        !isLoadingRefillTransactions ? (
-                        <Card>
-                          <CardBody>
-                            <div className="text-center py-12">
-                              <div className="text-default-400 mb-4">
-                                <IoReceiptOutline
-                                  className="mx-auto opacity-50"
-                                  size={48}
-                                />
-                              </div>
-                              <h3 className="text-lg font-medium text-default-700 mb-2">
-                                No purchases recorded
-                              </h3>
-                              <p className="text-default-500">
-                                No purchases found for{" "}
-                                {format(
-                                  new Date(dailyPurchasesReportDate),
-                                  "MMMM dd, yyyy",
-                                )}
-                                .
-                              </p>
-                            </div>
-                          </CardBody>
-                        </Card>
-                      ) : (
-                        <Card>
-                          <CardBody className="p-0">
-                            <Table aria-label="Daily purchases report table">
-                              <TableHeader>
-                                <TableColumn>REF/INVOICE NO</TableColumn>
-                                <TableColumn>DATE</TableColumn>
-                                <TableColumn>TYPE</TableColumn>
-                                <TableColumn>SUPPLIER</TableColumn>
-                                <TableColumn>MEDICINE NAME</TableColumn>
-                                <TableColumn>QUANTITY</TableColumn>
-                                <TableColumn>COST PRICE</TableColumn>
-                                <TableColumn>TOTAL COST</TableColumn>
-                              </TableHeader>
-                              <TableBody>
-                                {refillTransactions.map((transaction) => {
-                                  const medicine = medicines.find(
-                                    (m) => m.id === transaction.medicineId,
-                                  );
-                                  const medicineName =
-                                    medicine?.name || "Unknown Medicine";
-                                  const costPrice =
-                                    transaction.costPrice ||
-                                    getMedicineCostPrice(
-                                      transaction.medicineId,
-                                    );
-                                  const totalCost =
-                                    transaction.quantity * costPrice;
-                                  const transactionDate =
-                                    transaction.createdAt instanceof Date
-                                      ? transaction.createdAt
-                                      : new Date(transaction.createdAt);
-
-                                  return (
-                                    <TableRow key={`refill-${transaction.id}`}>
-                                      <TableCell>
-                                        <div className="font-medium">
-                                          {transaction.invoiceNumber || "N/A"}
-                                        </div>
-                                        {transaction.batchNumber && (
-                                          <div className="text-xs text-default-500">
-                                            Batch: {transaction.batchNumber}
-                                          </div>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        <div className="text-sm">
-                                          {format(
-                                            transactionDate,
-                                            "MMM dd, yyyy",
-                                          )}
-                                        </div>
-                                        <div className="text-xs text-default-500">
-                                          {format(transactionDate, "hh:mm a")}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Chip
-                                          color="success"
-                                          size="sm"
-                                          variant="flat"
-                                        >
-                                          Refill
-                                        </Chip>
-                                      </TableCell>
-                                      <TableCell>
-                                        {transaction.supplierId ? (
-                                          <span className="text-default-900">
-                                            {getSupplierName(
-                                              transaction.supplierId,
-                                            ) || "Unknown Supplier"}
-                                          </span>
-                                        ) : (
-                                          <span className="text-default-400 italic">
-                                            No Supplier
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        <div className="text-sm font-medium">
-                                          {medicineName}
-                                        </div>
-                                        {transaction.isSchemeStock && (
-                                          <div className="text-xs text-default-500">
-                                            Scheme Stock
-                                          </div>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        <span className="text-default-900">
-                                          {transaction.quantity}
-                                        </span>
-                                      </TableCell>
-                                      <TableCell>
-                                        {costPrice > 0 ? (
-                                          <span className="text-default-600">
-                                            NPR{" "}
-                                            {costPrice.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
-                                          </span>
-                                        ) : (
-                                          <span className="text-default-400">
-                                            N/A
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {costPrice > 0 ? (
-                                          <span className="font-medium text-default-900">
-                                            NPR{" "}
-                                            {totalCost.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
-                                          </span>
-                                        ) : (
-                                          <span className="text-default-400">
-                                            N/A
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-
-                                {isLoadingRefillTransactions && (
-                                  <TableRow>
-                                    <TableCell
-                                      className="text-center py-8"
-                                      colSpan={8}
-                                    >
-                                      <Spinner
-                                        label="Loading refill transactions..."
-                                        size="sm"
-                                      />
+                                      )}
                                     </TableCell>
                                   </TableRow>
-                                )}
+                                ))}
                               </TableBody>
                             </Table>
-                          </CardBody>
-                        </Card>
-                      )}
+                          )}
+                        </CardBody>
+                      </Card>
                     </>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+                  )}
+                </div>
+              )
+            }
+
+            {/* Daily Report Tab */}
+            {
+              activeTab === "daily_sales_report" && (
+                <div className="py-6">
+                  <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <Input
+                        className="w-48"
+                        label="Select Date"
+                        type="date"
+                        value={dailyReportDate}
+                        variant="bordered"
+                        onChange={(e) => setDailyReportDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        color="success"
+                        isDisabled={isExportingDailyReport}
+                        isLoading={isExportingDailyReport}
+                        startContent={<IoDownloadOutline size={20} />}
+                        variant="flat"
+                        onPress={async () => {
+                          setIsExportingDailyReport(true);
+                          try {
+                            const { exportPharmacyDailyReportToExcel } =
+                              await import("@/utils/reportExports");
+                            const dailyPurchases = getDailyReportPurchases();
+                            const selectedDate = new Date(dailyReportDate);
+
+                            exportPharmacyDailyReportToExcel(
+                              dailyPurchases,
+                              selectedDate,
+                              clinic?.name,
+                            );
+                          } catch (error) {
+                            console.error("Error exporting to Excel:", error);
+                            addToast({
+                              title: "Export Failed",
+                              description:
+                                "Failed to export daily report. Please try again.",
+                              color: "danger",
+                            });
+                          } finally {
+                            setIsExportingDailyReport(false);
+                          }
+                        }}
+                      >
+                        Export Excel
+                      </Button>
+                      <Button
+                        color="danger"
+                        isDisabled={isExportingDailyReport}
+                        isLoading={isExportingDailyReport}
+                        startContent={<IoDocumentTextOutline size={20} />}
+                        variant="flat"
+                        onPress={async () => {
+                          setIsExportingDailyReport(true);
+                          try {
+                            const { exportPharmacyDailyReportToPDF } =
+                              await import("@/utils/reportExports");
+                            const dailyPurchases = getDailyReportPurchases();
+                            const selectedDate = new Date(dailyReportDate);
+
+                            exportPharmacyDailyReportToPDF(
+                              dailyPurchases,
+                              selectedDate,
+                              clinic?.name,
+                            );
+                          } catch (error) {
+                            console.error("Error exporting to PDF:", error);
+                            addToast({
+                              title: "Export Failed",
+                              description:
+                                "Failed to export daily report. Please try again.",
+                              color: "danger",
+                            });
+                          } finally {
+                            setIsExportingDailyReport(false);
+                          }
+                        }}
+                      >
+                        Export PDF
+                      </Button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const summary = getDailyReportSummary();
+                    const dailyPurchases = getDailyReportPurchases();
+
+                    return (
+                      <>
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    Total Sales
+                                  </p>
+                                  <p className="text-stat-sm font-semibold text-default-900 mt-1">
+                                    NPR{" "}
+                                    {summary.totalSales.toLocaleString(
+                                      undefined,
+                                      {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      },
+                                    )}
+                                  </p>
+                                </div>
+                                <IoWalletOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    Total Items
+                                  </p>
+                                  <p className="text-stat-sm font-semibold text-default-900 mt-1">
+                                    {summary.totalItems}
+                                  </p>
+                                </div>
+                                <IoMedicalOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    Total No. of Sales
+                                  </p>
+                                  <p className="text-stat-sm font-semibold text-default-900 mt-1">
+                                    {summary.totalPurchases}
+                                  </p>
+                                </div>
+                                <IoReceiptOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    No of sales (Paid)
+                                  </p>
+                                  <p className="text-stat-sm font-semibold text-success mt-1">
+                                    {summary.paidCount}
+                                  </p>
+                                </div>
+                                <IoCheckmarkCircleOutline
+                                  className="text-success"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <p className="text-sm text-default-500">
+                                    Total Stock
+                                  </p>
+                                  {isLoadingStockSummary ? (
+                                    <Spinner className="mt-1" size="sm" />
+                                  ) : totalStock === null ? (
+                                    <p className="text-stat-sm font-semibold text-default-400 mt-1">
+                                      Data not available
+                                    </p>
+                                  ) : (
+                                    <p className="text-stat-sm font-semibold text-default-900 mt-1">
+                                      {totalStock.toLocaleString()}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-default-400 mt-1">
+                                    {totalStock !== null
+                                      ? `End of day ${format(new Date(dailyReportDate), "MMM dd, yyyy")}`
+                                      : `Sold Today: ${summary.totalItems}`}
+                                  </p>
+                                </div>
+                                <IoStorefrontOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                        </div>
+
+                        {/* Daily Purchases Table */}
+                        {dailyPurchases.length === 0 ? (
+                          <Card>
+                            <CardBody>
+                              <div className="text-center py-12">
+                                <div className="text-default-400 mb-4">
+                                  <IoReceiptOutline
+                                    className="mx-auto opacity-50"
+                                    size={48}
+                                  />
+                                </div>
+                                <h3 className="text-stat-sm font-medium text-default-700 mb-2">
+                                  No sales recorded
+                                </h3>
+                                <p className="text-default-500">
+                                  No purchases found for{" "}
+                                  {format(
+                                    new Date(dailyReportDate),
+                                    "MMMM dd, yyyy",
+                                  )}
+                                  .
+                                </p>
+                              </div>
+                            </CardBody>
+                          </Card>
+                        ) : (
+                          <Card>
+                            <CardBody className="p-0">
+                              <Table aria-label="Daily sales table">
+                                <TableHeader>
+                                  <TableColumn>PURCHASE NO</TableColumn>
+                                  <TableColumn>DATE</TableColumn>
+                                  <TableColumn>PATIENT NAME</TableColumn>
+                                  <TableColumn>ITEMS</TableColumn>
+                                  <TableColumn>TOTAL</TableColumn>
+                                  <TableColumn>DISCOUNT</TableColumn>
+                                  <TableColumn>TAX</TableColumn>
+                                  <TableColumn>NET AMOUNT</TableColumn>
+                                  <TableColumn>PAYMENT STATUS</TableColumn>
+                                  <TableColumn>PAYMENT TYPE</TableColumn>
+                                </TableHeader>
+                                <TableBody>
+                                  {dailyPurchases.map((purchase) => {
+                                    const purchaseDate =
+                                      purchase.purchaseDate instanceof Date
+                                        ? purchase.purchaseDate
+                                        : new Date(purchase.purchaseDate);
+
+                                    return (
+                                      <TableRow key={purchase.id}>
+                                        <TableCell>
+                                          <div className="font-medium">
+                                            {purchase.purchaseNo}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="text-sm">
+                                            {format(purchaseDate, "MMM dd, yyyy")}
+                                          </div>
+                                          <div className="text-xs text-default-500">
+                                            {format(purchaseDate, "hh:mm a")}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          {purchase.patientName || (
+                                            <span className="text-default-400 italic">
+                                              Walk-in Customer
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="text-sm">
+                                            {purchase.items.length} item
+                                            {purchase.items.length !== 1
+                                              ? "s"
+                                              : ""}
+                                          </div>
+                                          <div className="text-xs text-default-500">
+                                            Qty:{" "}
+                                            {purchase.items.reduce(
+                                              (sum, item) => sum + item.quantity,
+                                              0,
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          NPR{" "}
+                                          {purchase.total.toLocaleString(
+                                            undefined,
+                                            {
+                                              minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2,
+                                            },
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          {purchase.discount > 0 ? (
+                                            <span className="text-default-600">
+                                              NPR{" "}
+                                              {purchase.discount.toLocaleString(
+                                                undefined,
+                                                {
+                                                  minimumFractionDigits: 2,
+                                                  maximumFractionDigits: 2,
+                                                },
+                                              )}
+                                            </span>
+                                          ) : (
+                                            <span className="text-default-400">
+                                              —
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          {purchase.taxAmount > 0 ? (
+                                            <span className="text-default-600">
+                                              NPR{" "}
+                                              {purchase.taxAmount.toLocaleString(
+                                                undefined,
+                                                {
+                                                  minimumFractionDigits: 2,
+                                                  maximumFractionDigits: 2,
+                                                },
+                                              )}
+                                            </span>
+                                          ) : (
+                                            <span className="text-default-400">
+                                              —
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <span className="font-semibold text-default-900">
+                                            NPR{" "}
+                                            {purchase.netAmount.toLocaleString(
+                                              undefined,
+                                              {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2,
+                                              },
+                                            )}
+                                          </span>
+                                        </TableCell>
+                                        <TableCell>
+                                          <Chip
+                                            color={
+                                              purchase.paymentStatus === "paid"
+                                                ? "success"
+                                                : purchase.paymentStatus ===
+                                                  "unpaid" ||
+                                                  purchase.paymentStatus ===
+                                                  "pending"
+                                                  ? "danger"
+                                                  : purchase.paymentStatus ===
+                                                    "partial"
+                                                    ? "warning"
+                                                    : "default"
+                                            }
+                                            size="sm"
+                                            variant="flat"
+                                          >
+                                            {purchase.paymentStatus
+                                              .charAt(0)
+                                              .toUpperCase() +
+                                              purchase.paymentStatus.slice(1)}
+                                          </Chip>
+                                        </TableCell>
+                                        <TableCell>
+                                          <span className="text-sm text-default-600">
+                                            {purchase.paymentType || "N/A"}
+                                          </span>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </CardBody>
+                          </Card>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )
+            }
+
+            {/* Daily Purchases Report Tab */}
+            {
+              activeTab === "daily_purchases_report" && (
+                <div className="py-6">
+                  <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <Input
+                        className="w-48"
+                        label="Select Date"
+                        type="date"
+                        value={dailyPurchasesReportDate}
+                        variant="bordered"
+                        onChange={(e) =>
+                          setDailyPurchasesReportDate(e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        color="success"
+                        isDisabled={isExportingDailyPurchasesReport}
+                        isLoading={isExportingDailyPurchasesReport}
+                        startContent={<IoDownloadOutline size={20} />}
+                        variant="flat"
+                        onPress={async () => {
+                          setIsExportingDailyPurchasesReport(true);
+                          try {
+                            const { exportDailyPurchasesReportToExcel } =
+                              await import("@/utils/reportExports");
+                            const selectedDate = new Date(
+                              dailyPurchasesReportDate,
+                            );
+
+                            exportDailyPurchasesReportToExcel(
+                              [],
+                              selectedDate,
+                              clinic?.name,
+                              medicines,
+                              refillTransactions,
+                            );
+                          } catch (error) {
+                            console.error("Error exporting to Excel:", error);
+                            addToast({
+                              title: "Export Failed",
+                              description:
+                                "Failed to export daily purchases report. Please try again.",
+                              color: "danger",
+                            });
+                          } finally {
+                            setIsExportingDailyPurchasesReport(false);
+                          }
+                        }}
+                      >
+                        Export Excel
+                      </Button>
+                      <Button
+                        color="danger"
+                        isDisabled={isExportingDailyPurchasesReport}
+                        isLoading={isExportingDailyPurchasesReport}
+                        startContent={<IoDocumentTextOutline size={20} />}
+                        variant="flat"
+                        onPress={async () => {
+                          setIsExportingDailyPurchasesReport(true);
+                          try {
+                            const { exportDailyPurchasesReportToPDF } =
+                              await import("@/utils/reportExports");
+                            const selectedDate = new Date(
+                              dailyPurchasesReportDate,
+                            );
+
+                            exportDailyPurchasesReportToPDF(
+                              [],
+                              selectedDate,
+                              clinic?.name,
+                              medicines,
+                              refillTransactions,
+                            );
+                          } catch (error) {
+                            console.error("Error exporting to PDF:", error);
+                            addToast({
+                              title: "Export Failed",
+                              description:
+                                "Failed to export daily purchases report. Please try again.",
+                              color: "danger",
+                            });
+                          } finally {
+                            setIsExportingDailyPurchasesReport(false);
+                          }
+                        }}
+                      >
+                        Export PDF
+                      </Button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const summary = getDailyPurchasesReportSummary();
+
+                    return (
+                      <>
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    Total Purchase Cost
+                                  </p>
+                                  <p className="text-stat font-semibold text-default-900 mt-1">
+                                    NPR{" "}
+                                    {summary.totalPurchaseCost.toLocaleString(
+                                      undefined,
+                                      {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      },
+                                    )}
+                                  </p>
+                                </div>
+                                <IoWalletOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    Total Medicines
+                                  </p>
+                                  <p className="text-stat font-semibold text-default-900 mt-1">
+                                    {summary.totalMedicines}
+                                  </p>
+                                </div>
+                                <IoMedicalOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    Total Quantity
+                                  </p>
+                                  <p className="text-stat font-semibold text-default-900 mt-1">
+                                    {summary.totalQuantity}
+                                  </p>
+                                </div>
+                                <IoStorefrontOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card>
+                            <CardBody className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm text-default-500">
+                                    Avg Cost/Medicine
+                                  </p>
+                                  <p className="text-stat font-semibold text-default-900 mt-1">
+                                    NPR{" "}
+                                    {summary.averageCostPerMedicine.toLocaleString(
+                                      undefined,
+                                      {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      },
+                                    )}
+                                  </p>
+                                </div>
+                                <IoReceiptOutline
+                                  className="text-primary"
+                                  size={24}
+                                />
+                              </div>
+                            </CardBody>
+                          </Card>
+                        </div>
+
+                        {/* Daily Purchases Report Table */}
+                        {refillTransactions.length === 0 &&
+                          !isLoadingRefillTransactions ? (
+                          <Card>
+                            <CardBody>
+                              <div className="text-center py-12">
+                                <div className="text-default-400 mb-4">
+                                  <IoReceiptOutline
+                                    className="mx-auto opacity-50"
+                                    size={48}
+                                  />
+                                </div>
+                                <h3 className="text-stat-sm font-medium text-default-700 mb-2">
+                                  No purchases recorded
+                                </h3>
+                                <p className="text-default-500">
+                                  No purchases found for{" "}
+                                  {format(
+                                    new Date(dailyPurchasesReportDate),
+                                    "MMMM dd, yyyy",
+                                  )}
+                                  .
+                                </p>
+                              </div>
+                            </CardBody>
+                          </Card>
+                        ) : (
+                          <Card>
+                            <CardBody className="p-0">
+                              <Table aria-label="Daily purchases report table">
+                                <TableHeader>
+                                  <TableColumn>REF/INVOICE NO</TableColumn>
+                                  <TableColumn>DATE</TableColumn>
+                                  <TableColumn>TYPE</TableColumn>
+                                  <TableColumn>SUPPLIER</TableColumn>
+                                  <TableColumn>MEDICINE NAME</TableColumn>
+                                  <TableColumn>QUANTITY</TableColumn>
+                                  <TableColumn>COST PRICE</TableColumn>
+                                  <TableColumn>TOTAL COST</TableColumn>
+                                </TableHeader>
+                                <TableBody>
+                                  {refillTransactions.map((transaction) => {
+                                    const medicine = medicines.find(
+                                      (m) => m.id === transaction.medicineId,
+                                    );
+                                    const medicineName =
+                                      medicine?.name || "Unknown Medicine";
+                                    const costPrice =
+                                      transaction.costPrice ||
+                                      getMedicineCostPrice(
+                                        transaction.medicineId,
+                                      );
+                                    const totalCost =
+                                      transaction.quantity * costPrice;
+                                    const transactionDate =
+                                      transaction.createdAt instanceof Date
+                                        ? transaction.createdAt
+                                        : new Date(transaction.createdAt);
+
+                                    return (
+                                      <TableRow key={`refill-${transaction.id}`}>
+                                        <TableCell>
+                                          <div className="font-medium">
+                                            {transaction.invoiceNumber || "N/A"}
+                                          </div>
+                                          {transaction.batchNumber && (
+                                            <div className="text-xs text-default-500">
+                                              Batch: {transaction.batchNumber}
+                                            </div>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="text-sm">
+                                            {format(
+                                              transactionDate,
+                                              "MMM dd, yyyy",
+                                            )}
+                                          </div>
+                                          <div className="text-xs text-default-500">
+                                            {format(transactionDate, "hh:mm a")}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          <Chip
+                                            color="success"
+                                            size="sm"
+                                            variant="flat"
+                                          >
+                                            Refill
+                                          </Chip>
+                                        </TableCell>
+                                        <TableCell>
+                                          {transaction.supplierId ? (
+                                            <span className="text-default-900">
+                                              {getSupplierName(
+                                                transaction.supplierId,
+                                              ) || "Unknown Supplier"}
+                                            </span>
+                                          ) : (
+                                            <span className="text-default-400 italic">
+                                              No Supplier
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="text-sm font-medium">
+                                            {medicineName}
+                                          </div>
+                                          {transaction.isSchemeStock && (
+                                            <div className="text-xs text-default-500">
+                                              Scheme Stock
+                                            </div>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <span className="text-default-900">
+                                            {transaction.quantity}
+                                          </span>
+                                        </TableCell>
+                                        <TableCell>
+                                          {costPrice > 0 ? (
+                                            <span className="text-default-600">
+                                              NPR{" "}
+                                              {costPrice.toLocaleString(
+                                                undefined,
+                                                {
+                                                  minimumFractionDigits: 2,
+                                                  maximumFractionDigits: 2,
+                                                },
+                                              )}
+                                            </span>
+                                          ) : (
+                                            <span className="text-default-400">
+                                              N/A
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          {costPrice > 0 ? (
+                                            <span className="font-medium text-default-900">
+                                              NPR{" "}
+                                              {totalCost.toLocaleString(
+                                                undefined,
+                                                {
+                                                  minimumFractionDigits: 2,
+                                                  maximumFractionDigits: 2,
+                                                },
+                                              )}
+                                            </span>
+                                          ) : (
+                                            <span className="text-default-400">
+                                              N/A
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+
+                                  {isLoadingRefillTransactions && (
+                                    <TableRow>
+                                      <TableCell
+                                        className="text-center py-8"
+                                        colSpan={8}
+                                      >
+                                        <Spinner
+                                          label="Loading refill transactions..."
+                                          size="sm"
+                                        />
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </CardBody>
+                          </Card>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )
+            }
+          </div >
+        </div >
+      </div >
 
       {/* Purchase Medicine/Items Modal */}
-      <Modal
+      < Modal
         hideCloseButton={isSubmitting}
         isDismissable={!isSubmitting}
         isOpen={purchaseModalState.isOpen}
@@ -6325,10 +6332,10 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
 
       {/* Supplier Payment Modal */}
-      <Modal
+      < Modal
         hideCloseButton={isSavingSupplierPayment}
         isDismissable={!isSavingSupplierPayment}
         isOpen={addSupplierPaymentModalState.isOpen}
@@ -6435,10 +6442,10 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
 
       {/* Supplier Ledger History Modal */}
-      <Modal
+      < Modal
         isOpen={supplierHistoryModalState.isOpen}
         scrollBehavior="inside"
         size="xl"
@@ -6571,10 +6578,10 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
 
       {/* Add Purchase Entry Modal */}
-      <Modal
+      < Modal
         hideCloseButton={isSavingPurchaseEntry}
         isDismissable={!isSavingPurchaseEntry}
         isOpen={addPurchaseEntryModalState.isOpen}
@@ -6682,10 +6689,10 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
 
       {/* Edit Ledger Entry Modal */}
-      <Modal
+      < Modal
         hideCloseButton={isSavingLedgerEntry}
         isDismissable={!isSavingLedgerEntry}
         isOpen={editLedgerEntryModalState.isOpen}
@@ -6848,10 +6855,10 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
 
       {/* Add Payment Method Modal */}
-      <Modal
+      < Modal
         hideCloseButton={isSettingsLoading}
         isDismissable={!isSettingsLoading}
         isOpen={addPaymentMethodModalState.isOpen}
@@ -6951,10 +6958,10 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
 
       {/* Edit Payment Method Modal */}
-      <Modal
+      < Modal
         hideCloseButton={isSettingsLoading}
         isDismissable={!isSettingsLoading}
         isOpen={editPaymentMethodModalState.isOpen}
@@ -7065,10 +7072,10 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
 
       {/* Add Item Modal */}
-      <Modal
+      < Modal
         hideCloseButton={isSettingsLoading}
         isDismissable={!isSettingsLoading}
         isOpen={addItemModalState.isOpen}
@@ -7190,7 +7197,7 @@ export default function PharmacyPage() {
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </Modal >
     </>
   );
 }

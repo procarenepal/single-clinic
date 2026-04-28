@@ -7,11 +7,11 @@
 export const colors = {
   // ── Primary: Clinical Teal ──────────────────────────────────────────────
   primary: {
-    DEFAULT: "#0f766e", // teal-700
-    hover: "#0d9488", // teal-600
-    light: "#ccfbf1", // teal-100
+    DEFAULT: "#0356a1", // ProCare Blue (previously teal-700)
+    hover: "#026dc7", // ProCare Blue (previously teal-600)
+    light: "#e0effe", // ProCare Blue (previously teal-100)
     foreground: "#ffffff",
-    soft: "bg-teal-100 text-teal-700",
+    soft: "bg-teal-100 text-teal-700", // (Uses re-mapped teal classes)
   },
   // ── Secondary: Health Green ─────────────────────────────────────────────
   secondary: {
@@ -48,10 +48,10 @@ export const colors = {
   border: {
     subtle: "#e2e8f0", // slate-200
     strong: "#cbd5e1", // slate-300
-    focus: "#0f766e", // teal-700
+    focus: "#0356a1", // ProCare Blue
   },
   focus: {
-    ring: "#0f766e",
+    ring: "#0356a1",
   },
 };
 
@@ -60,8 +60,8 @@ export const colors = {
 export const radii = {
   none: "0",
   xs: "0.125rem", // 2px
-  sm: "0.25rem", // 4px — inputs, badges, chips
-  DEFAULT: "0.375rem", // 6px — buttons, cards (default)
+  sm: "0.375rem", // 6px — inputs, badges, chips
+  DEFAULT: "0.5rem", // 8px — buttons, cards (default)
   md: "0.5rem", // 8px — modals, panels
   lg: "0.625rem", // 10px — large panels
   xl: "0.75rem", // 12px
@@ -92,7 +92,7 @@ export const shadows = {
   none: "none",
   // Focus rings only — not structural depth
   ring: {
-    teal: "0 0 0 3px rgba(15, 118, 110, 0.2)",
+    teal: "0 0 0 3px rgba(3, 86, 161, 0.2)",
     rose: "0 0 0 3px rgba(225, 29, 72, 0.2)",
     violet: "0 0 0 3px rgba(124, 58, 237, 0.2)",
     blue: "0 0 0 3px rgba(2, 132, 199, 0.2)",
@@ -102,21 +102,21 @@ export const shadows = {
 // ── Typography ────────────────────────────────────────────────────────────────
 export const typography = {
   fontFamily: {
-    sans: "'Plus Jakarta Sans', Inter, system-ui, sans-serif",
+    sans: "'Nunito', 'Plus Jakarta Sans', Inter, system-ui, sans-serif",
     mono: "'JetBrains Mono', 'Fira Code', monospace",
     nepali: "'Noto Sans Devanagari', sans-serif",
   },
   // Compact type scale — base is 13px
   sizes: {
-    "2xs": "0.625rem", // 10px
-    xs: "0.6875rem", // 11px — captions, labels
-    sm: "0.75rem", // 12px — secondary text
-    base: "0.8125rem", // 13px — body (default)
-    md: "0.875rem", // 14px
-    lg: "1rem", // 16px — section titles
-    xl: "1.125rem", // 18px
-    "2xl": "1.25rem", // 20px — page titles
-    "3xl": "1.5rem", // 24px — hero numbers
+    "2xs": "0.8125rem", // 13px
+    xs: "0.875rem", // 14px — captions, labels
+    sm: "0.9375rem", // 15px — secondary text
+    base: "1rem", // 16px — body (default)
+    md: "1.25rem", // 20px
+    lg: "1.375rem", // 22px — section titles
+    xl: "1.75rem", // 28px
+    "2xl": "2.25rem", // 36px — page titles
+    "3xl": "2.625rem", // 42px — hero numbers
   },
   weights: {
     normal: "400",

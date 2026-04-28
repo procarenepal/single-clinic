@@ -345,8 +345,8 @@ export default function PatientEditPage() {
             ? patientData.age.toString()
             : patientData.dob
               ? calculateAge(
-                  new Date(patientData.dob).toISOString().split("T")[0],
-                )
+                new Date(patientData.dob).toISOString().split("T")[0],
+              )
               : "",
         referralPartnerId: patientData.referralPartnerId || "",
         referredBy: patientData.referredBy || "",
@@ -596,7 +596,7 @@ export default function PatientEditPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Edit Patient</h1>
+          <h1 className={title({ size: "lg" })}>Edit Patient</h1>
         </div>
         <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
@@ -638,7 +638,7 @@ export default function PatientEditPage() {
             Back
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>Edit Patient</h1>
+            <h1 className={title({ size: "lg" })}>Edit Patient</h1>
             <p className="text-[13.5px] text-mountain-500 mt-1">
               Update patient information
             </p>

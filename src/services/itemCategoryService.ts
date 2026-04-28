@@ -29,23 +29,16 @@ export const itemCategoryService = {
   ): Promise<ItemCategory[]> {
     try {
       const categoriesRef = collection(db, ITEM_CATEGORIES_COLLECTION);
-      let q = query(
-        categoriesRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          categoriesRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-          orderBy("name"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(categoriesRef, ...constraints);
       const querySnapshot = await getDocs(q);
       const categories: ItemCategory[] = [];
 
@@ -60,7 +53,8 @@ export const itemCategoryService = {
         } as ItemCategory);
       });
 
-      return categories;
+      // Sort in memory by name
+      return categories.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting categories by clinic:", error);
       throw error;

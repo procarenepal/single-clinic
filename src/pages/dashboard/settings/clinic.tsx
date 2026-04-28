@@ -471,7 +471,7 @@ export default function ClinicSettingsPage() {
 
   // Handle Save
   const handleSave = useCallback(async () => {
-    if (!clinicId || !clinic) return;
+    if (!clinicId) return;
 
     // Validate form
     if (!validateForm()) {
@@ -518,13 +518,24 @@ export default function ClinicSettingsPage() {
         description: formData.description.trim(),
       };
 
-      // If a manual save is triggered, we already uploaded the logo separately
-      // but let's make sure things are in sync if needed.
-      // (Standard update uses updateClinic)
-
       await retryOperation(() =>
         clinicService.updateClinic(clinicId, updateData),
       );
+
+      // Update local state immediately so UI reflects changes
+      setClinic((prev) => ({
+        ...(prev || {
+          id: clinicId,
+          subscriptionStatus: "active",
+          subscriptionPlan: "trial",
+          subscriptionStartDate: new Date(),
+          isMultiBranchEnabled: false,
+          maxBranches: 1,
+          createdAt: new Date(),
+        }),
+        ...updateData,
+        updatedAt: new Date(),
+      } as Clinic));
 
       setOriginalFormData(formData);
 
@@ -540,7 +551,6 @@ export default function ClinicSettingsPage() {
       onClose();
     } catch (error) {
       console.error("Error updating clinic:", error);
-      setClinic(clinic);
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -731,7 +741,7 @@ export default function ClinicSettingsPage() {
       >
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Clinic Information</h1>
+            <h1 className={title({ size: "lg" })}>Clinic Information</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage your clinic details and contact information
             </p>
@@ -772,7 +782,7 @@ export default function ClinicSettingsPage() {
       >
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Clinic Information</h1>
+            <h1 className={title({ size: "lg" })}>Clinic Information</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage your clinic details and contact information
             </p>
@@ -808,42 +818,7 @@ export default function ClinicSettingsPage() {
     );
   }
 
-  // No clinic found
-  if (!clinic) {
-    return (
-      <div
-        aria-label="Clinic Settings"
-        className="flex flex-col gap-6"
-        role="main"
-      >
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className={title({ size: "sm" })}>Clinic Information</h1>
-            <p className={subtitle({ class: "mt-1" })}>
-              Manage your clinic details and contact information
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <Link aria-label="Back to Settings" to="/dashboard/settings">
-              <Button startContent={<IoArrowBackOutline />} variant="light">
-                Back to Settings
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        <Card>
-          <CardBody className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <p className="text-mountain-500">No clinic information found</p>
-            </div>
-          </CardBody>
-        </Card>
-      </div>
-    );
-  }
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <div
@@ -854,7 +829,7 @@ export default function ClinicSettingsPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Clinic Information</h1>
+            <h1 className={title({ size: "lg" })}>Clinic Information</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage your clinic details and contact information
             </p>
@@ -866,266 +841,347 @@ export default function ClinicSettingsPage() {
                 Back to Settings
               </Button>
             </Link>
-            <Button
-              aria-label="Edit clinic information"
-              color="primary"
-              startContent={<IoPencilOutline />}
-              onPress={onOpen}
-            >
-              Edit Information
-            </Button>
+            {!clinic ? (
+              <Button
+                aria-label="Setup clinic information"
+                color="primary"
+                startContent={<IoPencilOutline />}
+                onPress={onOpen}
+              >
+                Setup Clinic
+              </Button>
+            ) : (
+              <Button
+                aria-label="Edit clinic information"
+                color="primary"
+                startContent={<IoPencilOutline />}
+                onPress={onOpen}
+              >
+                Edit Information
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Current Clinic Information Display */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Basic Information */}
-          <Card>
-            <CardHeader className="flex gap-3">
-              <IoBusinessOutline className="w-5 h-5 text-nepal-600" />
-              <div>
-                <h3 className="text-lg font-semibold">Basic Information</h3>
-                <p className="text-sm text-mountain-500">
-                  Your clinic's primary details
+        {!clinic ? (
+          /* Empty State / Setup CTA */
+          <Card className="border-dashed border-2 border-mountain-200 bg-mountain-50/30">
+            <CardBody className="flex items-center justify-center py-16">
+              <div className="text-center max-w-sm mx-auto">
+                <div className="w-16 h-16 rounded-full bg-mountain-100 flex items-center justify-center mx-auto mb-4">
+                  <IoBusinessOutline className="w-8 h-8 text-mountain-400" />
+                </div>
+                <h3 className="text-lg font-bold text-mountain-900 mb-2">
+                  Setup Your Clinic
+                </h3>
+                <p className="text-mountain-500 text-sm mb-6">
+                  You haven't configured your clinic information yet. Add your
+                  clinic name, logo, and contact details to get started.
                 </p>
+                <Button
+                  color="primary"
+                  size="lg"
+                  startContent={<IoPencilOutline />}
+                  onPress={onOpen}
+                >
+                  Enter Clinic Details
+                </Button>
               </div>
-            </CardHeader>
-            <Divider />
-            <CardBody className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-6 mb-2">
-                {/* Logo Section */}
-                <div className="flex flex-col items-center gap-3">
-                  <div className="relative group">
-                    <div className="w-24 h-24 rounded-lg overflow-hidden border-2 border-mountain-100 bg-mountain-50 flex items-center justify-center shadow-sm">
-                      {isUploadingLogo ? (
-                        <Spinner size="sm" />
-                      ) : logoPreview ? (
-                        <img
-                          alt="Clinic Logo"
-                          className="w-full h-full object-cover"
-                          src={logoPreview}
-                        />
-                      ) : (
-                        <IoImageOutline className="w-8 h-8 text-mountain-300" />
-                      )}
-                    </div>
-                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-lg">
-                      <div className="flex gap-2">
-                        <div
-                          className="p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
-                          title="Change logo"
-                        >
-                          <IoPencilOutline className="text-white w-5 h-5" />
-                        </div>
-                        {logoPreview && (
-                          <div
-                            className="p-2 bg-red-500/40 hover:bg-red-500/60 rounded-full transition-colors"
-                            title="Remove logo"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleRemoveLogo();
-                            }}
-                          >
-                            <IoTrashOutline className="text-white w-5 h-5" />
-                          </div>
+            </CardBody>
+          </Card>
+        ) : (
+          /* Current Clinic Information Display */
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Basic Information */}
+            <Card>
+              <CardHeader className="flex gap-3">
+                <IoBusinessOutline className="w-5 h-5 text-[rgb(var(--color-primary))]" />
+                <div>
+                  <h3 className="text-stat-sm font-semibold text-[rgb(var(--color-text))]">
+                    Basic Information
+                  </h3>
+                  <p className="text-sm text-[rgb(var(--color-text-muted))]">
+                    Your clinic's primary details
+                  </p>
+                </div>
+              </CardHeader>
+              <Divider className="opacity-50" />
+              <CardBody className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-6 mb-2">
+                  {/* Logo Section */}
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="relative group">
+                      <div className="w-24 h-24 rounded-lg overflow-hidden border-2 border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] flex items-center justify-center shadow-sm">
+                        {isUploadingLogo ? (
+                          <Spinner size="sm" />
+                        ) : logoPreview ? (
+                          <img
+                            alt="Clinic Logo"
+                            className="w-full h-full object-cover"
+                            src={logoPreview}
+                          />
+                        ) : (
+                          <IoImageOutline className="w-8 h-8 text-[rgb(var(--color-text-muted))]" />
                         )}
                       </div>
-                      <input
-                        accept="image/*"
-                        className="hidden"
-                        disabled={isUploadingLogo}
-                        type="file"
-                        onChange={handleLogoUpload}
-                      />
-                    </label>
+                      <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-lg">
+                        <div className="flex gap-2">
+                          <div
+                            className="p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
+                            title="Change logo"
+                          >
+                            <IoPencilOutline className="text-white w-5 h-5" />
+                          </div>
+                          {logoPreview && (
+                            <div
+                              className="p-2 bg-red-500/40 hover:bg-red-500/60 rounded-full transition-colors"
+                              title="Remove logo"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRemoveLogo();
+                              }}
+                            >
+                              <IoTrashOutline className="text-white w-5 h-5" />
+                            </div>
+                          )}
+                        </div>
+                        <input
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isUploadingLogo}
+                          type="file"
+                          onChange={handleLogoUpload}
+                        />
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-[rgb(var(--color-text-muted))] text-center font-medium">
+                      Click to change logo
+                      <br />
+                      (Max 2MB)
+                    </p>
                   </div>
-                  <p className="text-[11px] text-mountain-400 text-center font-medium">
-                    Click to change logo
-                    <br />
-                    (Max 2MB)
+
+                  {/* Quick Details */}
+                  <div className="flex-1 space-y-4">
+                    <div>
+                      <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                        Clinic Name
+                      </p>
+                      <p className="text-stat-sm font-bold text-[rgb(var(--color-primary))] leading-tight">
+                        {clinic.name}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                        Clinic Type
+                      </p>
+                      <Chip color="primary" size="sm" variant="flat">
+                        {getClinicTypeName(clinic.clinicType)}
+                      </Chip>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                    Description
+                  </p>
+                  <p className="text-[rgb(var(--color-text))] text-sm leading-relaxed">
+                    {clinic.description || "No description provided"}
                   </p>
                 </div>
 
-                {/* Quick Details */}
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <p className="text-sm font-medium text-mountain-600 mb-1">
-                      Clinic Name
-                    </p>
-                    <p className="text-lg font-bold text-mountain-900 leading-tight">
-                      {clinic.name}
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                    Registration Date
+                  </p>
+                  <p className="text-[rgb(var(--color-text))] text-sm">
+                    {clinic.createdAt?.toLocaleDateString()}
+                  </p>
+                </div>
+              </CardBody>
+            </Card>
 
-                  <div>
-                    <p className="text-sm font-medium text-mountain-600 mb-1">
-                      Clinic Type
-                    </p>
-                    <Chip color="primary" size="sm" variant="flat">
-                      {getClinicTypeName(clinic.clinicType)}
+            {/* Contact Information */}
+            <Card>
+              <CardHeader className="flex gap-3">
+                <IoCallOutline className="w-5 h-5 text-[rgb(var(--color-primary))]" />
+                <div>
+                  <h3 className="text-stat-sm font-semibold text-[rgb(var(--color-text))]">
+                    Contact Information
+                  </h3>
+                  <p className="text-sm text-[rgb(var(--color-text-muted))]">
+                    How patients can reach you
+                  </p>
+                </div>
+              </CardHeader>
+              <Divider className="opacity-50" />
+              <CardBody className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                    Email Address
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <IoMailOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
+                    <p className="text-[rgb(var(--color-text))]">{clinic.email}</p>
+                    <Chip color="success" size="sm" variant="flat">
+                      <IoShieldCheckmarkOutline className="w-3 h-3 mr-1" />
+                      Verified
                     </Chip>
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Description
-                </p>
-                <p className="text-mountain-900 text-sm leading-relaxed">
-                  {clinic.description || "No description provided"}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Registration Date
-                </p>
-                <p className="text-mountain-900 text-sm">
-                  {clinic.createdAt.toLocaleDateString()}
-                </p>
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Contact Information */}
-          <Card>
-            <CardHeader className="flex gap-3">
-              <IoCallOutline className="w-5 h-5 text-nepal-600" />
-              <div>
-                <h3 className="text-lg font-semibold">Contact Information</h3>
-                <p className="text-sm text-mountain-500">
-                  How patients can reach you
-                </p>
-              </div>
-            </CardHeader>
-            <Divider />
-            <CardBody className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Email Address
-                </p>
-                <div className="flex items-center gap-2">
-                  <IoMailOutline className="w-4 h-4 text-mountain-400" />
-                  <p className="text-mountain-900">{clinic.email}</p>
-                  <Chip color="success" size="sm" variant="flat">
-                    <IoShieldCheckmarkOutline className="w-3 h-3 mr-1" />
-                    Verified
-                  </Chip>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Phone Number
-                </p>
-                <div className="flex items-center gap-2">
-                  <IoCallOutline className="w-4 h-4 text-mountain-400" />
-                  <p className="text-mountain-900">{clinic.phone}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Location
-                </p>
-                <div className="flex items-center gap-2">
-                  <IoLocationOutline className="w-4 h-4 text-mountain-400" />
-                  <p className="text-mountain-900">
-                    {clinic.address ? `${clinic.address}, ` : ""}
-                    {clinic.city}, {clinic.state} {clinic.zipCode}, {clinic.country}
-                  </p>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-        </div>
-
-        {/* Subscription Information */}
-        <Card>
-          <CardHeader className="flex gap-3">
-            <IoCheckmarkCircleOutline className="w-5 h-5 text-health-600" />
-            <div>
-              <h3 className="text-lg font-semibold">
-                Subscription Information
-              </h3>
-              <p className="text-sm text-mountain-500">
-                Your current subscription details
-              </p>
-            </div>
-          </CardHeader>
-          <Divider />
-          <CardBody className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Status
-                </p>
-                <Chip
-                  color={
-                    clinic.subscriptionStatus === "active"
-                      ? "success"
-                      : clinic.subscriptionStatus === "suspended"
-                        ? "warning"
-                        : "danger"
-                  }
-                  size="sm"
-                  variant="flat"
-                >
-                  {clinic.subscriptionStatus.charAt(0).toUpperCase() +
-                    clinic.subscriptionStatus.slice(1)}
-                </Chip>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Plan
-                </p>
-                <p className="text-mountain-900">
-                  {getSubscriptionPlanName(clinic.subscriptionPlan)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Billing Type
-                </p>
-                <Chip
-                  color={
-                    clinic.subscriptionType === "yearly" ? "primary" : "default"
-                  }
-                  size="sm"
-                  variant="flat"
-                >
-                  {clinic.subscriptionType === "yearly" ? "Yearly" : "Monthly"}
-                </Chip>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium text-mountain-600 mb-1">
-                  Start Date
-                </p>
-                <p className="text-mountain-900 text-sm">
-                  {clinic.subscriptionStartDate.toLocaleDateString()}
-                </p>
-              </div>
-
-              {clinic.subscriptionEndDate && (
                 <div>
-                  <p className="text-sm font-medium text-mountain-600 mb-1">
-                    End Date
+                  <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                    Phone Number
                   </p>
-                  <p className="text-mountain-900 text-sm">
-                    {clinic.subscriptionEndDate.toLocaleDateString()}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <IoCallOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
+                    <p className="text-[rgb(var(--color-text))]">{clinic.phone}</p>
+                  </div>
                 </div>
-              )}
-            </div>
-          </CardBody>
-        </Card>
+
+                <div>
+                  <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                    Location
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <IoLocationOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
+                    <p className="text-[rgb(var(--color-text))]">
+                      {clinic.address ? `${clinic.address}, ` : ""}
+                      {clinic.city}, {clinic.state} {clinic.zipCode},{" "}
+                      {clinic.country}
+                    </p>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+
+            {!clinic ? (
+              /* Empty State / Setup CTA */
+              <Card className="border-dashed border-2 border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))]">
+                <CardBody className="flex items-center justify-center py-16">
+                  <div className="text-center max-w-sm mx-auto">
+                    <div className="w-16 h-16 rounded-full bg-[rgb(var(--color-surface-3))] flex items-center justify-center mx-auto mb-4">
+                      <IoBusinessOutline className="w-8 h-8 text-[rgb(var(--color-text-muted))]" />
+                    </div>
+                    <h3 className="text-lg font-bold text-[rgb(var(--color-text))] mb-2">
+                      Setup Your Clinic
+                    </h3>
+                    <p className="text-[rgb(var(--color-text-muted))] text-sm mb-6">
+                      You haven't configured your clinic information yet. Add your
+                      clinic name, logo, and contact details to get started.
+                    </p>
+                    <Button
+                      color="primary"
+                      size="lg"
+                      startContent={<IoPencilOutline />}
+                      onPress={onOpen}
+                    >
+                      Enter Clinic Details
+                    </Button>
+                  </div>
+                </CardBody>
+              </Card>
+            ) : (
+              /* ... previous refactored code ... */
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Subscription Information */}
+                <Card className="lg:col-span-2">
+                  <CardHeader className="flex gap-3">
+                    <IoCheckmarkCircleOutline className="w-5 h-5 text-health-600" />
+                    <div>
+                      <h3 className="text-stat-sm font-semibold text-[rgb(var(--color-text))]">
+                        Subscription Information
+                      </h3>
+                      <p className="text-sm text-[rgb(var(--color-text-muted))]">
+                        Your current subscription details
+                      </p>
+                    </div>
+                  </CardHeader>
+                  <Divider className="opacity-50" />
+                  <CardBody className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                          Status
+                        </p>
+                        <Chip
+                          color={
+                            clinic.subscriptionStatus === "active"
+                              ? "success"
+                              : clinic.subscriptionStatus === "suspended"
+                                ? "warning"
+                                : "danger"
+                          }
+                          size="sm"
+                          variant="flat"
+                        >
+                          {clinic.subscriptionStatus
+                            ? clinic.subscriptionStatus.charAt(0).toUpperCase() +
+                            clinic.subscriptionStatus.slice(1)
+                            : "Unknown"}
+                        </Chip>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                          Plan
+                        </p>
+                        <p className="text-[rgb(var(--color-text))]">
+                          {getSubscriptionPlanName(clinic.subscriptionPlan)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                          Billing Type
+                        </p>
+                        <Chip
+                          color={
+                            clinic.subscriptionType === "yearly"
+                              ? "primary"
+                              : "default"
+                          }
+                          size="sm"
+                          variant="flat"
+                        >
+                          {clinic.subscriptionType === "yearly"
+                            ? "Yearly"
+                            : "Monthly"}
+                        </Chip>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                          Start Date
+                        </p>
+                        <p className="text-[rgb(var(--color-text))] text-sm">
+                          {clinic.subscriptionStartDate?.toLocaleDateString() || "N/A"}
+                        </p>
+                      </div>
+
+                      {clinic.subscriptionEndDate && (
+                        <div>
+                          <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                            End Date
+                          </p>
+                          <p className="text-[rgb(var(--color-text))] text-sm">
+                            {clinic.subscriptionEndDate?.toLocaleDateString()}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Edit Information Modal */}
@@ -1147,7 +1203,7 @@ export default function ClinicSettingsPage() {
           <ModalBody>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                   Clinic Name <span className="text-red-600">*</span>
                 </label>
                 <Input
@@ -1165,7 +1221,7 @@ export default function ClinicSettingsPage() {
                   name="name"
                   placeholder="Enter clinic name"
                   startContent={
-                    <IoBusinessOutline className="text-mountain-400" />
+                    <IoBusinessOutline className="text-[rgb(var(--color-text-muted))]" />
                   }
                   value={formData.name}
                   variant="bordered"
@@ -1174,7 +1230,7 @@ export default function ClinicSettingsPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                   Email Address <span className="text-red-600">*</span>
                 </label>
                 <Input
@@ -1191,7 +1247,7 @@ export default function ClinicSettingsPage() {
                   maxLength={VALIDATION_RULES.email.maxLength}
                   name="email"
                   placeholder="clinic@example.com"
-                  startContent={<IoMailOutline className="text-mountain-400" />}
+                  startContent={<IoMailOutline className="text-[rgb(var(--color-text-muted))]" />}
                   type="email"
                   value={formData.email}
                   variant="bordered"
@@ -1200,7 +1256,7 @@ export default function ClinicSettingsPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                   Phone Number <span className="text-red-600">*</span>
                 </label>
                 <Input
@@ -1216,19 +1272,19 @@ export default function ClinicSettingsPage() {
                   }
                   name="phone"
                   placeholder="9XXXXXXXX or +9779XXXXXXXX"
-                  startContent={<IoCallOutline className="text-mountain-400" />}
+                  startContent={<IoCallOutline className="text-[rgb(var(--color-text-muted))]" />}
                   type="tel"
                   value={formData.phone}
                   variant="bordered"
                   onChange={handleInputChange}
                 />
-                <p className="text-xs text-mountain-500 mt-1">
+                <p className="text-xs text-[rgb(var(--color-text-muted))] mt-1">
                   Enter Nepali phone number format (10 digits starting with 9)
                 </p>
               </div>
 
               <div>
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                   City <span className="text-red-600">*</span>
                 </label>
                 <Input
@@ -1246,7 +1302,7 @@ export default function ClinicSettingsPage() {
                   name="city"
                   placeholder="Enter city name"
                   startContent={
-                    <IoLocationOutline className="text-mountain-400" />
+                    <IoLocationOutline className="text-[rgb(var(--color-text-muted))]" />
                   }
                   value={formData.city}
                   variant="bordered"
@@ -1256,7 +1312,7 @@ export default function ClinicSettingsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     State/Province <span className="text-red-600">*</span>
                   </label>
                   <Input
@@ -1275,7 +1331,7 @@ export default function ClinicSettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     ZIP/Postal Code <span className="text-red-600">*</span>
                   </label>
                   <Input
@@ -1296,7 +1352,7 @@ export default function ClinicSettingsPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                   Country <span className="text-red-600">*</span>
                 </label>
                 <Input
@@ -1316,7 +1372,7 @@ export default function ClinicSettingsPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                   Full Address <span className="text-red-600">*</span>
                 </label>
                 <Textarea
@@ -1335,7 +1391,7 @@ export default function ClinicSettingsPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                   Description
                 </label>
                 <Textarea
@@ -1360,11 +1416,12 @@ export default function ClinicSettingsPage() {
                   value={formData.description}
                   onChange={handleInputChange}
                 />
-                <p className="text-xs text-mountain-500 mt-1">
+                <p className="text-xs text-[rgb(var(--color-text-muted))] mt-1">
                   {formData.description.length}/
                   {VALIDATION_RULES.description.maxLength} characters
                 </p>
               </div>
+
             </div>
           </ModalBody>
           <ModalFooter>

@@ -117,102 +117,55 @@ export const referralPartnerService = {
   },
 
   /**
-   * Get all referral partners for a clinic (excluding deleted).
-   * @param {string} clinicId - Clinic ID
-   * @param {string} [branchId] - Optional branch ID to filter by
-   * @returns {Promise<ReferralPartner[]>} - Array of partners
+   * Get all referral partners (excluding deleted)
    */
-  async getReferralPartnersByClinic(
-    clinicId: string,
-    branchId?: string,
-  ): Promise<ReferralPartner[]> {
+  async getAllReferralPartners(): Promise<ReferralPartner[]> {
     try {
-      if (branchId) {
-        const partnersRef = collection(db, PARTNERS_COLLECTION);
-        const q = query(
-          partnersRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-        );
-        const querySnapshot = await getDocs(q);
+      const cached = cacheService.getClinicReferralPartners("standalone");
+      if (cached) return (cached as ReferralPartner[]).filter((p) => !p.isDeleted);
 
-        const partners = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
-          const createdAt = data.createdAt
-            ? new Date(data.createdAt.seconds * 1000)
-            : new Date();
-          const updatedAt = data.updatedAt
-            ? new Date(data.updatedAt.seconds * 1000)
-            : new Date();
+      const partnersRef = collection(db, PARTNERS_COLLECTION);
+      const querySnapshot = await getDocs(partnersRef);
 
-          return {
-            id: doc.id,
-            ...data,
-            createdAt,
-            updatedAt,
-          } as ReferralPartner;
-        });
+      const partners = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        const createdAt = data.createdAt
+          ? new Date(data.createdAt.seconds * 1000)
+          : new Date();
+        const updatedAt = data.updatedAt
+          ? new Date(data.updatedAt.seconds * 1000)
+          : new Date();
 
-        return partners.filter((p) => !p.isDeleted);
-      }
+        return {
+          id: doc.id,
+          ...data,
+          createdAt,
+          updatedAt,
+        } as ReferralPartner;
+      });
 
-      // Check cache
-      const cached = cacheService.getClinicReferralPartners(clinicId);
+      const activePartners = partners.filter((p) => !p.isDeleted);
+      cacheService.setClinicReferralPartners("standalone", activePartners);
 
-      if (cached) {
-        return (cached as ReferralPartner[]).filter((p) => !p.isDeleted);
-      }
-
-      const inflightKey = `clinic:${clinicId}`;
-      const existing = this.__inflight.get(inflightKey);
-
-      if (existing) {
-        const result = await existing;
-
-        return (result as ReferralPartner[]).filter((p) => !p.isDeleted);
-      }
-
-      const promise = (async () => {
-        const partnersRef = collection(db, PARTNERS_COLLECTION);
-        const q = query(partnersRef, where("clinicId", "==", clinicId));
-        const querySnapshot = await getDocs(q);
-
-        const partners = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
-          const createdAt = data.createdAt
-            ? new Date(data.createdAt.seconds * 1000)
-            : new Date();
-          const updatedAt = data.updatedAt
-            ? new Date(data.updatedAt.seconds * 1000)
-            : new Date();
-
-          return {
-            id: doc.id,
-            ...data,
-            createdAt,
-            updatedAt,
-          } as ReferralPartner;
-        });
-
-        const activePartners = partners.filter((p) => !p.isDeleted);
-
-        cacheService.setClinicReferralPartners(clinicId, activePartners);
-
-        return activePartners;
-      })();
-
-      this.__inflight.set(inflightKey, promise);
-      try {
-        const result = await promise;
-
-        return (result as ReferralPartner[]).filter((p) => !p.isDeleted);
-      } finally {
-        this.__inflight.delete(inflightKey);
-      }
+      return activePartners;
     } catch (error) {
-      console.error("Error getting referral partners by clinic:", error);
+      console.error("Error getting all referral partners:", error);
       throw error;
     }
+  },
+
+  /**
+   * Alias for backward compatibility
+   */
+  async getReferralPartnersByClinic(
+    _clinicId?: string,
+    branchId?: string,
+  ): Promise<ReferralPartner[]> {
+    const partners = await this.getAllReferralPartners();
+    if (branchId) {
+      return partners.filter((p) => p.branchId === branchId);
+    }
+    return partners;
   },
 
   /**
@@ -220,10 +173,10 @@ export const referralPartnerService = {
    */
   async searchReferralPartners(
     searchTerm: string,
-    clinicId: string,
+    _clinicId?: string,
   ): Promise<ReferralPartner[]> {
     try {
-      const partners = await this.getReferralPartnersByClinic(clinicId);
+      const partners = await this.getAllReferralPartners();
 
       if (!searchTerm) return partners;
       const term = searchTerm.toLowerCase();

@@ -5,7 +5,7 @@ import { IoBusinessOutline } from "react-icons/io5";
 
 import { useAuth } from "@/hooks/useAuth";
 
-interface ClinicSuperAdminRouteProps {
+interface SystemOwnerRouteProps {
   children: React.ReactNode;
   fallbackMessage?: string;
 }
@@ -14,10 +14,10 @@ interface ClinicSuperAdminRouteProps {
  * ProtectedRoute component specifically for clinic super admin features
  * Bypasses clinic type page authorization and only checks role
  */
-export function ClinicSuperAdminRoute({
+export function SystemOwnerRoute({
   children,
-  fallbackMessage = "Only clinic super administrators can access this page.",
-}: ClinicSuperAdminRouteProps) {
+  fallbackMessage = "Only system owners can access this page.",
+}: SystemOwnerRouteProps) {
   const { userData, isLoading } = useAuth();
 
   // Show loading state
@@ -31,7 +31,7 @@ export function ClinicSuperAdminRoute({
 
   // Check if user is clinic super admin or clinic admin
   const isAuthorized =
-    userData?.role === "clinic-super-admin" ||
+    userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
 
   if (!isAuthorized) {

@@ -38,8 +38,8 @@ export default function NewBranchPage() {
     },
   });
 
-  const isClinicSuperAdmin =
-    userData?.role === "clinic-super-admin" ||
+  const isSystemOwner =
+    userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
 
   const handleInputChange = (field: string, value: string) => {
@@ -153,7 +153,7 @@ export default function NewBranchPage() {
     }
   };
 
-  if (!isClinicSuperAdmin) {
+  if (!isSystemOwner) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="clarity-card p-3 border-saffron-200 bg-saffron-50">

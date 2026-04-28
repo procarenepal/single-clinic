@@ -77,12 +77,12 @@ function StatusBadge({
   type?: "status" | "payment";
 }) {
   const S_COLORS: Record<string, string> = {
-    paid: "bg-health-100 text-health-700 border-health-200",
-    finalized: "bg-teal-100 text-teal-700 border-teal-200",
-    partial: "bg-saffron-100 text-saffron-700 border-saffron-200",
-    unpaid: "bg-red-100 text-red-700 border-red-200",
-    cancelled: "bg-red-100 text-red-700 border-red-200",
-    default: "bg-mountain-100 text-mountain-600 border-mountain-200",
+    paid: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+    finalized: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
+    partial: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    unpaid: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+    cancelled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+    default: "bg-surface-2 text-text-muted border-border-base",
   };
   const color = S_COLORS[status] || S_COLORS.default;
 
@@ -125,17 +125,17 @@ function SearchSelect({
 
   return (
     <div className="flex flex-col gap-1 relative">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-muted">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <div
-        className={`flex items-center h-9 border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex items-center h-9 border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface ${disabled ? "bg-surface-2" : ""}`}
         onClick={() => !disabled && setOpen(true)}
       >
-        <IoSearchOutline className="ml-2.5 w-3.5 h-3.5 text-mountain-400 shrink-0" />
+        <IoSearchOutline className="ml-2.5 w-3.5 h-3.5 text-text-muted/50 shrink-0" />
         <input
-          className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300 w-full"
+          className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full"
           disabled={disabled}
           placeholder={placeholder || `Search…`}
           value={selected && !open ? selected.primary : q}
@@ -147,7 +147,7 @@ function SearchSelect({
         />
         {value && !disabled && (
           <button
-            className="mr-2 text-mountain-400 hover:text-mountain-700"
+            className="mr-2 text-text-muted hover:text-text-main"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -159,20 +159,20 @@ function SearchSelect({
           </button>
         )}
       </div>
-      {hint && <p className="text-[10.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-text-muted/70">{hint}</p>}
       {open && !disabled && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded max-h-48 overflow-y-auto shadow-sm">
+          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-lg">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-mountain-400">
+              <p className="px-3 py-2 text-[12px] text-text-muted/70">
                 No results
               </p>
             ) : (
               filtered.map((i) => (
                 <button
                   key={i.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-teal-50 ${i.id === value ? "bg-teal-50" : ""}`}
+                  className={`w-full text-left px-3 py-2 hover:bg-surface-2 ${i.id === value ? "bg-primary/5" : ""}`}
                   type="button"
                   onClick={() => {
                     onChange(i.id);
@@ -180,9 +180,9 @@ function SearchSelect({
                     setOpen(false);
                   }}
                 >
-                  <p className="text-[12.5px] text-mountain-800">{i.primary}</p>
+                  <p className="text-[12.5px] text-text-main">{i.primary}</p>
                   {i.secondary && (
-                    <p className="text-[11px] text-mountain-400">
+                    <p className="text-[11px] text-text-muted/60">
                       {i.secondary}
                     </p>
                   )}
@@ -225,20 +225,20 @@ function FlatInput({
 }) {
   return (
     <div className="flex flex-col gap-1 w-full">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-muted">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <div
-        className={`flex items-center h-9 border border-mountain-200 rounded bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 ${disabled ? "bg-surface-2" : ""}`}
       >
         {prefixText && (
-          <span className="pl-2.5 text-[12px] text-mountain-400 shrink-0">
+          <span className="pl-2.5 text-[12px] text-text-muted/50 shrink-0">
             {prefixText}
           </span>
         )}
         <input
-          className="flex-1 w-full px-2.5 text-[12.5px] bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300 disabled:text-mountain-400"
+          className="flex-1 w-full px-2.5 text-[12.5px] bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 disabled:text-text-muted/30"
           disabled={disabled}
           min={min}
           placeholder={placeholder}
@@ -248,12 +248,12 @@ function FlatInput({
           onChange={(e) => onChange?.(e.target.value)}
         />
         {suffixText && (
-          <span className="pr-2.5 text-[12px] text-mountain-400 shrink-0">
+          <span className="pr-2.5 text-[12px] text-text-muted/50 shrink-0">
             {suffixText}
           </span>
         )}
       </div>
-      {hint && <p className="text-[10.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-text-muted/70">{hint}</p>}
     </div>
   );
 }
@@ -277,7 +277,7 @@ function Toggle({
           className={`absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-transform duration-200 ease-in-out shadow-sm ${checked ? "transform translate-x-3.5" : ""}`}
         />
       </div>
-      <span className="text-[12.5px] text-mountain-700">{label}</span>
+      <span className="text-[12.5px] text-text-muted">{label}</span>
       {/* Hidden checkbox for accessibility/state */}
       <input
         checked={checked}
@@ -333,19 +333,19 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-surface border border-border-base rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] shadow-xl`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-border-base shrink-0">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-text-main">
               {title}
             </h3>
             {subtitle && <div className="mt-1">{subtitle}</div>}
           </div>
           {!disabled && (
             <button
-              className="text-mountain-400 hover:text-mountain-700 mt-0.5"
+              className="text-text-muted hover:text-text-main mt-0.5"
               type="button"
               onClick={onClose}
             >
@@ -354,7 +354,7 @@ function ModalShell({
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-border-base shrink-0 bg-surface-2/50">
           {footer}
         </div>
       </div>
@@ -373,8 +373,7 @@ export default function AppointmentBillingPage() {
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin =
     userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+    userData?.role === "system-owner";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
@@ -1064,28 +1063,27 @@ export default function AppointmentBillingPage() {
   // ── Rendering ──────────────────────────────────────────────────────────────
   if (loading)
     return (
-      <div className="p-8 text-center text-mountain-400">Loading billing…</div>
+      <div className="p-8 text-center text-text-muted">Loading billing…</div>
     );
-  if (!billingSettings?.enabledByAdmin || !billingSettings?.isActive)
-    return <DashboardNotFoundPage />;
+
 
   return (
     <div className="flex flex-col gap-5 px-4 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-page-title text-mountain-900">
+          <h1 className="text-page-title text-text-main">
             Appointment Billing
           </h1>
-          <p className="text-[12.5px] text-mountain-400 mt-1">
+          <p className="text-[12.5px] text-text-muted mt-1">
             Create and manage appointment invoices
           </p>
         </div>
         {!branchId && isClinicAdmin && branches.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-mountain-500">Branch</span>
+            <span className="text-[11px] text-text-muted">Branch</span>
             <select
-              className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+              className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
               value={selectedBranchId ?? ""}
               onChange={(e) => setSelectedBranchId(e.target.value || null)}
             >
@@ -1100,9 +1098,9 @@ export default function AppointmentBillingPage() {
         )}
       </div>
 
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
         {/* Tab Strip */}
-        <div className="flex border-b border-mountain-100 bg-mountain-25">
+        <div className="flex border-b border-border-base bg-surface-2/50">
           {[
             {
               id: "create",
@@ -1123,7 +1121,7 @@ export default function AppointmentBillingPage() {
             <button
               key={t.id}
               className={`flex items-center gap-2 px-5 py-3.5 text-[13px] font-medium border-b-2 transition-colors
-                ${activeTab === t.id ? "border-teal-700 text-teal-700 bg-white" : "border-transparent text-mountain-500 hover:text-teal-600 hover:bg-mountain-50"}`}
+                ${activeTab === t.id ? "border-primary text-primary bg-surface" : "border-transparent text-text-muted hover:text-primary hover:bg-surface-2"}`}
               type="button"
               onClick={() => setActiveTab(t.id)}
             >
@@ -1156,12 +1154,11 @@ export default function AppointmentBillingPage() {
                 onChange={(v) => setFormData((p) => ({ ...p, invoiceDate: v }))}
               />
             </div>
-
-            <div className="border-t border-mountain-100" />
+            <div className="border-t border-border-base" />
 
             <div>
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-[14px] font-semibold text-mountain-900">
+                <h3 className="text-[14px] font-semibold text-text-main">
                   Invoice Items
                 </h3>
                 <Button
@@ -1175,9 +1172,9 @@ export default function AppointmentBillingPage() {
               </div>
 
               {formData.items.length === 0 ? (
-                <div className="py-10 text-center border dashed border-mountain-200 rounded">
-                  <IoReceiptOutline className="mx-auto w-10 h-10 text-mountain-300 mb-2" />
-                  <p className="text-[13px] text-mountain-500 mb-4">
+                <div className="py-10 text-center border dashed border-border-base rounded-lg bg-surface-2/30">
+                  <IoReceiptOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-2" />
+                  <p className="text-[13px] text-text-muted mb-4">
                     No invoice items added
                   </p>
                   <Button
@@ -1194,7 +1191,7 @@ export default function AppointmentBillingPage() {
                   {formData.items.map((item, i) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 border border-mountain-200 rounded items-end bg-white shadow-sm"
+                      className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 border border-border-base rounded-lg items-end bg-surface-2/40 shadow-none"
                     >
                       <div className="md:col-span-3">
                         <SearchSelect
@@ -1259,11 +1256,11 @@ export default function AppointmentBillingPage() {
                       </div>
                       <div className="md:col-span-1">
                         <div className="flex flex-col gap-1">
-                          <label className="text-[12px] font-medium text-mountain-700">
+                          <label className="text-[12px] font-medium text-text-muted">
                             Disc. Type
                           </label>
                           <select
-                            className="h-9 px-1 text-[11.5px] border border-mountain-200 rounded bg-white shadow-sm"
+                            className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface shadow-none"
                             value={item.discountType || "percent"}
                             onChange={(e) =>
                               updateInvoiceItem(i, {
@@ -1310,7 +1307,7 @@ export default function AppointmentBillingPage() {
                           />
                         </div>
                         <button
-                          className="w-10 h-10 flex items-center justify-center text-red-500 border border-red-200 rounded hover:bg-red-50 shrink-0 transition-colors"
+                          className="w-10 h-10 flex items-center justify-center text-red-500 border border-red-500/20 rounded hover:bg-red-500/5 shrink-0 transition-colors"
                           type="button"
                           onClick={() => removeInvoiceItem(i)}
                         >
@@ -1325,19 +1322,19 @@ export default function AppointmentBillingPage() {
 
             {formData.items.length > 0 && (
               <>
-                <div className="border-t border-mountain-100" />
+                <div className="border-t border-border-base" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
-                    <h4 className="text-[13px] font-semibold text-mountain-900">
+                    <h4 className="text-[13px] font-semibold text-text-main">
                       Discount & Tax
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1">
-                        <label className="text-[12px] font-medium text-mountain-700">
+                        <label className="text-[12px] font-medium text-text-muted">
                           Discount Type
                         </label>
                         <select
-                          className="h-9 px-2 text-[12.5px] border border-mountain-200 rounded bg-white"
+                          className="h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main"
                           value={formData.discountType}
                           onChange={(e) =>
                             setFormData((p) => ({
@@ -1372,8 +1369,8 @@ export default function AppointmentBillingPage() {
                       onChange={(v) => setFormData((p) => ({ ...p, notes: v }))}
                     />
                   </div>
-                  <div className="bg-mountain-50 border border-mountain-100 rounded p-4 text-[13px] space-y-2 text-mountain-700">
-                    <h4 className="font-semibold text-mountain-900 mb-2">
+                  <div className="bg-surface-2 border border-border-base rounded p-4 text-[13px] space-y-2 text-text-muted">
+                    <h4 className="font-semibold text-text-main mb-2">
                       Summary
                     </h4>
                     <div className="flex justify-between">
@@ -1388,7 +1385,7 @@ export default function AppointmentBillingPage() {
                     )}
                     {calculations.itemDiscountAmount > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-mountain-500 italic ml-2">
+                        <span className="text-text-muted/60 italic ml-2">
                           Item-level Discounts:
                         </span>
                         <span className="text-red-400">
@@ -1402,7 +1399,7 @@ export default function AppointmentBillingPage() {
                         - {fmtCur(calculations.mainDiscountAmount)}
                       </span>
                     </div>
-                    <div className="flex justify-between border-t border-mountain-200 mt-1 pt-1 font-semibold">
+                    <div className="flex justify-between border-t border-border-base mt-1 pt-1 font-semibold">
                       <span>Total Discount:</span>
                       <span className="text-red-500">
                         - {fmtCur(calculations.totalDiscount)}
@@ -1417,7 +1414,7 @@ export default function AppointmentBillingPage() {
                         <span>{fmtCur(calculations.taxAmount)}</span>
                       </div>
                     )}
-                    <div className="border-t border-mountain-200 pt-2 flex justify-between font-bold text-mountain-900 text-[14px]">
+                    <div className="border-t border-border-base pt-2 flex justify-between font-bold text-text-main text-[14px]">
                       <span>Total:</span>
                       <span>{fmtCur(calculations.totalAmount)}</span>
                     </div>
@@ -1452,10 +1449,10 @@ export default function AppointmentBillingPage() {
           <div className="p-5 flex flex-col gap-4">
             {billings.length > 0 && (
               <div className="w-64">
-                <div className="flex items-center h-9 border border-mountain-200 rounded bg-white focus-within:border-teal-500">
-                  <IoSearchOutline className="ml-2.5 w-4 h-4 text-mountain-400" />
+                <div className="flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary">
+                  <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-muted/50" />
                   <input
-                    className="flex-1 px-2 text-[12.5px] bg-transparent focus:outline-none placeholder:text-mountain-400"
+                    className="flex-1 px-2 text-[12.5px] bg-transparent focus:outline-none placeholder:text-text-muted/40 text-text-main"
                     placeholder="Search invoices…"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1466,8 +1463,8 @@ export default function AppointmentBillingPage() {
 
             {filteredBillings.length === 0 ? (
               <div className="text-center py-12">
-                <IoReceiptOutline className="mx-auto w-12 h-12 text-mountain-300 mb-3" />
-                <p className="text-[14px] font-medium text-mountain-700">
+                <IoReceiptOutline className="mx-auto w-12 h-12 text-text-muted/30 mb-3" />
+                <p className="text-[14px] font-medium text-text-main">
                   No invoices found
                 </p>
                 {searchQuery ? (
@@ -1494,10 +1491,10 @@ export default function AppointmentBillingPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <div className="overflow-x-auto border border-mountain-200 rounded">
+                <div className="overflow-x-auto border border-border-base rounded">
                   <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead>
-                      <tr className="bg-mountain-50 border-b border-mountain-200">
+                      <tr className="bg-surface-2 border-b border-border-base">
                         {[
                           "INVOICE #",
                           "PATIENT",
@@ -1510,27 +1507,27 @@ export default function AppointmentBillingPage() {
                         ].map((h) => (
                           <th
                             key={h}
-                            className="px-3 py-2 text-[10.5px] font-semibold text-mountain-500 uppercase tracking-wider"
+                            className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
                           >
                             {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-mountain-100 bg-white">
+                    <tbody className="divide-y divide-border-base bg-transparent">
                       {currentBillings.map((b) => (
                         <tr
                           key={b.id}
-                          className="hover:bg-mountain-25 transition-colors"
+                          className="hover:bg-surface-2 transition-colors"
                         >
-                          <td className="px-3 py-2.5 text-[12.5px] font-mono text-mountain-900">
+                          <td className="px-3 py-2.5 text-[12.5px] font-mono text-text-main">
                             {b.invoiceNumber}
                           </td>
-                          <td className="px-3 py-2.5 text-[12.5px] text-mountain-800">
+                          <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                             {b.patientName}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px]">
-                            <p className="text-mountain-800">{b.doctorName}</p>
+                            <p className="text-text-main">{b.doctorName}</p>
                             {(() => {
                               const otherDoctors = Array.from(
                                 new Set(
@@ -1556,16 +1553,16 @@ export default function AppointmentBillingPage() {
                               }
 
                               return (
-                                <span className="text-[10px] text-mountain-400">
+                                <span className="text-[10px] text-text-muted/60">
                                   {b.doctorType}
                                 </span>
                               );
                             })()}
                           </td>
-                          <td className="px-3 py-2.5 text-[12.5px] text-mountain-600">
+                          <td className="px-3 py-2.5 text-[12.5px] text-text-muted">
                             {fmtDate(b.invoiceDate)}
                           </td>
-                          <td className="px-3 py-2.5 text-[12.5px] font-semibold text-mountain-900">
+                          <td className="px-3 py-2.5 text-[12.5px] font-semibold text-text-main">
                             {fmtCur(b.totalAmount)}
                           </td>
                           <td className="px-3 py-2.5">
@@ -1578,7 +1575,7 @@ export default function AppointmentBillingPage() {
                                 type="payment"
                               />
                               {b.paymentStatus !== "paid" && (
-                                <span className="text-[10.5px] text-mountain-500">
+                                <span className="text-[10.5px] text-text-muted">
                                   Bal: {fmtCur(b.balanceAmount)}
                                 </span>
                               )}
@@ -1587,7 +1584,7 @@ export default function AppointmentBillingPage() {
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1.5">
                               <button
-                                className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded"
+                                className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                 title="View"
                                 onClick={() =>
                                   navigate(
@@ -1600,7 +1597,7 @@ export default function AppointmentBillingPage() {
                               <Dropdown>
                                 <DropdownTrigger>
                                   <button
-                                    className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded flex items-center gap-0.5"
+                                    className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded flex items-center gap-0.5"
                                     title="Print"
                                   >
                                     <IoPrintOutline />
@@ -1661,7 +1658,7 @@ export default function AppointmentBillingPage() {
                                 </DropdownMenu>
                               </Dropdown>
                               <button
-                                className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded"
+                                className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                 title="Edit"
                                 onClick={() =>
                                   navigate(
@@ -1673,7 +1670,7 @@ export default function AppointmentBillingPage() {
                               </button>
                               {b.paymentStatus !== "paid" && (
                                 <button
-                                  className="p-1.5 text-mountain-500 hover:text-health-600 hover:bg-health-50 rounded"
+                                  className="p-1.5 text-text-muted hover:text-green-600 hover:bg-green-500/10 rounded"
                                   title="Pay"
                                   onClick={() => {
                                     setSelectedBillingForPayment(b);
@@ -1688,7 +1685,7 @@ export default function AppointmentBillingPage() {
                                 </button>
                               )}
                               <button
-                                className="p-1.5 text-mountain-500 hover:text-red-600 hover:bg-red-50 rounded"
+                                className="p-1.5 text-text-muted hover:text-red-600 hover:bg-red-500/10 rounded"
                                 title="Delete"
                                 onClick={() => {
                                   setDeletingBilling(b);
@@ -1707,7 +1704,7 @@ export default function AppointmentBillingPage() {
 
                 {/* Custom basic Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between text-[12.5px] text-mountain-600 mt-2">
+                  <div className="flex items-center justify-between text-[12.5px] text-text-muted mt-2">
                     <span>
                       Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
                       {Math.min(
@@ -1718,7 +1715,7 @@ export default function AppointmentBillingPage() {
                     </span>
                     <div className="flex gap-1">
                       <button
-                        className="px-2 py-1 border border-mountain-200 rounded hover:bg-mountain-50 disabled:opacity-50 text-mountain-800"
+                        className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                         disabled={currentPage === 1}
                         onClick={() => setCurrentPage((p) => p - 1)}
                       >
@@ -1744,9 +1741,9 @@ export default function AppointmentBillingPage() {
           <div className="p-5 space-y-8">
             <div className="flex flex-col lg:flex-row gap-6 items-start">
               {/* Add form */}
-              <div className="flex-1 w-full border border-mountain-200 rounded overflow-hidden shadow-sm bg-white">
-                <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-100">
-                  <h4 className="text-[13.5px] font-semibold text-mountain-900">
+              <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
+                <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
+                  <h4 className="text-[13.5px] font-semibold text-text-main">
                     Add Payment Method
                   </h4>
                 </div>
@@ -1791,11 +1788,11 @@ export default function AppointmentBillingPage() {
                   />
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-mountain-700">
+                      <label className="text-[12px] font-medium text-text-muted">
                         Icon
                       </label>
                       <select
-                        className="h-9 px-2 text-[12.5px] border border-mountain-200 rounded bg-white"
+                        className="h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main"
                         value={paymentMethodForm.icon}
                         onChange={(e) =>
                           setPaymentMethodForm((p) => ({
@@ -1846,9 +1843,9 @@ export default function AppointmentBillingPage() {
               </div>
 
               {/* List */}
-              <div className="flex-1 w-full border border-mountain-200 rounded overflow-hidden shadow-sm bg-white">
-                <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-100">
-                  <h4 className="text-[13.5px] font-semibold text-mountain-900">
+              <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
+                <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
+                  <h4 className="text-[13.5px] font-semibold text-text-main">
                     Current Methods
                   </h4>
                 </div>
@@ -1856,22 +1853,22 @@ export default function AppointmentBillingPage() {
                   {billingSettings?.paymentMethods?.map((m) => (
                     <div
                       key={m.id}
-                      className="flex items-center justify-between p-3 border border-mountain-100 rounded bg-white"
+                      className="flex items-center justify-between p-3 border border-border-base rounded bg-surface-2/30"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-[20px]">{m.icon}</span>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[12.5px] font-medium text-mountain-800">
+                            <span className="text-[12.5px] font-medium text-text-main">
                               {m.name}
                             </span>
                             {m.isCustom && (
-                              <span className="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">
+                              <span className="text-[10px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
                                 Custom
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-mountain-400">
+                          <p className="text-[11px] text-text-muted/60">
                             Key: {m.key} •{" "}
                             {m.requiresReference ? "Ref Req." : "No Ref"}
                           </p>
@@ -1885,7 +1882,7 @@ export default function AppointmentBillingPage() {
                         />
                         {m.isCustom && (
                           <button
-                            className="text-red-400 hover:text-red-600"
+                            className="text-red-400 hover:text-red-600 transition-colors"
                             onClick={() => handleDeleteMethod(m.id)}
                           >
                             <IoTrashOutline />
@@ -1898,14 +1895,14 @@ export default function AppointmentBillingPage() {
               </div>
             </div>
 
-            <div className="border-t border-mountain-100 pt-8 mt-8">
-              <h3 className="text-[16px] font-bold text-mountain-900 mb-4">
+            <div className="border-t border-border-base pt-8 mt-8">
+              <h3 className="text-[16px] font-bold text-text-main mb-4">
                 Treatment Categories
               </h3>
               <div className="flex flex-col lg:flex-row gap-6 items-start">
-                <div className="flex-1 w-full border border-mountain-200 rounded overflow-hidden shadow-sm bg-white">
-                  <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-100">
-                    <h4 className="text-[13.5px] font-semibold text-mountain-900">
+                <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
+                  <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
+                    <h4 className="text-[13.5px] font-semibold text-text-main">
                       Add Category
                     </h4>
                   </div>
@@ -1939,35 +1936,35 @@ export default function AppointmentBillingPage() {
                   </div>
                 </div>
 
-                <div className="flex-1 w-full border border-mountain-200 rounded overflow-hidden shadow-sm bg-white">
-                  <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-100">
-                    <h4 className="text-[13.5px] font-semibold text-mountain-900">
+                <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
+                  <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
+                    <h4 className="text-[13.5px] font-semibold text-text-main">
                       Current Categories
                     </h4>
                   </div>
                   <div className="p-4 flex flex-col gap-2">
                     {treatmentCategories.length === 0 ? (
-                      <p className="text-center py-4 text-mountain-400 text-[12.5px]">
+                      <p className="text-center py-4 text-text-muted/50 text-[12.5px]">
                         No categories yet.
                       </p>
                     ) : (
                       treatmentCategories.map((c) => (
                         <div
                           key={c.id}
-                          className="flex items-center justify-between p-3 border border-mountain-100 rounded bg-white shadow-sm"
+                          className="flex items-center justify-between p-3 border border-border-base rounded bg-surface-2/30 shadow-none"
                         >
                           <div>
-                            <span className="text-[13px] font-bold text-mountain-800">
+                            <span className="text-[13px] font-bold text-text-main">
                               {c.name}
                             </span>
                             {c.description && (
-                              <p className="text-[11px] text-mountain-500 mt-0.5">
+                              <p className="text-[11px] text-text-muted mt-0.5">
                                 {c.description}
                               </p>
                             )}
                           </div>
                           <button
-                            className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors"
+                            className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-500/10 rounded transition-colors"
                             onClick={() => handleDeleteCategory(c.id)}
                           >
                             <IoTrashOutline />
@@ -2033,48 +2030,48 @@ export default function AppointmentBillingPage() {
             }
             size="xl"
             subtitle={
-              <span className="text-mountain-500 font-mono text-[11.5px]">
+              <span className="text-text-muted/60 font-mono text-[11.5px]">
                 {selectedBilling.invoiceNumber}
               </span>
             }
             title="Invoice Details"
             onClose={() => setShowInvoiceModal(false)}
           >
-            <div className="space-y-4 text-[13px] text-mountain-800">
-              <div className="grid grid-cols-2 gap-3 bg-mountain-50 p-3 rounded border border-mountain-100">
+            <div className="space-y-4 text-[13px] text-text-main">
+              <div className="grid grid-cols-2 gap-3 bg-surface-2 p-3 rounded border border-border-base">
                 <div>
-                  <p className="text-[11px] text-mountain-500">Patient</p>
+                  <p className="text-[11px] text-text-muted">Patient</p>
                   <p className="font-semibold">{selectedBilling.patientName}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-mountain-500">Doctor</p>
+                  <p className="text-[11px] text-text-muted">Doctor</p>
                   <p className="font-semibold">
                     {selectedBilling.doctorName} ({selectedBilling.doctorType})
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-mountain-500">Date</p>
+                  <p className="text-[11px] text-text-muted">Date</p>
                   <p>{fmtDate(selectedBilling.invoiceDate)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-mountain-500">Status</p>
+                  <p className="text-[11px] text-text-muted">Status</p>
                   <StatusBadge status={selectedBilling.status} />
                 </div>
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2 text-mountain-900 border-b border-mountain-100 pb-1">
+                <h4 className="font-semibold mb-2 text-text-main border-b border-border-base pb-1">
                   Items
                 </h4>
                 <div className="space-y-1">
                   {selectedBilling.items.map((i, idx) => (
                     <div
                       key={idx}
-                      className="flex justify-between items-center bg-white border border-mountain-100 p-2 rounded"
+                      className="flex justify-between items-center bg-surface border border-border-base p-2 rounded"
                     >
                       <div>
                         <p className="font-medium">{i.appointmentTypeName}</p>
-                        <p className="text-[11.5px] text-mountain-500">
+                        <p className="text-[11.5px] text-text-muted">
                           {fmtCur(i.price)} × {i.quantity}
                         </p>
                       </div>
@@ -2084,39 +2081,39 @@ export default function AppointmentBillingPage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5 flex flex-col items-end border-t border-mountain-100 pt-3">
-                <p className="w-48 flex justify-between text-mountain-600">
+              <div className="space-y-1.5 flex flex-col items-end border-t border-border-base pt-3">
+                <p className="w-48 flex justify-between text-text-muted">
                   <span>Subtotal:</span>
                   <span>{fmtCur(selectedBilling.subtotal)}</span>
                 </p>
-                <p className="w-48 flex justify-between text-mountain-600">
+                <p className="w-48 flex justify-between text-text-muted">
                   <span>Discount:</span>
                   <span className="text-red-500">
                     - {fmtCur(selectedBilling.discountAmount)}
                   </span>
                 </p>
                 {selectedBilling.taxAmount > 0 && (
-                  <p className="w-48 flex justify-between text-mountain-600">
+                  <p className="w-48 flex justify-between text-text-muted">
                     <span>Tax:</span>
                     <span>{fmtCur(selectedBilling.taxAmount)}</span>
                   </p>
                 )}
-                <p className="w-48 flex justify-between font-bold text-mountain-900 mt-1 border-t border-mountain-100 pt-1">
+                <p className="w-48 flex justify-between font-bold text-text-main mt-1 border-t border-border-base pt-1">
                   <span>Total:</span>
                   <span>{fmtCur(selectedBilling.totalAmount)}</span>
                 </p>
               </div>
 
               {selectedBilling.paidAmount > 0 && (
-                <div className="bg-health-50 p-3 rounded border border-health-100 space-y-1 mt-4">
-                  <h4 className="font-semibold text-health-800 border-b border-health-100 pb-1 mb-2">
+                <div className="bg-green-500/5 p-3 rounded border border-green-500/10 space-y-1 mt-4">
+                  <h4 className="font-semibold text-green-600 border-b border-green-500/10 pb-1 mb-2">
                     Payment Recieved
                   </h4>
-                  <p className="flex justify-between text-health-700">
+                  <p className="flex justify-between text-text-muted">
                     <span>Total:</span>
                     <span>{fmtCur(selectedBilling.totalAmount)}</span>
                   </p>
-                  <p className="flex justify-between font-bold text-health-800">
+                  <p className="flex justify-between font-bold text-green-600">
                     <span>Paid:</span>
                     <span>{fmtCur(selectedBilling.paidAmount)}</span>
                   </p>
@@ -2162,7 +2159,7 @@ export default function AppointmentBillingPage() {
             }
             size="md"
             subtitle={
-              <span className="text-mountain-500 text-[11.5px]">
+              <span className="text-text-muted/60 text-[11.5px]">
                 Invoice: {selectedBillingForPayment.invoiceNumber} — Bal:{" "}
                 {fmtCur(selectedBillingForPayment.balanceAmount)}
               </span>
@@ -2180,11 +2177,11 @@ export default function AppointmentBillingPage() {
                 onChange={(v) => setPaymentForm((p) => ({ ...p, amount: v }))}
               />
               <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-medium text-mountain-700">
+                <label className="text-[12px] font-medium text-text-muted">
                   Payment Method <span className="text-red-500">*</span>
                 </label>
                 <select
-                  className="h-9 px-2 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100"
+                  className="h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
                   value={paymentForm.method}
                   onChange={(e) =>
                     setPaymentForm((p) => ({
@@ -2252,15 +2249,15 @@ export default function AppointmentBillingPage() {
             title="Delete Invoice"
             onClose={() => setShowDeleteModal(false)}
           >
-            <div className="text-[13px] text-mountain-800">
+            <div className="text-[13px] text-text-muted">
               <p>
                 Are you sure you want to delete invoice{" "}
-                <strong className="font-mono text-mountain-900">
+                <strong className="font-mono text-text-main">
                   {deletingBilling.invoiceNumber}
                 </strong>
                 ?
               </p>
-              <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded text-red-700">
+              <div className="mt-3 p-3 bg-red-500/5 border border-red-500/10 rounded text-red-500">
                 <p className="font-semibold flex items-center gap-1">
                   <IoTrashOutline /> This action cannot be undone.
                 </p>

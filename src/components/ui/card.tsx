@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 import clsx from "clsx";
 
 // ── Card ──────────────────────────────────────────────────────────────────────
@@ -11,21 +12,25 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, isPressable, isHoverable, onPress, onClick, ...rest }, ref) => {
+  ({ className, isPressable, isHoverable, isBlurred, onPress, onClick, ...rest }, ref) => {
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
       onClick?.(e);
       if (!e.defaultPrevented) onPress?.();
     };
 
     return (
-      <div
-        ref={ref}
+      <motion.div
+        ref={ref as any}
+        layout
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={isHoverable || isPressable ? { y: -2 } : {}}
         className={clsx(
-          // Flat — border only, no shadow
-          "bg-white border border-mountain-200 rounded overflow-hidden",
+          "bg-surface border border-border-base rounded-xl overflow-hidden transition-all duration-300",
+          isBlurred && "glass-morphism shadow-xl shadow-black/5",
           isPressable && "cursor-pointer select-none",
           (isPressable || isHoverable) &&
-            "hover:border-teal-300 hover:bg-teal-50/30 transition-colors duration-100",
+          "hover-glow hover:border-teal-500/30 dark:hover:border-teal-500/20",
           className,
         )}
         role={isPressable ? "button" : undefined}
@@ -34,11 +39,11 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
         onKeyDown={
           isPressable
             ? (e) => {
-                if (e.key === "Enter") onPress?.();
-              }
+              if (e.key === "Enter") onPress?.();
+            }
             : undefined
         }
-        {...rest}
+        {...rest as any}
       />
     );
   },
@@ -53,7 +58,7 @@ export const CardHeader = React.forwardRef<
   <div
     ref={ref}
     className={clsx(
-      "flex items-center justify-between gap-2 px-3 py-2 border-b border-mountain-100",
+      "flex items-center justify-between gap-2 px-3 py-2 border-b border-border-base bg-surface-2/30",
       className,
     )}
     {...rest}
@@ -78,7 +83,7 @@ export const CardFooter = React.forwardRef<
   <div
     ref={ref}
     className={clsx(
-      "flex items-center justify-end gap-2 px-3 py-2 border-t border-mountain-100",
+      "flex items-center justify-end gap-2 px-3 py-2 border-t border-border-base bg-surface-2/50",
       className,
     )}
     {...rest}

@@ -1,4 +1,5 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
+import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { isToday, isFuture, isPast, startOfDay, format } from "date-fns";
 
@@ -91,20 +92,20 @@ interface ChartDataType {
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_BADGE: Record<string, string> = {
-  confirmed: "bg-teal-100 text-teal-700",
-  scheduled: "bg-sky-100 text-sky-700",
-  "in-progress": "bg-saffron-100 text-saffron-700",
-  completed: "bg-health-100 text-health-700",
-  cancelled: "bg-red-100 text-red-600",
-  default: "bg-mountain-100 text-mountain-600",
+  confirmed: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
+  scheduled: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  "in-progress": "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  completed: "bg-green-500/10 text-green-600 dark:text-green-400",
+  cancelled: "bg-red-500/10 text-red-600 dark:text-red-400",
+  default: "bg-surface-2 text-text-muted",
 };
 
 const ENQUIRY_BADGE: Record<string, string> = {
-  new: "bg-teal-100 text-teal-700",
-  contacted: "bg-saffron-100 text-saffron-700",
-  scheduled: "bg-sky-100 text-sky-700",
-  converted: "bg-health-100 text-health-700",
-  closed: "bg-mountain-100 text-mountain-500",
+  new: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
+  contacted: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  scheduled: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  converted: "bg-green-500/10 text-green-600 dark:text-green-400",
+  closed: "bg-surface-2 text-text-muted",
 };
 
 function statusBadge(status: string) {
@@ -113,6 +114,31 @@ function statusBadge(status: string) {
 function enquiryBadge(status: string) {
   return ENQUIRY_BADGE[status] ?? STATUS_BADGE.default;
 }
+
+// ── Motion Variants ──────────────────────────────────────────────────────────
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+};
 
 // ── Micro components ──────────────────────────────────────────────────────────
 
@@ -137,35 +163,38 @@ function StatCard({
   alert,
 }: StatCardProps) {
   return (
-    <Link className="block group no-underline" to={href}>
-      <div className="bg-white border border-mountain-200 rounded p-3 hover:border-teal-300 transition-colors duration-100">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            {/* Label — section-label style from spec */}
-            <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
-              {label}
-            </p>
-            {/* KPI value — 22px/700 from spec */}
-            <p
-              className={`text-stat-sm leading-none ${alert ? "text-red-600" : "text-mountain-900"}`}
+    <motion.div variants={itemVariants}>
+      <Link className="block group no-underline" to={href}>
+        <div className="bg-surface border border-border-base rounded-xl p-4 hover-glow hover:border-primary/30 transition-all duration-300 relative overflow-hidden group">
+          {/* Subtle background glow on hover */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+          <div className="relative z-10 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1.5 opacity-80">
+                {label}
+              </p>
+              <p
+                className={`text-stat-sm font-bold leading-none tracking-tight ${alert ? "text-red-500" : "text-text-main"}`}
+              >
+                {typeof value === "number" ? value.toLocaleString() : value}
+              </p>
+              {sub && <p className="text-[11px] text-text-muted mt-2 font-medium">{sub}</p>}
+            </div>
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 ${iconBg}`}
             >
-              {typeof value === "number" ? value.toLocaleString() : value}
-            </p>
-            {sub && <p className="text-[11px] text-mountain-400 mt-1">{sub}</p>}
+              {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
+            </div>
           </div>
-          <div
-            className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${iconBg}`}
-          >
-            {icon}
+
+          <div className="relative z-10 mt-4 flex items-center gap-1.5 text-[11px] font-bold text-text-muted group-hover:text-primary transition-colors">
+            <span>Details</span>
+            <IoChevronForwardOutline className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
           </div>
         </div>
-        {/* Bottom accent line */}
-        <div className="mt-3 flex items-center gap-1 text-[11px] text-mountain-400 group-hover:text-teal-600 transition-colors">
-          <span>View details</span>
-          <IoChevronForwardOutline className="w-3 h-3" />
-        </div>
-      </div>
-    </Link>
+      </Link>
+    </motion.div>
   );
 }
 
@@ -178,26 +207,24 @@ interface TabStripProps {
 
 function TabStrip({ tabs, selected, onChange }: TabStripProps) {
   return (
-    <div className="flex gap-1 border-b border-mountain-100 mb-2">
+    <div className="flex gap-1 border-b border-border-base mb-2">
       {tabs.map((t) => (
         <button
           key={t.key}
-          className={`flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium transition-colors duration-75 border-b-2 -mb-px ${
-            selected === t.key
-              ? "border-teal-700 text-teal-700"
-              : "border-transparent text-mountain-500 hover:text-mountain-800"
-          }`}
+          className={`flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium transition-colors duration-75 border-b-2 -mb-px ${selected === t.key
+            ? "border-primary text-primary"
+            : "border-transparent text-text-muted hover:text-text-main"
+            }`}
           type="button"
           onClick={() => onChange(t.key)}
         >
           {t.label}
           {t.count !== undefined && (
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                selected === t.key
-                  ? "bg-teal-100 text-teal-700"
-                  : "bg-mountain-100 text-mountain-500"
-              }`}
+              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${selected === t.key
+                ? "bg-primary/10 text-primary"
+                : "bg-surface-2 text-text-muted"
+                }`}
             >
               {t.count}
             </span>
@@ -211,10 +238,10 @@ function TabStrip({ tabs, selected, onChange }: TabStripProps) {
 /** Section card header row */
 function SectionHeader({ title, href }: { title: string; href: string }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-b border-mountain-100">
-      <p className="text-[12.5px] font-semibold text-mountain-900">{title}</p>
+    <div className="flex items-center justify-between px-3 py-2 border-b border-border-base">
+      <p className="text-[12.5px] font-semibold text-text-main">{title}</p>
       <Link
-        className="text-[11px] text-teal-600 hover:text-teal-700 font-medium flex items-center gap-0.5 no-underline"
+        className="text-[11px] text-primary hover:text-primary/80 font-medium flex items-center gap-0.5 no-underline"
         to={href}
       >
         View all <IoChevronForwardOutline className="w-3 h-3" />
@@ -228,7 +255,7 @@ export default function DashboardIndexPage() {
   const { isDark } = useTheme();
   const { clinicId, userData, branchId } = useAuthContext();
   const isClinicAdmin =
-    userData?.role === "clinic-super-admin" ||
+    userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
 
   const [stats, setStats] = useState<DashboardStats>({
@@ -308,37 +335,7 @@ export default function DashboardIndexPage() {
       : enquiries.filter((e) => e.status === s).length;
 
   // ── Branch list for clinic-wide admins (no fixed branchId) ────────────────
-  useEffect(() => {
-    if (!clinicId) return;
-    if (!isClinicAdmin || branchId) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches(clinicId, true);
-
-        if (cancelled) return;
-        setBranches(data);
-        if (data.length > 0) {
-          // Ordered by isMainBranch desc in service; first entry is main branch
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (err) {
-        console.error("Dashboard branches fetch error:", err);
-        if (!cancelled) {
-          setBranches([]);
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
+  // Removed legacy branch fetching for standalone mode
 
   // ── Data fetch (all in parallel to avoid waterfall) ────────────────────────
   useEffect(() => {
@@ -348,7 +345,7 @@ export default function DashboardIndexPage() {
 
     (async () => {
       try {
-        const branchScopedId = effectiveBranchId;
+        const branchScopedId = undefined; // Branch filters removed for standalone mode
         const [allPatients, allDoctors, allAppTypes, allAppts, allEnquiries] =
           await Promise.all([
             patientService.getPatientsByClinic(clinicId, branchScopedId),
@@ -417,7 +414,8 @@ export default function DashboardIndexPage() {
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const getChartData = (): ChartDataType => {
-    const primaryColor = isDark ? "#2dd4bf" : "#0f766e";
+    // ProCare Blue theme colors from globals.css
+    const primaryColor = isDark ? "#38a9f8" : "#0356a1";
     const secondaryColor = isDark ? "#4ade80" : "#16a34a";
     const warningColor = isDark ? "#fbbf24" : "#d97706";
     const dangerColor = isDark ? "#f87171" : "#e11d48";
@@ -593,7 +591,7 @@ export default function DashboardIndexPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[320px] gap-3">
         <IoAlertCircleOutline className="w-8 h-8 text-red-400" />
-        <p className="text-sm text-mountain-600">{error}</p>
+        <p className="text-sm text-text-muted">{error}</p>
         <Button
           color="primary"
           size="sm"
@@ -608,16 +606,16 @@ export default function DashboardIndexPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-4">
+    <div className="w-full flex flex-col gap-4">
       {/* ── Page header — spec: clarity-page-header pattern ────────────── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           {/* spec: page title 15px/700/-0.02em */}
-          <h1 className="text-page-title text-mountain-900 leading-tight">
+          <h1 className="text-page-title text-text-main leading-tight">
             Dashboard
           </h1>
           {/* spec: body 13px/400 */}
-          <p className="text-[13px] text-mountain-400 mt-0.5">
+          <p className="text-[13px] text-text-muted mt-0.5">
             {new Date().toLocaleDateString("en-US", {
               weekday: "long",
               month: "long",
@@ -631,9 +629,9 @@ export default function DashboardIndexPage() {
         <div className="flex flex-wrap gap-2 items-center">
           {!branchId && isClinicAdmin && branches.length > 0 && (
             <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-mountain-500">Branch</span>
+              <span className="text-[11px] text-text-muted">Branch</span>
               <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                 value={selectedBranchId ?? ""}
                 onChange={(e) => setSelectedBranchId(e.target.value || null)}
               >
@@ -681,7 +679,12 @@ export default function DashboardIndexPage() {
       </div>
 
       {/* ── KPI stat cards — 4-col grid ────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+      >
         <StatCard
           href="/dashboard/patients"
           icon={<IoPersonOutline className="w-4 h-4" />}
@@ -715,233 +718,241 @@ export default function DashboardIndexPage() {
           sub="Currently available"
           value={stats.activeDoctors}
         />
-      </div>
+      </motion.div>
 
-      {/* ── Row 2: Patient visits chart + Appointments list ────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* Patient visits (line chart) */}
-        <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-          <div className="px-3 py-2 border-b border-mountain-100">
-            {/* spec: section label 11px/600/uppercase */}
-            <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400">
-              Patient Registrations
-            </p>
-            <p className="text-[12.5px] font-semibold text-mountain-900 mt-0.5">
-              Last 6 months
-            </p>
+      {/* ── Row 2 & 3 with fade-in ── */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="flex flex-col gap-3"
+      >
+        {/* ── Row 2: Patient visits chart + Appointments list ────────────── */}
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Patient visits (line chart) */}
+          <div className="bg-surface border border-border-base rounded-xl overflow-hidden shadow-sm shadow-black/5">
+            <div className="px-3 py-2 border-b border-border-base">
+              {/* spec: section label 11px/600/uppercase */}
+              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
+                Patient Registrations
+              </p>
+              <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
+                Last 6 months
+              </p>
+            </div>
+            <div className="p-3 h-[220px]">
+              <Suspense
+                fallback={
+                  <div className="h-full flex items-center justify-center">
+                    <Spinner label="Loading chart…" size="sm" />
+                  </div>
+                }
+              >
+                <PatientVisitsChart
+                  data={chartData.patientVisits}
+                  options={chartOpts}
+                />
+              </Suspense>
+            </div>
           </div>
-          <div className="p-3 h-[220px]">
-            <Suspense
-              fallback={
-                <div className="h-full flex items-center justify-center">
-                  <Spinner label="Loading chart…" size="sm" />
-                </div>
-              }
-            >
-              <PatientVisitsChart
-                data={chartData.patientVisits}
-                options={chartOpts}
+
+          {/* Appointments tabbed list */}
+          <div className="bg-surface border border-border-base rounded overflow-hidden flex flex-col">
+            <SectionHeader href="/dashboard/appointments" title="Appointments" />
+
+            <div className="px-3 pt-2">
+              <TabStrip
+                selected={apptTab}
+                tabs={[
+                  { key: "today", label: "Today", count: todayAppts.length },
+                  {
+                    key: "upcoming",
+                    label: "Upcoming",
+                    count: upcomingAppts.length,
+                  },
+                  { key: "past", label: "Past", count: pastAppts.length },
+                ]}
+                onChange={setApptTab}
               />
-            </Suspense>
+            </div>
+
+            <div
+              className="flex-1 overflow-y-auto px-1 pb-2"
+              style={{ maxHeight: "234px" }}
+            >
+              {filteredAppts.length === 0 ? (
+                <div className="py-8 text-center">
+                  <IoCalendarOutline className="w-6 h-6 mx-auto mb-1.5 text-mountain-300" />
+                  <p className="text-[12px] text-mountain-400">No appointments</p>
+                </div>
+              ) : (
+                filteredAppts.slice(0, 6).map((appt) => {
+                  const doctor = doctors.find((d) => d.id === appt.doctorId);
+                  const patient = patients.find((p) => p.id === appt.patientId);
+
+                  return (
+                    <div
+                      key={appt.id}
+                      className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-surface-2 rounded transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          className="text-[12.5px] font-medium text-text-main hover:text-primary truncate block no-underline"
+                          to={`/dashboard/patients/${patient?.id}`}
+                        >
+                          {patient?.name ?? "Unknown Patient"}
+                        </Link>
+                        <p className="text-[11px] text-text-muted truncate">
+                          Dr. {doctor?.name ?? "Unknown"} ·{" "}
+                          {apptTypeName(appt.appointmentTypeId)} ·{" "}
+                          {formatTime12(appt.startTime ?? "")}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded ${statusBadge(appt.status)}`}
+                      >
+                        {appt.status}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Appointments tabbed list */}
-        <div className="bg-white border border-mountain-200 rounded overflow-hidden flex flex-col">
-          <SectionHeader href="/dashboard/appointments" title="Appointments" />
-
-          <div className="px-3 pt-2">
-            <TabStrip
-              selected={apptTab}
-              tabs={[
-                { key: "today", label: "Today", count: todayAppts.length },
-                {
-                  key: "upcoming",
-                  label: "Upcoming",
-                  count: upcomingAppts.length,
-                },
-                { key: "past", label: "Past", count: pastAppts.length },
-              ]}
-              onChange={setApptTab}
-            />
+        {/* ── Row 3: Status doughnut + Enquiries ─────────────────────────── */}
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-3 pb-8">
+          {/* Appointment status breakdown (doughnut) — 2/3 width */}
+          <div className="lg:col-span-2 bg-surface border border-border-base rounded overflow-hidden">
+            <div className="px-3 py-2 border-b border-border-base">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
+                Status Breakdown
+              </p>
+              <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
+                Appointment distribution
+              </p>
+            </div>
+            <div className="p-3 h-[220px]">
+              <Suspense
+                fallback={
+                  <div className="h-full flex items-center justify-center">
+                    <Spinner label="Loading chart…" size="sm" />
+                  </div>
+                }
+              >
+                <AppointmentStatusChart
+                  data={chartData.appointmentStatus}
+                  options={doughnutOpts}
+                />
+              </Suspense>
+            </div>
           </div>
 
-          <div
-            className="flex-1 overflow-y-auto px-1 pb-2"
-            style={{ maxHeight: "234px" }}
-          >
-            {filteredAppts.length === 0 ? (
-              <div className="py-8 text-center">
-                <IoCalendarOutline className="w-6 h-6 mx-auto mb-1.5 text-mountain-300" />
-                <p className="text-[12px] text-mountain-400">No appointments</p>
-              </div>
-            ) : (
-              filteredAppts.slice(0, 6).map((appt) => {
-                const doctor = doctors.find((d) => d.id === appt.doctorId);
-                const patient = patients.find((p) => p.id === appt.patientId);
+          {/* Enquiries — 1/3 width */}
+          <div className="bg-surface border border-border-base rounded overflow-hidden flex flex-col">
+            <SectionHeader href="/dashboard/enquiries" title="Enquiries" />
 
-                return (
+            <div className="px-3 pt-2">
+              <TabStrip
+                selected={enquiryTab}
+                tabs={[
+                  { key: "new", label: "New", count: enquiryCount("new") },
+                  {
+                    key: "contacted",
+                    label: "Contacted",
+                    count: enquiryCount("contacted"),
+                  },
+                  {
+                    key: "converted",
+                    label: "Done",
+                    count: enquiryCount("converted"),
+                  },
+                  { key: "all", label: "All", count: enquiryCount("all") },
+                ]}
+                onChange={(v) => setEnquiryTab(v as EnquiryStatus | "all")}
+              />
+            </div>
+
+            <div
+              className="flex-1 overflow-y-auto px-1 pb-2"
+              style={{ maxHeight: "234px" }}
+            >
+              {filteredEnquiries.length === 0 ? (
+                <div className="py-8 text-center">
+                  <IoStarOutline className="w-6 h-6 mx-auto mb-1.5 text-text-muted/30" />
+                  <p className="text-[12px] text-text-muted">No enquiries</p>
+                </div>
+              ) : (
+                filteredEnquiries.map((enq) => (
                   <div
-                    key={appt.id}
-                    className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-50 rounded transition-colors"
+                    key={enq.id}
+                    className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-surface-2 rounded transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <Link
-                        className="text-[12.5px] font-medium text-mountain-900 hover:text-teal-700 truncate block no-underline"
-                        to={`/dashboard/patients/${patient?.id}`}
-                      >
-                        {patient?.name ?? "Unknown Patient"}
-                      </Link>
-                      <p className="text-[11px] text-mountain-400 truncate">
-                        Dr. {doctor?.name ?? "Unknown"} ·{" "}
-                        {apptTypeName(appt.appointmentTypeId)} ·{" "}
-                        {formatTime12(appt.startTime ?? "")}
+                      <p className="text-[12.5px] font-medium text-text-main truncate">
+                        {enq.fullName}
+                      </p>
+                      <p className="text-[11px] text-text-muted truncate">
+                        {enq.phone}
+                        {enq.source ? ` · ${enq.source}` : ""} ·{" "}
+                        {enq.createdAt
+                          ? format(new Date(enq.createdAt), "MMM dd")
+                          : ""}
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded ${statusBadge(appt.status)}`}
+                      className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded ${enquiryBadge(enq.status)}`}
                     >
-                      {appt.status}
+                      {enq.status}
                     </span>
                   </div>
-                );
-              })
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Row 3: Status doughnut + Enquiries ─────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Appointment status breakdown (doughnut) — 2/3 width */}
-        <div className="lg:col-span-2 bg-white border border-mountain-200 rounded overflow-hidden">
-          <div className="px-3 py-2 border-b border-mountain-100">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400">
-              Status Breakdown
-            </p>
-            <p className="text-[12.5px] font-semibold text-mountain-900 mt-0.5">
-              Appointment distribution
-            </p>
-          </div>
-          <div className="p-3 h-[220px]">
-            <Suspense
-              fallback={
-                <div className="h-full flex items-center justify-center">
-                  <Spinner label="Loading chart…" size="sm" />
-                </div>
-              }
-            >
-              <AppointmentStatusChart
-                data={chartData.appointmentStatus}
-                options={doughnutOpts}
-              />
-            </Suspense>
-          </div>
-        </div>
-
-        {/* Enquiries — 1/3 width */}
-        <div className="bg-white border border-mountain-200 rounded overflow-hidden flex flex-col">
-          <SectionHeader href="/dashboard/enquiries" title="Enquiries" />
-
-          <div className="px-3 pt-2">
-            <TabStrip
-              selected={enquiryTab}
-              tabs={[
-                { key: "new", label: "New", count: enquiryCount("new") },
-                {
-                  key: "contacted",
-                  label: "Contacted",
-                  count: enquiryCount("contacted"),
-                },
-                {
-                  key: "converted",
-                  label: "Done",
-                  count: enquiryCount("converted"),
-                },
-                { key: "all", label: "All", count: enquiryCount("all") },
-              ]}
-              onChange={(v) => setEnquiryTab(v as EnquiryStatus | "all")}
-            />
-          </div>
-
-          <div
-            className="flex-1 overflow-y-auto px-1 pb-2"
-            style={{ maxHeight: "234px" }}
-          >
-            {filteredEnquiries.length === 0 ? (
-              <div className="py-8 text-center">
-                <IoStarOutline className="w-6 h-6 mx-auto mb-1.5 text-mountain-300" />
-                <p className="text-[12px] text-mountain-400">No enquiries</p>
-              </div>
-            ) : (
-              filteredEnquiries.map((enq) => (
-                <div
-                  key={enq.id}
-                  className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-50 rounded transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12.5px] font-medium text-mountain-900 truncate">
-                      {enq.fullName}
-                    </p>
-                    <p className="text-[11px] text-mountain-400 truncate">
-                      {enq.phone}
-                      {enq.source ? ` · ${enq.source}` : ""} ·{" "}
-                      {enq.createdAt
-                        ? format(new Date(enq.createdAt), "MMM dd")
-                        : ""}
-                    </p>
-                  </div>
-                  <span
-                    className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded ${enquiryBadge(enq.status)}`}
-                  >
-                    {enq.status}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {showAnnouncement && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden backdrop-blur-sm"
           onClick={closeAnnouncement}
         >
-          <div
-            className="bg-white border border-mountain-200 rounded max-w-md w-full flex flex-col shadow-lg"
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-surface border border-border-base rounded-2xl max-w-md w-full flex flex-col shadow-2xl glass-morphism overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 bg-gradient-to-r from-teal-50 to-white">
-              <h3 className="text-[15px] font-semibold text-teal-900 flex items-center gap-2">
-                <IoStarOutline className="text-teal-600" /> UI Update
-                Announcement
+            <div className="flex items-start justify-between px-6 py-4 border-b border-border-base bg-gradient-to-r from-teal-500/10 to-transparent">
+              <h3 className="text-[16px] font-bold text-text-main flex items-center gap-2">
+                <IoStarOutline className="text-teal-500" /> UI Update Announcement
               </h3>
               <button
-                className="text-mountain-400 hover:text-mountain-700"
+                className="text-text-muted hover:text-text-main transition-colors"
                 type="button"
                 onClick={closeAnnouncement}
               >
                 <IoCloseOutline className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-5 text-[13.5px] text-mountain-800 space-y-3">
-              <p className="text-[15px]">
-                <strong>Gradual release of All new UI</strong>
+            <div className="p-6 text-[14px] text-text-main space-y-4">
+              <p className="text-[16px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-600 dark:from-teal-400 dark:to-emerald-400">
+                A New Premium Experience
               </p>
-              <p className="text-mountain-600 text-[13px]">
-                We are excited to announce a refresh to our interface! You will
-                start seeing a more modern, cleaner, and faster experience
-                across different parts of our application as we roll out these
-                changes.
+              <p className="text-text-muted text-[13.5px] leading-relaxed">
+                Welcome to ProCare v2.0. We've introduced glassmorphism,
+                staggered entrance animations, and a new "Floating" navigation
+                to make your workflow feel faster and more premium.
               </p>
             </div>
-            <div className="flex justify-end px-4 py-3 border-t border-mountain-100 bg-mountain-50">
-              <Button color="primary" size="sm" onClick={closeAnnouncement}>
+            <div className="flex justify-end px-6 py-4 border-t border-border-base bg-surface-2/50">
+              <Button color="primary" radius="lg" size="md" onClick={closeAnnouncement}>
                 Got it!
               </Button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>

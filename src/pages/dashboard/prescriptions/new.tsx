@@ -116,10 +116,10 @@ function SearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + " " + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + " " + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -349,7 +349,7 @@ export default function NewPrescriptionPage() {
       if (dObj && !isNaN(dObj.getTime())) {
         return `${dObj.getFullYear()}/${String(dObj.getMonth() + 1).padStart(2, "0")}/${String(dObj.getDate()).padStart(2, "0")}`;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return "Invalid Date";
   };
@@ -478,7 +478,7 @@ export default function NewPrescriptionPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>New Prescription</h1>
+          <h1 className={title({ size: "lg" })}>New Prescription</h1>
         </div>
         <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
@@ -499,7 +499,7 @@ export default function NewPrescriptionPage() {
             Back
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>New Prescription</h1>
+            <h1 className={title({ size: "lg" })}>New Prescription</h1>
             <p className="text-[13.5px] text-mountain-500 mt-1">
               Create a new prescription for your patient
             </p>

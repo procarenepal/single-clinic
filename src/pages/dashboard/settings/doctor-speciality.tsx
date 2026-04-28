@@ -132,7 +132,6 @@ const DoctorSpecialityPage: React.FC = () => {
       newErrors.key = "Key is required";
     } else {
       const keyExists = await specialityService.isKeyExists(
-        clinicId!,
         formData.key,
         editingSpeciality?.id,
       );
@@ -327,7 +326,7 @@ const DoctorSpecialityPage: React.FC = () => {
         {/* Page header — spec: clarity-page-header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-[15px] font-bold text-mountain-900 tracking-[-0.02em]">
+            <h1 className="text-page-title font-bold text-mountain-900 tracking-[-0.02em]">
               Doctor Specialities
             </h1>
             <p className="text-[13px] text-mountain-500 mt-0.5">
@@ -417,8 +416,8 @@ const DoctorSpecialityPage: React.FC = () => {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span
                           className={`clarity-badge inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border ${speciality.isActive
-                              ? "bg-teal-100 text-teal-700 border-teal-200"
-                              : "bg-red-100 text-red-700 border-red-200"
+                            ? "bg-teal-100 text-teal-700 border-teal-200"
+                            : "bg-red-100 text-red-700 border-red-200"
                             }`}
                         >
                           {speciality.isActive ? (

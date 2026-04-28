@@ -20,20 +20,28 @@ export default {
   theme: {
     extend: {
       colors: {
-        // ── Clinical Teal (new primary palette) ─────────────────────────────
+        // ── ProCare Blue (redefined from teal for compatibility) ───────────
         'teal': {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2dd4bf',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
-          950: '#042f2e',
+          50: '#f0f7ff',
+          100: '#e0effe',
+          200: '#bae0fd',
+          300: '#7cc8fc',
+          400: '#38a9f8',
+          500: '#0e84e9',
+          600: '#026dc7',
+          700: '#0356a1',
+          800: '#074785',
+          900: '#0c3b6e',
+          950: '#061d33',
         },
+        // ── Semantic Semantic Colors ────────────────────────────────────────
+        'surface': 'rgb(var(--color-surface) / <alpha-value>)',
+        'surface-2': 'rgb(var(--color-surface-2) / <alpha-value>)',
+        'bg': 'rgb(var(--color-bg) / <alpha-value>)',
+        'border-base': 'rgb(var(--color-border) / <alpha-value>)',
+        'text-main': 'rgb(var(--color-text) / <alpha-value>)',
+        'text-muted': 'rgb(var(--color-text-muted) / <alpha-value>)',
+
         // ── Legacy colors (backward compat) ─────────────────────────────────
         'nepal': {
           50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc',
@@ -58,7 +66,7 @@ export default {
       },
 
       fontFamily: {
-        'sans': ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        'sans': ['Nunito', 'Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
         'mono': ['JetBrains Mono', 'Fira Code', 'monospace'],
         'nepali': ['Noto Sans Devanagari', 'sans-serif'],
       },
@@ -67,24 +75,24 @@ export default {
       // Preflight resets all h1–h6 to inherit — these classes restore hierarchy.
       fontSize: {
         // Page-level headings
-        'page-title': ['24px', { lineHeight: '1.2', letterSpacing: '-0.03em', fontWeight: '700' }],
-        'section-title': ['18px', { lineHeight: '1.3', letterSpacing: '-0.02em', fontWeight: '600' }],
-        'card-title': ['15px', { lineHeight: '1.4', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'page-title': ['15px', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '700' }],
+        'section-title': ['14px', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'card-title': ['13px', { lineHeight: '1.4', letterSpacing: '0', fontWeight: '600' }],
         // Body & UI chrome
         'body': ['13px', { lineHeight: '1.5', letterSpacing: '-0.01em', fontWeight: '400' }],
         'label': ['12px', { lineHeight: '1.4', letterSpacing: '0', fontWeight: '500' }],
         'micro': ['11px', { lineHeight: '1.4', letterSpacing: '0.06em', fontWeight: '600' }],
         // KPI stat values
-        'stat': ['28px', { lineHeight: '1', letterSpacing: '-0.04em', fontWeight: '700' }],
-        'stat-sm': ['22px', { lineHeight: '1', letterSpacing: '-0.03em', fontWeight: '700' }],
+        'stat': ['20px', { lineHeight: '1', letterSpacing: '-0.03em', fontWeight: '700' }],
+        'stat-sm': ['15px', { lineHeight: '1', letterSpacing: '-0.02em', fontWeight: '700' }],
       },
 
       // ── Compact radius (flat corners) ────────────────────────────────────
       borderRadius: {
         'none': '0',
         'xs': '0.125rem',
-        'sm': '0.25rem',
-        DEFAULT: '0.375rem',
+        'sm': '0.375rem',
+        DEFAULT: '0.5rem',
         'md': '0.5rem',
         'lg': '0.625rem',
         'xl': '0.75rem',
@@ -95,11 +103,11 @@ export default {
       // ── Zero shadows (flat design — borders only) ─────────────────────────
       boxShadow: {
         'none': 'none',
-        'focus-teal': '0 0 0 3px rgba(15, 118, 110, 0.18)',
+        'focus-teal': '0 0 0 3px rgba(3, 86, 161, 0.18)',
         'focus-rose': '0 0 0 3px rgba(225, 29, 72, 0.18)',
         'focus-violet': '0 0 0 3px rgba(124, 58, 237, 0.18)',
         'focus-sky': '0 0 0 3px rgba(2, 132, 199, 0.18)',
-        // Legacy names → none (override HeroUI defaults)
+        // Legacy names → none (maintain flat aesthetic)
         'sm': 'none',
         'md': 'none',
         'lg': 'none',
@@ -123,17 +131,17 @@ export default {
           background: '#f8fafc',
           foreground: '#0f172a',
           primary: {
-            '50': '#f0fdfa',
-            '100': '#ccfbf1',
-            '200': '#99f6e4',
-            '300': '#5eead4',
-            '400': '#2dd4bf',
-            '500': '#14b8a6',
-            '600': '#0d9488',
-            '700': '#0f766e',
-            '800': '#115e59',
-            '900': '#134e4a',
-            DEFAULT: '#0f766e',
+            '50': '#f0f7ff',
+            '100': '#e0effe',
+            '200': '#bae0fd',
+            '300': '#7cc8fc',
+            '400': '#38a9f8',
+            '500': '#0e84e9',
+            '600': '#026dc7',
+            '700': '#0356a1',
+            '800': '#074785',
+            '900': '#0c3b6e',
+            DEFAULT: '#0356a1',
             foreground: '#ffffff',
           },
           secondary: {
@@ -160,27 +168,26 @@ export default {
             DEFAULT: '#e11d48',
             foreground: '#ffffff',
           },
-          focus: '#0f766e',
+          focus: '#0356a1',
         },
       },
 
       // ── 2. Clarity Dark ───────────────────────────────────────────────────
       dark: {
-        // No `extend` needed — `dark` IS a base theme in HeroUI
         colors: {
           background: '#09090b',
           foreground: '#fafafa',
           primary: {
-            '50': '#f0fdfa',
-            '100': '#ccfbf1',
-            '200': '#99f6e4',
-            '300': '#5eead4',
-            '400': '#2dd4bf',
-            '500': '#14b8a6',
-            '600': '#0d9488',
-            '700': '#0f766e',
-            DEFAULT: '#2dd4bf',
-            foreground: '#042f2e',
+            '50': '#f0f7ff',
+            '100': '#e0effe',
+            '200': '#bae0fd',
+            '300': '#7cc8fc',
+            '400': '#38a9f8',
+            '500': '#0e84e9',
+            '600': '#026dc7',
+            '700': '#0356a1',
+            DEFAULT: '#38a9f8',
+            foreground: '#0c3b6e',
           },
           secondary: {
             DEFAULT: '#4ade80',
@@ -198,7 +205,12 @@ export default {
             DEFAULT: '#fb7185',
             foreground: '#000000',
           },
-          focus: '#2dd4bf',
+          focus: '#38a9f8',
+          content1: '#151517',
+          content2: '#242427',
+          content3: '#27272a',
+          content4: '#3f3f42',
+          divider: 'rgba(255, 255, 255, 0.1)',
         },
       },
 

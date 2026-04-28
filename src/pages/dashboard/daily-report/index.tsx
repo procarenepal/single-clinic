@@ -88,7 +88,7 @@ export default function DailyReportPage() {
   const [isMultiBranch, setIsMultiBranch] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const isClinicAdmin =
-    userData?.role === "clinic-super-admin" ||
+    userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
   const effectiveBranchId = userBranchId ?? selectedBranchId ?? undefined;
   const currentBranchName = effectiveBranchId
@@ -221,26 +221,26 @@ export default function DailyReportPage() {
   const branchRevenueBreakdown =
     isMultiBranch && isClinicAdmin && branches.length > 0 && !effectiveBranchId
       ? branches
-          .map((branch) => {
-            const branchBilling = reportData.billing.filter(
-              (b) => b.branchId === branch.id,
-            );
-            const revenue = branchBilling.reduce(
-              (sum, b) => sum + (b.totalAmount || 0),
-              0,
-            );
-            const invoiceCount = branchBilling.length;
+        .map((branch) => {
+          const branchBilling = reportData.billing.filter(
+            (b) => b.branchId === branch.id,
+          );
+          const revenue = branchBilling.reduce(
+            (sum, b) => sum + (b.totalAmount || 0),
+            0,
+          );
+          const invoiceCount = branchBilling.length;
 
-            return {
-              branchId: branch.id,
-              branchName: branch.name,
-              branchCode: branch.code,
-              isMainBranch: branch.isMainBranch,
-              revenue,
-              invoiceCount,
-            };
-          })
-          .filter((b) => b.revenue > 0 || b.invoiceCount > 0)
+          return {
+            branchId: branch.id,
+            branchName: branch.name,
+            branchCode: branch.code,
+            isMainBranch: branch.isMainBranch,
+            revenue,
+            invoiceCount,
+          };
+        })
+        .filter((b) => b.revenue > 0 || b.invoiceCount > 0)
       : [];
 
   // Handle export (pass branchName when report is branch-scoped)
@@ -402,7 +402,7 @@ export default function DailyReportPage() {
         ) : (
           <>
             {/* Summary Statistics — clarity-card, no shadow, KPI 22px per spec */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <Card
                 isPressable
                 className="clarity-card cursor-pointer border border-mountain-200"
@@ -414,7 +414,7 @@ export default function DailyReportPage() {
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
                         New Patients
                       </p>
-                      <p className="text-[22px] font-bold text-mountain-900 leading-none">
+                      <p className="text-stat-sm text-mountain-900 leading-none">
                         {summaryStats.totalPatients}
                       </p>
                     </div>
@@ -438,7 +438,7 @@ export default function DailyReportPage() {
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
                         Total Appointments
                       </p>
-                      <p className="text-[22px] font-bold text-mountain-900 leading-none">
+                      <p className="text-stat-sm text-mountain-900 leading-none">
                         {summaryStats.totalAppointments}
                       </p>
                       <p className="text-[11px] text-mountain-400 mt-1">
@@ -468,7 +468,7 @@ export default function DailyReportPage() {
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
                         Total Revenue
                       </p>
-                      <p className="text-[22px] font-bold text-mountain-900 leading-none">
+                      <p className="text-stat-sm text-mountain-900 leading-none">
                         {formatCurrency(summaryStats.totalRevenue)}
                       </p>
                     </div>
@@ -494,7 +494,7 @@ export default function DailyReportPage() {
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
                         Total Invoices
                       </p>
-                      <p className="text-[22px] font-bold text-mountain-900 leading-none">
+                      <p className="text-stat-sm text-mountain-900 leading-none">
                         {summaryStats.totalInvoices}
                       </p>
                     </div>

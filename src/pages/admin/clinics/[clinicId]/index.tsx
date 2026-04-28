@@ -63,7 +63,7 @@ export default function ClinicDetailPage() {
     clinicId: string;
   };
   const navigate = useNavigate();
-  const { isSuperAdmin, currentUser } = useAuthContext();
+  const { isSystemOwner, currentUser } = useAuthContext();
   const { currentTheme, themeConfig, isDark } = useTheme();
 
   // State variables
@@ -363,7 +363,7 @@ export default function ClinicDetailPage() {
   const handleEnableMultiBranch = async () => {
     if (!clinic) return;
 
-    if (!isSuperAdmin()) {
+    if (!isSystemOwner()) {
       addToast({
         title: "Access Denied",
         description:
@@ -409,7 +409,7 @@ export default function ClinicDetailPage() {
   const handleDisableMultiBranch = async () => {
     if (!clinic) return;
 
-    if (!isSuperAdmin()) {
+    if (!isSystemOwner()) {
       addToast({
         title: "Access Denied",
         description:
@@ -449,7 +449,7 @@ export default function ClinicDetailPage() {
   const handleEnableBilling = async () => {
     if (!clinic) return;
 
-    if (!isSuperAdmin()) {
+    if (!isSystemOwner()) {
       addToast({
         title: "Access Denied",
         description:
@@ -503,7 +503,7 @@ export default function ClinicDetailPage() {
   const handleDisableBilling = async () => {
     if (!clinic) return;
 
-    if (!isSuperAdmin()) {
+    if (!isSystemOwner()) {
       addToast({
         title: "Access Denied",
         description:
@@ -1503,13 +1503,13 @@ export default function ClinicDetailPage() {
                                     plan.yearlyPrice
                                   ).toLocaleString()}
                                   {plan.discountedYearlyPrice &&
-                                  plan.yearlyPrice ? (
+                                    plan.yearlyPrice ? (
                                     <span className="text-xs text-success ml-2">
                                       {Math.round(
                                         (1 -
                                           plan.discountedYearlyPrice /
-                                            plan.yearlyPrice) *
-                                          100,
+                                          plan.yearlyPrice) *
+                                        100,
                                       )}
                                       % off
                                     </span>
@@ -1646,7 +1646,7 @@ export default function ClinicDetailPage() {
                             <TableCell>
                               <Chip
                                 color={
-                                  user.role === "clinic-super-admin"
+                                  user.role === "system-owner"
                                     ? "warning"
                                     : user.role === "clinic-admin"
                                       ? "primary"
@@ -1691,13 +1691,13 @@ export default function ClinicDetailPage() {
                               <span className={getThemeClasses().textSecondary}>
                                 {user.createdAt
                                   ? new Date(user.createdAt).toLocaleDateString(
-                                      "en-US",
-                                      {
-                                        year: "numeric",
-                                        month: "short",
-                                        day: "numeric",
-                                      },
-                                    )
+                                    "en-US",
+                                    {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    },
+                                  )
                                   : "Unknown"}
                               </span>
                             </TableCell>
@@ -1779,7 +1779,7 @@ export default function ClinicDetailPage() {
                           </svg>
                           Add Branch
                         </Button>
-                        {isSuperAdmin() && (
+                        {isSystemOwner() && (
                           <Button
                             color="danger"
                             size="sm"
@@ -1896,11 +1896,11 @@ export default function ClinicDetailPage() {
                       <p className={`${getThemeClasses().textSecondary} mb-6`}>
                         This clinic doesn't have multi-branch functionality
                         enabled.
-                        {isSuperAdmin()
+                        {isSystemOwner()
                           ? "Enable it to manage multiple branch locations for this clinic."
                           : "Only platform super admins can enable multi-branch functionality."}
                       </p>
-                      {isSuperAdmin() ? (
+                      {isSystemOwner() ? (
                         <Button
                           color="primary"
                           startContent={
@@ -2029,7 +2029,7 @@ export default function ClinicDetailPage() {
                         </p>
                         <p className={`text-sm ${getThemeClasses().textMuted}`}>
                           Enable invoice generation for appointments
-                          {!isSuperAdmin() && " (Super admin control required)"}
+                          {!isSystemOwner() && " (Super admin control required)"}
                         </p>
                         {billingSettings && (
                           <p
@@ -2055,7 +2055,7 @@ export default function ClinicDetailPage() {
                             <Chip color="success" size="sm" variant="flat">
                               Enabled
                             </Chip>
-                            {isSuperAdmin() && (
+                            {isSystemOwner() && (
                               <Button
                                 aria-label="Disable appointment billing system"
                                 color="danger"
@@ -2074,7 +2074,7 @@ export default function ClinicDetailPage() {
                             <Chip color="default" size="sm" variant="flat">
                               Disabled
                             </Chip>
-                            {isSuperAdmin() && (
+                            {isSystemOwner() && (
                               <Button
                                 aria-label="Enable appointment billing system"
                                 color="primary"

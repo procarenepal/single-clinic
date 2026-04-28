@@ -118,32 +118,17 @@ export const rbacService = {
       // Get all roles for the clinic
       const clinicRoles = await this.getClinicRoles(clinicId);
 
-      // Filter roles by branch if specified
-      let rolesToCheck = clinicRoles;
-
-      if (branchId) {
-        // Check both branch-specific roles and roles without branchId (clinic-wide)
-        rolesToCheck = clinicRoles.filter(
-          (role) => role.branchId === branchId || !role.branchId,
-        );
-      } else {
-        // For clinic-wide roles, check only clinic-wide roles (no branchId)
-        rolesToCheck = clinicRoles.filter((role) => !role.branchId);
-      }
-
       // Check for duplicate name (case-insensitive)
-      const duplicate = rolesToCheck.find((role) => {
+      const duplicate = clinicRoles.find((role) => {
         if (excludeId && role.id === excludeId) return false; // Exclude current role when updating
 
         return role.name.trim().toLowerCase() === trimmedName.toLowerCase();
       });
 
       if (duplicate) {
-        const scope = branchId ? `branch ${branchId}` : "clinic";
-
         return {
           valid: false,
-          error: `A role with the name "${name}" already exists in this ${scope}`,
+          error: `A role with the name "${name}" already exists in the system`,
         };
       }
 
@@ -381,8 +366,6 @@ export const rbacService = {
   async getClinicRoles(
     clinicId: string,
     options?: {
-      branchId?: string;
-      isBranchSpecific?: boolean;
       excludeNames?: string[];
     },
   ): Promise<Role[]> {
@@ -405,31 +388,17 @@ export const rbacService = {
           }) as Role,
       );
 
-      // Apply filters
-      if (options?.branchId) {
-        // Filter to only roles for this specific branch or branch-independent roles
-        roles = roles.filter(
-          (role) => !role.branchId || role.branchId === options.branchId,
-        );
-      }
-
-      if (options?.isBranchSpecific !== undefined) {
-        roles = roles.filter(
-          (role) => role.isBranchSpecific === options.isBranchSpecific,
-        );
-      }
-
       if (options?.excludeNames?.length) {
         roles = roles.filter(
           (role) => !options.excludeNames!.includes(role.name),
         );
       }
 
-      // Remove duplicates by name + branchId
+      // Remove duplicates by name
       const uniqueMap = new Map<string, Role>();
 
       roles.forEach((r) => {
-        const key = `${r.name}_${r.branchId || "global"}`;
+        const key = r.name.toLowerCase();
 
         if (!uniqueMap.has(key)) {
           uniqueMap.set(key, r);
@@ -704,12 +673,22 @@ export const rbacService = {
       }
 
       // Cache miss - fetch from database
+
+      // If standalone default clinic, return all pages natively
+      if (clinicId === "default") {
+        const { pageService } = await import("./pageService");
+        const pages = await pageService.getAllPages();
+        cacheService.setClinicPages(clinicId, pages);
+        return pages;
+      }
+
       // First get the clinic to find its type
       const clinicRef = doc(db, "clinics", clinicId);
       const clinicSnap = await getDoc(clinicRef);
 
       if (!clinicSnap.exists()) {
-        throw new Error("Clinic not found");
+        console.warn(`Clinic not found: ${clinicId}, returning empty pages.`);
+        return [];
       }
 
       const clinicType = clinicSnap.data().clinicType;
@@ -1309,14 +1288,14 @@ export const rbacService = {
     clinicId: string,
   ): Promise<Page[]> {
     try {
-      // Check if user has legacy clinic-admin or clinic-super-admin role
+      // Check if user has legacy clinic-admin or system-owner role
       // These users should have access to all clinic type pages
       const { userService } = await import("./userService");
       const user = await userService.getUserById(userId);
 
       if (
         user &&
-        (user.role === "clinic-admin" || user.role === "clinic-super-admin")
+        (user.role === "clinic-admin" || user.role === "system-owner")
       ) {
         // Legacy admin users get all clinic type pages
         const allPages = await this.getAvailablePagesForClinic(clinicId);
@@ -1542,7 +1521,7 @@ export const rbacService = {
   /**
    * Create default clinic super admin role for multi-branch clinics
    */
-  async createDefaultClinicSuperAdminRole(clinicId: string): Promise<string> {
+  async createDefaultSystemOwnerRole(clinicId: string): Promise<string> {
     try {
       const availablePages = await this.getAvailablePagesForClinic(clinicId);
       const allPageIds = availablePages.map((page) => page.id);

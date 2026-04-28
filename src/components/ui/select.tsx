@@ -23,6 +23,7 @@ export interface SelectProps
   selectedKeys?: Iterable<React.Key> | "all";
   defaultSelectedKeys?: Iterable<React.Key> | "all";
   onSelectionChange?: (keys: Set<React.Key>) => void;
+  fullWidth?: boolean;
   classNames?: {
     trigger?: string;
     value?: string;
@@ -30,8 +31,8 @@ export interface SelectProps
 }
 
 const baseWrapper =
-  "flex items-center gap-2 rounded-md border bg-white text-mountain-900 focus-within:ring-2 " +
-  "focus-within:ring-nepal-500 focus-within:border-nepal-500 transition-shadow";
+  "flex items-center gap-2 rounded-md border bg-white dark:bg-zinc-950 text-mountain-900 dark:text-zinc-100 border-mountain-200 dark:border-zinc-800 focus-within:ring-2 " +
+  "focus-within:ring-nepal-500 focus-within:border-nepal-500 transition-all duration-200";
 
 const variantClasses: Record<NonNullable<SelectProps["variant"]>, string> = {
   bordered: "border-mountain-200 bg-white",
@@ -61,6 +62,7 @@ export const Select: React.FC<SelectProps> = ({
   size = "md",
   isRequired,
   isDisabled,
+  fullWidth,
   selectedKeys,
   defaultSelectedKeys,
   onSelectionChange,
@@ -114,16 +116,20 @@ export const Select: React.FC<SelectProps> = ({
     items.find((i) => String(i.key) === String(currentKey))?.label ?? "";
 
   return (
-    <div className={clsx("flex flex-col gap-1", className)}>
+    <div className={clsx("flex flex-col gap-1", fullWidth && "w-full", className)}>
       {label && (
-        <label className="text-sm font-medium text-mountain-800">{label}</label>
+        <label className="text-xs font-medium text-mountain-700 dark:text-zinc-400">
+          {label}
+        </label>
       )}
       <div
         className={clsx(
           baseWrapper,
+          "px-2.5",
           variantClasses[variant],
           radiusClasses[radius],
           sizeClasses[size],
+          fullWidth && "w-full",
           errorMessage && "!border-red-500 focus-within:ring-red-500",
           classNames?.trigger,
         )}
@@ -131,7 +137,7 @@ export const Select: React.FC<SelectProps> = ({
         <select
           {...rest}
           className={clsx(
-            "flex-1 bg-transparent outline-none border-none text-sm text-mountain-900",
+            "flex-1 bg-transparent outline-none border-none text-[13px] text-mountain-900 dark:text-zinc-100",
             "appearance-none pr-6",
             classNames?.value,
           )}
@@ -147,7 +153,7 @@ export const Select: React.FC<SelectProps> = ({
             </option>
           ))}
         </select>
-        <span className="pointer-events-none relative -mr-1 flex h-full items-center text-mountain-400">
+        <span className="pointer-events-none relative -mr-1 flex h-full items-center text-mountain-400 dark:text-zinc-500">
           <svg
             aria-hidden="true"
             className="w-4 h-4"

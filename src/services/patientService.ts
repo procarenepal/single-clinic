@@ -29,11 +29,10 @@ const PATIENTS_COLLECTION = "patients";
  */
 export const patientService = {
   /**
-   * Generate the next registration number for a clinic
-   * @param {string} clinicId - ID of the clinic
+   * Generate the next registration number
    * @returns {Promise<string>} - Next registration number in sequence
    */
-  async getNextRegistrationNumber(clinicId: string): Promise<string> {
+  async getNextRegistrationNumber(clinicId?: string): Promise<string> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
 
@@ -41,7 +40,6 @@ export const patientService = {
       try {
         const qNumeric = query(
           patientsRef,
-          where("clinicId", "==", clinicId),
           orderBy("regNumberNumeric", "desc"),
           limit(1),
         );
@@ -64,7 +62,6 @@ export const patientService = {
       // 2) Fallback: fetch recent patients by createdAt and compute max numeric reg
       const qRecent = query(
         patientsRef,
-        where("clinicId", "==", clinicId),
         orderBy("createdAt", "desc"),
         limit(100),
       );
@@ -184,61 +181,25 @@ export const patientService = {
    * @param {string} [branchId] - Optional branch ID to filter patients by
    * @returns {Promise<Patient[]>} - Array of patients for the clinic (ordered by registration number descending)
    */
-  async getPatientsByClinic(
-    clinicId: string,
-    branchId?: string,
-  ): Promise<Patient[]> {
+  async getPatients(_branchId?: string): Promise<Patient[]> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
-
-      // For clinic-wide queries, use cache; for branch-scoped queries, always hit Firestore
-      if (!branchId) {
-        const cached = cacheService.getClinicPatients(clinicId) as
-          | Patient[]
-          | null;
-
-        if (cached && !this.shouldBypassPatientsCache(cached)) {
-          return cached as Patient[];
-        }
-      }
-
-      const baseConstraints: any[] = [
-        where("clinicId", "==", clinicId),
-        where("isActive", "==", true),
-      ];
-
-      if (branchId) {
-        baseConstraints.push(where("branchId", "==", branchId));
-      }
 
       // Prefer numeric ordering when available
       let q: any;
 
       try {
-        const numericConstraints = [
-          ...baseConstraints,
-          orderBy("regNumberNumeric", "desc"),
-        ];
-        const probeQ = query(patientsRef, ...numericConstraints, limit(1));
-
-        await getDocs(probeQ);
-        q = query(patientsRef, ...numericConstraints);
+        q = query(patientsRef, orderBy("regNumberNumeric", "desc"));
+        await getDocs(query(q, limit(1)));
       } catch {
-        const fallbackConstraints = [
-          ...baseConstraints,
-          orderBy("regNumber", "desc"),
-        ];
-
-        q = query(patientsRef, ...fallbackConstraints);
+        q = query(patientsRef, orderBy("regNumber", "desc"));
       }
 
       const querySnapshot = await getDocs(q);
-
       const patients: Patient[] = [];
 
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data() as any;
-        // Convert Firebase Timestamp objects to JavaScript Date objects
         const createdAt = data.createdAt
           ? new Date(data.createdAt.seconds * 1000)
           : new Date();
@@ -260,16 +221,21 @@ export const patientService = {
         } as Patient);
       });
 
-      // Only cache the full clinic-wide list; branch-scoped results are not cached separately
-      if (!branchId) {
-        cacheService.setClinicPatients(clinicId, patients);
-      }
-
       return patients;
     } catch (error) {
-      console.error("Error getting patients by clinic:", error);
+      console.error("Error getting patients:", error);
       throw error;
     }
+  },
+
+  /**
+   * Alias for backward compatibility
+   */
+  async getPatientsByClinic(
+    _clinicId?: string,
+    _branchId?: string,
+  ): Promise<Patient[]> {
+    return this.getPatients();
   },
 
   /**
@@ -356,14 +322,11 @@ export const patientService = {
    * @returns {Promise<Patient[]>} - Array of matching patients
    */
   async searchPatients(
-    clinicId: string,
+    _clinicId: string,
     searchTerm: string,
   ): Promise<Patient[]> {
     try {
-      // Get all patients for the clinic first, then filter client-side
-      // Firestore doesn't support complex text search natively
-      const allPatients = await this.getPatientsByClinic(clinicId);
-
+      const allPatients = await this.getPatients();
       const lowerSearchTerm = searchTerm.toLowerCase();
 
       return allPatients.filter(
@@ -389,52 +352,22 @@ export const patientService = {
    * @returns {Promise<Patient[]>} - Array of patients assigned to the doctor
    */
   async getPatientsByDoctor(
-    clinicId: string,
     doctorId: string,
-    branchId?: string,
+    _clinicId?: string,
   ): Promise<Patient[]> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
-
-      // Only use cache for clinic-wide, doctor-scoped queries
-      if (!branchId) {
-        const cached = cacheService.getDoctorPatients(clinicId, doctorId) as
-          | Patient[]
-          | null;
-
-        if (cached && !this.shouldBypassPatientsCache(cached)) {
-          return cached as Patient[];
-        }
-      }
-
-      const constraints: any[] = [
-        where("clinicId", "==", clinicId),
-        where("doctorId", "==", doctorId),
-        where("isActive", "==", true),
-      ];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
-
-      const q = query(patientsRef, ...constraints);
+      const q = query(patientsRef, where("doctorId", "==", doctorId));
       const querySnapshot = await getDocs(q);
 
       const patients: Patient[] = [];
 
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        // Convert Firebase Timestamp objects to JavaScript Date objects
-        const createdAt = data.createdAt
-          ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
-        const updatedAt = data.updatedAt
-          ? new Date(data.updatedAt.seconds * 1000)
-          : new Date();
+        const createdAt = data.createdAt ? new Date(data.createdAt.seconds * 1000) : new Date();
+        const updatedAt = data.updatedAt ? new Date(data.updatedAt.seconds * 1000) : new Date();
         const dob = data.dob ? new Date(data.dob.seconds * 1000) : undefined;
-        const bsDate = data.bsDate
-          ? new Date(data.bsDate.seconds * 1000)
-          : undefined;
+        const bsDate = data.bsDate ? new Date(data.bsDate.seconds * 1000) : undefined;
 
         patients.push({
           id: docSnap.id,
@@ -445,10 +378,6 @@ export const patientService = {
           bsDate,
         } as Patient);
       });
-
-      if (!branchId) {
-        cacheService.setDoctorPatients(clinicId, doctorId, patients);
-      }
 
       return patients;
     } catch (error) {
@@ -465,7 +394,7 @@ export const patientService = {
    * @returns { patients, lastDoc }
    */
   async getPatientsByClinicPaginated(
-    clinicId: string,
+    _clinicId?: string,
     options: {
       pageSize: number;
       lastDoc?: QueryDocumentSnapshot | null;
@@ -474,7 +403,7 @@ export const patientService = {
       gender?: string;
       isCritical?: boolean;
       branchId?: string;
-    },
+    } = {} as any,
   ): Promise<{ patients: Patient[]; lastDoc: QueryDocumentSnapshot | null }> {
     const {
       pageSize,
@@ -493,7 +422,7 @@ export const patientService = {
         "%c[PatientsSearch:service] getPatientsByClinicPaginated",
         "color: #0d9488",
         {
-          clinicId,
+          clinicId: _clinicId,
           searchPrefix: searchPrefix ?? "(none)",
           prefix: prefix ?? "(none)",
           hasNameSearch,
@@ -507,10 +436,7 @@ export const patientService = {
 
     const patientsRef = collection(db, PATIENTS_COLLECTION);
 
-    const baseConstraints: any[] = [
-      where("clinicId", "==", clinicId),
-      where("isActive", "==", true),
-    ];
+    const baseConstraints: any[] = [];
 
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
@@ -531,8 +457,10 @@ export const patientService = {
       try {
         baseConstraints.push(orderBy("regNumberNumeric", "desc"));
         const probeQ = query(patientsRef, ...baseConstraints, limit(1));
-
-        await getDocs(probeQ);
+        const probeSnap = await getDocs(probeQ);
+        if (probeSnap.empty) {
+          throw new Error("No numeric sequence field found, fallback to string");
+        }
         q = query(patientsRef, ...baseConstraints);
       } catch {
         baseConstraints.pop(); // remove regNumberNumeric orderBy
@@ -592,14 +520,14 @@ export const patientService = {
    * Get total count of patients for a clinic with the same filters as getPatientsByClinicPaginated.
    */
   async getPatientsCountByClinic(
-    clinicId: string,
+    _clinicId?: string,
     options: {
       doctorId?: string;
       searchPrefix?: string;
       gender?: string;
       isCritical?: boolean;
       branchId?: string;
-    },
+    } = {} as any,
   ): Promise<number> {
     const { doctorId, searchPrefix, gender, isCritical, branchId } =
       options as {
@@ -624,18 +552,10 @@ export const patientService = {
 
     const patientsRef = collection(db, PATIENTS_COLLECTION);
 
-    const baseConstraints: any[] = [
-      where("clinicId", "==", clinicId),
-      where("isActive", "==", true),
-    ];
+    const baseConstraints: any[] = [];
 
-    if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
     if (gender) baseConstraints.push(where("gender", "==", gender));
-    if (isCritical === true)
-      baseConstraints.push(where("isCritical", "==", true));
-    if (isCritical === false)
-      baseConstraints.push(where("isCritical", "==", false));
 
     let q: any;
 
@@ -649,8 +569,12 @@ export const patientService = {
         baseConstraints.push(orderBy("regNumberNumeric", "desc"));
         q = query(patientsRef, ...baseConstraints);
         const countSnap = await getCountFromServer(q);
+        const count = countSnap.data().count;
+        if (count === 0) {
+          throw new Error("Numeric sequence count is 0, trying string fallback");
+        }
 
-        return countSnap.data().count;
+        return count;
       } catch {
         baseConstraints.pop();
         baseConstraints.push(orderBy("regNumber", "desc"));

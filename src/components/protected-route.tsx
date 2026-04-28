@@ -49,10 +49,10 @@ export function ProtectedRoute({
     }
 
     const runId = ++runningCheckRef.current;
-    const isSuperAdmin = userData?.role === "super-admin";
+    const isSystemOwner = userData?.role === "system-owner";
 
-    // Fast path: super admin always allowed
-    if (isSuperAdmin) {
+    // Fast path: system owner always allowed
+    if (isSystemOwner) {
       setPermissionAllowed(true);
 
       return;
@@ -108,13 +108,7 @@ export function ProtectedRoute({
     );
   }
 
-  // Super admin auto-redirect away from dashboard
-  if (
-    userData?.role === "super-admin" &&
-    location.pathname.startsWith("/dashboard")
-  ) {
-    return <Navigate replace to="/admin" />;
-  }
+
 
   // If background checks finished and denied
   if (permissionAllowed === false) {

@@ -83,33 +83,20 @@ export const appointmentTypeService = {
   },
 
   /**
-   * Get all appointment types for a specific clinic and branch
-   * @param {string} clinicId - ID of the clinic
-   * @param {string} branchId - ID of the branch
-   * @returns {Promise<AppointmentType[]>} - Array of appointment types for the clinic and branch
+   * Get all appointment types (excluding deleted)
    */
-  async getAppointmentTypesByClinicAndBranch(
-    clinicId: string,
-    branchId: string,
-  ): Promise<AppointmentType[]> {
+  async getAppointmentTypes(_branchId?: string): Promise<AppointmentType[]> {
     try {
-      const cached = cacheService.getClinicAppointmentTypes(clinicId);
-
+      const cached = cacheService.getClinicAppointmentTypes("standalone");
       if (cached) return cached as AppointmentType[];
 
       const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
-      const q = query(
-        appointmentTypesRef,
-        where("clinicId", "==", clinicId),
-        where("branchId", "==", branchId),
-      );
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(appointmentTypesRef);
 
       const appointmentTypes: AppointmentType[] = [];
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        // Convert Firebase Timestamp objects to JavaScript Date objects
         const createdAt = data.createdAt
           ? new Date(data.createdAt.seconds * 1000)
           : new Date();
@@ -125,174 +112,68 @@ export const appointmentTypeService = {
         } as AppointmentType);
       });
 
-      cacheService.setClinicAppointmentTypes(clinicId, appointmentTypes);
-
+      cacheService.setClinicAppointmentTypes("standalone", appointmentTypes);
       return appointmentTypes;
     } catch (error) {
-      console.error(
-        "Error getting appointment types by clinic and branch:",
-        error,
-      );
+      console.error("Error getting appointment types:", error);
       throw error;
     }
   },
 
   /**
-   * Get all appointment types for a specific clinic.
-   * Optionally filter by branch. When a branchId is provided, this delegates
-   * to the branch-specific variant and does not use the clinic-wide cache.
-   * @param {string} clinicId - ID of the clinic
-   * @param {string} [branchId] - Optional branch ID to filter by
-   * @returns {Promise<AppointmentType[]>} - Array of appointment types for the clinic
+   * Alias for backward compatibility
    */
   async getAppointmentTypesByClinic(
-    clinicId: string,
+    _clinicId?: string,
     branchId?: string,
   ): Promise<AppointmentType[]> {
-    try {
-      if (branchId) {
-        return this.getAppointmentTypesByClinicAndBranch(clinicId, branchId);
-      }
-
-      const cached = cacheService.getClinicAppointmentTypes(clinicId);
-
-      if (cached) return cached as AppointmentType[];
-
-      const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
-      const q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
-      const querySnapshot = await getDocs(q);
-
-      const appointmentTypes: AppointmentType[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        // Convert Firebase Timestamp objects to JavaScript Date objects
-        const createdAt = data.createdAt
-          ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
-        const updatedAt = data.updatedAt
-          ? new Date(data.updatedAt.seconds * 1000)
-          : new Date();
-
-        appointmentTypes.push({
-          id: doc.id,
-          ...data,
-          createdAt,
-          updatedAt,
-        } as AppointmentType);
-      });
-      cacheService.setClinicAppointmentTypes(clinicId, appointmentTypes);
-
-      return appointmentTypes;
-    } catch (error) {
-      console.error("Error getting appointment types by clinic:", error);
-      throw error;
+    const types = await this.getAppointmentTypes();
+    if (branchId) {
+      return types.filter((t) => t.branchId === branchId);
     }
+    return types;
   },
 
   /**
-   * Get all active appointment types for a specific clinic and branch
-   * @param {string} clinicId - ID of the clinic
-   * @param {string} branchId - ID of the branch
-   * @returns {Promise<AppointmentType[]>} - Array of active appointment types for the clinic and branch
+   * Alias for backward compatibility
    */
-  async getActiveAppointmentTypesByClinicAndBranch(
-    clinicId: string,
+  async getAppointmentTypesByClinicAndBranch(
+    _clinicId: string,
     branchId: string,
   ): Promise<AppointmentType[]> {
-    try {
-      const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
-      const q = query(
-        appointmentTypesRef,
-        where("clinicId", "==", clinicId),
-        where("branchId", "==", branchId),
-        where("isActive", "==", true),
-      );
-      const querySnapshot = await getDocs(q);
-
-      const appointmentTypes: AppointmentType[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        // Convert Firebase Timestamp objects to JavaScript Date objects
-        const createdAt = data.createdAt
-          ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
-        const updatedAt = data.updatedAt
-          ? new Date(data.updatedAt.seconds * 1000)
-          : new Date();
-
-        appointmentTypes.push({
-          id: doc.id,
-          ...data,
-          createdAt,
-          updatedAt,
-        } as AppointmentType);
-      });
-
-      return appointmentTypes;
-    } catch (error) {
-      console.error(
-        "Error getting active appointment types by clinic and branch:",
-        error,
-      );
-      throw error;
-    }
+    return this.getAppointmentTypesByClinic(_clinicId, branchId);
   },
 
   /**
-   * Get all active appointment types for a specific clinic.
-   * Optionally filter by branch. When a branchId is provided, this delegates
-   * to the branch-specific variant.
-   * @param {string} clinicId - ID of the clinic
-   * @param {string} [branchId] - Optional branch ID to filter by
-   * @returns {Promise<AppointmentType[]>} - Array of active appointment types for the clinic
+   * Get all active appointment types
+   */
+  async getActiveAppointmentTypes(): Promise<AppointmentType[]> {
+    const types = await this.getAppointmentTypes();
+    return types.filter((t) => t.isActive);
+  },
+
+  /**
+   * Alias for backward compatibility
    */
   async getActiveAppointmentTypesByClinic(
-    clinicId: string,
+    _clinicId?: string,
     branchId?: string,
   ): Promise<AppointmentType[]> {
-    try {
-      if (branchId) {
-        return this.getActiveAppointmentTypesByClinicAndBranch(
-          clinicId,
-          branchId,
-        );
-      }
-
-      const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
-      const q = query(
-        appointmentTypesRef,
-        where("clinicId", "==", clinicId),
-        where("isActive", "==", true),
-      );
-      const querySnapshot = await getDocs(q);
-
-      const appointmentTypes: AppointmentType[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        // Convert Firebase Timestamp objects to JavaScript Date objects
-        const createdAt = data.createdAt
-          ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
-        const updatedAt = data.updatedAt
-          ? new Date(data.updatedAt.seconds * 1000)
-          : new Date();
-
-        appointmentTypes.push({
-          id: doc.id,
-          ...data,
-          createdAt,
-          updatedAt,
-        } as AppointmentType);
-      });
-
-      return appointmentTypes;
-    } catch (error) {
-      console.error("Error getting active appointment types by clinic:", error);
-      throw error;
+    const types = await this.getActiveAppointmentTypes();
+    if (branchId) {
+      return types.filter((t) => t.branchId === branchId);
     }
+    return types;
+  },
+
+  /**
+   * Alias for backward compatibility
+   */
+  async getActiveAppointmentTypesByClinicAndBranch(
+    _clinicId: string,
+    branchId: string,
+  ): Promise<AppointmentType[]> {
+    return this.getActiveAppointmentTypesByClinic(_clinicId, branchId);
   },
 
   /**

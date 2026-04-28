@@ -921,7 +921,7 @@ const NewPatientPage: React.FC = () => {
 
     // Load doctors
     doctorService
-      .getDoctorsByClinic(clinicId)
+      .getDoctors()
       .then((data) => {
         const active = data.filter((d) => d.isActive);
 
@@ -943,7 +943,7 @@ const NewPatientPage: React.FC = () => {
 
     // Load experts
     expertService
-      .getExpertsByClinic(clinicId)
+      .getExperts()
       .then((data) => {
         const active = data.filter((e) => e.isActive);
 
@@ -954,20 +954,20 @@ const NewPatientPage: React.FC = () => {
 
     // Load patients for existing appointment lookup
     patientService
-      .getPatientsByClinic(clinicId)
+      .getPatients()
       .then(setPatients)
       .catch(console.error);
 
     // Load appointment types
     appointmentTypeService
-      .getActiveAppointmentTypesByClinic(clinicId)
+      .getActiveAppointmentTypes()
       .then(setAppointmentTypes)
       .catch(console.error)
       .finally(() => setApptTypesLoading(false));
 
     // Load referral partners
     referralPartnerService
-      .getReferralPartnersByClinic(clinicId)
+      .getAllReferralPartners()
       .then(setReferralPartners)
       .catch(console.error);
   }, [clinicId, authLoading, userData]);
@@ -980,11 +980,11 @@ const NewPatientPage: React.FC = () => {
       return;
     }
     branchService
-      .isMultiBranchEnabled(clinicId)
+      .isMultiBranchEnabled()
       .then((multi) =>
         multi
           ? branchService
-            .getMainBranch(clinicId)
+            .getMainBranch()
             .then((b) => b && setDefaultBranchId(b.id))
           : setDefaultBranchId(clinicId),
       )
@@ -996,7 +996,7 @@ const NewPatientPage: React.FC = () => {
     if (!clinicId) return;
     setGeneratingReg(true);
     patientService
-      .getNextRegistrationNumber(clinicId)
+      .getNextRegistrationNumber()
       .then((n) => setProfile((p) => ({ ...p, regNumber: n })))
       .catch(console.error)
       .finally(() => setGeneratingReg(false));
@@ -1012,8 +1012,8 @@ const NewPatientPage: React.FC = () => {
     setLoadingAppointments(true);
     appointmentService
       .getAppointmentsByDate(
-        clinicId,
         new Date(appt.appointmentDate),
+        undefined, // clinicId
         defaultBranchId || userData?.branchId,
       )
       .then(setExistingAppointments)
@@ -1075,7 +1075,7 @@ const NewPatientPage: React.FC = () => {
     if (!clinicId) return;
     setGeneratingReg(true);
     try {
-      const n = await patientService.getNextRegistrationNumber(clinicId);
+      const n = await patientService.getNextRegistrationNumber();
 
       setProfile((p) => ({ ...p, regNumber: n }));
       addToast({ title: `Reg# ${n} generated`, color: "success" });

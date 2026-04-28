@@ -91,107 +91,109 @@ function PathologySearchSelect({
   const selected = items.find((i) => i.id === value);
 
   return (
-    <div className="flex flex-col gap-1.5 relative">
-      {(label || required) && (
-        <label className="text-[13px] font-medium text-mountain-700">
-          {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
-        </label>
-      )}
-      <div
-        className="flex flex-wrap items-center min-h-[32px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white"
-        onClick={() => setOpen(true)}
-      >
-        <IoSearchOutline className="ml-3 w-4 h-4 text-mountain-400 shrink-0" />
-        <input
-          className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-400 w-full min-w-0"
-          placeholder={
-            selected && !open ? selected.primary : placeholder || "Search…"
-          }
-          value={open ? q : selected ? selected.primary : ""}
-          onChange={(e) => {
-            const val = e.target.value;
-
-            setQ(val);
-            setOpen(true);
-            if (onInputChange) onInputChange(val);
-          }}
-          onFocus={() => setOpen(true)}
-        />
-        {value && (
-          <button
-            className="mr-3 text-mountain-400 hover:text-mountain-700"
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange("", "");
-              setQ("");
-              if (onInputChange) onInputChange("");
-            }}
-          >
-            <IoCloseOutline className="w-4 h-4" />
-          </button>
+    <>
+      <div className="flex flex-col gap-1.5 relative">
+        {(label || required) && (
+          <label className="text-[13px] font-medium text-mountain-700">
+            {label}
+            {required && <span className="text-red-500 ml-0.5">*</span>}
+          </label>
         )}
-      </div>
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpen(false);
+        <div
+          className="flex flex-wrap items-center min-h-[32px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white"
+          onClick={() => setOpen(true)}
+        >
+          <IoSearchOutline className="ml-3 w-4 h-4 text-mountain-400 shrink-0" />
+          <input
+            className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-400 w-full min-w-0"
+            placeholder={
+              selected && !open ? selected.primary : placeholder || "Search…"
+            }
+            value={open ? q : selected ? selected.primary : ""}
+            onChange={(e) => {
+              const val = e.target.value;
+
+              setQ(val);
+              setOpen(true);
+              if (onInputChange) onInputChange(val);
             }}
+            onFocus={() => setOpen(true)}
           />
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded shadow-lg max-h-64 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
-                <p className="text-[13px] text-mountain-500">
-                  No results found for "{q}"
-                </p>
-                {onAddNew && q && (
-                  <Button
-                    color="primary"
-                    size="sm"
-                    startContent={<IoAddOutline className="w-4 h-4" />}
-                    variant="flat"
+          {value && (
+            <button
+              className="mr-3 text-mountain-400 hover:text-mountain-700"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("", "");
+                setQ("");
+                if (onInputChange) onInputChange("");
+              }}
+            >
+              <IoCloseOutline className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        {open && (
+          <>
+            <div
+              className="fixed inset-0 z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
+            ></div>
+            <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded shadow-lg max-h-64 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
+                  <p className="text-[13px] text-mountain-500">
+                    No results found for "{q}"
+                  </p>
+                  {onAddNew && q && (
+                    <Button
+                      color="primary"
+                      size="sm"
+                      startContent={<IoAddOutline className="w-4 h-4" />}
+                      variant="flat"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddNew(q);
+                        setOpen(false);
+                      }}
+                    >
+                      Create New
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                filtered.map((i) => (
+                  <button
+                    key={i.id}
+                    className={`flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-mountain-50 last:border-0 ${i.id === value ? "bg-teal-50/50" : ""}`}
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onAddNew(q);
+                      onChange(i.id, i.primary);
+                      setQ("");
                       setOpen(false);
                     }}
                   >
-                    Create New
-                  </Button>
-                )}
-              </div>
-            ) : (
-              filtered.map((i) => (
-                <button
-                  key={i.id}
-                  className={`flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-mountain-50 last:border-0 ${i.id === value ? "bg-teal-50/50" : ""}`}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onChange(i.id, i.primary);
-                    setQ("");
-                    setOpen(false);
-                  }}
-                >
-                  <span className="text-[13.5px] font-medium text-mountain-800 leading-tight">
-                    {i.primary}
-                  </span>
-                  {i.secondary && (
-                    <span className="text-[11.5px] text-mountain-500 mt-0.5 leading-tight">
-                      {i.secondary}
+                    <span className="text-[13.5px] font-medium text-mountain-800 leading-tight">
+                      {i.primary}
                     </span>
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-        </>
-      )}
-    </div>
+                    {i.secondary && (
+                      <span className="text-[11.5px] text-mountain-500 mt-0.5 leading-tight">
+                        {i.secondary}
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1810,474 +1812,826 @@ export default function PathologyPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className={title()}>Pathology</h1>
-          <p className="text-mountain-500 mt-2 text-[13.5px]">
-            Manage pathology tests, categories, units, and parameters
-          </p>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="clarity-card border border-mountain-200 rounded">
-        {/* Tab header */}
-        <div className="border-b border-mountain-200 overflow-x-auto">
-          <div className="inline-flex rounded-t">
-            {TAB_KEYS.map((key) => (
-              <button
-                key={key}
-                className={`px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeTab === key
-                  ? "border-teal-600 text-teal-700"
-                  : "border-transparent text-mountain-600 hover:text-mountain-900 hover:border-mountain-300"
-                  }`}
-                type="button"
-                onClick={() => setActiveTab(key)}
-              >
-                {tabLabels[key]}
-              </button>
-            ))}
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className={title()}>Pathology</h1>
+            <p className="text-mountain-500 mt-2 text-[13.5px]">
+              Manage pathology tests, categories, units, and parameters
+            </p>
           </div>
         </div>
 
-        <div className="p-4">
-          {activeTab === "tests" && (
-            <PathologyTestsTab
-              filteredTests={filteredTests}
-              searchQuery={testsSearchQuery}
-              onAdd={() => {
-                resetTestForm();
-                testModalState.open();
-              }}
-              onDelete={(test) =>
-                openDeleteModal("test", test.id, test.testName)
-              }
-              onEdit={editTest}
-              onPrint={handlePrintTest}
-              onSearchChange={setTestsSearchQuery}
-            />
-          )}
-          {activeTab === "category" && (
-            <PathologyCategoriesTab
-              filteredCategories={filteredCategories}
-              searchQuery={categoriesSearchQuery}
-              onAdd={() => {
-                resetCategoryForm();
-                categoryModalState.open();
-              }}
-              onAddSubCategory={(cat) => {
-                resetParameterForm();
-                setParameterForm((prev) => ({ ...prev, categoryId: cat.id }));
-                parameterModalState.open();
-              }}
-              onDelete={(cat) => openDeleteModal("category", cat.id, cat.name)}
-              onEdit={editCategory}
-              onSearchChange={setCategoriesSearchQuery}
-            />
-          )}
-          {activeTab === "units" && (
-            <PathologyUnitsTab
-              filteredUnits={filteredUnits}
-              searchQuery={unitsSearchQuery}
-              onAdd={() => {
-                resetUnitForm();
-                unitModalState.open();
-              }}
-              onDelete={(u) => openDeleteModal("unit", u.id, u.name)}
-              onEdit={editUnit}
-              onSearchChange={setUnitsSearchQuery}
-            />
-          )}
-          {activeTab === "parameters" && (
-            <PathologyParametersTab
-              categories={categories}
-              filteredParameters={filteredParameters}
-              searchQuery={parametersSearchQuery}
-              units={units}
-              onAdd={() => {
-                resetParameterForm();
-                parameterModalState.open();
-              }}
-              onDelete={(p) => openDeleteModal("parameter", p.id, p.name)}
-              onEdit={editParameter}
-              onSearchChange={setParametersSearchQuery}
-            />
-          )}
-          {activeTab === "testPrices" && (
-            <PathologyTestTypesTab
-              filteredTestTypes={filteredTestTypes}
-              searchQuery={testTypesSearchQuery}
-              onAdd={() => {
-                resetTestTypeForm();
-                testTypeModalState.open();
-              }}
-              onDelete={(tt) =>
-                openDeleteModal(
-                  "testType",
-                  tt.id,
-                  tt.name || "Price Configuration",
-                )
-              }
-              onEdit={editTestType}
-              onSearchChange={setTestTypesSearchQuery}
-            />
-          )}
-          {activeTab === "technicians" && (
-            <LabTechnicianManagement
-              branchId={branchId!}
-              clinicId={clinicId!}
-            />
-          )}
-          {activeTab === "dailyReport" && (
-            <PathologyDailyReportTab
-              dailyReportData={dailyReportData}
-              selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
-              onPrintReport={() => {
-                const printWindow = window.open(
-                  "",
-                  "_blank",
-                  "width=900,height=1200",
-                );
+        {/* Main Content */}
+        <div className="clarity-card border border-mountain-200 rounded">
+          {/* Tab header */}
+          <div className="border-b border-mountain-200 overflow-x-auto">
+            <div className="inline-flex rounded-t">
+              {TAB_KEYS.map((key) => (
+                <button
+                  key={key}
+                  className={`px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeTab === key
+                    ? "border-teal-600 text-teal-700"
+                    : "border-transparent text-mountain-600 hover:text-mountain-900 hover:border-mountain-300"
+                    }`}
+                  type="button"
+                  onClick={() => setActiveTab(key)}
+                >
+                  {tabLabels[key]}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                if (printWindow) {
-                  const reportHtml = buildDailyReportHtml(
-                    dailyReportData,
-                    selectedDate,
-                    clinic,
-                    layoutConfig,
+          <div className="p-4">
+            {activeTab === "tests" && (
+              <PathologyTestsTab
+                filteredTests={filteredTests}
+                searchQuery={testsSearchQuery}
+                onAdd={() => {
+                  resetTestForm();
+                  testModalState.open();
+                }}
+                onDelete={(test) =>
+                  openDeleteModal("test", test.id, test.testName)
+                }
+                onEdit={editTest}
+                onPrint={handlePrintTest}
+                onSearchChange={setTestsSearchQuery}
+              />
+            )}
+            {activeTab === "category" && (
+              <PathologyCategoriesTab
+                filteredCategories={filteredCategories}
+                searchQuery={categoriesSearchQuery}
+                onAdd={() => {
+                  resetCategoryForm();
+                  categoryModalState.open();
+                }}
+                onAddSubCategory={(cat) => {
+                  resetParameterForm();
+                  setParameterForm((prev) => ({ ...prev, categoryId: cat.id }));
+                  parameterModalState.open();
+                }}
+                onDelete={(cat) => openDeleteModal("category", cat.id, cat.name)}
+                onEdit={editCategory}
+                onSearchChange={setCategoriesSearchQuery}
+              />
+            )}
+            {activeTab === "units" && (
+              <PathologyUnitsTab
+                filteredUnits={filteredUnits}
+                searchQuery={unitsSearchQuery}
+                onAdd={() => {
+                  resetUnitForm();
+                  unitModalState.open();
+                }}
+                onDelete={(u) => openDeleteModal("unit", u.id, u.name)}
+                onEdit={editUnit}
+                onSearchChange={setUnitsSearchQuery}
+              />
+            )}
+            {activeTab === "parameters" && (
+              <PathologyParametersTab
+                categories={categories}
+                filteredParameters={filteredParameters}
+                searchQuery={parametersSearchQuery}
+                units={units}
+                onAdd={() => {
+                  resetParameterForm();
+                  parameterModalState.open();
+                }}
+                onDelete={(p) => openDeleteModal("parameter", p.id, p.name)}
+                onEdit={editParameter}
+                onSearchChange={setParametersSearchQuery}
+              />
+            )}
+            {activeTab === "testPrices" && (
+              <PathologyTestTypesTab
+                filteredTestTypes={filteredTestTypes}
+                searchQuery={testTypesSearchQuery}
+                onAdd={() => {
+                  resetTestTypeForm();
+                  testTypeModalState.open();
+                }}
+                onDelete={(tt) =>
+                  openDeleteModal(
+                    "testType",
+                    tt.id,
+                    tt.name || "Price Configuration",
+                  )
+                }
+                onEdit={editTestType}
+                onSearchChange={setTestTypesSearchQuery}
+              />
+            )}
+            {activeTab === "technicians" && (
+              <LabTechnicianManagement
+                branchId={branchId!}
+                clinicId={clinicId!}
+              />
+            )}
+            {activeTab === "dailyReport" && (
+              <PathologyDailyReportTab
+                dailyReportData={dailyReportData}
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+                onPrintReport={() => {
+                  const printWindow = window.open(
+                    "",
+                    "_blank",
+                    "width=900,height=1200",
                   );
 
-                  printWindow.document.write(reportHtml);
-                  printWindow.document.close();
-                }
-              }}
-            />
-          )}
-          {activeTab === "billing" && (
-            <PathologyBillingTab branchId={branchId!} clinicId={clinicId!} />
-          )}
+                  if (printWindow) {
+                    const reportHtml = buildDailyReportHtml(
+                      dailyReportData,
+                      selectedDate,
+                      clinic,
+                      layoutConfig,
+                    );
+
+                    printWindow.document.write(reportHtml);
+                    printWindow.document.close();
+                  }
+                }}
+              />
+            )}
+            {activeTab === "billing" && (
+              <PathologyBillingTab branchId={branchId!} clinicId={clinicId!} />
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Test Form Modal - custom overlay */}
-      {
-        testModalState.isOpen &&
-        createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-              onClick={testModalState.close}
-            />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-lg w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col shadow-2xl">
-              <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60 flex items-center justify-between shrink-0">
-                <h2 className="text-[14px] font-semibold text-mountain-900">
-                  {isEditing ? "Edit Pathology Test" : "Create Pathology Tests"}
-                </h2>
-                <button
-                  className="text-mountain-400 hover:text-mountain-700"
-                  type="button"
-                  onClick={testModalState.close}
-                >
-                  <IoArrowBackOutline className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-5 overflow-y-auto flex-1">
-                <div className="space-y-6">
-                  {/* Test Details Section */}
-                  <h3 className="text-lg font-semibold mb-4">Test Details</h3>
+        {/* Test Form Modal - custom overlay */}
+        {
+          testModalState.isOpen &&
+          createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
+                onClick={testModalState.close}
+              ></div>
+              <div className="relative z-10 bg-white border border-mountain-200 rounded-lg w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col shadow-2xl">
+                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60 flex items-center justify-between shrink-0">
+                  <h2 className="text-[14px] font-semibold text-mountain-900">
+                    {isEditing ? "Edit Pathology Test" : "Create Pathology Tests"}
+                  </h2>
+                  <button
+                    className="text-mountain-400 hover:text-mountain-700"
+                    type="button"
+                    onClick={testModalState.close}
+                  >
+                    <IoArrowBackOutline className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-5 overflow-y-auto flex-1">
+                  <div className="space-y-6">
+                    {/* Test Details Section */}
+                    <h3 className="text-lg font-semibold mb-4">Test Details</h3>
 
-                  {/* Walk-in vs Existing Patient Toggle */}
-                  <div className="flex bg-mountain-100 p-1 rounded-md w-max mb-4">
-                    <button
-                      className={`px-4 py-1.5 text-sm rounded ${!testForm.isWalkIn ? "bg-white shadow text-mountain-900 font-medium" : "text-mountain-600 hover:text-mountain-900"}`}
-                      type="button"
-                      onClick={() =>
-                        setTestForm((prev) => ({
-                          ...prev,
-                          isWalkIn: false,
-                          patientId: "",
-                          patientName: "",
-                          patientAge: "",
-                          patientGender: "",
-                          walkInPhone: "",
-                        }))
-                      }
-                    >
-                      Existing Patient
-                    </button>
-                    <button
-                      className={`px-4 py-1.5 text-sm rounded ${testForm.isWalkIn ? "bg-white shadow text-mountain-900 font-medium" : "text-mountain-600 hover:text-mountain-900"}`}
-                      type="button"
-                      onClick={() =>
-                        setTestForm((prev) => ({
-                          ...prev,
-                          isWalkIn: true,
-                          patientId: "",
-                          patientName: "",
-                          patientAge: "",
-                          patientGender: "",
-                          walkInPhone: "",
-                        }))
-                      }
-                    >
-                      Walk-In Client
-                    </button>
-                  </div>
+                    {/* Walk-in vs Existing Patient Toggle */}
+                    <div className="flex bg-mountain-100 p-1 rounded-md w-max mb-4">
+                      <button
+                        className={`px-4 py-1.5 text-sm rounded ${!testForm.isWalkIn ? "bg-white shadow text-mountain-900 font-medium" : "text-mountain-600 hover:text-mountain-900"}`}
+                        type="button"
+                        onClick={() =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            isWalkIn: false,
+                            patientId: "",
+                            patientName: "",
+                            patientAge: "",
+                            patientGender: "",
+                            walkInPhone: "",
+                          }))
+                        }
+                      >
+                        Existing Patient
+                      </button>
+                      <button
+                        className={`px-4 py-1.5 text-sm rounded ${testForm.isWalkIn ? "bg-white shadow text-mountain-900 font-medium" : "text-mountain-600 hover:text-mountain-900"}`}
+                        type="button"
+                        onClick={() =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            isWalkIn: true,
+                            patientId: "",
+                            patientName: "",
+                            patientAge: "",
+                            patientGender: "",
+                            walkInPhone: "",
+                          }))
+                        }
+                      >
+                        Walk-In Client
+                      </button>
+                    </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {!testForm.isWalkIn ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {!testForm.isWalkIn ? (
+                        <PathologySearchSelect
+                          required
+                          items={patients.map((p) => ({
+                            id: p.id,
+                            primary: p.name,
+                            secondary: `${p.mobile || ""} ${p.age ? `(${p.age}y)` : ""} `,
+                          }))}
+                          label="Patient Name *"
+                          placeholder="Search or enter patient name"
+                          value={testForm.patientId}
+                          onChange={(id, primary) => {
+                            const patient = patients.find((p) => p.id === id);
+
+                            setTestForm((prev) => ({
+                              ...prev,
+                              patientId: id,
+                              patientName: primary,
+                              patientAge:
+                                patient?.age?.toString() || prev.patientAge,
+                              patientGender:
+                                patient?.gender || prev.patientGender,
+                            }));
+                          }}
+                          onInputChange={(val) =>
+                            setTestForm((prev) => ({
+                              ...prev,
+                              patientName: val,
+                              patientId: "",
+                            }))
+                          }
+                        />
+                      ) : (
+                        <>
+                          <Input
+                            isRequired
+                            label="Patient Name *"
+                            placeholder="Walk-In Name"
+                            value={testForm.patientName}
+                            onValueChange={(v) =>
+                              setTestForm((prev) => ({ ...prev, patientName: v }))
+                            }
+                          />
+                          <Input
+                            label="Phone Number"
+                            placeholder="Phone Number"
+                            value={testForm.walkInPhone}
+                            onValueChange={(v) =>
+                              setTestForm((prev) => ({ ...prev, walkInPhone: v }))
+                            }
+                          />
+                        </>
+                      )}
+
+                      <Input
+                        label="Patient Age"
+                        placeholder="Enter patient age"
+                        type="number"
+                        value={testForm.patientAge}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, patientAge: v }))
+                        }
+                      />
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[13px] font-medium text-mountain-700">
+                          Patient Gender
+                        </label>
+                        <select
+                          className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                          value={testForm.patientGender}
+                          onChange={(e) =>
+                            setTestForm((prev) => ({
+                              ...prev,
+                              patientGender: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Select gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <Input
+                        label="Short Name"
+                        placeholder="Short Name"
+                        value={testForm.shortName}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, shortName: v }))
+                        }
+                      />
+
                       <PathologySearchSelect
-                        required
-                        items={patients.map((p) => ({
-                          id: p.id,
-                          primary: p.name,
-                          secondary: `${p.mobile || ""} ${p.age ? `(${p.age}y)` : ""} `,
+                        items={testTypes.map((tt) => ({
+                          id: tt.name,
+                          primary: tt.name,
+                          secondary: `NPR ${tt.price.toFixed(2)} `,
                         }))}
-                        label="Patient Name *"
-                        placeholder="Search or enter patient name"
-                        value={testForm.patientId}
+                        label="Test Type"
+                        placeholder="Search and select test type"
+                        value={testForm.testType}
                         onChange={(id, primary) => {
-                          const patient = patients.find((p) => p.id === id);
+                          const tt = testTypes.find((t) => t.name === primary);
 
                           setTestForm((prev) => ({
                             ...prev,
-                            patientId: id,
-                            patientName: primary,
-                            patientAge:
-                              patient?.age?.toString() || prev.patientAge,
-                            patientGender:
-                              patient?.gender || prev.patientGender,
+                            testType: primary,
+                            standardCharge: tt
+                              ? tt.price.toString()
+                              : prev.standardCharge,
                           }));
                         }}
-                        onInputChange={(val) =>
+                      />
+
+                      <PathologySearchSelect
+                        items={categories.map((c) => ({
+                          id: c.id,
+                          primary: c.name,
+                        }))}
+                        label="Category Name"
+                        placeholder="Search and select category"
+                        value={testForm.categoryId}
+                        onChange={(id) =>
+                          setTestForm((prev) => ({ ...prev, categoryId: id }))
+                        }
+                      />
+
+                      <Input
+                        label="Unit"
+                        placeholder="Unit"
+                        value={testForm.unit}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, unit: v }))
+                        }
+                      />
+
+                      <Input
+                        label="Sub Category"
+                        placeholder="Sub Category"
+                        value={testForm.subCategory}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, subCategory: v }))
+                        }
+                      />
+
+                      <Input
+                        label="Method"
+                        placeholder="Method"
+                        value={testForm.method}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, method: v }))
+                        }
+                      />
+
+                      <Input
+                        label="Report Days"
+                        placeholder="Report Days"
+                        type="number"
+                        value={testForm.reportDays}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, reportDays: v }))
+                        }
+                      />
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[13px] font-medium text-mountain-700">
+                          Charge Category
+                        </label>
+                        <select
+                          className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                          value={testForm.chargeCategory}
+                          onChange={(e) =>
+                            setTestForm((prev) => ({
+                              ...prev,
+                              chargeCategory: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Select Charge Category</option>
+                          <option value="lab">Lab</option>
+                          <option value="fee">Fee</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <Input
+                        label="Standard Charge (NPR)"
+                        placeholder="Standard Charge"
+                        type="number"
+                        value={testForm.standardCharge}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, standardCharge: v }))
+                        }
+                      />
+
+                      <PathologySearchSelect
+                        items={labTechnicians.map((t) => ({
+                          id: t.id,
+                          primary: t.name,
+                          secondary: t.employeeId
+                            ? `(${t.employeeId})`
+                            : undefined,
+                        }))}
+                        label="Lab Technician (Optional)"
+                        placeholder="Search and select lab technician"
+                        value={testForm.labTechnicianId}
+                        onChange={(id) =>
                           setTestForm((prev) => ({
                             ...prev,
-                            patientName: val,
-                            patientId: "",
+                            labTechnicianId: id,
                           }))
                         }
                       />
-                    ) : (
-                      <>
-                        <Input
-                          isRequired
-                          label="Patient Name *"
-                          placeholder="Walk-In Name"
-                          value={testForm.patientName}
-                          onValueChange={(v) =>
-                            setTestForm((prev) => ({ ...prev, patientName: v }))
-                          }
-                        />
-                        <Input
-                          label="Phone Number"
-                          placeholder="Phone Number"
-                          value={testForm.walkInPhone}
-                          onValueChange={(v) =>
-                            setTestForm((prev) => ({ ...prev, walkInPhone: v }))
-                          }
-                        />
-                      </>
-                    )}
-
-                    <Input
-                      label="Patient Age"
-                      placeholder="Enter patient age"
-                      type="number"
-                      value={testForm.patientAge}
-                      onValueChange={(v) =>
-                        setTestForm((prev) => ({ ...prev, patientAge: v }))
-                      }
-                    />
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[13px] font-medium text-mountain-700">
-                        Patient Gender
-                      </label>
-                      <select
-                        className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
-                        value={testForm.patientGender}
-                        onChange={(e) =>
-                          setTestForm((prev) => ({
-                            ...prev,
-                            patientGender: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Select gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
                     </div>
+                  </div>
 
-                    <Input
-                      label="Short Name"
-                      placeholder="Short Name"
-                      value={testForm.shortName}
-                      onValueChange={(v) =>
-                        setTestForm((prev) => ({ ...prev, shortName: v }))
-                      }
-                    />
-
-                    <PathologySearchSelect
-                      items={testTypes.map((tt) => ({
-                        id: tt.name,
-                        primary: tt.name,
-                        secondary: `NPR ${tt.price.toFixed(2)} `,
-                      }))}
-                      label="Test Type"
-                      placeholder="Search and select test type"
-                      value={testForm.testType}
-                      onChange={(id, primary) => {
-                        const tt = testTypes.find((t) => t.name === primary);
-
-                        setTestForm((prev) => ({
-                          ...prev,
-                          testType: primary,
-                          standardCharge: tt
-                            ? tt.price.toString()
-                            : prev.standardCharge,
-                        }));
-                      }}
-                    />
-
-                    <PathologySearchSelect
-                      items={categories.map((c) => ({
-                        id: c.id,
-                        primary: c.name,
-                      }))}
-                      label="Category Name"
-                      placeholder="Search and select category"
-                      value={testForm.categoryId}
-                      onChange={(id) =>
-                        setTestForm((prev) => ({ ...prev, categoryId: id }))
-                      }
-                    />
-
-                    <Input
-                      label="Unit"
-                      placeholder="Unit"
-                      value={testForm.unit}
-                      onValueChange={(v) =>
-                        setTestForm((prev) => ({ ...prev, unit: v }))
-                      }
-                    />
-
-                    <Input
-                      label="Sub Category"
-                      placeholder="Sub Category"
-                      value={testForm.subCategory}
-                      onValueChange={(v) =>
-                        setTestForm((prev) => ({ ...prev, subCategory: v }))
-                      }
-                    />
-
-                    <Input
-                      label="Method"
-                      placeholder="Method"
-                      value={testForm.method}
-                      onValueChange={(v) =>
-                        setTestForm((prev) => ({ ...prev, method: v }))
-                      }
-                    />
-
-                    <Input
-                      label="Report Days"
-                      placeholder="Report Days"
-                      type="number"
-                      value={testForm.reportDays}
-                      onValueChange={(v) =>
-                        setTestForm((prev) => ({ ...prev, reportDays: v }))
-                      }
-                    />
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[13px] font-medium text-mountain-700">
-                        Charge Category
-                      </label>
-                      <select
-                        className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
-                        value={testForm.chargeCategory}
-                        onChange={(e) =>
-                          setTestForm((prev) => ({
-                            ...prev,
-                            chargeCategory: e.target.value,
-                          }))
-                        }
+                  {/* Parameters Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">
+                      Parameter Fields
+                    </h3>
+                    {testForm.parameters.map((param, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-12 gap-2 mb-4 items-end bg-mountain-50/30 p-2 rounded border border-mountain-100"
                       >
-                        <option value="">Select Charge Category</option>
-                        <option value="lab">Lab</option>
-                        <option value="fee">Fee</option>
-                        <option value="other">Other</option>
-                      </select>
+                        <div className="col-span-2">
+                          <PathologySearchSelect
+                            items={categories.map((c) => ({
+                              id: c.id,
+                              primary: c.name,
+                            }))}
+                            label="Category"
+                            placeholder="Select category"
+                            value={param.categoryId}
+                            onChange={(id) => {
+                              updateTestParameter(index, "categoryId", id);
+                              updateTestParameter(index, "parameterId", ""); // Reset parameter when category changes
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <PathologySearchSelect
+                            required
+                            items={parameters
+                              .filter(
+                                (p) =>
+                                  !param.categoryId ||
+                                  p.categoryId === param.categoryId,
+                              )
+                              .map((p) => ({
+                                id: p.id,
+                                primary: p.name,
+                                secondary: p.referenceRange
+                                  ? `Range: ${p.referenceRange} `
+                                  : undefined,
+                              }))}
+                            label="Parameter *"
+                            placeholder="Select sub-category"
+                            value={param.parameterId}
+                            onChange={(id) =>
+                              updateTestParameter(index, "parameterId", id)
+                            }
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          <Input
+                            isRequired
+                            label="Patient Result *"
+                            placeholder="Result (e.g. 10.5 or Text)"
+                            value={param.patientResult}
+                            onValueChange={(v) =>
+                              updateTestParameter(index, "patientResult", v)
+                            }
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Input
+                            label="Ref. Range"
+                            placeholder="Range"
+                            value={param.referenceRange}
+                            onValueChange={(v) =>
+                              updateTestParameter(index, "referenceRange", v)
+                            }
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Input
+                            label="Unit"
+                            placeholder="Unit"
+                            value={param.unit}
+                            onValueChange={(v) =>
+                              updateTestParameter(index, "unit", v)
+                            }
+                          />
+                        </div>
+                        <div className="col-span-1 flex items-center justify-center h-[32px] gap-1">
+                          <Button
+                            isIconOnly
+                            color="default"
+                            disabled={index === 0}
+                            size="sm"
+                            variant="light"
+                            onClick={() => moveTestParameter(index, "up")}
+                          >
+                            <IoArrowUpOutline className="text-mountain-400" />
+                          </Button>
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            size="sm"
+                            variant="light"
+                            onClick={() => removeTestParameter(index)}
+                          >
+                            <IoTrashOutline />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-center mt-4">
+                      <Button
+                        color="default"
+                        startContent={<IoAddOutline />}
+                        variant="bordered"
+                        onClick={addTestParameter}
+                      >
+                        Add
+                      </Button>
                     </div>
-
-                    <Input
-                      label="Standard Charge (NPR)"
-                      placeholder="Standard Charge"
-                      type="number"
-                      value={testForm.standardCharge}
-                      onValueChange={(v) =>
-                        setTestForm((prev) => ({ ...prev, standardCharge: v }))
-                      }
-                    />
-
-                    <PathologySearchSelect
-                      items={labTechnicians.map((t) => ({
-                        id: t.id,
-                        primary: t.name,
-                        secondary: t.employeeId
-                          ? `(${t.employeeId})`
-                          : undefined,
-                      }))}
-                      label="Lab Technician (Optional)"
-                      placeholder="Search and select lab technician"
-                      value={testForm.labTechnicianId}
-                      onChange={(id) =>
-                        setTestForm((prev) => ({
-                          ...prev,
-                          labTechnicianId: id,
-                        }))
-                      }
-                    />
                   </div>
                 </div>
+                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2 shrink-0">
+                  <Button variant="light" onClick={testModalState.close}>
+                    Cancel
+                  </Button>
+                  <Button color="primary" onClick={handleSaveTest}>
+                    {isEditing ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        }
 
-                {/* Parameters Section */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">
-                    Parameter Fields
-                  </h3>
-                  {testForm.parameters.map((param, index) => (
-                    <div
-                      key={index}
-                      className="grid grid-cols-12 gap-2 mb-4 items-end bg-mountain-50/30 p-2 rounded border border-mountain-100"
+        {/* Category Form Modal */}
+        {
+          categoryModalState.isOpen && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={categoryModalState.close}
+              ></div>
+              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
+                  <h2 className="text-[14px] font-semibold text-mountain-900">
+                    {isEditing
+                      ? "Edit Pathology Category"
+                      : "New Pathology Category"}
+                  </h2>
+                </div>
+                <div className="p-5">
+                  <Input
+                    isRequired
+                    label="Name *"
+                    placeholder="Category Name"
+                    value={categoryForm.name}
+                    onValueChange={(v) =>
+                      setCategoryForm((prev) => ({ ...prev, name: v }))
+                    }
+                  />
+                </div>
+                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                  <Button variant="light" onClick={categoryModalState.close}>
+                    Cancel
+                  </Button>
+                  <Button color="primary" onClick={handleSaveCategory}>
+                    {isEditing ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Unit Form Modal */}
+        {
+          unitModalState.isOpen && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={unitModalState.close}
+              ></div>
+              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
+                  <h2 className="text-[14px] font-semibold text-mountain-900">
+                    {isEditing ? "Edit Pathology Unit" : "New Pathology Unit"}
+                  </h2>
+                </div>
+                <div className="p-5">
+                  <Input
+                    isRequired
+                    label="Name *"
+                    placeholder="Unit Name"
+                    value={unitForm.name}
+                    onValueChange={(v) =>
+                      setUnitForm((prev) => ({ ...prev, name: v }))
+                    }
+                  />
+                </div>
+                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                  <Button variant="light" onClick={unitModalState.close}>
+                    Cancel
+                  </Button>
+                  <Button color="primary" onClick={handleSaveUnit}>
+                    {isEditing ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Parameter Form Modal */}
+        {
+          parameterModalState.isOpen && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={parameterModalState.close}
+              ></div>
+              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
+                  <h2 className="text-[14px] font-semibold text-mountain-900">
+                    {isEditing
+                      ? "Edit Pathology Parameter"
+                      : "New Pathology Parameter"}
+                  </h2>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[13px] font-medium text-mountain-700">
+                      Category Name
+                    </label>
+                    <select
+                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      value={parameterForm.categoryId}
+                      onChange={(e) =>
+                        setParameterForm((prev) => ({
+                          ...prev,
+                          categoryId: e.target.value,
+                        }))
+                      }
                     >
-                      <div className="col-span-2">
+                      <option value="">No Category Selected</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Input
+                    isRequired
+                    label="Name *"
+                    placeholder="Parameter Name"
+                    value={parameterForm.name}
+                    onValueChange={(v) =>
+                      setParameterForm((prev) => ({ ...prev, name: v }))
+                    }
+                  />
+                  <Input
+                    isRequired
+                    label="Reference Range *"
+                    placeholder="Reference Range"
+                    value={parameterForm.referenceRange}
+                    onValueChange={(v) =>
+                      setParameterForm((prev) => ({ ...prev, referenceRange: v }))
+                    }
+                  />
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[13px] font-medium text-mountain-700">
+                      Unit
+                    </label>
+                    <select
+                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      value={parameterForm.unit}
+                      onChange={(e) =>
+                        setParameterForm((prev) => ({
+                          ...prev,
+                          unit: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Select Unit</option>
+                      {units.map((unit) => (
+                        <option key={unit.id} value={unit.id}>
+                          {unit.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                  <Button variant="light" onClick={parameterModalState.close}>
+                    Cancel
+                  </Button>
+                  <Button color="primary" onClick={handleSaveParameter}>
+                    {isEditing ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Test Type Form Modal */}
+        {
+          testTypeModalState.isOpen && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={testTypeModalState.close}
+              ></div>
+              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4 overflow-visible">
+                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
+                  <h2 className="text-[14px] font-semibold text-mountain-900">
+                    {isEditing
+                      ? "Edit Price Configuration"
+                      : "New Price Configuration"}
+                  </h2>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[13px] font-medium text-mountain-700">
+                      Setting Price For *
+                    </label>
+                    <select
+                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      value={testTypeForm.targetType}
+                      onChange={(e) =>
+                        setTestTypeForm((prev) => ({
+                          ...prev,
+                          targetType: e.target.value as "category" | "parameter",
+                          categoryId: "",
+                          parameterId: "",
+                        }))
+                      }
+                    >
+                      <option value="category">Full Category Package</option>
+                      <option value="parameter">
+                        Individual Sub-Category (Parameter)
+                      </option>
+                    </select>
+                  </div>
+
+                  {testTypeForm.targetType === "category" ? (
+                    <div className="z-50 relative">
+                      <PathologySearchSelect
+                        required
+                        items={categories.map((c) => ({
+                          id: c.id,
+                          primary: c.name,
+                        }))}
+                        label="Category (e.g. CBC) *"
+                        placeholder="Search and select category"
+                        value={testTypeForm.categoryId}
+                        onChange={(id) =>
+                          setTestTypeForm((prev) => ({ ...prev, categoryId: id }))
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="z-40 relative">
                         <PathologySearchSelect
                           items={categories.map((c) => ({
                             id: c.id,
                             primary: c.name,
                           }))}
-                          label="Category"
-                          placeholder="Select category"
-                          value={param.categoryId}
-                          onChange={(id) => {
-                            updateTestParameter(index, "categoryId", id);
-                            updateTestParameter(index, "parameterId", ""); // Reset parameter when category changes
-                          }}
+                          label="Category (Optional)"
+                          placeholder="Filter parameters by category"
+                          value={testTypeForm.categoryId}
+                          onChange={(id) =>
+                            setTestTypeForm((prev) => ({
+                              ...prev,
+                              categoryId: id,
+                              parameterId: "",
+                            }))
+                          }
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="z-50 relative">
                         <PathologySearchSelect
                           required
                           items={parameters
                             .filter(
                               (p) =>
-                                !param.categoryId ||
-                                p.categoryId === param.categoryId,
+                                !testTypeForm.categoryId ||
+                                p.categoryId === testTypeForm.categoryId,
                             )
                             .map((p) => ({
                               id: p.id,
@@ -2286,524 +2640,173 @@ export default function PathologyPage() {
                                 ? `Range: ${p.referenceRange} `
                                 : undefined,
                             }))}
-                          label="Parameter *"
-                          placeholder="Select sub-category"
-                          value={param.parameterId}
+                          label="Sub Category (Parameter) *"
+                          placeholder="Search and select sub category"
+                          value={testTypeForm.parameterId}
                           onChange={(id) =>
-                            updateTestParameter(index, "parameterId", id)
+                            setTestTypeForm((prev) => ({
+                              ...prev,
+                              parameterId: id,
+                            }))
                           }
                         />
-                      </div>
-                      <div className="col-span-3">
-                        <Input
-                          isRequired
-                          label="Patient Result *"
-                          placeholder="Result (e.g. 10.5 or Text)"
-                          value={param.patientResult}
-                          onValueChange={(v) =>
-                            updateTestParameter(index, "patientResult", v)
-                          }
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Input
-                          label="Ref. Range"
-                          placeholder="Range"
-                          value={param.referenceRange}
-                          onValueChange={(v) =>
-                            updateTestParameter(index, "referenceRange", v)
-                          }
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Input
-                          label="Unit"
-                          placeholder="Unit"
-                          value={param.unit}
-                          onValueChange={(v) =>
-                            updateTestParameter(index, "unit", v)
-                          }
-                        />
-                      </div>
-                      <div className="col-span-1 flex items-center justify-center h-[32px] gap-1">
-                        <Button
-                          isIconOnly
-                          color="default"
-                          disabled={index === 0}
-                          size="sm"
-                          variant="light"
-                          onClick={() => moveTestParameter(index, "up")}
-                        >
-                          <IoArrowUpOutline className="text-mountain-400" />
-                        </Button>
-                        <Button
-                          isIconOnly
-                          color="danger"
-                          size="sm"
-                          variant="light"
-                          onClick={() => removeTestParameter(index)}
-                        >
-                          <IoTrashOutline />
-                        </Button>
                       </div>
                     </div>
-                  ))}
-                  <div className="flex justify-center mt-4">
-                    <Button
-                      color="default"
-                      startContent={<IoAddOutline />}
-                      variant="bordered"
-                      onClick={addTestParameter}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2 shrink-0">
-                <Button variant="light" onClick={testModalState.close}>
-                  Cancel
-                </Button>
-                <Button color="primary" onClick={handleSaveTest}>
-                  {isEditing ? "Update" : "Create"}
-                </Button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )
-      }
+                  )}
 
-      {/* Category Form Modal */}
-      {
-        categoryModalState.isOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-              onClick={categoryModalState.close}
-            />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-              <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                <h2 className="text-[14px] font-semibold text-mountain-900">
-                  {isEditing
-                    ? "Edit Pathology Category"
-                    : "New Pathology Category"}
-                </h2>
-              </div>
-              <div className="p-5">
-                <Input
-                  isRequired
-                  label="Name *"
-                  placeholder="Category Name"
-                  value={categoryForm.name}
-                  onValueChange={(v) =>
-                    setCategoryForm((prev) => ({ ...prev, name: v }))
-                  }
-                />
-              </div>
-              <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
-                <Button variant="light" onClick={categoryModalState.close}>
-                  Cancel
-                </Button>
-                <Button color="primary" onClick={handleSaveCategory}>
-                  {isEditing ? "Update" : "Create"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Unit Form Modal */}
-      {
-        unitModalState.isOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-              onClick={unitModalState.close}
-            />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-              <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                <h2 className="text-[14px] font-semibold text-mountain-900">
-                  {isEditing ? "Edit Pathology Unit" : "New Pathology Unit"}
-                </h2>
-              </div>
-              <div className="p-5">
-                <Input
-                  isRequired
-                  label="Name *"
-                  placeholder="Unit Name"
-                  value={unitForm.name}
-                  onValueChange={(v) =>
-                    setUnitForm((prev) => ({ ...prev, name: v }))
-                  }
-                />
-              </div>
-              <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
-                <Button variant="light" onClick={unitModalState.close}>
-                  Cancel
-                </Button>
-                <Button color="primary" onClick={handleSaveUnit}>
-                  {isEditing ? "Update" : "Create"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Parameter Form Modal */}
-      {
-        parameterModalState.isOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-              onClick={parameterModalState.close}
-            />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-              <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                <h2 className="text-[14px] font-semibold text-mountain-900">
-                  {isEditing
-                    ? "Edit Pathology Parameter"
-                    : "New Pathology Parameter"}
-                </h2>
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-medium text-mountain-700">
-                    Category Name
-                  </label>
-                  <select
-                    className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
-                    value={parameterForm.categoryId}
-                    onChange={(e) =>
-                      setParameterForm((prev) => ({
-                        ...prev,
-                        categoryId: e.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">No Category Selected</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Input
-                  isRequired
-                  label="Name *"
-                  placeholder="Parameter Name"
-                  value={parameterForm.name}
-                  onValueChange={(v) =>
-                    setParameterForm((prev) => ({ ...prev, name: v }))
-                  }
-                />
-                <Input
-                  isRequired
-                  label="Reference Range *"
-                  placeholder="Reference Range"
-                  value={parameterForm.referenceRange}
-                  onValueChange={(v) =>
-                    setParameterForm((prev) => ({ ...prev, referenceRange: v }))
-                  }
-                />
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-medium text-mountain-700">
-                    Unit
-                  </label>
-                  <select
-                    className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
-                    value={parameterForm.unit}
-                    onChange={(e) =>
-                      setParameterForm((prev) => ({
-                        ...prev,
-                        unit: e.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Select Unit</option>
-                    {units.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
-                <Button variant="light" onClick={parameterModalState.close}>
-                  Cancel
-                </Button>
-                <Button color="primary" onClick={handleSaveParameter}>
-                  {isEditing ? "Update" : "Create"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Test Type Form Modal */}
-      {
-        testTypeModalState.isOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-              onClick={testTypeModalState.close}
-            />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4 overflow-visible">
-              <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                <h2 className="text-[14px] font-semibold text-mountain-900">
-                  {isEditing
-                    ? "Edit Price Configuration"
-                    : "New Price Configuration"}
-                </h2>
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-medium text-mountain-700">
-                    Setting Price For *
-                  </label>
-                  <select
-                    className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
-                    value={testTypeForm.targetType}
-                    onChange={(e) =>
-                      setTestTypeForm((prev) => ({
-                        ...prev,
-                        targetType: e.target.value as "category" | "parameter",
-                        categoryId: "",
-                        parameterId: "",
-                      }))
-                    }
-                  >
-                    <option value="category">Full Category Package</option>
-                    <option value="parameter">
-                      Individual Sub-Category (Parameter)
-                    </option>
-                  </select>
-                </div>
-
-                {testTypeForm.targetType === "category" ? (
-                  <div className="z-50 relative">
-                    <PathologySearchSelect
-                      required
-                      items={categories.map((c) => ({
-                        id: c.id,
-                        primary: c.name,
-                      }))}
-                      label="Category (e.g. CBC) *"
-                      placeholder="Search and select category"
-                      value={testTypeForm.categoryId}
-                      onChange={(id) =>
-                        setTestTypeForm((prev) => ({ ...prev, categoryId: id }))
-                      }
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="z-40 relative">
-                      <PathologySearchSelect
-                        items={categories.map((c) => ({
-                          id: c.id,
-                          primary: c.name,
-                        }))}
-                        label="Category (Optional)"
-                        placeholder="Filter parameters by category"
-                        value={testTypeForm.categoryId}
-                        onChange={(id) =>
-                          setTestTypeForm((prev) => ({
-                            ...prev,
-                            categoryId: id,
-                            parameterId: "",
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="z-50 relative">
-                      <PathologySearchSelect
-                        required
-                        items={parameters
-                          .filter(
-                            (p) =>
-                              !testTypeForm.categoryId ||
-                              p.categoryId === testTypeForm.categoryId,
-                          )
-                          .map((p) => ({
-                            id: p.id,
-                            primary: p.name,
-                            secondary: p.referenceRange
-                              ? `Range: ${p.referenceRange} `
-                              : undefined,
-                          }))}
-                        label="Sub Category (Parameter) *"
-                        placeholder="Search and select sub category"
-                        value={testTypeForm.parameterId}
-                        onChange={(id) =>
-                          setTestTypeForm((prev) => ({
-                            ...prev,
-                            parameterId: id,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <Input
-                  isRequired
-                  label="Price (NPR) *"
-                  placeholder="0.00"
-                  type="number"
-                  value={testTypeForm.price}
-                  onValueChange={(v) =>
-                    setTestTypeForm((prev) => ({ ...prev, price: v }))
-                  }
-                />
-              </div>
-              <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
-                <Button variant="light" onClick={testTypeModalState.close}>
-                  Cancel
-                </Button>
-                <Button color="primary" onClick={handleSaveTestType}>
-                  {isEditing ? "Update" : "Create"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Delete Confirmation Modal */}
-      {
-        deleteConfirmModalState.isOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-              onClick={deleteConfirmModalState.close}
-            />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-              <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                <h2 className="text-[14px] font-semibold text-mountain-900">
-                  Confirm Delete
-                </h2>
-              </div>
-              <div className="p-5">
-                <p className="text-[13.5px] text-mountain-800">
-                  Are you sure you want to delete{" "}
-                  <strong>{itemToDelete?.name}</strong>? This action cannot be
-                  undone.
-                </p>
-              </div>
-              <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
-                <Button variant="light" onClick={deleteConfirmModalState.close}>
-                  Cancel
-                </Button>
-                <Button color="danger" onClick={handleDelete}>
-                  Delete
-                </Button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-      {/* Quick Patient Creation Modal */}
-      {
-        quickPatientModalState.isOpen &&
-        createPortal(
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-              onClick={quickPatientModalState.close}
-            />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-lg w-full max-w-lg mx-4 shadow-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center justify-between">
-                <div>
-                  <h2 className="text-[16px] font-bold text-mountain-900">
-                    Quick Create Patient
-                  </h2>
-                  <p className="text-[12px] text-mountain-500">
-                    Register a new patient to continue with the test
-                  </p>
-                </div>
-                <button
-                  className="p-1.5 rounded-full hover:bg-mountain-100 text-mountain-400 hover:text-mountain-700 transition-colors"
-                  type="button"
-                  onClick={quickPatientModalState.close}
-                >
-                  <IoCloseOutline className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 space-y-6">
-                <Input
-                  className="text-[14px]"
-                  label="Full Name *"
-                  placeholder="e.g. John Doe"
-                  value={quickPatientForm.name}
-                  onValueChange={(v) =>
-                    setQuickPatientForm((prev) => ({ ...prev, name: v }))
-                  }
-                />
-                <div className="grid grid-cols-2 gap-6">
                   <Input
-                    label="Age"
-                    placeholder="e.g. 25"
+                    isRequired
+                    label="Price (NPR) *"
+                    placeholder="0.00"
                     type="number"
-                    value={quickPatientForm.age}
+                    value={testTypeForm.price}
                     onValueChange={(v) =>
-                      setQuickPatientForm((prev) => ({ ...prev, age: v }))
+                      setTestTypeForm((prev) => ({ ...prev, price: v }))
                     }
                   />
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-semibold text-mountain-700">
-                      Gender
-                    </label>
-                    <select
-                      className="h-9 border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100 transition-all shadow-sm"
-                      value={quickPatientForm.gender}
-                      onChange={(e) =>
-                        setQuickPatientForm((prev) => ({
-                          ...prev,
-                          gender: e.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">Select Gender</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
                 </div>
-                <Input
-                  label="Mobile Number"
-                  placeholder="e.g. +977 98XXXXXXXX"
-                  value={quickPatientForm.mobile}
-                  onValueChange={(v) =>
-                    setQuickPatientForm((prev) => ({ ...prev, mobile: v }))
-                  }
-                />
-              </div>
-              <div className="px-6 py-4 border-t border-mountain-100 bg-mountain-50/50 flex justify-end gap-3">
-                <Button variant="flat" onClick={quickPatientModalState.close}>
-                  Cancel
-                </Button>
-                <Button
-                  className="px-8 font-medium"
-                  color="primary"
-                  onClick={handleSaveQuickPatient}
-                >
-                  Create Patient
-                </Button>
+                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                  <Button variant="light" onClick={testTypeModalState.close}>
+                    Cancel
+                  </Button>
+                  <Button color="primary" onClick={handleSaveTestType}>
+                    {isEditing ? "Update" : "Create"}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>,
-          document.body,
-        )
-      }
-    </div >
+          )
+        }
 
+        {/* Delete Confirmation Modal */}
+        {
+          deleteConfirmModalState.isOpen && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
+                onClick={deleteConfirmModalState.close}
+              ></div>
+              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
+                  <h2 className="text-[14px] font-semibold text-mountain-900">
+                    Confirm Delete
+                  </h2>
+                </div>
+                <div className="p-5">
+                  <p className="text-[13.5px] text-mountain-800">
+                    Are you sure you want to delete{" "}
+                    <strong>{itemToDelete?.name}</strong>? This action cannot be
+                    undone.
+                  </p>
+                </div>
+                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                  <Button variant="light" onClick={deleteConfirmModalState.close}>
+                    Cancel
+                  </Button>
+                  <Button color="danger" onClick={handleDelete}>
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+        {/* Quick Patient Creation Modal */}
+        {
+          quickPatientModalState.isOpen &&
+          createPortal(
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
+                onClick={quickPatientModalState.close}
+              ></div>
+              <div className="relative z-10 bg-white border border-mountain-200 rounded-lg w-full max-w-lg mx-4 shadow-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-[16px] font-bold text-mountain-900">
+                      Quick Create Patient
+                    </h2>
+                    <p className="text-[12px] text-mountain-500">
+                      Register a new patient to continue with the test
+                    </p>
+                  </div>
+                  <button
+                    className="p-1.5 rounded-full hover:bg-mountain-100 text-mountain-400 hover:text-mountain-700 transition-colors"
+                    type="button"
+                    onClick={quickPatientModalState.close}
+                  >
+                    <IoCloseOutline className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-6">
+                  <Input
+                    className="text-[14px]"
+                    label="Full Name *"
+                    placeholder="e.g. John Doe"
+                    value={quickPatientForm.name}
+                    onValueChange={(v) =>
+                      setQuickPatientForm((prev) => ({ ...prev, name: v }))
+                    }
+                  />
+                  <div className="grid grid-cols-2 gap-6">
+                    <Input
+                      label="Age"
+                      placeholder="e.g. 25"
+                      type="number"
+                      value={quickPatientForm.age}
+                      onValueChange={(v) =>
+                        setQuickPatientForm((prev) => ({ ...prev, age: v }))
+                      }
+                    />
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[13px] font-semibold text-mountain-700">
+                        Gender
+                      </label>
+                      <select
+                        className="h-9 border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100 transition-all shadow-sm"
+                        value={quickPatientForm.gender}
+                        onChange={(e) =>
+                          setQuickPatientForm((prev) => ({
+                            ...prev,
+                            gender: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <Input
+                    label="Mobile Number"
+                    placeholder="e.g. +977 98XXXXXXXX"
+                    value={quickPatientForm.mobile}
+                    onValueChange={(v) =>
+                      setQuickPatientForm((prev) => ({ ...prev, mobile: v }))
+                    }
+                  />
+                </div>
+                <div className="px-6 py-4 border-t border-mountain-100 bg-mountain-50/50 flex justify-end gap-3">
+                  <Button variant="flat" onClick={quickPatientModalState.close}>
+                    Cancel
+                  </Button>
+                  <Button
+                    className="px-8 font-medium"
+                    color="primary"
+                    onClick={handleSaveQuickPatient}
+                  >
+                    Create Patient
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        }
+      </div>
+    </>
   );
 }
 

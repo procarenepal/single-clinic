@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
 import clsx from "clsx";
 import {
   IoMenuOutline,
@@ -16,8 +17,6 @@ import { useAuthContext } from "@/context/AuthContext";
 import { useNavigation } from "@/hooks/useNavigation";
 import { useTheme } from "@/context/ThemeContext";
 import { DashboardHeader } from "@/components/dashboard-header";
-import { SubscriptionBanner } from "@/components/subscription-banner";
-import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { NavItem } from "@/services/navigationService";
 import { prefetchChunks } from "@/utils/prefetchRoutes";
 // Custom UI components — no HeroUI
@@ -120,72 +119,88 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const isActive = isPathActive(item);
 
     const itemBase = clsx(
-      "flex items-center px-2.5 py-[6px] text-[13.5px] font-medium rounded transition-colors duration-200 select-none cursor-pointer",
+      "relative group flex items-center px-3 py-1.5 text-[13.5px] font-medium rounded-lg transition-all duration-300 select-none cursor-pointer",
       level > 0 && "ml-3",
       isActive
-        ? "bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400"
-        : "text-mountain-500 dark:text-zinc-400 hover:bg-mountain-100 dark:hover:bg-zinc-800 hover:text-mountain-900 dark:hover:text-zinc-100",
+        ? "text-teal-600 dark:text-teal-400"
+        : "text-mountain-500 dark:text-zinc-400 hover:text-mountain-900 dark:hover:text-zinc-100",
     );
 
     return (
-      <div key={item.href}>
+      <motion.div
+        key={item.href}
+        layout
+        animate={{ opacity: 1, x: 0 }}
+        initial={{ opacity: 0, x: -5 }}
+        transition={{ duration: 0.2 }}
+      >
         {hasChildren ? (
           <div
             className={clsx(
-              "flex items-center rounded overflow-hidden",
+              "flex items-center rounded-lg overflow-hidden group/nav",
               level > 0 && "ml-3",
             )}
           >
             {/* Clickable link area */}
             <Link
               className={clsx(
-                "flex items-center flex-1 px-2.5 py-[6px] text-[13.5px] font-medium rounded-l transition-colors duration-200",
+                "relative flex items-center flex-1 px-3 py-1.5 text-[13.5px] font-medium transition-all duration-300",
                 isActive
-                  ? "bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400 transition-colors"
-                  : "text-mountain-500 dark:text-zinc-400 hover:bg-mountain-100 dark:hover:bg-zinc-800 hover:text-mountain-900 dark:hover:text-zinc-100",
+                  ? "text-teal-600 dark:text-teal-400"
+                  : "text-mountain-500 dark:text-zinc-400 hover:text-mountain-900 dark:hover:text-zinc-100",
               )}
               to={item.href}
             >
-              <span className="mr-2 shrink-0 opacity-70 [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {isActive && (
+                <motion.div
+                  layoutId="active-nav-bg"
+                  className="absolute inset-0 bg-teal-500/10 dark:bg-teal-500/15 rounded-lg z-0"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <span className="relative z-10 mr-2 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity [&>svg]:w-4 [&>svg]:h-4">
                 {item.icon}
               </span>
-              <span className="truncate">{item.title}</span>
+              <span className="relative z-10 truncate">{item.title}</span>
             </Link>
 
             {/* Subtree toggle */}
             <button
               aria-label={isExpanded ? "Collapse" : "Expand"}
               className={clsx(
-                "flex items-center justify-center w-7 py-[5px] shrink-0 rounded-r transition-colors duration-200",
+                "relative z-10 flex items-center justify-center w-8 py-1.5 shrink-0 transition-all duration-300",
                 isActive
-                  ? "bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400 hover:bg-teal-500/20 dark:hover:bg-teal-500/25 border-l border-mountain-200 dark:border-teal-800"
-                  : "text-mountain-400 dark:text-zinc-600 hover:bg-mountain-100 dark:hover:bg-zinc-800 border-l border-mountain-100 dark:border-zinc-800",
+                  ? "text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 dark:hover:bg-teal-500/20"
+                  : "text-mountain-400 dark:text-zinc-600 hover:bg-mountain-100 dark:hover:bg-zinc-800",
               )}
               onClick={() => toggleSubMenu(item.href)}
             >
-              {isExpanded ? (
-                <IoChevronDownOutline className="w-3 h-3" />
-              ) : (
-                <IoChevronForwardOutline className="w-3 h-3" />
-              )}
+              <IoChevronForwardOutline className={clsx("w-3 h-3 transition-transform duration-300", isExpanded && "rotate-90")} />
             </button>
           </div>
         ) : (
           <Link className={itemBase} to={item.href}>
-            <span className="mr-2 shrink-0 opacity-70 [&>svg]:w-3.5 [&>svg]:h-3.5">
+            {isActive && (
+              <motion.div
+                layoutId="active-nav-bg"
+                className="absolute inset-0 bg-teal-500/10 dark:bg-teal-500/15 rounded-lg z-0"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+              />
+            )}
+            <span className="relative z-10 mr-2 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity [&>svg]:w-4 [&>svg]:h-4">
               {item.icon}
             </span>
-            <span className="truncate">{item.title}</span>
+            <span className="relative z-10 truncate">{item.title}</span>
           </Link>
         )}
 
         {/* Children */}
         {hasChildren && isExpanded && (
-          <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-mountain-100 dark:border-zinc-800 pl-2">
+          <div className="ml-4 mt-1 space-y-1 mb-1 border-l border-mountain-100 dark:border-zinc-800/50 pl-3">
             {item.children.map((child) => renderNavItem(child, level + 1))}
           </div>
         )}
-      </div>
+      </motion.div>
     );
   };
 
@@ -194,8 +209,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const formatRole = (role?: string): string => {
     if (!role) return "User";
     const map: Record<string, string> = {
-      "super-admin": "Platform Admin",
-      "clinic-super-admin": "Clinic Super Admin",
+      "system-owner": "System Owner",
       "clinic-admin": "Clinic Admin",
       doctor: "Doctor",
       nurse: "Nurse",
@@ -211,26 +225,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-zinc-950">
+    <div className="flex flex-col h-screen bg-bg">
       {/* ── Top header ──────────────────────────────────────────────────── */}
       <DashboardHeader
         isSidebarOpen={isSidebarOpen}
         toggleSidebar={toggleSidebar}
       />
 
-      <div className="flex flex-1 pt-12">
+      <div className="flex flex-1 pt-14">
         {/* ── Sidebar ───────────────────────────────────────────────────── */}
         <aside
           aria-label="Sidebar navigation"
           className={clsx(
-            "fixed inset-y-0 top-12 left-0 z-20 w-[220px]",
+            "fixed inset-y-0 top-14 left-0 z-20 w-[220px]",
             "transition-transform duration-200 ease-out",
             // Theme-aware split-surface
             "bg-white dark:bg-zinc-950 border-r border-mountain-200 dark:border-zinc-800",
             "flex flex-col print:hidden",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
-          style={{ height: "calc(100vh - 3rem)" }}
+          style={{ height: "calc(100vh - 3.5rem)" }}
         >
           {/* User identity strip */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-mountain-100 dark:border-zinc-800">
@@ -246,6 +260,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       "User"
                     }
                     size="sm"
+                    src={userData?.photoURL || currentUser?.photoURL || ""}
                   />
                   <div className="min-w-0">
                     <p className="text-[12.5px] font-bold truncate leading-tight text-mountain-900 dark:text-zinc-100">
@@ -328,24 +343,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </aside>
 
-        {/* ── Main content ──────────────────────────────────────────────── */}
+
         <main
           className={clsx(
-            "flex-1 transition-all duration-200 ease-out overflow-hidden",
+            "flex-1 w-full flex flex-col items-start justify-start transition-all duration-300 ease-in-out overflow-hidden relative",
+            "bg-bg mesh-gradient",
             isSidebarOpen ? "md:pl-[220px]" : "",
           )}
-          style={{ height: "calc(100vh - 3rem)" }}
+          style={{ height: "calc(100vh - 3.5rem)" }}
         >
-          {/* Content well — always white/light regardless of theme */}
+          {/* Content well with subtle mesh gradient */}
           <div
-            className="h-full overflow-auto bg-slate-50 print:p-0 cv-auto will-scroll"
+            className="w-full h-full overflow-auto print:p-0 cv-auto will-scroll relative z-10"
             id="dashboard-scroll-container"
           >
-            <div className="px-4 py-3 pb-10 min-h-full">
-              <ImpersonationBanner />
-              <SubscriptionBanner />
+            <motion.div
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full px-4 py-3 pb-10 min-h-full"
+              initial={{ opacity: 0, y: 10 }}
+              key={location.pathname}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+            >
               {children}
-            </div>
+            </motion.div>
           </div>
         </main>
 

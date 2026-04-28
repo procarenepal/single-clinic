@@ -36,15 +36,15 @@ const STATUS_OPTIONS: {
   label: string;
   color: "primary" | "warning" | "secondary" | "success" | "danger" | "default";
 }[] = [
-  { key: "all", label: "All Statuses", color: "default" },
-  { key: "new", label: "New", color: "primary" },
-  { key: "contacted", label: "Contacted", color: "warning" },
-  // Backward-compatible: underlying status key stays `scheduled` but UI label is "Technician"
-  { key: "scheduled", label: "Technician", color: "secondary" },
-  // Backward-compatible: underlying status key stays `converted` but UI label is "Done"
-  { key: "converted", label: "Done", color: "success" },
-  { key: "closed", label: "Closed", color: "danger" },
-];
+    { key: "all", label: "All Statuses", color: "default" },
+    { key: "new", label: "New", color: "primary" },
+    { key: "contacted", label: "Contacted", color: "warning" },
+    // Backward-compatible: underlying status key stays `scheduled` but UI label is "Technician"
+    { key: "scheduled", label: "Technician", color: "secondary" },
+    // Backward-compatible: underlying status key stays `converted` but UI label is "Done"
+    { key: "converted", label: "Done", color: "success" },
+    { key: "closed", label: "Closed", color: "danger" },
+  ];
 
 const ACTION_OPTIONS: { key: "call" | "offer" | "council"; label: string }[] = [
   { key: "call", label: "Call" },
@@ -414,10 +414,10 @@ export default function EnquiriesPage() {
     <div className="space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
-          <h1 className="text-[15px] font-semibold tracking-tight text-mountain-900">
+          <h1 className="text-page-title font-bold tracking-tight text-text-main">
             Enquiries
           </h1>
-          <p className="text-[13.5px] text-mountain-500 mt-1">
+          <p className="text-sm font-medium text-text-muted mt-1">
             Log social media and marketing leads in one place.
           </p>
         </div>
@@ -449,10 +449,10 @@ export default function EnquiriesPage() {
       </div>
 
       {/* Filters */}
-      <div className="clarity-card bg-white border border-mountain-200 rounded">
-        <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60 flex items-center gap-2">
-          <IoFilterOutline className="w-4 h-4 text-mountain-500" />
-          <span className="text-[13px] font-semibold text-mountain-900">
+      <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-border-base bg-surface-2/50 flex items-center gap-2">
+          <IoFilterOutline className="w-4 h-4 text-primary" />
+          <span className="text-xs font-bold text-text-main uppercase tracking-wider">
             Filters
           </span>
         </div>
@@ -460,19 +460,18 @@ export default function EnquiriesPage() {
           <div className="flex flex-col lg:flex-row lg:flex-wrap gap-4 lg:items-center">
             {/* Date presets */}
             <div className="flex flex-col gap-2">
-              <p className="text-[12.5px] text-mountain-500">Date presets</p>
-              <div className="inline-flex rounded border border-mountain-200 bg-mountain-50 overflow-hidden">
+              <p className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Date presets</p>
+              <div className="inline-flex rounded-lg border border-border-base bg-surface-2 overflow-hidden p-1">
                 {DATE_PRESETS.map((preset) => {
                   const active = datePreset === preset.key;
 
                   return (
                     <button
                       key={preset.key}
-                      className={`px-3 py-1.5 text-[12px] border-r border-mountain-200 last:border-r-0 ${
-                        active
-                          ? "bg-white text-teal-700 font-medium"
-                          : "text-mountain-600 hover:bg-white hover:text-mountain-900"
-                      }`}
+                      className={`px-4 py-1.5 text-[12px] rounded-md transition-all ${active
+                        ? "bg-surface text-primary font-bold shadow-sm ring-1 ring-border-base"
+                        : "text-text-muted hover:text-text-main hover:bg-surface/50"
+                        }`}
                       type="button"
                       onClick={() => {
                         setDatePreset(preset.key);
@@ -489,12 +488,12 @@ export default function EnquiriesPage() {
 
             {/* Date range */}
             <div className="flex flex-col gap-1.5 w-[220px] shrink-0">
-              <label className="text-[13px] font-medium text-mountain-700">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                 Date range
               </label>
               <div className="flex gap-2 min-w-0">
                 <input
-                  className="h-[32px] min-w-0 flex-1 border border-mountain-200 rounded px-2 text-[13px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                  className="h-[32px] min-w-0 flex-1 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                   placeholder="From"
                   type="date"
                   value={rangeStart}
@@ -504,7 +503,7 @@ export default function EnquiriesPage() {
                   }}
                 />
                 <input
-                  className="h-[32px] min-w-0 flex-1 border border-mountain-200 rounded px-2 text-[13px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                  className="h-[32px] min-w-0 flex-1 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                   placeholder="To"
                   type="date"
                   value={rangeEnd}
@@ -518,11 +517,11 @@ export default function EnquiriesPage() {
 
             {/* Date field */}
             <div className="flex flex-col gap-1.5 w-[150px]">
-              <label className="text-[13px] font-medium text-mountain-700">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                 Date field
               </label>
               <select
-                className="h-[32px] border border-mountain-200 rounded px-2 text-[13px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                className="h-[32px] border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                 value={dateField}
                 onChange={(e) =>
                   setDateField(
@@ -530,25 +529,25 @@ export default function EnquiriesPage() {
                   )
                 }
               >
-                <option value="appointmentDate">Appointment date</option>
-                <option value="createdAt">Created date</option>
+                <option className="bg-surface" value="appointmentDate">Appointment date</option>
+                <option className="bg-surface" value="createdAt">Created date</option>
               </select>
             </div>
 
             {/* Status */}
             <div className="flex flex-col gap-1.5 w-[170px]">
-              <label className="text-[13px] font-medium text-mountain-700">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                 Status
               </label>
               <select
-                className="h-[32px] border border-mountain-200 rounded px-2 text-[13px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                className="h-[32px] border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                 value={statusFilter}
                 onChange={(e) =>
                   setStatusFilter(e.target.value as EnquiryStatus | "all")
                 }
               >
                 {STATUS_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
+                  <option className="bg-surface" key={option.key} value={option.key}>
                     {option.label}
                   </option>
                 ))}
@@ -559,113 +558,111 @@ export default function EnquiriesPage() {
       </div>
 
       {/* Enquiries table */}
-      <div className="clarity-card bg-white border border-mountain-200 rounded">
+      <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
         <div className="p-0">
           {isLoading ? (
             <div className="py-12 flex items-center justify-center">
               <Spinner size="md" />
             </div>
           ) : filteredEnquiries.length === 0 ? (
-            <div className="text-center py-12 px-4">
-              <p className="text-[13.5px] text-mountain-500">
+            <div className="text-center py-12 px-4 bg-surface-2/30">
+              <p className="text-sm font-medium text-text-muted">
                 No enquiries found for the selected filters.
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="clarity-table w-full text-left border-collapse whitespace-normal">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-200">
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                  <tr className="bg-surface-2/50 border-b border-border-base">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Name
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Phone
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Appt Date
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Source
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Last contacted
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Next contact
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Action
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Created
                     </th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-mountain-100 bg-white">
+                <tbody className="divide-y divide-border-base bg-surface">
                   {filteredEnquiries.map((enquiry) => (
                     <tr
                       key={enquiry.id}
-                      className="hover:bg-mountain-50/40 transition-colors"
+                      className="hover:bg-surface-2/40 transition-colors"
                     >
-                      <td className="px-3 py-2 align-top">
+                      <td className="px-4 py-3 align-top">
                         <div className="flex flex-col">
-                          <span className="text-[13.5px] font-medium flex items-center gap-2 text-mountain-900">
-                            <IoPersonOutline className="text-mountain-400" />
+                          <span className="text-sm font-semibold flex items-center gap-2 text-text-main">
+                            <IoPersonOutline className="text-primary" />
                             {enquiry.fullName}
                           </span>
                           {enquiry.reasonForVisit && (
-                            <span className="text-[11.5px] text-mountain-500 mt-0.5">
+                            <span className="text-xs font-medium text-text-muted mt-0.5 ml-6">
                               {enquiry.reasonForVisit}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2 align-top">
+                      <td className="px-4 py-3 align-top text-xs font-semibold text-text-main">
                         <div className="flex items-center gap-2">
-                          <IoCallOutline className="text-mountain-400" />
+                          <IoCallOutline className="text-primary" />
                           {enquiry.phone}
                         </div>
                       </td>
-                      <td className="px-3 py-2 align-top">
+                      <td className="px-4 py-3 align-top text-xs font-semibold text-text-main">
                         {enquiry.appointmentDate ? (
                           <div className="flex items-center gap-2">
-                            <IoCalendarOutline className="text-mountain-400" />
+                            <IoCalendarOutline className="text-primary" />
                             {format(enquiry.appointmentDate, "MMM dd, yyyy")}
                           </div>
                         ) : (
-                          <span className="text-mountain-400 text-[13px]">
-                            —
-                          </span>
+                          <span className="text-text-muted/40">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 align-top text-[13px] text-mountain-800">
+                      <td className="px-4 py-3 align-top text-xs font-medium text-text-main">
                         {enquiry.source || "—"}
                       </td>
-                      <td className="px-3 py-2 align-top text-[13px] text-mountain-800">
+                      <td className="px-4 py-3 align-top text-xs font-medium text-text-main">
                         {enquiry.lastContactedAt
                           ? format(enquiry.lastContactedAt, "MMM dd, yyyy")
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 align-top text-[13px] text-mountain-800">
+                      <td className="px-4 py-3 align-top text-xs font-medium text-text-main">
                         {enquiry.nextContactAt
                           ? format(enquiry.nextContactAt, "MMM dd, yyyy")
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 align-top text-[13px] text-mountain-800">
+                      <td className="px-4 py-3 align-top text-xs font-medium text-text-main">
                         {enquiry.action
                           ? (ACTION_OPTIONS.find(
-                              (o) => o.key === enquiry.action,
-                            )?.label ?? enquiry.action)
+                            (o) => o.key === enquiry.action,
+                          )?.label ?? enquiry.action)
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 align-top">
+                      <td className="px-4 py-3 align-top">
                         {(() => {
                           const opt = STATUS_OPTIONS.find(
                             (o) => o.key === enquiry.status,
@@ -675,58 +672,53 @@ export default function EnquiriesPage() {
                           ).toString();
                           const cls =
                             opt?.color === "success"
-                              ? "bg-health-100 text-health-700 border-health-200"
+                              ? "bg-health-100/10 text-health-700 border-health-200/20"
                               : opt?.color === "warning"
-                                ? "bg-saffron-100 text-saffron-700 border-saffron-200"
+                                ? "bg-saffron-100/10 text-saffron-700 border-saffron-200/20"
                                 : opt?.color === "secondary"
-                                  ? "bg-teal-100 text-teal-700 border-teal-200"
+                                  ? "bg-teal-100/10 text-teal-700 border-teal-200/20"
                                   : opt?.color === "danger"
-                                    ? "bg-red-100 text-red-700 border-red-200"
+                                    ? "bg-red-100/10 text-red-700 border-red-200/20"
                                     : opt?.color === "primary"
-                                      ? "bg-teal-100 text-teal-700 border-teal-200"
-                                      : "bg-mountain-100 text-mountain-700 border-mountain-200";
+                                      ? "bg-teal-100/10 text-teal-700 border-teal-200/20"
+                                      : "bg-surface-2 text-text-muted border-border-base";
 
                           return (
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold ${cls}`}
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${cls}`}
                             >
                               {label}
                             </span>
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-2 align-top text-[13px] text-mountain-800">
+                      <td className="px-4 py-3 align-top text-xs font-medium text-text-muted">
                         {enquiry.createdAt
                           ? format(enquiry.createdAt, "MMM dd, yyyy HH:mm")
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 align-top">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex gap-1.5">
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
                             <Button
-                              size="sm"
-                              variant="bordered"
+                              className="h-8 min-w-0 px-2"
+                              variant="light"
                               onClick={() => handleOpenModal(enquiry)}
                             >
-                              <IoCreateOutline className="w-3.5 h-3.5 mr-1" />
-                              Edit
+                              <IoCreateOutline className="w-4 h-4 text-primary" />
                             </Button>
                             <Button
+                              className="h-8 min-w-0 px-2"
                               color="danger"
-                              size="sm"
-                              variant="bordered"
+                              variant="light"
                               onClick={() => handleDelete(enquiry.id)}
                             >
-                              <IoTrashOutline className="w-3.5 h-3.5 mr-1" />
-                              Delete
+                              <IoTrashOutline className="w-4 h-4" />
                             </Button>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] text-mountain-500">
-                              Status:
-                            </span>
+                          <div className="flex items-center gap-2">
                             <select
-                              className="h-[28px] border border-mountain-200 rounded px-2 text-[12.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                              className="h-[28px] border border-border-base rounded-md px-1 text-[11px] font-semibold text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
                               value={enquiry.status}
                               onChange={(e) =>
                                 handleStatusChange(
@@ -738,7 +730,7 @@ export default function EnquiriesPage() {
                               {STATUS_OPTIONS.filter(
                                 (o) => o.key !== "all",
                               ).map((option) => (
-                                <option key={option.key} value={option.key}>
+                                <option className="bg-surface" key={option.key} value={option.key}>
                                   {option.label}
                                 </option>
                               ))}
@@ -760,7 +752,7 @@ export default function EnquiriesPage() {
         createPortal(
           <div className="fixed inset-0 z-[9999] flex items-center justify-center">
             <div
-              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-surface/40 backdrop-blur-md"
               onClick={() => {
                 if (!isSaving) {
                   setIsModalOpen(false);
@@ -768,18 +760,18 @@ export default function EnquiriesPage() {
                 }
               }}
             />
-            <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-2xl mx-4">
-              <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60 flex items-center justify-between">
+            <div className="relative z-10 bg-surface border border-border-base rounded-2xl w-full max-w-2xl mx-4 shadow-2xl overflow-hidden">
+              <div className="px-6 py-5 border-b border-border-base bg-surface-2/50 flex items-center justify-between">
                 <div>
-                  <h2 className="text-[14px] font-semibold text-mountain-900">
-                    {editingEnquiry ? "Edit Enquiry" : "New Enquiry"}
+                  <h2 className="text-lg font-bold text-text-main">
+                    {editingEnquiry ? "Edit enquiry" : "New enquiry"}
                   </h2>
-                  <p className="text-[12px] text-mountain-500 mt-0.5">
+                  <p className="text-xs font-medium text-text-muted mt-0.5">
                     Capture lead details and optional appointment date.
                   </p>
                 </div>
                 <button
-                  className="text-mountain-400 hover:text-mountain-700"
+                  className="text-text-muted hover:text-text-main transition-colors"
                   type="button"
                   onClick={() => {
                     if (!isSaving) {
@@ -788,17 +780,17 @@ export default function EnquiriesPage() {
                     }
                   }}
                 >
-                  <IoCloseOutline className="w-4 h-4" />
+                  <IoCloseOutline className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-5 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Full Name<span className="text-red-500 ml-0.5">*</span>
                     </label>
                     <input
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       type="text"
                       value={form.fullName}
                       onChange={(e) =>
@@ -809,12 +801,12 @@ export default function EnquiriesPage() {
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Phone<span className="text-red-500 ml-0.5">*</span>
                     </label>
                     <input
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       type="text"
                       value={form.phone}
                       onChange={(e) =>
@@ -822,12 +814,12 @@ export default function EnquiriesPage() {
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Reason for Visit
                     </label>
                     <input
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       type="text"
                       value={form.reasonForVisit}
                       onChange={(e) =>
@@ -838,12 +830,12 @@ export default function EnquiriesPage() {
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Appointment Date
                     </label>
                     <input
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       type="date"
                       value={form.appointmentDate}
                       onChange={(e) =>
@@ -854,12 +846,12 @@ export default function EnquiriesPage() {
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Last contacted
                     </label>
                     <input
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       type="date"
                       value={form.lastContactedAt}
                       onChange={(e) =>
@@ -870,12 +862,12 @@ export default function EnquiriesPage() {
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Source
                     </label>
                     <input
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       placeholder="Facebook, Instagram, Referral..."
                       type="text"
                       value={form.source}
@@ -884,12 +876,12 @@ export default function EnquiriesPage() {
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Next contacted
                     </label>
                     <input
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       type="date"
                       value={form.nextContactAt}
                       onChange={(e) =>
@@ -900,12 +892,12 @@ export default function EnquiriesPage() {
                       }
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Action
                     </label>
                     <select
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       value={form.action}
                       onChange={(e) =>
                         setForm((prev) => ({
@@ -918,20 +910,20 @@ export default function EnquiriesPage() {
                         }))
                       }
                     >
-                      <option value="">—</option>
+                      <option className="bg-surface" value="">—</option>
                       {ACTION_OPTIONS.map((option) => (
-                        <option key={option.key} value={option.key}>
+                        <option className="bg-surface" key={option.key} value={option.key}>
                           {option.label}
                         </option>
                       ))}
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Status
                     </label>
                     <select
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[36px] border border-border-base rounded-lg px-3 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
                       value={form.status}
                       onChange={(e) =>
                         setForm((prev) => ({
@@ -942,7 +934,7 @@ export default function EnquiriesPage() {
                     >
                       {STATUS_OPTIONS.filter((opt) => opt.key !== "all").map(
                         (option) => (
-                          <option key={option.key} value={option.key}>
+                          <option className="bg-surface" key={option.key} value={option.key}>
                             {option.label}
                           </option>
                         ),
@@ -950,12 +942,12 @@ export default function EnquiriesPage() {
                     </select>
                   </div>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-medium text-mountain-700">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Notes
                   </label>
                   <textarea
-                    className="min-h-[80px] border border-mountain-200 rounded px-3 py-2 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                    className="min-h-[100px] border border-border-base rounded-lg px-3 py-2 text-sm text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium resize-none"
                     placeholder="Add any special instructions or notes..."
                     value={form.note}
                     onChange={(e) =>
@@ -964,8 +956,9 @@ export default function EnquiriesPage() {
                   />
                 </div>
               </div>
-              <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50 flex justify-end gap-3">
+              <div className="px-6 py-4 border-t border-border-base bg-surface-2 flex justify-end gap-3">
                 <Button
+                  className="px-6"
                   disabled={isSaving}
                   variant="bordered"
                   onClick={() => {
@@ -978,11 +971,12 @@ export default function EnquiriesPage() {
                   Cancel
                 </Button>
                 <Button
+                  className="px-6 shadow-lg shadow-primary/20"
                   color="primary"
                   isLoading={isSaving}
                   onClick={handleSaveEnquiry}
                 >
-                  {editingEnquiry ? "Update Enquiry" : "Create Enquiry"}
+                  {editingEnquiry ? "Update enquiry" : "Create enquiry"}
                 </Button>
               </div>
             </div>

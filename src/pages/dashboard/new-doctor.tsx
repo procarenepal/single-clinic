@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import { IoArrowBackOutline, IoSaveOutline } from "react-icons/io5";
+import { IoArrowBackOutline, IoSaveOutline, IoAddOutline, IoRefreshOutline } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
@@ -41,11 +41,10 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${
-          isInvalid
-            ? "border-red-300 focus-within:ring-red-100"
-            : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
-        } focus-within:ring-1 ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${isInvalid
+          ? "border-red-300 focus-within:ring-red-100"
+          : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
+          } focus-within:ring-1 ${disabled ? "bg-mountain-50" : ""}`}
       >
         <input
           className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500"
@@ -123,6 +122,7 @@ export default function NewDoctorPage() {
   const [emailError, setEmailError] = useState<string>("");
   const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
 
+  const [isAddingNewSpeciality, setIsAddingNewSpeciality] = useState(false);
   const [doctorProfile, setDoctorProfile] = useState({
     name: "",
     doctorType: "",
@@ -140,14 +140,9 @@ export default function NewDoctorPage() {
   }, [clinicId, defaultBranchId]);
 
   const loadSpecialities = async () => {
-    if (!clinicId) return;
     try {
-      const branchId = defaultBranchId ?? undefined;
       const specialitiesData =
-        await specialityService.getActiveSpecialitiesForDropdown(
-          clinicId,
-          branchId,
-        );
+        await specialityService.getActiveSpecialitiesForDropdown();
 
       setSpecialities(
         specialitiesData.map((s: { key: string; label: string }) => ({
@@ -156,6 +151,7 @@ export default function NewDoctorPage() {
         })),
       );
     } catch (error) {
+      console.error("Error loading specialities:", error);
       addToast({
         title: "Error",
         description: "Failed to load specialities.",
@@ -177,8 +173,8 @@ export default function NewDoctorPage() {
       .then((multi) =>
         multi
           ? branchService
-              .getMainBranch(clinicId)
-              .then((b) => b && setDefaultBranchId(b.id))
+            .getMainBranch(clinicId)
+            .then((b) => b && setDefaultBranchId(b.id))
           : setDefaultBranchId(clinicId),
       )
       .catch(() => setDefaultBranchId(clinicId));
@@ -202,7 +198,7 @@ export default function NewDoctorPage() {
         if (userData.email) emails.push(userData.email.toLowerCase());
       });
       setAdminEmails(emails);
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const validateEmail = (email: string): string => {
@@ -263,11 +259,38 @@ export default function NewDoctorPage() {
 
     setLoading(true);
     try {
+      let finalSpecialityKey = doctorProfile.speciality;
+
+      if (isAddingNewSpeciality && doctorProfile.speciality) {
+        // Generate a URL-friendly key from the speciality name
+        const generatedKey = doctorProfile.speciality
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/\s+/g, "-");
+
+        // Check if this speciality already exists by key
+        const exists = await specialityService.isKeyExists(generatedKey);
+
+        if (!exists) {
+          // Create the new speciality in Firestore
+          await specialityService.createSpeciality({
+            name: doctorProfile.speciality,
+            key: generatedKey,
+            isActive: true,
+            clinicId,
+            branchId: defaultBranchId || clinicId,
+            createdBy: currentUser?.uid || "system",
+          });
+        }
+        finalSpecialityKey = generatedKey;
+      }
+
       const doctorData = {
         name: doctorProfile.name,
         doctorType: doctorProfile.doctorType as "regular" | "visiting",
         defaultCommission: parseFloat(doctorProfile.defaultCommission) || 0,
-        speciality: doctorProfile.speciality,
+        speciality: finalSpecialityKey,
         phone: doctorProfile.phone,
         email: doctorProfile.email || "",
         nmcNumber: doctorProfile.nmcNumber,
@@ -304,7 +327,7 @@ export default function NewDoctorPage() {
           <IoArrowBackOutline className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className={title({ size: "sm" })}>Add New Doctor</h1>
+          <h1 className={title({ size: "lg" })}>Add New Doctor</h1>
           <p className="text-[14px] text-mountain-500 mt-1">
             Enter the doctor information below
           </p>
@@ -355,15 +378,62 @@ export default function NewDoctorPage() {
                 value={doctorProfile.defaultCommission}
                 onChange={handleDoctorProfileChange}
               />
-              <CustomSelect
-                required
-                label="Speciality"
-                name="speciality"
-                options={specialities}
-                placeholder="Select speciality"
-                value={doctorProfile.speciality}
-                onChange={handleDoctorProfileChange}
-              />
+              <div className="flex flex-col gap-1.5 w-full">
+                <div className="flex justify-between items-center px-0.5">
+                  <label className="text-[13px] font-medium text-mountain-700">
+                    Speciality<span className="text-red-500 ml-0.5">*</span>
+                  </label>
+                  <button
+                    className="text-[12px] text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1 hover:underline transition-all"
+                    type="button"
+                    onClick={() => {
+                      setIsAddingNewSpeciality(!isAddingNewSpeciality);
+                      setDoctorProfile({ ...doctorProfile, speciality: "" });
+                    }}
+                  >
+                    {isAddingNewSpeciality ? (
+                      <>
+                        <IoRefreshOutline className="w-3.5 h-3.5" />
+                        Select Existing
+                      </>
+                    ) : (
+                      <>
+                        <IoAddOutline className="w-3.5 h-3.5" />
+                        Add New
+                      </>
+                    )}
+                  </button>
+                </div>
+                {isAddingNewSpeciality ? (
+                  <div className="flex items-center border border-mountain-200 rounded min-h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 transition-colors">
+                    <input
+                      className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
+                      name="speciality"
+                      placeholder="Enter new speciality name"
+                      required
+                      value={doctorProfile.speciality}
+                      onChange={handleDoctorProfileChange}
+                    />
+                  </div>
+                ) : (
+                  <select
+                    className="w-full min-h-[38px] bg-white border border-mountain-200 text-mountain-800 text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow"
+                    name="speciality"
+                    required
+                    value={doctorProfile.speciality}
+                    onChange={handleDoctorProfileChange}
+                  >
+                    <option disabled hidden value="">
+                      Select speciality
+                    </option>
+                    {specialities.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               <CustomInput
                 required
                 label="Phone Number"

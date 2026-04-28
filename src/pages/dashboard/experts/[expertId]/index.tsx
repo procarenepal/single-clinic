@@ -216,7 +216,7 @@ export default function ExpertProfilePage() {
             <IoArrowBackOutline />
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>Expert Profile</h1>
+            <h1 className={title({ size: "lg" })}>Expert Profile</h1>
           </div>
         </div>
         <div className="flex gap-3">
@@ -231,12 +231,12 @@ export default function ExpertProfilePage() {
       </div>
 
       <div className="bg-white border border-mountain-200 rounded p-6 shadow-sm flex gap-6">
-        <div className="w-24 h-24 rounded-full bg-teal-100 flex items-center justify-center text-3xl font-bold text-teal-800">
+        <div className="w-20 h-20 rounded-full bg-teal-100 flex items-center justify-center text-stat-sm font-bold text-teal-800">
           {expert.name.charAt(0)}
         </div>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold">{expert.name}</h2>
-          <p className="text-mountain-600 font-medium capitalize">
+          <h2 className="text-page-title font-bold">{expert.name}</h2>
+          <p className="text-mountain-600 font-medium capitalize text-[14px]">
             {expert.speciality} • {expert.expertType}
           </p>
           <div className="flex gap-4 mt-4">

@@ -29,7 +29,7 @@ export const SuperAdminRoute: React.FC<SuperAdminRouteProps> = ({
   }
 
   // If not a super admin, redirect to dashboard
-  if (userData?.role !== "super-admin") {
+  if (userData?.role !== "system-owner") {
     return <Navigate replace to="/dashboard" />;
   }
 

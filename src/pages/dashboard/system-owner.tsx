@@ -32,7 +32,7 @@ interface BranchStats {
   thisMonthAppointments: number;
 }
 
-export default function ClinicSuperAdminDashboard() {
+export default function SystemOwnerDashboard() {
   const navigate = useNavigate();
   const { clinicId, userData } = useAuth();
   const [clinic, setClinic] = useState<Clinic | null>(null);
@@ -46,15 +46,15 @@ export default function ClinicSuperAdminDashboard() {
     activeBranches: 0,
   });
 
-  const isClinicSuperAdmin =
-    userData?.role === "clinic-super-admin" ||
+  const isSystemOwner =
+    userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
 
   useEffect(() => {
-    if (clinicId && isClinicSuperAdmin) {
+    if (clinicId && isSystemOwner) {
       loadDashboardData();
     }
-  }, [clinicId, isClinicSuperAdmin]);
+  }, [clinicId, isSystemOwner]);
 
   const loadDashboardData = async () => {
     if (!clinicId) return;
@@ -107,7 +107,7 @@ export default function ClinicSuperAdminDashboard() {
     }
   };
 
-  if (!isClinicSuperAdmin) {
+  if (!isSystemOwner) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="clarity-card p-3 border-saffron-200 bg-saffron-50">
@@ -121,8 +121,7 @@ export default function ClinicSuperAdminDashboard() {
                 Access Restricted
               </h3>
               <p className="text-sm text-saffron-700">
-                This dashboard is only available for clinic super
-                administrators.
+                This dashboard is only available for system owners.
               </p>
             </div>
           </div>
@@ -149,7 +148,7 @@ export default function ClinicSuperAdminDashboard() {
     <div className="max-w-7xl mx-auto px-4 py-3 space-y-6">
       <div className="clarity-page-header">
         <div>
-          <h1 className="clarity-page-title">Clinic Super Admin Dashboard</h1>
+          <h1 className="clarity-page-title">System Owner Dashboard</h1>
           <p className="clarity-page-subtitle">
             Multi-branch overview and management
           </p>

@@ -45,8 +45,8 @@ const themes: Record<ThemeVariant, ThemeConfig> = {
   // ─────────────────────────────────────────────────────
   light: {
     id: "light",
-    name: "Clarity",
-    description: "Flat teal, compact, professional",
+    name: "Clarity Light",
+    description: "Modern ProCare Blue interface",
     isNew: true,
     colors: {
       primary: "teal-700",
@@ -66,7 +66,7 @@ const themes: Record<ThemeVariant, ThemeConfig> = {
   dark: {
     id: "dark",
     name: "Clarity Dark",
-    description: "Dark surface, teal accent, easy on eyes",
+    description: "Premium dark mode interface",
     isNew: true,
     isDarkTheme: true,
     colors: {

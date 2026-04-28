@@ -282,11 +282,10 @@ export const userService = {
    * @param {string} clinicId - ID of the clinic
    * @returns {Promise<User[]>} - Array of users in the clinic
    */
-  async getClinicUsers(clinicId: string): Promise<User[]> {
+  async getClinicUsers(clinicId?: string): Promise<User[]> {
     try {
       const usersRef = collection(db, USERS_COLLECTION);
-      const q = query(usersRef, where("clinicId", "==", clinicId));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(usersRef);
 
       return querySnapshot.docs.map(
         (doc) =>
@@ -296,33 +295,11 @@ export const userService = {
           }) as User,
       );
     } catch (error) {
-      console.error("Error getting clinic users:", error);
+      console.error("Error getting users:", error);
       throw error;
     }
   },
 
-  /**
-   * Get all super admins
-   * @returns {Promise<User[]>} - Array of super admin users
-   */
-  async getSuperAdmins(): Promise<User[]> {
-    try {
-      const usersRef = collection(db, USERS_COLLECTION);
-      const q = query(usersRef, where("role", "==", "super-admin"));
-      const querySnapshot = await getDocs(q);
-
-      return querySnapshot.docs.map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...doc.data(),
-          }) as User,
-      );
-    } catch (error) {
-      console.error("Error getting super admins:", error);
-      throw error;
-    }
-  },
 
   /**
    * Update a user's information
@@ -458,11 +435,10 @@ export const userService = {
    * @param {string} clinicId - Clinic ID
    * @returns {Promise<User[]>} - Array of users for the clinic
    */
-  async getUsersByClinic(clinicId: string): Promise<User[]> {
+  async getUsersByClinic(clinicId?: string): Promise<User[]> {
     try {
       const usersRef = collection(db, USERS_COLLECTION);
-      const q = query(usersRef, where("clinicId", "==", clinicId));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(usersRef);
 
       return querySnapshot.docs.map(
         (doc) =>
@@ -474,7 +450,7 @@ export const userService = {
           }) as User,
       );
     } catch (error) {
-      console.error("Error getting clinic users:", error);
+      console.error("Error getting users:", error);
       throw error;
     }
   },
@@ -720,24 +696,24 @@ export const userService = {
    */
   async getBranchAdmin(branchId: string): Promise<User | null> {
     try {
-      const usersRef = collection(db, USERS_COLLECTION);
       const q = query(
-        usersRef,
+        collection(db, USERS_COLLECTION),
         where("branchId", "==", branchId),
         where("role", "==", "clinic-admin"),
-        where("isActive", "==", true),
         limit(1),
       );
+
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
         const doc = querySnapshot.docs[0];
+        const data = doc.data();
 
         return {
           id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-          updatedAt: doc.data().updatedAt?.toDate(),
+          ...data,
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate(),
         } as User;
       }
 
@@ -766,141 +742,18 @@ export const userService = {
     branchId: string,
     adminPassword?: string,
   ): Promise<string> {
-    try {
-      const userData = {
+    return this.createUser(
+      email,
+      password,
+      {
         displayName,
-        role: "clinic-admin" as UserRole,
+        email,
+        role: "clinic-admin",
         clinicId,
         branchId,
         isActive: true,
-      };
-
-      // Create the user first
-      const userId = await this.createUser(
-        email,
-        password,
-        userData,
-        adminPassword,
-      );
-
-      // Import RBAC service to assign proper roles
-      const { rbacService } = await import("./rbacService");
-
-      // Check if clinic type has pages assigned, if not assign essential pages
-      try {
-        const availablePages =
-          await rbacService.getAvailablePagesForClinic(clinicId);
-
-        if (availablePages.length === 0) {
-          console.warn(
-            "No pages assigned to clinic type, attempting to assign essential pages",
-          );
-
-          // Import services for page assignment
-          const { clinicService } = await import("./clinicService");
-          const { clinicTypeService } = await import("./clinicTypeService");
-          const { pageService } = await import("./pageService");
-
-          // Get clinic and its type
-          const clinic = await clinicService.getClinicById(clinicId);
-
-          if (clinic) {
-            // Get all available pages
-            const allPages = await pageService.getAllPages();
-
-            // Define essential pages that should be assigned by default
-            const essentialPagePaths = [
-              "/dashboard",
-              "/dashboard/patients",
-              "/dashboard/appointments",
-              "/dashboard/doctors",
-              "/dashboard/settings",
-            ];
-
-            const essentialPages = allPages.filter((page) =>
-              essentialPagePaths.includes(page.path),
-            );
-
-            // Assign essential pages to the clinic type
-            const { collection, doc, setDoc, Timestamp } = await import(
-              "firebase/firestore"
-            );
-            const { db } = await import("../config/firebase");
-
-            for (const page of essentialPages) {
-              try {
-                // Create clinic type page assignment directly
-                const clinicTypePagesRef = collection(db, "clinic_type_pages");
-                const assignmentDocRef = doc(clinicTypePagesRef);
-
-                await setDoc(assignmentDocRef, {
-                  id: assignmentDocRef.id,
-                  clinicTypeId: clinic.clinicType,
-                  pageId: page.id,
-                  isEnabled: true,
-                  createdAt: Timestamp.now(),
-                  updatedAt: Timestamp.now(),
-                });
-              } catch (error) {
-                console.warn(
-                  `Failed to assign page ${page.name} to clinic type:`,
-                  error,
-                );
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.warn("Error checking/assigning clinic type pages:", error);
-      }
-
-      // Ensure branch-specific roles exist for this branch
-      try {
-        await rbacService.createBranchRoles(clinicId, branchId);
-      } catch (error) {
-        // If branch roles already exist, that's fine
-        console.warn(
-          "Branch roles may already exist or failed to create:",
-          error,
-        );
-      }
-
-      // Create or get the default clinic admin role for this clinic
-      // Branch admins should have the same full access as regular clinic admins
-      let adminRoleId: string;
-
-      try {
-        // First try to find existing "Clinic Administrator" role (full access)
-        const existingRoles = await rbacService.getClinicRoles(clinicId);
-        const fullAdminRole = existingRoles.find(
-          (role) =>
-            role.name === "Clinic Administrator" && !role.isBranchSpecific,
-        );
-
-        if (fullAdminRole) {
-          adminRoleId = fullAdminRole.id;
-        } else {
-          // Create a new full access clinic admin role
-          adminRoleId =
-            await rbacService.createDefaultClinicAdminRole(clinicId);
-        }
-      } catch (error) {
-        console.error(
-          "Failed to get/create full admin role for branch admin:",
-          error,
-        );
-        throw new Error(
-          "Could not create or find clinic admin role with full access",
-        );
-      }
-
-      // Assign the admin role to the user
-      await rbacService.assignRolesToUser(userId, [adminRoleId], clinicId);
-
-      return userId;
-    } catch (error) {
-      console.error("Error creating branch admin:", error);
-      throw error;
-    }
+      },
+      adminPassword,
+    );
   },
 };

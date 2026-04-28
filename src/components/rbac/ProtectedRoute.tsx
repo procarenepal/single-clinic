@@ -27,7 +27,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = React.memo(
     const {
       currentUser,
       clinicId,
-      isSuperAdmin,
+      isSystemOwner,
       isClinicAdmin,
       hasPagePermission,
       hasPagePermissionByPath,
@@ -60,7 +60,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = React.memo(
 
         try {
           // Super admin has access to everything
-          if (isSuperAdmin()) {
+          if (isSystemOwner()) {
             if (isMounted) {
               setHasAccess(true);
               setChecking(false);
@@ -277,7 +277,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = React.memo(
     }, [
       accessCheckKey, // Use the memoized key instead of individual deps
       isLoading,
-      isSuperAdmin,
+      isSystemOwner,
       isClinicAdmin,
       hasPagePermission,
       hasPagePermissionByPath,

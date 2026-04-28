@@ -25,9 +25,8 @@ import {
   ModalFooter,
   Link,
 } from "@/components/ui";
-import { AppointmentType, TreatmentCategory } from "@/types/models";
+import { AppointmentType } from "@/types/models";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { treatmentCategoryService } from "@/services/treatmentCategoryService";
 import { useAuthContext } from "@/context/AuthContext";
 import {
   APPOINTMENT_COLORS,
@@ -43,9 +42,6 @@ export default function AppointmentSettingsPage() {
     [],
   );
   const [editingType, setEditingType] = useState<AppointmentType | null>(null);
-  const [treatmentCategories, setTreatmentCategories] = useState<
-    TreatmentCategory[]
-  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [showInactive, setShowInactive] = useState(true);
@@ -61,23 +57,8 @@ export default function AppointmentSettingsPage() {
   useEffect(() => {
     if (clinicId) {
       loadAppointmentTypes();
-      loadCategories();
     }
   }, [clinicId]);
-
-  const loadCategories = async () => {
-    if (!clinicId) return;
-    try {
-      const cats = await treatmentCategoryService.getCategoriesByClinic(
-        clinicId,
-        branchId,
-      );
-
-      setTreatmentCategories(cats);
-    } catch (e) {
-      console.error("Error loading categories:", e);
-    }
-  };
 
   const loadAppointmentTypes = async () => {
     if (!clinicId) return;
@@ -112,7 +93,7 @@ export default function AppointmentSettingsPage() {
           where("branchId", "==", branchId),
         );
       } else {
-        // Individual clinic or clinic-super-admin - show all for clinic
+        // Individual clinic or system-owner - show all for clinic
         q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
       }
 
@@ -164,7 +145,6 @@ export default function AppointmentSettingsPage() {
           price: type.price,
           isActive: type.isActive,
           color: type.color,
-          categoryId: type.categoryId,
         });
         savedId = editingType.id;
       } else {
@@ -178,7 +158,6 @@ export default function AppointmentSettingsPage() {
           color: type.color || "none",
           clinicId,
           createdBy: currentUser.uid,
-          categoryId: type.categoryId,
         };
 
         // Only include branchId if the user has one (for multi-branch clinics)
@@ -333,7 +312,7 @@ export default function AppointmentSettingsPage() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Appointment Configuration</h1>
+            <h1 className={title({ size: "lg" })}>Appointment Configuration</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
@@ -362,7 +341,7 @@ export default function AppointmentSettingsPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Appointment Configuration</h1>
+            <h1 className={title({ size: "lg" })}>Appointment Configuration</h1>
             <p className="mt-1 text-mountain-500">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
@@ -486,11 +465,10 @@ export default function AppointmentSettingsPage() {
                 {filteredAppointmentTypes.map((type) => (
                   <Card
                     key={type.id}
-                    className={`border border-mountain-200 ${!type.isActive ? "opacity-60" : ""} ${
-                      selectedTypes.has(type.id)
-                        ? "ring-2 ring-teal-200 bg-teal-50/30"
-                        : ""
-                    }`}
+                    className={`border border-mountain-200 ${!type.isActive ? "opacity-60" : ""} ${selectedTypes.has(type.id)
+                      ? "ring-2 ring-teal-200 bg-teal-50/30"
+                      : ""
+                      }`}
                   >
                     <CardBody className="p-4">
                       <div className="flex items-center justify-between">
@@ -586,7 +564,6 @@ export default function AppointmentSettingsPage() {
           <AppointmentTypeModal
             isLoading={isLoading}
             modalState={modalState}
-            treatmentCategories={treatmentCategories}
             type={editingType}
             onClose={modalState.close}
             onSave={handleSaveAppointmentType}
@@ -604,14 +581,12 @@ function AppointmentTypeModal({
   onClose,
   modalState,
   isLoading,
-  treatmentCategories,
 }: {
   type: AppointmentType | null;
   onSave: (type: Partial<AppointmentType>) => void;
   onClose: () => void;
   modalState: ReturnType<typeof useModalState>;
   isLoading: boolean;
-  treatmentCategories: TreatmentCategory[];
 }) {
   const [formData, setFormData] = useState<Partial<AppointmentType>>(
     type || {
@@ -685,28 +660,7 @@ function AppointmentTypeModal({
               }))
             }
           />
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-mountain-700">
-              Treatment Category
-            </label>
-            <select
-              className="w-full h-10 px-3 text-sm border-2 border-mountain-200 rounded-lg bg-white focus:border-primary focus:outline-none transition-colors"
-              value={formData.categoryId || ""}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  categoryId: e.target.value,
-                }))
-              }
-            >
-              <option value="">No Category</option>
-              {treatmentCategories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
+
           <div className="space-y-2">
             <label className="text-sm font-medium text-mountain-700">
               Color Theme

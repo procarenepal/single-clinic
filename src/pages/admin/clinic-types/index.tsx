@@ -56,9 +56,9 @@ export default function ClinicTypesPage() {
     description: "",
   });
 
-  // Check if user is super-admin
+  // Check if user is system-owner
   useEffect(() => {
-    if (userData && userData.role !== "super-admin") {
+    if (userData && userData.role !== "system-owner") {
       addToast({
         title: "Access Denied",
         description: "Only super admins can manage clinic types",

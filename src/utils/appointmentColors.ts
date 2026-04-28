@@ -93,11 +93,11 @@ export const APPOINTMENT_COLORS: AppointmentColor[] = [
   },
   {
     id: "teal",
-    name: "Teal",
-    lightColor: "rgb(20, 184, 166)", // teal-500
-    darkColor: "rgb(45, 212, 191)", // teal-400
-    lightBg: "rgb(240, 253, 250)", // teal-50
-    darkBg: "rgb(15, 118, 110)", // teal-700
+    name: "Teal", // (ProCare Blue)
+    lightColor: "rgb(14, 132, 233)", // teal-500 re-mapped to ProCare Blue
+    darkColor: "rgb(56, 169, 248)", // teal-400 re-mapped to ProCare Blue
+    lightBg: "rgb(240, 247, 255)", // teal-50
+    darkBg: "rgb(3, 86, 161)", // teal-700
   },
 ];
 

@@ -76,8 +76,8 @@ export const dailyReportService = {
   ): Promise<Appointment[]> {
     try {
       return await appointmentService.getAppointmentsByDate(
-        clinicId,
         date,
+        clinicId,
         branchId,
       );
     } catch (error) {

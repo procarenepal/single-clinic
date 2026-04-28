@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 import clsx from "clsx";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -144,13 +145,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     return (
-      <button
-        ref={ref}
+      <motion.button
+        ref={ref as any}
+        whileHover={!isDisabled && !isLoading ? { scale: 1.01 } : {}}
+        whileTap={!isDisabled && !isLoading ? { scale: 0.98 } : {}}
         className={clsx(
           // base
           "inline-flex items-center justify-center font-medium whitespace-nowrap",
-          "transition-colors duration-100 select-none",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-1",
+          "transition-all duration-300 select-none",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700/50 focus-visible:ring-offset-1",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           // size
           SIZE[size],
@@ -173,24 +176,32 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={isDisabled || isLoading || rest.disabled}
         type={type}
         onClick={handleClick}
-        {...rest}
+        {...rest as any}
       >
         {startContent && (
-          <span className="shrink-0 inline-flex items-center">
+          <motion.span
+            initial={{ opacity: 0, x: -2 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="shrink-0 inline-flex items-center"
+          >
             {startContent}
-          </span>
+          </motion.span>
         )}
         {!isIconOnly && children}
         {isIconOnly && children}
         {isLoading && (
-          <span className="shrink-0 inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <span className="shrink-0 inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin ml-2" />
         )}
         {endContent && (
-          <span className="shrink-0 inline-flex items-center">
+          <motion.span
+            initial={{ opacity: 0, x: 2 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="shrink-0 inline-flex items-center"
+          >
             {endContent}
-          </span>
+          </motion.span>
         )}
-      </button>
+      </motion.button>
     );
   },
 );

@@ -46,10 +46,10 @@ function CustomSearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -434,7 +434,7 @@ export default function EditAppointmentPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Edit Appointment</h1>
+          <h1 className={title({ size: "lg" })}>Edit Appointment</h1>
           <p className="text-mountain-500 mt-1 text-[13.5px]">
             Loading appointment details…
           </p>
@@ -450,7 +450,7 @@ export default function EditAppointmentPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Edit Appointment</h1>
+          <h1 className={title({ size: "lg" })}>Edit Appointment</h1>
           <p className="text-mountain-500 mt-1 text-[13.5px]">
             Error loading appointment
           </p>
@@ -491,7 +491,7 @@ export default function EditAppointmentPage() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "sm" })}>Edit Appointment</h1>
+          <h1 className={title({ size: "lg" })}>Edit Appointment</h1>
           <p className="text-mountain-500 mt-1 text-[13.5px]">
             Update appointment details and status
           </p>

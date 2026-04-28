@@ -111,18 +111,13 @@ export const doctorService = {
    * @param {string} [branchId] - Optional branch ID to filter doctors by
    * @returns {Promise<Doctor[]>} - Array of doctors (excluding deleted)
    */
-  async getDoctorsByClinic(
-    clinicId: string,
-    branchId?: string,
-  ): Promise<Doctor[]> {
+  async getDoctors(_branchId?: string): Promise<Doctor[]> {
     try {
-      // When a branchId is provided, run a branch-scoped query without using the clinic-wide cache.
-      if (branchId) {
-        const doctorsRef = collection(db, DOCTORS_COLLECTION);
-        const q = query(doctorsRef, where("clinicId", "==", clinicId));
-        const querySnapshot = await getDocs(q);
+      const doctorsRef = collection(db, DOCTORS_COLLECTION);
+      const querySnapshot = await getDocs(doctorsRef);
 
-        const doctors = querySnapshot.docs.map((doc) => {
+      return querySnapshot.docs
+        .map((doc) => {
           const data = doc.data();
           const createdAt = data.createdAt
             ? new Date(data.createdAt.seconds * 1000)
@@ -137,91 +132,35 @@ export const doctorService = {
             createdAt,
             updatedAt,
           } as Doctor;
-        });
-
-        // Filter by branchId OR global (clinicId or empty)
-        return doctors.filter(
-          (doctor) =>
-            !doctor.isDeleted &&
-            (doctor.branchId === branchId ||
-              doctor.branchId === clinicId ||
-              !doctor.branchId ||
-              (typeof doctor.branchId === "string" &&
-                doctor.branchId.trim() === "")),
-        );
-      }
-
-      // For clinic-wide queries, use the cache + inflight dedup to avoid redundant Firestore reads.
-      const cached = cacheService.getClinicDoctors(clinicId);
-
-      if (cached) {
-        return (cached as Doctor[]).filter((doctor) => !doctor.isDeleted);
-      }
-
-      const inflightKey = `clinic:${clinicId}`;
-      const existing = this.__inflight.get(inflightKey);
-
-      if (existing) {
-        const result = await existing;
-
-        return (result as Doctor[]).filter((doctor) => !doctor.isDeleted);
-      }
-
-      const promise = (async () => {
-        const doctorsRef = collection(db, DOCTORS_COLLECTION);
-        const q = query(doctorsRef, where("clinicId", "==", clinicId));
-        const querySnapshot = await getDocs(q);
-
-        const doctors = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
-          const createdAt = data.createdAt
-            ? new Date(data.createdAt.seconds * 1000)
-            : new Date();
-          const updatedAt = data.updatedAt
-            ? new Date(data.updatedAt.seconds * 1000)
-            : new Date();
-
-          return {
-            id: doc.id,
-            ...data,
-            createdAt,
-            updatedAt,
-          } as Doctor;
-        });
-        // Filter out deleted doctors before caching
-        const activeDoctors = doctors.filter((doctor) => !doctor.isDeleted);
-
-        cacheService.setClinicDoctors(clinicId, activeDoctors);
-
-        return activeDoctors;
-      })();
-
-      this.__inflight.set(inflightKey, promise);
-      try {
-        const result = await promise;
-
-        return (result as Doctor[]).filter((doctor) => !doctor.isDeleted);
-      } finally {
-        this.__inflight.delete(inflightKey);
-      }
+        })
+        .filter((doctor) => !doctor.isDeleted);
     } catch (error) {
-      console.error("Error getting doctors by clinic:", error);
+      console.error("Error getting doctors:", error);
       throw error;
     }
+  },
+
+  /**
+   * Alias for backward compatibility
+   */
+  async getDoctorsByClinic(
+    _clinicId?: string,
+    _branchId?: string,
+  ): Promise<Doctor[]> {
+    return this.getDoctors();
   },
 
   /**
    * Get a doctor by email within a clinic (more efficient than fetching all doctors)
    */
   async getDoctorByEmail(
-    clinicId: string,
     email: string,
+    _clinicId?: string,
   ): Promise<Doctor | null> {
     try {
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
       const qy = query(
         doctorsRef,
-        where("clinicId", "==", clinicId),
         where("email", "==", email.toLowerCase()),
       );
       const snap = await getDocs(qy);
@@ -247,12 +186,15 @@ export const doctorService = {
   /**
    * Search doctors by name, speciality, or NMC number
    * @param {string} searchTerm - Search term
-   * @param {string} clinicId - Clinic ID to filter by
+   * @param {string} [clinicId] - Optional Clinic ID for backward compatibility
    * @returns {Promise<Doctor[]>} - Array of matching doctors
    */
-  async searchDoctors(searchTerm: string, clinicId: string): Promise<Doctor[]> {
+  async searchDoctors(
+    searchTerm: string,
+    clinicId?: string,
+  ): Promise<Doctor[]> {
     try {
-      const doctors = await this.getDoctorsByClinic(clinicId);
+      const doctors = await this.getDoctors();
 
       if (!searchTerm) {
         return doctors;

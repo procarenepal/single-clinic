@@ -85,7 +85,7 @@ export default function DashboardNotFoundPage() {
             </div>
 
             <h1
-              className={`text-5xl font-bold ${themeClasses.numberText} mb-2`}
+              className={`text-stat font-bold ${themeClasses.numberText} mb-2`}
             >
               404
             </h1>

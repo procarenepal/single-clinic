@@ -25,7 +25,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<any>;
   logout: () => Promise<void>;
   isClinicAdmin: () => boolean;
-  isSuperAdmin: () => boolean;
+  isSystemOwner: () => boolean;
   hasPermission: (permission: string) => boolean;
   hasPagePermission: (pageId: string) => Promise<boolean>;
   hasPagePermissionSync: (pageId: string) => boolean | null;
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login: auth.login,
     logout: auth.logout,
     isClinicAdmin: auth.isClinicAdmin,
-    isSuperAdmin: auth.isSuperAdmin,
+    isSystemOwner: auth.isSystemOwner,
     hasPagePermission: auth.hasPagePermission,
     hasPagePermissionSync: (auth as any).hasPagePermissionSync,
     hasPagePermissionByPath: auth.hasPagePermissionByPath,
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         "hasPermission is deprecated, use hasPagePermission instead",
       );
 
-      return auth.userData?.role === "super-admin" || false; // Return true for super admin, false otherwise
+      return auth.userData?.role === "system-owner" || false; // Return true for super admin, false otherwise
     },
   };
 

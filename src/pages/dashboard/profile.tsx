@@ -13,7 +13,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { clinicService } from "@/services/clinicService";
 
 export default function ProfilePage() {
-  const { currentUser, userData, isClinicAdmin, isSuperAdmin } =
+  const { currentUser, userData, isClinicAdmin, isSystemOwner } =
     useAuthContext();
   const {
     isOpen: isEditModalOpen,
@@ -32,6 +32,8 @@ export default function ProfilePage() {
       clinicService.getClinicById(userData.clinicId).then((clinic) => {
         if (clinic) setClinicName(clinic.name);
       });
+    } else if (isSystemOwner()) {
+      setClinicName("ProCare Administration");
     }
   }, [userData?.clinicId]);
 
@@ -40,7 +42,7 @@ export default function ProfilePage() {
   const email = currentUser?.email || userData?.email || "No email provided";
 
   const getRoleBadge = () => {
-    if (isSuperAdmin())
+    if (isSystemOwner())
       return (
         <Chip color="danger" size="sm" variant="flat">
           System Admin
@@ -63,26 +65,27 @@ export default function ProfilePage() {
   return (
     <div className="flex flex-col gap-8 max-w-5xl mx-auto py-8 px-4">
       {/* Premium Hero Section */}
-      <div className="relative overflow-hidden bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 shadow-sm">
+      <div className="relative overflow-hidden bg-surface border border-border-base rounded-2xl p-8 shadow-sm">
         <div className="flex flex-col md:flex-row gap-8 items-center md:items-start relative z-10">
-          <div className="relative group">
+          <div className="relative group w-16 h-16 shrink-0">
             <Avatar
-              className="w-32 h-32 text-3xl shadow-lg ring-4 ring-white dark:ring-zinc-900"
+              className="w-full h-full text-3xl shadow-md ring-4 ring-mountain-50 dark:ring-zinc-900"
               color="primary"
               name={displayName}
-              src={currentUser?.photoURL || ""}
+              src={userData?.photoURL || currentUser?.photoURL || ""}
             />
             <button
-              className="absolute bottom-0 right-0 p-2 bg-teal-600 text-white rounded-full shadow-md hover:bg-teal-700 transition-colors border-2 border-white dark:border-zinc-900"
+              className="absolute -bottom-1 -right-1 p-2 bg-teal-600 text-white rounded-full shadow-lg hover:bg-teal-700 transition-all border-2 border-white dark:border-zinc-900 z-10"
+              title="Change Profile Picture"
               onClick={onEditModalOpen}
             >
-              <IoSettingsOutline className="w-4 h-4" />
+              <IoSettingsOutline className="w-3 h-3" />
             </button>
           </div>
 
           <div className="flex-1 text-center md:text-left space-y-3">
             <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <h1 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 tracking-tight">
+              <h1 className="text-page-title font-extrabold text-text-main tracking-tight">
                 {displayName}
               </h1>
               <div className="flex justify-center md:justify-start">
@@ -90,8 +93,8 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <p className="text-zinc-500 dark:text-zinc-400 font-medium flex items-center justify-center md:justify-start gap-2">
-              <span className="p-1 px-2 bg-zinc-100 dark:bg-zinc-900 rounded text-xs font-mono">
+            <p className="text-text-muted font-medium flex items-center justify-center md:justify-start gap-2">
+              <span className="p-1 px-2 bg-surface-2 rounded text-xs font-mono">
                 {email}
               </span>
             </p>
@@ -107,7 +110,7 @@ export default function ProfilePage() {
                 Edit Profile
               </Button>
               <Button
-                className="rounded-full px-6 bg-zinc-100 dark:bg-zinc-900"
+                className="rounded-full px-6 bg-surface-2"
                 color="default"
                 size="sm"
                 variant="flat"
@@ -127,47 +130,47 @@ export default function ProfilePage() {
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-8">
           <section className="space-y-4">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-[0.2em] px-1">
-              Personal Details
+            <h3 className="text-[14px] font-bold text-text-main px-1">
+              Personal details
             </h3>
-            <Card className="border-none shadow-none bg-zinc-50/50 dark:bg-zinc-900/30">
+            <Card className="border-none shadow-none bg-surface-2/30">
               <CardBody className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8 p-8">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 tracking-wide uppercase">
-                    Email Address
+                  <label className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
+                    Email address
                   </label>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <p className="text-[13px] font-semibold text-text-main">
                     {email}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 tracking-wide uppercase">
-                    Phone Number
+                  <label className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
+                    Phone number
                   </label>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm font-medium text-text-main">
                     {userData?.phone || "—"}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 tracking-wide uppercase">
-                    User Type
+                  <label className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
+                    User type
                   </label>
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 capitalize">
                     {userData?.role?.replace(/-/g, " ") || "Staff"}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 tracking-wide uppercase">
-                    Member Since
+                  <label className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400">
+                    Member since
                   </label>
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {currentUser?.metadata.creationTime
                       ? new Date(
-                          currentUser.metadata.creationTime,
-                        ).toLocaleDateString(undefined, {
-                          month: "long",
-                          year: "numeric",
-                        })
+                        currentUser.metadata.creationTime,
+                      ).toLocaleDateString(undefined, {
+                        month: "long",
+                        year: "numeric",
+                      })
                       : "N/A"}
                   </p>
                 </div>
@@ -176,16 +179,16 @@ export default function ProfilePage() {
           </section>
 
           <section className="space-y-4">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-[0.2em] px-1">
+            <h3 className="text-[14px] font-bold text-text-main px-1">
               Permissions
             </h3>
-            <div className="p-6 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+            <div className="p-6 rounded-2xl bg-surface border border-border-base flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center text-teal-600">
                   <IoLockClosedOutline size={20} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold capitalize text-zinc-900 dark:text-zinc-100">
+                  <p className="text-sm font-bold capitalize text-text-main">
                     {userData?.role?.replace(/-/g, " ")} Access
                   </p>
                   <p className="text-xs text-zinc-500">
@@ -207,58 +210,58 @@ export default function ProfilePage() {
         {/* Sidebar Info */}
         <div className="space-y-8">
           <section className="space-y-4">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-[0.2em] px-1">
+            <h3 className="text-[14px] font-bold text-text-main px-1">
               Organization
             </h3>
-            <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-              <div className="h-24 bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center border-b border-zinc-100 dark:border-zinc-800">
+            <Card className="border-border-base shadow-sm overflow-hidden">
+              <div className="h-24 bg-surface-2 flex items-center justify-center border-b border-border-base">
                 {clinicName ? (
                   <span className="text-lg font-bold text-zinc-300 dark:text-zinc-700 tracking-tighter">
-                    PROVIDER
+                    {isSystemOwner() ? "System" : "Clinic"}
                   </span>
                 ) : (
                   <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent animate-spin rounded-full" />
                 )}
               </div>
               <CardBody className="p-6 text-center">
-                <h4 className="text-lg font-extrabold text-zinc-900 dark:text-zinc-100">
+                <h4 className="text-lg font-extrabold text-text-main">
                   {clinicName || "Loading..."}
                 </h4>
-                <p className="text-[11px] text-zinc-400 font-medium uppercase mt-1 tracking-widest">
-                  {userData?.clinicId ? "Clinic Head" : "Clinic Unit"}
+                <p className="text-[12px] text-zinc-500 font-medium mt-1">
+                  {isSystemOwner() ? "System platform" : userData?.clinicId ? "Clinic head" : "Clinic unit"}
                 </p>
               </CardBody>
             </Card>
           </section>
 
           <section className="space-y-4">
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-[0.2em] px-1">
-              Recent Activity
+            <h3 className="text-[14px] font-bold text-text-main px-1">
+              Recent activity
             </h3>
             <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-[1px] before:bg-zinc-100 dark:before:bg-zinc-800">
               <div className="relative pl-8 space-y-1">
-                <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-white dark:bg-zinc-900 border-2 border-teal-500 z-10" />
-                <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-surface border-2 border-teal-500 z-10" />
+                <p className="text-xs font-bold text-text-main">
                   Last Sign In
                 </p>
                 <p className="text-[10px] text-zinc-500">
                   {currentUser?.metadata.lastSignInTime
                     ? new Date(
-                        currentUser.metadata.lastSignInTime,
-                      ).toLocaleString()
+                      currentUser.metadata.lastSignInTime,
+                    ).toLocaleString()
                     : "First Session"}
                 </p>
               </div>
               <div className="relative pl-8 space-y-1">
-                <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-white dark:bg-zinc-900 border-2 border-zinc-200 z-10" />
-                <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-surface border-2 border-border-base z-10" />
+                <p className="text-xs font-bold text-text-main">
                   Account Created
                 </p>
                 <p className="text-[10px] text-zinc-500">
                   {currentUser?.metadata.creationTime
                     ? new Date(
-                        currentUser.metadata.creationTime,
-                      ).toLocaleString()
+                      currentUser.metadata.creationTime,
+                    ).toLocaleString()
                     : "N/A"}
                 </p>
               </div>
@@ -273,6 +276,6 @@ export default function ProfilePage() {
         isOpen={isPasswordModalOpen}
         onClose={onPasswordModalClose}
       />
-    </div>
+    </div >
   );
 }

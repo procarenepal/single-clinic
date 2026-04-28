@@ -9,16 +9,10 @@ import { initScrollbarThemeObserver } from "@/utils/scrollbarTheme";
 // Layouts (keep default layout as regular import, lazy others)
 const DefaultLayout = reactLazy(() => import("@/layouts/default"));
 const AuthProviders = reactLazy(() => import("@/providers/auth-providers"));
-const AdminLayout = reactLazy(() => import("@/layouts/admin"));
 const DashboardLayout = reactLazy(() => import("@/layouts/dashboard"));
-const SuperAdminRoute = reactLazy(() =>
-  import("@/components/super-admin-route").then((m) => ({
-    default: m.SuperAdminRoute,
-  })),
-);
-const ClinicSuperAdminRoute = reactLazy(() =>
-  import("@/components/rbac/ClinicSuperAdminRoute").then((m) => ({
-    default: m.ClinicSuperAdminRoute,
+const SystemOwnerRoute = reactLazy(() =>
+  import("@/components/rbac/SystemOwnerRoute").then((m) => ({
+    default: m.SystemOwnerRoute,
   })),
 );
 const RbacProtectedRoute = reactLazy(() =>
@@ -153,8 +147,8 @@ const BranchManagementPage = lazy(
   () => import("@/pages/dashboard/branches/index"),
 );
 const NewBranchPage = lazy(() => import("@/pages/dashboard/new-branch"));
-const ClinicSuperAdminDashboard = lazy(
-  () => import("@/pages/dashboard/clinic-super-admin"),
+const SystemOwnerDashboard = lazy(
+  () => import("@/pages/dashboard/system-owner"),
 );
 
 // Lazy load reports page
@@ -172,37 +166,6 @@ const ManageCallLogsPage = lazy(
 );
 const FrontOfficeDeskPage = lazy(
   () => import("@/pages/dashboard/front-office/front-office-desk"),
-);
-
-// Lazy load admin pages
-const AdminPage = lazy(() => import("@/pages/admin/index"));
-const ClinicListPage = lazy(() => import("@/pages/admin/clinics/index"));
-const ClinicDetailPage = lazy(
-  () => import("@/pages/admin/clinics/[clinicId]/index"),
-);
-const ClinicEditPage = lazy(
-  () => import("@/pages/admin/clinics/[clinicId]/edit"),
-);
-const AdminImpersonationPage = lazy(
-  () => import("@/pages/admin/clinics/impersonation"),
-);
-const NewClinicPage = lazy(() => import("@/pages/admin/clinics/new"));
-const ClinicTypesPage = lazy(() => import("@/pages/admin/clinic-types"));
-const ManageClinicTypePages = lazy(
-  () => import("@/pages/admin/clinic-types/pages/[clinicTypeId]"),
-);
-const SystemPagesPage = lazy(() => import("@/pages/admin/system/pages"));
-const AdminLogsPage = lazy(() => import("@/pages/admin/logs/index"));
-
-// Lazy load subscription management pages
-const SubscriptionsPage = lazy(
-  () => import("@/pages/admin/subscriptions/index"),
-);
-const SubscriptionPlansPage = lazy(
-  () => import("@/pages/admin/subscriptions/plans"),
-);
-const EditClinicSubscriptionPage = lazy(
-  () => import("@/pages/admin/subscriptions/edit/[clinicId]/index"),
 );
 
 // Lazy load invitation handler
@@ -421,67 +384,7 @@ export default function App() {
               path="/invitation/:id"
             />
 
-            {/* Super Admin routes */}
-            <Route
-              element={
-                <Suspense fallback={<LoadingSpinner />}>
-                  <SuperAdminRoute>
-                    <AdminLayout>
-                      <Suspense fallback={<LoadingSpinner />}>
-                        <Routes>
-                          <Route element={<AdminPage />} path="" />
-                          <Route element={<ClinicListPage />} path="clinics" />
-                          <Route
-                            element={<NewClinicPage />}
-                            path="clinics/new"
-                          />
-                          <Route
-                            element={<AdminImpersonationPage />}
-                            path="clinics/impersonation"
-                          />
-                          <Route
-                            element={<ClinicTypesPage />}
-                            path="clinic-types"
-                          />
-                          <Route
-                            element={<ManageClinicTypePages />}
-                            path="clinic-types/pages/:clinicTypeId"
-                          />
-                          <Route
-                            element={<SystemPagesPage />}
-                            path="system/pages"
-                          />
-                          <Route
-                            element={<ClinicDetailPage />}
-                            path="clinics/:clinicId"
-                          />
-                          <Route
-                            element={<ClinicEditPage />}
-                            path="clinics/:clinicId/edit"
-                          />
-                          <Route
-                            element={<SubscriptionsPage />}
-                            path="subscriptions"
-                          />
-                          <Route
-                            element={<SubscriptionPlansPage />}
-                            path="subscriptions/plans"
-                          />
-                          <Route
-                            element={<EditClinicSubscriptionPage />}
-                            path="subscriptions/edit/:clinicId"
-                          />
-                          <Route element={<AdminLogsPage />} path="logs" />
-                        </Routes>
-                      </Suspense>
-                    </AdminLayout>
-                  </SuperAdminRoute>
-                </Suspense>
-              }
-              path="/admin/*"
-            />
-
-            {/* Protected Dashboard routes */}
+            {/* Dashboard routes */}
             <Route
               element={
                 <Suspense fallback={<LoadingSpinner />}>
@@ -629,6 +532,31 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="appointments-billing/:id/edit"
+                          />
+                          {/* Map the general /dashboard/billing route to the same component */}
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/billing">
+                                <AppointmentBillingPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="billing"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/billing">
+                                <InvoiceDetailPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="billing/:id"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/billing">
+                                <EditInvoicePage />
+                              </RbacProtectedRoute>
+                            }
+                            path="billing/:id/edit"
                           />
                           <Route
                             element={
@@ -878,28 +806,28 @@ export default function App() {
                             path="settings/referral-partners/:partnerId"
                           />
 
-                          {/* Clinic Super Admin Branch Management Routes */}
+                          {/* System Owner Branch Management Routes */}
                           <Route
                             element={
-                              <ClinicSuperAdminRoute>
-                                <ClinicSuperAdminDashboard />
-                              </ClinicSuperAdminRoute>
+                              <SystemOwnerRoute>
+                                <SystemOwnerDashboard />
+                              </SystemOwnerRoute>
                             }
                             path="clinic-overview"
                           />
                           <Route
                             element={
-                              <ClinicSuperAdminRoute>
+                              <SystemOwnerRoute>
                                 <BranchManagementPage />
-                              </ClinicSuperAdminRoute>
+                              </SystemOwnerRoute>
                             }
                             path="branches"
                           />
                           <Route
                             element={
-                              <ClinicSuperAdminRoute>
+                              <SystemOwnerRoute>
                                 <NewBranchPage />
-                              </ClinicSuperAdminRoute>
+                              </SystemOwnerRoute>
                             }
                             path="branches/new"
                           />

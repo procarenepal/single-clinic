@@ -394,7 +394,7 @@ export default function PurchaseReturnPage() {
           <Button isIconOnly variant="light" onPress={() => navigate(-1)}>
             <IoArrowBackOutline />
           </Button>
-          <h1 className={title({ size: "sm" })}>Record Return</h1>
+          <h1 className={title({ size: "lg" })}>Record Return</h1>
         </div>
         <Card>
           <CardBody className="flex items-center justify-center py-12">
@@ -416,7 +416,7 @@ export default function PurchaseReturnPage() {
           >
             <IoArrowBackOutline />
           </Button>
-          <h1 className={title({ size: "sm" })}>Record Return</h1>
+          <h1 className={title({ size: "lg" })}>Record Return</h1>
         </div>
         <Card>
           <CardBody className="py-10 text-center">
@@ -437,9 +437,9 @@ export default function PurchaseReturnPage() {
     purchase.totalReturnedAmount && purchase.totalReturnedAmount > 0
       ? purchase.totalReturnedAmount
       : (purchase.returns ?? []).reduce(
-          (sum, r) => sum + Math.abs(r.totalAmount || 0),
-          0,
-        );
+        (sum, r) => sum + Math.abs(r.totalAmount || 0),
+        0,
+      );
 
   const remainingNetAfterReturns = Math.max(
     0,
@@ -466,7 +466,7 @@ export default function PurchaseReturnPage() {
               <IoArrowBackOutline />
             </Button>
             <div>
-              <h1 className={title({ size: "sm" })}>Record Return</h1>
+              <h1 className={title({ size: "lg" })}>Record Return</h1>
               <p className="text-default-500 mt-1">
                 Purchase No: {purchase.purchaseNo} •{" "}
                 {purchase.purchaseDate.toLocaleDateString()}
@@ -503,7 +503,7 @@ export default function PurchaseReturnPage() {
           <Card>
             <CardBody className="py-4">
               <p className="text-sm text-default-500">Original Net Amount</p>
-              <p className="text-2xl font-semibold">
+              <p className="text-stat font-semibold">
                 NPR {purchase.netAmount.toLocaleString()}
               </p>
             </CardBody>
@@ -511,7 +511,7 @@ export default function PurchaseReturnPage() {
           <Card>
             <CardBody className="py-4">
               <p className="text-sm text-default-500">Total Returned So Far</p>
-              <p className="text-2xl font-semibold text-warning-600">
+              <p className="text-stat font-semibold text-warning-600">
                 NPR {totalReturnedAmount.toLocaleString()}
               </p>
             </CardBody>
@@ -519,7 +519,7 @@ export default function PurchaseReturnPage() {
           <Card>
             <CardBody className="py-4">
               <p className="text-sm text-default-500">Net After Returns</p>
-              <p className="text-2xl font-semibold text-success">
+              <p className="text-stat font-semibold text-success">
                 NPR {remainingNetAfterReturns.toLocaleString()}
               </p>
             </CardBody>
@@ -532,7 +532,7 @@ export default function PurchaseReturnPage() {
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2">
                 <IoReloadOutline className="text-primary" />
-                <h3 className="text-lg font-semibold">Return Items</h3>
+                <h3 className="text-stat-sm font-semibold">Return Items</h3>
               </div>
               {allFullyReturned && (
                 <div className="flex items-center gap-1 text-sm text-warning-600">
@@ -640,7 +640,7 @@ export default function PurchaseReturnPage() {
             <div className="flex justify-end">
               <div className="text-right">
                 <p className="text-sm text-default-500">Return Amount</p>
-                <p className="text-2xl font-semibold text-warning-600">
+                <p className="text-stat font-semibold text-warning-600">
                   NPR{" "}
                   {totalReturnAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,

@@ -96,8 +96,7 @@ const settingsSections: SettingsSection[] = [
 ];
 
 const categoryLabels: Record<string, string> = {
-  general: "General Settings",
-  clinic: "Clinic Management",
+  general: "System Settings",
 };
 
 export default function SettingsPage() {
@@ -123,86 +122,38 @@ export default function SettingsPage() {
         <div className="flex gap-2" />
       </div>
 
-      {/* Filter tabs — clarity-card, clarity-btn */}
-      <div className="clarity-card p-3">
-        <div className="flex flex-wrap gap-2">
-          <button
-            className={`clarity-btn ${selectedCategory === "all" ? "clarity-btn-primary" : "clarity-btn-ghost"}`}
-            type="button"
-            onClick={() => setSelectedCategory("all")}
-          >
-            All Settings
-          </button>
-          {Object.entries(categoryLabels).map(([key, label]) => (
-            <button
-              key={key}
-              className={`clarity-btn ${selectedCategory === key ? "clarity-btn-primary" : "clarity-btn-ghost"}`}
-              type="button"
-              onClick={() => setSelectedCategory(key)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Settings Sections */}
       <div className="space-y-6">
-        {Object.entries(categoryLabels).map(([categoryKey, categoryLabel]) => {
-          const categorySections = filteredSections.filter(
-            (section) => section.category === categoryKey,
-          );
-
-          if (
-            categorySections.length === 0 ||
-            (selectedCategory !== "all" && selectedCategory !== categoryKey)
-          ) {
-            return null;
-          }
-
-          return (
-            <div key={categoryKey}>
-              {selectedCategory === "all" && (
-                <div className="flex items-center gap-2 mb-3">
-                  <h2 className="clarity-section-header flex-1">
-                    {categoryLabel}
-                  </h2>
-                  <div className="clarity-divider flex-1" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {settingsSections.map((section) => (
+            <RouterLink
+              key={section.id}
+              className="clarity-card p-3 block group border border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-surface-2))] hover:border-[rgb(var(--color-primary-hover))] transition-colors duration-200 rounded-[var(--card-radius)]"
+              to={section.href}
+            >
+              <div className="flex gap-3 pb-2">
+                <div className="flex-shrink-0 p-2 rounded-lg bg-[rgb(var(--color-primary-light))] text-[rgb(var(--color-primary))] transition-colors">
+                  {section.icon}
                 </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {categorySections.map((section) => (
-                  <RouterLink
-                    key={section.id}
-                    className="clarity-card p-3 block group border border-[rgb(var(--color-border))] hover:bg-slate-50 hover:border-teal-200 transition-colors duration-200 rounded-[var(--card-radius)]"
-                    to={section.href}
-                  >
-                    <div className="flex gap-3 pb-2">
-                      <div className="flex-shrink-0 p-2 rounded-lg bg-teal-100/80 group-hover:bg-teal-100 text-teal-700 transition-colors">
-                        {section.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-[13px] text-[rgb(var(--color-text))] truncate">
-                          {section.title}
-                        </h4>
-                      </div>
-                    </div>
-                    <p className="text-sm text-[rgb(var(--color-text-muted))] mb-3 line-clamp-2">
-                      {section.description}
-                    </p>
-                    <div className="flex items-center justify-end">
-                      <span className="clarity-btn clarity-btn-tinted opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1">
-                        Configure
-                        <IoChevronForwardOutline className="w-4 h-4" />
-                      </span>
-                    </div>
-                  </RouterLink>
-                ))}
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-[13px] text-[rgb(var(--color-text))] truncate">
+                    {section.title}
+                  </h4>
+                </div>
               </div>
-            </div>
-          );
-        })}
+              <p className="text-sm text-[rgb(var(--color-text-muted))] mb-3 line-clamp-2">
+                {section.description}
+              </p>
+              <div className="flex items-center justify-end">
+                <span className="clarity-btn clarity-btn-tinted opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1">
+                  Configure
+                  <IoChevronForwardOutline className="w-4 h-4" />
+                </span>
+              </div>
+            </RouterLink>
+          ))}
+        </div>
       </div>
     </div>
   );

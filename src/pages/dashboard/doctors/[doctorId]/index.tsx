@@ -224,9 +224,9 @@ export default function DoctorProfilePage() {
       setDoctor(doctorData);
 
       const loadTasks = [
-        loadAppointments(doctorId).catch(() => {}),
-        loadPatients(doctorId).catch(() => {}),
-        loadCommissions(doctorId).catch(() => {}),
+        loadAppointments(doctorId).catch(() => { }),
+        loadPatients(doctorId).catch(() => { }),
+        loadCommissions(doctorId).catch(() => { }),
       ];
 
       await Promise.allSettled(loadTasks);
@@ -464,7 +464,7 @@ export default function DoctorProfilePage() {
   if (!doctor) {
     return (
       <div className="flex flex-col items-center justify-center py-16 bg-white border border-mountain-200 rounded shadow-sm">
-        <IoWarningOutline className="text-mountain-300 text-6xl mb-4" />
+        <IoWarningOutline className="text-mountain-300 text-stat mb-4" />
         <p className="text-mountain-500 font-medium">Doctor not found.</p>
         <Button className="mt-6" color="primary" onClick={() => navigate(-1)}>
           Back
@@ -511,12 +511,12 @@ export default function DoctorProfilePage() {
       {/* Hero Overview */}
       <div className="bg-white border border-mountain-200 rounded shadow-sm p-6 overflow-hidden relative">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10 w-full">
-          <div className="w-24 h-24 rounded-full bg-teal-100 flex items-center justify-center border border-teal-200 shrink-0 text-3xl font-bold text-teal-800">
+          <div className="w-20 h-20 rounded-full bg-teal-100 flex items-center justify-center border border-teal-200 shrink-0 text-stat font-bold text-teal-800">
             {doctor.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 text-center md:text-left">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-center md:justify-start">
-              <h2 className="text-2xl font-bold text-mountain-900">
+              <h2 className="text-page-title font-bold text-mountain-900">
                 {doctor.name}
               </h2>
               <span
@@ -597,7 +597,7 @@ export default function DoctorProfilePage() {
           >
             <div className="p-3 bg-white rounded-full shadow-sm">{s.icon}</div>
             <div>
-              <p className="text-[24px] font-bold text-mountain-900 leading-none">
+              <p className="text-stat-sm text-mountain-900 leading-none">
                 {s.val}
               </p>
               <p className="text-[13px] text-mountain-600 font-medium mt-1">
@@ -619,11 +619,10 @@ export default function DoctorProfilePage() {
           ].map((t) => (
             <button
               key={t.key}
-              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${
-                selectedTab === t.key
-                  ? "border-teal-600 text-teal-700 bg-teal-50/30"
-                  : "border-transparent text-mountain-600 hover:text-mountain-900 hover:bg-mountain-50"
-              }`}
+              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTab === t.key
+                ? "border-teal-600 text-teal-700 bg-teal-50/30"
+                : "border-transparent text-mountain-600 hover:text-mountain-900 hover:bg-mountain-50"
+                }`}
               onClick={() => handleTabChange(t.key)}
             >
               {t.label}
@@ -733,15 +732,14 @@ export default function DoctorProfilePage() {
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <span
-                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${
-                                  appointment.status === "completed"
-                                    ? "bg-green-50 text-green-700 border-green-200"
-                                    : appointment.status === "scheduled"
-                                      ? "bg-teal-50 text-teal-700 border-teal-200"
-                                      : appointment.status === "cancelled"
-                                        ? "bg-red-50 text-red-700 border-red-200"
-                                        : "bg-amber-50 text-amber-700 border-amber-200"
-                                }`}
+                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${appointment.status === "completed"
+                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  : appointment.status === "scheduled"
+                                    ? "bg-teal-50 text-teal-700 border-teal-200"
+                                    : appointment.status === "cancelled"
+                                      ? "bg-red-50 text-red-700 border-red-200"
+                                      : "bg-amber-50 text-amber-700 border-amber-200"
+                                  }`}
                               >
                                 {appointment.status}
                               </span>
@@ -757,7 +755,7 @@ export default function DoctorProfilePage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-12 text-center text-mountain-500 bg-mountain-50 rounded">
-                  <IoCalendarOutline className="text-4xl mb-2 text-mountain-300" />
+                  <IoCalendarOutline className="text-stat mb-2 text-mountain-300" />
                   <p>No appointments created.</p>
                 </div>
               )}
@@ -805,7 +803,7 @@ export default function DoctorProfilePage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-12 text-center text-mountain-500 bg-mountain-50 rounded">
-                  <IoPeopleOutline className="text-4xl mb-2 text-mountain-300" />
+                  <IoPeopleOutline className="text-stat mb-2 text-mountain-300" />
                   <p>No patients linked.</p>
                 </div>
               )}
@@ -837,7 +835,7 @@ export default function DoctorProfilePage() {
                     className="p-5 text-center border border-mountain-200 rounded shadow-sm bg-mountain-50/50"
                   >
                     <p
-                      className={`text-[22px] font-bold leading-none ${s.color}`}
+                      className={`text-stat-sm leading-none ${s.color}`}
                     >
                       {s.val}
                     </p>
@@ -899,7 +897,7 @@ export default function DoctorProfilePage() {
                               Pending:{" "}
                               {formatCurrency(
                                 commission.commissionAmount -
-                                  (commission.paidAmount || 0),
+                                (commission.paidAmount || 0),
                               )}
                             </p>
                           )}
@@ -920,7 +918,7 @@ export default function DoctorProfilePage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-12 text-center text-mountain-500 bg-mountain-50 rounded">
-                  <IoWalletOutline className="text-4xl mb-2 text-mountain-300" />
+                  <IoWalletOutline className="text-stat mb-2 text-mountain-300" />
                   <p>No commissions attached yet.</p>
                 </div>
               )}
@@ -956,7 +954,7 @@ export default function DoctorProfilePage() {
                 <span className="font-bold text-amber-600">
                   {formatCurrency(
                     selectedCommission.commissionAmount -
-                      (selectedCommission.paidAmount || 0),
+                    (selectedCommission.paidAmount || 0),
                   )}
                 </span>
               </p>
@@ -993,17 +991,17 @@ export default function DoctorProfilePage() {
             />
             {(paymentForm.method === "bank_transfer" ||
               paymentForm.method === "cheque") && (
-              <CustomInput
-                label="Reference / Transaction ID"
-                value={paymentForm.reference}
-                onChange={(e: any) =>
-                  setPaymentForm((prev) => ({
-                    ...prev,
-                    reference: e.target.value,
-                  }))
-                }
-              />
-            )}
+                <CustomInput
+                  label="Reference / Transaction ID"
+                  value={paymentForm.reference}
+                  onChange={(e: any) =>
+                    setPaymentForm((prev) => ({
+                      ...prev,
+                      reference: e.target.value,
+                    }))
+                  }
+                />
+              )}
             <CustomInput
               label="Notes (Optional)"
               value={paymentForm.notes}

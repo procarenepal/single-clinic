@@ -92,8 +92,7 @@ export default function ReferralPartnersPage() {
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin =
     userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+    userData?.role === "system-owner";
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
     branchId ??
@@ -241,7 +240,7 @@ export default function ReferralPartnersPage() {
     <div className="flex flex-col gap-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "sm" })}>Referral Partners</h1>
+          <h1 className={title({ size: "lg" })}>Referral Partners</h1>
           <p className="text-[13.5px] text-mountain-500 mt-1">
             Manage external referral sources and commission rates
           </p>

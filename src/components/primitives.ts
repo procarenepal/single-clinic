@@ -17,11 +17,11 @@ export const title = tv({
       yellow: "text-saffron-600",
     },
     size: {
-      xs: "text-lg lg:text-xl",
-      sm: "text-xl lg:text-2xl",
-      md: "text-2xl lg:text-3xl", // default — compact vs old 3xl/4xl
-      lg: "text-3xl lg:text-4xl",
-      xl: "text-4xl lg:text-5xl",
+      xs: "text-label", // 12px
+      sm: "text-[13px]",
+      md: "text-section-title", // 14px
+      lg: "text-page-title", // 15px
+      xl: "text-stat", // 20px
     },
     fullWidth: {
       true: "w-full block",
@@ -97,9 +97,9 @@ export const statValue = tv({
   base: "font-bold tracking-tighter text-foreground leading-none",
   variants: {
     size: {
-      sm: "text-xl",
-      md: "text-2xl",
-      lg: "text-3xl",
+      sm: "text-stat-sm", // 15px
+      md: "text-stat", // 20px
+      lg: "text-[24px]",
     },
   },
   defaultVariants: {

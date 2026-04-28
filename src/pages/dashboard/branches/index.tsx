@@ -50,8 +50,8 @@ export default function BranchManagementPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
 
-  const isClinicSuperAdmin =
-    userData?.role === "clinic-super-admin" ||
+  const isSystemOwner =
+    userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
 
   useEffect(() => {
@@ -197,7 +197,7 @@ export default function BranchManagementPage() {
   const canCreateMoreBranches =
     clinic && clinic.maxBranches && branches.length < clinic.maxBranches;
 
-  if (!isClinicSuperAdmin) {
+  if (!isSystemOwner) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="clarity-card p-3 border-saffron-200 bg-saffron-50">

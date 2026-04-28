@@ -72,20 +72,21 @@ export const medicineService = {
         constraints.push(where("branchId", "==", branchId));
       }
 
-      constraints.push(orderBy("name"));
-
       const q = query(
         collection(db, MEDICINE_BRANDS_COLLECTION),
         ...constraints,
       );
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
+      const brands = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate(),
         updatedAt: doc.data().updatedAt?.toDate(),
       })) as MedicineBrand[];
+
+      // Sort in memory by name
+      return brands.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error fetching medicine brands:", error);
       throw error;
@@ -150,20 +151,21 @@ export const medicineService = {
         constraints.push(where("branchId", "==", branchId));
       }
 
-      constraints.push(orderBy("name"));
-
       const q = query(
         collection(db, MEDICINE_CATEGORIES_COLLECTION),
         ...constraints,
       );
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
+      const categories = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate(),
         updatedAt: doc.data().updatedAt?.toDate(),
       })) as MedicineCategory[];
+
+      // Sort in memory by name
+      return categories.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error fetching medicine categories:", error);
       throw error;
@@ -233,19 +235,20 @@ export const medicineService = {
         constraints.push(where("branchId", "==", branchId));
       }
 
-      constraints.push(orderBy("name"));
-
       const q = query(collection(db, MEDICINES_COLLECTION), ...constraints);
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
+      const medicines = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate(),
         updatedAt: doc.data().updatedAt?.toDate(),
         expiryDate: doc.data().expiryDate?.toDate(),
       })) as Medicine[];
+
+      // Sort in memory by name
+      return medicines.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error fetching medicines:", error);
       throw error;

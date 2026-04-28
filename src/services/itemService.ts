@@ -26,23 +26,16 @@ export const itemService = {
   async getItemsByClinic(clinicId: string, branchId?: string): Promise<Item[]> {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
-      let q = query(
-        itemsRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          itemsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-          orderBy("name"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(itemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
       const items: Item[] = [];
 
@@ -57,7 +50,8 @@ export const itemService = {
         } as Item);
       });
 
-      return items;
+      // Sort in memory by name
+      return items.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting items by clinic:", error);
       throw error;
@@ -171,25 +165,17 @@ export const itemService = {
   ): Promise<Item[]> {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
-      let q = query(
-        itemsRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("category", "==", category),
         where("isActive", "==", true),
-        orderBy("name"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          itemsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("category", "==", category),
-          where("isActive", "==", true),
-          orderBy("name"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(itemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
       const items: Item[] = [];
 
@@ -204,7 +190,8 @@ export const itemService = {
         } as Item);
       });
 
-      return items;
+      // Sort in memory by name
+      return items.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting items by category:", error);
       throw error;

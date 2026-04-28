@@ -379,7 +379,7 @@ export default function PurchaseEditPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Edit Purchase</h1>
+          <h1 className={title({ size: "lg" })}>Edit Purchase</h1>
           <p className="text-default-500 mt-1">Loading purchase data...</p>
         </div>
         <Card>
@@ -395,7 +395,7 @@ export default function PurchaseEditPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Edit Purchase</h1>
+          <h1 className={title({ size: "lg" })}>Edit Purchase</h1>
           <p className="text-default-500 mt-1">Purchase not found</p>
         </div>
         <Card>
@@ -430,7 +430,7 @@ export default function PurchaseEditPage() {
               >
                 <IoArrowBackOutline size={20} />
               </Button>
-              <h1 className={title({ size: "sm" })}>Edit Purchase</h1>
+              <h1 className={title({ size: "lg" })}>Edit Purchase</h1>
             </div>
             <p className="text-default-500">
               Purchase No: {purchase.purchaseNo} •{" "}
@@ -500,7 +500,7 @@ export default function PurchaseEditPage() {
             {/* Purchase Items */}
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-lg font-medium">Purchase Items</h4>
+                <h4 className="text-stat-sm font-medium">Purchase Items</h4>
                 <Button
                   color="primary"
                   size="sm"
@@ -567,37 +567,37 @@ export default function PurchaseEditPage() {
                         >
                           {item.type === "medicine"
                             ? medicines.map((medicine) => (
-                                <AutocompleteItem
-                                  key={medicine.id}
-                                  textValue={medicine.name}
-                                >
-                                  <div className="flex flex-col">
-                                    <span className="text-small">
-                                      {medicine.name}
-                                    </span>
-                                    <span className="text-tiny text-default-400">
-                                      {medicine.genericName} • NPR{" "}
-                                      {medicine.price}
-                                    </span>
-                                  </div>
-                                </AutocompleteItem>
-                              ))
+                              <AutocompleteItem
+                                key={medicine.id}
+                                textValue={medicine.name}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-small">
+                                    {medicine.name}
+                                  </span>
+                                  <span className="text-tiny text-default-400">
+                                    {medicine.genericName} • NPR{" "}
+                                    {medicine.price}
+                                  </span>
+                                </div>
+                              </AutocompleteItem>
+                            ))
                             : items.map((itemData) => (
-                                <AutocompleteItem
-                                  key={itemData.id}
-                                  textValue={itemData.name}
-                                >
-                                  <div className="flex flex-col">
-                                    <span className="text-small">
-                                      {itemData.name}
-                                    </span>
-                                    <span className="text-tiny text-default-400">
-                                      {itemData.category} • NPR{" "}
-                                      {itemData.salePrice}
-                                    </span>
-                                  </div>
-                                </AutocompleteItem>
-                              ))}
+                              <AutocompleteItem
+                                key={itemData.id}
+                                textValue={itemData.name}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-small">
+                                    {itemData.name}
+                                  </span>
+                                  <span className="text-tiny text-default-400">
+                                    {itemData.category} • NPR{" "}
+                                    {itemData.salePrice}
+                                  </span>
+                                </div>
+                              </AutocompleteItem>
+                            ))}
                         </Autocomplete>
                       </div>
 
@@ -675,7 +675,7 @@ export default function PurchaseEditPage() {
 
             {/* Summary Section */}
             <div>
-              <h4 className="text-lg font-medium mb-4">Purchase Summary</h4>
+              <h4 className="text-stat-sm font-medium mb-4">Purchase Summary</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   isReadOnly
@@ -723,7 +723,7 @@ export default function PurchaseEditPage() {
                 <Input
                   isReadOnly
                   classNames={{
-                    input: "font-bold text-lg",
+                    input: "font-bold text-stat-sm",
                   }}
                   label="Net Amount *"
                   startContent="NPR"

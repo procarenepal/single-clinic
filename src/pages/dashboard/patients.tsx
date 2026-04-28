@@ -50,10 +50,10 @@ function Badge({
   variant?: "critical" | "normal" | "primary" | "default";
 }) {
   const cls = {
-    critical: "bg-red-100 text-red-700 border border-red-200",
-    normal: "bg-health-100 text-health-700 border border-health-200",
-    primary: "bg-teal-100 text-teal-700 border border-teal-200",
-    default: "bg-mountain-100 text-mountain-600 border border-mountain-200",
+    critical: "bg-red-500/10 text-red-600 border border-red-500/20",
+    normal: "bg-green-500/10 text-green-600 border border-green-500/20",
+    primary: "bg-primary/10 text-primary border border-primary/20",
+    default: "bg-surface-2 text-text-muted border border-border-base",
   }[variant];
 
   return (
@@ -74,7 +74,7 @@ function FilterChip({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] bg-teal-100 text-teal-700 border border-teal-200 px-2 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-[11px] bg-teal-500/10 text-teal-600 border border-teal-200/50 dark:border-teal-500/30 px-2 py-0.5 rounded">
       {label}
       <button
         className="hover:text-red-500 ml-0.5"
@@ -101,7 +101,7 @@ function NativeSelect({
 }) {
   return (
     <select
-      className={`h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200 ${className}`}
+      className={`h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 ${className}`}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
@@ -133,19 +133,19 @@ function Modal({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       {/* Panel */}
-      <div className="relative bg-white border border-mountain-200 rounded-md shadow-none w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
+      <div className="relative bg-surface border border-border-base rounded-md shadow-none w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-border-base">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-text-main">
               {title}
             </h3>
             {subtitle && (
-              <p className="text-[12px] text-mountain-400 mt-0.5">{subtitle}</p>
+              <p className="text-[12px] text-text-muted mt-0.5">{subtitle}</p>
             )}
           </div>
           <button
-            className="p-1 text-mountain-400 hover:text-mountain-700 rounded"
+            className="p-1 text-text-muted hover:text-text-main rounded"
             type="button"
             onClick={onClose}
           >
@@ -153,10 +153,10 @@ function Modal({
           </button>
         </div>
         {/* Body */}
-        <div className="px-4 py-3 overflow-y-auto flex-1">{children}</div>
+        <div className="px-4 py-3 overflow-y-auto flex-1 text-text-main">{children}</div>
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-mountain-100">
+          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-base">
             {footer}
           </div>
         )}
@@ -188,7 +188,7 @@ function Pagination({
     <div className="flex items-center gap-1.5">
       <button
         aria-label="Previous page"
-        className="w-8 h-8 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all"
+        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-600 hover:bg-surface-2 transition-all"
         disabled={page === 1}
         onClick={() => onChange(page - 1)}
       >
@@ -197,11 +197,10 @@ function Pagination({
       {pages.map((p) => (
         <button
           key={p}
-          className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${
-            p === page
-              ? "bg-teal-700 text-white border-teal-700 shadow-sm"
-              : "border-mountain-300 text-mountain-600 hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50"
-          }`}
+          className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${p === page
+            ? "bg-teal-700 text-white border-teal-700 shadow-sm"
+            : "border-border-base text-text-muted hover:border-teal-400 hover:text-teal-600 hover:bg-surface-2"
+            }`}
           onClick={() => onChange(p)}
         >
           {p}
@@ -209,7 +208,7 @@ function Pagination({
       ))}
       <button
         aria-label="Next page"
-        className="w-8 h-8 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all"
+        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-600 hover:bg-surface-2 transition-all"
         disabled={page === total}
         onClick={() => onChange(page + 1)}
       >
@@ -231,7 +230,7 @@ const debug = (msg: string, data?: object) => {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PatientsPage() {
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData, isSystemOwner: checkOwner, isClinicAdmin: checkAdmin } = useAuth();
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -269,9 +268,7 @@ export default function PatientsPage() {
 
   // Branch context
   const branchId = userData?.branchId ?? null;
-  const isClinicSuperAdmin =
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "clinic-admin";
+  const isSystemOwner = checkOwner() || checkAdmin();
   const [branchFilter, setBranchFilter] = useState<string | null>(null);
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
@@ -290,10 +287,10 @@ export default function PatientsPage() {
       doctorIdOverride?: string | null,
     ): Promise<
       | {
-          patients: Patient[];
-          lastDoc: QueryDocumentSnapshot | null;
-          totalCount?: number;
-        }
+        patients: Patient[];
+        lastDoc: QueryDocumentSnapshot | null;
+        totalCount?: number;
+      }
       | undefined
     > => {
       const searchPrefix = search.trim() || undefined;
@@ -319,7 +316,7 @@ export default function PatientsPage() {
               : undefined;
         const effectiveDoctorId = doctorIdOverride ?? currentDoctorId;
         const { patients: pagePatients, lastDoc: nextLastDoc } =
-          await patientService.getPatientsByClinicPaginated(clinicId, {
+          await patientService.getPatientsByClinicPaginated(undefined, {
             pageSize: PER_PAGE,
             lastDoc: targetPage === 1 ? undefined : (cursor ?? undefined),
             doctorId: effectiveDoctorId ?? undefined,
@@ -331,7 +328,7 @@ export default function PatientsPage() {
         let totalCount: number | undefined;
 
         if (targetPage === 1) {
-          totalCount = await patientService.getPatientsCountByClinic(clinicId, {
+          totalCount = await patientService.getPatientsCountByClinic(undefined, {
             doctorId: effectiveDoctorId ?? undefined,
             searchPrefix,
             gender: genderFilter === "all" ? undefined : genderFilter,
@@ -370,9 +367,9 @@ export default function PatientsPage() {
 
   // ── Data load ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!clinicId || !isClinicSuperAdmin) return;
+    if (!clinicId || !isSystemOwner) return;
     branchService
-      .getClinicBranches(clinicId, false)
+      .getClinicBranches(undefined, false)
       .then((data) => {
         setBranches(data);
         const map: Record<string, string> = {};
@@ -387,7 +384,7 @@ export default function PatientsPage() {
         }
       })
       .catch(console.error);
-  }, [clinicId, isClinicSuperAdmin, branchId]);
+  }, [clinicId, isSystemOwner, branchId]);
 
   // Resolve the logged-in user's doctorId once
   useEffect(() => {
@@ -395,7 +392,6 @@ export default function PatientsPage() {
     (async () => {
       try {
         const doc = await doctorService.getDoctorByEmail(
-          clinicId,
           userData.email!,
         );
 
@@ -420,14 +416,9 @@ export default function PatientsPage() {
       try {
         const data = currentDoctorId
           ? await patientService.getPatientsByDoctor(
-              clinicId,
-              currentDoctorId,
-              effectiveBranchId,
-            )
-          : await patientService.getPatientsByClinic(
-              clinicId,
-              effectiveBranchId,
-            );
+            currentDoctorId,
+          )
+          : await patientService.getPatients();
 
         if (!cancelled) {
           setPatients(data);
@@ -642,10 +633,10 @@ export default function PatientsPage() {
           prev.map((p) =>
             p.id === selectedForCritical.id
               ? {
-                  ...p,
-                  isCritical: true,
-                  criticalReason: criticalReason.trim(),
-                }
+                ...p,
+                isCritical: true,
+                criticalReason: criticalReason.trim(),
+              }
               : p,
           ),
         );
@@ -806,16 +797,16 @@ export default function PatientsPage() {
         {/* ── Page header ──────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h1 className="text-page-title text-mountain-900 leading-tight flex items-center gap-2">
+            <h1 className="text-page-title text-text-main leading-tight flex items-center gap-2">
               Patients
               {currentDoctorId && <Badge variant="primary">Doctor View</Badge>}
             </h1>
-            <p className="text-[13px] text-mountain-400 mt-0.5">
+            <p className="text-[13px] text-text-muted mt-0.5">
               {currentDoctorId
                 ? "Your assigned patient records"
                 : branchId
                   ? "Patients for your branch"
-                  : isClinicSuperAdmin && branchFilter
+                  : isSystemOwner && branchFilter
                     ? "Clinic patients for selected branch"
                     : "All registered clinic patients"}
             </p>
@@ -833,14 +824,14 @@ export default function PatientsPage() {
         </div>
 
         {/* ── Table card ───────────────────────────────────────────────────── */}
-        <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+        <div className="bg-surface border border-border-base rounded overflow-hidden">
           {/* ── Toolbar ─────────────────────────────────────────────────── */}
-          <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b border-mountain-100">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b border-border-base">
             {/* Search */}
             <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <IoSearchOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-mountain-400 pointer-events-none" />
+              <IoSearchOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted/50 pointer-events-none" />
               <input
-                className="w-full h-8 pl-8 pr-3 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                className="w-full h-8 pl-8 pr-3 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                 placeholder="Search by name, email, phone…"
                 type="text"
                 value={search}
@@ -882,7 +873,7 @@ export default function PatientsPage() {
             </NativeSelect>
 
             {/* Branch filter for clinic-wide admins (branch staff are locked to their own branch) */}
-            {isClinicSuperAdmin && !branchId && branches.length > 0 && (
+            {isSystemOwner && !branchId && branches.length > 0 && (
               <NativeSelect
                 value={branchFilter ?? ""}
                 onChange={(v) => {
@@ -953,52 +944,52 @@ export default function PatientsPage() {
             ageMax ||
             regStart ||
             regEnd) && (
-            <div className="flex flex-wrap gap-1.5 px-3 py-1.5 border-b border-mountain-100 bg-mountain-50">
-              {search && (
-                <FilterChip
-                  label={`Search: "${search}"`}
-                  onRemove={() => setSearch("")}
-                />
-              )}
-              {genderFilter !== "all" && (
-                <FilterChip
-                  label={`Gender: ${genderFilter}`}
-                  onRemove={() => setGenderFilter("all")}
-                />
-              )}
-              {criticalFilter !== "all" && (
-                <FilterChip
-                  label={`Status: ${criticalFilter}`}
-                  onRemove={() => setCriticalFilter("all")}
-                />
-              )}
-              {(ageMin || ageMax) && (
-                <FilterChip
-                  label={`Age: ${ageMin || "0"}–${ageMax || "∞"}`}
-                  onRemove={() => {
-                    setAgeMin("");
-                    setAgeMax("");
-                  }}
-                />
-              )}
-              {(regStart || regEnd) && (
-                <FilterChip
-                  label={`Reg: ${regStart || "…"} – ${regEnd || "…"}`}
-                  onRemove={() => {
-                    setRegStart("");
-                    setRegEnd("");
-                  }}
-                />
-              )}
-              <button
-                className="text-[11px] text-mountain-400 hover:text-red-500 ml-1"
-                type="button"
-                onClick={clearFilters}
-              >
-                Clear all
-              </button>
-            </div>
-          )}
+              <div className="flex flex-wrap gap-1.5 px-3 py-1.5 border-b border-border-base bg-surface-2">
+                {search && (
+                  <FilterChip
+                    label={`Search: "${search}"`}
+                    onRemove={() => setSearch("")}
+                  />
+                )}
+                {genderFilter !== "all" && (
+                  <FilterChip
+                    label={`Gender: ${genderFilter}`}
+                    onRemove={() => setGenderFilter("all")}
+                  />
+                )}
+                {criticalFilter !== "all" && (
+                  <FilterChip
+                    label={`Status: ${criticalFilter}`}
+                    onRemove={() => setCriticalFilter("all")}
+                  />
+                )}
+                {(ageMin || ageMax) && (
+                  <FilterChip
+                    label={`Age: ${ageMin || "0"}–${ageMax || "∞"}`}
+                    onRemove={() => {
+                      setAgeMin("");
+                      setAgeMax("");
+                    }}
+                  />
+                )}
+                {(regStart || regEnd) && (
+                  <FilterChip
+                    label={`Reg: ${regStart || "…"} – ${regEnd || "…"}`}
+                    onRemove={() => {
+                      setRegStart("");
+                      setRegEnd("");
+                    }}
+                  />
+                )}
+                <button
+                  className="text-[11px] text-text-muted hover:text-red-500 ml-1"
+                  type="button"
+                  onClick={clearFilters}
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
 
           {/* ── Table ───────────────────────────────────────────────────── */}
           {loading ? (
@@ -1009,12 +1000,12 @@ export default function PatientsPage() {
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-100">
+                  <tr className="bg-surface-2 border-b border-border-base">
                     {["Patient", "Contact", "Status", "Reg Date", ""].map(
                       (h) => (
                         <th
                           key={h}
-                          className={`py-2 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-mountain-400 ${h === "" ? "text-right" : "text-left"}`}
+                          className={`py-2 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted ${h === "" ? "text-right" : "text-left"}`}
                         >
                           {h}
                         </th>
@@ -1022,12 +1013,12 @@ export default function PatientsPage() {
                     )}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-mountain-100">
+                <tbody className="divide-y divide-border-base">
                   {pagePatients.length === 0 ? (
                     <tr>
                       <td className="py-16 text-center" colSpan={5}>
-                        <IoPersonOutline className="w-8 h-8 mx-auto mb-2 text-mountain-300" />
-                        <p className="text-[13px] text-mountain-400">
+                        <IoPersonOutline className="w-8 h-8 mx-auto mb-2 text-text-muted/30" />
+                        <p className="text-[13px] text-text-muted">
                           No patients found
                         </p>
                         {filtered.length === 0 && patients.length > 0 && (
@@ -1045,7 +1036,7 @@ export default function PatientsPage() {
                     pagePatients.map((patient) => (
                       <tr
                         key={patient.id}
-                        className={`hover:bg-slate-50 transition-colors ${patient.isCritical ? "crit-row" : ""}`}
+                        className={`hover:bg-surface-2 transition-colors ${patient.isCritical ? "crit-row" : ""}`}
                       >
                         {/* Patient column */}
                         <td className="py-2.5 px-3">
@@ -1064,13 +1055,13 @@ export default function PatientsPage() {
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                {isClinicSuperAdmin && patient.branchId && (
+                                {isSystemOwner && patient.branchId && (
                                   <Badge variant="primary">
                                     {branchMap[patient.branchId] || "Branch"}
                                   </Badge>
                                 )}
                                 <Link
-                                  className="text-[12.5px] font-medium text-mountain-900 hover:text-teal-700 no-underline"
+                                  className="text-[12.5px] font-medium text-text-main hover:text-teal-700 no-underline"
                                   to={`/dashboard/patients/${patient.id}`}
                                 >
                                   {patient.name}
@@ -1079,7 +1070,7 @@ export default function PatientsPage() {
                                   <Badge variant="critical">⚠ CRITICAL</Badge>
                                 )}
                               </div>
-                              <p className="text-[11px] text-mountain-400">
+                              <p className="text-[11px] text-text-muted">
                                 Reg# {patient.regNumber}
                               </p>
                             </div>
@@ -1088,10 +1079,10 @@ export default function PatientsPage() {
 
                         {/* Contact column */}
                         <td className="py-2.5 px-3">
-                          <p className="text-[12px] text-mountain-700">
+                          <p className="text-[12px] text-text-main">
                             {patient.mobile}
                           </p>
-                          <p className="text-[11px] text-mountain-400">
+                          <p className="text-[11px] text-text-muted">
                             {patient.email || "—"}
                           </p>
                         </td>
@@ -1103,7 +1094,7 @@ export default function PatientsPage() {
                               <Badge variant="critical">Critical</Badge>
                               {patient.criticalReason && (
                                 <p
-                                  className="text-[10px] text-mountain-400 mt-0.5 max-w-[120px] truncate"
+                                  className="text-[10px] text-text-muted mt-0.5 max-w-[120px] truncate"
                                   title={patient.criticalReason}
                                 >
                                   {patient.criticalReason}
@@ -1116,7 +1107,7 @@ export default function PatientsPage() {
                         </td>
 
                         {/* Reg date column */}
-                        <td className="py-2.5 px-3 whitespace-nowrap text-[12px] text-mountain-600">
+                        <td className="py-2.5 px-3 whitespace-nowrap text-[12px] text-text-muted">
                           {fmt(patient.createdAt)}
                         </td>
 
@@ -1126,7 +1117,7 @@ export default function PatientsPage() {
                             <DropdownTrigger>
                               <button
                                 aria-label="Actions"
-                                className="p-1.5 rounded hover:bg-mountain-100 text-mountain-500 transition-colors"
+                                className="p-1.5 rounded hover:bg-surface-2 text-text-muted transition-colors"
                               >
                                 <IoEllipsisVerticalOutline className="w-4 h-4" />
                               </button>
@@ -1134,7 +1125,7 @@ export default function PatientsPage() {
                             <DropdownMenu aria-label="Patient actions">
                               <DropdownItem key="view">
                                 <Link
-                                  className="no-underline text-mountain-700 block w-full"
+                                  className="no-underline text-text-main block w-full"
                                   to={`/dashboard/patients/${patient.id}`}
                                 >
                                   View Details
@@ -1142,7 +1133,7 @@ export default function PatientsPage() {
                               </DropdownItem>
                               <DropdownItem key="edit">
                                 <Link
-                                  className="no-underline text-mountain-700 block w-full"
+                                  className="no-underline text-text-main block w-full"
                                   to={`/dashboard/patients/${patient.id}/edit`}
                                 >
                                   Edit
@@ -1150,7 +1141,7 @@ export default function PatientsPage() {
                               </DropdownItem>
                               <DropdownItem key="appointment">
                                 <Link
-                                  className="no-underline text-mountain-700 block w-full"
+                                  className="no-underline text-text-main block w-full"
                                   to={`/dashboard/appointments/new?patientId=${patient.id}`}
                                 >
                                   New Appointment
@@ -1186,8 +1177,8 @@ export default function PatientsPage() {
 
           {/* ── Footer: count + pagination ───────────────────────────────── */}
           {!loading && filtered.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 py-2.5 border-t border-mountain-100 bg-mountain-50">
-              <p className="text-[11px] text-mountain-500">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 py-2.5 border-t border-border-base bg-surface-2">
+              <p className="text-[11px] text-text-muted">
                 Showing <strong>{(page - 1) * PER_PAGE + 1}</strong>–
                 <strong>
                   {Math.min(
@@ -1266,19 +1257,19 @@ export default function PatientsPage() {
         onClose={() => setCriticalModal(false)}
       >
         <div className="space-y-3">
-          <div className="flex gap-2.5 p-3 bg-red-50 border border-red-200 rounded">
+          <div className="flex gap-2.5 p-3 bg-red-500/10 border border-red-500/20 rounded">
             <IoAlertCircleOutline className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-[12px] text-red-700">
+            <p className="text-[12px] text-red-600/90">
               This patient will be highlighted in the patient list and flagged
               for priority attention. The reason will be visible to all staff.
             </p>
           </div>
           <div>
-            <label className="block text-[12px] font-medium text-mountain-700 mb-1">
+            <label className="block text-[12px] font-medium text-text-main mb-1">
               Reason <span className="text-red-500">*</span>
             </label>
             <textarea
-              className="w-full px-2.5 py-2 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 resize-none"
+              className="w-full px-2.5 py-2 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 resize-none"
               placeholder="Enter the reason for marking as critical…"
               rows={3}
               value={criticalReason}
@@ -1316,29 +1307,29 @@ export default function PatientsPage() {
       >
         <div className="space-y-4">
           {/* Summary stats */}
-          <div className="grid grid-cols-3 gap-2 p-3 bg-mountain-50 border border-mountain-200 rounded">
+          <div className="grid grid-cols-3 gap-2 p-3 bg-surface-2 border border-border-base rounded">
             {[
               {
                 label: "Total",
                 value: patients.length,
-                cls: "text-mountain-900",
+                cls: "text-text-main",
               },
               {
                 label: "Filtered",
                 value: filtered.length,
-                cls: "text-teal-700",
+                cls: "text-teal-600",
               },
               {
                 label: "Critical",
                 value: patients.filter((p) => p.isCritical).length,
-                cls: "text-red-600",
+                cls: "text-red-500",
               },
             ].map((s) => (
               <div key={s.label} className="text-center">
                 <p className={`text-stat-sm leading-none ${s.cls}`}>
                   {s.value}
                 </p>
-                <p className="text-[10px] text-mountain-400 mt-0.5">
+                <p className="text-[10px] text-text-muted mt-0.5">
                   {s.label}
                 </p>
               </div>
@@ -1347,22 +1338,22 @@ export default function PatientsPage() {
 
           {/* Age range */}
           <div>
-            <label className="block text-[12px] font-medium text-mountain-700 mb-1.5">
+            <label className="block text-[12px] font-medium text-text-main mb-1.5">
               Age Range
             </label>
             <div className="flex gap-2">
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
                 placeholder="Min"
                 type="number"
                 value={ageMin}
                 onChange={(e) => setAgeMin(e.target.value)}
               />
-              <span className="text-mountain-400 self-center text-[12px]">
+              <span className="text-text-muted self-center text-[12px]">
                 –
               </span>
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
                 placeholder="Max"
                 type="number"
                 value={ageMax}
@@ -1373,21 +1364,21 @@ export default function PatientsPage() {
 
           {/* Registration date range */}
           <div>
-            <label className="block text-[12px] font-medium text-mountain-700 mb-1.5">
+            <label className="block text-[12px] font-medium text-text-main mb-1.5">
               Registration Date
             </label>
             <div className="flex gap-2">
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
                 type="date"
                 value={regStart}
                 onChange={(e) => setRegStart(e.target.value)}
               />
-              <span className="text-mountain-400 self-center text-[12px]">
+              <span className="text-text-muted self-center text-[12px]">
                 –
               </span>
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
                 type="date"
                 value={regEnd}
                 onChange={(e) => setRegEnd(e.target.value)}

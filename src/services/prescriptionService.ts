@@ -149,25 +149,12 @@ export const prescriptionService = {
   },
 
   /**
-   * Get prescriptions by clinic, optionally scoped by branch.
-   * When branchId is provided, only prescriptions for that branch are returned.
+   * Get all prescriptions (excluding deleted)
    */
-  async getPrescriptionsByClinic(
-    clinicId: string,
-    branchId?: string,
-  ): Promise<Prescription[]> {
+  async getPrescriptions(): Promise<Prescription[]> {
     try {
       const prescriptionsCollection = collection(db, "prescriptions");
-      const constraints: any[] = [
-        where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
-      ];
-
-      if (branchId) {
-        constraints.splice(1, 0, where("branchId", "==", branchId));
-      }
-      const q = query(prescriptionsCollection, ...constraints);
-
+      const q = query(prescriptionsCollection, orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
 
       return querySnapshot.docs.map((docSnap) => ({
@@ -185,6 +172,20 @@ export const prescriptionService = {
   },
 
   /**
+   * Alias for backward compatibility
+   */
+  async getPrescriptionsByClinic(
+    _clinicId?: string,
+    branchId?: string,
+  ): Promise<Prescription[]> {
+    const prescriptions = await this.getPrescriptions();
+    if (branchId) {
+      return prescriptions.filter((p) => p.branchId === branchId);
+    }
+    return prescriptions;
+  },
+
+  /**
    * Get prescriptions by appointment
    */
   async getPrescriptionsByAppointment(
@@ -195,7 +196,6 @@ export const prescriptionService = {
       const q = query(
         prescriptionsCollection,
         where("appointmentId", "==", appointmentId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -223,7 +223,6 @@ export const prescriptionService = {
       const q = query(
         prescriptionsCollection,
         where("patientId", "==", patientId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);

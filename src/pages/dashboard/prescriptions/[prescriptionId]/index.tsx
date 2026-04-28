@@ -357,7 +357,7 @@ export default function PrescriptionDetailPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Prescription Details</h1>
+          <h1 className={title({ size: "lg" })}>Prescription Details</h1>
         </div>
         <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
@@ -392,7 +392,7 @@ export default function PrescriptionDetailPage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>Prescription Details</h1>
+            <h1 className={title({ size: "lg" })}>Prescription Details</h1>
             <p className="text-[14.5px] font-semibold text-mountain-800 tracking-wide mt-1">
               #{prescription.prescriptionNo}
             </p>

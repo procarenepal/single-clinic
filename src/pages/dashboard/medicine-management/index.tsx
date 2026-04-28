@@ -35,7 +35,7 @@ import SettingsTab from "@/pages/dashboard/medicine-management/tabs/SettingsTab"
 export default function MedicineManagementPage() {
   const { userData, clinicId, branchId } = useAuthContext();
   const isClinicAdmin =
-    userData?.role === "clinic-super-admin" ||
+    userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
   const [selectedTab, setSelectedTab] = useState("medicines");
   const [isLoading, setIsLoading] = useState(true);
@@ -60,9 +60,9 @@ export default function MedicineManagementPage() {
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
     !isMultiBranch ||
-    (isClinicAdmin &&
-      (selectedBranchId === null ||
-        (mainBranchId && selectedBranchId === mainBranchId)))
+      (isClinicAdmin &&
+        (selectedBranchId === null ||
+          (mainBranchId && selectedBranchId === mainBranchId)))
       ? undefined
       : (userData?.branchId ?? (selectedBranchId || undefined));
 
@@ -425,7 +425,7 @@ export default function MedicineManagementPage() {
           <div className="clarity-card bg-danger-50 border-danger-200">
             <div className="text-center py-8">
               <IoAlertCircleOutline className="mx-auto mb-4 text-4xl text-danger" />
-              <h2 className="text-xl font-semibold text-danger mb-2">
+              <h2 className="text-stat-sm font-semibold text-danger mb-2">
                 Access Denied
               </h2>
               <p className="text-danger-600">
@@ -446,7 +446,7 @@ export default function MedicineManagementPage() {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className={title({ size: "sm" })}>Medicine Management</h1>
+              <h1 className={title({ size: "lg" })}>Medicine Management</h1>
               <p className="text-default-600 mt-1">
                 Manage medicines, inventory, brands, and supplier information
               </p>
@@ -472,11 +472,10 @@ export default function MedicineManagementPage() {
                 </div>
               )}
               <span
-                className={`text-xs font-semibold px-2.5 py-1 rounded-sm border ${
-                  clinicSettings?.sellsMedicines
-                    ? "bg-health-100 text-health-700 border-health-200"
-                    : "bg-mountain-100 text-mountain-700 border-mountain-200"
-                } flex items-center gap-1.5`}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-sm border ${clinicSettings?.sellsMedicines
+                  ? "bg-health-100 text-health-700 border-health-200"
+                  : "bg-mountain-100 text-mountain-700 border-mountain-200"
+                  } flex items-center gap-1.5`}
               >
                 <IoMedicalOutline />
                 {clinicSettings?.sellsMedicines
@@ -492,7 +491,7 @@ export default function MedicineManagementPage() {
           <div className="mb-6">
             <div className="clarity-card bg-saffron-50 border-saffron-200 p-4">
               <div className="flex items-start gap-3">
-                <IoWarningOutline className="text-saffron-600 text-xl mt-0.5 flex-shrink-0" />
+                <IoWarningOutline className="text-saffron-600 text-stat-sm mt-0.5 flex-shrink-0" />
                 <div>
                   <h3 className="font-medium text-saffron-800 mb-1">
                     Prescription Only Mode
@@ -514,7 +513,7 @@ export default function MedicineManagementPage() {
           <div className="mb-6">
             <div className="clarity-card bg-mountain-50 border-mountain-200 p-4">
               <div className="flex items-start gap-3">
-                <IoWarningOutline className="text-mountain-600 text-xl mt-0.5 flex-shrink-0" />
+                <IoWarningOutline className="text-mountain-600 text-stat-sm mt-0.5 flex-shrink-0" />
                 <div>
                   <h3 className="font-medium text-mountain-800 mb-1">
                     Select a branch to manage medicines
@@ -549,10 +548,10 @@ export default function MedicineManagementPage() {
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
                   <div className="p-2 bg-teal-100 rounded-lg">
-                    <IoMedkitOutline className="text-teal-700 text-xl" />
+                    <IoMedkitOutline className="text-teal-700 text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-mountain-900">
+                <p className="text-stat font-bold text-mountain-900">
                   {dashboardStats.totalMedicines}
                 </p>
                 <p className="text-[12px] text-mountain-600">Total Medicines</p>
@@ -560,11 +559,10 @@ export default function MedicineManagementPage() {
             </div>
 
             <div
-              className={`clarity-card transition-colors p-4 ${
-                dashboardStats.lowStockItems > 0
-                  ? "cursor-pointer hover:border-saffron-300"
-                  : ""
-              }`}
+              className={`clarity-card transition-colors p-4 ${dashboardStats.lowStockItems > 0
+                ? "cursor-pointer hover:border-saffron-300"
+                : ""
+                }`}
               role="button"
               onClick={() =>
                 dashboardStats.lowStockItems > 0 &&
@@ -574,10 +572,10 @@ export default function MedicineManagementPage() {
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
                   <div className="p-2 bg-saffron-100 rounded-lg">
-                    <IoWarningOutline className="text-saffron-600 text-xl" />
+                    <IoWarningOutline className="text-saffron-600 text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-mountain-900">
+                <p className="text-stat font-bold text-mountain-900">
                   {dashboardStats.lowStockItems}
                 </p>
                 <p className="text-[12px] text-mountain-600">
@@ -597,11 +595,10 @@ export default function MedicineManagementPage() {
             </div>
 
             <div
-              className={`clarity-card transition-colors p-4 ${
-                dashboardStats.expiringItems > 0
-                  ? "cursor-pointer hover:border-rose-300"
-                  : ""
-              }`}
+              className={`clarity-card transition-colors p-4 ${dashboardStats.expiringItems > 0
+                ? "cursor-pointer hover:border-rose-300"
+                : ""
+                }`}
               role="button"
               onClick={() =>
                 dashboardStats.expiringItems > 0 &&
@@ -611,10 +608,10 @@ export default function MedicineManagementPage() {
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
                   <div className="p-2 bg-rose-100 rounded-lg">
-                    <IoAlertCircleOutline className="text-rose-600 text-xl" />
+                    <IoAlertCircleOutline className="text-rose-600 text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-mountain-900">
+                <p className="text-stat font-bold text-mountain-900">
                   {dashboardStats.expiringItems}
                 </p>
                 <p className="text-[12px] text-mountain-600">
@@ -641,10 +638,10 @@ export default function MedicineManagementPage() {
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
                   <div className="p-2 bg-slate-100 rounded-lg">
-                    <IoBusinessOutline className="text-slate-600 text-xl" />
+                    <IoBusinessOutline className="text-slate-600 text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-mountain-900">
+                <p className="text-stat font-bold text-mountain-900">
                   {dashboardStats.totalBrands}
                 </p>
                 <p className="text-[12px] text-mountain-600">Brands</p>
@@ -659,10 +656,10 @@ export default function MedicineManagementPage() {
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
                   <div className="p-2 bg-health-100 rounded-lg">
-                    <IoFlaskOutline className="text-health-700 text-xl" />
+                    <IoFlaskOutline className="text-health-700 text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-mountain-900">
+                <p className="text-stat font-bold text-mountain-900">
                   {dashboardStats.totalCategories}
                 </p>
                 <p className="text-[12px] text-mountain-600">Categories</p>
@@ -693,12 +690,12 @@ export default function MedicineManagementPage() {
                   },
                   clinicSettings?.enableInventoryManagement
                     ? {
-                        key: "stock",
-                        icon: <IoArchiveOutline />,
-                        title: "Stock",
-                        count: dashboardStats.lowStockItems,
-                        countStyle: "bg-saffron-100 text-saffron-700",
-                      }
+                      key: "stock",
+                      icon: <IoArchiveOutline />,
+                      title: "Stock",
+                      count: dashboardStats.lowStockItems,
+                      countStyle: "bg-saffron-100 text-saffron-700",
+                    }
                     : null,
                   {
                     key: "brands",
@@ -714,17 +711,17 @@ export default function MedicineManagementPage() {
                   },
                   clinicSettings?.sellsMedicines
                     ? {
-                        key: "suppliers",
-                        icon: <IoPeopleOutline />,
-                        title: "Suppliers",
-                      }
+                      key: "suppliers",
+                      icon: <IoPeopleOutline />,
+                      title: "Suppliers",
+                    }
                     : null,
                   clinicSettings?.sellsMedicines
                     ? {
-                        key: "purchase-records",
-                        icon: <IoReceiptOutline />,
-                        title: "Purchase Records",
-                      }
+                      key: "purchase-records",
+                      icon: <IoReceiptOutline />,
+                      title: "Purchase Records",
+                    }
                     : null,
                   {
                     key: "settings",
@@ -738,11 +735,10 @@ export default function MedicineManagementPage() {
                       tab && (
                         <button
                           key={tab.key}
-                          className={`flex items-center gap-2 px-4 h-11 text-[13px] font-medium transition-colors whitespace-nowrap ${
-                            selectedTab === tab.key
-                              ? "text-teal-700 border-b-2 border-teal-600 bg-white relative top-[1px]"
-                              : "text-mountain-600 hover:text-mountain-800 hover:bg-slate-100"
-                          }`}
+                          className={`flex items-center gap-2 px-4 h-11 text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTab === tab.key
+                            ? "text-teal-700 border-b-2 border-teal-600 bg-white relative top-[1px]"
+                            : "text-mountain-600 hover:text-mountain-800 hover:bg-slate-100"
+                            }`}
                           onClick={() => handleTabChange(tab.key)}
                         >
                           {tab.icon}

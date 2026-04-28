@@ -24,6 +24,7 @@ import {
   IoPrintOutline,
   IoChevronBack,
   IoChevronForward,
+  IoChevronDown,
 } from "react-icons/io5";
 import * as XLSX from "xlsx";
 
@@ -43,7 +44,7 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { branchService } from "@/services/branchService";
 import { Prescription } from "@/types/medical-records";
-import { Branch } from "@/types/models";
+import { Branch, Doctor } from "@/types/models";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface ExtendedPrescription extends Prescription {
@@ -63,15 +64,15 @@ function CustomInput({
 }: any) {
   return (
     <div
-      className={`flex items-center border border-mountain-200 rounded min-h-[36px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${className || ""}`}
+      className={`flex items-center border border-border-base rounded-lg min-h-[36px] bg-surface-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all ${className || ""}`}
     >
       {startContent && (
-        <div className="pl-3 pr-2 text-mountain-400 flex items-center">
+        <div className="pl-3 pr-2 text-text-muted flex items-center">
           {startContent}
         </div>
       )}
       <input
-        className="flex-1 w-full text-[13px] px-2 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
+        className="flex-1 w-full text-[13px] px-2 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/50 font-medium"
         placeholder={placeholder}
         type={type}
         value={value}
@@ -86,25 +87,39 @@ function CustomSelect({
   onChange,
   options,
   className,
-  placeholder,
+  label,
 }: any) {
+  const selectedOption = options.find((o: any) => o.value === value);
+
   return (
-    <select
-      className={`h-[36px] bg-white border border-mountain-200 text-mountain-800 text-[13px] rounded px-3 py-1 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow ${className || ""}`}
-      value={value}
-      onChange={onChange}
-    >
-      {placeholder && (
-        <option disabled hidden value="">
-          {placeholder}
-        </option>
+    <div className={`flex flex-col gap-1.5 ${className || ""}`}>
+      {label && (
+        <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+          {label}
+        </label>
       )}
-      {options.map((opt: any) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+      <Dropdown placement="bottom-start" className="w-full">
+        <DropdownTrigger className="w-full">
+          <div className="w-full h-[36px] bg-surface-2 border border-border-base rounded-lg px-3 flex items-center justify-between text-[13px] font-medium text-text-main hover:bg-surface-3 transition-all cursor-pointer">
+            <span className="truncate">
+              {selectedOption?.label || "Select..."}
+            </span>
+            <IoChevronDown className="w-3.5 h-3.5 text-text-muted shrink-0 ml-2" />
+          </div>
+        </DropdownTrigger>
+        <DropdownMenu matchTriggerWidth className="w-full">
+          {options.map((option: any) => (
+            <DropdownItem
+              key={option.value}
+              className={value === option.value ? "bg-primary/10 text-primary font-bold" : ""}
+              onClick={() => onChange({ target: { value: option.value } } as any)}
+            >
+              {option.label}
+            </DropdownItem>
+          ))}
+        </DropdownMenu>
+      </Dropdown>
+    </div>
   );
 }
 
@@ -122,25 +137,25 @@ function ModalShell({ isOpen, onClose, title, children, size = "md" }: any) {
   return (
     <>
       <div
-        className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] bg-surface/40 backdrop-blur-md"
         onClick={onClose}
       />
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none">
         <div
-          className={`bg-white rounded shadow-lg w-full ${maxWidth} pointer-events-auto flex flex-col max-h-[90vh]`}
+          className={`bg-surface border border-border-base rounded-2xl shadow-2xl w-full ${maxWidth} pointer-events-auto flex flex-col max-h-[90vh] overflow-hidden`}
         >
-          <div className="flex items-center justify-between px-5 py-3 border-b border-mountain-100">
-            <h3 className="text-[15px] font-semibold text-mountain-900">
+          <div className="flex items-center justify-between px-6 py-5 border-b border-border-base bg-surface-2/50">
+            <h3 className="text-lg font-bold text-text-main">
               {title}
             </h3>
             <button
-              className="text-mountain-400 hover:text-mountain-600"
+              className="text-text-muted hover:text-text-main transition-colors"
               onClick={onClose}
             >
-              <IoCloseOutline className="w-5 h-5" />
+              <IoCloseOutline className="w-6 h-6" />
             </button>
           </div>
-          <div className="px-5 py-4 overflow-y-auto">{children}</div>
+          <div className="px-6 py-6 overflow-y-auto">{children}</div>
         </div>
       </div>
     </>
@@ -155,8 +170,7 @@ export default function PrescriptionsPage() {
   const branchId = userData?.branchId ?? contextBranchId ?? null;
   const isClinicAdmin =
     userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+    userData?.role === "system-owner";
 
   const [prescriptions, setPrescriptions] = useState<ExtendedPrescription[]>(
     [],
@@ -164,6 +178,7 @@ export default function PrescriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
   const [branchMap, setBranchMap] = useState<Record<string, string>>({});
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(null);
@@ -250,6 +265,19 @@ export default function PrescriptionsPage() {
   useEffect(() => {
     if (branchId) setSelectedBranchId(null);
   }, [branchId]);
+
+  // Load all doctors for the filter
+  useEffect(() => {
+    if (!clinicId) return;
+    (async () => {
+      try {
+        const doctorsData = await doctorService.getDoctors();
+        setAllDoctors(doctorsData);
+      } catch (err) {
+        console.error("Error fetching doctors:", err);
+      }
+    })();
+  }, [clinicId]);
 
   useEffect(() => {
     const fetchPrescriptions = async () => {
@@ -341,9 +369,6 @@ export default function PrescriptionsPage() {
     return searchMatch && statusMatch && doctorMatch && dateMatch;
   });
 
-  const uniqueDoctors = Array.from(
-    new Set(prescriptions.map((p) => ({ id: p.doctorId, name: p.doctorName }))),
-  ).filter((d, i, self) => self.findIndex((sd) => sd.id === d.id) === i);
 
   const totalPages = Math.max(
     1,
@@ -508,9 +533,9 @@ export default function PrescriptionsPage() {
   };
 
   const statusColors: Record<string, string> = {
-    active: "bg-teal-50 text-teal-700 border border-teal-200",
-    completed: "bg-mountain-100 text-mountain-800 border border-mountain-200",
-    cancelled: "bg-red-50 text-red-700 border border-red-200",
+    active: "bg-primary/10 text-primary border border-primary/20",
+    completed: "bg-surface-2 text-text-muted border border-border-base",
+    cancelled: "bg-red-500/10 text-red-500 border border-red-500/20",
   };
 
   return (
@@ -518,26 +543,36 @@ export default function PrescriptionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "sm" })}>Prescriptions</h1>
-          <p className="text-[13.5px] text-mountain-500 mt-1">
+          <h1 className={title({ size: "lg" })}>Prescriptions</h1>
+          <p className="text-xs font-medium text-text-muted mt-1">
             Manage patient prescriptions and medical records
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {!branchId && isClinicAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-mountain-500">Branch</span>
-              <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
-                value={selectedBranchId ?? ""}
-                onChange={(e) => setSelectedBranchId(e.target.value || null)}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-1.5 bg-surface-2 border border-border-base px-2.5 py-1 rounded-lg">
+              <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Branch</span>
+              <Dropdown placement="bottom-end">
+                <DropdownTrigger>
+                  <div className="h-6 flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity">
+                    <span className="text-[12px] font-bold text-text-main">
+                      {branches.find((b) => b.id === (selectedBranchId ?? ""))?.name || "All Branches"}
+                    </span>
+                    <IoChevronDown className="w-3 h-3 text-text-muted" />
+                  </div>
+                </DropdownTrigger>
+                <DropdownMenu className="min-w-[150px]">
+                  {branches.map((b) => (
+                    <DropdownItem
+                      key={b.id}
+                      className={selectedBranchId === b.id ? "bg-primary/10 text-primary font-bold" : ""}
+                      onClick={() => setSelectedBranchId(b.id)}
+                    >
+                      {b.name}
+                    </DropdownItem>
+                  ))}
+                </DropdownMenu>
+              </Dropdown>
             </div>
           )}
           <Dropdown placement="bottom-end">
@@ -581,11 +616,11 @@ export default function PrescriptionsPage() {
       </div>
 
       {/* Filter and Table Container */}
-      <div className="bg-white border border-mountain-200 rounded shadow-sm">
+      <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-hidden">
         {/* Controls */}
-        <div className="p-4 border-b border-mountain-100 bg-mountain-50/50 flex flex-col gap-3">
+        <div className="p-5 border-b border-border-base bg-surface-2/50 flex flex-col gap-4">
           <div className="flex justify-between items-center">
-            <h4 className="font-semibold text-[14px] text-mountain-800">
+            <h4 className="font-bold text-[11px] text-text-muted uppercase tracking-widest">
               Search & Filter
             </h4>
             <div className="flex gap-2">
@@ -640,7 +675,7 @@ export default function PrescriptionsPage() {
               className="w-full md:w-48"
               options={[
                 { value: "all", label: "All Doctors" },
-                ...uniqueDoctors.map((d) => ({ value: d.id, label: d.name })),
+                ...allDoctors.map((d) => ({ value: d.id, label: `Dr. ${d.name}` })),
               ]}
               value={selectedDoctor}
               onChange={(e: any) => {
@@ -653,10 +688,10 @@ export default function PrescriptionsPage() {
           {hasAdvancedFilters && (
             <div className="flex flex-wrap gap-2 pt-1 border-t border-mountain-100">
               {selectedStatus !== "all" && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 rounded text-[12px] font-medium text-teal-800">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-md text-[12px] font-semibold text-primary">
                   Status: <span className="capitalize">{selectedStatus}</span>
                   <button
-                    className="text-teal-600 hover:text-teal-900"
+                    className="text-primary hover:text-primary-dark transition-colors"
                     onClick={() => setSelectedStatus("all")}
                   >
                     <IoAddOutline className="w-3.5 h-3.5 rotate-45" />
@@ -664,11 +699,11 @@ export default function PrescriptionsPage() {
                 </div>
               )}
               {selectedDoctor !== "all" && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-mountain-100 border border-mountain-200 rounded text-[12px] font-medium text-mountain-800">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-base rounded-md text-[12px] font-semibold text-text-main">
                   Doctor:{" "}
-                  {uniqueDoctors.find((d) => d.id === selectedDoctor)?.name}
+                  {allDoctors.find((d) => d.id === selectedDoctor)?.name}
                   <button
-                    className="text-mountain-400 hover:text-mountain-600"
+                    className="text-text-muted hover:text-text-main transition-colors"
                     onClick={() => setSelectedDoctor("all")}
                   >
                     <IoAddOutline className="w-3.5 h-3.5 rotate-45" />
@@ -676,10 +711,10 @@ export default function PrescriptionsPage() {
                 </div>
               )}
               {(dateRange.start || dateRange.end) && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded text-[12px] font-medium text-blue-800">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-md text-[12px] font-semibold text-primary">
                   Date: {dateRange.start || "Any"} - {dateRange.end || "Any"}
                   <button
-                    className="text-blue-600 hover:text-blue-900"
+                    className="text-primary hover:text-primary-dark transition-colors"
                     onClick={() => setDateRange({ start: "", end: "" })}
                   >
                     <IoAddOutline className="w-3.5 h-3.5 rotate-45" />
@@ -697,13 +732,13 @@ export default function PrescriptionsPage() {
           title="Advanced Filters"
           onClose={() => setIsFiltersOpen(false)}
         >
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[13px] font-medium text-mountain-700">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                 From Date
               </label>
               <input
-                className="px-3 py-1.5 border border-mountain-200 rounded text-[13px] focus:outline-none focus:border-teal-500"
+                className="h-[36px] bg-surface-2 border border-border-base rounded-lg px-3 text-sm text-text-main focus:outline-none focus:border-primary transition-all font-medium"
                 type="date"
                 value={dateRange.start}
                 onChange={(e) =>
@@ -711,12 +746,12 @@ export default function PrescriptionsPage() {
                 }
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[13px] font-medium text-mountain-700">
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                 To Date
               </label>
               <input
-                className="px-3 py-1.5 border border-mountain-200 rounded text-[13px] focus:outline-none focus:border-teal-500"
+                className="h-[36px] bg-surface-2 border border-border-base rounded-lg px-3 text-sm text-text-main focus:outline-none focus:border-primary transition-all font-medium"
                 type="date"
                 value={dateRange.end}
                 onChange={(e) =>
@@ -744,37 +779,41 @@ export default function PrescriptionsPage() {
         {/* Table/Content Area */}
         <div className="p-0 overflow-x-auto min-h-[300px]">
           {loading ? (
-            <div className="flex justify-center items-center h-[300px]">
+            <div className="flex justify-center items-center h-[400px]">
               <Spinner size="md" />
             </div>
           ) : error ? (
-            <div className="flex flex-col justify-center items-center h-[300px] gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center border border-red-100">
-                <span className="text-red-500">⚠️</span>
+            <div className="flex flex-col justify-center items-center h-[400px] gap-4 text-center p-6">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                <span className="text-2xl">⚠️</span>
               </div>
-              <h3 className="text-[14px] font-semibold text-mountain-800">
-                Error Loading Prescriptions
-              </h3>
-              <p className="text-[13px] text-mountain-500 max-w-sm">{error}</p>
+              <div>
+                <h3 className="text-lg font-bold text-text-main">
+                  Error Loading Prescriptions
+                </h3>
+                <p className="text-sm font-medium text-text-muted mt-1 max-w-sm">{error}</p>
+              </div>
               <Button color="primary" onClick={() => window.location.reload()}>
                 Try Again
               </Button>
             </div>
           ) : currentPrescriptions.length === 0 ? (
-            <div className="flex flex-col justify-center items-center h-[300px] gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-mountain-50 flex items-center justify-center border border-mountain-100">
-                <IoReceiptOutline className="w-6 h-6 text-mountain-400" />
+            <div className="flex flex-col justify-center items-center h-[400px] gap-6 text-center p-6 bg-surface-2/30">
+              <div className="w-20 h-20 rounded-3xl bg-surface-2 flex items-center justify-center border border-border-base shadow-inner">
+                <IoReceiptOutline className="w-10 h-10 text-text-muted/40" />
               </div>
-              <h3 className="text-[14px] font-semibold text-mountain-800">
-                {searchTerm || hasAdvancedFilters
-                  ? "No prescriptions match your criteria"
-                  : "No prescriptions created yet"}
-              </h3>
-              <p className="text-[13px] text-mountain-500 max-w-sm">
-                {searchTerm || hasAdvancedFilters
-                  ? "Try removing some filters or change your search term."
-                  : "Start writing prescriptions for your patients."}
-              </p>
+              <div>
+                <h3 className="text-lg font-bold text-text-main">
+                  {searchTerm || hasAdvancedFilters
+                    ? "No prescriptions found"
+                    : "No prescriptions yet"}
+                </h3>
+                <p className="text-sm font-medium text-text-muted mt-1 max-w-sm">
+                  {searchTerm || hasAdvancedFilters
+                    ? "Try adjusting your filters or search term to find what you're looking for."
+                    : "Start writing prescriptions for your patients to see them here."}
+                </p>
+              </div>
               {!searchTerm && !hasAdvancedFilters && (
                 <Button
                   color="primary"
@@ -786,114 +825,88 @@ export default function PrescriptionsPage() {
               )}
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[700px]">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                <tr className="bg-surface-2/50 border-b border-border-base">
+                  <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     No.
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Patient
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Doctor
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Date
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
-                    Medicines
-                  </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600 w-24">
-                    Action
+                  <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider text-right">
+                    Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-border-base">
                 {currentPrescriptions.map((prescription) => (
                   <tr
                     key={prescription.id}
-                    className="hover:bg-mountain-50/30 transition-colors"
+                    className="hover:bg-surface-2/30 transition-colors group"
                   >
-                    <td className="px-5 py-3">
+                    <td className="px-6 py-4">
                       <Link
-                        className="text-[13.5px] font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+                        className="text-sm font-bold text-text-main group-hover:text-primary transition-colors"
                         to={`/dashboard/prescriptions/${prescription.id}`}
                       >
                         {prescription.prescriptionNo}
                       </Link>
                     </td>
-                    <td className="px-5 py-3 text-[13.5px] font-medium text-mountain-900">
-                      {prescription.patientName}
-                    </td>
-                    <td className="px-5 py-3 text-[13.5px] text-mountain-700">
-                      {prescription.doctorName}
-                    </td>
-                    <td className="px-5 py-3 text-[13.5px] text-mountain-600">
-                      {formatDate(prescription.prescriptionDate)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-1.5 text-[13px] text-mountain-700">
-                        <span className="font-semibold text-mountain-900">
-                          {prescription.itemsCount}
-                        </span>
-                        rx
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-bold text-text-main">
+                        {prescription.patientName}
                       </div>
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-text-main">
+                        {prescription.doctorName}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-text-muted">
+                        {formatDate(prescription.prescriptionDate)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
                       <span
-                        className={`inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium capitalize ${statusColors[prescription.status] || statusColors.completed}`}
+                        className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${statusColors[prescription.status] || "bg-surface-2 text-text-muted border border-border-base"}`}
                       >
                         {prescription.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-[13.5px]">
-                      <Dropdown placement="bottom-end">
-                        <DropdownTrigger>
-                          <Button
-                            isIconOnly
-                            className="text-mountain-500"
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <IoEllipsisVerticalOutline />
-                          </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu aria-label="Actions">
-                          <DropdownItem
-                            startContent={<IoEyeOutline />}
-                            onClick={() =>
-                              navigate(
-                                `/dashboard/prescriptions/${prescription.id}`,
-                              )
-                            }
-                          >
-                            View Details
-                          </DropdownItem>
-                          <DropdownItem
-                            startContent={<IoCreateOutline />}
-                            onClick={() =>
-                              navigate(
-                                `/dashboard/prescriptions/${prescription.id}/edit`,
-                              )
-                            }
-                          >
-                            Edit
-                          </DropdownItem>
-                          <DropdownItem
-                            color="danger"
-                            startContent={<IoTrashOutline />}
-                            onClick={() => {
-                              /* TODO: Implement delete */
-                            }}
-                          >
-                            Delete
-                          </DropdownItem>
-                        </DropdownMenu>
-                      </Dropdown>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="light"
+                          onClick={() =>
+                            navigate(`/dashboard/prescriptions/${prescription.id}`)
+                          }
+                        >
+                          <IoEyeOutline className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="light"
+                          onClick={() =>
+                            navigate(`/dashboard/prescriptions/edit/${prescription.id}`)
+                          }
+                        >
+                          <IoCreateOutline className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -904,27 +917,29 @@ export default function PrescriptionsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && currentPrescriptions.length > 0 && (
-          <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/30 flex items-center justify-between">
-            <p className="text-[12.5px] text-mountain-500">
+          <div className="px-6 py-4 border-t border-border-base bg-surface-2/30 flex items-center justify-between">
+            <p className="text-xs font-medium text-text-muted">
               Showing{" "}
-              <span className="font-medium text-mountain-900">
+              <span className="font-bold text-text-main mx-1">
                 {startIndex + 1}
               </span>{" "}
               to{" "}
-              <span className="font-medium text-mountain-900">
+              <span className="font-bold text-text-main mx-1">
                 {Math.min(
                   startIndex + itemsPerPage,
                   filteredPrescriptions.length,
                 )}
               </span>{" "}
               of{" "}
-              <span className="font-medium text-mountain-900">
+              <span className="font-bold text-text-main mx-1">
                 {filteredPrescriptions.length}
               </span>
+              prescriptions
             </p>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <Button
                 isIconOnly
+                className="w-8 h-8 rounded-lg border-border-base"
                 disabled={currentPage === 1}
                 size="sm"
                 variant="bordered"
@@ -932,11 +947,12 @@ export default function PrescriptionsPage() {
               >
                 <IoChevronBack className="w-3.5 h-3.5" />
               </Button>
-              <div className="px-3 text-[13px] font-medium text-mountain-700">
+              <div className="px-4 py-1.5 bg-surface-2 border border-border-base rounded-lg text-xs font-bold text-text-main min-w-[60px] text-center">
                 {currentPage} / {totalPages}
               </div>
               <Button
                 isIconOnly
+                className="w-8 h-8 rounded-lg border-border-base"
                 disabled={currentPage === totalPages}
                 size="sm"
                 variant="bordered"

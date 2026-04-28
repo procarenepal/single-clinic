@@ -119,8 +119,7 @@ export default function ReportsPage() {
 
   const isClinicAdmin =
     userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+    userData?.role === "system-owner";
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -885,7 +884,7 @@ export default function ReportsPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Page Header — spec: clarity-page-header, clarity-page-title, clarity-page-subtitle */}
-      <div className="clarity-page-header flex-col sm:flex-row gap-4">
+      <div className="clarity-page-header flex-col sm:flex-row gap-4 !items-start sm:!items-center">
         <div>
           <h1 className="clarity-page-title">Reports & Analytics</h1>
           <p className="clarity-page-subtitle">
@@ -919,7 +918,7 @@ export default function ReportsPage() {
             Report Filters
           </h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Input
             fullWidth
             isDisabled={allDates}
@@ -941,6 +940,7 @@ export default function ReportsPage() {
             onValueChange={(v) => setDateRange((prev) => ({ ...prev, end: v }))}
           />
           <Select
+            fullWidth
             label="Doctor"
             selectedKeys={[selectedDoctor]}
             size="md"
@@ -953,6 +953,7 @@ export default function ReportsPage() {
             ))}
           </Select>
           <Select
+            fullWidth
             label="Appointment Type"
             selectedKeys={[selectedAppointmentType]}
             size="md"
@@ -978,10 +979,10 @@ export default function ReportsPage() {
           className="w-full"
           classNames={{
             tabList:
-              "w-full relative rounded-none px-4 pt-2 border-b border-mountain-200",
-            tab: "px-3 h-10 text-xs",
-            tabContent: "text-teal-700",
-            cursor: "bg-teal-700",
+              "w-full relative rounded-none px-4 pt-2 border-b border-mountain-200 dark:border-zinc-800 overflow-x-auto scrollbar-none",
+            tab: "px-3 h-10 text-[13px]",
+            tabContent: "text-teal-700 dark:text-teal-400 font-medium",
+            cursor: "bg-teal-700 dark:bg-teal-400",
           }}
           color="primary"
           selectedKey={selectedTab}
@@ -998,30 +999,30 @@ export default function ReportsPage() {
             }
           >
             <div className="px-4 py-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                 <div className="clarity-stat text-center">
-                  <IoCalendarOutline className="text-teal-700 text-xl mx-auto mb-1" />
+                  <IoCalendarOutline className="text-teal-700 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-teal-700">
                     {stats.totalAppointments}
                   </p>
                   <p className="clarity-stat-label">Total Appointments</p>
                 </div>
                 <div className="clarity-stat text-center">
-                  <IoPeopleOutline className="text-health-600 text-xl mx-auto mb-1" />
+                  <IoPeopleOutline className="text-health-600 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-health-600">
                     {stats.totalPatients}
                   </p>
                   <p className="clarity-stat-label">Total Patients</p>
                 </div>
                 <div className="clarity-stat text-center">
-                  <IoMedicalOutline className="text-health-600 text-xl mx-auto mb-1" />
+                  <IoMedicalOutline className="text-health-600 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-health-600">
                     {stats.activeDoctors}
                   </p>
                   <p className="clarity-stat-label">Active Doctors</p>
                 </div>
                 <div className="clarity-stat text-center">
-                  <IoMedkitOutline className="text-saffron-600 text-xl mx-auto mb-1" />
+                  <IoMedkitOutline className="text-saffron-600 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-saffron-600">
                     {stats.completionRate}%
                   </p>
@@ -1066,84 +1067,72 @@ export default function ReportsPage() {
                 <div className="clarity-card p-3">
                   <h4 className="clarity-section-header">Quick Export</h4>
                   <Divider className="my-2" />
-                  <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <Button
                       fullWidth
-                      color="primary"
+                      className="justify-start h-10 px-3 bg-primary-50/50 dark:bg-primary-900/10 border border-primary-100/50 dark:border-primary-800/30 text-primary-700 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={
-                        <IoDownloadOutline className="w-3.5 h-3.5" />
-                      }
+                      startContent={<IoCalendarOutline className="w-4 h-4 opacity-80" />}
                       variant="flat"
                       onPress={exportAppointmentsReport}
                     >
-                      Export Appointments Report
+                      Appointments Report
                     </Button>
                     <Button
                       fullWidth
-                      color="secondary"
+                      className="justify-start h-10 px-3 bg-secondary-50/50 dark:bg-secondary-900/10 border border-secondary-100/50 dark:border-secondary-800/30 text-secondary-700 dark:text-secondary-400 hover:bg-secondary-100 dark:hover:bg-secondary-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={
-                        <IoDownloadOutline className="w-3.5 h-3.5" />
-                      }
+                      startContent={<IoPeopleOutline className="w-4 h-4 opacity-80" />}
                       variant="flat"
                       onPress={exportPatientsReport}
                     >
-                      Export Patients Report
+                      Patients Report
                     </Button>
                     <Button
                       fullWidth
-                      color="success"
+                      className="justify-start h-10 px-3 bg-success-50/50 dark:bg-success-900/10 border border-success-100/50 dark:border-success-800/30 text-success-700 dark:text-success-400 hover:bg-success-100 dark:hover:bg-success-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={
-                        <IoDownloadOutline className="w-3.5 h-3.5" />
-                      }
+                      startContent={<IoMedicalOutline className="w-4 h-4 opacity-80" />}
                       variant="flat"
                       onPress={exportDoctorsReport}
                     >
-                      Export Doctors Report
+                      Doctors Report
                     </Button>
                     <Button
                       fullWidth
-                      color="warning"
+                      className="justify-start h-10 px-3 bg-warning-50/50 dark:bg-warning-900/10 border border-warning-100/50 dark:border-warning-800/30 text-warning-700 dark:text-warning-400 hover:bg-warning-100 dark:hover:bg-warning-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={
-                        <IoDownloadOutline className="w-3.5 h-3.5" />
-                      }
+                      startContent={<IoMedkitOutline className="w-4 h-4 opacity-80" />}
                       variant="flat"
                       onPress={exportMedicinesReport}
                     >
-                      Export Medicines Report
+                      Medicines Report
                     </Button>
                     <Button
                       fullWidth
-                      color="secondary"
+                      className="justify-start h-10 px-3 bg-secondary-50/50 dark:bg-secondary-900/10 border border-secondary-100/50 dark:border-secondary-800/30 text-secondary-700 dark:text-secondary-400 hover:bg-secondary-100 dark:hover:bg-secondary-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={
-                        <IoDownloadOutline className="w-3.5 h-3.5" />
-                      }
+                      startContent={<IoStorefrontOutline className="w-4 h-4 opacity-80" />}
                       variant="flat"
                       onPress={exportPharmacyReport}
                     >
-                      Export Pharmacy Report
+                      Pharmacy Report
                     </Button>
                     <Button
                       fullWidth
-                      color="default"
+                      className="justify-start h-10 px-3 bg-mountain-50/50 dark:bg-mountain-900/10 border border-mountain-200/50 dark:border-mountain-800/30 text-mountain-700 dark:text-mountain-400 hover:bg-mountain-100 dark:hover:bg-mountain-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={
-                        <IoDownloadOutline className="w-3.5 h-3.5" />
-                      }
+                      startContent={<IoLayersOutline className="w-4 h-4 opacity-80" />}
                       variant="flat"
                       onPress={exportInventoryReport}
                     >
-                      Export Inventory Report
+                      Inventory Report
                     </Button>
                   </div>
                 </div>
@@ -1177,9 +1166,9 @@ export default function ReportsPage() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                 <div className="clarity-stat text-center">
-                  <IoCalendarOutline className="text-teal-700 text-xl mx-auto mb-1" />
+                  <IoCalendarOutline className="text-teal-700 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-teal-700">
                     {
                       getFilteredAppointments().filter(
@@ -1190,7 +1179,7 @@ export default function ReportsPage() {
                   <p className="clarity-stat-label">Scheduled</p>
                 </div>
                 <div className="clarity-stat text-center">
-                  <IoCheckmarkCircleOutline className="text-health-600 text-xl mx-auto mb-1" />
+                  <IoCheckmarkCircleOutline className="text-health-600 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-health-600">
                     {
                       getFilteredAppointments().filter(
@@ -1201,7 +1190,7 @@ export default function ReportsPage() {
                   <p className="clarity-stat-label">Completed</p>
                 </div>
                 <div className="clarity-stat text-center">
-                  <IoTimeOutline className="text-saffron-600 text-xl mx-auto mb-1" />
+                  <IoTimeOutline className="text-saffron-600 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-saffron-600">
                     {
                       getFilteredAppointments().filter(
@@ -1212,7 +1201,7 @@ export default function ReportsPage() {
                   <p className="clarity-stat-label">In Progress</p>
                 </div>
                 <div className="clarity-stat text-center">
-                  <IoCloseCircleOutline className="text-rose-600 text-xl mx-auto mb-1" />
+                  <IoCloseCircleOutline className="text-rose-600 text-stat-sm mx-auto mb-1" />
                   <p className="clarity-stat-value text-rose-600">
                     {
                       getFilteredAppointments().filter(
@@ -1321,12 +1310,12 @@ export default function ReportsPage() {
                               <Chip
                                 color={
                                   statusColor as
-                                    | "success"
-                                    | "primary"
-                                    | "warning"
-                                    | "danger"
-                                    | "default"
-                                    | "secondary"
+                                  | "success"
+                                  | "primary"
+                                  | "warning"
+                                  | "danger"
+                                  | "default"
+                                  | "secondary"
                                 }
                                 size="sm"
                                 variant="flat"
@@ -1406,7 +1395,7 @@ export default function ReportsPage() {
                   Export Excel
                 </Button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
                 <div className="clarity-stat text-center">
                   <p className="clarity-stat-value text-health-600">
                     {getFilteredPatients().length}
@@ -1502,8 +1491,8 @@ export default function ReportsPage() {
                           <td className="whitespace-nowrap">
                             {patient.createdAt
                               ? new Date(
-                                  patient.createdAt as any,
-                                ).toLocaleDateString()
+                                patient.createdAt as any,
+                              ).toLocaleDateString()
                               : ""}
                           </td>
                         </tr>
@@ -1940,14 +1929,14 @@ export default function ReportsPage() {
                     {Array.from(
                       new Set(filteredBillings.map((b) => b.doctorId)),
                     ).length > 6 && (
-                      <p className="text-sm text-mountain-500 text-center mt-2">
-                        +
-                        {Array.from(
-                          new Set(filteredBillings.map((b) => b.doctorId)),
-                        ).length - 6}{" "}
-                        more doctors
-                      </p>
-                    )}
+                        <p className="text-sm text-mountain-500 text-center mt-2">
+                          +
+                          {Array.from(
+                            new Set(filteredBillings.map((b) => b.doctorId)),
+                          ).length - 6}{" "}
+                          more doctors
+                        </p>
+                      )}
                     <Divider className="my-3" />
                     <h4 className="clarity-section-header">Revenue Trends</h4>
                     <div className="grid grid-cols-2 gap-3">

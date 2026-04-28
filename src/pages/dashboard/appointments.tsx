@@ -61,19 +61,18 @@ import {
 const getStatusColorCls = (status: string) => {
   switch (status?.toLowerCase()) {
     case "confirmed":
-      return "bg-health-100 text-health-700 border-health-200";
+      return "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20";
     case "scheduled":
-      return "bg-teal-100 text-teal-700 border-teal-200";
+      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20";
     case "in-progress":
-      return "bg-saffron-100 text-saffron-700 border-saffron-200";
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
     case "completed":
-      return "bg-health-100 text-health-700 border-health-200";
+      return "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20";
     case "cancelled":
-      return "bg-red-100 text-red-700 border-red-200";
     case "no-show":
-      return "bg-red-100 text-red-700 border-red-200";
+      return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20";
     default:
-      return "bg-mountain-100 text-mountain-600 border-mountain-200";
+      return "bg-surface-2 text-text-muted border-border-base";
   }
 };
 
@@ -89,7 +88,7 @@ const Avatar = ({ name }: { name: string }) => {
       .toUpperCase() || "?";
 
   return (
-    <div className="w-8 h-8 rounded border border-mountain-200 bg-white text-mountain-600 flex items-center justify-center text-[11px] font-bold shrink-0 shadow-sm">
+    <div className="w-8 h-8 rounded border border-border-base bg-surface text-text-muted flex items-center justify-center text-[11px] font-bold shrink-0">
       {initials}
     </div>
   );
@@ -110,18 +109,18 @@ function Pagination({
     <div className="flex items-center gap-1.5">
       <button
         aria-label="Previous page"
-        className="w-9 h-9 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 hover:bg-mountain-50 hover:text-teal-700 hover:border-teal-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        className="w-9 h-9 flex items-center justify-center rounded border border-border-base text-text-muted hover:bg-surface-2 hover:text-primary hover:border-primary/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
         disabled={page === 1}
         onClick={() => onChange(Math.max(1, page - 1))}
       >
         <IoChevronBack className="w-5 h-5" />
       </button>
-      <span className="text-[13px] font-medium text-mountain-700 px-3">
+      <span className="text-[13px] font-medium text-text-main px-3">
         Page {page} of {total}
       </span>
       <button
         aria-label="Next page"
-        className="w-9 h-9 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 hover:bg-mountain-50 hover:text-teal-700 hover:border-teal-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        className="w-9 h-9 flex items-center justify-center rounded border border-border-base text-text-muted hover:bg-surface-2 hover:text-primary hover:border-primary/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
         disabled={page === total}
         onClick={() => onChange(Math.min(total, page + 1))}
       >
@@ -146,31 +145,31 @@ function CustomModal({
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="bg-white rounded border border-mountain-200 shadow-xl max-w-md w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-surface rounded border border-border-base shadow-xl max-w-md w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200">
         <div
-          className={`px-5 py-4 border-b border-mountain-100 flex justify-between items-center ${isDanger ? "bg-red-50/50" : "bg-mountain-50/50"}`}
+          className={`px-5 py-4 border-b border-border-base flex justify-between items-center ${isDanger ? "bg-red-500/5" : "bg-surface-2"}`}
         >
           <h3
-            className={`font-semibold text-[15px] flex items-center gap-2 ${isDanger ? "text-red-700" : "text-mountain-900"}`}
+            className={`font-semibold text-[15px] flex items-center gap-2 ${isDanger ? "text-red-500" : "text-text-main"}`}
           >
             {isDanger ? <IoWarningOutline className="w-5 h-5" /> : null}
             {title}
           </h3>
           <button
-            className="text-mountain-400 hover:text-mountain-700"
+            className="text-text-muted hover:text-text-main"
             onClick={onClose}
           >
             <IoCloseOutline className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-5 text-[14px] text-mountain-700 text-left">
+        <div className="p-5 text-[14px] text-text-muted text-left">
           {children}
         </div>
         {footer && (
-          <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50 flex justify-end gap-3">
+          <div className="px-5 py-3 border-t border-border-base bg-surface-2 flex justify-end gap-3">
             {footer}
           </div>
         )}
@@ -182,7 +181,7 @@ function CustomModal({
 
 export default function AppointmentsPage() {
   const navigate = useNavigate();
-  const { clinicId, userData, branchId } = useAuthContext();
+  const { clinicId, userData, branchId, isClinicAdmin: checkAdmin, isSystemOwner: checkOwner } = useAuthContext();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -215,10 +214,7 @@ export default function AppointmentsPage() {
 
   const itemsPerPage = 6;
 
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+  const isClinicAdmin = checkAdmin() || checkOwner();
 
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
@@ -236,7 +232,7 @@ export default function AppointmentsPage() {
 
     (async () => {
       try {
-        const data = await branchService.getClinicBranches(clinicId, true);
+        const data = await branchService.getClinicBranches();
 
         if (cancelled) return;
         setBranches(data);
@@ -270,14 +266,12 @@ export default function AppointmentsPage() {
         const userRole = userData.role;
         const isAdmin =
           userRole === "clinic-admin" ||
-          userRole === "clinic-super-admin" ||
-          userRole === "super-admin";
+          userRole === "system-owner";
         let doctorId: string | null = null;
 
         if (!isAdmin && userData.email) {
           try {
             const matchingDoctor = await doctorService.getDoctorByEmail(
-              clinicId,
               userData.email,
             );
 
@@ -296,14 +290,12 @@ export default function AppointmentsPage() {
           await Promise.all([
             doctorId
               ? patientService.getPatientsByDoctor(
-                  clinicId,
-                  doctorId,
-                  effectiveBranchId,
-                )
-              : patientService.getPatientsByClinic(clinicId, effectiveBranchId),
-            doctorService.getDoctorsByClinic(clinicId, effectiveBranchId),
-            appointmentTypeService.getAppointmentTypesByClinic(
-              clinicId,
+                doctorId,
+                effectiveBranchId,
+              )
+              : patientService.getPatients(effectiveBranchId),
+            doctorService.getDoctors(effectiveBranchId),
+            appointmentTypeService.getAppointmentTypes(
               effectiveBranchId,
             ),
           ]);
@@ -349,17 +341,17 @@ export default function AppointmentsPage() {
 
     const unsubscribe = currentDoctorId
       ? appointmentService.subscribeToDoctorAppointments(
-          currentDoctorId,
-          effectiveBranchId,
-          handleSnapshot,
-          handleError,
-        )
+        currentDoctorId,
+        effectiveBranchId,
+        handleSnapshot,
+        handleError,
+      )
       : appointmentService.subscribeToClinicAppointments(
-          clinicId,
-          effectiveBranchId,
-          handleSnapshot,
-          handleError,
-        );
+        undefined, // clinicId
+        effectiveBranchId,
+        handleSnapshot,
+        handleError,
+      );
 
     return () => {
       isActive = false;
@@ -498,7 +490,7 @@ export default function AppointmentsPage() {
       layoutType === "tabbed" ||
       !selectedDate ||
       format(appt.appointmentDate, "yyyy-MM-dd") ===
-        format(selectedDate, "yyyy-MM-dd");
+      format(selectedDate, "yyyy-MM-dd");
 
     return matchesSearch && matchesStatus && matchesDoctor && matchesDate;
   });
@@ -565,11 +557,11 @@ export default function AppointmentsPage() {
     if (appointmentsToRender.length === 0) {
       return (
         <div className="py-12 text-center flex flex-col items-center">
-          <IoCalendarOutline className="w-12 h-12 text-mountain-300 mb-3" />
-          <p className="mt-2 text-[14.5px] font-medium text-mountain-800">
+          <IoCalendarOutline className="w-12 h-12 text-text-muted/20 mb-3" />
+          <p className="mt-2 text-[14.5px] font-medium text-text-main">
             No appointments found
           </p>
-          <p className="text-[13px] text-mountain-500 mb-4">
+          <p className="text-[13px] text-text-muted mb-4">
             You have no appointments scheduled for this period.
           </p>
           <Link to="/dashboard/appointments/new">
@@ -595,7 +587,7 @@ export default function AppointmentsPage() {
             return (
               <div
                 key={appointment.id}
-                className={`flex flex-col md:flex-row md:items-center justify-between p-4 bg-white border border-mountain-200 rounded shadow-sm hover:border-teal-300 transition-colors relative group ${getBlinkingCssClass(apptTypeColor)}`}
+                className={`flex flex-col md:flex-row md:items-center justify-between p-4 bg-surface border border-border-base rounded shadow-none hover:border-primary transition-colors relative group ${getBlinkingCssClass(apptTypeColor)}`}
                 onMouseEnter={() => setHoveredAppointment(appointment.id)}
                 onMouseLeave={() => setHoveredAppointment(null)}
               >
@@ -603,32 +595,32 @@ export default function AppointmentsPage() {
                   <Avatar name={patientName} />
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 w-full">
                     <div>
-                      <p className="text-[13.5px] font-semibold text-mountain-900 leading-none mb-1">
+                      <p className="text-[13.5px] font-semibold text-text-main leading-none mb-1">
                         {patientName}
                       </p>
-                      <p className="text-[11.5px] font-medium text-mountain-500">
+                      <p className="text-[11.5px] font-medium text-text-muted">
                         Reg #{getPatientRegNumberById(appointment.patientId)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[13px] font-medium text-mountain-800 leading-none mb-1">
+                      <p className="text-[13px] font-medium text-text-main leading-none mb-1">
                         Dr. {doctorName}
                       </p>
-                      <p className="text-[11.5px] text-mountain-500">
+                      <p className="text-[11.5px] text-text-muted">
                         {getDoctorSpecialityById(appointment.doctorId)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[13px] font-medium text-mountain-800 leading-none mb-1">
+                      <p className="text-[13px] font-medium text-text-main leading-none mb-1">
                         {date}
                       </p>
-                      <p className="text-[11.5px] text-mountain-500">{time}</p>
+                      <p className="text-[11.5px] text-text-muted">{time}</p>
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5 mb-1">
                         {apptTypeColor && apptTypeColor !== "none" && (
                           <div
-                            className="w-2.5 h-2.5 rounded-full border border-mountain-300 shrink-0"
+                            className="w-2.5 h-2.5 rounded-full border border-border-base shrink-0"
                             style={{
                               backgroundColor:
                                 getAppointmentColorById(apptTypeColor)
@@ -636,19 +628,19 @@ export default function AppointmentsPage() {
                             }}
                           />
                         )}
-                        <p className="text-[13px] font-medium text-mountain-800 leading-none truncate">
+                        <p className="text-[13px] font-medium text-text-main leading-none truncate">
                           {getAppointmentTypeNameById(
                             appointment.appointmentTypeId,
                           )}
                         </p>
                       </div>
-                      <p className="text-[11.5px] text-mountain-500 truncate">
+                      <p className="text-[11.5px] text-text-muted truncate">
                         {appointment.reason || appointment.notes || "No reason"}
                       </p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 mt-4 md:mt-0 ml-0 md:ml-4 self-end md:self-auto border-t md:border-t-0 border-mountain-100 pt-3 md:pt-0 w-full md:w-auto">
+                <div className="flex items-center gap-3 mt-4 md:mt-0 ml-0 md:ml-4 self-end md:self-auto border-t md:border-t-0 border-border-base pt-3 md:pt-0 w-full md:w-auto">
                   <Dropdown placement="bottom-end">
                     <DropdownTrigger>
                       <button
@@ -682,7 +674,7 @@ export default function AppointmentsPage() {
 
                   <Dropdown placement="bottom-end">
                     <DropdownTrigger>
-                      <button className="p-1.5 text-mountain-500 hover:text-mountain-900 border border-transparent hover:border-mountain-200 rounded transition flex items-center justify-center">
+                      <button className="p-1.5 text-text-muted hover:text-text-main border border-transparent hover:border-border-base rounded transition flex items-center justify-center">
                         <IoEllipsisVertical className="w-4 h-4" />
                       </button>
                     </DropdownTrigger>
@@ -694,12 +686,12 @@ export default function AppointmentsPage() {
                         }
                       >
                         <span className="flex items-center gap-2">
-                          <IoEyeOutline className="text-mountain-400" /> View
+                          <IoEyeOutline className="text-text-muted/50" /> View
                           Details
                         </span>
                       </DropdownItem>
                       {appointment.status.toLowerCase() !== "cancelled" &&
-                      appointment.status.toLowerCase() !== "completed" ? (
+                        appointment.status.toLowerCase() !== "completed" ? (
                         <DropdownItem
                           key="edit"
                           onClick={() =>
@@ -709,7 +701,7 @@ export default function AppointmentsPage() {
                           }
                         >
                           <span className="flex items-center gap-2">
-                            <IoPencilOutline className="text-mountain-400" />{" "}
+                            <IoPencilOutline className="text-text-muted/50" />{" "}
                             Edit
                           </span>
                         </DropdownItem>
@@ -723,12 +715,12 @@ export default function AppointmentsPage() {
                         }
                       >
                         <span className="flex items-center gap-2">
-                          <IoPersonOutline className="text-mountain-400" />{" "}
+                          <IoPersonOutline className="text-text-muted/50" />{" "}
                           Patient Profile
                         </span>
                       </DropdownItem>
                       {appointment.status.toLowerCase() !== "cancelled" &&
-                      appointment.status.toLowerCase() !== "completed" ? (
+                        appointment.status.toLowerCase() !== "completed" ? (
                         <DropdownItem
                           key="cancel"
                           onClick={() => {
@@ -760,7 +752,7 @@ export default function AppointmentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "sm" })}>
+          <h1 className={title({ size: "lg" })}>
             Appointments
             {currentDoctorId && (
               <span className="ml-3 text-[11px] font-semibold tracking-wider text-teal-700 bg-teal-100 uppercase px-2 py-0.5 rounded border border-teal-200">
@@ -768,7 +760,7 @@ export default function AppointmentsPage() {
               </span>
             )}
           </h1>
-          <p className="text-[13.5px] text-mountain-500 mt-1">
+          <p className="text-[13.5px] text-text-muted mt-1">
             {currentDoctorId
               ? "Manage your assigned patient appointments"
               : "Manage patient appointments"}
@@ -777,9 +769,9 @@ export default function AppointmentsPage() {
         <div className="flex gap-3 items-center">
           {!branchId && isClinicAdmin && branches.length > 0 && (
             <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-mountain-500">Branch</span>
+              <span className="text-[11px] text-text-muted">Branch</span>
               <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                 value={selectedBranchId ?? ""}
                 onChange={(e) => setSelectedBranchId(e.target.value || null)}
               >
@@ -792,16 +784,16 @@ export default function AppointmentsPage() {
               </select>
             </div>
           )}
-          <div className="flex p-0.5 bg-mountain-100 rounded border border-mountain-200 shadow-inner">
+          <div className="flex p-0.5 bg-surface-2 rounded border border-border-base shadow-none">
             <button
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-medium transition ${layoutType === "tabbed" ? "bg-white text-teal-700 shadow-sm" : "text-mountain-600 hover:text-mountain-900"}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-medium transition ${layoutType === "tabbed" ? "bg-surface text-primary shadow-sm" : "text-text-muted hover:text-text-main"}`}
               type="button"
               onClick={() => setLayoutType("tabbed")}
             >
               <IoListOutline className="w-4 h-4" /> Tabs
             </button>
             <button
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-medium transition ${layoutType === "table" ? "bg-white text-teal-700 shadow-sm" : "text-mountain-600 hover:text-mountain-900"}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-medium transition ${layoutType === "table" ? "bg-surface text-primary shadow-sm" : "text-text-muted hover:text-text-main"}`}
               type="button"
               onClick={() => setLayoutType("table")}
             >
@@ -819,12 +811,12 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-mountain-200 rounded shadow-sm">
-        <div className="p-4 border-b border-mountain-100 flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-surface border border-border-base rounded shadow-none">
+        <div className="p-4 border-b border-border-base flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="w-full md:flex-1 relative">
-            <IoSearchOutline className="w-4 h-4 text-mountain-400 absolute top-1/2 left-3 -translate-y-1/2" />
+            <IoSearchOutline className="w-4 h-4 text-text-muted/50 absolute top-1/2 left-3 -translate-y-1/2" />
             <input
-              className="w-full pl-9 pr-3 py-1.5 h-[34px] border border-mountain-200 rounded text-[13px] text-mountain-800 placeholder:text-mountain-400 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow"
+              className="w-full pl-9 pr-3 py-1.5 h-[34px] border border-border-base rounded bg-surface-2 text-[13px] text-text-main placeholder:text-text-muted/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow"
               placeholder="Search appointments..."
               type="text"
               value={searchQuery}
@@ -835,7 +827,7 @@ export default function AppointmentsPage() {
             />
             {searchQuery && (
               <button
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-mountain-400 hover:text-mountain-700"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main"
                 type="button"
                 onClick={() => {
                   setSearchQuery("");
@@ -848,7 +840,7 @@ export default function AppointmentsPage() {
           </div>
           <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
             <select
-              className="h-[34px] bg-white border border-mountain-200 text-mountain-700 text-[12.5px] rounded px-3 py-1 outline-none focus:border-teal-500 cursor-pointer min-w-[130px]"
+              className="h-[34px] bg-surface-2 border border-border-base text-text-main text-[12.5px] rounded px-3 py-1 outline-none focus:border-primary cursor-pointer min-w-[130px]"
               value={selectedStatus}
               onChange={(e) => {
                 setSelectedStatus(e.target.value);
@@ -862,7 +854,7 @@ export default function AppointmentsPage() {
               ))}
             </select>
             <select
-              className="h-[34px] bg-white border border-mountain-200 text-mountain-700 text-[12.5px] rounded px-3 py-1 outline-none focus:border-teal-500 cursor-pointer max-w-[160px]"
+              className="h-[34px] bg-surface-2 border border-border-base text-text-main text-[12.5px] rounded px-3 py-1 outline-none focus:border-primary cursor-pointer max-w-[160px]"
               value={selectedDoctor}
               onChange={(e) => {
                 setSelectedDoctor(e.target.value);
@@ -878,7 +870,7 @@ export default function AppointmentsPage() {
             </select>
             {layoutType === "table" && (
               <input
-                className="h-[34px] bg-white border border-mountain-200 text-mountain-700 text-[12.5px] rounded px-3 py-1 outline-none focus:border-teal-500 cursor-pointer"
+                className="h-[34px] bg-surface-2 border border-border-base text-text-main text-[12.5px] rounded px-3 py-1 outline-none focus:border-primary cursor-pointer"
                 type="date"
                 value={selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""}
                 onChange={(e) => {
@@ -892,7 +884,7 @@ export default function AppointmentsPage() {
             <Dropdown placement="bottom-end">
               <DropdownTrigger>
                 <button
-                  className="h-[34px] px-3 bg-white border border-mountain-200 text-mountain-700 text-[12.5px] font-medium rounded hover:bg-mountain-50 transition-colors flex items-center gap-1.5 outline-none focus:ring-2 ring-teal-500 ring-offset-1"
+                  className="h-[34px] px-3 bg-surface-2 border border-border-base text-text-main text-[12.5px] font-medium rounded hover:bg-surface transition-colors flex items-center gap-1.5 outline-none focus:ring-2 ring-primary/50 ring-offset-1"
                   type="button"
                 >
                   <IoDownloadOutline className="w-4 h-4" /> Export
@@ -914,42 +906,41 @@ export default function AppointmentsPage() {
             </div>
           ) : error ? (
             <div className="py-12 text-center flex flex-col items-center">
-              <IoWarningOutline className="w-12 h-12 text-red-400 mb-3" />
-              <p className="text-red-600 font-medium mb-1">
+              <IoWarningOutline className="w-12 h-12 text-red-500/50 mb-3" />
+              <p className="text-red-500 font-medium mb-1">
                 Error loading appointments
               </p>
-              <p className="text-mountain-500 text-[13px]">{error}</p>
+              <p className="text-text-muted text-[13px]">{error}</p>
               <Button className="mt-4" onClick={() => window.location.reload()}>
                 Try Again
               </Button>
             </div>
           ) : layoutType === "tabbed" ? (
             <div className="flex flex-col w-full">
-              <div className="flex gap-4 border-b border-mountain-200 w-full mb-4 px-1">
+              <div className="flex gap-4 border-b border-border-base w-full mb-4 px-1">
                 {[
                   {
                     id: "today",
                     name: "Today",
                     count: getTodayAppointments().length,
-                    color: "text-teal-700 bg-teal-100 border-teal-200",
+                    color: "text-primary bg-primary/10 border-primary/20",
                   },
                   {
                     id: "upcoming",
                     name: "Upcoming",
                     count: getUpcomingAppointments().length,
-                    color: "text-saffron-700 bg-saffron-100 border-saffron-200",
+                    color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
                   },
                   {
                     id: "past",
                     name: "Past",
                     count: getPastAppointments().length,
-                    color:
-                      "text-mountain-600 bg-mountain-100 border-mountain-200",
+                    color: "text-text-muted bg-surface-2 border-border-base",
                   },
                 ].map((t) => (
                   <button
                     key={t.id}
-                    className={`pb-2.5 px-2 relative text-[13.5px] font-medium transition-colors flex items-center gap-2 outline-none ${selectedTab === t.id ? "text-teal-700" : "text-mountain-500 hover:text-mountain-800"}`}
+                    className={`pb-2.5 px-2 relative text-[13.5px] font-medium transition-colors flex items-center gap-2 outline-none ${selectedTab === t.id ? "text-primary" : "text-text-muted hover:text-text-main"}`}
                     onClick={() => {
                       setSelectedTab(t.id);
                       setCurrentPage(1);
@@ -962,7 +953,7 @@ export default function AppointmentsPage() {
                       {t.count}
                     </span>
                     {selectedTab === t.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600 rounded-t-full" />
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />
                     )}
                   </button>
                 ))}
@@ -973,7 +964,7 @@ export default function AppointmentsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-200 text-[12px] uppercase font-semibold text-mountain-600 tracking-wider">
+                  <tr className="bg-surface-2 border-b border-border-base text-[12px] uppercase font-semibold text-text-muted tracking-wider">
                     <th className="py-2.5 px-4 font-semibold">Patient</th>
                     <th className="py-2.5 px-4 font-semibold">Doctor</th>
                     <th className="py-2.5 px-4 font-semibold">Date & Time</th>
@@ -984,7 +975,7 @@ export default function AppointmentsPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-mountain-100">
+                <tbody className="divide-y divide-border-base">
                   {currentAppointments.map((app) => {
                     const { date, time } = formatAppointmentTime(app);
                     const patName = getPatientNameById(app.patientId);
@@ -996,27 +987,27 @@ export default function AppointmentsPage() {
                     return (
                       <tr
                         key={app.id}
-                        className="hover:bg-mountain-50/50 transition-colors"
+                        className="hover:bg-surface-2 transition-colors"
                       >
                         <td className="py-3 px-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             <Avatar name={patName} />
-                            <span className="text-[13.5px] font-medium text-mountain-900">
+                            <span className="text-[13.5px] font-medium text-text-main">
                               {patName}
                             </span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="text-[13px] text-mountain-800 font-medium">
+                          <div className="text-[13px] text-text-main font-medium">
                             {dName}
                           </div>
-                          <div className="text-[11.5px] text-mountain-500">
+                          <div className="text-[11.5px] text-text-muted">
                             {getDoctorSpecialityById(app.doctorId)}
                           </div>
                         </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-[13px] text-mountain-800">
+                        <td className="py-3 px-4 whitespace-nowrap text-[13px] text-text-main">
                           <div>{date}</div>
-                          <div className="text-[11.5px] text-mountain-500">
+                          <div className="text-[11.5px] text-text-muted">
                             {time}
                           </div>
                         </td>
@@ -1043,11 +1034,11 @@ export default function AppointmentsPage() {
                             </DropdownMenu>
                           </Dropdown>
                         </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-[13px] text-mountain-800">
+                        <td className="py-3 px-4 whitespace-nowrap text-[13px] text-text-main">
                           <div className="flex items-center gap-1.5">
                             {typeColor && typeColor !== "none" && (
                               <div
-                                className="w-2.5 h-2.5 rounded-full border border-mountain-300"
+                                className="w-2.5 h-2.5 rounded-full border border-border-base"
                                 style={{
                                   backgroundColor:
                                     getAppointmentColorById(typeColor)
@@ -1061,7 +1052,7 @@ export default function AppointmentsPage() {
                         <td className="py-3 px-4 text-right">
                           <Dropdown placement="bottom-end">
                             <DropdownTrigger>
-                              <button className="p-1.5 text-mountain-400 hover:text-mountain-800 rounded outline-none border border-transparent hover:border-mountain-200 transition">
+                              <button className="p-1.5 text-text-muted/50 hover:text-text-main rounded outline-none border border-transparent hover:border-border-base transition">
                                 <IoEllipsisVertical className="w-4 h-4" />
                               </button>
                             </DropdownTrigger>
@@ -1075,7 +1066,7 @@ export default function AppointmentsPage() {
                                 View Details
                               </DropdownItem>
                               {app.status.toLowerCase() !== "cancelled" &&
-                              app.status.toLowerCase() !== "completed" ? (
+                                app.status.toLowerCase() !== "completed" ? (
                                 <DropdownItem
                                   key="edit"
                                   onClick={() =>
@@ -1105,7 +1096,7 @@ export default function AppointmentsPage() {
                 </tbody>
               </table>
               {currentAppointments.length === 0 && (
-                <div className="py-8 text-center text-mountain-500 text-[13px]">
+                <div className="py-8 text-center text-text-muted text-[13px]">
                   No appointments match filters.
                 </div>
               )}
@@ -1114,8 +1105,8 @@ export default function AppointmentsPage() {
         </div>
 
         {filteredAppointments.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-mountain-100 bg-mountain-50/50">
-            <p className="text-[12.5px] text-mountain-500 mb-4 sm:mb-0">
+          <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border-base bg-surface-2">
+            <p className="text-[12.5px] text-text-muted mb-4 sm:mb-0">
               Showing {startIndex + 1} to {endIndex} of{" "}
               {filteredAppointments.length} appointments
             </p>
@@ -1156,14 +1147,14 @@ export default function AppointmentsPage() {
         <div className="space-y-4">
           <p>
             Are you sure you want to cancel the appointment with{" "}
-            <span className="font-semibold text-mountain-900">
+            <span className="font-semibold text-text-main">
               {selectedAppointment
                 ? getPatientNameById(selectedAppointment.patientId)
                 : ""}
             </span>
             ?
           </p>
-          <div className="p-3 bg-red-50 border border-red-100 rounded text-red-700 text-[13px] flex items-start gap-2">
+          <div className="p-3 bg-red-500/5 border border-red-500/10 rounded text-red-500 text-[13px] flex items-start gap-2">
             <IoWarningOutline className="w-5 h-5 shrink-0" />
             <p>
               This action cannot be undone. The patient will no longer appear in

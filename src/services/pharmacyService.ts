@@ -247,19 +247,13 @@ export const pharmacyService = {
   ): Promise<MedicinePurchase[]> {
     try {
       const purchasesRef = collection(db, MEDICINE_PURCHASES_COLLECTION);
-      let q = query(
-        purchasesRef,
-        where("clinicId", "==", clinicId),
-        orderBy("purchaseDate", "desc"),
-      );
+      let q = query(purchasesRef);
 
       // Filter by branch if specified
       if (branchId) {
         q = query(
           purchasesRef,
-          where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
-          orderBy("purchaseDate", "desc"),
         );
       }
 
@@ -334,9 +328,9 @@ export const pharmacyService = {
         current.returns,
       )
         ? current.returns.map((r: any) => ({
-            ...r,
-            createdAt: r.createdAt?.toDate ? r.createdAt.toDate() : r.createdAt,
-          }))
+          ...r,
+          createdAt: r.createdAt?.toDate ? r.createdAt.toDate() : r.createdAt,
+        }))
         : [];
 
       const allReturns = [...existingReturns, returnRecord];
@@ -482,18 +476,14 @@ export const pharmacyService = {
       const purchasesRef = collection(db, MEDICINE_PURCHASES_COLLECTION);
       let q = query(
         purchasesRef,
-        where("clinicId", "==", clinicId),
         where("paymentStatus", "==", paymentStatus),
-        orderBy("purchaseDate", "desc"),
       );
 
       if (branchId) {
         q = query(
           purchasesRef,
-          where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("paymentStatus", "==", paymentStatus),
-          orderBy("purchaseDate", "desc"),
         );
       }
 
@@ -584,19 +574,13 @@ export const pharmacyService = {
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
-      let q = query(
-        usageRef,
-        where("clinicId", "==", clinicId),
-        orderBy("usageDate", "desc"),
-      );
+      let q = query(usageRef);
 
       // Filter by branch if specified
       if (branchId) {
         q = query(
           usageRef,
-          where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
-          orderBy("usageDate", "desc"),
         );
       }
 
@@ -631,18 +615,14 @@ export const pharmacyService = {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
       let q = query(
         usageRef,
-        where("clinicId", "==", clinicId),
         where("medicineId", "==", medicineId),
-        orderBy("usageDate", "desc"),
       );
 
       if (branchId) {
         q = query(
           usageRef,
-          where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("medicineId", "==", medicineId),
-          orderBy("usageDate", "desc"),
         );
       }
 
@@ -677,18 +657,14 @@ export const pharmacyService = {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
       let q = query(
         usageRef,
-        where("clinicId", "==", clinicId),
         where("patientId", "==", patientId),
-        orderBy("usageDate", "desc"),
       );
 
       if (branchId) {
         q = query(
           usageRef,
-          where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("patientId", "==", patientId),
-          orderBy("usageDate", "desc"),
         );
       }
 

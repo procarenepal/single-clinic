@@ -30,21 +30,13 @@ export const issuedItemService = {
   ): Promise<IssuedItem[]> {
     try {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
-      let q = query(
-        issuedItemsRef,
-        where("clinicId", "==", clinicId),
-        orderBy("issuedDate", "desc"),
-      );
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
 
       if (branchId) {
-        q = query(
-          issuedItemsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          orderBy("issuedDate", "desc"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(issuedItemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
       const issuedItems: IssuedItem[] = [];
 
@@ -62,7 +54,10 @@ export const issuedItemService = {
         } as IssuedItem);
       });
 
-      return issuedItems;
+      // Sort in memory by issuedDate (descending)
+      return issuedItems.sort(
+        (a, b) => (b.issuedDate?.getTime() || 0) - (a.issuedDate?.getTime() || 0),
+      );
     } catch (error) {
       console.error("Error getting issued items by clinic:", error);
       throw error;
@@ -79,23 +74,16 @@ export const issuedItemService = {
   ): Promise<IssuedItem[]> {
     try {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
-      let q = query(
-        issuedItemsRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("status", "==", status),
-        orderBy("issuedDate", "desc"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          issuedItemsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("status", "==", status),
-          orderBy("issuedDate", "desc"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(issuedItemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
       const issuedItems: IssuedItem[] = [];
 
@@ -113,7 +101,10 @@ export const issuedItemService = {
         } as IssuedItem);
       });
 
-      return issuedItems;
+      // Sort in memory by issuedDate (descending)
+      return issuedItems.sort(
+        (a, b) => (b.issuedDate?.getTime() || 0) - (a.issuedDate?.getTime() || 0),
+      );
     } catch (error) {
       console.error("Error getting issued items by status:", error);
       throw error;

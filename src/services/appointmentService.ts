@@ -128,37 +128,15 @@ export const appointmentService = {
   },
 
   /**
-   * Get all appointments for a specific clinic.
-   * Optionally scope by branch for branch-aware views.
-   * @param {string} clinicId - ID of the clinic
-   * @param {string} [branchId] - Optional branch ID to filter appointments by
-   * @returns {Promise<Appointment[]>} - Array of appointments for the clinic
+   * Get all appointments (excluding deleted/cancelled)
    */
-  async getAppointmentsByClinic(
-    clinicId: string,
-    branchId?: string,
-  ): Promise<Appointment[]> {
+  async getAppointments(): Promise<Appointment[]> {
     try {
       const appointmentsCollection = collection(db, "appointments");
-
-      // For clinic-wide queries, use cache; for branch-scoped queries, always hit Firestore
-      if (!branchId) {
-        const cached = cacheService.getClinicAppointments(clinicId);
-
-        if (cached) {
-          return cached as Appointment[];
-        }
-      }
-
-      const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
-      constraints.push(orderBy("appointmentDate", "desc"));
-
-      const q = query(appointmentsCollection, ...constraints);
-
+      const q = query(
+        appointmentsCollection,
+        orderBy("appointmentDate", "desc"),
+      );
       const querySnapshot = await getDocs(q);
       const appointments: Appointment[] = [];
 
@@ -166,15 +144,29 @@ export const appointmentService = {
         appointments.push(mapAppointmentDoc(docSnap));
       });
 
-      if (!branchId) {
-        cacheService.setClinicAppointments(clinicId, appointments);
-      }
-
       return appointments;
     } catch (error) {
-      console.error("Error fetching appointments:", error);
-      throw new Error("Failed to fetch appointments");
+      console.error("Error fetching all appointments:", error);
+      throw new Error("Failed to fetch all appointments");
     }
+  },
+
+  /**
+   * Alias for backward compatibility
+   */
+  async getAppointmentsByClinic(
+    clinicId?: string,
+    _branchId?: string,
+  ): Promise<Appointment[]> {
+    const appointments = await this.getAppointments();
+
+    if (clinicId) {
+      cacheService.setClinicAppointments(clinicId, appointments);
+    } else {
+      cacheService.setClinicAppointments("standalone", appointments);
+    }
+
+    return appointments;
   },
 
   /**
@@ -398,20 +390,17 @@ export const appointmentService = {
    * @returns {Promise<Appointment[]>} - Array of appointments in the date range
    */
   async getAppointmentsByDateRange(
-    clinicId: string,
+    _clinicId: string | undefined,
     startDate: Date,
     endDate: Date,
-    branchId?: string,
+    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const appointmentsCollection = collection(db, "appointments");
 
       // OPTION 2: Client-side filtering to avoid composite index requirements
       // We only query by clinicId (and branchId) which are equality filters
-      const constraints: any[] = [where("clinicId", "==", clinicId)];
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
+      const constraints: any[] = [];
 
       // We remove the date range where() and orderBy() from the Firestore query
       // and handle them in memory to solve the index error immediately.
@@ -445,8 +434,8 @@ export const appointmentService = {
    * @returns {Promise<Appointment[]>} - Array of upcoming appointments
    */
   async getUpcomingAppointments(
-    clinicId: string,
-    branchId?: string,
+    _clinicId?: string,
+    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const today = new Date();
@@ -455,10 +444,10 @@ export const appointmentService = {
       nextWeek.setDate(today.getDate() + 7);
 
       return await this.getAppointmentsByDateRange(
-        clinicId,
+        _clinicId,
         today,
         nextWeek,
-        branchId,
+        _branchId,
       );
     } catch (error) {
       console.error("Error fetching upcoming appointments:", error);
@@ -473,8 +462,8 @@ export const appointmentService = {
    * @returns {Promise<Appointment[]>} - Array of today's appointments
    */
   async getTodaysAppointments(
-    clinicId: string,
-    branchId?: string,
+    _clinicId?: string,
+    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const today = new Date();
@@ -493,10 +482,10 @@ export const appointmentService = {
       );
 
       return await this.getAppointmentsByDateRange(
-        clinicId,
+        _clinicId,
         startOfDay,
         endOfDay,
-        branchId,
+        _branchId,
       );
     } catch (error) {
       console.error("Error fetching today's appointments:", error);
@@ -512,9 +501,9 @@ export const appointmentService = {
    * @returns {Promise<Appointment[]>} - Array of appointments for the date
    */
   async getAppointmentsByDate(
-    clinicId: string,
     date: Date,
-    branchId?: string,
+    _clinicId?: string,
+    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const startOfDay = new Date(
@@ -532,10 +521,10 @@ export const appointmentService = {
       );
 
       return await this.getAppointmentsByDateRange(
-        clinicId,
+        _clinicId,
         startOfDay,
         endOfDay,
-        branchId,
+        _branchId,
       );
     } catch (error) {
       console.error("Error fetching appointments by date:", error);
@@ -547,17 +536,13 @@ export const appointmentService = {
    * Subscribe to clinic appointments (real-time updates)
    */
   subscribeToClinicAppointments(
-    clinicId: string,
-    branchId: string | undefined,
+    _clinicId: string | undefined,
+    _branchId: string | undefined,
     onData: AppointmentSnapshotHandler,
     onError?: AppointmentErrorHandler,
   ) {
     const appointmentsCollection = collection(db, "appointments");
-    const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-    if (branchId) {
-      constraints.push(where("branchId", "==", branchId));
-    }
+    const constraints: any[] = [];
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
 
@@ -594,10 +579,6 @@ export const appointmentService = {
   ) {
     const appointmentsCollection = collection(db, "appointments");
     const constraints: any[] = [where("doctorId", "==", doctorId)];
-
-    if (branchId) {
-      constraints.push(where("branchId", "==", branchId));
-    }
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
 

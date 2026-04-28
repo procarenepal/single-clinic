@@ -85,7 +85,7 @@ export default function StaffManagementPage() {
     newRole: "",
   });
 
-  // Available roles for staff creation (excluding super-admin)
+  // Available roles for staff creation (excluding system-owner)
   const availableRoles = [
     { key: "clinic-admin", label: "Clinic Admin" },
     { key: "staff", label: "Staff Member" },
@@ -258,7 +258,7 @@ export default function StaffManagementPage() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Staff & User Management</h1>
+            <h1 className={title({ size: "lg" })}>Staff & User Management</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage clinic staff, roles, and permissions
             </p>
@@ -280,7 +280,7 @@ export default function StaffManagementPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Staff & User Management</h1>
+            <h1 className={title({ size: "lg" })}>Staff & User Management</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage clinic staff, roles, and permissions
             </p>
@@ -313,7 +313,7 @@ export default function StaffManagementPage() {
                 <IoPeopleOutline className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{staff.length}</p>
+                <p className="text-stat-sm font-bold">{staff.length}</p>
                 <p className="text-sm text-default-500">Total Staff</p>
               </div>
             </CardBody>
@@ -325,7 +325,7 @@ export default function StaffManagementPage() {
                 <IoShieldCheckmarkOutline className="w-6 h-6 text-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold">
+                <p className="text-stat-sm font-bold">
                   {staff.filter((s) => s.isActive).length}
                 </p>
                 <p className="text-sm text-default-500">Active Staff</p>

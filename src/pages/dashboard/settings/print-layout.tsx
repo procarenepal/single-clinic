@@ -390,7 +390,7 @@ export default function PrintLayoutPage() {
             <IoArrowBackOutline />
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>
+            <h1 className={title({ size: "lg" })}>
               Print Layout Configuration
             </h1>
             <p className="text-default-500 mt-1">Loading configuration...</p>
@@ -419,7 +419,7 @@ export default function PrintLayoutPage() {
               <IoArrowBackOutline />
             </Button>
             <div>
-              <h1 className={title({ size: "sm" })}>
+              <h1 className={title({ size: "lg" })}>
                 Print Layout Configuration
               </h1>
               <p className="text-default-500 mt-1">
@@ -1153,7 +1153,7 @@ export default function PrintLayoutPage() {
                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-slate-200">
                           <IoBusinessOutline className="w-8 h-8 text-slate-300" />
                         </div>
-                        <h2 className="text-xl font-bold text-slate-400 mb-2 uppercase tracking-tight">
+                        <h2 className="text-stat-sm font-bold text-slate-400 mb-2 uppercase tracking-tight">
                           Document Content Area
                         </h2>
                         <div className="h-0.5 w-12 bg-slate-100 mx-auto mb-4" />

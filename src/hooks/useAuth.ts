@@ -11,7 +11,6 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "../config/firebase";
 import { User } from "../types/models";
-import { subscriptionMonitorService } from "../services/subscriptionMonitorService";
 import { onInvalidation } from "../services/invalidationChannel";
 import { userService } from "../services/userService";
 
@@ -52,9 +51,6 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Logout current user
   const logout = async () => {
-    // Stop subscription monitoring before logout
-    subscriptionMonitorService.stopMonitoring();
-
     return signOut(auth);
   };
 
@@ -80,20 +76,20 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
   const isClinicAdmin = useCallback((): boolean => {
     return (
       (userData?.role === "clinic-admin" ||
-        userData?.role === "clinic-super-admin") &&
+        userData?.role === "system-owner") &&
       Boolean(userData?.clinicId)
     );
   }, [userData?.role, userData?.clinicId]);
 
-  // Check if the user is a super admin
-  const isSuperAdmin = useCallback((): boolean => {
-    return userData?.role === "super-admin";
+  // Check if the user is a system owner
+  const isSystemOwner = useCallback((): boolean => {
+    return userData?.role === "system-owner";
   }, [userData?.role]);
 
   // Check if the user has permission to access a specific page
   const hasPagePermission = useCallback(
     async (pageId: string): Promise<boolean> => {
-      if (userData?.role === "super-admin") {
+      if (userData?.role === "system-owner") {
         return true; // Super admin has all permissions
       }
 
@@ -121,7 +117,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
   // Synchronous cache-only permission check (returns null if not cached yet)
   const hasPagePermissionSync = useCallback(
     (pageId: string): boolean | null => {
-      if (userData?.role === "super-admin") return true;
+      if (userData?.role === "system-owner") return true;
       if (!currentUser || !clinicId) return false;
       try {
         const { cacheService } = require("../services/cacheService");
@@ -143,7 +139,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
   // Check if the user has permission to access a specific page by path (faster cached version)
   const hasPagePermissionByPath = useCallback(
     async (pagePath: string): Promise<boolean> => {
-      if (userData?.role === "super-admin") {
+      if (userData?.role === "system-owner") {
         return true; // Super admin has all permissions
       }
 
@@ -179,10 +175,10 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Preload user permissions for better performance
   const preloadPermissions = useCallback(async (): Promise<void> => {
-    if (userData?.role === "super-admin" || !currentUser || !clinicId) {
-      setPermissionsReady(true); // Super admin treats as ready immediately
+    if (userData?.role === "system-owner" || !currentUser || !clinicId) {
+      setPermissionsReady(true); // System owner treats as ready immediately
 
-      return; // Super admin doesn't need RBAC, or no user/clinic
+      return; // System owner doesn't need RBAC, or no user/clinic
     }
 
     try {
@@ -198,11 +194,11 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Check clinic subscription status
   const checkClinicSubscription = useCallback(async (): Promise<boolean> => {
-    if (userData?.role === "super-admin" || !userData?.clinicId) {
+    if (userData?.role === "system-owner" || !userData?.clinicId) {
       setSubscriptionValid(true);
       setSubscriptionLastChecked(Date.now());
 
-      return true; // Super admin or no clinic - always allow
+      return true; // System owner or no clinic - always allow
     }
 
     try {
@@ -240,14 +236,14 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Get accessible pages for the current user
   const getAccessiblePages = useCallback(async (): Promise<any[]> => {
-    if (userData?.role === "super-admin") {
-      // Super admin can access all pages
+    if (userData?.role === "system-owner") {
+      // System owner can access all pages
       try {
         const { pageService } = await import("../services/pageService");
 
         return await pageService.getAllPages();
       } catch (error) {
-        console.error("Error getting all pages for super admin:", error);
+        console.error("Error getting all pages for system owner:", error);
 
         return [];
       }
@@ -343,62 +339,9 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
               return;
             }
 
-            // Check clinic subscription status for non-super-admin users (but skip if impersonating)
-            if (
-              userDataFromFirestore.role !== "super-admin" &&
-              userDataFromFirestore.clinicId &&
-              !isImpersonating
-            ) {
-              try {
-                const { clinicService } = await import(
-                  "../services/clinicService"
-                );
-                const clinic = await clinicService.getClinicById(
-                  userDataFromFirestore.clinicId,
-                );
-
-                if (clinic) {
-                  // Check if subscription is suspended, cancelled or expired
-                  const isSubscriptionSuspended =
-                    clinic.subscriptionStatus === "suspended";
-                  const isSubscriptionCancelled =
-                    clinic.subscriptionStatus === "cancelled";
-                  const isSubscriptionExpired =
-                    clinic.subscriptionEndDate &&
-                    new Date(clinic.subscriptionEndDate) < new Date();
-
-                  if (
-                    isSubscriptionSuspended ||
-                    isSubscriptionCancelled ||
-                    isSubscriptionExpired
-                  ) {
-                    // Sign out users from clinics with suspended/cancelled/expired subscriptions
-                    await signOut(auth);
-                    setCurrentUser(null);
-                    setUserData(null);
-                    setClinicId(null);
-                    setSubscriptionValid(false);
-                    setSubscriptionLastChecked(Date.now());
-                    setLoading(false);
-
-                    return;
-                  }
-                  setSubscriptionValid(true);
-                  setSubscriptionLastChecked(Date.now());
-                }
-              } catch (error) {
-                console.error(
-                  "Error checking clinic subscription status:",
-                  error,
-                );
-                // Continue with login if clinic check fails (don't block access due to technical error)
-                setSubscriptionValid(true);
-                setSubscriptionLastChecked(Date.now());
-              }
-            } else {
-              setSubscriptionValid(true);
-              setSubscriptionLastChecked(Date.now());
-            }
+            // STANDALONE MODE: Assume subscription is always valid for the single installation
+            setSubscriptionValid(true);
+            setSubscriptionLastChecked(Date.now());
 
             // Create extended user object
             const extendedUser = firebaseUser as ExtendedUser;
@@ -410,26 +353,13 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
             // Set user data and preload permissions
             setCurrentUser(extendedUser);
             setUserData(userDataFromFirestore);
-            setClinicId(userDataFromFirestore.clinicId || null);
+            const effectiveClinicId = userDataFromFirestore.clinicId || "default";
+            setClinicId(effectiveClinicId);
 
-            // Start subscription monitoring for non-super-admin users
-            if (
-              userDataFromFirestore.role !== "super-admin" &&
-              userDataFromFirestore.clinicId
-            ) {
-              subscriptionMonitorService.startMonitoring(
-                userDataFromFirestore.clinicId,
-                userDataFromFirestore.role,
-              );
-            }
-
-            // Preload permissions after setting user data (but don't wait for it)
-            // Only preload for non-super-admin users with a clinic
-            if (
-              userDataFromFirestore.role !== "super-admin" &&
-              userDataFromFirestore.clinicId
-            ) {
-              // Use setTimeout to not block the auth state change
+            // STANDALONE MODE: Simplified permission preloading
+            if (userDataFromFirestore.role === "system-owner") {
+              setPermissionsReady(true);
+            } else if (effectiveClinicId) {
               setTimeout(async () => {
                 try {
                   const { rbacService } = await import(
@@ -448,7 +378,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
                   );
                   setPermissionsReady(false);
                 }
-              }, 100); // Small delay to let auth state settle
+              }, 100);
             }
           } else {
             // User exists in Firebase Auth but not in Firestore
@@ -470,9 +400,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
           setCurrentUser(firebaseUser as ExtendedUser);
         }
       } else {
-        // No user is logged in - ensure subscription monitoring is stopped
-        subscriptionMonitorService.stopMonitoring();
-
+        // No user is logged in
         setCurrentUser(null);
         setUserData(null);
         setClinicId(null);
@@ -492,7 +420,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
     const MIN_INTERVAL = 3 * 60 * 1000; // 3 minutes
 
     function maybeRevalidate() {
-      if (!currentUser || userData?.role === "super-admin") return;
+      if (!currentUser || userData?.role === "system-owner") return;
       const now = Date.now();
 
       if (
@@ -568,7 +496,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
       logout,
       getUserData,
       isClinicAdmin,
-      isSuperAdmin,
+      isSystemOwner,
       hasPagePermission,
       hasPagePermissionSync,
       hasPagePermissionByPath,
@@ -587,7 +515,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
       subscriptionLastChecked,
       permissionsReady,
       isClinicAdmin,
-      isSuperAdmin,
+      isSystemOwner,
       hasPagePermission,
       hasPagePermissionSync,
       hasPagePermissionByPath,

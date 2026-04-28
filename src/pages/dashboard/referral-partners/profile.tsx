@@ -322,7 +322,7 @@ export default function ReferralPartnerProfilePage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Partner Profile</h1>
+          <h1 className={title({ size: "lg" })}>Partner Profile</h1>
         </div>
         <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
@@ -382,8 +382,8 @@ export default function ReferralPartnerProfilePage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>Partner Profile</h1>
-            <p className="text-[14.5px] font-medium text-mountain-50 tracking-wide mt-1">
+            <h1 className={title({ size: "lg" })}>Partner Profile</h1>
+            <p className="text-[14.5px] font-medium text-mountain-500 tracking-wide mt-1">
               View and manage information
             </p>
           </div>
@@ -401,12 +401,12 @@ export default function ReferralPartnerProfilePage() {
       {/* Hero Card */}
       <div className="bg-white border border-mountain-200 rounded shadow-sm p-6 overflow-hidden relative">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10 w-full">
-          <div className="w-24 h-24 rounded-full bg-teal-100 flex items-center justify-center border border-teal-200 shrink-0 text-3xl font-bold text-teal-800">
+          <div className="w-20 h-20 rounded-full bg-teal-100 flex items-center justify-center border border-teal-200 shrink-0 text-stat-sm font-bold text-teal-800">
             {partner.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 text-center md:text-left">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-center md:justify-start">
-              <h2 className="text-2xl font-bold text-mountain-900">
+              <h2 className="text-page-title font-bold text-mountain-900">
                 {partner.name}
               </h2>
               <span
@@ -475,7 +475,7 @@ export default function ReferralPartnerProfilePage() {
           >
             <div className="p-3 bg-white rounded-full shadow-sm">{s.icon}</div>
             <div>
-              <p className="text-[22px] font-bold text-mountain-900 leading-none">
+              <p className="text-stat-sm text-mountain-900 leading-none">
                 {s.val}
               </p>
               <p className="text-[13px] text-mountain-600 font-medium mt-1">
@@ -498,8 +498,8 @@ export default function ReferralPartnerProfilePage() {
             <button
               key={t.key}
               className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTab === t.key
-                  ? "border-teal-600 text-teal-700 bg-teal-50/30"
-                  : "border-transparent text-mountain-600 hover:text-mountain-900 hover:bg-mountain-50"
+                ? "border-teal-600 text-teal-700 bg-teal-50/30"
+                : "border-transparent text-mountain-600 hover:text-mountain-900 hover:bg-mountain-50"
                 }`}
               onClick={() => setSelectedTab(t.key)}
             >

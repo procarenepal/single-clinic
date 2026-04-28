@@ -97,30 +97,20 @@ export const branchService = {
    * @returns {Promise<Branch[]>} - Array of branches
    */
   async getClinicBranches(
-    clinicId: string,
+    _clinicId?: string,
     activeOnly = true,
   ): Promise<Branch[]> {
     try {
-      let q = query(
-        collection(db, BRANCHES_COLLECTION),
-        where("clinicId", "==", clinicId),
-        orderBy("isMainBranch", "desc"), // Main branch first
-        orderBy("name"),
-      );
+      const branchesCollection = collection(db, BRANCHES_COLLECTION);
+      let q = query(branchesCollection);
 
       if (activeOnly) {
-        q = query(
-          collection(db, BRANCHES_COLLECTION),
-          where("clinicId", "==", clinicId),
-          where("isActive", "==", true),
-          orderBy("isMainBranch", "desc"),
-          orderBy("name"),
-        );
+        q = query(branchesCollection, where("isActive", "==", true));
       }
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const branches = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -129,6 +119,14 @@ export const branchService = {
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
         } as Branch;
+      });
+
+      // Sort client-side: Main branch first, then alphabetically by name
+      return branches.sort((a, b) => {
+        if (a.isMainBranch && !b.isMainBranch) return -1;
+        if (!a.isMainBranch && b.isMainBranch) return 1;
+
+        return (a.name || "").localeCompare(b.name || "");
       });
     } catch (error) {
       console.error("Error getting clinic branches:", error);
@@ -141,11 +139,10 @@ export const branchService = {
    * @param {string} clinicId - Clinic ID
    * @returns {Promise<Branch | null>} - Main branch or null if not found
    */
-  async getMainBranch(clinicId: string): Promise<Branch | null> {
+  async getMainBranch(_clinicId?: string): Promise<Branch | null> {
     try {
       const q = query(
         collection(db, BRANCHES_COLLECTION),
-        where("clinicId", "==", clinicId),
         where("isMainBranch", "==", true),
         where("isActive", "==", true),
         limit(1),
@@ -192,7 +189,6 @@ export const branchService = {
         const branchData = branchSnap.data();
         const codeQuery = query(
           collection(db, BRANCHES_COLLECTION),
-          where("clinicId", "==", branchData.clinicId),
           where("code", "==", updateData.code),
         );
         const codeSnap = await getDocs(codeQuery);
@@ -235,7 +231,6 @@ export const branchService = {
       if (branchData.isMainBranch) {
         const activeBranchesQuery = query(
           collection(db, BRANCHES_COLLECTION),
-          where("clinicId", "==", branchData.clinicId),
           where("isActive", "==", true),
         );
         const activeBranchesSnap = await getDocs(activeBranchesQuery);
@@ -289,7 +284,6 @@ export const branchService = {
       // First, unset the current main branch
       const currentMainQuery = query(
         collection(db, BRANCHES_COLLECTION),
-        where("clinicId", "==", branchData.clinicId),
         where("isMainBranch", "==", true),
       );
       const currentMainSnap = await getDocs(currentMainQuery);
@@ -324,9 +318,10 @@ export const branchService = {
    * @param {string} clinicId - Clinic ID
    * @returns {Promise<boolean>} - Whether multi-branch is enabled
    */
-  async isMultiBranchEnabled(clinicId: string): Promise<boolean> {
+  async isMultiBranchEnabled(_clinicId?: string): Promise<boolean> {
     try {
-      const clinicRef = doc(db, "clinics", clinicId);
+      const cid = _clinicId || "standalone";
+      const clinicRef = doc(db, "clinics", cid);
       const clinicSnap = await getDoc(clinicRef);
 
       if (clinicSnap.exists()) {
@@ -336,7 +331,8 @@ export const branchService = {
       return false;
     } catch (error) {
       console.error("Error checking multi-branch status:", error);
-      throw error;
+
+      return false;
     }
   },
 

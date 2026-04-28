@@ -202,9 +202,7 @@ export default function InvoiceDetailPage() {
   const paymentModal = useModalState(false);
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin =
-    userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+    userData?.role === "system-owner";
 
   const [invoice, setInvoice] = useState<AppointmentBilling | null>(null);
   const [loading, setLoading] = useState(true);
@@ -670,7 +668,7 @@ export default function InvoiceDetailPage() {
               <p className="text-[12px] text-mountain-500 mb-0.5">
                 Total Amount
               </p>
-              <p className="text-[22px] font-bold text-mountain-900 tracking-tight">
+              <p className="text-stat-sm text-mountain-900 tracking-tight">
                 {formatCurrency(invoice.totalAmount)}
               </p>
             </div>

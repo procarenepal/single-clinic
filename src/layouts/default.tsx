@@ -9,20 +9,20 @@ export default function DefaultLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex flex-col min-h-screen bg-slate-50 font-sans text-slate-800">
+    <div className="relative flex flex-col min-h-screen bg-[rgb(var(--color-bg))] font-sans text-[rgb(var(--color-text))] transition-colors duration-300">
       <Navbar />
 
       {/* Main Content Area */}
       <main className="flex-grow flex flex-col pt-6">{children}</main>
 
       {/* Footer Area */}
-      <footer className="w-full bg-white border-t border-slate-200 mt-20 pb-8 transition-colors duration-300">
+      <footer className="w-full bg-[rgb(var(--color-surface))] border-t border-[rgb(var(--color-border))] mt-20 pb-8 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-16">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8">
             {/* Brand & Mission */}
             <div className="lg:col-span-2">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 border border-slate-200 rounded-lg bg-slate-50 shadow-sm flex items-center justify-center">
+                <div className="p-2 border border-[rgb(var(--color-border))] rounded-lg bg-[rgb(var(--color-surface-2))] shadow-sm flex items-center justify-center">
                   <img
                     alt="Procare Software Logo"
                     className="w-8 h-8 object-contain"
@@ -30,22 +30,22 @@ export default function DefaultLayout({
                   />
                 </div>
                 <div>
-                  <h3 className="font-bold text-xl text-slate-900 tracking-tight">
+                  <h3 className="font-bold text-xl text-[rgb(var(--color-text))] tracking-tight">
                     Procare Software
                   </h3>
-                  <p className="text-xs text-teal-700 font-bold uppercase tracking-wider">
+                  <p className="text-xs text-[rgb(var(--color-primary))] font-bold uppercase tracking-wider">
                     Nepal
                   </p>
                 </div>
               </div>
-              <p className="text-slate-600 text-sm leading-relaxed mb-6 pr-4">
+              <p className="text-[rgb(var(--color-text-muted))] text-sm leading-relaxed mb-6 pr-4">
                 Nepal's premier clinical management platform. We empower
                 healthcare professionals with modern, reliable, and compliant
                 digital solutions that streamline everyday operations.
               </p>
               <div className="flex gap-4">
                 <a
-                  className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200 transition-all"
+                  className="w-8 h-8 rounded-full border border-[rgb(var(--color-border))] flex items-center justify-center text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-primary-light))] hover:text-[rgb(var(--color-primary))] hover:border-[rgb(var(--color-primary))] transition-all"
                   href="#"
                 >
                   <svg
@@ -57,7 +57,7 @@ export default function DefaultLayout({
                   </svg>
                 </a>
                 <a
-                  className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200 transition-all"
+                  className="w-8 h-8 rounded-full border border-[rgb(var(--color-border))] flex items-center justify-center text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-primary-light))] hover:text-[rgb(var(--color-primary))] hover:border-[rgb(var(--color-primary))] transition-all"
                   href="#"
                 >
                   <svg
@@ -69,7 +69,7 @@ export default function DefaultLayout({
                   </svg>
                 </a>
                 <a
-                  className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200 transition-all"
+                  className="w-8 h-8 rounded-full border border-[rgb(var(--color-border))] flex items-center justify-center text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-primary-light))] hover:text-[rgb(var(--color-primary))] hover:border-[rgb(var(--color-primary))] transition-all"
                   href="#"
                 >
                   <svg
@@ -85,13 +85,13 @@ export default function DefaultLayout({
 
             {/* Product Links */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-slate-900 mb-5">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-text))] mb-5">
                 Platform
               </h4>
               <ul className="space-y-3">
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/features"
                   >
                     Features
@@ -99,7 +99,7 @@ export default function DefaultLayout({
                 </li>
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/pricing"
                   >
                     Pricing Plans
@@ -107,7 +107,7 @@ export default function DefaultLayout({
                 </li>
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/demo"
                   >
                     Book a Demo
@@ -115,7 +115,7 @@ export default function DefaultLayout({
                 </li>
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/login"
                   >
                     Clinic Login
@@ -126,13 +126,13 @@ export default function DefaultLayout({
 
             {/* Company Links */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-slate-900 mb-5">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-text))] mb-5">
                 Company
               </h4>
               <ul className="space-y-3">
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/about"
                   >
                     About Us
@@ -140,7 +140,7 @@ export default function DefaultLayout({
                 </li>
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/blog"
                   >
                     Blog & News
@@ -148,7 +148,7 @@ export default function DefaultLayout({
                 </li>
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/careers"
                   >
                     Careers
@@ -156,7 +156,7 @@ export default function DefaultLayout({
                 </li>
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/contact"
                   >
                     Contact Sales
@@ -167,13 +167,13 @@ export default function DefaultLayout({
 
             {/* Support Space */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-slate-900 mb-5">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-text))] mb-5">
                 Support
               </h4>
               <ul className="space-y-3 mb-6">
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/help"
                   >
                     Help Center
@@ -181,7 +181,7 @@ export default function DefaultLayout({
                 </li>
                 <li>
                   <Link
-                    className="text-sm text-slate-600 hover:text-teal-700 hover:underline underline-offset-4 transition-all"
+                    className="text-sm text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] hover:underline underline-offset-4 transition-all"
                     to="/status"
                   >
                     System Status
@@ -190,16 +190,16 @@ export default function DefaultLayout({
               </ul>
 
               {/* Contact Box */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-md clarity-card">
-                <p className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-teal-500" />
+              <div className="p-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-md clarity-card">
+                <p className="text-xs font-bold text-[rgb(var(--color-text))] uppercase tracking-wide mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[rgb(var(--color-success))]" />
                   Kathmandu HQ
                 </p>
-                <div className="space-y-1.5 text-sm text-slate-600">
+                <div className="space-y-1.5 text-sm text-[rgb(var(--color-text-muted))]">
                   <p>Tripureshwor, Kathmandu, Nepal</p>
                   <p className="pt-2">
                     <a
-                      className="font-medium hover:text-teal-700 transition-colors"
+                      className="font-medium hover:text-[rgb(var(--color-primary))] transition-colors"
                       href={`tel:${siteConfig.links.phone ?? ""}`}
                     >
                       {siteConfig.links.phone ?? "+977-1-XX-XXXX"}
@@ -207,7 +207,7 @@ export default function DefaultLayout({
                   </p>
                   <p>
                     <a
-                      className="font-medium hover:text-teal-700 transition-colors"
+                      className="font-medium hover:text-[rgb(var(--color-primary))] transition-colors"
                       href={`mailto:${siteConfig.links.email ?? ""}`}
                     >
                       {siteConfig.links.email ?? "hello@procaresoftware.com"}
@@ -221,40 +221,40 @@ export default function DefaultLayout({
 
         {/* Bottom Bar */}
         <div className="max-w-7xl mx-auto px-6 lg:px-8 mt-4">
-          <div className="pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="pt-8 border-t border-[rgb(var(--color-border))] flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-col items-center md:items-start gap-1">
-              <p className="text-slate-500 text-sm font-medium">
+              <p className="text-[rgb(var(--color-text-muted))] text-sm font-medium">
                 © {new Date().getFullYear()} Procare Software Nepal. All rights
                 reserved.
               </p>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5 text-xs text-[rgb(var(--color-text-muted))] opacity-70">
                 <span>Designed & Engineered in</span>
                 <span className="text-red-500">🇳🇵</span>
-                <span className="font-medium text-slate-500">Nepal</span>
+                <span className="font-medium text-[rgb(var(--color-text-muted))]">Nepal</span>
               </div>
             </div>
 
             <div className="flex flex-wrap justify-center gap-6">
               <Link
-                className="text-xs font-medium text-slate-500 hover:text-teal-700 transition-colors text-uppercase tracking-wide uppercase"
+                className="text-xs font-medium text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] transition-colors text-uppercase tracking-wide uppercase"
                 to="/terms"
               >
                 Terms
               </Link>
               <Link
-                className="text-xs font-medium text-slate-500 hover:text-teal-700 transition-colors text-uppercase tracking-wide uppercase"
+                className="text-xs font-medium text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] transition-colors text-uppercase tracking-wide uppercase"
                 to="/privacy"
               >
                 Privacy
               </Link>
               <Link
-                className="text-xs font-medium text-slate-500 hover:text-teal-700 transition-colors text-uppercase tracking-wide uppercase"
+                className="text-xs font-medium text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] transition-colors text-uppercase tracking-wide uppercase"
                 to="/security"
               >
                 Security
               </Link>
               <Link
-                className="text-xs font-medium text-slate-500 hover:text-teal-700 transition-colors text-uppercase tracking-wide uppercase"
+                className="text-xs font-medium text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-primary))] transition-colors text-uppercase tracking-wide uppercase"
                 to="/compliance"
               >
                 Compliance

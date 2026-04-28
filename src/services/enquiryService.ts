@@ -88,22 +88,14 @@ export const enquiryService = {
   },
 
   async getEnquiries(
-    clinicId: string,
-    branchId?: string,
+    _clinicId?: string,
+    _branchId?: string,
     filters?: EnquiryFilters,
   ): Promise<Enquiry[]> {
     try {
-      const constraints: QueryConstraint[] = [
-        where("clinicId", "==", clinicId),
-      ];
+      const constraints: QueryConstraint[] = [];
 
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
-
-      if (filters?.branchId) {
-        constraints.push(where("branchId", "==", filters.branchId));
-      }
+      // Branch filter removed for standalone mode
 
       const rangeField = filters?.dateField ?? "appointmentDate";
       let orderConstraint: QueryConstraint = orderBy("createdAt", "desc");
@@ -113,11 +105,8 @@ export const enquiryService = {
           ? normalizeEnquiryStatus(filters.status)
           : undefined;
 
-      // Backward compatibility: older records might have status saved as "Scheduled"/"Converted"
-      // or other labels. Firestore can't OR-query multiple values easily, so we fetch and
-      // filter client-side for the legacy-sensitive statuses.
-      const shouldFilterClientSide =
-        requestedStatus === "scheduled" || requestedStatus === "converted";
+      // Always filter client-side to avoid requiring composite indexes for status + createdAt
+      const shouldFilterClientSide = true;
 
       if (requestedStatus && !shouldFilterClientSide) {
         constraints.push(where("status", "==", requestedStatus));

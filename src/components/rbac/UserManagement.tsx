@@ -51,8 +51,6 @@ interface UserManagementProps {
 
 export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
   const { currentUser, userData } = useAuth();
-  const isBranchAdmin =
-    !!userData?.branchId && userData?.role === "clinic-admin";
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -89,19 +87,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       // Prepare filtering options based on current user's role and branch
       const userFilterOptions: any = {};
       const roleFilterOptions: any = {};
-
-      if (userData && userData.branchId) {
-        // Branch clinic admin - filter on server side
-        userFilterOptions.branchId = userData.branchId;
-        userFilterOptions.excludeRoles = ["clinic-super-admin"];
-
-        roleFilterOptions.branchId = userData.branchId;
-        roleFilterOptions.isBranchSpecific = true;
-        roleFilterOptions.excludeNames = [
-          "Clinic Super Admin",
-          "Clinic Administrator",
-        ];
-      }
 
       const [usersData, rolesData, doctorsData] = await Promise.all([
         rbacService.getClinicUsersWithRoles(clinicId, userFilterOptions),
@@ -278,7 +263,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                 "failure",
                 errorMessage,
                 {
-                  branchId: userData?.branchId,
+                  branchId: undefined,
                 },
               );
             } catch (logError) {
@@ -328,7 +313,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
               "failure",
               errorMessage,
               {
-                branchId: userData?.branchId,
+                branchId: undefined,
               },
             );
           } catch (logError) {
@@ -650,37 +635,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
 
   return (
     <div className="space-y-6">
-      {isBranchAdmin && (
-        <Card className="border border-blue-200 bg-blue-50">
-          <CardBody className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
-                ℹ
-              </div>
-              <div>
-                <h4 className="font-medium text-blue-900 mb-1">
-                  Branch-Specific User Management
-                </h4>
-                <p className="text-sm text-blue-800">
-                  All users you create will be automatically assigned to your
-                  branch and can only access branch-specific data. You can
-                  create custom branch roles and assign them to users, but all
-                  roles are automatically scoped to your branch only.
-                </p>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-      )}
 
       <Card>
         <CardHeader className="flex justify-between items-center">
           <div>
             <h3 className="text-xl font-semibold">User Management</h3>
             <p className="text-sm text-gray-600">
-              {isBranchAdmin
-                ? `Create and manage staff for your branch. All users created will be automatically assigned to your branch.`
-                : `Create and manage clinic staff with role-based permissions`}
+              Create and manage clinic staff with role-based permissions
             </p>
           </div>
           <Button
@@ -722,11 +683,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                     {user.roles.length > 0 ? (
                       <div className="flex items-center gap-2">
                         {getUserRoleChips(user.roles)}
-                        {user.branchId && (
-                          <Chip color="primary" size="sm" variant="flat">
-                            Branch User
-                          </Chip>
-                        )}
                       </div>
                     ) : (
                       <Chip color="warning" size="sm" variant="flat">
@@ -802,9 +758,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                 <p className="text-sm text-green-800">
                   <strong>User Permissions:</strong> Select roles that control
                   which pages and features this user can access.
-                  {isBranchAdmin
-                    ? ` Only branch-specific roles are available. All users will be automatically assigned to your branch.`
-                    : ` You can assign multiple roles for combined permissions. At least one role is required.`}
+                  You can assign multiple roles for combined permissions. At least one role is required.
                 </p>
               </div>
 
@@ -861,11 +815,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                   }}
                 >
                   {doctors
-                    .filter(
-                      (doctor) =>
-                        !userData?.branchId ||
-                        doctor.branchId === userData.branchId,
-                    )
                     .map((doctor) => (
                       <SelectItem key={doctor.id} textValue={doctor.name}>
                         <div className="flex flex-col">
@@ -969,9 +918,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                 <p className="text-sm text-amber-800">
                   <strong>Role Assignments:</strong> Select roles that control
                   which pages and features this user can access.
-                  {userData && userData.branchId
-                    ? " You can only assign branch-appropriate roles."
-                    : " Multiple roles can be assigned for combined permissions."}
+                  Multiple roles can be assigned for combined permissions.
                 </p>
               </div>
 

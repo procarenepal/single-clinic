@@ -9,6 +9,12 @@ import {
   IoFilterOutline,
   IoEllipsisVerticalOutline,
   IoTrashOutline,
+  IoEyeOutline,
+  IoCreateOutline,
+  IoCalendarOutline,
+  IoListOutline,
+  IoPowerOutline,
+  IoShieldCheckmarkOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
@@ -38,15 +44,15 @@ function CustomInput({
 }: any) {
   return (
     <div
-      className={`flex items-center border border-mountain-200 rounded min-h-[36px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${className || ""}`}
+      className={`flex items-center border border-border-base rounded min-h-[36px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10 ${className || ""}`}
     >
       {startContent && (
-        <div className="pl-3 pr-2 text-mountain-400 flex items-center">
+        <div className="pl-3 pr-2 text-text-muted/50 flex items-center">
           {startContent}
         </div>
       )}
       <input
-        className="flex-1 w-full text-[13px] px-2 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
+        className="flex-1 w-full text-[13px] px-2 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/50"
         placeholder={placeholder}
         type={type}
         value={value}
@@ -65,7 +71,7 @@ function CustomSelect({
 }: any) {
   return (
     <select
-      className={`h-[36px] bg-white border border-mountain-200 text-mountain-800 text-[13px] rounded px-3 py-1 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow ${className || ""}`}
+      className={`h-[36px] bg-surface border border-border-base text-text-main text-[13px] rounded px-3 py-1 outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-shadow ${className || ""}`}
       value={value}
       onChange={onChange}
     >
@@ -84,7 +90,7 @@ function CustomSelect({
 }
 
 export default function DoctorsPage() {
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData, isClinicAdmin, isSystemOwner } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,10 +107,7 @@ export default function DoctorsPage() {
   const itemsPerPage = 8; // Adjust to preferred page size
 
   const branchId = userData?.branchId ?? null;
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+  const isClinicWideAdmin = isClinicAdmin() || isSystemOwner();
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
     branchId ??
@@ -118,14 +121,13 @@ export default function DoctorsPage() {
   }, [clinicId, effectiveBranchId]);
 
   const loadSpecialities = async () => {
-    if (!clinicId) return;
     try {
       const specialitiesData =
-        await specialityService.getActiveSpecialitiesForDropdown(clinicId);
+        await specialityService.getActiveSpecialitiesForDropdown();
 
       setSpecialities([
         { key: "all", label: "All Specialities" },
-        ...specialitiesData,
+        ...specialitiesData ?? [],
       ]);
     } catch (error) {
       console.error("Error loading specialities:", error);
@@ -134,13 +136,9 @@ export default function DoctorsPage() {
   };
 
   const loadDoctors = async () => {
-    if (!clinicId) return;
     try {
       setLoading(true);
-      const doctorsData = await doctorService.getDoctorsByClinic(
-        clinicId,
-        effectiveBranchId,
-      );
+      const doctorsData = await doctorService.getDoctors();
 
       setDoctors(doctorsData);
     } catch (error) {
@@ -157,13 +155,13 @@ export default function DoctorsPage() {
   // Load branches for clinic-wide admins (no fixed branchId)
   useEffect(() => {
     if (!clinicId) return;
-    if (!isClinicAdmin || branchId) return;
+    if (!isClinicWideAdmin || branchId) return;
 
     let cancelled = false;
 
     (async () => {
       try {
-        const data = await branchService.getClinicBranches(clinicId, true);
+        const data = await branchService.getClinicBranches();
 
         if (cancelled) return;
         setBranches(data);
@@ -271,7 +269,7 @@ export default function DoctorsPage() {
     const matchesSpeciality =
       selectedSpeciality === "all" ||
       doctor.speciality.toLowerCase().replace(/\s+/g, "-") ===
-        selectedSpeciality;
+      selectedSpeciality;
 
     const matchesStatus =
       selectedStatus === "all" ||
@@ -302,17 +300,17 @@ export default function DoctorsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "sm" })}>Doctors</h1>
-          <p className="text-[13.5px] text-mountain-500 mt-1">
+          <h1 className={title({ size: "lg" })}>Doctors</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage and access doctor records
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          {!branchId && isClinicAdmin && branches.length > 0 && (
+          {!branchId && isClinicWideAdmin && branches.length > 0 && (
             <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-mountain-500">Branch</span>
+              <span className="text-[11px] text-text-muted">Branch</span>
               <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                 value={selectedBranchId ?? ""}
                 onChange={(e) => setSelectedBranchId(e.target.value || null)}
               >
@@ -327,7 +325,7 @@ export default function DoctorsPage() {
           )}
           <Button
             startContent={
-              <div className="p-0.5 rounded-full bg-teal-50 text-teal-600">
+              <div className="p-0.5 rounded-full bg-primary/10 text-primary">
                 <svg
                   fill="none"
                   height="14"
@@ -360,9 +358,9 @@ export default function DoctorsPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-mountain-200 rounded shadow-sm flex flex-col">
+      <div className="bg-surface border border-border-base rounded shadow-none flex flex-col">
         {/* Filters Top Bar */}
-        <div className="p-5 border-b border-mountain-100 flex flex-col gap-4">
+        <div className="p-5 border-b border-border-base flex flex-col gap-4">
           <div className="flex flex-col md:flex-row justify-between gap-4">
             <div className="flex flex-col md:flex-row gap-3 flex-1">
               <CustomInput
@@ -410,16 +408,16 @@ export default function DoctorsPage() {
           </div>
 
           {hasAdvancedFilters && (
-            <div className="flex flex-wrap gap-2 pt-1 border-t border-mountain-100">
+            <div className="flex flex-wrap gap-2 pt-1 border-t border-border-base">
               {selectedSpeciality !== "all" && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 rounded text-[12px] font-medium text-teal-800">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded text-[12px] font-medium text-primary">
                   Speciality:{" "}
                   {
                     specialities.find((s) => s.key === selectedSpeciality)
                       ?.label
                   }
                   <button
-                    className="text-teal-600 hover:text-teal-900"
+                    className="text-primary hover:text-primary-600"
                     onClick={() => setSelectedSpeciality("all")}
                   >
                     <IoAddOutline className="w-3.5 h-3.5 rotate-45" />
@@ -427,10 +425,10 @@ export default function DoctorsPage() {
                 </div>
               )}
               {selectedStatus !== "all" && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-mountain-100 border border-mountain-200 rounded text-[12px] font-medium text-mountain-800">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-base rounded text-[12px] font-medium text-text-main">
                   Status: <span className="capitalize">{selectedStatus}</span>
                   <button
-                    className="text-mountain-400 hover:text-mountain-600"
+                    className="text-text-muted hover:text-text-main"
                     onClick={() => setSelectedStatus("all")}
                   >
                     <IoAddOutline className="w-3.5 h-3.5 rotate-45" />
@@ -449,15 +447,15 @@ export default function DoctorsPage() {
             </div>
           ) : currentDoctors.length === 0 ? (
             <div className="flex flex-col justify-center items-center h-[300px] gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-mountain-50 flex items-center justify-center border border-mountain-100">
-                <IoSearchOutline className="w-6 h-6 text-mountain-400" />
+              <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center border border-border-base">
+                <IoSearchOutline className="w-6 h-6 text-text-muted/40" />
               </div>
-              <h3 className="text-[14px] font-semibold text-mountain-800">
+              <h3 className="text-[14px] font-semibold text-text-main">
                 {searchQuery || hasAdvancedFilters
                   ? "No doctors match your criteria"
                   : "No doctors added yet"}
               </h3>
-              <p className="text-[13px] text-mountain-500 max-w-sm">
+              <p className="text-[13px] text-text-muted max-w-sm">
                 {searchQuery || hasAdvancedFilters
                   ? "Try adjusting filters or search term."
                   : "Start by adding a doctor to your clinic."}
@@ -477,23 +475,23 @@ export default function DoctorsPage() {
           ) : (
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                <tr className="bg-surface-2 border-b border-border-base">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                     Doctor
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                     Contact
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                     Speciality
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                     Type
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                     Commission
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                     Status
                   </th>
                   <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600 text-right">
@@ -501,30 +499,30 @@ export default function DoctorsPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-border-base">
                 {currentDoctors.map((doctor) => (
                   <tr
                     key={doctor.id}
-                    className="hover:bg-mountain-50/30 transition-colors"
+                    className="hover:bg-surface-2 transition-colors"
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-semibold text-[13px] shrink-0 border border-teal-200">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-[13px] shrink-0 border border-primary/20">
                           {doctor.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <Link
-                            className="font-semibold text-[13.5px] text-mountain-900 hover:text-teal-600 hover:underline"
+                            className="font-semibold text-[13.5px] text-text-main hover:text-primary hover:underline"
                             to={`/dashboard/doctors/${doctor.id}`}
                           >
                             {doctor.name}
                           </Link>
-                          <div className="text-[11.5px] text-mountain-500 font-mono mt-0.5">
+                          <div className="text-[11.5px] text-text-muted font-mono mt-0.5">
                             NMC: {doctor.nmcNumber}
                           </div>
-                          {isClinicAdmin && branchMap[doctor.branchId] && (
+                          {isClinicWideAdmin && doctor.branchId && (
                             <div className="mt-0.5">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-mountain-50 text-mountain-600 border border-mountain-200">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface-2 text-text-muted border border-border-base">
                                 {branchMap[doctor.branchId]}
                               </span>
                             </div>
@@ -533,43 +531,41 @@ export default function DoctorsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="text-[13px] text-mountain-800">
+                      <div className="text-[13px] text-text-main">
                         {doctor.phone}
                       </div>
                       {doctor.email && (
-                        <div className="text-[11.5px] text-mountain-500 mt-0.5">
+                        <div className="text-[11.5px] text-text-muted mt-0.5">
                           {doctor.email}
                         </div>
                       )}
                     </td>
                     <td className="px-5 py-3">
-                      <span className="text-[13px] text-mountain-800 capitalize">
+                      <span className="text-[13px] text-text-main capitalize">
                         {doctor.speciality}
                       </span>
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${
-                          doctor.doctorType === "regular"
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : "bg-purple-50 text-purple-700 border-purple-200"
-                        }`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${doctor.doctorType === "regular"
+                          ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                          : "bg-purple-500/10 text-purple-600 border-purple-500/20"
+                          }`}
                       >
                         {doctor.doctorType}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span className="text-[13px] text-mountain-800 font-medium">
+                      <span className="text-[13px] text-text-main font-medium">
                         {doctor.defaultCommission}%
                       </span>
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${
-                          doctor.isActive
-                            ? "bg-teal-50 text-teal-700 border-teal-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                        }`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${doctor.isActive
+                          ? "bg-green-500/10 text-green-600 border-green-500/20"
+                          : "bg-red-500/10 text-red-600 border-red-500/20"
+                          }`}
                       >
                         {doctor.isActive ? "Active" : "Inactive"}
                       </span>
@@ -581,12 +577,13 @@ export default function DoctorsPage() {
                             {actionLoading === doctor.id ? (
                               <Spinner size="sm" />
                             ) : (
-                              <IoEllipsisVerticalOutline className="w-4 h-4 text-mountain-600" />
+                              <IoEllipsisVerticalOutline className="w-4 h-4 text-text-muted" />
                             )}
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu>
                           <DropdownItem
+                            startContent={<IoEyeOutline className="w-4 h-4" />}
                             onClick={() =>
                               (window.location.href = `/dashboard/doctors/${doctor.id}`)
                             }
@@ -594,6 +591,7 @@ export default function DoctorsPage() {
                             View Profile
                           </DropdownItem>
                           <DropdownItem
+                            startContent={<IoCreateOutline className="w-4 h-4" />}
                             onClick={() =>
                               (window.location.href = `/dashboard/doctors/${doctor.id}/edit`)
                             }
@@ -601,6 +599,7 @@ export default function DoctorsPage() {
                             Edit
                           </DropdownItem>
                           <DropdownItem
+                            startContent={<IoCalendarOutline className="w-4 h-4" />}
                             onClick={() =>
                               (window.location.href = `/dashboard/doctors/${doctor.id}/schedule`)
                             }
@@ -608,6 +607,7 @@ export default function DoctorsPage() {
                             Schedule
                           </DropdownItem>
                           <DropdownItem
+                            startContent={<IoListOutline className="w-4 h-4" />}
                             onClick={() =>
                               (window.location.href = `/dashboard/appointments?doctorId=${doctor.id}`)
                             }
@@ -620,6 +620,13 @@ export default function DoctorsPage() {
                                 ? "text-amber-600"
                                 : "text-teal-600"
                             }
+                            startContent={
+                              doctor.isActive ? (
+                                <IoPowerOutline className="w-4 h-4" />
+                              ) : (
+                                <IoShieldCheckmarkOutline className="w-4 h-4" />
+                              )
+                            }
                             onClick={() =>
                               handleToggleStatus(doctor.id, doctor.isActive)
                             }
@@ -627,14 +634,13 @@ export default function DoctorsPage() {
                             {doctor.isActive ? "Deactivate" : "Activate"}
                           </DropdownItem>
                           <DropdownItem
-                            className="text-red-600"
+                            color="danger"
+                            startContent={<IoTrashOutline className="w-4 h-4" />}
                             onClick={() =>
                               handleDeleteDoctor(doctor.id, doctor.name)
                             }
                           >
-                            <div className="flex items-center gap-1.5">
-                              <IoTrashOutline /> Delete
-                            </div>
+                            Delete
                           </DropdownItem>
                         </DropdownMenu>
                       </Dropdown>
@@ -648,8 +654,8 @@ export default function DoctorsPage() {
 
         {/* Pagination */}
         {filteredDoctors.length > 0 && (
-          <div className="p-4 border-t border-mountain-100 bg-mountain-50/30 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <span className="text-[12.5px] text-mountain-500 font-medium">
+          <div className="p-4 border-t border-border-base bg-surface-2 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span className="text-[12.5px] text-text-muted font-medium">
               Showing {startIndex + 1} to {endIndex} of {filteredDoctors.length}{" "}
               doctors
             </span>
@@ -672,11 +678,11 @@ export default function DoctorsPage() {
                 .map((p, i, arr) => (
                   <React.Fragment key={p}>
                     {i > 0 && arr[i - 1] !== p - 1 && (
-                      <span className="px-2 text-mountain-400">...</span>
+                      <span className="px-2 text-text-muted/50">...</span>
                     )}
                     <Button
                       className={
-                        currentPage === p ? "" : "text-mountain-600 bg-white"
+                        currentPage === p ? "" : "text-text-muted bg-surface"
                       }
                       color={currentPage === p ? "primary" : "default"}
                       size="sm"

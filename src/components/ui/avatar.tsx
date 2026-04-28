@@ -43,18 +43,21 @@ export const Avatar: React.FC<AvatarProps> = ({
   color = "primary",
   className,
 }) => {
+  const [hasError, setHasError] = React.useState(false);
+
   const base = clsx(
     "rounded-full inline-flex items-center justify-center shrink-0 font-semibold select-none overflow-hidden",
     SIZE[size],
     className,
   );
 
-  if (src) {
+  if (src && !hasError) {
     return (
       <img
         alt={alt ?? name ?? "avatar"}
         className={clsx(base, "object-cover bg-mountain-100")}
         src={src}
+        onError={() => setHasError(true)}
       />
     );
   }

@@ -1295,7 +1295,7 @@ export default function PurchaseDetailPage() {
               <p className="text-[12.5px] text-mountain-500 mb-1">
                 Total Amount
               </p>
-              <p className="text-xl font-bold text-mountain-900">
+              <p className="text-stat-sm font-bold text-mountain-900">
                 NPR {totalAmount.toLocaleString()}
               </p>
               {totalReturnedAmount > 0 && (
@@ -1310,7 +1310,7 @@ export default function PurchaseDetailPage() {
               <p className="text-[12.5px] text-mountain-500 mb-1">
                 Paid Amount
               </p>
-              <p className="text-xl font-bold text-health-600">
+              <p className="text-stat-sm font-bold text-health-600">
                 NPR {paidAmount.toLocaleString()}
               </p>
             </div>
@@ -1319,7 +1319,7 @@ export default function PurchaseDetailPage() {
             <div className="text-center lg:text-left">
               <p className="text-[12.5px] text-mountain-500 mb-1">Due Amount</p>
               <p
-                className={`text-xl font-bold ${dueAmount > 0 ? "text-red-500" : "text-health-600"}`}
+                className={`text-stat-sm font-bold ${dueAmount > 0 ? "text-red-500" : "text-health-600"}`}
               >
                 NPR {dueAmount.toLocaleString()}
               </p>

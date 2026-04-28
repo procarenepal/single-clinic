@@ -39,11 +39,10 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${
-          isInvalid
+        className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${isInvalid
             ? "border-red-300 focus-within:ring-red-100"
             : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
-        } focus-within:ring-1 ${disabled ? "bg-mountain-50" : ""}`}
+          } focus-within:ring-1 ${disabled ? "bg-mountain-50" : ""}`}
       >
         <input
           className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500"
@@ -171,8 +170,8 @@ export default function NewExpertPage() {
       .then((multi) =>
         multi
           ? branchService
-              .getMainBranch(clinicId)
-              .then((b) => b && setDefaultBranchId(b.id))
+            .getMainBranch(clinicId)
+            .then((b) => b && setDefaultBranchId(b.id))
           : setDefaultBranchId(clinicId),
       )
       .catch(() => setDefaultBranchId(clinicId));
@@ -256,7 +255,7 @@ export default function NewExpertPage() {
           <IoArrowBackOutline className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className={title({ size: "sm" })}>Add New Expert</h1>
+          <h1 className={title({ size: "lg" })}>Add New Expert</h1>
           <p className="text-[14px] text-mountain-500 mt-1">
             Enter expert information below
           </p>

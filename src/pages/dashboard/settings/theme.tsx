@@ -109,7 +109,7 @@ export default function ThemeSettingsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Theme Settings</h1>
+        <h1 className="text-page-title font-bold text-foreground">Theme Settings</h1>
         <p className="text-foreground-500 mt-1">
           Customize your clinic dashboard appearance and visual preferences
         </p>

@@ -134,7 +134,7 @@ const BTN_COLOR: Record<AlertLevel, "danger" | "warning" | "primary"> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function SubscriptionBanner() {
-  const { userData, isSuperAdmin, logout } = useAuthContext();
+  const { userData, isSystemOwner, logout } = useAuthContext();
 
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -145,7 +145,7 @@ export function SubscriptionBanner() {
       localStorage.getItem("isImpersonating") === "true" ||
       !!localStorage.getItem("impersonationMeta");
 
-    if (isSuperAdmin() || !userData?.clinicId || isImpersonating) {
+    if (isSystemOwner() || !userData?.clinicId || isImpersonating) {
       setLoading(false);
 
       return;
@@ -165,9 +165,9 @@ export function SubscriptionBanner() {
       })
       .catch((err) => console.error("SubscriptionBanner fetch error:", err))
       .finally(() => setLoading(false));
-  }, [userData?.clinicId, isSuperAdmin, logout]);
+  }, [userData?.clinicId, isSystemOwner, logout]);
 
-  if (loading || dismissed || !clinic || isSuperAdmin()) return null;
+  if (loading || dismissed || !clinic || isSystemOwner()) return null;
 
   const alert = getAlert(clinic);
 
@@ -233,7 +233,7 @@ export function SubscriptionBanner() {
                   }}
                 >
                   {clinic?.subscriptionStatus === "suspended" ||
-                  clinic?.subscriptionStatus === "cancelled"
+                    clinic?.subscriptionStatus === "cancelled"
                     ? "Contact Support"
                     : "Manage Subscription"}
                 </Button>

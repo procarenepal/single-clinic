@@ -51,7 +51,7 @@ export const systemSetupService = {
   async checkSuperAdminExists(): Promise<boolean> {
     try {
       const usersRef = collection(db, USERS_COLLECTION);
-      const q = query(usersRef, where("role", "==", "super-admin"));
+      const q = query(usersRef, where("role", "==", "system-owner"));
       const querySnapshot = await getDocs(q);
 
       return !querySnapshot.empty;
@@ -98,7 +98,7 @@ export const systemSetupService = {
         id: uid,
         email,
         displayName,
-        role: "super-admin",
+        role: "system-owner",
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),

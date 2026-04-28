@@ -56,7 +56,18 @@ export const appointmentBillingService = {
           updatedAt: data.updatedAt?.toDate() || new Date(),
         } as AppointmentBillingSettings;
 
-        // Auto-migrate: If paymentMethods doesn't exist, initialize with defaults
+        // Auto-migrate: Force enable for standalone system
+        let needsUpdate = false;
+        const updates: any = {};
+
+        if (!settings.isActive || !settings.enabledByAdmin) {
+          settings.isActive = true;
+          settings.enabledByAdmin = true;
+          updates.isActive = true;
+          updates.enabledByAdmin = true;
+          needsUpdate = true;
+        }
+
         if (!Array.isArray(settings.paymentMethods)) {
           const defaultSettings = this.getDefaultBillingSettings(
             clinicId,
@@ -65,19 +76,27 @@ export const appointmentBillingService = {
 
           settings.paymentMethods = defaultSettings.paymentMethods;
           settings.defaultPaymentMethod = defaultSettings.defaultPaymentMethod;
+          updates.paymentMethods = settings.paymentMethods;
+          updates.defaultPaymentMethod = settings.defaultPaymentMethod;
+          needsUpdate = true;
+        }
 
-          // Update the database with the new payment methods
-          await updateDoc(settingsRef, {
-            paymentMethods: settings.paymentMethods,
-            defaultPaymentMethod: settings.defaultPaymentMethod,
-            updatedAt: Timestamp.now(),
-          });
+        if (needsUpdate) {
+          updates.updatedAt = Timestamp.now();
+          await updateDoc(settingsRef, updates);
         }
 
         return settings;
       }
 
-      return null;
+      // If document doesn't exist, create it auto-enabled
+      const defaultSettings = this.getDefaultBillingSettings(clinicId, "system");
+      await setDoc(settingsRef, {
+        ...defaultSettings,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+      return defaultSettings;
     } catch (error) {
       console.error("Error getting billing settings:", error);
       throw error;
@@ -207,8 +226,8 @@ export const appointmentBillingService = {
       id: clinicId,
       clinicId,
       branchId: "",
-      enabledByAdmin: false,
-      isActive: false,
+      enabledByAdmin: true,
+      isActive: true,
       invoicePrefix: "INV",
       nextInvoiceNumber: 1,
       defaultDiscountType: "percent",

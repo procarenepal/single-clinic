@@ -114,7 +114,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               : "bg-white dark:bg-zinc-950 border-mountain-200 dark:border-zinc-800",
             "focus-within:border-teal-600 focus-within:ring-1 focus-within:ring-teal-600/20",
             (isInvalid || errorMessage) &&
-              "!border-red-400 focus-within:!ring-red-400/20",
+            "!border-red-400 focus-within:!ring-red-400/20",
             isDisabled && "opacity-50 cursor-not-allowed",
             SIZE_WRAPPER[size],
             fullWidth && "w-full",
@@ -205,7 +205,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ) => (
     <div className={clsx("flex flex-col gap-0.5", fullWidth && "w-full")}>
       {label && (
-        <label className="text-xs font-medium text-mountain-700">
+        <label className="text-xs font-medium text-mountain-700 dark:text-zinc-400">
           {label}
           {isRequired && <span className="text-red-500 ml-0.5">*</span>}
         </label>

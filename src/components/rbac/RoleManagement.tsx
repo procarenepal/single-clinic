@@ -41,8 +41,6 @@ interface RoleManagementProps {
 
 export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
   const { currentUser, userData } = useAuth();
-  const isBranchAdmin =
-    !!userData?.branchId && userData?.role === "clinic-admin";
   const [roles, setRoles] = useState<Role[]>([]);
   const [availablePages, setAvailablePages] = useState<Page[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,18 +65,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      // Prepare filtering options based on current user's role and branch
       const roleFilterOptions: any = {};
-
-      if (isBranchAdmin && userData?.branchId) {
-        // Branch clinic admin - filter on server side
-        roleFilterOptions.branchId = userData.branchId;
-        roleFilterOptions.isBranchSpecific = true;
-        roleFilterOptions.excludeNames = [
-          "Clinic Super Admin",
-          "Clinic Administrator",
-        ];
-      }
 
       const [rolesData, pagesData] = await Promise.all([
         rbacService.getClinicRoles(clinicId, roleFilterOptions),
@@ -143,17 +130,14 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
           const nameValidation = await rbacService.validateRoleNameUnique(
             clinicId,
             formData.name,
-            isBranchAdmin && userData?.branchId ? userData.branchId : undefined,
+            undefined, // No branchId in standalone
           );
 
           if (!nameValidation.valid) {
             console.error("Role name validation failed:", {
               name: formData.name,
               clinicId,
-              branchId:
-                isBranchAdmin && userData?.branchId
-                  ? userData.branchId
-                  : undefined,
+              branchId: undefined,
               validationResult: nameValidation,
             });
 
@@ -175,10 +159,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                 "failure",
                 nameValidation.error || "A role with this name already exists",
                 {
-                  branchId:
-                    isBranchAdmin && userData?.branchId
-                      ? userData.branchId
-                      : undefined,
+                  branchId: undefined,
                 },
               );
             } catch (logError) {
@@ -221,7 +202,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               errorMessage,
               {
                 branchId:
-                  isBranchAdmin && userData?.branchId
+                  false && userData?.branchId
                     ? userData.branchId
                     : undefined,
               },
@@ -273,12 +254,9 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   },
                   "failure",
                   permissionValidation.error ||
-                    "One or more permissions are invalid",
+                  "One or more permissions are invalid",
                   {
-                    branchId:
-                      isBranchAdmin && userData?.branchId
-                        ? userData.branchId
-                        : undefined,
+                    branchId: undefined,
                   },
                 );
               } catch (logError) {
@@ -322,10 +300,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                 "failure",
                 errorMessage,
                 {
-                  branchId:
-                    isBranchAdmin && userData?.branchId
-                      ? userData.branchId
-                      : undefined,
+                  branchId: undefined,
                 },
               );
             } catch (logError) {
@@ -349,11 +324,8 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
           clinicId,
           permissions: formData.permissions,
           isDefault: false,
-          isBranchSpecific: isBranchAdmin, // Automatically branch-specific for branch admins
+          isBranchSpecific: false,
           linkedToDoctor: formData.linkedToDoctor,
-          ...(isBranchAdmin && userData?.branchId
-            ? { branchId: userData.branchId }
-            : {}),
         };
 
         try {
@@ -681,9 +653,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
           <div>
             <h3 className="text-xl font-semibold">Role Management</h3>
             <p className="text-sm text-gray-600">
-              {isBranchAdmin
-                ? `Create and manage branch-specific roles for your branch. All roles you create will be automatically scoped to your branch only.`
-                : `Manage roles and permissions for your clinic staff`}
+              Manage roles and permissions for your clinic staff
             </p>
           </div>
           <Button
@@ -691,7 +661,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
             startContent={<PlusIcon size={16} />}
             onPress={handleCreateRole}
           >
-            {isBranchAdmin ? "Create Branch Role" : "Create Role"}
+            {"Create Role"}
           </Button>
         </CardHeader>
         <CardBody>
@@ -739,14 +709,14 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   <TableCell>
                     {(() => {
                       // Check if branch admin can manage this role
-                      const canManage = isBranchAdmin
+                      const canManage = false
                         ? role.isBranchSpecific &&
-                          (!role.branchId ||
-                            role.branchId === userData?.branchId) &&
-                          !role.isDefault
+                        (!role.branchId ||
+                          role.branchId === userData?.branchId) &&
+                        !role.isDefault
                         : true;
 
-                      if (!canManage && isBranchAdmin) {
+                      if (!canManage && false) {
                         return (
                           <Chip color="default" size="sm" variant="flat">
                             View Only
@@ -801,13 +771,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
       >
         <ModalContent>
           <ModalHeader>
-            {modalMode === "create"
-              ? isBranchAdmin
-                ? "Create New Branch Role"
-                : "Create New Role"
-              : isBranchAdmin
-                ? "Edit Branch Role"
-                : "Edit Role"}
+            {modalMode === "create" ? "Create New Role" : "Edit Role"}
           </ModalHeader>
           <ModalBody className="space-y-4">
             <Input
@@ -848,24 +812,12 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               </div>
             </Checkbox>
 
-            {isBranchAdmin && (
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-800">
-                  <strong>Branch-Specific Role:</strong> This role will be
-                  automatically scoped to your branch and will only be able to
-                  access data and users within your branch.
-                </p>
-              </div>
-            )}
-
             <Divider />
 
             <div>
               <h4 className="text-lg font-medium mb-4">Page Permissions</h4>
               <p className="text-sm text-gray-600 mb-4">
-                {isBranchAdmin
-                  ? "Select which pages this branch role can access. This role will only work within your branch."
-                  : "Select which pages this role can access"}
+                Select which pages this role can access
               </p>
 
               <CheckboxGroup
@@ -906,41 +858,11 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               isLoading={isSubmitting}
               onPress={handleSubmit}
             >
-              {modalMode === "create"
-                ? isBranchAdmin
-                  ? "Create Branch Role"
-                  : "Create Role"
-                : isBranchAdmin
-                  ? "Update Branch Role"
-                  : "Update Role"}
+              {modalMode === "create" ? "Create Role" : "Update Role"}
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
-
-      {isBranchAdmin && (
-        <Card className="border border-blue-200 bg-blue-50">
-          <CardBody className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
-                ℹ
-              </div>
-              <div>
-                <h4 className="font-medium text-blue-900 mb-1">
-                  Branch-Specific Role Management
-                </h4>
-                <p className="text-sm text-blue-800">
-                  You can create and manage custom roles for your branch. All
-                  roles you create will be automatically scoped to your branch
-                  only and cannot access data from other branches. Default
-                  system roles are view-only, but you can create and edit your
-                  own custom branch roles.
-                </p>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-      )}
     </div>
   );
 };

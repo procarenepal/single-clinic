@@ -38,15 +38,15 @@ function CustomInput({
 }: any) {
   return (
     <div
-      className={`flex items-center border border-mountain-200 rounded min-h-[36px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${className || ""}`}
+      className={`flex items-center border border-border-base rounded min-h-[36px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10 ${className || ""}`}
     >
       {startContent && (
-        <div className="pl-3 pr-2 text-mountain-400 flex items-center">
+        <div className="pl-3 pr-2 text-text-muted/50 flex items-center">
           {startContent}
         </div>
       )}
       <input
-        className="flex-1 w-full text-[13px] px-2 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
+        className="flex-1 w-full text-[13px] px-2 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/50"
         placeholder={placeholder}
         type={type}
         value={value}
@@ -65,7 +65,7 @@ function CustomSelect({
 }: any) {
   return (
     <select
-      className={`h-[36px] bg-white border border-mountain-200 text-mountain-800 text-[13px] rounded px-3 py-1 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow ${className || ""}`}
+      className={`h-[36px] bg-surface border border-border-base text-text-main text-[13px] rounded px-3 py-1 outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-shadow ${className || ""}`}
       value={value}
       onChange={onChange}
     >
@@ -84,7 +84,7 @@ function CustomSelect({
 }
 
 export default function ExpertsPage() {
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData, isClinicAdmin, isSystemOwner } = useAuth();
   const [experts, setExperts] = useState<Expert[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,10 +101,7 @@ export default function ExpertsPage() {
   const itemsPerPage = 8;
 
   const branchId = userData?.branchId ?? null;
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" ||
-    userData?.role === "clinic-super-admin" ||
-    userData?.role === "super-admin";
+  const isClinicWideAdmin = isClinicAdmin() || isSystemOwner();
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
     branchId ??
@@ -156,7 +153,7 @@ export default function ExpertsPage() {
 
   useEffect(() => {
     if (!clinicId) return;
-    if (!isClinicAdmin || branchId) return;
+    if (!isClinicWideAdmin || branchId) return;
 
     let cancelled = false;
 
@@ -261,7 +258,7 @@ export default function ExpertsPage() {
     const matchesSpeciality =
       selectedSpeciality === "all" ||
       expert.speciality.toLowerCase().replace(/\s+/g, "-") ===
-        selectedSpeciality;
+      selectedSpeciality;
 
     const matchesStatus =
       selectedStatus === "all" ||
@@ -291,17 +288,17 @@ export default function ExpertsPage() {
     <div className="flex flex-col gap-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "sm" })}>Experts</h1>
+          <h1 className={title({ size: "lg" })}>Experts</h1>
           <p className="text-[13.5px] text-mountain-500 mt-1">
             Manage and access expert records
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          {!branchId && isClinicAdmin && branches.length > 0 && (
+          {!branchId && isClinicWideAdmin && branches.length > 0 && (
             <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-mountain-500">Branch</span>
+              <span className="text-[11px] text-text-muted">Branch</span>
               <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                 value={selectedBranchId ?? ""}
                 onChange={(e) => setSelectedBranchId(e.target.value || null)}
               >
@@ -324,8 +321,8 @@ export default function ExpertsPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-mountain-200 rounded shadow-sm flex flex-col">
-        <div className="p-5 border-b border-mountain-100 flex flex-col gap-4">
+      <div className="bg-surface border border-border-base rounded shadow-none flex flex-col">
+        <div className="p-5 border-b border-border-base flex flex-col gap-4">
           <div className="flex flex-col md:flex-row justify-between gap-4">
             <div className="flex flex-col md:flex-row gap-3 flex-1">
               <CustomInput
@@ -468,11 +465,10 @@ export default function ExpertsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${
-                          expert.expertType === "regular"
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : "bg-purple-50 text-purple-700 border-purple-200"
-                        }`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${expert.expertType === "regular"
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : "bg-purple-50 text-purple-700 border-purple-200"
+                          }`}
                       >
                         {expert.expertType}
                       </span>
@@ -484,11 +480,10 @@ export default function ExpertsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${
-                          expert.isActive
-                            ? "bg-teal-50 text-teal-700 border-teal-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                        }`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${expert.isActive
+                          ? "bg-teal-50 text-teal-700 border-teal-200"
+                          : "bg-red-50 text-red-700 border-red-200"
+                          }`}
                       >
                         {expert.isActive ? "Active" : "Inactive"}
                       </span>
@@ -500,12 +495,13 @@ export default function ExpertsPage() {
                             {actionLoading === expert.id ? (
                               <Spinner size="sm" />
                             ) : (
-                              <IoEllipsisVerticalOutline className="w-4 h-4 text-mountain-600" />
+                              <IoEllipsisVerticalOutline className="w-4 h-4 text-text-muted" />
                             )}
                           </Button>
                         </DropdownTrigger>
-                        <DropdownMenu>
+                        <DropdownMenu aria-label="Expert actions">
                           <DropdownItem
+                            key="view"
                             onClick={() =>
                               (window.location.href = `/dashboard/experts/${expert.id}`)
                             }
@@ -513,6 +509,7 @@ export default function ExpertsPage() {
                             View Profile
                           </DropdownItem>
                           <DropdownItem
+                            key="edit"
                             onClick={() =>
                               (window.location.href = `/dashboard/experts/${expert.id}/edit`)
                             }
@@ -520,6 +517,7 @@ export default function ExpertsPage() {
                             Edit
                           </DropdownItem>
                           <DropdownItem
+                            key="status"
                             className={
                               expert.isActive
                                 ? "text-amber-600"
@@ -532,6 +530,7 @@ export default function ExpertsPage() {
                             {expert.isActive ? "Deactivate" : "Activate"}
                           </DropdownItem>
                           <DropdownItem
+                            key="delete"
                             className="text-red-600"
                             onClick={() =>
                               handleDeleteExpert(expert.id, expert.name)

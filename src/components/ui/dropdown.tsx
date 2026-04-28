@@ -1,7 +1,7 @@
 /**
  * Clinic Clarity — Custom Dropdown
  * Fully custom, zero HeroUI dependency.
- * Flat design: border-only, no shadow, compact.
+ * Enhanced premium design with glassmorphism and smooth transitions.
  */
 import React, {
   createContext,
@@ -36,7 +36,7 @@ interface DropdownCtx {
 
 const Ctx = createContext<DropdownCtx>({
   open: false,
-  setOpen: () => {},
+  setOpen: () => { },
   triggerRef: { current: null },
   menuRef: { current: null },
   placement: "bottom-end",
@@ -99,10 +99,12 @@ export const Dropdown: React.FC<DropdownProps> = ({
 // ── DropdownTrigger ───────────────────────────────────────────────────────────
 export interface DropdownTriggerProps {
   children: ReactNode;
+  className?: string;
 }
 
 export const DropdownTrigger: React.FC<DropdownTriggerProps> = ({
   children,
+  className,
 }) => {
   const { open, setOpen, triggerRef } = useContext(Ctx);
 
@@ -116,7 +118,7 @@ export const DropdownTrigger: React.FC<DropdownTriggerProps> = ({
       ref={triggerRef}
       aria-expanded={open}
       aria-haspopup="menu"
-      className="inline-flex cursor-pointer"
+      className={clsx("inline-flex cursor-pointer", className)}
       role="button"
       tabIndex={0}
       onClick={handleClick}
@@ -138,17 +140,22 @@ export interface DropdownMenuProps {
   className?: string;
   /** aria-label for accessibility */
   "aria-label"?: string;
+  /** Whether the menu should match the width of the trigger */
+  matchTriggerWidth?: boolean;
 }
 
 export const DropdownMenu: React.FC<DropdownMenuProps> = ({
   children,
   className,
   "aria-label": ariaLabel,
+  matchTriggerWidth,
 }) => {
   const { open, setOpen, triggerRef, menuRef, placement } = useContext(Ctx);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
-    null,
-  );
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    width?: number;
+  } | null>(null);
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current || !menuRef.current) return;
@@ -157,7 +164,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
 
     let top = 0;
     let left = 0;
-    const gap = 4; // spacing
+    const gap = 6; // slightly more gap for modern feel
 
     switch (placement) {
       case "bottom-start":
@@ -186,8 +193,8 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
         break;
     }
 
-    setCoords({ top, left });
-  }, [placement]);
+    setCoords({ top, left, width: matchTriggerWidth ? triggerRect.width : undefined });
+  }, [placement, matchTriggerWidth]);
 
   useLayoutEffect(() => {
     if (open) {
@@ -217,10 +224,11 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
       ref={menuRef}
       aria-label={ariaLabel}
       className={clsx(
-        "z-[9999] min-w-[160px]",
-        "bg-white border border-mountain-200 rounded shadow-lg",
-        "py-1 overflow-hidden",
-        "animate-in fade-in-0 zoom-in-95 duration-100",
+        "z-[9999] min-w-[180px]",
+        "bg-surface/85 backdrop-blur-xl border border-border-base rounded-xl",
+        "shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25),0_0_1px_rgba(255,255,255,0.1)]",
+        "py-1.5 overflow-hidden",
+        "animate-in fade-in-0 zoom-in-95 duration-200 cubic-bezier(0.16, 1, 0.3, 1)",
         className,
       )}
       role="menu"
@@ -228,6 +236,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
         position: "fixed",
         top: coords ? coords.top : -9999,
         left: coords ? coords.left : -9999,
+        width: coords?.width,
         opacity: coords ? 1 : 0,
       }}
       onClick={() => setOpen(false)}
@@ -254,10 +263,10 @@ export interface DropdownItemProps {
 }
 
 const ITEM_COLOR: Record<NonNullable<DropdownItemProps["color"]>, string> = {
-  default: "text-mountain-800 hover:bg-mountain-50",
-  primary: "text-teal-700 hover:bg-teal-50",
-  danger: "text-red-600 hover:bg-red-50",
-  warning: "text-saffron-700 hover:bg-saffron-50",
+  default: "text-text-main hover:bg-surface-3",
+  primary: "text-primary hover:bg-primary/10",
+  danger: "text-red-500 hover:bg-red-500/10",
+  warning: "text-amber-500 hover:bg-amber-500/10",
 };
 
 export const DropdownItem: React.FC<DropdownItemProps> = ({
@@ -279,9 +288,9 @@ export const DropdownItem: React.FC<DropdownItemProps> = ({
   };
 
   const commonClass = clsx(
-    "w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium",
-    "transition-colors duration-75 cursor-pointer select-none",
-    "focus:outline-none focus:bg-mountain-50",
+    "w-[calc(100%-8px)] flex items-center gap-3 px-3 py-1.5 mx-1 my-0.5 rounded-lg text-[12.5px] font-medium",
+    "transition-all duration-200 cursor-pointer select-none",
+    "focus:outline-none focus:bg-surface-3",
     ITEM_COLOR[color],
     isDisabled && "opacity-40 cursor-not-allowed pointer-events-none",
     className,
@@ -290,9 +299,11 @@ export const DropdownItem: React.FC<DropdownItemProps> = ({
   const content = (
     <>
       {startContent && (
-        <span className="shrink-0 text-current opacity-70">{startContent}</span>
+        <span className="shrink-0 text-current transition-transform duration-200 group-hover:scale-110">
+          {startContent}
+        </span>
       )}
-      <span className="flex-1">
+      <span className="flex-1 text-left">
         {children}
         {description && (
           <span className="block text-[10px] text-mountain-400 mt-0.5 font-normal">
@@ -309,7 +320,7 @@ export const DropdownItem: React.FC<DropdownItemProps> = ({
   if (href) {
     return (
       <a
-        className={commonClass}
+        className={clsx(commonClass, "group")}
         href={href}
         role="menuitem"
         onClick={handleClick}
@@ -321,7 +332,7 @@ export const DropdownItem: React.FC<DropdownItemProps> = ({
 
   return (
     <button
-      className={commonClass}
+      className={clsx(commonClass, "group")}
       disabled={isDisabled}
       role="menuitem"
       tabIndex={0}

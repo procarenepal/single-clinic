@@ -187,7 +187,7 @@ export default function AppointmentDetailsPage() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "sm" })}>Appointment Details</h1>
+          <h1 className={title({ size: "lg" })}>Appointment Details</h1>
           <p className="text-mountain-500 mt-1 text-[13.5px]">
             View appointment information and history
           </p>
@@ -279,12 +279,12 @@ export default function AppointmentDetailsPage() {
                 <Chip
                   color={
                     statusColor as
-                      | "success"
-                      | "primary"
-                      | "warning"
-                      | "danger"
-                      | "default"
-                      | "secondary"
+                    | "success"
+                    | "primary"
+                    | "warning"
+                    | "danger"
+                    | "default"
+                    | "secondary"
                   }
                   size="md"
                   variant="flat"
@@ -648,30 +648,30 @@ export default function AppointmentDetailsPage() {
 
             {(appointment.status === "scheduled" ||
               appointment.status === "confirmed") && (
-              <Button
-                color="danger"
-                startContent={
-                  <svg
-                    fill="none"
-                    height="18"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                    width="18"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="15" x2="9" y1="9" y2="15" />
-                    <line x1="9" x2="15" y1="9" y2="15" />
-                  </svg>
-                }
-                variant="flat"
-              >
-                Cancel Appointment
-              </Button>
-            )}
+                <Button
+                  color="danger"
+                  startContent={
+                    <svg
+                      fill="none"
+                      height="18"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                      width="18"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="15" x2="9" y1="9" y2="15" />
+                      <line x1="9" x2="15" y1="9" y2="15" />
+                    </svg>
+                  }
+                  variant="flat"
+                >
+                  Cancel Appointment
+                </Button>
+              )}
           </div>
         </CardBody>
       </Card>

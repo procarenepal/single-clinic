@@ -114,7 +114,7 @@ export default function StaffManagementPage() {
       if (isBranchAdmin && userData?.branchId) {
         // Branch clinic admin - filter on server side
         userFilterOptions.branchId = userData.branchId;
-        userFilterOptions.excludeRoles = ["clinic-super-admin"];
+        userFilterOptions.excludeRoles = ["system-owner"];
 
         roleFilterOptions.branchId = userData.branchId;
         roleFilterOptions.isBranchSpecific = true;
@@ -296,7 +296,7 @@ export default function StaffManagementPage() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Staff & User Management</h1>
+            <h1 className={title({ size: "lg" })}>Staff & User Management</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage clinic staff, roles, and permissions
             </p>
@@ -318,7 +318,7 @@ export default function StaffManagementPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Staff & User Management</h1>
+            <h1 className={title({ size: "lg" })}>Staff & User Management</h1>
             <p className={subtitle({ class: "mt-1" })}>
               Manage clinic staff, roles, and permissions
             </p>
@@ -351,7 +351,7 @@ export default function StaffManagementPage() {
                 <IoPeopleOutline className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{staff.length}</p>
+                <p className="text-stat font-bold">{staff.length}</p>
                 <p className="text-sm text-default-500">Total Staff</p>
               </div>
             </CardBody>
@@ -363,7 +363,7 @@ export default function StaffManagementPage() {
                 <IoShieldCheckmarkOutline className="w-6 h-6 text-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold">
+                <p className="text-stat font-bold">
                   {staff.filter((s) => s.isActive).length}
                 </p>
                 <p className="text-sm text-default-500">Active Staff</p>
@@ -379,7 +379,7 @@ export default function StaffManagementPage() {
               {staff.length === 0 ? (
                 <div className="text-center py-12">
                   <IoPeopleOutline className="w-16 h-16 mx-auto mb-4 text-default-300" />
-                  <h3 className="text-lg font-semibold text-default-600 mb-2">
+                  <h3 className="text-stat-sm font-semibold text-default-600 mb-2">
                     No staff members yet
                   </h3>
                   <p className="text-default-500 mb-6">

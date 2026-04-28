@@ -50,66 +50,11 @@ class NavigationService {
   }
 
   /**
-   * Build navigation items for super admin
+   * Build navigation items for administrators (System Owner / Clinic Admin)
    */
-  private async buildSuperAdminNavigation(): Promise<NavItem[]> {
-    const items: NavItem[] = [
-      {
-        title: "Dashboard",
-        href: "/dashboard",
-        icon: <IoGridOutline className="w-5 h-5" />,
-        children: [],
-      },
-    ];
-
-    // Get all pages for super admin
-    const userAccessiblePages = await pageService.getAllPages();
-
-    if (userAccessiblePages.length > 0) {
-      // Create a map for quick lookup
-      const accessiblePagesMap = new Map(
-        userAccessiblePages.map((page) => [page.id, page]),
-      );
-
-      // Filter and add parent pages that the user has access to
-      userAccessiblePages.forEach((page) => {
-        // Skip dashboard as it's already added
-        if (
-          page.path !== "/dashboard" &&
-          page.showInSidebar !== false &&
-          !page.parentId
-        ) {
-          // Filter children to only include accessible ones
-          const accessibleChildren = userAccessiblePages
-            .filter(
-              (child) =>
-                child.parentId === page.id && child.showInSidebar !== false,
-            )
-            .map((child) => ({
-              title: child.name,
-              href: child.path,
-              icon: this.renderIcon(child.icon),
-              children: [],
-            }));
-
-          items.push({
-            title: page.name,
-            href: page.path,
-            icon: this.renderIcon(page.icon),
-            children: accessibleChildren,
-          });
-        }
-      });
-    }
-
-    return items;
-  }
-
-  /**
-   * Build navigation items for clinic super admin
-   */
-  private async buildClinicSuperAdminNavigation(
+  private async buildAdminNavigation(
     clinicId: string,
+    role: string,
   ): Promise<NavItem[]> {
     const items: NavItem[] = [
       {
@@ -120,122 +65,25 @@ class NavigationService {
       },
     ];
 
-    // Check if clinic has multi-branch enabled
-    let isMultiBranchEnabled = false;
-
-    try {
-      const clinic = await clinicService.getClinicById(clinicId);
-
-      isMultiBranchEnabled = clinic.isMultiBranchEnabled;
-    } catch (error) {
-      console.error("Error checking clinic multi-branch status:", error);
+    // Get pages assigned to the system
+    let availablePages = [];
+    if (role === "system-owner") {
+      availablePages = await pageService.getAllPages();
+    } else {
+      availablePages = await rbacService.getAvailablePagesForClinic(clinicId);
     }
 
-    // Add branch management if multi-branch is enabled
-    if (isMultiBranchEnabled) {
-      items.push({
-        title: "Manage Branches",
-        href: "/dashboard/branches",
-        icon: <IoStorefrontOutline className="w-5 h-5" />,
-        children: [
-          {
-            title: "Add Branch",
-            href: "/dashboard/branches/new",
-            icon: <IoAddOutline className="w-5 h-5" />,
-            children: [],
-          },
-        ],
-      });
-    }
-
-    // Get pages assigned to clinic type (clinic super admins should see all clinic type pages)
-    const clinicTypePages =
-      await rbacService.getAvailablePagesForClinic(clinicId);
-
-    console.log(
-      "[Navigation] Clinic Super Admin - Total clinic type pages:",
-      clinicTypePages.length,
-    );
-    console.log(
-      "[Navigation] Clinic Super Admin - Page URLs:",
-      clinicTypePages.map((p) => p.path),
-    );
-    console.log(
-      "[Navigation] Clinic Super Admin - Pages:",
-      clinicTypePages.map((p) => ({
-        id: p.id,
-        name: p.name,
-        path: p.path,
-        showInSidebar: p.showInSidebar,
-        parentId: p.parentId,
-      })),
-    );
-
-    // Check billing settings to filter billing-related pages
-    let isBillingEnabled = false;
-
-    try {
-      const { appointmentBillingService } = await import(
-        "./appointmentBillingService"
-      );
-      const billingSettings =
-        await appointmentBillingService.getBillingSettings(clinicId);
-
-      isBillingEnabled =
-        billingSettings &&
-        billingSettings.enabledByAdmin &&
-        billingSettings.isActive;
-    } catch (error) {
-      console.error("Error checking billing settings:", error);
-      isBillingEnabled = false;
-    }
-
-    if (clinicTypePages.length > 0) {
-      // Create a map for quick lookup
-      const accessiblePagesMap = new Map(
-        clinicTypePages.map((page) => [page.id, page]),
-      );
-
-      let addedCount = 0;
-      let skippedCount = 0;
-
-      // Filter and add parent pages that are assigned to clinic type
-      clinicTypePages.forEach((page) => {
-        // Skip dashboard and hardcoded pages as they're already added
+    if (availablePages.length > 0) {
+      // Filter and add parent pages
+      availablePages.forEach((page) => {
         if (
           page.path !== "/dashboard" &&
-          page.path !== "/dashboard/clinic-overview" &&
-          page.path !== "/dashboard/branches" &&
-          page.path !== "/dashboard/rbac" &&
-          page.name !== "User Management" &&
           page.showInSidebar !== false &&
           !page.parentId
         ) {
-          // Filter out billing-related pages if billing is disabled
-          if (!isBillingEnabled && this.isBillingRelatedPage(page.path)) {
-            skippedCount++;
-            console.log(
-              "[Navigation] Skipping billing page:",
-              page.name,
-              page.path,
-            );
-
-            return; // Skip this page
-          }
-
-          // Filter children to only include accessible ones and non-billing pages if billing is disabled
-          const accessibleChildren = clinicTypePages
-            .filter((child) => {
-              if (child.parentId !== page.id || child.showInSidebar === false) {
-                return false;
-              }
-              // Filter out billing-related child pages if billing is disabled
-              if (!isBillingEnabled && this.isBillingRelatedPage(child.path)) {
-                return false;
-              }
-
-              return true;
-            })
+          // Filter children
+          const accessibleChildren = availablePages
+            .filter((child) => child.parentId === page.id && child.showInSidebar !== false)
             .map((child) => ({
               title: child.name,
               href: child.path,
@@ -249,67 +97,45 @@ class NavigationService {
             icon: this.renderIcon(page.icon),
             children: accessibleChildren,
           });
-          addedCount++;
-          console.log(
-            "[Navigation] Added page to sidebar:",
-            page.name,
-            page.path,
-          );
-        } else {
-          skippedCount++;
-          const reason =
-            page.path === "/dashboard"
-              ? "dashboard"
-              : page.path === "/dashboard/clinic-overview"
-                ? "clinic-overview"
-                : page.path === "/dashboard/branches"
-                  ? "branches"
-                  : page.path === "/dashboard/rbac"
-                    ? "rbac"
-                    : page.showInSidebar === false
-                      ? "showInSidebar=false"
-                      : page.parentId
-                        ? `parentId=${page.parentId}`
-                        : "unknown";
-
-          console.log(
-            "[Navigation] Skipped page:",
-            page.name,
-            page.path,
-            `reason: ${reason}`,
-          );
         }
       });
-
-      console.log(
-        "[Navigation] Clinic Super Admin - Added pages:",
-        addedCount,
-        "Skipped:",
-        skippedCount,
-      );
-
-
-      // FORCE INJECT Experts
-      const hasExpertItem = items.some(
-        (item) => item.href === "/dashboard/experts",
-      );
-
-      if (!hasExpertItem) {
-        items.push({
-          title: "Experts",
-          href: "/dashboard/experts",
-          icon: this.renderIcon("IoPeopleOutline"),
-          children: [
-            {
-              title: "Add Expert",
-              href: "/dashboard/experts/new",
-              icon: this.renderIcon("IoAddOutline"),
-              children: [],
-            },
-          ],
-        });
-      }
     }
+
+    // Sort items according to preferred feature layout
+    const targetOrder = [
+      "Dashboard",
+      "Patients",
+      "Appointments",
+      "Prescriptions",
+      "Doctors",
+      "Experts",
+      "Medicine",
+      "Medicine Management",
+      "Bed Management",
+      "Pharmacy",
+      "Pathology",
+      "Communication",
+      "Billing",
+      "Appointment Billing",
+      "Front Office",
+      "Reports",
+      "Inventory",
+      "Text Editor",
+      "Settings",
+      "Enquiry Management",
+      "Enquiries",
+    ];
+
+    items.sort((a, b) => {
+      let idxA = targetOrder.indexOf(a.title);
+      let idxB = targetOrder.indexOf(b.title);
+
+      if (idxA === -1) idxA = 999;
+      if (idxB === -1) idxB = 999;
+      if (idxA !== idxB) return idxA - idxB;
+
+      return a.title.localeCompare(b.title);
+    });
 
     return items;
   }
@@ -411,8 +237,6 @@ class NavigationService {
         // Skip dashboard as it's already added
         if (
           page.path !== "/dashboard" &&
-          page.path !== "/dashboard/rbac" &&
-          page.name !== "User Management" &&
           page.showInSidebar !== false &&
           !page.parentId
         ) {
@@ -489,6 +313,42 @@ class NavigationService {
 
     }
 
+    // Sort items according to preferred feature layout
+    const targetOrder = [
+      "Dashboard",
+      "Patients",
+      "Appointments",
+      "Prescriptions",
+      "Doctors",
+      "Experts",
+      "Medicine",
+      "Medicine Management",
+      "Bed Management",
+      "Pharmacy",
+      "Pathology",
+      "Communication",
+      "Billing",
+      "Appointment Billing",
+      "Front Office",
+      "Reports",
+      "Inventory",
+      "Text Editor",
+      "Settings",
+      "Enquiry Management",
+      "Enquiries",
+    ];
+
+    items.sort((a, b) => {
+      let idxA = targetOrder.indexOf(a.title);
+      let idxB = targetOrder.indexOf(b.title);
+
+      if (idxA === -1) idxA = 999;
+      if (idxB === -1) idxB = 999;
+      if (idxA !== idxB) return idxA - idxB;
+
+      return a.title.localeCompare(b.title);
+    });
+
     return items;
   }
 
@@ -540,9 +400,10 @@ class NavigationService {
     try {
       // Check clinic settings for caching
       try {
-        const clinic = await clinicService.getClinicById(clinicId);
-
-        isMultiBranchEnabled = clinic.isMultiBranchEnabled;
+        if (clinicId && clinicId !== "default") {
+          const clinic = await clinicService.getClinicById(clinicId);
+          isMultiBranchEnabled = clinic?.isMultiBranchEnabled || false;
+        }
       } catch (error) {
         console.error("Error checking clinic multi-branch status:", error);
       }
@@ -561,13 +422,9 @@ class NavigationService {
       }
 
       switch (role) {
-        case "super-admin":
-          navItems = await this.buildSuperAdminNavigation();
-          break;
-
-        case "clinic-super-admin":
+        case "system-owner":
         case "clinic-admin":
-          navItems = await this.buildClinicSuperAdminNavigation(clinicId);
+          navItems = await this.buildAdminNavigation(clinicId, role);
           break;
 
         default:

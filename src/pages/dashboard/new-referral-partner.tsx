@@ -37,8 +37,8 @@ function CustomInput({
       )}
       <div
         className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${isInvalid
-            ? "border-red-300 focus-within:ring-red-100"
-            : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
+          ? "border-red-300 focus-within:ring-red-100"
+          : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
           } focus-within:ring-1 ${disabled ? "bg-mountain-50" : ""}`}
       >
         <input
@@ -214,7 +214,7 @@ export default function NewReferralPartnerPage() {
           <IoArrowBackOutline className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className={title({ size: "sm" })}>
+          <h1 className={title({ size: "lg" })}>
             {isEdit ? "Edit Partner" : "Add Referral Partner"}
           </h1>
           <p className="text-[14px] text-mountain-500 mt-1">

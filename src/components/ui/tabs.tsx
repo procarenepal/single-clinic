@@ -99,7 +99,7 @@ export const Tabs: React.FC<TabsProps> = ({
     <div className={className} {...rest}>
       <div
         className={clsx(
-          "flex w-full border-b border-mountain-200",
+          "flex w-full border-b border-mountain-200 dark:border-zinc-800 overflow-x-auto scrollbar-none",
           classNames?.tabList,
         )}
       >
@@ -110,9 +110,8 @@ export const Tabs: React.FC<TabsProps> = ({
             <button
               key={item.key}
               className={clsx(
-                "relative px-4 inline-flex items-center justify-center gap-2 whitespace-nowrap",
-                "text-mountain-600 hover:text-mountain-900",
-                "transition-colors",
+                "relative px-4 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-t-md transition-all duration-200",
+                "text-mountain-600 dark:text-zinc-400 hover:text-mountain-900 dark:hover:text-zinc-100 hover:bg-mountain-50 dark:hover:bg-zinc-800/50",
                 sizeClasses,
                 isActive && activeColor,
                 classNames?.tab,

@@ -125,10 +125,10 @@ function SearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + " " + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + " " + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -556,7 +556,7 @@ export default function EditPrescriptionPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "sm" })}>Edit Prescription</h1>
+          <h1 className={title({ size: "lg" })}>Edit Prescription</h1>
         </div>
         <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
@@ -578,7 +578,7 @@ export default function EditPrescriptionPage() {
               Back to list
             </Button>
             <div>
-              <h1 className={title({ size: "sm" })}>Edit Prescription</h1>
+              <h1 className={title({ size: "lg" })}>Edit Prescription</h1>
               <p className="text-[13.5px] text-mountain-500 mt-1">
                 {accessError}
               </p>
@@ -605,7 +605,7 @@ export default function EditPrescriptionPage() {
             Back
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>Edit Prescription</h1>
+            <h1 className={title({ size: "lg" })}>Edit Prescription</h1>
             <p className="text-[13.5px] text-mountain-500 mt-1">
               Update prescription details
             </p>

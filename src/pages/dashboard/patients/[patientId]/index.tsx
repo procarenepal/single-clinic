@@ -345,33 +345,49 @@ export default function PatientDetailPage() {
 <head>
   <title>Comprehensive Patient Report - ${patient.name}</title>
   <style>
-    body { font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background: white; color: #333; line-height: 1.5; font-size: 11px; }
-    .print-container { max-width: 100%; margin: 0; background: white; display: flex; flex-direction: column; padding: 0; box-sizing: border-box; }
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; width: 100%; height: 100%; }
+    body { font-family: Arial, sans-serif; color: #333; line-height: 1.4; font-size: 11px; }
     
     ${brandingCSS}
 
-    .content { flex: 1; padding: 15mm; min-height: 0; }
+    .print-container { 
+      width: 210mm; 
+      min-height: auto;
+      margin: 0 auto; 
+      background: white; 
+      display: flex; 
+      flex-direction: column; 
+      padding: 0 25mm 20mm 25mm; 
+      box-sizing: border-box; 
+    }
     
-    .document-title { text-align: center; margin: 10px 0 25px 0; }
-    .document-title h2 { font-size: 20px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; }
-    .document-subtitle { font-size: 13px; color: #64748b; margin: 5px 0; font-weight: 500; }
+    .content { flex: 1; padding: 0; min-height: 0; }
     
-    .patient-overview { background: #f8fafc; border-radius: 8px; padding: 15px; margin-bottom: 25px; border: 1px solid #f1f5f9; }
-    .patient-overview h3 { margin: 0 0 10px 0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; }
-    .patient-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .patient-field { display: flex; gap: 5px; align-items: baseline; }
-    .patient-field .label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; white-space: nowrap; }
-    .patient-field .value { font-size: 11px; color: #1e293b; font-weight: 500; }
+    .document-title { text-align: center; margin: 5px 0 10px 0; }
+    .document-title h2 { font-size: 18px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; }
+    .document-subtitle { font-size: 11px; color: #64748b; margin: 1px 0; font-weight: 500; }
+    
+    .patient-overview { background: #f8fafc; border-radius: 6px; padding: 12px 15px; margin: 5px 0 20px 0; border: 1px solid #f1f5f9; }
+    .patient-overview h3 { margin: 0 0 8px 0; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; letter-spacing: 0.05em; }
+    .patient-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 15px; }
+    .patient-field { display: flex; gap: 6px; align-items: baseline; }
+    .patient-field .label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; white-space: nowrap; }
+    .patient-field .value { font-size: 10px; color: #1e293b; font-weight: 600; }
 
-    .section { margin-bottom: 30px; }
-    .section-header { color: #475569; padding: 5px 0; margin-bottom: 12px; font-weight: 800; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #f1f5f9; letter-spacing: 0.05em; }
+    .section { margin-bottom: 20px; page-break-inside: avoid; }
+    .section-header { margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 4px; }
+    .section-header h3 { margin: 0; font-size: 13px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .report-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; page-break-inside: avoid; }
+    .report-table th { background: #f8fafc; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; }
+    .report-table td { padding: 8px 12px; border: 1px solid #e2e8f0; font-size: 11px; color: #334155; vertical-align: top; }
+    .report-table tr:nth-child(even) { background-color: #fafafa; }
     
-    .report-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-    
-    .card { padding: 12px; margin-bottom: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
-    .card-header { font-weight: 700; color: #1e293b; margin-bottom: 5px; font-size: 11px; text-transform: uppercase; }
-    .card-content { font-size: 11px; color: #334155; line-height: 1.5; }
-    .card-meta { font-size: 9px; color: #64748b; margin-top: 8px; padding-top: 5px; border-top: 1px solid #f1f5f9; font-weight: 500; }
+    .financial-summary-table { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
+    .financial-summary-table th { background: #f8fafc; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 6px 12px; border: 1px solid #e2e8f0; text-align: left; }
+    .financial-summary-table td { padding: 8px 12px; border: 1px solid #e2e8f0; font-size: 11px; }
 
     .med-item { margin-bottom: 6px; padding: 6px; background: #f8fafc; border-radius: 4px; font-size: 10px; border-left: 3px solid #cbd5e1; }
     .med-name { font-weight: 700; color: #1e293b; }
@@ -379,7 +395,7 @@ export default function PatientDetailPage() {
 
     .empty-state { text-align: center; color: #94a3b8; font-style: italic; padding: 20px; font-size: 11px; }
 
-    @media print { body { padding: 0; margin: 0; } .print-container { height: 100vh; padding: 0; max-width: 100%; } .section, .patient-overview, .card { page-break-inside: avoid; } }
+    @media print { body { padding: 0; margin: 0; } .print-container { padding: 25mm 25mm 10mm 25mm !important; } .section, .report-table, .financial-summary-table { page-break-inside: avoid; } }
   </style>
 </head>
 <body>
@@ -396,120 +412,145 @@ export default function PatientDetailPage() {
         <h3>Patient Identification</h3>
         <div class="patient-grid">
           <div class="patient-field"><span class="label">Name:</span><span class="value">${patient.name}</span></div>
-          <div class="patient-field"><span class="label">Reg #:</span><span class="value">${patient.regNumber || "N/A"}</span></div>
-          <div class="patient-field"><span class="label">Age:</span><span class="value">${patient.dob ? calculateAge(patient.dob) : "N/A"} Years</span></div>
-          <div class="patient-field"><span class="label">Gender:</span><span class="value">${patient.gender || "N/A"}</span></div>
-          <div class="patient-field"><span class="label">Blood:</span><span class="value">${patient.bloodGroup || "N/A"}</span></div>
-          <div class="patient-field"><span class="label">Contact:</span><span class="value">${patient.mobile || "N/A"}</span></div>
+          ${patient.regNumber ? `<div class="patient-field"><span class="label">Reg #:</span><span class="value">${patient.regNumber}</span></div>` : ""}
+          ${patient.dob ? `<div class="patient-field"><span class="label">Age:</span><span class="value">${calculateAge(patient.dob)} Years</span></div>` : ""}
+          ${patient.gender ? `<div class="patient-field"><span class="label">Gender:</span><span class="value">${patient.gender}</span></div>` : ""}
+          ${patient.bloodGroup ? `<div class="patient-field"><span class="label">Blood:</span><span class="value">${patient.bloodGroup}</span></div>` : ""}
+          ${patient.mobile ? `<div class="patient-field"><span class="label">Contact:</span><span class="value">${patient.mobile}</span></div>` : ""}
         </div>
       </div>
 
-      <div class="report-grid">
-        <div class="report-col">
-          <div class="section">
-            <div class="section-header">Clinical History & Reports</div>
-            ${medicalReportResponses &&
+      ${medicalReportResponses &&
         medicalReportFields.length > 0 &&
         Object.keys(medicalReportResponses.fieldValues || {}).length > 0
-        ? medicalReportFields
+        ? `
+        <div class="section">
+          <div class="section-header">
+            <h3>Clinical History & Results</h3>
+          </div>
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th style="width: 40%">Parameter</th>
+                <th>Result / Finding</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${medicalReportFields
           .map((field: any) => {
             const response =
               medicalReportResponses.fieldValues?.[field.fieldKey];
-
             if (!response || response === "") return "";
-
             return `
-                  <div class="card">
-                    <div class="card-header">${field.fieldLabel}</div>
-                    <div class="card-content">
-                      ${Array.isArray(response) ? response.join(", ") : response}
-                    </div>
-                  </div>
+                  <tr>
+                    <td style="font-weight: 700; color: #475569;">${field.fieldLabel}</td>
+                    <td>${Array.isArray(response) ? response.join(", ") : response}</td>
+                  </tr>
                 `;
           })
-          .join("")
-        : '<div class="empty-state">No clinical report entries found.</div>'
-      }
-          </div>
-
-          <div class="section">
-            <div class="section-header">Clinical Progress Notes</div>
-            ${noteEntries.length > 0
-        ? noteEntries
-          .map(
-            (note: any) => `
-                <div class="card">
-                  <div class="card-header">${note.sectionLabel || "Note Entry"}</div>
-                  <div class="card-content">${note.content}</div>
-                </div>
-              `,
-          )
-          .join("")
-        : '<div class="empty-state">No progress notes recorded.</div>'
-      }
-          </div>
-        </div>
-
-        <div class="report-col">
-          <div class="section">
-            <div class="section-header">Medication Treatment Plans</div>
-            ${prescriptions && prescriptions.length > 0
-        ? prescriptions
-          .map(
-            (p: any) => `
-                <div class="card">
-                  <div class="card-header">PRESCRIPTION #${p.prescriptionNo}</div>
-                  <div class="card-content">
-                    ${p.items && p.items.length > 0
-                ? p.items
-                  .map(
-                    (item: any) => `
-                        <div class="med-item">
-                          <div class="med-name">${item.medicineName}</div>
-                          <div class="med-details">${item.dosage || ""} | ${item.frequency || ""} | ${item.duration || ""}</div>
-                        </div>
-                      `,
-                  )
-                  .join("")
-                : '<div class="empty-state">No items.</div>'
-              }
-                  </div>
-                  <div class="card-meta">Issued on: ${p.prescriptionDate ? new Date(p.prescriptionDate).toLocaleDateString() : "N/A"}</div>
-                </div>
-              `,
-          )
-          .join("")
-        : '<div class="empty-state">No active prescriptions.</div>'
-      }
-          </div>
-
-          ${isBillingEnabled
-        ? `
-          <div class="section">
-            <div class="section-header">Financial Summary</div>
-            ${billingRecords.length > 0
-          ? billingRecords
-            .map(
-              (b: any) => `
-                <div class="card">
-                  <div class="card-header">INVOICE #${b.billNumber}</div>
-                  <div style="display:flex; justify-content:space-between; font-weight:600; font-size:11px; margin-top:5px;">
-                    <span>Total Amount:</span>
-                    <span>NPR ${b.totalAmount?.toLocaleString() || "0"}</span>
-                  </div>
-                  <div class="card-meta">Status: ${b.status?.toUpperCase() || "PENDING"}</div>
-                </div>
-              `,
-            )
-            .join("")
-          : '<div class="empty-state">No billing records found.</div>'
-        }
-          </div>
-          `
+          .join("")}
+            </tbody>
+          </table>
+        </div>`
         : ""
       }
+
+      ${prescriptions && prescriptions.length > 0
+        ? `
+        <div class="section">
+          <div class="section-header">
+            <h3>Medication Treatment Plans</h3>
+          </div>
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Medicine Name</th>
+                <th>Dosage / Frequency</th>
+                <th style="width: 120px">Duration</th>
+                <th style="width: 100px">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${prescriptions
+          .map((p: any) => p.items?.map((item: any) => `
+                  <tr>
+                    <td style="font-weight: 700; color: #1e293b;">${item.medicineName}</td>
+                    <td>${item.dosage || "-"} • ${item.frequency || "-"}</td>
+                    <td>${item.duration || "-"}</td>
+                    <td style="font-size: 10px; color: #64748b;">${p.prescriptionDate ? new Date(p.prescriptionDate).toLocaleDateString() : "-"}</td>
+                  </tr>
+                `).join("") || "")
+          .join("")}
+            </tbody>
+          </table>
+        </div>`
+        : ""
+      }
+
+      ${noteEntries.length > 0
+        ? `
+        <div class="section">
+          <div class="section-header">
+            <h3>Clinical Progress Notes</h3>
+          </div>
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th style="width: 30%">Category</th>
+                <th>Clinical Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${noteEntries
+          .map(
+            (note: any) => `
+                <tr>
+                  <td style="font-weight: 700; color: #475569;">${note.sectionLabel || "General"}</td>
+                  <td>${note.content}</td>
+                </tr>
+              `,
+          )
+          .join("")}
+            </tbody>
+          </table>
+        </div>`
+        : ""
+      }
+
+      ${isBillingEnabled && billingRecords.length > 0
+        ? `
+      <div class="section">
+        <div class="section-header">
+          <h3>Financial Summary</h3>
         </div>
+        <table class="financial-summary-table">
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Date</th>
+              <th style="text-align: right">Total Amount</th>
+              <th style="text-align: center">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${billingRecords
+          .map(
+            (b: any) => `
+                <tr>
+                  <td style="font-weight: 700; color: #1e293b;">${b.invoiceNumber || b.billNumber || "DRAFT"}</td>
+                  <td>${b.invoiceDate ? new Date(b.invoiceDate).toLocaleDateString() : "-"}</td>
+                  <td style="text-align: right; font-weight: 800; color: #0f172a;">NPR ${b.totalAmount?.toLocaleString() || "0"}</td>
+                  <td style="text-align: center;"><span style="font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; text-transform: uppercase;">${b.status || "Pending"}</span></td>
+                </tr>
+              `,
+          )
+          .join("")}
+          </tbody>
+        </table>
       </div>
+      `
+        : ""
+      }
     </div>
 
     ${footerHtml}

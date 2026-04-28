@@ -31,6 +31,11 @@ import {
   IoTime,
   IoWarning,
   IoArrowForward,
+  IoTimeOutline,
+  IoCheckmarkCircleOutline,
+  IoWarningOutline,
+  IoCreateOutline,
+  IoArrowForwardOutline
 } from "react-icons/io5";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -99,22 +104,7 @@ export default function InventoryPage() {
     useState<IssuedItem | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Theme-aware classes
-  const getThemeClasses = () => {
-    const themeVariant = themeConfig.id;
-
-    return {
-      mainCard: isDark
-        ? "bg-default-100"
-        : "bg-white border border-default-200",
-      tableHeader: isDark ? "bg-default-200" : "bg-nepal-50",
-      tableRow: isDark ? "hover:bg-default-200" : "hover:bg-nepal-50",
-      input: isDark ? "bg-default-100" : "bg-white",
-      modal: isDark ? "bg-default-100" : "bg-white",
-    };
-  };
-
-  const themeClasses = getThemeClasses();
+  // Load data
 
   // Load data
   useEffect(() => {
@@ -491,7 +481,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Main Content */}
-      <Card className={themeClasses.mainCard}>
+      <Card className="bg-surface border border-border-base shadow-none">
         <CardHeader className="flex justify-between items-center">
           <div className="flex items-center gap-4">
             <Input
@@ -655,78 +645,61 @@ export default function InventoryPage() {
                 </div>
 
                 {filteredCategories.length > 0 ? (
-                  <Table aria-label="Categories table">
-                    <TableHeader>
-                      <TableColumn>CATEGORY NAME</TableColumn>
-                      <TableColumn>DESCRIPTION</TableColumn>
-                      <TableColumn>ITEMS COUNT</TableColumn>
-                      <TableColumn>ACTIONS</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredCategories.map((category) => (
-                        <TableRow key={category.id}>
-                          <TableCell>
-                            <p className="font-medium">{category.name}</p>
-                          </TableCell>
-                          <TableCell>
-                            <p className="text-sm text-default-500">
+                  <div className="border border-border-base rounded overflow-hidden">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-surface-2 border-b border-border-base">
+                          {["CATEGORY NAME", "DESCRIPTION", "ITEMS COUNT", "ACTIONS"].map((h) => (
+                            <th key={h} className="px-4 py-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-base bg-surface">
+                        {filteredCategories.map((category) => (
+                          <tr key={category.id} className="hover:bg-surface-2 transition-colors">
+                            <td className="px-4 py-3 text-[13.5px] font-medium text-text-main">
+                              {category.name}
+                            </td>
+                            <td className="px-4 py-3 text-[12.5px] text-text-muted">
                               {category.description || "No description"}
-                            </p>
-                          </TableCell>
-                          <TableCell>
-                            <Chip color="primary" size="sm" variant="flat">
-                              {
-                                items.filter(
-                                  (item) => item.category === category.name,
-                                ).length
-                              }
-                            </Chip>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              color="primary"
-                              size="sm"
-                              startContent={<IoCreate />}
-                              variant="flat"
-                              onPress={() => editCategory(category)}
-                            >
-                              Edit
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-medium bg-primary/10 text-primary border border-primary/20">
+                                {items.filter((item) => item.category === category.name).length}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                                title="Edit"
+                                onClick={() => editCategory(category)}
+                              >
+                                <IoCreateOutline size={18} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <div className="flex flex-col items-center justify-center py-12 px-4 bg-surface">
                     <div className="text-center space-y-4">
-                      <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center mx-auto">
-                        <IoAdd className="w-8 h-8 text-default-400" />
+                      <div className="w-16 h-16 bg-surface-2 rounded-full flex items-center justify-center mx-auto">
+                        <IoAdd className="w-8 h-8 text-text-muted/40" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-medium text-default-700 mb-2">
-                          {searchQuery
-                            ? "No categories found"
-                            : "No categories yet"}
+                        <h3 className="text-lg font-medium text-text-main mb-2">
+                          {searchQuery ? "No categories found" : "No categories yet"}
                         </h3>
-                        <p className="text-sm text-default-500 max-w-sm">
+                        <p className="text-sm text-text-muted max-w-sm">
                           {searchQuery
                             ? `No categories match your search "${searchQuery}". Try adjusting your search terms.`
                             : "Organize your inventory by creating item categories first."}
                         </p>
                       </div>
-                      {!searchQuery && (
-                        <Button
-                          color="primary"
-                          startContent={<IoAdd />}
-                          onPress={() => {
-                            resetCategoryForm();
-                            categoryModalState.open();
-                          }}
-                        >
-                          Create Your First Category
-                        </Button>
-                      )}
                     </div>
                   </div>
                 )}
@@ -753,89 +726,91 @@ export default function InventoryPage() {
                 </div>
 
                 {filteredIssuedItems.length > 0 ? (
-                  <Table aria-label="Issued items table">
-                    <TableHeader>
-                      <TableColumn>ITEM NAME</TableColumn>
-                      <TableColumn>CATEGORY</TableColumn>
-                      <TableColumn>QUANTITY</TableColumn>
-                      <TableColumn>ISSUED DATE</TableColumn>
-                      <TableColumn>RETURN DATE</TableColumn>
-                      <TableColumn>ISSUED TO</TableColumn>
-                      <TableColumn>STATUS</TableColumn>
-                      <TableColumn>ACTIONS</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredIssuedItems.map((issuedItem) => (
-                        <TableRow key={issuedItem.id}>
-                          <TableCell>
-                            <p className="font-medium">{issuedItem.itemName}</p>
-                          </TableCell>
-                          <TableCell>
-                            <Chip color="primary" size="sm" variant="flat">
-                              {issuedItem.itemCategory}
-                            </Chip>
-                          </TableCell>
-                          <TableCell>{issuedItem.quantity}</TableCell>
-                          <TableCell>
-                            {format(issuedItem.issuedDate, "MMM dd, yyyy")}
-                          </TableCell>
-                          <TableCell>
-                            {issuedItem.returnDate
-                              ? format(issuedItem.returnDate, "MMM dd, yyyy")
-                              : issuedItem.expectedReturnDate
-                                ? `Expected: ${format(issuedItem.expectedReturnDate, "MMM dd, yyyy")}`
-                                : "N/A"}
-                          </TableCell>
-                          <TableCell>{issuedItem.issuedTo || "N/A"}</TableCell>
-                          <TableCell>
-                            <Chip
-                              color={getStatusColor(issuedItem.status)}
-                              size="sm"
-                              startContent={
-                                issuedItem.status === "issued" ? (
-                                  <IoTime />
-                                ) : issuedItem.status === "returned" ? (
-                                  <IoCheckmark />
-                                ) : (
-                                  <IoWarning />
-                                )
-                              }
-                              variant="flat"
-                            >
-                              {issuedItem.status.charAt(0).toUpperCase() +
-                                issuedItem.status.slice(1)}
-                            </Chip>
-                          </TableCell>
-                          <TableCell>
-                            {issuedItem.status === "issued" && (
-                              <Button
-                                color="success"
-                                size="sm"
-                                startContent={<IoCheckmark />}
-                                variant="flat"
-                                onPress={() => openReturnModal(issuedItem)}
-                              >
-                                Return
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="border border-border-base rounded overflow-hidden">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-surface-2 border-b border-border-base">
+                          {[
+                            "ITEM NAME",
+                            "CATEGORY",
+                            "QUANTITY",
+                            "ISSUED DATE",
+                            "RETURN DATE",
+                            "ISSUED TO",
+                            "STATUS",
+                            "ACTIONS",
+                          ].map((h) => (
+                            <th key={h} className="px-4 py-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-base bg-surface">
+                        {filteredIssuedItems.map((issuedItem) => (
+                          <tr key={issuedItem.id} className="hover:bg-surface-2 transition-colors">
+                            <td className="px-4 py-3 text-[13.5px] font-medium text-text-main">
+                              {issuedItem.itemName}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-medium bg-primary/10 text-primary border border-primary/20">
+                                {issuedItem.itemCategory}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-[13px] text-text-main">
+                              {issuedItem.quantity}
+                            </td>
+                            <td className="px-4 py-3 text-[12.5px] text-text-muted">
+                              {format(issuedItem.issuedDate, "MMM dd, yyyy")}
+                            </td>
+                            <td className="px-4 py-3 text-[12.5px] text-text-muted">
+                              {issuedItem.returnDate
+                                ? format(issuedItem.returnDate, "MMM dd, yyyy")
+                                : issuedItem.expectedReturnDate
+                                  ? `Exp: ${format(issuedItem.expectedReturnDate, "MMM dd, yyyy")}`
+                                  : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-[12.5px] text-text-main">
+                              {issuedItem.issuedTo || "—"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium 
+                                ${issuedItem.status === "returned" ? "bg-green-500/10 text-green-600 border border-green-500/20" :
+                                  issuedItem.status === "overdue" ? "bg-red-500/10 text-red-600 border border-red-500/20" :
+                                    "bg-primary/10 text-primary border border-primary/20"}`}>
+                                {issuedItem.status === "issued" ? <IoTimeOutline /> :
+                                  issuedItem.status === "returned" ? <IoCheckmarkCircleOutline /> :
+                                    <IoWarningOutline />}
+                                {issuedItem.status.charAt(0).toUpperCase() + issuedItem.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {issuedItem.status === "issued" && (
+                                <button
+                                  className="p-1.5 text-text-muted hover:text-green-600 hover:bg-green-500/10 rounded transition-colors"
+                                  title="Return"
+                                  onClick={() => openReturnModal(issuedItem)}
+                                >
+                                  <IoCheckmarkCircleOutline size={18} />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <div className="flex flex-col items-center justify-center py-12 px-4 bg-surface">
                     <div className="text-center space-y-4">
-                      <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center mx-auto">
-                        <IoArrowForward className="w-8 h-8 text-default-400" />
+                      <div className="w-16 h-16 bg-surface-2 rounded-full flex items-center justify-center mx-auto">
+                        <IoArrowForwardOutline className="w-8 h-8 text-text-muted/40" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-medium text-default-700 mb-2">
-                          {searchQuery
-                            ? "No issued items found"
-                            : "No issued items yet"}
+                        <h3 className="text-lg font-medium text-text-main mb-2">
+                          {searchQuery ? "No issued items found" : "No issued items yet"}
                         </h3>
-                        <p className="text-sm text-default-500 max-w-sm">
+                        <p className="text-sm text-text-muted max-w-sm">
                           {searchQuery
                             ? `No issued items match your search "${searchQuery}". Try adjusting your search terms.`
                             : items.length > 0
@@ -843,27 +818,6 @@ export default function InventoryPage() {
                               : "Add some items to your inventory first before you can issue them."}
                         </p>
                       </div>
-                      {!searchQuery && items.length > 0 && (
-                        <Button
-                          color="primary"
-                          startContent={<IoArrowForward />}
-                          onPress={() => {
-                            resetIssueForm();
-                            issueModalState.open();
-                          }}
-                        >
-                          Issue Your First Item
-                        </Button>
-                      )}
-                      {!searchQuery && items.length === 0 && (
-                        <Button
-                          color="primary"
-                          variant="flat"
-                          onPress={() => setSelectedTab("items")}
-                        >
-                          Go to Items Tab
-                        </Button>
-                      )}
                     </div>
                   </div>
                 )}
@@ -875,307 +829,281 @@ export default function InventoryPage() {
 
       {/* Add/Edit Item Modal */}
       <Modal
-        isDismissable={false}
-        isKeyboardDismissDisabled={true}
         isOpen={itemModalState.isOpen}
-        size="2xl"
         onClose={itemModalState.close}
+        size="2xl"
+        classNames={{
+          base: "bg-surface border border-border-base",
+          header: "border-b border-border-base font-semibold text-text-main",
+          body: "py-6",
+          footer: "border-t border-border-base bg-surface-2/50",
+        }}
       >
         <ModalContent>
-          <ModalHeader>{isEditing ? "Edit Item" : "Add New Item"}</ModalHeader>
-          <ModalBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                isRequired
-                label="Item Name"
-                placeholder="Enter item name"
-                value={itemForm.name}
-                onChange={(e) =>
-                  setItemForm({ ...itemForm, name: e.target.value })
-                }
-              />
-              <Select
-                isRequired
-                disallowEmptySelection={false}
-                label="Category"
-                placeholder="Select category"
-                popoverProps={{
-                  placement: "bottom",
-                  triggerType: "listbox",
-                  offset: 10,
-                }}
-                selectedKeys={
-                  itemForm.category ? new Set([itemForm.category]) : new Set()
-                }
-                onSelectionChange={(keys) => {
-                  itemModalState.handleDropdownInteraction();
-                  const selectedKey = Array.from(keys)[0] as string;
-
-                  setItemForm({ ...itemForm, category: selectedKey || "" });
-                }}
-              >
-                {categories.map((category) => (
-                  <SelectItem key={category.name}>{category.name}</SelectItem>
-                ))}
-              </Select>
-              <Input
-                isRequired
-                label="Quantity"
-                min="0"
-                placeholder="Enter quantity"
-                type="number"
-                value={itemForm.quantity.toString()}
-                onChange={(e) =>
-                  setItemForm({
-                    ...itemForm,
-                    quantity: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-              <Input
-                label="Unit"
-                placeholder="e.g., piece, box, bottle"
-                value={itemForm.unit}
-                onChange={(e) =>
-                  setItemForm({ ...itemForm, unit: e.target.value })
-                }
-              />
-              <Input
-                label="Barcode"
-                placeholder="Enter barcode"
-                value={itemForm.barcode}
-                onChange={(e) =>
-                  setItemForm({ ...itemForm, barcode: e.target.value })
-                }
-              />
-            </div>
-            <Textarea
-              label="Description"
-              placeholder="Enter item description"
-              value={itemForm.description}
-              onChange={(e) =>
-                setItemForm({ ...itemForm, description: e.target.value })
-              }
-            />
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={itemModalState.forceClose}>
-              Cancel
-            </Button>
-            <Button color="primary" onPress={handleSaveItem}>
-              {isEditing ? "Update" : "Add"} Item
-            </Button>
-          </ModalFooter>
+          {(onClose) => (
+            <>
+              <ModalHeader>{isEditing ? "Edit Item" : "Add New Item"}</ModalHeader>
+              <ModalBody>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input
+                    isRequired
+                    label="Item Name"
+                    placeholder="Enter item name"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                    value={itemForm.name}
+                    onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                  />
+                  <Select
+                    isRequired
+                    label="Category"
+                    placeholder="Select category"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    classNames={{ trigger: "bg-surface border-border-base" }}
+                    selectedKeys={itemForm.category ? new Set([itemForm.category]) : new Set()}
+                    onSelectionChange={(keys) => {
+                      const selectedKey = Array.from(keys)[0] as string;
+                      setItemForm({ ...itemForm, category: selectedKey || "" });
+                    }}
+                  >
+                    {categories.map((category) => (
+                      <SelectItem key={category.name} textValue={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                  <Input
+                    isRequired
+                    label="Quantity"
+                    min="0"
+                    type="number"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                    value={itemForm.quantity.toString()}
+                    onChange={(e) => setItemForm({ ...itemForm, quantity: parseInt(e.target.value) || 0 })}
+                  />
+                  <Input
+                    label="Unit"
+                    placeholder="e.g., piece, box"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                    value={itemForm.unit}
+                    onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}
+                  />
+                  <Input
+                    label="Barcode"
+                    placeholder="Scan or enter barcode"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                    value={itemForm.barcode}
+                    onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })}
+                  />
+                  <Textarea
+                    label="Description"
+                    placeholder="Enter item description"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    className="md:col-span-2"
+                    classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                    value={itemForm.description}
+                    onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                  />
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button color="primary" onPress={handleSaveItem}>
+                  {isEditing ? "Update" : "Add"} Item
+                </Button>
+              </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
 
       {/* Add/Edit Category Modal */}
       <Modal
-        isDismissable={false}
-        isKeyboardDismissDisabled={true}
         isOpen={categoryModalState.isOpen}
         onClose={categoryModalState.close}
+        classNames={{
+          base: "bg-surface border border-border-base",
+          header: "border-b border-border-base font-semibold text-text-main",
+          body: "py-6",
+          footer: "border-t border-border-base bg-surface-2/50",
+        }}
       >
         <ModalContent>
-          <ModalHeader>
-            {isEditing ? "Edit Category" : "Add New Category"}
-          </ModalHeader>
-          <ModalBody>
-            <div className="space-y-4">
-              <Input
-                isRequired
-                label="Category Name"
-                placeholder="Enter category name"
-                value={categoryForm.name}
-                onChange={(e) =>
-                  setCategoryForm({ ...categoryForm, name: e.target.value })
-                }
-              />
-              <Textarea
-                label="Description"
-                placeholder="Enter category description"
-                value={categoryForm.description}
-                onChange={(e) =>
-                  setCategoryForm({
-                    ...categoryForm,
-                    description: e.target.value,
-                  })
-                }
-              />
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={categoryModalState.forceClose}>
-              Cancel
-            </Button>
-            <Button color="primary" onPress={handleSaveCategory}>
-              {isEditing ? "Update" : "Add"} Category
-            </Button>
-          </ModalFooter>
+          {(onClose) => (
+            <>
+              <ModalHeader>{isEditing ? "Edit Category" : "Add New Category"}</ModalHeader>
+              <ModalBody className="space-y-5">
+                <Input
+                  isRequired
+                  label="Category Name"
+                  placeholder="Enter category name"
+                  variant="bordered"
+                  labelPlacement="outside"
+                  classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                />
+                <Textarea
+                  label="Description"
+                  placeholder="Enter description"
+                  variant="bordered"
+                  labelPlacement="outside"
+                  classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                  value={categoryForm.description}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                />
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button color="primary" onPress={handleSaveCategory}>
+                  {isEditing ? "Update" : "Add"} Category
+                </Button>
+              </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
 
       {/* Issue Item Modal */}
       <Modal
-        isDismissable={false}
-        isKeyboardDismissDisabled={true}
         isOpen={issueModalState.isOpen}
         onClose={issueModalState.close}
+        classNames={{
+          base: "bg-surface border border-border-base",
+          header: "border-b border-border-base font-semibold text-text-main",
+          body: "py-6",
+          footer: "border-t border-border-base bg-surface-2/50",
+        }}
       >
         <ModalContent>
-          <ModalHeader>Issue Item</ModalHeader>
-          <ModalBody>
-            <div className="space-y-4">
-              <Select
-                isRequired
-                disallowEmptySelection={false}
-                label="Select Item"
-                placeholder="Choose item to issue"
-                popoverProps={{
-                  placement: "bottom",
-                  triggerType: "listbox",
-                  offset: 10,
-                }}
-                selectedKeys={
-                  issueForm.itemId ? new Set([issueForm.itemId]) : new Set()
-                }
-                onSelectionChange={(keys) => {
-                  issueModalState.handleDropdownInteraction();
-                  const selectedKey = Array.from(keys)[0] as string;
-
-                  setIssueForm({ ...issueForm, itemId: selectedKey || "" });
-                }}
-              >
-                {items
-                  .filter((item) => item.quantity > 0)
-                  .map((item) => (
-                    <SelectItem
-                      key={item.id}
-                      textValue={`${item.name} (${item.category}) - Available: ${item.quantity}`}
-                    >
-                      {item.name} ({item.category}) - Available: {item.quantity}
+          {(onClose) => (
+            <>
+              <ModalHeader>Issue Item</ModalHeader>
+              <ModalBody className="space-y-5">
+                <Select
+                  isRequired
+                  label="Select Item"
+                  placeholder="Choose item to issue"
+                  variant="bordered"
+                  labelPlacement="outside"
+                  classNames={{ trigger: "bg-surface border-border-base" }}
+                  selectedKeys={issueForm.itemId ? new Set([issueForm.itemId]) : new Set()}
+                  onSelectionChange={(keys) => {
+                    const selectedKey = Array.from(keys)[0] as string;
+                    setIssueForm({ ...issueForm, itemId: selectedKey || "" });
+                  }}
+                >
+                  {items.filter(item => item.quantity > 0).map((item) => (
+                    <SelectItem key={item.id} textValue={item.name}>
+                      {item.name} ({item.category}) - {item.quantity} available
                     </SelectItem>
                   ))}
-              </Select>
-              <Input
-                isRequired
-                label="Quantity"
-                max={
-                  issueForm.itemId
-                    ? items.find((item) => item.id === issueForm.itemId)
-                        ?.quantity || 0
-                    : undefined
-                }
-                min="1"
-                placeholder="Enter quantity"
-                type="number"
-                value={issueForm.quantity.toString()}
-                onChange={(e) =>
-                  setIssueForm({
-                    ...issueForm,
-                    quantity: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-              {issueForm.itemId && (
-                <div className="col-span-full">
-                  <p className="text-sm text-default-500">
-                    Available quantity:{" "}
-                    {items.find((item) => item.id === issueForm.itemId)
-                      ?.quantity || 0}
-                  </p>
+                </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    isRequired
+                    label="Quantity"
+                    type="number"
+                    min="1"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                    value={issueForm.quantity.toString()}
+                    onChange={(e) => setIssueForm({ ...issueForm, quantity: parseInt(e.target.value) || 0 })}
+                  />
+                  <Input
+                    label="Exp. Return Date"
+                    type="date"
+                    variant="bordered"
+                    labelPlacement="outside"
+                    classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                    value={issueForm.expectedReturnDate ? issueForm.expectedReturnDate.toISOString().split('T')[0] : ""}
+                    onChange={(e) => setIssueForm({ ...issueForm, expectedReturnDate: e.target.value ? new Date(e.target.value) : null })}
+                  />
                 </div>
-              )}
-              <Input
-                label="Issued To"
-                placeholder="Person or department"
-                value={issueForm.issuedTo}
-                onChange={(e) =>
-                  setIssueForm({ ...issueForm, issuedTo: e.target.value })
-                }
-              />
-              <Input
-                label="Expected Return Date"
-                type="date"
-                value={
-                  issueForm.expectedReturnDate
-                    ? issueForm.expectedReturnDate.toISOString().split("T")[0]
-                    : ""
-                }
-                onChange={(e) =>
-                  setIssueForm({
-                    ...issueForm,
-                    expectedReturnDate: e.target.value
-                      ? new Date(e.target.value)
-                      : null,
-                  })
-                }
-              />
-              <Textarea
-                label="Notes"
-                placeholder="Additional notes"
-                value={issueForm.notes}
-                onChange={(e) =>
-                  setIssueForm({ ...issueForm, notes: e.target.value })
-                }
-              />
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={issueModalState.forceClose}>
-              Cancel
-            </Button>
-            <Button color="primary" onPress={handleIssueItem}>
-              Issue Item
-            </Button>
-          </ModalFooter>
+                <Input
+                  label="Issued To"
+                  placeholder="Person or department"
+                  variant="bordered"
+                  labelPlacement="outside"
+                  classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                  value={issueForm.issuedTo}
+                  onChange={(e) => setIssueForm({ ...issueForm, issuedTo: e.target.value })}
+                />
+                <Textarea
+                  label="Notes"
+                  placeholder="Reason or additional info"
+                  variant="bordered"
+                  labelPlacement="outside"
+                  classNames={{ inputWrapper: "bg-surface border-border-base" }}
+                  value={issueForm.notes}
+                  onChange={(e) => setIssueForm({ ...issueForm, notes: e.target.value })}
+                />
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button color="primary" onPress={handleIssueItem}>
+                  Issue Item
+                </Button>
+              </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
 
       {/* Return Item Modal */}
       <Modal
-        isDismissable={false}
-        isKeyboardDismissDisabled={true}
         isOpen={returnModalState.isOpen}
         onClose={returnModalState.close}
+        classNames={{
+          base: "bg-surface border border-border-base",
+          header: "border-b border-border-base font-semibold text-text-main",
+          body: "py-6",
+          footer: "border-t border-border-base bg-surface-2/50",
+        }}
       >
         <ModalContent>
-          <ModalHeader>Return Item</ModalHeader>
-          <ModalBody>
-            {selectedIssuedItem && (
-              <div className="space-y-4">
-                <p className="text-sm text-default-500">
-                  Are you sure you want to mark this item as returned?
-                </p>
-                <div className="bg-default-100 p-4 rounded-lg">
-                  <p>
-                    <strong>Item:</strong> {selectedIssuedItem.itemName}
-                  </p>
-                  <p>
-                    <strong>Category:</strong> {selectedIssuedItem.itemCategory}
-                  </p>
-                  <p>
-                    <strong>Quantity:</strong> {selectedIssuedItem.quantity}
-                  </p>
-                  <p>
-                    <strong>Issued To:</strong> {selectedIssuedItem.issuedTo}
-                  </p>
-                  <p>
-                    <strong>Issued Date:</strong>{" "}
-                    {format(selectedIssuedItem.issuedDate, "MMM dd, yyyy")}
-                  </p>
-                </div>
-              </div>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={returnModalState.forceClose}>
-              Cancel
-            </Button>
-            <Button color="success" onPress={handleReturnItem}>
-              Confirm Return
-            </Button>
-          </ModalFooter>
+          {(onClose) => (
+            <>
+              <ModalHeader>Confirm Return</ModalHeader>
+              <ModalBody>
+                {selectedIssuedItem && (
+                  <div className="space-y-4">
+                    <p className="text-[14px] text-text-muted">
+                      Marking <strong>{selectedIssuedItem.itemName}</strong> ({selectedIssuedItem.quantity} units) as returned by {selectedIssuedItem.issuedTo || "staff"}.
+                    </p>
+                    <div className="bg-surface-2 p-4 rounded border border-border-base text-sm space-y-1">
+                      <p className="text-text-muted">Issued on: {format(selectedIssuedItem.issuedDate, "MMM dd, yyyy")}</p>
+                      {selectedIssuedItem.notes && <p className="text-text-muted italic">Notes: {selectedIssuedItem.notes}</p>}
+                    </div>
+                  </div>
+                )}
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button color="success" onPress={handleReturnItem} className="text-white">
+                  Confirm Return
+                </Button>
+              </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
     </div>

@@ -62,8 +62,8 @@ export interface User {
   displayName: string;
   photoURL?: string;
   phone?: string;
-  clinicId?: string; // null for super-admin
-  branchId?: string; // null for clinic-super-admin and super-admin
+  clinicId?: string; // null for system-owner
+  branchId?: string; // null for system-owner and system-owner
   role: UserRole;
   isActive: boolean;
   createdAt: Date;
@@ -73,8 +73,7 @@ export interface User {
 
 // Possible user roles in the system
 export type UserRole =
-  | "super-admin"
-  | "clinic-super-admin"
+  | "system-owner"
   | "clinic-admin"
   | "staff";
 
@@ -86,7 +85,7 @@ export interface ClinicType {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  createdBy: string; // User ID of the creator (super-admin)
+  createdBy: string; // User ID of the creator (system-owner)
 }
 
 // Subscription Plan model for different subscription tiers

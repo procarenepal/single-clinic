@@ -87,11 +87,11 @@ const systemSetupService = {
     try {
       const docRef = doc(db, 'system_config', 'system_status');
       const docSnap = await getDoc(docRef);
-      
+
       if (docSnap.exists() && docSnap.data().initialized) {
         return true;
       }
-      
+
       // Also check if any super admin exists
       return await this.checkSuperAdminExists();
     } catch (error) {
@@ -99,20 +99,20 @@ const systemSetupService = {
       return false;
     }
   },
-  
+
   async checkSuperAdminExists() {
     try {
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('role', '==', 'super-admin'));
+      const q = query(usersRef, where('role', '==', 'system-owner'));
       const querySnapshot = await getDocs(q);
-      
+
       return !querySnapshot.empty;
     } catch (error) {
       console.error('Error checking super admin existence:', error);
       return false;
     }
   },
-  
+
   async resetSystemInitialization() {
     try {
       await setDoc(doc(db, 'system_config', 'system_status'), {
@@ -125,28 +125,28 @@ const systemSetupService = {
       throw error;
     }
   },
-  
+
   async createSuperAdmin(email, password, displayName) {
     try {
       // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
-      
+
       // Update user profile
       await updateProfile(userCredential.user, {
         displayName: displayName
       });
-      
+
       // Create user in Firestore
       await setDoc(doc(db, 'users', uid), {
         email,
         displayName,
-        role: 'super-admin',
+        role: 'system-owner',
         isActive: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      
+
       // Set system as initialized
       await setDoc(doc(db, 'system_config', 'system_status'), {
         initialized: true,
@@ -154,7 +154,7 @@ const systemSetupService = {
         initializedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      
+
       return uid;
     } catch (error) {
       console.error('Error creating super admin:', error);
@@ -170,9 +170,9 @@ const rbacService = {
       // Create default roles and permissions
       const roles = [
         {
-          name: 'Super Admin',
+          name: 'System Owner',
           description: 'Full access to all system features',
-          systemRole: 'super-admin',
+          systemRole: 'system-owner',
           permissions: ['*'],
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -218,13 +218,13 @@ const rbacService = {
           updatedAt: serverTimestamp()
         }
       ];
-      
+
       // Save roles to Firestore
       for (const role of roles) {
         const { systemRole } = role;
         await setDoc(doc(db, 'roles', systemRole), role);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error initializing system permissions:', error);
@@ -236,16 +236,16 @@ const rbacService = {
 // Main initialization function
 async function initializeSystem() {
   console.log('\n=== Procare Software System Initialization ===\n');
-  
+
   try {
     // Check if system is already initialized
     const isInitialized = await systemSetupService.isSystemInitialized();
-    
+
     if (isInitialized) {
       console.log('\n⚠️  System is already initialized and a super admin already exists.');
-      
+
       const resetConfirmation = await question('Do you want to reset the initialization status? (This will NOT delete existing data) (y/N): ');
-      
+
       if (resetConfirmation.toLowerCase() === 'y') {
         await systemSetupService.resetSystemInitialization();
         console.log('System initialization status has been reset.');
@@ -255,66 +255,66 @@ async function initializeSystem() {
         return;
       }
     }
-    
+
     console.log('\n📋 Creating Super Admin Account');
     console.log('This account will have full access to manage the entire platform.\n');
-    
+
     // Get super admin email
     let email = '';
     while (!isValidEmail(email)) {
       email = (await question('Enter Super Admin Email: ')).trim();
-      
+
       if (!isValidEmail(email)) {
         console.log('❌ Invalid email format. Please enter a valid email.');
       }
     }
-    
+
     // Get super admin password
     let password = '';
     while (!isValidPassword(password)) {
       password = (await question('Enter Super Admin Password (min 8 characters): ')).trim();
-      
+
       if (!isValidPassword(password)) {
         console.log('❌ Password must be at least 8 characters long.');
       }
     }
-    
+
     // Get display name
     let displayName = '';
     while (!displayName) {
       displayName = (await question('Enter Super Admin Name: ')).trim();
-      
+
       if (!displayName) {
         console.log('❌ Name cannot be empty.');
       }
     }
-    
+
     // Confirm details
     console.log('\n--- Please confirm the details ---');
     console.log(`Email: ${email}`);
     console.log(`Name: ${displayName}`);
-    
+
     const confirmDetails = await question('\nIs this information correct? (Y/n): ');
-    
+
     if (confirmDetails.toLowerCase() === 'n') {
       console.log('Operation cancelled by user.');
       rl.close();
       return;
     }
-    
+
     console.log('\n🔄 Creating super admin account...');
-    
+
     // Initialize system permissions
     console.log('🔄 Initializing system permissions...');
     await rbacService.initializeSystemPermissions();
-    
+
     // Create super admin
     const superAdminId = await systemSetupService.createSuperAdmin(email, password, displayName);
-    
+
     console.log(`\n✅ Super Admin created successfully with ID: ${superAdminId}`);
     console.log(`✅ System has been initialized successfully.`);
     console.log('\n🔐 You can now log in with the super admin credentials at the login page.');
-    
+
   } catch (error) {
     console.error('\n❌ Error during system initialization:');
     console.error(error);

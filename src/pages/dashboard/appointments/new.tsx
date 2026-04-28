@@ -64,10 +64,10 @@ function CustomSearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -485,8 +485,8 @@ export default function NewAppointmentPage() {
         setLoadingAppointments(true);
         const selectedDate = new Date(appointmentInfo.appointmentDate);
         const appointments = await appointmentService.getAppointmentsByDate(
-          clinicId,
           selectedDate,
+          clinicId,
           defaultBranchId || userData?.branchId,
         );
 
@@ -802,7 +802,7 @@ export default function NewAppointmentPage() {
                   }
                   endContent={
                     dateConversionState.isConverting &&
-                    dateConversionState.field === "appointmentBS" ? (
+                      dateConversionState.field === "appointmentBS" ? (
                       <Spinner size="sm" />
                     ) : appointmentInfo.appointmentBS &&
                       dateConversionState.lastConversion.timestamp > 0 ? (

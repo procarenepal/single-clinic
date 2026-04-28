@@ -40,7 +40,7 @@ interface ModalCtx {
 }
 
 const ModalContext = React.createContext<ModalCtx>({
-  onClose: () => {},
+  onClose: () => { },
   isDismissable: true,
   hideCloseButton: false,
   scrollBehavior: "inside",
@@ -128,10 +128,10 @@ export function ModalContent({ children, className }: ModalContentProps) {
 
   return (
     <div
-      /* Clinic Clarity elevated overlay: bg-white, 1px border, rounded-md, NO shadow */
+      /* Clinic Clarity elevated overlay: semantic surface, 1px border, rounded-md, NO shadow */
       className={[
-        "pointer-events-auto relative bg-white",
-        "border border-mountain-200 rounded-md",
+        "pointer-events-auto relative bg-[rgb(var(--color-surface))]",
+        "border border-[rgb(var(--color-border))] rounded-md",
         "flex flex-col w-full",
         widthClass,
         scrollBehavior === "inside" ? "max-h-[92vh]" : "",
@@ -158,14 +158,14 @@ export function ModalHeader({ children, className }: ModalHeaderProps) {
       className={[
         "flex items-center justify-between",
         "px-4 py-2.5" /* compact — spec: px-4 py-3 */,
-        "border-b border-mountain-100",
-        "bg-mountain-50/60 rounded-t-md" /* subtle tinted header plane */,
+        "border-b border-[rgb(var(--color-border))]",
+        "bg-[rgb(var(--color-surface-2))] rounded-t-md" /* subtle tinted header plane */,
         "shrink-0",
         className ?? "",
       ].join(" ")}
     >
       {/* Title area — spec: 15px, weight 700 */}
-      <div className="flex flex-col gap-0.5 text-[13px] font-semibold text-mountain-900 leading-snug tracking-[-0.01em]">
+      <div className="flex flex-col gap-0.5 text-[13px] font-semibold text-[rgb(var(--color-text))] leading-snug tracking-[-0.01em]">
         {children}
       </div>
 
@@ -175,7 +175,7 @@ export function ModalHeader({ children, className }: ModalHeaderProps) {
           className={[
             "ml-3 shrink-0 flex items-center justify-center",
             "w-6 h-6 rounded",
-            "text-mountain-400 hover:text-mountain-700 hover:bg-mountain-100",
+            "text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-2))]",
             "transition-colors",
           ].join(" ")}
           type="button"
@@ -223,8 +223,8 @@ export function ModalFooter({ children, className }: ModalFooterProps) {
       className={[
         "flex justify-end items-center gap-2",
         "px-4 py-2.5",
-        "border-t border-mountain-100",
-        "bg-mountain-50/60 rounded-b-md",
+        "border-t border-[rgb(var(--color-border))]",
+        "bg-[rgb(var(--color-surface-2))] rounded-b-md",
         "shrink-0",
         className ?? "",
       ].join(" ")}
@@ -233,3 +233,4 @@ export function ModalFooter({ children, className }: ModalFooterProps) {
     </div>
   );
 }
+

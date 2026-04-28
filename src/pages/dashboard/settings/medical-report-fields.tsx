@@ -338,7 +338,7 @@ export default function MedicalReportFieldsPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "sm" })}>Medical Report Fields</h1>
+            <h1 className={title({ size: "lg" })}>Medical Report Fields</h1>
             <p className="mt-1 text-mountain-500">
               Configure custom fields for patient medical reports
             </p>

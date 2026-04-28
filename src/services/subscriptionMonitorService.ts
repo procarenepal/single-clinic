@@ -20,7 +20,7 @@ class SubscriptionMonitorService {
     // Don't monitor super admins or during impersonation
     const isImpersonating = localStorage.getItem("isImpersonating") === "true";
 
-    if (userRole === "super-admin" || isImpersonating) {
+    if (userRole === "system-owner" || isImpersonating) {
       return;
     }
 
@@ -66,7 +66,7 @@ class SubscriptionMonitorService {
     if (
       !this.isMonitoring ||
       !this.clinicId ||
-      this.userRole === "super-admin" ||
+      this.userRole === "system-owner" ||
       isImpersonating
     ) {
       return;
@@ -149,7 +149,7 @@ class SubscriptionMonitorService {
    * Force an immediate subscription check
    */
   async forceCheck(): Promise<boolean> {
-    if (!this.clinicId || this.userRole === "super-admin") {
+    if (!this.clinicId || this.userRole === "system-owner") {
       return true;
     }
 

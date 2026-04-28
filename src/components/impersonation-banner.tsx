@@ -1,7 +1,7 @@
 /**
  * ImpersonationBanner — Clinic Clarity Design
  *
- * Shown when a super-admin is impersonating a clinic user.
+ * Shown when a system-owner is impersonating a clinic user.
  * Robust features:
  *  - Reads impersonation metadata from localStorage (set by admin panel on login-as)
  *  - Shows: who is being impersonated, original admin identity, session duration timer
@@ -25,11 +25,11 @@ import { Button } from "@/components/ui/button";
 
 // ── Impersonation session data (written by admin panel at login-as) ────────────
 interface ImpersonationMeta {
-  /** UID of the original super-admin */
+  /** UID of the original system-owner */
   originalAdminUid: string;
-  /** Display name of the super-admin */
+  /** Display name of the system-owner */
   originalAdminName: string;
-  /** Email of the super-admin */
+  /** Email of the system-owner */
   originalAdminEmail: string;
   /** ISO timestamp when impersonation started */
   startedAt: string;

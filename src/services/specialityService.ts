@@ -8,13 +8,15 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
 import { DoctorSpeciality } from "@/types/models";
 
+/**
+ * Service for managing doctor specialities in Firestore
+ */
 export const specialityService = {
   /**
    * Create a new doctor speciality
@@ -28,6 +30,7 @@ export const specialityService = {
       const specialitiesCollection = collection(db, "doctor_specialities");
 
       const docRef = await addDoc(specialitiesCollection, {
+        isActive: true,
         ...specialityData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -108,34 +111,19 @@ export const specialityService = {
   },
 
   /**
-   * Get all specialities for a clinic, optionally scoped by branch.
-   * When branchId is provided: returns specialities for that branch plus clinic-wide defaults (missing/empty branchId).
-   * @param {string} clinicId - Clinic ID
+   * Get all specialities.
+   * Scoping by clinicId/branchId is ignored in standalone mode.
    * @param {boolean} activeOnly - Whether to return only active specialities
-   * @param {string} [branchId] - Optional branch ID to scope results (branch-specific + clinic-wide defaults)
    * @returns {Promise<DoctorSpeciality[]>} - Array of specialities
    */
-  async getSpecialitiesByClinic(
-    clinicId: string,
+  async getSpecialities(
     activeOnly: boolean = false,
-    branchId?: string,
   ): Promise<DoctorSpeciality[]> {
     try {
       const specialitiesCollection = collection(db, "doctor_specialities");
+      const querySnapshot = await getDocs(specialitiesCollection);
 
-      const queryConditions = [
-        where("clinicId", "==", clinicId),
-        orderBy("name", "asc"),
-      ];
-
-      if (activeOnly) {
-        queryConditions.splice(1, 0, where("isActive", "==", true));
-      }
-
-      const q = query(specialitiesCollection, ...queryConditions);
-      const querySnapshot = await getDocs(q);
-
-      const specialities: DoctorSpeciality[] = [];
+      let specialities: DoctorSpeciality[] = [];
 
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -148,42 +136,45 @@ export const specialityService = {
         } as DoctorSpeciality);
       });
 
-      if (branchId) {
-        return specialities.filter(
-          (s) =>
-            s.branchId === branchId ||
-            s.branchId === clinicId || // Treat clinicId as a global/default branch
-            !s.branchId ||
-            (typeof s.branchId === "string" && s.branchId.trim() === ""),
-        );
+      // Filter by active status in memory
+      if (activeOnly) {
+        specialities = specialities.filter((s) => s.isActive === true);
       }
+
+      // Sort by name in memory
+      specialities.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
       return specialities;
     } catch (error) {
-      console.error("Error getting specialities by clinic:", error);
+      console.error("Error getting specialities:", error);
       throw error;
     }
   },
 
   /**
-   * Get active specialities for dropdown usage, optionally scoped by branch.
-   * @param {string} clinicId - Clinic ID
-   * @param {string} [branchId] - Optional branch ID to show only that branch's specialities plus clinic-wide defaults
+   * Alias for backward compatibility during migration
+   */
+  async getSpecialitiesByClinic(
+    _clinicId?: string,
+    activeOnly: boolean = false,
+    _branchId?: string,
+  ): Promise<DoctorSpeciality[]> {
+    return this.getSpecialities(activeOnly);
+  },
+
+  /**
+   * Get active specialities for dropdown usage.
    * @returns {Promise<Array<{key: string, label: string}>>} - Array of key-label pairs
    */
   async getActiveSpecialitiesForDropdown(
-    clinicId: string,
-    branchId?: string,
+    _clinicId?: string,
+    _branchId?: string,
   ): Promise<Array<{ key: string; label: string }>> {
     try {
-      const specialities = await this.getSpecialitiesByClinic(
-        clinicId,
-        true,
-        branchId,
-      );
+      const specialities = await this.getSpecialities(true);
 
       return specialities.map((speciality) => ({
-        key: speciality.key,
+        key: speciality.key || speciality.id,
         label: speciality.name,
       }));
     } catch (error) {
@@ -193,30 +184,26 @@ export const specialityService = {
   },
 
   /**
-   * Check if a speciality key already exists in a clinic
-   * @param {string} clinicId - Clinic ID
+   * Check if a speciality key already exists
    * @param {string} key - Speciality key to check
    * @param {string} excludeId - ID to exclude from check (for updates)
    * @returns {Promise<boolean>} - True if key exists
    */
   async isKeyExists(
-    clinicId: string,
     key: string,
-    excludeId?: string,
+    _excludeId?: string,
   ): Promise<boolean> {
     try {
       const specialitiesCollection = collection(db, "doctor_specialities");
       const q = query(
         specialitiesCollection,
-        where("clinicId", "==", clinicId),
         where("key", "==", key),
       );
 
       const querySnapshot = await getDocs(q);
 
-      if (excludeId) {
-        // Check if any document other than the excluded one has this key
-        return querySnapshot.docs.some((doc) => doc.id !== excludeId);
+      if (_excludeId) {
+        return querySnapshot.docs.some(doc => doc.id !== _excludeId);
       }
 
       return !querySnapshot.empty;

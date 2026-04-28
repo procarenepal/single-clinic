@@ -33,7 +33,7 @@ export default function RBACManagementPage() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold">Staff & User Management</h1>
+          <h1 className="text-page-title font-bold">Staff & User Management</h1>
           <p className="text-gray-600">
             Manage roles, permissions, and user assignments for your clinic
           </p>

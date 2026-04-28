@@ -99,49 +99,47 @@ export const expertService = {
   },
 
   /**
-   * Get all experts for a clinic (excluding deleted experts).
-   * @param {string} clinicId - Clinic ID
-   * @param {string} [branchId] - Optional branch ID to filter experts by
-   * @returns {Promise<Expert[]>} - Array of experts (excluding deleted)
+   * Get all experts (excluding deleted)
    */
-  async getExpertsByClinic(
-    clinicId: string,
-    branchId?: string,
-  ): Promise<Expert[]> {
+  async getExperts(): Promise<Expert[]> {
     try {
       const expertsRef = collection(db, EXPERTS_COLLECTION);
-      let q;
+      const snap = await getDocs(expertsRef);
 
-      if (branchId) {
-        q = query(
-          expertsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-        );
-      } else {
-        q = query(expertsRef, where("clinicId", "==", clinicId));
-      }
+      return snap.docs
+        .map((doc) => {
+          const data = doc.data() as any;
+          const createdAt = data.createdAt ? data.createdAt.toDate() : new Date();
+          const updatedAt = data.updatedAt ? data.updatedAt.toDate() : new Date();
 
-      const snap = await getDocs(q);
-
-      const experts = snap.docs.map((doc) => {
-        const data = doc.data() as any;
-        const createdAt = data.createdAt ? data.createdAt.toDate() : new Date();
-        const updatedAt = data.updatedAt ? data.updatedAt.toDate() : new Date();
-
-        return {
-          id: doc.id,
-          ...data,
-          createdAt,
-          updatedAt,
-        } as Expert;
-      });
-
-      return experts.filter((expert) => !expert.isDeleted);
+          return {
+            id: doc.id,
+            ...data,
+            createdAt,
+            updatedAt,
+          } as Expert;
+        })
+        .filter((expert) => !expert.isDeleted);
     } catch (error) {
-      console.error("Error getting experts by clinic:", error);
+      console.error("Error getting experts:", error);
       throw error;
     }
+  },
+
+  /**
+   * Alias for backward compatibility
+   */
+  async getExpertsByClinic(
+    _clinicId?: string,
+    branchId?: string,
+  ): Promise<Expert[]> {
+    const experts = await this.getExperts();
+
+    if (branchId) {
+      return experts.filter((e) => e.branchId === branchId);
+    }
+
+    return experts;
   },
 
   /**
@@ -150,9 +148,12 @@ export const expertService = {
    * @param {string} clinicId - Clinic ID to filter by
    * @returns {Promise<Expert[]>} - Array of matching experts
    */
-  async searchExperts(searchTerm: string, clinicId: string): Promise<Expert[]> {
+  async searchExperts(
+    searchTerm: string,
+    _clinicId?: string,
+  ): Promise<Expert[]> {
     try {
-      const experts = await this.getExpertsByClinic(clinicId);
+      const experts = await this.getExperts();
 
       if (!searchTerm) {
         return experts;
