@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { format, startOfToday, addDays, subDays, startOfDay } from "date-fns";
 import * as XLSX from "xlsx";
 import {
   IoAddOutline,
-  IoFilterOutline,
+  IoSearchOutline,
   IoRefreshOutline,
   IoDownloadOutline,
   IoPersonOutline,
@@ -82,8 +83,29 @@ export default function EnquiriesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [editingEnquiry, setEditingEnquiry] = useState<Enquiry | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const filteredEnquiries = useMemo(() => enquiries, [enquiries]);
+  const [search, setSearch] = useState("");
+  const filteredEnquiries = useMemo(() => {
+    return enquiries.filter((e) => {
+      const q = search.toLowerCase();
+
+      return (
+        !q ||
+        e.fullName.toLowerCase().includes(q) ||
+        e.phone.toLowerCase().includes(q) ||
+        e.reasonForVisit?.toLowerCase().includes(q) ||
+        e.source?.toLowerCase().includes(q)
+      );
+    });
+  }, [enquiries, search]);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "new") {
+      setIsModalOpen(true);
+      setSearchParams(new URLSearchParams());
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!clinicId) return;
@@ -448,112 +470,32 @@ export default function EnquiriesPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-border-base bg-surface-2/50 flex items-center gap-2">
-          <IoFilterOutline className="w-4 h-4 text-primary" />
-          <span className="text-xs font-bold text-text-main uppercase tracking-wider">
-            Filters
-          </span>
+      {/* Search Toolbar */}
+      <div className="flex items-center gap-4 bg-surface border border-border-base rounded-xl p-3 shadow-sm">
+        <div className="relative flex-1 max-w-md">
+          <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            className="w-full h-9 pl-9 pr-3 text-[13px] border border-border-base rounded-lg bg-surface-2 text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+            placeholder="Search enquiries by name, phone, or reason..."
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        <div className="p-5 space-y-4">
-          <div className="flex flex-col lg:flex-row lg:flex-wrap gap-4 lg:items-center">
-            {/* Date presets */}
-            <div className="flex flex-col gap-2">
-              <p className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Date presets</p>
-              <div className="inline-flex rounded-lg border border-border-base bg-surface-2 overflow-hidden p-1">
-                {DATE_PRESETS.map((preset) => {
-                  const active = datePreset === preset.key;
-
-                  return (
-                    <button
-                      key={preset.key}
-                      className={`px-4 py-1.5 text-[12px] rounded-md transition-all ${active
-                        ? "bg-surface text-primary font-bold shadow-sm ring-1 ring-border-base"
-                        : "text-text-muted hover:text-text-main hover:bg-surface/50"
-                        }`}
-                      type="button"
-                      onClick={() => {
-                        setDatePreset(preset.key);
-                        setRangeStart("");
-                        setRangeEnd("");
-                      }}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Date range */}
-            <div className="flex flex-col gap-1.5 w-[220px] shrink-0">
-              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                Date range
-              </label>
-              <div className="flex gap-2 min-w-0">
-                <input
-                  className="h-[32px] min-w-0 flex-1 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
-                  placeholder="From"
-                  type="date"
-                  value={rangeStart}
-                  onChange={(e) => {
-                    setRangeStart(e.target.value);
-                    setDatePreset("all");
-                  }}
-                />
-                <input
-                  className="h-[32px] min-w-0 flex-1 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
-                  placeholder="To"
-                  type="date"
-                  value={rangeEnd}
-                  onChange={(e) => {
-                    setRangeEnd(e.target.value);
-                    setDatePreset("all");
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Date field */}
-            <div className="flex flex-col gap-1.5 w-[150px]">
-              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                Date field
-              </label>
-              <select
-                className="h-[32px] border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
-                value={dateField}
-                onChange={(e) =>
-                  setDateField(
-                    e.target.value as "appointmentDate" | "createdAt",
-                  )
-                }
-              >
-                <option className="bg-surface" value="appointmentDate">Appointment date</option>
-                <option className="bg-surface" value="createdAt">Created date</option>
-              </select>
-            </div>
-
-            {/* Status */}
-            <div className="flex flex-col gap-1.5 w-[170px]">
-              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                Status
-              </label>
-              <select
-                className="h-[32px] border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-medium"
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as EnquiryStatus | "all")
-                }
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option className="bg-surface" key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+        <div className="h-6 w-px bg-border-base hidden sm:block" />
+        <div className="flex items-center gap-2">
+          <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Status</label>
+          <select
+            className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as EnquiryStatus | "all")}
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option className="bg-surface" key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

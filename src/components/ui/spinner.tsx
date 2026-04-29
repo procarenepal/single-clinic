@@ -15,11 +15,11 @@ const TRACK_SIZE: Record<NonNullable<SpinnerProps["size"]>, string> = {
 };
 
 const TRACK_COLOR: Record<NonNullable<SpinnerProps["color"]>, string> = {
-  primary: "border-teal-200   border-t-teal-700",
-  default: "border-mountain-200 border-t-mountain-600",
-  danger: "border-red-200    border-t-red-600",
-  success: "border-health-200 border-t-health-600",
-  warning: "border-saffron-200 border-t-saffron-600",
+  primary: "border-primary/20 border-t-primary",
+  default: "border-border-base border-t-text-muted",
+  danger: "border-error/20    border-t-error",
+  success: "border-success/20 border-t-success",
+  warning: "border-warning/20 border-t-warning",
 };
 
 export const Spinner: React.FC<SpinnerProps> = ({
@@ -42,6 +42,6 @@ export const Spinner: React.FC<SpinnerProps> = ({
         TRACK_COLOR[color],
       )}
     />
-    {label && <span className="text-[11px] text-mountain-500">{label}</span>}
+    {label && <span className="text-[11px] text-text-muted">{label}</span>}
   </span>
 );

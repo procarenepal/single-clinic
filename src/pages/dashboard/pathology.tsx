@@ -94,18 +94,18 @@ function PathologySearchSelect({
     <>
       <div className="flex flex-col gap-1.5 relative">
         {(label || required) && (
-          <label className="text-[13px] font-medium text-mountain-700">
+          <label className="text-[13px] font-medium text-text-muted">
             {label}
             {required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
         )}
         <div
-          className="flex flex-wrap items-center min-h-[32px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white"
+          className="flex flex-wrap items-center min-h-[32px] border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface"
           onClick={() => setOpen(true)}
         >
-          <IoSearchOutline className="ml-3 w-4 h-4 text-mountain-400 shrink-0" />
+          <IoSearchOutline className="ml-3 w-4 h-4 text-text-muted shrink-0" />
           <input
-            className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-400 w-full min-w-0"
+            className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted w-full min-w-0"
             placeholder={
               selected && !open ? selected.primary : placeholder || "Search…"
             }
@@ -121,7 +121,7 @@ function PathologySearchSelect({
           />
           {value && (
             <button
-              className="mr-3 text-mountain-400 hover:text-mountain-700"
+              className="mr-3 text-text-muted hover:text-text-main"
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -143,10 +143,10 @@ function PathologySearchSelect({
                 setOpen(false);
               }}
             ></div>
-            <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded shadow-lg max-h-64 overflow-y-auto">
+            <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded shadow-lg max-h-64 overflow-y-auto">
               {filtered.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
-                  <p className="text-[13px] text-mountain-500">
+                  <p className="text-[13px] text-text-muted">
                     No results found for "{q}"
                   </p>
                   {onAddNew && q && (
@@ -169,7 +169,7 @@ function PathologySearchSelect({
                 filtered.map((i) => (
                   <button
                     key={i.id}
-                    className={`flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-mountain-50 last:border-0 ${i.id === value ? "bg-teal-50/50" : ""}`}
+                    className={`flex flex-col w-full text-left px-3 py-2 hover:bg-primary/5 border-b border-border-base/50 last:border-0 ${i.id === value ? "bg-primary/10" : ""}`}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -178,11 +178,11 @@ function PathologySearchSelect({
                       setOpen(false);
                     }}
                   >
-                    <span className="text-[13.5px] font-medium text-mountain-800 leading-tight">
+                    <span className="text-[13.5px] font-medium text-text-main leading-tight">
                       {i.primary}
                     </span>
                     {i.secondary && (
-                      <span className="text-[11.5px] text-mountain-500 mt-0.5 leading-tight">
+                      <span className="text-[11.5px] text-text-muted mt-0.5 leading-tight">
                         {i.secondary}
                       </span>
                     )}
@@ -1818,23 +1818,23 @@ export default function PathologyPage() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className={title()}>Pathology</h1>
-            <p className="text-mountain-500 mt-2 text-[13.5px]">
+            <p className="text-text-muted mt-2 text-[13.5px]">
               Manage pathology tests, categories, units, and parameters
             </p>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="clarity-card border border-mountain-200 rounded">
+        <div className="bg-surface border border-border-base rounded">
           {/* Tab header */}
-          <div className="border-b border-mountain-200 overflow-x-auto">
+          <div className="border-b border-border-base overflow-x-auto">
             <div className="inline-flex rounded-t">
               {TAB_KEYS.map((key) => (
                 <button
                   key={key}
                   className={`px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeTab === key
-                    ? "border-teal-600 text-teal-700"
-                    : "border-transparent text-mountain-600 hover:text-mountain-900 hover:border-mountain-300"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-text-muted hover:text-text-main hover:border-border-base"
                     }`}
                   type="button"
                   onClick={() => setActiveTab(key)}
@@ -1974,13 +1974,13 @@ export default function PathologyPage() {
                 className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
                 onClick={testModalState.close}
               ></div>
-              <div className="relative z-10 bg-white border border-mountain-200 rounded-lg w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col shadow-2xl">
-                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60 flex items-center justify-between shrink-0">
-                  <h2 className="text-[14px] font-semibold text-mountain-900">
+              <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col shadow-2xl">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2 flex items-center justify-between shrink-0">
+                  <h2 className="text-[14px] font-semibold text-text-main">
                     {isEditing ? "Edit Pathology Test" : "Create Pathology Tests"}
                   </h2>
                   <button
-                    className="text-mountain-400 hover:text-mountain-700"
+                    className="text-text-muted hover:text-text-main"
                     type="button"
                     onClick={testModalState.close}
                   >
@@ -1993,9 +1993,9 @@ export default function PathologyPage() {
                     <h3 className="text-lg font-semibold mb-4">Test Details</h3>
 
                     {/* Walk-in vs Existing Patient Toggle */}
-                    <div className="flex bg-mountain-100 p-1 rounded-md w-max mb-4">
+                    <div className="flex bg-surface-2 p-1 rounded-md w-max mb-4 border border-border-base">
                       <button
-                        className={`px-4 py-1.5 text-sm rounded ${!testForm.isWalkIn ? "bg-white shadow text-mountain-900 font-medium" : "text-mountain-600 hover:text-mountain-900"}`}
+                        className={`px-4 py-1.5 text-sm rounded ${!testForm.isWalkIn ? "bg-surface shadow-sm text-text-main font-medium border border-border-base" : "text-text-muted hover:text-text-main"}`}
                         type="button"
                         onClick={() =>
                           setTestForm((prev) => ({
@@ -2012,7 +2012,7 @@ export default function PathologyPage() {
                         Existing Patient
                       </button>
                       <button
-                        className={`px-4 py-1.5 text-sm rounded ${testForm.isWalkIn ? "bg-white shadow text-mountain-900 font-medium" : "text-mountain-600 hover:text-mountain-900"}`}
+                        className={`px-4 py-1.5 text-sm rounded ${testForm.isWalkIn ? "bg-surface shadow-sm text-text-main font-medium border border-border-base" : "text-text-muted hover:text-text-main"}`}
                         type="button"
                         onClick={() =>
                           setTestForm((prev) => ({
@@ -2095,11 +2095,11 @@ export default function PathologyPage() {
                         }
                       />
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] font-medium text-mountain-700">
+                        <label className="text-[13px] font-medium text-text-muted">
                           Patient Gender
                         </label>
                         <select
-                          className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                          className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                           value={testForm.patientGender}
                           onChange={(e) =>
                             setTestForm((prev) => ({
@@ -2197,11 +2197,11 @@ export default function PathologyPage() {
                       />
 
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] font-medium text-mountain-700">
+                        <label className="text-[13px] font-medium text-text-muted">
                           Charge Category
                         </label>
                         <select
-                          className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                          className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                           value={testForm.chargeCategory}
                           onChange={(e) =>
                             setTestForm((prev) => ({
@@ -2256,7 +2256,7 @@ export default function PathologyPage() {
                     {testForm.parameters.map((param, index) => (
                       <div
                         key={index}
-                        className="grid grid-cols-12 gap-2 mb-4 items-end bg-mountain-50/30 p-2 rounded border border-mountain-100"
+                        className="grid grid-cols-12 gap-2 mb-4 items-end bg-surface-2/50 p-2 rounded border border-border-base/50"
                       >
                         <div className="col-span-2">
                           <PathologySearchSelect
@@ -2337,7 +2337,7 @@ export default function PathologyPage() {
                             variant="light"
                             onClick={() => moveTestParameter(index, "up")}
                           >
-                            <IoArrowUpOutline className="text-mountain-400" />
+                            <IoArrowUpOutline className="text-text-muted" />
                           </Button>
                           <Button
                             isIconOnly
@@ -2363,7 +2363,7 @@ export default function PathologyPage() {
                     </div>
                   </div>
                 </div>
-                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2 shrink-0">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2 shrink-0">
                   <Button variant="light" onClick={testModalState.close}>
                     Cancel
                   </Button>
@@ -2385,9 +2385,9 @@ export default function PathologyPage() {
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={categoryModalState.close}
               ></div>
-              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                  <h2 className="text-[14px] font-semibold text-mountain-900">
+              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
+                  <h2 className="text-[14px] font-semibold text-text-main">
                     {isEditing
                       ? "Edit Pathology Category"
                       : "New Pathology Category"}
@@ -2404,7 +2404,7 @@ export default function PathologyPage() {
                     }
                   />
                 </div>
-                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
                   <Button variant="light" onClick={categoryModalState.close}>
                     Cancel
                   </Button>
@@ -2425,9 +2425,9 @@ export default function PathologyPage() {
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={unitModalState.close}
               ></div>
-              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                  <h2 className="text-[14px] font-semibold text-mountain-900">
+              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
+                  <h2 className="text-[14px] font-semibold text-text-main">
                     {isEditing ? "Edit Pathology Unit" : "New Pathology Unit"}
                   </h2>
                 </div>
@@ -2442,7 +2442,7 @@ export default function PathologyPage() {
                     }
                   />
                 </div>
-                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
                   <Button variant="light" onClick={unitModalState.close}>
                     Cancel
                   </Button>
@@ -2463,9 +2463,9 @@ export default function PathologyPage() {
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={parameterModalState.close}
               ></div>
-              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                  <h2 className="text-[14px] font-semibold text-mountain-900">
+              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
+                  <h2 className="text-[14px] font-semibold text-text-main">
                     {isEditing
                       ? "Edit Pathology Parameter"
                       : "New Pathology Parameter"}
@@ -2473,11 +2473,11 @@ export default function PathologyPage() {
                 </div>
                 <div className="p-5 space-y-4">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                    <label className="text-[13px] font-medium text-text-muted">
                       Category Name
                     </label>
                     <select
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                       value={parameterForm.categoryId}
                       onChange={(e) =>
                         setParameterForm((prev) => ({
@@ -2513,11 +2513,11 @@ export default function PathologyPage() {
                     }
                   />
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                    <label className="text-[13px] font-medium text-text-muted">
                       Unit
                     </label>
                     <select
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                       value={parameterForm.unit}
                       onChange={(e) =>
                         setParameterForm((prev) => ({
@@ -2535,7 +2535,7 @@ export default function PathologyPage() {
                     </select>
                   </div>
                 </div>
-                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
                   <Button variant="light" onClick={parameterModalState.close}>
                     Cancel
                   </Button>
@@ -2556,9 +2556,9 @@ export default function PathologyPage() {
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={testTypeModalState.close}
               ></div>
-              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4 overflow-visible">
-                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                  <h2 className="text-[14px] font-semibold text-mountain-900">
+              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4 overflow-visible">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
+                  <h2 className="text-[14px] font-semibold text-text-main">
                     {isEditing
                       ? "Edit Price Configuration"
                       : "New Price Configuration"}
@@ -2566,11 +2566,11 @@ export default function PathologyPage() {
                 </div>
                 <div className="p-5 space-y-4">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-mountain-700">
+                    <label className="text-[13px] font-medium text-text-muted">
                       Setting Price For *
                     </label>
                     <select
-                      className="h-[32px] border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                      className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                       value={testTypeForm.targetType}
                       onChange={(e) =>
                         setTestTypeForm((prev) => ({
@@ -2665,7 +2665,7 @@ export default function PathologyPage() {
                     }
                   />
                 </div>
-                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
                   <Button variant="light" onClick={testTypeModalState.close}>
                     Cancel
                   </Button>
@@ -2686,20 +2686,20 @@ export default function PathologyPage() {
                 className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
                 onClick={deleteConfirmModalState.close}
               ></div>
-              <div className="relative z-10 bg-white border border-mountain-200 rounded-md w-full max-w-md mx-4">
-                <div className="px-5 py-3 border-b border-mountain-100 bg-mountain-50/60">
-                  <h2 className="text-[14px] font-semibold text-mountain-900">
+              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
+                  <h2 className="text-[14px] font-semibold text-text-main">
                     Confirm Delete
                   </h2>
                 </div>
                 <div className="p-5">
-                  <p className="text-[13.5px] text-mountain-800">
+                  <p className="text-[13.5px] text-text-main">
                     Are you sure you want to delete{" "}
                     <strong>{itemToDelete?.name}</strong>? This action cannot be
                     undone.
                   </p>
                 </div>
-                <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/60 flex justify-end gap-2">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
                   <Button variant="light" onClick={deleteConfirmModalState.close}>
                     Cancel
                   </Button>
@@ -2720,18 +2720,18 @@ export default function PathologyPage() {
                 className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
                 onClick={quickPatientModalState.close}
               ></div>
-              <div className="relative z-10 bg-white border border-mountain-200 rounded-lg w-full max-w-lg mx-4 shadow-2xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center justify-between">
+              <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-lg mx-4 shadow-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-border-base/50 bg-surface-2 flex items-center justify-between">
                   <div>
-                    <h2 className="text-[16px] font-bold text-mountain-900">
+                    <h2 className="text-[16px] font-bold text-text-main">
                       Quick Create Patient
                     </h2>
-                    <p className="text-[12px] text-mountain-500">
+                    <p className="text-[12px] text-text-muted">
                       Register a new patient to continue with the test
                     </p>
                   </div>
                   <button
-                    className="p-1.5 rounded-full hover:bg-mountain-100 text-mountain-400 hover:text-mountain-700 transition-colors"
+                    className="p-1.5 rounded-full hover:bg-surface-2 text-text-muted hover:text-text-main transition-colors"
                     type="button"
                     onClick={quickPatientModalState.close}
                   >
@@ -2759,11 +2759,11 @@ export default function PathologyPage() {
                       }
                     />
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[13px] font-semibold text-mountain-700">
+                      <label className="text-[13px] font-semibold text-text-muted">
                         Gender
                       </label>
                       <select
-                        className="h-9 border border-mountain-200 rounded px-3 text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100 transition-all shadow-sm"
+                        className="h-9 border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-sm"
                         value={quickPatientForm.gender}
                         onChange={(e) =>
                           setQuickPatientForm((prev) => ({
@@ -2788,7 +2788,7 @@ export default function PathologyPage() {
                     }
                   />
                 </div>
-                <div className="px-6 py-4 border-t border-mountain-100 bg-mountain-50/50 flex justify-end gap-3">
+                <div className="px-6 py-4 border-t border-border-base/50 bg-surface-2 flex justify-end gap-3">
                   <Button variant="flat" onClick={quickPatientModalState.close}>
                     Cancel
                   </Button>

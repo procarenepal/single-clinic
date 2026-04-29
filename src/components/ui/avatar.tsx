@@ -19,11 +19,11 @@ const SIZE: Record<NonNullable<AvatarProps["size"]>, string> = {
 };
 
 const COLOR: Record<NonNullable<AvatarProps["color"]>, string> = {
-  primary: "bg-teal-100   text-teal-700",
-  secondary: "bg-health-100 text-health-700",
-  default: "bg-mountain-100 text-mountain-700",
-  danger: "bg-red-100    text-red-700",
-  warning: "bg-saffron-100 text-saffron-700",
+  primary: "bg-primary/10   text-primary",
+  secondary: "bg-success/10 text-success",
+  default: "bg-surface-2 text-text-muted",
+  danger: "bg-error/10    text-error",
+  warning: "bg-warning/10 text-warning",
 };
 
 function initials(name?: string): string {

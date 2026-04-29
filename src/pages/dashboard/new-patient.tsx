@@ -84,12 +84,12 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-main">
         {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {required && <span className="text-error ml-0.5">*</span>}
       </label>
       {children}
-      {hint && <p className="text-[10.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-text-muted">{hint}</p>}
     </div>
   );
 }
@@ -115,9 +115,9 @@ function FlatInput({
   return (
     <div className="relative">
       <input
-        className={`w-full h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-          placeholder:text-mountain-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
-          disabled:bg-mountain-50 disabled:text-mountain-400 ${endContent ? "pr-20" : ""} ${className}`}
+        className={`w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+          placeholder:text-text-muted/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20
+          disabled:bg-surface-2 disabled:text-text-muted ${endContent ? "pr-20" : ""} ${className}`}
         disabled={disabled}
         placeholder={placeholder}
         type={type}
@@ -147,9 +147,9 @@ function FlatSelect({
 }) {
   return (
     <select
-      className="w-full h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-        focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
-        disabled:bg-mountain-50 disabled:text-mountain-400"
+      className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+        focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20
+        disabled:bg-surface-2 disabled:text-text-muted"
       disabled={disabled}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -233,26 +233,26 @@ function DoctorSelect({
     <div className="relative">
       <div
         ref={triggerRef}
-        className={`flex items-center h-9 border border-mountain-200 rounded bg-white ${locked ? "bg-mountain-50" : "cursor-text"} focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100`}
+        className={`flex items-center h-9 border border-border-base rounded bg-surface ${locked ? "bg-surface-2" : "cursor-text"} focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20`}
         onClick={() => !locked && setOpen(true)}
       >
         {loading ? (
           <div className="flex items-center gap-2 px-2.5">
             <Spinner size="xs" />
-            <span className="text-[12px] text-mountain-400">
+            <span className="text-[12px] text-text-muted">
               Loading {title ? title.toLowerCase() : "doctors"}…
             </span>
           </div>
         ) : locked && selected ? (
-          <span className="px-2.5 text-[12.5px] text-mountain-700">
+          <span className="px-2.5 text-[12.5px] text-text-main">
             {selected.name}
             {selected.speciality && ` — ${selected.speciality}`}
           </span>
         ) : (
           <div className="flex items-center gap-1.5 px-2.5 w-full">
-            <IoSearchOutline className="w-3.5 h-3.5 text-mountain-400 shrink-0" />
+            <IoSearchOutline className="w-3.5 h-3.5 text-text-muted shrink-0" />
             <input
-              className="flex-1 text-[12.5px] bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300"
+              className="flex-1 text-[12.5px] bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/60"
               placeholder={placeholder || "Search doctor…"}
               type="text"
               value={selected && !open ? `${selected.name}` : q}
@@ -264,7 +264,7 @@ function DoctorSelect({
             />
             {value && !locked && (
               <button
-                className="text-mountain-400 hover:text-mountain-700"
+                className="text-text-muted hover:text-text-main"
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -289,7 +289,7 @@ function DoctorSelect({
               onClick={() => setOpen(false)}
             />
             <div
-              className="z-[9999] bg-white border border-mountain-200 rounded shadow-lg max-h-48 overflow-y-auto min-w-[200px]"
+              className="z-[9999] bg-surface border border-border-base rounded shadow-lg max-h-48 overflow-y-auto min-w-[200px]"
               style={{
                 position: "fixed",
                 top: coords ? coords.top : -9999,
@@ -298,14 +298,14 @@ function DoctorSelect({
               }}
             >
               {filtered.length === 0 ? (
-                <p className="px-3 py-2 text-[12px] text-mountain-400">
+                <p className="px-3 py-2 text-[12px] text-text-muted">
                   No {title ? title.toLowerCase() : "doctors"} found
                 </p>
               ) : (
                 filtered.map((d) => (
                   <button
                     key={d.id}
-                    className={`w-full text-left px-3 py-2 hover:bg-teal-50 transition-colors ${d.id === value ? "bg-teal-50" : ""}`}
+                    className={`w-full text-left px-3 py-2 hover:bg-primary/10 transition-colors ${d.id === value ? "bg-primary/10" : ""}`}
                     type="button"
                     onClick={() => {
                       onChange(d.id);
@@ -313,11 +313,11 @@ function DoctorSelect({
                       setOpen(false);
                     }}
                   >
-                    <p className="text-[12.5px] text-mountain-800 font-medium">
+                    <p className="text-[12.5px] text-text-main font-medium">
                       {d.name}
                     </p>
                     {d.speciality && (
-                      <p className="text-[11px] text-mountain-400">
+                      <p className="text-[11px] text-text-muted">
                         {d.speciality}
                       </p>
                     )}
@@ -328,7 +328,7 @@ function DoctorSelect({
           </>,
           document.body,
         )}
-      {hint && <p className="text-[10.5px] text-mountain-400 mt-1">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-text-muted mt-1">{hint}</p>}
     </div>
   );
 }
@@ -395,21 +395,21 @@ function AppointmentTypeSelect({
     <div className="relative">
       <div
         ref={triggerRef}
-        className="flex items-center h-9 border border-mountain-200 rounded bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 cursor-text"
+        className="flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 cursor-text"
         onClick={() => setOpen(true)}
       >
         {loading ? (
           <div className="flex items-center gap-2 px-2.5">
             <Spinner size="xs" />
-            <span className="text-[12px] text-mountain-400">
+            <span className="text-[12px] text-text-muted">
               Loading types…
             </span>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 px-2.5 w-full">
-            <IoSearchOutline className="w-3.5 h-3.5 text-mountain-400 shrink-0" />
+            <IoSearchOutline className="w-3.5 h-3.5 text-text-muted shrink-0" />
             <input
-              className="flex-1 text-[12.5px] bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300"
+              className="flex-1 text-[12.5px] bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/60"
               placeholder="Search appointment type…"
               type="text"
               value={selected && !open ? selected.name : q}
@@ -421,7 +421,7 @@ function AppointmentTypeSelect({
             />
             {value && (
               <button
-                className="text-mountain-400 hover:text-mountain-700"
+                className="text-text-muted hover:text-text-main"
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -445,7 +445,7 @@ function AppointmentTypeSelect({
               onClick={() => setOpen(false)}
             />
             <div
-              className="z-[9999] bg-white border border-mountain-200 rounded shadow-lg max-h-48 overflow-y-auto min-w-[200px]"
+              className="z-[9999] bg-surface border border-border-base rounded shadow-lg max-h-48 overflow-y-auto min-w-[200px]"
               style={{
                 position: "fixed",
                 top: coords ? coords.top : -9999,
@@ -454,14 +454,14 @@ function AppointmentTypeSelect({
               }}
             >
               {filtered.length === 0 ? (
-                <p className="px-3 py-2 text-[12px] text-mountain-400">
+                <p className="px-3 py-2 text-[12px] text-text-muted">
                   No types found
                 </p>
               ) : (
                 filtered.map((t) => (
                   <button
                     key={t.id}
-                    className={`w-full text-left px-3 py-2 hover:bg-teal-50 text-[12.5px] text-mountain-800 ${t.id === value ? "bg-teal-50 font-medium" : ""}`}
+                    className={`w-full text-left px-3 py-2 hover:bg-primary/10 text-[12.5px] text-text-main ${t.id === value ? "bg-primary/10 font-medium" : ""}`}
                     type="button"
                     onClick={() => {
                       onChange(t.id);
@@ -547,13 +547,13 @@ function ReferralSourceSelect({
   return (
     <div ref={triggerRef} className="relative w-full">
       <div
-        className="flex items-center w-full h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800 cursor-text"
+        className="flex items-center w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main cursor-text"
         onClick={() => setOpen(true)}
       >
-        <IoSearchOutline className="mr-2 text-mountain-400 w-3.5 h-3.5" />
+        <IoSearchOutline className="mr-2 text-text-muted w-3.5 h-3.5" />
         <input
           autoComplete="off"
-          className="flex-1 bg-transparent outline-none placeholder:text-mountain-300"
+          className="flex-1 bg-transparent outline-none placeholder:text-text-muted/60"
           placeholder={loading ? "Loading..." : "Search source..."}
           type="text"
           value={selected && !open ? selected.name : q}
@@ -565,7 +565,7 @@ function ReferralSourceSelect({
         />
         {value && (
           <button
-            className="text-mountain-400 hover:text-mountain-700"
+            className="text-text-muted hover:text-text-main"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -585,16 +585,16 @@ function ReferralSourceSelect({
             className="fixed inset-0 z-[100]"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-0 right-0 top-full mt-1 z-[101] bg-white border border-mountain-200 rounded shadow-lg max-h-48 overflow-y-auto">
+          <div className="absolute left-0 right-0 top-full mt-1 z-[101] bg-surface border border-border-base rounded shadow-lg max-h-48 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-mountain-400">
+              <p className="px-3 py-2 text-[12px] text-text-muted">
                 {q ? "No partners found" : "No referral partners registered"}
               </p>
             ) : (
               filtered.map((p) => (
                 <button
                   key={p.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-teal-50 transition-colors ${p.id === value ? "bg-teal-50" : ""}`}
+                  className={`w-full text-left px-3 py-2 hover:bg-primary/10 transition-colors ${p.id === value ? "bg-primary/10" : ""}`}
                   type="button"
                   onClick={() => {
                     onChange(p.id!, p.name, p.rawType);
@@ -602,10 +602,10 @@ function ReferralSourceSelect({
                     setOpen(false);
                   }}
                 >
-                  <p className="text-[12.5px] text-mountain-800 font-medium">
+                  <p className="text-[12.5px] text-text-main font-medium">
                     {p.name}
                   </p>
-                  <p className="text-[11px] text-mountain-400 capitalize">
+                  <p className="text-[11px] text-text-muted capitalize">
                     {p.type}
                   </p>
                 </button>
@@ -631,19 +631,19 @@ function ConversionIndicator({
   if (!converting) return null;
 
   return (
-    <div className="mt-1 p-2 bg-teal-50 border border-teal-200 rounded">
+    <div className="mt-1 p-2 bg-primary/10 border border-primary/20 rounded">
       <div className="flex items-center gap-1.5 mb-1">
         <Spinner size="xs" />
-        <span className="text-[11px] text-teal-700 font-medium">
+        <span className="text-[11px] text-primary font-medium">
           {message || "Converting…"}
         </span>
-        <span className="ml-auto text-[10px] text-teal-500">
+        <span className="ml-auto text-[10px] text-text-muted">
           {Math.round(progress)}%
         </span>
       </div>
-      <div className="h-1 bg-teal-200 rounded-full overflow-hidden">
+      <div className="h-1 bg-primary/10 rounded-full overflow-hidden">
         <div
-          className="h-full bg-teal-600 rounded-full transition-all duration-300"
+          className="h-full bg-primary rounded-full transition-all duration-300"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -662,12 +662,12 @@ function SectionHeader({
   subtitle?: string;
 }) {
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 bg-mountain-50 border-b border-mountain-100">
-      <span className="text-teal-600">{icon}</span>
+    <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-2 border-b border-border-base/50">
+      <span className="text-primary">{icon}</span>
       <div>
-        <h3 className="text-[13px] font-semibold text-mountain-800">{title}</h3>
+        <h3 className="text-[13px] font-semibold text-text-main">{title}</h3>
         {subtitle && (
-          <p className="text-[11px] text-mountain-400">{subtitle}</p>
+          <p className="text-[11px] text-text-muted">{subtitle}</p>
         )}
       </div>
     </div>
@@ -676,11 +676,11 @@ function SectionHeader({
 
 // ── Appointment status badge ──────────────────────────────────────────────────
 const STATUS_BADGE: Record<string, string> = {
-  scheduled: "bg-teal-100 text-teal-700 border-teal-200",
-  completed: "bg-health-100 text-health-700 border-health-200",
-  cancelled: "bg-red-100 text-red-700 border-red-200",
-  "no-show": "bg-saffron-100 text-saffron-700 border-saffron-200",
-  "in-progress": "bg-mountain-100 text-mountain-700 border-mountain-200",
+  scheduled: "bg-primary/10 text-primary border-primary/20",
+  completed: "bg-health-500/10 text-health-600 border-health-500/20",
+  cancelled: "bg-error/10 text-error border-error/20",
+  "no-show": "bg-orange-500/10 text-orange-600 border-orange-500/20",
+  "in-progress": "bg-surface-2 text-text-main border-border-base",
 };
 
 // ── ConversionProgress type ───────────────────────────────────────────────────
@@ -1360,17 +1360,17 @@ const NewPatientPage: React.FC = () => {
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <button
-          className="p-1.5 rounded border border-mountain-200 text-mountain-500 hover:text-teal-700 hover:border-teal-400 transition-colors"
+          className="p-1.5 rounded border border-border-base text-text-muted hover:text-primary hover:border-primary transition-colors"
           type="button"
           onClick={() => navigate(-1)}
         >
           <IoArrowBackOutline className="w-4 h-4" />
         </button>
         <div>
-          <h1 className="text-page-title text-mountain-900 leading-tight">
+          <h1 className="text-page-title text-text-main leading-tight">
             Add New Patient
           </h1>
-          <p className="text-[13px] text-mountain-400">
+          <p className="text-[13px] text-text-muted">
             Register a new patient and optionally schedule their first
             appointment
           </p>
@@ -1378,7 +1378,7 @@ const NewPatientPage: React.FC = () => {
       </div>
 
       {/* ── Step tracker ────────────────────────────────────────────────── */}
-      <div className="flex items-center bg-white border border-mountain-200 rounded px-4 py-3">
+      <div className="flex items-center bg-surface border border-border-base rounded px-4 py-3">
         {[
           {
             n: 1,
@@ -1400,32 +1400,32 @@ const NewPatientPage: React.FC = () => {
                 <div
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 border-2 transition-colors
                   ${done
-                      ? "bg-teal-600 border-teal-600 text-white"
+                      ? "bg-primary border-primary text-white"
                       : active
-                        ? "bg-white border-teal-600 text-teal-700"
-                        : "bg-white border-mountain-200 text-mountain-400"
+                        ? "bg-surface border-primary text-primary"
+                        : "bg-surface border-border-base text-text-muted"
                     }`}
                 >
                   {done ? <IoCheckmarkCircleOutline className="w-4 h-4" /> : n}
                 </div>
                 <div className="hidden sm:block">
                   <p
-                    className={`text-[12px] font-semibold ${active ? "text-teal-700" : done ? "text-teal-600" : "text-mountain-400"}`}
+                    className={`text-[12px] font-semibold ${active ? "text-primary" : done ? "text-primary" : "text-text-muted"}`}
                   >
                     {label}
                   </p>
-                  <p className="text-[10.5px] text-mountain-400">{sub}</p>
+                  <p className="text-[10.5px] text-text-muted">{sub}</p>
                 </div>
               </div>
               {i < 1 && (
                 <div
-                  className={`flex-1 h-px mx-4 ${done ? "bg-teal-400" : "bg-mountain-200"}`}
+                  className={`flex-1 h-px mx-4 ${done ? "bg-primary/40" : "bg-border-base"}`}
                 />
               )}
             </React.Fragment>
           );
         })}
-        <p className="ml-auto text-[11px] text-mountain-400 hidden sm:block">
+        <p className="ml-auto text-[11px] text-text-muted hidden sm:block">
           Step {step} of {TOTAL_STEPS}
         </p>
       </div>
@@ -1436,7 +1436,7 @@ const NewPatientPage: React.FC = () => {
         {step === 1 && (
           <>
             {/* Patient Info Card */}
-            <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+            <div className="bg-surface border border-border-base rounded overflow-hidden">
               <SectionHeader
                 icon={<IoPersonOutline className="w-4 h-4" />}
                 subtitle="Basic demographics and contact info"
@@ -1650,7 +1650,7 @@ const NewPatientPage: React.FC = () => {
 
                 {/* Picture upload */}
                 <Field label="Patient Picture">
-                  <label className="relative flex items-center h-9 border border-mountain-200 rounded bg-white cursor-pointer hover:border-teal-400 transition-colors px-2.5 gap-2">
+                  <label className="relative flex items-center h-9 border border-border-base rounded bg-surface cursor-pointer hover:border-primary transition-colors px-2.5 gap-2">
                     <input
                       accept="image/*"
                       className="sr-only"
@@ -1662,13 +1662,13 @@ const NewPatientPage: React.FC = () => {
                         }))
                       }
                     />
-                    <IoPersonOutline className="w-3.5 h-3.5 text-mountain-400 shrink-0" />
-                    <span className="text-[12px] text-mountain-500 flex-1 truncate">
+                    <IoPersonOutline className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                    <span className="text-[12px] text-text-muted flex-1 truncate">
                       {profile.picture
                         ? profile.picture.name
                         : "Choose image file"}
                     </span>
-                    <span className="text-[10px] bg-mountain-100 text-mountain-600 px-1.5 py-0.5 rounded shrink-0">
+                    <span className="text-[10px] bg-surface-2 text-text-main px-1.5 py-0.5 rounded shrink-0">
                       Browse
                     </span>
                   </label>
@@ -1716,7 +1716,7 @@ const NewPatientPage: React.FC = () => {
             </div>
 
             {/* Additional Info Card */}
-            <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+            <div className="bg-surface border border-border-base rounded overflow-hidden">
               <SectionHeader
                 icon={<IoPersonOutline className="w-4 h-4" />}
                 subtitle="Optional demographic details"
@@ -1750,7 +1750,7 @@ const NewPatientPage: React.FC = () => {
             </div>
 
             {/* Medical Conditions Card */}
-            <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+            <div className="bg-surface border border-border-base rounded overflow-hidden">
               <SectionHeader
                 icon={<IoPersonOutline className="w-4 h-4" />}
                 subtitle="Pre-existing conditions and allergies"
@@ -1759,7 +1759,7 @@ const NewPatientPage: React.FC = () => {
               <div className="p-4 space-y-3">
                 <div className="flex gap-2">
                   <input
-                    className="flex-1 h-8 px-2.5 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+                    className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary placeholder:text-text-muted/60"
                     placeholder="Type condition and press Enter or Add…"
                     type="text"
                     value={conditionInput}
@@ -1783,7 +1783,7 @@ const NewPatientPage: React.FC = () => {
                     {profile.medicalConditions.map((c) => (
                       <span
                         key={c}
-                        className="inline-flex items-center gap-1 text-[11px] bg-mountain-100 text-mountain-700 border border-mountain-200 px-2 py-0.5 rounded"
+                        className="inline-flex items-center gap-1 text-[11px] bg-surface-2 text-text-main border border-border-base px-2 py-0.5 rounded"
                       >
                         {c}
                         <button
@@ -1805,7 +1805,7 @@ const NewPatientPage: React.FC = () => {
         {/* ═══ STEP 2: Schedule Appointment ═══ */}
         {step === 2 && (
           <>
-            <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+            <div className="bg-surface border border-border-base rounded overflow-hidden">
               <SectionHeader
                 icon={<IoCalendarOutline className="w-4 h-4" />}
                 subtitle="Optional — can be added later from the patient's profile"
@@ -1953,13 +1953,13 @@ const NewPatientPage: React.FC = () => {
 
             {/* Existing appointments for selected date */}
             {appt.appointmentDate && (
-              <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2.5 bg-mountain-50 border-b border-mountain-100">
+              <div className="bg-surface border border-border-base rounded overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-surface-2 border-b border-border-base/50">
                   <div>
-                    <h3 className="text-[13px] font-semibold text-mountain-800">
+                    <h3 className="text-[13px] font-semibold text-text-main">
                       Existing Appointments
                     </h3>
-                    <p className="text-[11px] text-mountain-400">
+                    <p className="text-[11px] text-text-muted">
                       {new Date(appt.appointmentDate).toLocaleDateString(
                         "en-US",
                         {
@@ -1979,14 +1979,14 @@ const NewPatientPage: React.FC = () => {
                     <Spinner label="Loading…" size="sm" />
                   </div>
                 ) : existingAppointments.length === 0 ? (
-                  <div className="py-8 text-center text-[13px] text-mountain-400">
+                  <div className="py-8 text-center text-[13px] text-text-muted">
                     No appointments on this date
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full">
                       <thead>
-                        <tr className="bg-mountain-50 border-b border-mountain-100">
+                        <tr className="bg-surface-2 border-b border-border-base/50">
                           {[
                             "Patient",
                             "Doctor",
@@ -1997,7 +1997,7 @@ const NewPatientPage: React.FC = () => {
                           ].map((h) => (
                             <th
                               key={h}
-                              className="py-2 px-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-mountain-400"
+                              className="py-2 px-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted"
                             >
                               {h}
                             </th>
@@ -2006,29 +2006,29 @@ const NewPatientPage: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-mountain-100">
                         {existingAppointments.map((a) => (
-                          <tr key={a.id} className="hover:bg-slate-50">
-                            <td className="py-2 px-3 text-[12px] text-mountain-700">
+                          <tr key={a.id} className="hover:bg-surface-2/50">
+                            <td className="py-2 px-3 text-[12px] text-text-main">
                               {getPatientName(a.patientId)}
                             </td>
-                            <td className="py-2 px-3 text-[12px] text-mountain-600">
+                            <td className="py-2 px-3 text-[12px] text-text-muted">
                               {getDoctorName(a.doctorId)}
                             </td>
-                            <td className="py-2 px-3 text-[12px] text-mountain-600 whitespace-nowrap">
+                            <td className="py-2 px-3 text-[12px] text-text-muted whitespace-nowrap">
                               {a.startTime && a.endTime
                                 ? `${fmtTime(a.startTime)} – ${fmtTime(a.endTime)}`
                                 : a.startTime
                                   ? fmtTime(a.startTime)
                                   : "—"}
                             </td>
-                            <td className="py-2 px-3 text-[12px] text-mountain-600">
+                            <td className="py-2 px-3 text-[12px] text-text-muted">
                               {getApptTypeName(a.appointmentTypeId)}
                             </td>
-                            <td className="py-2 px-3 text-[12px] text-mountain-500 max-w-[150px] truncate">
+                            <td className="py-2 px-3 text-[12px] text-text-muted max-w-[150px] truncate">
                               {a.reason || "—"}
                             </td>
                             <td className="py-2 px-3">
                               <span
-                                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${STATUS_BADGE[a.status?.toLowerCase()] || "bg-mountain-100 text-mountain-600 border-mountain-200"}`}
+                                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${STATUS_BADGE[a.status?.toLowerCase()] || "bg-surface-2 text-text-main border-border-base"}`}
                               >
                                 {a.status || "unknown"}
                               </span>

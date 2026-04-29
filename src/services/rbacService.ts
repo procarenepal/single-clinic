@@ -1435,6 +1435,62 @@ export const rbacService = {
   // =================== INITIALIZATION ===================
 
   /**
+   * Initialize system-level permissions and roles
+   */
+  async initializeSystemPermissions(): Promise<void> {
+    try {
+      const rolesRef = collection(db, ROLES_COLLECTION);
+
+      const systemRoles = [
+        {
+          id: "system-owner",
+          name: "System Owner",
+          description: "Full access to all system features",
+          clinicId: null,
+          permissions: ["*"],
+          isDefault: true,
+          isBranchSpecific: false,
+          linkedToDoctor: false,
+        },
+        {
+          id: "clinic-admin",
+          name: "Clinic Administrator",
+          description: "Full administrative access to a clinic",
+          clinicId: null,
+          permissions: [
+            "dashboard:*",
+            "patients:*",
+            "appointments:*",
+            "doctors:*",
+            "settings:*",
+          ],
+          isDefault: true,
+          isBranchSpecific: false,
+          linkedToDoctor: false,
+        },
+      ];
+
+      const batch = writeBatch(db);
+
+      for (const roleData of systemRoles) {
+        // Use the ID as the document ID
+        const docRef = doc(rolesRef, roleData.id);
+        batch.set(docRef, {
+          ...roleData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      console.log("System permissions initialized successfully.");
+    } catch (error) {
+      console.error("Error initializing system permissions:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Create default clinic admin role when a new clinic is created
    */
   async createDefaultClinicAdminRole(clinicId: string): Promise<string> {

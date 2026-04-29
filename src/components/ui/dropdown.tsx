@@ -265,8 +265,8 @@ export interface DropdownItemProps {
 const ITEM_COLOR: Record<NonNullable<DropdownItemProps["color"]>, string> = {
   default: "text-text-main hover:bg-surface-3",
   primary: "text-primary hover:bg-primary/10",
-  danger: "text-red-500 hover:bg-red-500/10",
-  warning: "text-amber-500 hover:bg-amber-500/10",
+  danger: "text-error hover:bg-error/10",
+  warning: "text-warning hover:bg-warning/10",
 };
 
 export const DropdownItem: React.FC<DropdownItemProps> = ({
@@ -306,13 +306,13 @@ export const DropdownItem: React.FC<DropdownItemProps> = ({
       <span className="flex-1 text-left">
         {children}
         {description && (
-          <span className="block text-[10px] text-mountain-400 mt-0.5 font-normal">
+          <span className="block text-[10px] text-text-muted mt-0.5 font-normal">
             {description}
           </span>
         )}
       </span>
       {endContent && (
-        <span className="shrink-0 text-mountain-400">{endContent}</span>
+        <span className="shrink-0 text-text-muted">{endContent}</span>
       )}
     </>
   );
@@ -361,12 +361,12 @@ export const DropdownSection: React.FC<DropdownSectionProps> = ({
   <div
     className={clsx(
       "py-1",
-      showDivider && "border-b border-mountain-100",
+      showDivider && "border-b border-border-base",
       className,
     )}
   >
     {title && (
-      <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-mountain-400">
+      <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
         {title}
       </div>
     )}

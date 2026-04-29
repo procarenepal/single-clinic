@@ -409,7 +409,6 @@ export const pathologyBillingService = {
       let q = query(
         billingRef,
         where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
       );
 
       if (branchId) {
@@ -417,7 +416,6 @@ export const pathologyBillingService = {
           billingRef,
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
-          orderBy("createdAt", "desc"),
         );
       }
 
@@ -438,7 +436,12 @@ export const pathologyBillingService = {
         } as PathologyBilling);
       });
 
-      return billings;
+      // Sort by createdAt descending in memory to avoid index error
+      return billings.sort((a, b) => {
+        const dateA = a.createdAt?.getTime() || 0;
+        const dateB = b.createdAt?.getTime() || 0;
+        return dateB - dateA;
+      });
     } catch (error) {
       console.error("Error getting pathology billing by clinic:", error);
       throw error;

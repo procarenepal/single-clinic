@@ -31,19 +31,19 @@ export interface SelectProps
 }
 
 const baseWrapper =
-  "flex items-center gap-2 rounded-md border bg-white dark:bg-zinc-950 text-mountain-900 dark:text-zinc-100 border-mountain-200 dark:border-zinc-800 focus-within:ring-2 " +
-  "focus-within:ring-nepal-500 focus-within:border-nepal-500 transition-all duration-200";
+  "flex items-center gap-2 rounded-md border bg-surface text-text-main border-border-base focus-within:ring-2 " +
+  "focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200 min-h-[40px] w-full";
 
 const variantClasses: Record<NonNullable<SelectProps["variant"]>, string> = {
-  bordered: "border-mountain-200 bg-white",
-  flat: "border-transparent bg-mountain-50",
-  underlined: "border-0 border-b border-mountain-200 rounded-none",
+  bordered: "border-border-base bg-surface",
+  flat: "border-transparent bg-surface-2",
+  underlined: "border-0 border-b border-border-base rounded-none",
 };
 
 const sizeClasses: Record<NonNullable<SelectProps["size"]>, string> = {
-  sm: "h-8 text-xs",
-  md: "h-10 text-sm",
-  lg: "h-11 text-base",
+  sm: "min-h-[32px] text-xs",
+  md: "min-h-[40px] text-sm",
+  lg: "min-h-[44px] text-base",
 };
 
 const radiusClasses: Record<NonNullable<SelectProps["radius"]>, string> = {
@@ -62,7 +62,7 @@ export const Select: React.FC<SelectProps> = ({
   size = "md",
   isRequired,
   isDisabled,
-  fullWidth,
+  fullWidth = true,
   selectedKeys,
   defaultSelectedKeys,
   onSelectionChange,
@@ -116,59 +116,68 @@ export const Select: React.FC<SelectProps> = ({
     items.find((i) => String(i.key) === String(currentKey))?.label ?? "";
 
   return (
-    <div className={clsx("flex flex-col gap-1", fullWidth && "w-full", className)}>
+    <div className={clsx("flex flex-col gap-1.5 w-full", className)}>
       {label && (
-        <label className="text-xs font-medium text-mountain-700 dark:text-zinc-400">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
+          {isRequired && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
-      <div
-        className={clsx(
-          baseWrapper,
-          "px-2.5",
-          variantClasses[variant],
-          radiusClasses[radius],
-          sizeClasses[size],
-          fullWidth && "w-full",
-          errorMessage && "!border-red-500 focus-within:ring-red-500",
-          classNames?.trigger,
-        )}
-      >
+      <div className="relative w-full">
         <select
           {...rest}
           className={clsx(
-            "flex-1 bg-transparent outline-none border-none text-[13px] text-mountain-900 dark:text-zinc-100",
-            "appearance-none pr-6",
+            "w-full min-h-[40px] bg-surface border border-border-base text-text-main text-[13.5px] rounded-md px-4 py-2 outline-none",
+            "appearance-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer",
+            errorMessage && "!border-red-500",
             classNames?.value,
           )}
+          style={{ colorScheme: "inherit" }}
           disabled={isDisabled ?? rest.disabled}
           required={isRequired ?? rest.required}
           value={currentKey !== undefined ? String(currentKey) : ""}
           onChange={handleChange}
         >
-          {placeholder && <option value="">{placeholder}</option>}
+          {placeholder && (
+            <option disabled hidden value="">
+              {placeholder}
+            </option>
+          )}
           {items.map((item) => (
             <option key={item.key} value={String(item.key)}>
               {item.label}
             </option>
           ))}
+          {React.Children.map(children, (child: any) => {
+            if (child?.type?.name === "SelectItem" || child?.props?.value) {
+              return (
+                <option key={child.props.value} value={child.props.value}>
+                  {child.props.children}
+                </option>
+              );
+            }
+            return child;
+          })}
         </select>
-        <span className="pointer-events-none relative -mr-1 flex h-full items-center text-mountain-400 dark:text-zinc-500">
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted/50">
           <svg
             aria-hidden="true"
             className="w-4 h-4"
-            focusable="false"
-            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
             <path
-              d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z"
-              fill="currentColor"
+              d="M19 9l-7 7-7-7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
             />
           </svg>
         </span>
       </div>
       {description && !errorMessage && (
-        <p className="text-xs text-mountain-500">{description}</p>
+        <p className="text-xs text-text-muted/80">{description}</p>
       )}
       {errorMessage && <p className="text-xs text-red-500">{errorMessage}</p>}
     </div>

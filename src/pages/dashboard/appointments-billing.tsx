@@ -270,14 +270,13 @@ function Toggle({
   return (
     <label className="flex items-center gap-2 cursor-pointer">
       <div
-        className="relative inline-block w-8 h-4.5 rounded-full transition-colors duration-200 ease-in-out"
-        style={{ backgroundColor: checked ? "#0f766e" : "#e2e8f0" }}
+        className={`relative inline-flex items-center w-9 h-5 rounded-full transition-colors duration-200 ease-in-out border border-border-base ${checked ? "bg-primary" : "bg-mountain-600"}`}
       >
         <div
-          className={`absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-transform duration-200 ease-in-out shadow-sm ${checked ? "transform translate-x-3.5" : ""}`}
+          className={`absolute left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out shadow-sm ${checked ? "translate-x-4" : "translate-x-0"}`}
         />
       </div>
-      <span className="text-[12.5px] text-text-muted">{label}</span>
+      <span className="text-[12.5px] text-text-main">{label}</span>
       {/* Hidden checkbox for accessibility/state */}
       <input
         checked={checked}

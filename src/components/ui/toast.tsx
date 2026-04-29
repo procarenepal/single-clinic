@@ -139,29 +139,29 @@ const COLOR_STYLES: Record<
   }
 > = {
   default: {
-    bar: "bg-mountain-400",
+    bar: "bg-text-muted",
     icon: IoInformationCircleOutline,
-    iconCls: "text-mountain-500",
+    iconCls: "text-text-muted",
   },
   primary: {
-    bar: "bg-teal-600",
+    bar: "bg-primary",
     icon: IoInformationCircleOutline,
-    iconCls: "text-teal-600",
+    iconCls: "text-primary",
   },
   success: {
-    bar: "bg-health-600",
+    bar: "bg-success",
     icon: IoCheckmarkCircleOutline,
-    iconCls: "text-health-600",
+    iconCls: "text-success",
   },
   danger: {
-    bar: "bg-red-500",
+    bar: "bg-error",
     icon: IoAlertCircleOutline,
-    iconCls: "text-red-500",
+    iconCls: "text-error",
   },
   warning: {
-    bar: "bg-saffron-500",
+    bar: "bg-warning",
     icon: IoWarningOutline,
-    iconCls: "text-saffron-600",
+    iconCls: "text-warning",
   },
 };
 
@@ -182,7 +182,7 @@ const ToastEl: React.FC<{ toast: ToastItem; onDismiss: () => void }> = ({
         "relative flex items-start gap-2.5 pointer-events-auto",
         "w-[300px] max-w-[90vw]",
         // Flat design — border only, no shadow
-        "bg-white border border-mountain-200 rounded",
+        "bg-surface border border-border-base rounded shadow-lg",
         "px-3 py-2.5 overflow-hidden",
         // Transition
         "transition-all duration-200",
@@ -202,11 +202,11 @@ const ToastEl: React.FC<{ toast: ToastItem; onDismiss: () => void }> = ({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-mountain-900 leading-tight">
+        <p className="text-xs font-semibold text-text-main leading-tight">
           {toast.title}
         </p>
         {toast.description && (
-          <p className="text-xs text-mountain-500 mt-0.5 leading-tight">
+          <p className="text-xs text-text-muted mt-0.5 leading-tight">
             {toast.description}
           </p>
         )}
@@ -215,7 +215,7 @@ const ToastEl: React.FC<{ toast: ToastItem; onDismiss: () => void }> = ({
       {/* Dismiss */}
       <button
         aria-label="Dismiss"
-        className="shrink-0 text-mountain-400 hover:text-mountain-600 transition-colors"
+        className="shrink-0 text-text-muted hover:text-text-main transition-colors"
         type="button"
         onClick={onDismiss}
       >

@@ -122,8 +122,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       "relative group flex items-center px-3 py-1.5 text-[13.5px] font-medium rounded-lg transition-all duration-300 select-none cursor-pointer",
       level > 0 && "ml-3",
       isActive
-        ? "text-teal-600 dark:text-teal-400"
-        : "text-mountain-500 dark:text-zinc-400 hover:text-mountain-900 dark:hover:text-zinc-100",
+        ? "text-primary"
+        : "text-text-muted hover:text-text-main hover:bg-surface-2/50",
     );
 
     return (
@@ -146,17 +146,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               className={clsx(
                 "relative flex items-center flex-1 px-3 py-1.5 text-[13.5px] font-medium transition-all duration-300",
                 isActive
-                  ? "text-teal-600 dark:text-teal-400"
-                  : "text-mountain-500 dark:text-zinc-400 hover:text-mountain-900 dark:hover:text-zinc-100",
+                  ? "text-primary"
+                  : "text-text-muted hover:text-text-main",
               )}
               to={item.href}
             >
               {isActive && (
-                <motion.div
-                  layoutId="active-nav-bg"
-                  className="absolute inset-0 bg-teal-500/10 dark:bg-teal-500/15 rounded-lg z-0"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
+                <>
+                  <motion.div
+                    layoutId="active-nav-bg"
+                    className="absolute inset-0 bg-primary/5 dark:bg-primary/10 rounded-lg z-0"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                  <motion.div
+                    layoutId="active-indicator"
+                    className="absolute left-0 top-1 bottom-1 w-[3px] bg-primary rounded-r-full z-10"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                </>
               )}
               <span className="relative z-10 mr-2 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity [&>svg]:w-4 [&>svg]:h-4">
                 {item.icon}
@@ -181,11 +188,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ) : (
           <Link className={itemBase} to={item.href}>
             {isActive && (
-              <motion.div
-                layoutId="active-nav-bg"
-                className="absolute inset-0 bg-teal-500/10 dark:bg-teal-500/15 rounded-lg z-0"
-                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-              />
+              <>
+                <motion.div
+                  layoutId="active-nav-bg"
+                  className="absolute inset-0 bg-primary/5 dark:bg-primary/10 rounded-lg z-0"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+                <motion.div
+                  layoutId="active-indicator"
+                  className="absolute left-0 top-1.5 bottom-1.5 w-[3px] bg-primary rounded-r-full z-10"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              </>
             )}
             <span className="relative z-10 mr-2 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity [&>svg]:w-4 [&>svg]:h-4">
               {item.icon}
@@ -239,58 +253,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           className={clsx(
             "fixed inset-y-0 top-14 left-0 z-20 w-[220px]",
             "transition-transform duration-200 ease-out",
-            // Theme-aware split-surface
-            "bg-white dark:bg-zinc-950 border-r border-mountain-200 dark:border-zinc-800",
-            "flex flex-col print:hidden",
+            "bg-surface border-r border-border-base flex flex-col print:hidden",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
           style={{ height: "calc(100vh - 3.5rem)" }}
         >
-          {/* User identity strip */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-mountain-100 dark:border-zinc-800">
-            {currentUser && (
-              <>
-                <div className="flex items-center gap-2 min-w-0">
-                  <Avatar
-                    className="shrink-0"
-                    color="primary"
-                    name={
-                      currentUser.displayName ||
-                      currentUser.email?.split("@")[0] ||
-                      "User"
-                    }
-                    size="sm"
-                    src={userData?.photoURL || currentUser?.photoURL || ""}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-[12.5px] font-bold truncate leading-tight text-mountain-900 dark:text-zinc-100">
-                      {currentUser.displayName ||
-                        currentUser.email?.split("@")[0] ||
-                        "User"}
-                    </p>
-                    <p className="text-[11px] truncate text-mountain-400 dark:text-zinc-500">
-                      {formatRole(userData?.role)}
-                    </p>
-                  </div>
-                </div>
 
-                {/* Refresh nav */}
-                <button
-                  className="shrink-0 p-1 rounded transition-colors duration-100 text-mountain-400 dark:text-zinc-500 hover:bg-mountain-100 dark:hover:bg-zinc-800 disabled:opacity-40"
-                  disabled={loading}
-                  title="Refresh navigation"
-                  onClick={refreshNavigation}
-                >
-                  <IoRefreshOutline
-                    className={clsx("w-3.5 h-3.5", loading && "animate-spin")}
-                  />
-                </button>
-              </>
-            )}
-          </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-950">
+          <nav className="flex-1 px-2 py-2 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-950">
             {loading ? (
               // Skeleton
               Array.from({ length: 6 }).map((_, i) => (
@@ -317,28 +288,65 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </button>
               </div>
             ) : navItems.length > 0 ? (
-              navItems.map((item) => renderNavItem(item))
+              (() => {
+                const categories: ("MAIN" | "CLINICAL" | "OPERATIONS" | "ADMIN")[] = [
+                  "MAIN",
+                  "CLINICAL",
+                  "OPERATIONS",
+                  "ADMIN",
+                ];
+
+                return categories.map((cat) => {
+                  const items = navItems.filter((i) => i.category === cat);
+
+                  if (items.length === 0) return null;
+
+                  return (
+                    <div key={cat} className="space-y-0.5">
+                      {cat !== "MAIN" && (
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-mountain-400 dark:text-zinc-500 uppercase tracking-wider">
+                          {cat}
+                        </div>
+                      )}
+                      {items.map((item) => renderNavItem(item))}
+                    </div>
+                  );
+                });
+              })()
             ) : (
               renderNavItem({
                 title: "Dashboard",
                 href: "/dashboard",
                 icon: <IoGridOutline />,
                 children: [],
+                category: "MAIN",
               })
             )}
           </nav>
 
           {/* Bottom action */}
-          <div className="px-3 py-2 shrink-0 border-t border-mountain-100 dark:border-zinc-800">
+          <div className="px-4 py-3 shrink-0 border-t border-border-base bg-surface-2/30 flex gap-2">
             <Button
-              fullWidth
-              className="text-[12.5px] h-[30px] text-mountain-400 dark:text-zinc-500 hover:bg-mountain-50 dark:hover:bg-zinc-800 hover:text-mountain-900 dark:hover:text-zinc-300"
+              className="flex-1 text-[12.5px] h-[32px] text-text-muted hover:bg-surface-3 hover:text-primary transition-all duration-200"
               color="default"
               size="sm"
               startContent={<IoHeadsetOutline className="w-4 h-4" />}
               variant="light"
             >
-              Get Support
+              Support
+            </Button>
+            <Button
+              isIconOnly
+              aria-label="Refresh navigation"
+              className="text-text-muted hover:bg-surface-3 hover:text-primary h-[32px] w-[32px] min-w-0"
+              disabled={loading}
+              title="Refresh navigation"
+              variant="light"
+              onClick={refreshNavigation}
+            >
+              <IoRefreshOutline
+                className={clsx("w-3.5 h-3.5", loading && "animate-spin")}
+              />
             </Button>
           </div>
         </aside>

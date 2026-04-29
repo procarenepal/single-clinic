@@ -63,23 +63,24 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-// Import the services needed for system setup
-import { systemSetupService } from '../src/services/systemSetupService.js';
-import { rbacService } from '../src/services/rbacService.js';
+// Import the services needed for system setup dynamically inside the function
+// to ensure environment variables are loaded first
+// import { systemSetupService } from '../src/services/systemSetupService.js';
+// import { rbacService } from '../src/services/rbacService.js';
 
 // Function to validate email
-function isValidEmail(email) {
+function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
 
 // Function to validate password
-function isValidPassword(password) {
+function isValidPassword(password: string): boolean {
   return password.length >= 8;
 }
 
 // Promisify readline question
-function question(query) {
+function question(query: string): Promise<string> {
   return new Promise(resolve => {
     rl.question(query, resolve);
   });
@@ -88,16 +89,20 @@ function question(query) {
 // Main initialization function
 async function initializeSystem() {
   console.log('\n=== Procare Software System Initialization ===\n');
-  
+
   try {
+    // Dynamically import services
+    const { systemSetupService } = await import('../src/services/systemSetupService.js');
+    const { rbacService } = await import('../src/services/rbacService.js');
+
     // Check if system is already initialized
     const isInitialized = await systemSetupService.isSystemInitialized();
-    
+
     if (isInitialized) {
       console.log('\n⚠️  System is already initialized and a super admin already exists.');
-      
+
       const resetConfirmation = await question('Do you want to reset the initialization status? (This will NOT delete existing data) (y/N): ');
-      
+
       if (resetConfirmation.toLowerCase() === 'y') {
         await systemSetupService.resetSystemInitialization();
         console.log('System initialization status has been reset.');
@@ -107,66 +112,66 @@ async function initializeSystem() {
         return;
       }
     }
-    
+
     console.log('\n📋 Creating Super Admin Account');
     console.log('This account will have full access to manage the entire platform.\n');
-    
+
     // Get super admin email
     let email = '';
     while (!isValidEmail(email)) {
       email = (await question('Enter Super Admin Email: ')).trim();
-      
+
       if (!isValidEmail(email)) {
         console.log('❌ Invalid email format. Please enter a valid email.');
       }
     }
-    
+
     // Get super admin password
     let password = '';
     while (!isValidPassword(password)) {
       password = (await question('Enter Super Admin Password (min 8 characters): ')).trim();
-      
+
       if (!isValidPassword(password)) {
         console.log('❌ Password must be at least 8 characters long.');
       }
     }
-    
+
     // Get display name
     let displayName = '';
     while (!displayName) {
       displayName = (await question('Enter Super Admin Name: ')).trim();
-      
+
       if (!displayName) {
         console.log('❌ Name cannot be empty.');
       }
     }
-    
+
     // Confirm details
     console.log('\n--- Please confirm the details ---');
     console.log(`Email: ${email}`);
     console.log(`Name: ${displayName}`);
-    
+
     const confirmDetails = await question('\nIs this information correct? (Y/n): ');
-    
+
     if (confirmDetails.toLowerCase() === 'n') {
       console.log('Operation cancelled by user.');
       rl.close();
       return;
     }
-    
+
     console.log('\n🔄 Creating super admin account...');
-    
+
     // Initialize system permissions
     console.log('🔄 Initializing system permissions...');
     await rbacService.initializeSystemPermissions();
-    
+
     // Create super admin
     const superAdminId = await systemSetupService.createSuperAdmin(email, password, displayName);
-    
+
     console.log(`\n✅ Super Admin created successfully with ID: ${superAdminId}`);
     console.log(`✅ System has been initialized successfully.`);
     console.log('\n🔐 You can now log in with the super admin credentials at the login page.');
-    
+
   } catch (error) {
     console.error('\n❌ Error during system initialization:');
     console.error(error);

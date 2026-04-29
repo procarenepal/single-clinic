@@ -30,9 +30,9 @@ export interface InputProps
 }
 
 const SIZE_WRAPPER: Record<NonNullable<InputProps["size"]>, string> = {
-  sm: "h-7  text-xs",
-  md: "h-8  text-xs",
-  lg: "h-9  text-sm",
+  sm: "min-h-[32px] text-xs",
+  md: "min-h-[40px] text-xs",
+  lg: "min-h-[44px] text-sm",
 };
 
 const SIZE_INNER: Record<NonNullable<InputProps["size"]>, string> = {
@@ -54,7 +54,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       isClearable,
       onClear,
       onValueChange,
-      fullWidth,
+      fullWidth = true,
       className,
       isRequired,
       isReadOnly,
@@ -88,33 +88,28 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div
         className={clsx(
-          "flex flex-col gap-0.5",
-          fullWidth && "w-full",
+          "flex flex-col gap-1.5 w-full min-w-0",
           classNames?.base,
         )}
       >
         {label && (
           <label
             className={clsx(
-              "text-xs font-medium text-mountain-700 dark:text-zinc-400",
+              "text-xs font-medium text-text-main",
               classNames?.label,
             )}
           >
             {label}
-            {isRequired && <span className="text-red-500 ml-0.5">*</span>}
+            {isRequired && <span className="text-error ml-0.5">*</span>}
           </label>
         )}
 
         {/* Input wrapper */}
         <div
           className={clsx(
-            "flex items-center gap-1 rounded border transition-colors duration-200",
-            variant === "flat"
-              ? "bg-mountain-50 dark:bg-zinc-900 border-mountain-100 dark:border-zinc-800"
-              : "bg-white dark:bg-zinc-950 border-mountain-200 dark:border-zinc-800",
-            "focus-within:border-teal-600 focus-within:ring-1 focus-within:ring-teal-600/20",
+            "flex items-center gap-2 rounded-md border bg-surface text-text-main border-border-base focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200 min-h-[40px] w-full",
             (isInvalid || errorMessage) &&
-            "!border-red-400 focus-within:!ring-red-400/20",
+            "!border-error focus-within:!ring-error/20",
             isDisabled && "opacity-50 cursor-not-allowed",
             SIZE_WRAPPER[size],
             fullWidth && "w-full",
@@ -123,7 +118,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           )}
         >
           {startContent && (
-            <span className="pl-2 shrink-0 text-mountain-400 inline-flex items-center">
+            <span className="pl-2 shrink-0 text-text-muted inline-flex items-center">
               {startContent}
             </span>
           )}
@@ -132,7 +127,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             className={clsx(
               "flex-1 min-w-0 h-full bg-transparent outline-none border-none",
-              "placeholder:text-mountain-400 dark:placeholder:text-zinc-600 text-mountain-900 dark:text-zinc-100",
+              "placeholder:text-text-muted/60 text-text-main",
               !startContent && "pl-2",
               !endContent && !isClearable && "pr-2",
               SIZE_INNER[size],
@@ -165,10 +160,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         </div>
 
         {description && !errorMessage && (
-          <p className="text-[11px] text-mountain-500">{description}</p>
+          <p className="text-[11px] text-text-muted">{description}</p>
         )}
         {errorMessage && (
-          <p className="text-[11px] text-red-500">{errorMessage}</p>
+          <p className="text-[11px] text-error">{errorMessage}</p>
         )}
       </div>
     );
@@ -194,7 +189,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       label,
       description,
       errorMessage,
-      fullWidth,
+      fullWidth = true,
       className,
       isInvalid,
       isDisabled,
@@ -205,19 +200,19 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ) => (
     <div className={clsx("flex flex-col gap-0.5", fullWidth && "w-full")}>
       {label && (
-        <label className="text-xs font-medium text-mountain-700 dark:text-zinc-400">
+        <label className="text-xs font-medium text-text-main">
           {label}
-          {isRequired && <span className="text-red-500 ml-0.5">*</span>}
+          {isRequired && <span className="text-error ml-0.5">*</span>}
         </label>
       )}
       <textarea
         ref={ref}
         className={clsx(
-          "w-full rounded border border-mountain-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1.5",
-          "text-xs text-mountain-900 dark:text-zinc-100 placeholder:text-mountain-400 dark:placeholder:text-zinc-600",
-          "focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600/20",
+          "w-full rounded border border-border-base bg-surface px-2.5 py-1.5",
+          "text-xs text-text-main placeholder:text-text-muted/60",
+          "focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20",
           "transition-colors duration-200 resize-y",
-          (isInvalid || errorMessage) && "!border-red-400",
+          (isInvalid || errorMessage) && "!border-error",
           isDisabled && "opacity-50 cursor-not-allowed",
           className,
         )}
@@ -225,10 +220,10 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         {...rest}
       />
       {description && !errorMessage && (
-        <p className="text-[11px] text-mountain-500">{description}</p>
+        <p className="text-[11px] text-text-muted">{description}</p>
       )}
       {errorMessage && (
-        <p className="text-[11px] text-red-500">{errorMessage}</p>
+        <p className="text-[11px] text-error">{errorMessage}</p>
       )}
     </div>
   ),

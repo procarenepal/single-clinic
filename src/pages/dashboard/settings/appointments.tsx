@@ -33,11 +33,13 @@ import {
   getAppointmentColorById,
 } from "@/utils/appointmentColors";
 import { useModalState } from "@/hooks/useModalState";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function AppointmentSettingsPage() {
   const modalState = useModalState(false);
   const { clinicId, branchId, currentUser, userData, isClinicAdmin } =
     useAuthContext();
+  const { isDark } = useTheme();
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
     [],
   );
@@ -342,7 +344,7 @@ export default function AppointmentSettingsPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className={title({ size: "lg" })}>Appointment Configuration</h1>
-            <p className="mt-1 text-mountain-500">
+            <p className="mt-1 text-text-muted">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
           </div>
@@ -486,18 +488,15 @@ export default function AppointmentSettingsPage() {
                             <div className="flex items-center gap-2 mb-1">
                               {type.color !== "none" ? (
                                 <div
-                                  className="w-4 h-4 rounded-full border border-mountain-300"
                                   style={{
-                                    backgroundColor: getAppointmentColorById(
-                                      type.color,
-                                    ).lightColor,
-                                    boxShadow: `0 0 0 2px ${getAppointmentColorById(type.color).lightBg}`,
+                                    backgroundColor: isDark ? getAppointmentColorById(type.color).darkColor : getAppointmentColorById(type.color).lightColor,
+                                    boxShadow: `0 0 0 2px ${isDark ? getAppointmentColorById(type.color).darkBg : getAppointmentColorById(type.color).lightBg}`,
                                   }}
                                 />
                               ) : (
-                                <div className="w-4 h-4 rounded-full border-2 border-dashed border-mountain-300 bg-mountain-50" />
+                                <div className="w-4 h-4 rounded-full border-2 border-dashed border-border-base bg-surface-2" />
                               )}
-                              <h4 className="font-semibold">{type.name}</h4>
+                              <h4 className="font-semibold text-text-main">{type.name}</h4>
                               <Chip
                                 color={type.isActive ? "success" : "default"}
                                 size="sm"
@@ -562,6 +561,7 @@ export default function AppointmentSettingsPage() {
       >
         <ModalContent>
           <AppointmentTypeModal
+            isDark={isDark}
             isLoading={isLoading}
             modalState={modalState}
             type={editingType}
@@ -581,12 +581,14 @@ function AppointmentTypeModal({
   onClose,
   modalState,
   isLoading,
+  isDark,
 }: {
   type: AppointmentType | null;
   onSave: (type: Partial<AppointmentType>) => void;
   onClose: () => void;
   modalState: ReturnType<typeof useModalState>;
   isLoading: boolean;
+  isDark: boolean;
 }) {
   const [formData, setFormData] = useState<Partial<AppointmentType>>(
     type || {
@@ -667,7 +669,7 @@ function AppointmentTypeModal({
             </label>
 
             {/* Selected color preview */}
-            <div className="flex items-center gap-2 rounded border border-mountain-200 bg-mountain-50 px-3 py-2">
+            <div className="flex items-center gap-2 rounded border border-border-base bg-surface-2 px-3 py-2">
               {(() => {
                 const selected = getAppointmentColorById(
                   formData.color || "none",
@@ -676,8 +678,8 @@ function AppointmentTypeModal({
                 if (!selected || selected.id === "none") {
                   return (
                     <>
-                      <div className="w-4 h-4 rounded-full border-2 border-dashed border-mountain-300 bg-mountain-50" />
-                      <span className="text-xs text-mountain-500">
+                      <div className="w-4 h-4 rounded-full border-2 border-dashed border-border-base bg-surface-3" />
+                      <span className="text-xs text-text-muted">
                         No specific color — uses default styling
                       </span>
                     </>
@@ -687,18 +689,18 @@ function AppointmentTypeModal({
                 return (
                   <>
                     <div
-                      className="w-4 h-4 rounded-full border border-mountain-300"
+                      className="w-4 h-4 rounded-full border border-border-base"
                       style={{
-                        backgroundColor: selected.lightColor,
-                        boxShadow: `0 0 0 2px ${selected.lightBg}`,
+                        backgroundColor: isDark ? selected.darkColor : selected.lightColor,
+                        boxShadow: `0 0 0 2px ${isDark ? selected.darkBg : selected.lightBg}`,
                       }}
                     />
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-mountain-800">
+                      <span className="text-xs font-medium text-text-main">
                         {selected.name}
                       </span>
                       {selected.description && (
-                        <span className="text-[11px] text-mountain-500">
+                        <span className="text-[11px] text-text-muted">
                           {selected.description}
                         </span>
                       )}
@@ -719,10 +721,10 @@ function AppointmentTypeModal({
                     key={color.id}
                     className={clsx(
                       "flex items-center gap-2 rounded border px-2 py-1.5 text-left transition-colors",
-                      "bg-white hover:bg-teal-50",
+                      "bg-surface-2 hover:bg-surface-3",
                       isSelected
-                        ? "border-teal-500 ring-1 ring-teal-500/40"
-                        : "border-mountain-200",
+                        ? "border-primary ring-1 ring-primary/40"
+                        : "border-border-base",
                     )}
                     type="button"
                     onClick={() =>
@@ -733,22 +735,22 @@ function AppointmentTypeModal({
                     }
                   >
                     {isNone ? (
-                      <div className="w-4 h-4 rounded-full border-2 border-dashed border-mountain-300 bg-mountain-50" />
+                      <div className="w-4 h-4 rounded-full border-2 border-dashed border-border-base bg-surface-3" />
                     ) : (
                       <div
-                        className="w-4 h-4 rounded-full border border-mountain-300 flex-shrink-0"
+                        className="w-4 h-4 rounded-full border border-border-base flex-shrink-0"
                         style={{
-                          backgroundColor: color.lightColor,
-                          boxShadow: `0 0 0 2px ${color.lightBg}`,
+                          backgroundColor: isDark ? color.darkColor : color.lightColor,
+                          boxShadow: `0 0 0 2px ${isDark ? color.darkBg : color.lightBg}`,
                         }}
                       />
                     )}
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-mountain-800">
+                      <span className="text-xs font-medium text-text-main">
                         {color.name}
                       </span>
                       {color.description && (
-                        <span className="text-[10px] text-mountain-500">
+                        <span className="text-[10px] text-text-muted">
                           {color.description}
                         </span>
                       )}

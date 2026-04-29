@@ -38,18 +38,18 @@ function Toggle({
     <button
       aria-checked={checked}
       aria-label={ariaLabel}
-      className={`relative inline-flex h-6 w-10 shrink-0 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 ${
+      className={`relative inline-flex items-center h-5 w-9 shrink-0 rounded-full border transition-all duration-200 focus:outline-none ${
         checked
-          ? "border-teal-300 bg-teal-600"
-          : "border-mountain-200 bg-mountain-100"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+          ? "border-primary bg-primary"
+          : "border-border-base bg-mountain-600"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-border-focus"}`}
       disabled={disabled}
       role="switch"
       type="button"
       onClick={() => onChange(!checked)}
     >
       <span
-        className={`pointer-events-none inline-block h-5 w-5 rounded-full border border-mountain-200 bg-white shadow-none transition-transform mt-0.5 ${
+        className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
           checked ? "translate-x-4" : "translate-x-0.5"
         }`}
       />
@@ -172,10 +172,10 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-[15px] font-bold text-mountain-900 tracking-tight">
+          <h2 className="text-[15px] font-bold text-text-main tracking-tight">
             Medicine Settings
           </h2>
-          <p className="text-[12.5px] text-mountain-500 mt-1">
+          <p className="text-[12.5px] text-text-muted mt-1">
             Configure your clinic's medicine management settings
           </p>
         </div>
@@ -191,20 +191,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       </div>
 
       {/* Medicine Sales Settings */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-mountain-100 bg-mountain-50/50">
-          <IoCashOutline className="text-teal-700 w-5 h-5" />
-          <h3 className="text-[13px] font-semibold text-mountain-900">
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-base bg-surface-2/50">
+          <IoCashOutline className="text-primary w-5 h-5" />
+          <h3 className="text-[13px] font-semibold text-text-main">
             Medicine Sales
           </h3>
         </div>
         <div className="p-4 space-y-4">
           <div className="flex justify-between items-center gap-4">
             <div>
-              <p className="text-[13px] font-medium text-mountain-900">
+              <p className="text-[13px] font-medium text-text-main">
                 Enable Medicine Sales
               </p>
-              <p className="text-[12px] text-mountain-500 mt-0.5">
+              <p className="text-[12px] text-text-muted mt-0.5">
                 Allow selling medicines and generate invoices
               </p>
             </div>
@@ -220,10 +220,10 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       </div>
 
       {/* Alert Settings */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-mountain-100 bg-mountain-50/50">
-          <IoNotificationsOutline className="text-teal-700 w-5 h-5" />
-          <h3 className="text-[13px] font-semibold text-mountain-900">
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-base bg-surface-2/50">
+          <IoNotificationsOutline className="text-primary w-5 h-5" />
+          <h3 className="text-[13px] font-semibold text-text-main">
             Alert Settings
           </h3>
         </div>
@@ -232,10 +232,10 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           <div className="space-y-4">
             <div className="flex justify-between items-center gap-4">
               <div>
-                <p className="text-[13px] font-medium text-mountain-900">
+                <p className="text-[13px] font-medium text-text-main">
                   Low Stock Alerts
                 </p>
-                <p className="text-[12px] text-mountain-500 mt-0.5">
+                <p className="text-[12px] text-text-muted mt-0.5">
                   Get notified when medicines are running low
                 </p>
               </div>
@@ -277,10 +277,10 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           <div className="space-y-4">
             <div className="flex justify-between items-center gap-4">
               <div>
-                <p className="text-[13px] font-medium text-mountain-900">
+                <p className="text-[13px] font-medium text-text-main">
                   Expiry Alerts
                 </p>
-                <p className="text-[12px] text-mountain-500 mt-0.5">
+                <p className="text-[12px] text-text-muted mt-0.5">
                   Get notified when medicines are about to expire
                 </p>
               </div>

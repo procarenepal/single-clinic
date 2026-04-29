@@ -277,12 +277,12 @@ export default function LabTechnicianManagement({
             {filteredTechnicians.map((technician) => (
               <TableRow key={technician.id}>
                 <TableCell>
-                  <p className="font-medium">{technician.name}</p>
+                  <p className="font-medium text-text-main">{technician.name}</p>
                 </TableCell>
-                <TableCell>{technician.employeeId || "—"}</TableCell>
-                <TableCell>{technician.phone || "—"}</TableCell>
-                <TableCell>{technician.email || "—"}</TableCell>
-                <TableCell>{technician.specialization || "—"}</TableCell>
+                <TableCell className="text-text-main">{technician.employeeId || "—"}</TableCell>
+                <TableCell className="text-text-main">{technician.phone || "—"}</TableCell>
+                <TableCell className="text-text-main">{technician.email || "—"}</TableCell>
+                <TableCell className="text-text-main">{technician.specialization || "—"}</TableCell>
                 <TableCell>
                   <Chip
                     color={technician.isActive ? "success" : "default"}
@@ -322,7 +322,7 @@ export default function LabTechnicianManagement({
         </Table>
       ) : (
         <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-default-500">
+          <p className="text-text-muted">
             {searchQuery ? "No technicians found" : "No lab technicians yet"}
           </p>
         </div>

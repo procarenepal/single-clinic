@@ -118,7 +118,7 @@ export interface Permission {
 // Role with associated permissions
 export interface Role {
   id: string;
-  clinicId: string; // Associated clinic (null for system-defined roles)
+  clinicId: string | null; // Associated clinic (null for system-defined roles)
   branchId?: string; // Associated branch (null for clinic-wide or system-defined roles)
   name: string;
   description: string;

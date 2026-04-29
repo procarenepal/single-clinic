@@ -59,48 +59,47 @@ export default function IndexPage() {
         <div className="flex-1 text-center lg:text-left max-w-2xl">
           <div className="flex flex-wrap gap-2 justify-center lg:justify-start mb-6">
             <span className="flex items-center gap-1.5 bg-[rgb(var(--color-primary-light))] text-[rgb(var(--color-primary))] px-3 py-1 rounded-md text-xs font-semibold tracking-wide uppercase border border-[rgb(var(--color-primary)/0.2)]">
-              <MapPin className="w-4 h-4" /> Built for Nepal
+              <MapPin className="w-4 h-4" /> Comprehensive Care in Nepal
             </span>
             <span className="flex items-center gap-1.5 bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] px-3 py-1 rounded-md text-xs font-semibold tracking-wide uppercase border border-[rgb(var(--color-border))]">
-              <Building2 className="w-4 h-4" /> Trusted by 100+ Clinics
+              <Building2 className="w-4 h-4" /> State-of-the-art Facility
             </span>
           </div>
 
           <h1 className="text-4xl lg:text-5xl lg:leading-[1.15] font-bold mb-6 text-[rgb(var(--color-text))] tracking-tight">
-            Transform <span className="text-[rgb(var(--color-primary))]">Your Practice</span> With
-            Modern Healthcare Technology
+            Excellence in <span className="text-[rgb(var(--color-primary))]">Patient Care</span> &
+            Personalized Medical Services
           </h1>
 
           <p className="mb-8 text-lg lg:text-xl text-[rgb(var(--color-text-muted))] leading-relaxed font-medium">
-            Your patients deserve a seamless experience. Bring your clinic into
-            the future with intelligent digital records, automated appointments,
-            and comprehensive pharmacy management. Take absolute control of your
-            workflow.
+            Your health and comfort are our highest priorities. Experience compassionate healthcare
+            delivered by our team of dedicated specialists using the latest medical technologies.
+            We are here to support your journey to better health.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
             <Link
               className="bg-[rgb(var(--color-primary))] text-white font-medium px-8 py-3.5 text-sm hover:opacity-90 transition-colors rounded border border-[rgb(var(--color-primary))] text-center inline-block"
-              to="/demo"
+              to="/login"
             >
-              Book Your 1-to-1 Demo
+              Book An Appointment
             </Link>
             <Link
               className="bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text))] font-medium px-8 py-3.5 text-sm hover:bg-[rgb(var(--color-surface-2))] transition-colors rounded border border-[rgb(var(--color-border))] text-center inline-block"
-              to="/contact"
+              to="/features"
             >
-              Explore Features
+              Our Specialties
             </Link>
           </div>
 
           <div className="flex flex-wrap items-center justify-center lg:justify-start gap-5 text-xs font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <span>Gov. Compliant</span>
+              <span>Open 24/7</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-amber-500 rounded-full" />
-              <span>Local Support</span>
+              <span>Certified Specialists</span>
             </div>
           </div>
         </div>
@@ -123,10 +122,10 @@ export default function IndexPage() {
       <section className="py-12 border-y border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
           {[
-            { number: "100+", label: "Active Facilities" },
-            { number: "500+", label: "Medical Professionals" },
-            { number: "30k+", label: "Patient Records" },
-            { number: "99.9%", label: "System Uptime" },
+            { number: "15+", label: "Specialist Doctors" },
+            { number: "10k+", label: "Happy Patients" },
+            { number: "20+", label: "Years of Excellence" },
+            { number: "24/7", label: "Emergency Services" },
           ].map((stat, index) => (
             <div
               key={index}
@@ -143,55 +142,55 @@ export default function IndexPage() {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* Features (Services) Section */}
       <section className="py-24 px-4 max-w-7xl mx-auto">
         <div className="text-center mb-16 max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold text-[rgb(var(--color-text))] mb-4 tracking-tight">
-            Everything You Need to Run Your Practice
+            Comprehensive Medical Services
           </h2>
           <p className="text-lg text-[rgb(var(--color-text-muted))]">
-            From patient registration to complex billing, our platform gives you
-            the tools to manage every aspect of your clinic through one clean,
-            unified interface.
+            We offer a wide range of specialized healthcare services designed to meet
+            the diverse needs of our community, ensuring every patient receives the
+            highest standard of care.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
             {
-              title: "Patient Management",
+              title: "General Medicine",
               description:
-                "Give your patients a smooth registration process. Track complete medical history, billing records, and multi-tab patient profiles with Nepali BS date support.",
+                "Comprehensive health checkups, chronic disease management, and primary care for patients of all ages by experienced clinicians.",
               icon: <Users className="w-5 h-5 text-[rgb(var(--color-text))]" />,
             },
             {
-              title: "Advanced Appointments",
+              title: "Pediatric Care",
               description:
-                "You're in control of your schedule. Define custom appointment types, pricing, and instantly track initial visits, follow-ups, and emergencies.",
+                "Dedicated healthcare services for infants, children, and adolescents, including vaccinations and developmental screenings.",
               icon: <Calendar className="w-5 h-5 text-[rgb(var(--color-text))]" />,
             },
             {
-              title: "Digital Records",
+              title: "Diagnostic Imaging",
               description:
-                "Your digital filing cabinet. Securely upload X-rays, manage customizable medical reports, and structure patient notes perfectly.",
+                "Advanced imaging technologies including X-rays and Ultrasounds to provide accurate and timely diagnostic reports.",
               icon: <ClipboardList className="w-5 h-5 text-[rgb(var(--color-text))]" />,
             },
             {
-              title: "Staff & Doctors",
+              title: "Specialized Surgery",
               description:
-                "Empower your team. Manage comprehensive profiles with NMC license tracking, calculate commissions instantly, and maintain strict access control.",
+                "Expert surgical teams performing both minor and major procedures with a focus on safety and quick recovery.",
               icon: <Stethoscope className="w-5 h-5 text-[rgb(var(--color-text))]" />,
             },
             {
-              title: "Pharmacy Control",
+              title: "Pharmacy Services",
               description:
-                "Never run out of essential stock. Automate inventory alerts, manage expiry dates, and streamline purchase orders with ease.",
+                "On-site pharmacy with a comprehensive stock of genuine medicines, available 24/7 for patient convenience.",
               icon: <Pill className="w-5 h-5 text-[rgb(var(--color-text))]" />,
             },
             {
-              title: "Multi-Branch Management",
+              title: "Pathology Lab",
               description:
-                "Expand your operations seamlessly. Centralize administration across all your clinic locations while keeping branch-specific data isolated.",
+                "Accredited laboratory services offering a full range of diagnostic tests with fast and reliable results.",
               icon: <Building className="w-5 h-5 text-[rgb(var(--color-text))]" />,
             },
           ].map((feature, index) => (
@@ -231,30 +230,30 @@ export default function IndexPage() {
 
           <div>
             <div className="inline-block px-3 py-1 bg-[rgb(var(--color-primary-light))] border border-[rgb(var(--color-primary)/0.2)] text-[rgb(var(--color-primary))] text-xs font-bold uppercase tracking-widest rounded mb-6">
-              Empowering Nepali Healthcare
+              Compassionate Care
             </div>
             <h2 className="text-3xl font-bold text-[rgb(var(--color-text))] mb-6 tracking-tight">
-              Designed For Your Local Environment
+              A Healthcare Experience Designed For You
             </h2>
             <p className="text-lg text-[rgb(var(--color-text-muted))] mb-8 leading-relaxed">
-              We understand the challenges you face in Nepal's healthcare
-              landscape. Our system is engineered from the ground up to ensure
-              your clinic operates without interruption.
+              We prioritize your well-being with a patient-first approach. Our modern facility
+              and expert staff are dedicated to providing you with a comfortable, efficient,
+              and highly effective healthcare experience.
             </p>
 
             <div className="space-y-6">
               {[
                 {
-                  title: "Low-Bandwidth Optimized",
-                  desc: "Your software works swiftly even on slower networks.",
+                  title: "Patient-First Approach",
+                  desc: "Every clinical decision is made with your unique needs and comfort in mind.",
                 },
                 {
-                  title: "Bilingual Interface",
-                  desc: "Switch seamlessly between English and Nepali languages.",
+                  title: "Modern Diagnostics",
+                  desc: "Equipped with the latest medical technology for rapid and precise results.",
                 },
                 {
-                  title: "Local Integrations",
-                  desc: "Integrated with local payment gateways and SMS providers.",
+                  title: "Seamless Experience",
+                  desc: "From easy appointment booking to digital medical records, your journey is hassle-free.",
                 },
               ].map((item, i) => (
                 <div key={i} className="flex gap-4">
@@ -290,15 +289,87 @@ export default function IndexPage() {
       <section className="py-24 bg-[rgb(var(--color-bg))] transition-colors">
         <div className="text-center mb-12 max-w-2xl mx-auto px-4">
           <h2 className="text-3xl font-bold text-[rgb(var(--color-text))] mb-4 tracking-tight">
-            Hear From Your Peers
+            What Our Patients Say
           </h2>
           <p className="text-[rgb(var(--color-text-muted))]">
-            See how other clinics in Nepal are revolutionizing their patient
-            care.
+            Experience the difference through the words of the people we serve every day.
           </p>
         </div>
         <div className="max-w-4xl mx-auto px-4 h-64">
           <Carousel autoPlayInterval={6000} items={testimonials} />
+        </div>
+      </section>
+
+      {/* Contact & Location Section */}
+      <section className="py-24 px-4 max-w-7xl mx-auto border-t border-[rgb(var(--color-border))]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+          <div>
+            <h2 className="text-3xl font-bold text-[rgb(var(--color-text))] mb-6 tracking-tight">
+              Visit Us Today
+            </h2>
+            <p className="text-lg text-[rgb(var(--color-text-muted))] mb-10">
+              We are located in the heart of the city, easily accessible by public transport.
+              Our friendly staff is ready to welcome you.
+            </p>
+
+            <div className="space-y-8">
+              <div className="flex gap-5">
+                <div className="w-12 h-12 rounded-xl bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center shrink-0">
+                  <MapPin className="w-6 h-6 text-[rgb(var(--color-primary))]" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-[rgb(var(--color-text))] mb-1">Our Location</h4>
+                  <p className="text-[rgb(var(--color-text-muted))]">
+                    123 Medical Avenue, Pokhara-08,<br />
+                    Gandaki, Nepal
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-5">
+                <div className="w-12 h-12 rounded-xl bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center shrink-0">
+                  <Building2 className="w-6 h-6 text-[rgb(var(--color-primary))]" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-[rgb(var(--color-text))] mb-1">Clinic Hours</h4>
+                  <p className="text-[rgb(var(--color-text-muted))]">
+                    Sunday - Friday: 8:00 AM - 8:00 PM<br />
+                    Saturday: 10:00 AM - 2:00 PM (Emergency Only)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-5">
+                <div className="w-12 h-12 rounded-xl bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center shrink-0">
+                  <Stethoscope className="w-6 h-6 text-[rgb(var(--color-primary))]" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-[rgb(var(--color-text))] mb-1">Contact Details</h4>
+                  <p className="text-[rgb(var(--color-text-muted))]">
+                    Phone: +977-61-123456<br />
+                    Email: info@procareclinic.com.np
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full h-[450px] bg-[rgb(var(--color-surface-2))] rounded-2xl border border-[rgb(var(--color-border))] overflow-hidden relative shadow-sm">
+            {/* Map Placeholder - In a real app, use an iframe or Map component */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
+              <div className="w-16 h-16 bg-white dark:bg-zinc-800 rounded-full shadow-lg flex items-center justify-center mb-4">
+                <MapPin className="w-8 h-8 text-[rgb(var(--color-primary))]" />
+              </div>
+              <h3 className="font-bold text-[rgb(var(--color-text))] mb-2">Interactive Map</h3>
+              <p className="text-sm text-[rgb(var(--color-text-muted))] max-w-xs">
+                We've integrated a custom map to help you find us easily.
+                Our clinic is located right next to the Central Hospital.
+              </p>
+              <div className="mt-6 w-full h-32 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] border-dashed rounded-lg flex items-center justify-center">
+                <p className="text-xs text-[rgb(var(--color-text-muted))]">Google Maps API Integration point</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -310,21 +381,20 @@ export default function IndexPage() {
         </div>
         <div className="max-w-3xl mx-auto relative z-10">
           <h2 className="text-3xl font-bold mb-6 tracking-tight text-white">
-            Ready to elevate your medical practice?
+            Ready to experience excellence in healthcare?
           </h2>
           <p className="text-white/80 text-lg mb-10 leading-relaxed font-medium">
-            Join the growing network of providers who have modernized their
-            operations. Offer your patients the organized, quick, and secure
-            medical care they expect.
+            Your journey to better health begins with a single step. Book your appointment today
+            and join the thousands of patients who trust us with their well-being.
           </p>
           <Link
             className="inline-block bg-white text-[rgb(var(--color-primary))] font-bold px-10 py-4 text-sm uppercase tracking-wide rounded hover:bg-white/90 transition-colors border-2 border-transparent focus:outline-none"
-            to="/demo"
+            to="/login"
           >
-            Start Your Digital Journey Today
+            Book Your Appointment Today
           </Link>
           <p className="mt-8 text-sm text-white/60 font-medium">
-            No setup fees • Free training • 24/7 dedicated local support
+            Walk-ins available for emergencies • Experienced Specialists • 24/7 Dedicated Support
           </p>
         </div>
       </section>

@@ -12,6 +12,7 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 
 import { db, auth } from "../config/firebase";
 import { User } from "../types/models";
+import { rbacService } from "./rbacService";
 
 const USERS_COLLECTION = "users";
 const SYSTEM_CONFIG_COLLECTION = "system_config";
@@ -111,8 +112,7 @@ export const systemSetupService = {
       });
 
       // Initialize system permissions if needed
-      // TODO: Implement initializeSystemPermissions in rbacService or use a different seeding mechanism
-      // await rbacService.initializeSystemPermissions();
+      await rbacService.initializeSystemPermissions();
 
       // Mark system as initialized
       await setDoc(doc(db, SYSTEM_CONFIG_COLLECTION, "system_status"), {

@@ -12,79 +12,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
 import { addToast } from "@/components/ui/toast";
+import { Input } from "@/components/ui/input";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Expert } from "@/types/models";
 
-// ── Custom UI Helpers ────────────────────────────────────────────────────────
-function CustomInput({
-  label,
-  name,
-  value,
-  onChange,
-  type = "text",
-  required,
-  placeholder,
-}: any) {
-  return (
-    <div className={`flex flex-col gap-1.5 w-full`}>
-      {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
-          {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
-        </label>
-      )}
-      <div className="border border-mountain-200 rounded min-h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100">
-        <input
-          className="w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800"
-          name={name}
-          placeholder={placeholder}
-          required={required}
-          type={type}
-          value={value}
-          onChange={onChange}
-        />
-      </div>
-    </div>
-  );
-}
-
-function CustomSelect({
-  label,
-  name,
-  value,
-  onChange,
-  options,
-  placeholder,
-  required,
-}: any) {
-  return (
-    <div className={`flex flex-col gap-1.5 w-full`}>
-      {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
-          {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
-        </label>
-      )}
-      <select
-        className="w-full min-h-[38px] bg-white border border-mountain-200 text-mountain-800 text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-teal-500"
-        name={name}
-        required={required}
-        value={value}
-        onChange={onChange}
-      >
-        {placeholder && (
-          <option disabled value="">
-            {placeholder}
-          </option>
-        )}
-        {options.map((opt: any) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
 
 export default function EditExpertPage() {
   const { expertId } = useParams<{ expertId: string }>();
@@ -155,49 +86,59 @@ export default function EditExpertPage() {
         <h1 className={title({ size: "sm" })}>Edit Expert</h1>
       </div>
       <form
-        className="bg-white border rounded p-6 shadow-sm grid grid-cols-2 gap-6"
+        className="bg-surface border border-border-base rounded p-6 shadow-none grid grid-cols-2 gap-6"
         onSubmit={handleUpdate}
       >
-        <CustomInput
-          required
+        <Input
+          isRequired
           label="Name"
           name="name"
           value={expertProfile.name}
+          variant="bordered"
           onChange={(e: any) =>
             setExpertProfile({ ...expertProfile, name: e.target.value })
           }
         />
-        <CustomSelect
+        <Select
           label="Speciality"
           name="speciality"
-          options={specialities}
           value={expertProfile.speciality}
+          variant="bordered"
           onChange={(e: any) =>
             setExpertProfile({ ...expertProfile, speciality: e.target.value })
           }
-        />
-        <CustomInput
-          required
+        >
+          {specialities.map((s: any) => (
+            <SelectItem key={s.value} value={s.value}>
+              {s.label}
+            </SelectItem>
+          ))}
+        </Select>
+        <Input
+          isRequired
           label="Phone"
           name="phone"
           value={expertProfile.phone}
+          variant="bordered"
           onChange={(e: any) =>
             setExpertProfile({ ...expertProfile, phone: e.target.value })
           }
         />
-        <CustomInput
+        <Input
           label="Email"
           name="email"
           value={expertProfile.email}
+          variant="bordered"
           onChange={(e: any) =>
             setExpertProfile({ ...expertProfile, email: e.target.value })
           }
         />
-        <CustomInput
-          required
+        <Input
+          isRequired
           label="License Number"
           name="licenseNumber"
           value={expertProfile.licenseNumber}
+          variant="bordered"
           onChange={(e: any) =>
             setExpertProfile({
               ...expertProfile,

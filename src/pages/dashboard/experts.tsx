@@ -26,6 +26,7 @@ import { specialityService } from "@/services/specialityService";
 import { branchService } from "@/services/branchService";
 import { Branch, Expert } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
+import { Chip } from "@/components/ui/chip";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
 function CustomInput({
@@ -289,7 +290,7 @@ export default function ExpertsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className={title({ size: "lg" })}>Experts</h1>
-          <p className="text-[13.5px] text-mountain-500 mt-1">
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage and access expert records
           </p>
         </div>
@@ -377,10 +378,10 @@ export default function ExpertsPage() {
             </div>
           ) : currentExperts.length === 0 ? (
             <div className="flex flex-col justify-center items-center h-[300px] gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-mountain-50 flex items-center justify-center border border-mountain-100">
-                <IoSearchOutline className="w-6 h-6 text-mountain-400" />
+              <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center border border-border-base">
+                <IoSearchOutline className="w-6 h-6 text-text-muted/40" />
               </div>
-              <h3 className="text-[14px] font-semibold text-mountain-800">
+              <h3 className="text-[14px] font-semibold text-text-main">
                 {searchQuery || hasAdvancedFilters
                   ? "No experts match your criteria"
                   : "No experts added yet"}
@@ -400,93 +401,91 @@ export default function ExpertsPage() {
           ) : (
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                <tr className="bg-surface-2/30 border-b border-border-base">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted uppercase tracking-wider">
                     Expert
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted uppercase tracking-wider">
                     Contact
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted uppercase tracking-wider">
                     Speciality
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted uppercase tracking-wider">
                     Commission
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600 text-right">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted uppercase tracking-wider text-right">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-border-base/50">
                 {currentExperts.map((expert) => (
                   <tr
                     key={expert.id}
-                    className="hover:bg-mountain-50/30 transition-colors"
+                    className="hover:bg-surface-2/30 transition-colors"
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-semibold text-[13px] shrink-0 border border-teal-200">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-[13px] shrink-0 border border-primary/20">
                           {expert.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <Link
-                            className="font-semibold text-[13.5px] text-mountain-900 hover:text-teal-600 hover:underline"
+                            className="font-semibold text-[13.5px] text-text-main hover:text-primary hover:underline"
                             to={`/dashboard/experts/${expert.id}`}
                           >
                             {expert.name}
                           </Link>
-                          <div className="text-[11.5px] text-mountain-500 font-mono mt-0.5">
+                          <div className="text-[11.5px] text-text-muted/60 font-mono mt-0.5">
                             License: {expert.licenseNumber}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="text-[13px] text-mountain-800">
+                      <div className="text-[13px] text-text-main">
                         {expert.phone}
                       </div>
                       {expert.email && (
-                        <div className="text-[11.5px] text-mountain-500 mt-0.5">
+                        <div className="text-[11.5px] text-text-muted mt-0.5">
                           {expert.email}
                         </div>
                       )}
                     </td>
                     <td className="px-5 py-3">
-                      <span className="text-[13px] text-mountain-800 capitalize">
+                      <span className="text-[13px] text-text-main capitalize">
                         {expert.speciality}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${expert.expertType === "regular"
-                          ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : "bg-purple-50 text-purple-700 border-purple-200"
-                          }`}
+                      <Chip
+                        color={expert.expertType === "regular" ? "primary" : "secondary"}
+                        size="sm"
+                        variant="flat"
                       >
                         {expert.expertType}
-                      </span>
+                      </Chip>
                     </td>
                     <td className="px-5 py-3">
-                      <span className="text-[13px] text-mountain-800 font-medium">
+                      <span className="text-[13px] text-text-main font-medium">
                         {expert.defaultCommission}%
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${expert.isActive
-                          ? "bg-teal-50 text-teal-700 border-teal-200"
-                          : "bg-red-50 text-red-700 border-red-200"
-                          }`}
+                      <Chip
+                        color={expert.isActive ? "success" : "danger"}
+                        size="sm"
+                        variant="flat"
                       >
                         {expert.isActive ? "Active" : "Inactive"}
-                      </span>
+                      </Chip>
                     </td>
                     <td className="px-5 py-3 text-right">
                       <Dropdown>

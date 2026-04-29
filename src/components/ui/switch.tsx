@@ -47,8 +47,8 @@ export const Switch: React.FC<SwitchProps> = ({
         className={clsx(
           "relative inline-flex h-5 w-9 items-center rounded-full border transition-colors",
           value
-            ? "bg-nepal-500 border-nepal-500"
-            : "bg-mountain-200 border-mountain-300",
+            ? "bg-primary border-primary"
+            : "bg-surface-3 border-border-base",
         )}
       >
         <span
@@ -66,7 +66,7 @@ export const Switch: React.FC<SwitchProps> = ({
           onChange={handleChange}
         />
       </span>
-      {label && <span className="text-sm text-mountain-800">{label}</span>}
+      {label && <span className="text-sm text-text-main">{label}</span>}
     </label>
   );
 };

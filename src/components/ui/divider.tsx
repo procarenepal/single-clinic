@@ -14,8 +14,8 @@ export const Divider: React.FC<DividerProps> = ({
     aria-orientation={orientation}
     className={clsx(
       orientation === "horizontal"
-        ? "w-full h-px bg-mountain-200 dark:bg-zinc-800 my-1"
-        : "h-full w-px bg-mountain-200 dark:bg-zinc-800 mx-1",
+        ? "w-full h-px bg-border-base my-1"
+        : "h-full w-px bg-border-base mx-1",
       className,
     )}
     role="separator"

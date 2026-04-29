@@ -40,15 +40,15 @@ export default function PathologyDailyReportTab({
     <div className="space-y-6">
       {/* Date Filter */}
       <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
+        <div className="flex items-end gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[13px] font-medium text-mountain-700">
+            <label className="text-[13px] font-medium text-text-muted">
               Select Date
             </label>
             <div className="relative">
-              <IoCalendarOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-mountain-400" />
+              <IoCalendarOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
               <input
-                className="w-64 h-[32px] pl-9 pr-3 border border-mountain-200 rounded text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+                className="w-64 h-[32px] pl-9 pr-3 border border-border-base rounded text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                 type="date"
                 value={selectedDate}
                 onChange={(e) => onDateChange(e.target.value)}
@@ -56,6 +56,7 @@ export default function PathologyDailyReportTab({
             </div>
           </div>
           <Button
+            className="h-[32px]"
             variant="flat"
             onClick={() => onDateChange(new Date().toISOString().split("T")[0])}
           >
@@ -73,69 +74,69 @@ export default function PathologyDailyReportTab({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="clarity-card p-4">
+        <div className="bg-surface border border-border-base rounded p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[12px] text-mountain-500">Total Tests</p>
-              <p className="text-[22px] font-bold text-mountain-900">
+              <p className="text-[12px] text-text-muted">Total Tests</p>
+              <p className="text-[22px] font-bold text-text-main">
                 {dailyReportData.totalTests}
               </p>
             </div>
-            <IoStatsChartOutline className="text-3xl text-teal-600" />
+            <IoStatsChartOutline className="text-3xl text-primary" />
           </div>
         </div>
-        <div className="clarity-card p-4">
+        <div className="bg-surface border border-border-base rounded p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[12px] text-mountain-500">Total Patients</p>
-              <p className="text-[22px] font-bold text-mountain-900">
+              <p className="text-[12px] text-text-muted">Total Patients</p>
+              <p className="text-[22px] font-bold text-text-main">
                 {dailyReportData.totalPatients}
               </p>
             </div>
-            <IoPeopleOutline className="text-3xl text-health-600" />
+            <IoPeopleOutline className="text-3xl text-health-500" />
           </div>
         </div>
-        <div className="clarity-card p-4">
+        <div className="bg-surface border border-border-base rounded p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[12px] text-mountain-500">Total Revenue</p>
-              <p className="text-[22px] font-bold text-mountain-900">
+              <p className="text-[12px] text-text-muted">Total Revenue</p>
+              <p className="text-[22px] font-bold text-text-main">
                 NPR {dailyReportData.totalRevenue.toLocaleString()}
               </p>
             </div>
-            <IoReceiptOutline className="text-3xl text-saffron-600" />
+            <IoReceiptOutline className="text-3xl text-orange-500" />
           </div>
         </div>
-        <div className="clarity-card p-4">
+        <div className="bg-surface border border-border-base rounded p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[12px] text-mountain-500">Total Invoices</p>
-              <p className="text-[22px] font-bold text-mountain-900">
+              <p className="text-[12px] text-text-muted">Total Invoices</p>
+              <p className="text-[22px] font-bold text-text-main">
                 {dailyReportData.totalBillings}
               </p>
             </div>
-            <IoReceiptOutline className="text-3xl text-teal-600" />
+            <IoReceiptOutline className="text-3xl text-primary" />
           </div>
         </div>
       </div>
 
       {/* Revenue Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="clarity-card p-4">
-          <p className="text-[12px] text-mountain-500 mb-2">Paid Amount</p>
-          <p className="text-xl font-bold text-health-700">
+        <div className="bg-surface border border-border-base rounded p-4">
+          <p className="text-[12px] text-text-muted mb-2">Paid Amount</p>
+          <p className="text-xl font-bold text-health-600">
             NPR {dailyReportData.totalPaid.toLocaleString()}
           </p>
         </div>
-        <div className="clarity-card p-4">
-          <p className="text-[12px] text-mountain-500 mb-2">Pending Amount</p>
-          <p className="text-xl font-bold text-saffron-700">
+        <div className="bg-surface border border-border-base rounded p-4">
+          <p className="text-[12px] text-text-muted mb-2">Pending Amount</p>
+          <p className="text-xl font-bold text-orange-600">
             NPR {dailyReportData.totalPending.toLocaleString()}
           </p>
         </div>
-        <div className="clarity-card p-4">
-          <p className="text-[12px] text-mountain-500 mb-2">Payment Rate</p>
-          <p className="text-xl font-bold text-mountain-900">
+        <div className="bg-surface border border-border-base rounded p-4">
+          <p className="text-[12px] text-text-muted mb-2">Payment Rate</p>
+          <p className="text-xl font-bold text-text-main">
             {dailyReportData.totalRevenue > 0
               ? (
                   (dailyReportData.totalPaid / dailyReportData.totalRevenue) *
@@ -148,34 +149,34 @@ export default function PathologyDailyReportTab({
       </div>
 
       {/* Tests Table */}
-      <div className="clarity-card border border-mountain-200 rounded">
-        <div className="px-4 py-3 border-b border-mountain-100 bg-mountain-50/60">
-          <h3 className="text-[14px] font-semibold text-mountain-900">
+      <div className="bg-surface border border-border-base rounded">
+        <div className="px-4 py-3 border-b border-border-base/50 bg-surface-2">
+          <h3 className="text-[14px] font-semibold text-text-main">
             Tests Performed
           </h3>
         </div>
         <div className="p-0">
           {dailyReportData.dailyTests.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="clarity-table w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-200">
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                  <tr className="bg-surface-2 border-b border-border-base">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Test Name
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Patient
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Test Type
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Category
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Lab Technician
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Time
                     </th>
                   </tr>
@@ -184,24 +185,24 @@ export default function PathologyDailyReportTab({
                   {dailyReportData.dailyTests.map((test) => (
                     <tr
                       key={test.id}
-                      className="hover:bg-mountain-50/40 border-b border-mountain-100"
+                      className="hover:bg-surface-2/50 border-b border-border-base/50"
                     >
                       <td className="px-4 py-2">
-                        <p className="text-[13.5px] font-medium text-mountain-900">
+                        <p className="text-[13.5px] font-medium text-text-main">
                           {test.testName}
                         </p>
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-[11px] font-semibold">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[11px] font-semibold">
                             {test.patientName?.charAt(0)?.toUpperCase() || "?"}
                           </div>
                           <div>
-                            <p className="text-[13.5px] font-medium text-mountain-900">
+                            <p className="text-[13.5px] font-medium text-text-main">
                               {test.patientName}
                             </p>
                             {test.patientAge && (
-                              <p className="text-[11.5px] text-mountain-500">
+                              <p className="text-[11.5px] text-text-muted">
                                 {test.patientAge}{" "}
                                 {test.patientGender
                                   ? `, ${test.patientGender}`
@@ -211,26 +212,26 @@ export default function PathologyDailyReportTab({
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-[13px] text-mountain-700">
+                      <td className="px-4 py-2 text-[13px] text-text-main">
                         {test.testType || "—"}
                       </td>
                       <td className="px-4 py-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-teal-100 text-teal-700 border-teal-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
                           {test.categoryName}
                         </span>
                       </td>
                       <td className="px-4 py-2">
                         {test.labTechnicianName ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-health-100 text-health-700 border-health-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-health-500/10 text-health-600 border-health-500/20">
                             {test.labTechnicianName}
                           </span>
                         ) : (
-                          <span className="text-mountain-400 text-[13px]">
+                          <span className="text-text-muted text-[13px]">
                             —
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-[13px] text-mountain-700">
+                      <td className="px-4 py-2 text-[13px] text-text-main">
                         {new Date(test.createdAt).toLocaleTimeString()}
                       </td>
                     </tr>
@@ -239,7 +240,7 @@ export default function PathologyDailyReportTab({
               </table>
             </div>
           ) : (
-            <div className="text-center py-8 text-mountain-500 text-[13.5px]">
+            <div className="text-center py-8 text-text-muted text-[13.5px]">
               No tests performed on this date
             </div>
           )}
@@ -247,34 +248,34 @@ export default function PathologyDailyReportTab({
       </div>
 
       {/* Billings Table */}
-      <div className="clarity-card border border-mountain-200 rounded">
-        <div className="px-4 py-3 border-b border-mountain-100 bg-mountain-50/60">
-          <h3 className="text-[14px] font-semibold text-mountain-900">
+      <div className="bg-surface border border-border-base rounded">
+        <div className="px-4 py-3 border-b border-border-base/50 bg-surface-2">
+          <h3 className="text-[14px] font-semibold text-text-main">
             Invoices
           </h3>
         </div>
         <div className="p-0">
           {dailyReportData.dailyBillings.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="clarity-table w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-200">
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                  <tr className="bg-surface-2 border-b border-border-base">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Invoice No
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Patient
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Items
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Amount
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Status
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Time
                     </th>
                   </tr>
@@ -283,30 +284,30 @@ export default function PathologyDailyReportTab({
                   {dailyReportData.dailyBillings.map((billing) => (
                     <tr
                       key={billing.id}
-                      className="hover:bg-mountain-50/40 border-b border-mountain-100"
+                      className="hover:bg-surface-2/50 border-b border-border-base/50"
                     >
                       <td className="px-4 py-2">
-                        <p className="text-[13.5px] font-medium text-mountain-900">
+                        <p className="text-[13.5px] font-medium text-text-main">
                           {billing.invoiceNumber}
                         </p>
                       </td>
                       <td className="px-4 py-2">
                         <div>
-                          <p className="text-[13.5px] font-medium text-mountain-900">
+                          <p className="text-[13.5px] font-medium text-text-main">
                             {billing.patientName}
                           </p>
                           {billing.patientEmail && (
-                            <p className="text-[11.5px] text-mountain-500">
+                            <p className="text-[11.5px] text-text-muted">
                               {billing.patientEmail}
                             </p>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-[13px] text-mountain-700">
+                      <td className="px-4 py-2 text-[13px] text-text-main">
                         {billing.items.length} item(s)
                       </td>
                       <td className="px-4 py-2">
-                        <p className="text-[13.5px] font-medium text-mountain-900">
+                        <p className="text-[13.5px] font-medium text-text-main">
                           NPR {billing.totalAmount.toLocaleString()}
                         </p>
                       </td>
@@ -314,14 +315,14 @@ export default function PathologyDailyReportTab({
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold ${
                             billing.status === "paid"
-                              ? "bg-health-100 text-health-700 border-health-200"
-                              : "bg-saffron-100 text-saffron-700 border-saffron-200"
+                              ? "bg-health-500/10 text-health-600 border-health-500/20"
+                              : "bg-orange-500/10 text-orange-600 border-orange-500/20"
                           }`}
                         >
                           {billing.status.toUpperCase()}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-[13px] text-mountain-700">
+                      <td className="px-4 py-2 text-[13px] text-text-main">
                         {new Date(billing.invoiceDate).toLocaleTimeString()}
                       </td>
                     </tr>
@@ -330,7 +331,7 @@ export default function PathologyDailyReportTab({
               </table>
             </div>
           ) : (
-            <div className="text-center py-8 text-mountain-500 text-[13.5px]">
+            <div className="text-center py-8 text-text-muted text-[13.5px]">
               No invoices created on this date
             </div>
           )}
@@ -340,22 +341,22 @@ export default function PathologyDailyReportTab({
       {/* Statistics Tables */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Test Types Breakdown */}
-        <div className="clarity-card border border-mountain-200 rounded">
-          <div className="px-4 py-3 border-b border-mountain-100 bg-mountain-50/60">
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+        <div className="bg-surface border border-border-base rounded">
+          <div className="px-4 py-3 border-b border-border-base/50 bg-surface-2">
+            <h3 className="text-[14px] font-semibold text-text-main">
               Test Types Breakdown
             </h3>
           </div>
           <div className="p-0">
             {Object.keys(dailyReportData.testTypeBreakdown).length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="clarity-table w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-mountain-50 border-b border-mountain-200">
-                      <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <tr className="bg-surface-2 border-b border-border-base">
+                      <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                         Test Type
                       </th>
-                      <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                      <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                         Count
                       </th>
                     </tr>
@@ -366,13 +367,13 @@ export default function PathologyDailyReportTab({
                       .map(([type, count]) => (
                         <tr
                           key={type}
-                          className="hover:bg-mountain-50/40 border-b border-mountain-100"
+                          className="hover:bg-surface-2/50 border-b border-border-base/50"
                         >
-                          <td className="px-4 py-2 text-[13px] text-mountain-800">
+                          <td className="px-4 py-2 text-[13px] text-text-main">
                             {type}
                           </td>
                           <td className="px-4 py-2">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-teal-100 text-teal-700 border-teal-200">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
                               {count}
                             </span>
                           </td>
@@ -382,7 +383,7 @@ export default function PathologyDailyReportTab({
                 </table>
               </div>
             ) : (
-              <div className="text-center py-4 text-mountain-500 text-[13.5px]">
+              <div className="text-center py-4 text-text-muted text-[13.5px]">
                 No test types data
               </div>
             )}
@@ -390,22 +391,22 @@ export default function PathologyDailyReportTab({
         </div>
 
         {/* Category Breakdown */}
-        <div className="clarity-card border border-mountain-200 rounded">
-          <div className="px-4 py-3 border-b border-mountain-100 bg-mountain-50/60">
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+        <div className="bg-surface border border-border-base rounded">
+          <div className="px-4 py-3 border-b border-border-base/50 bg-surface-2">
+            <h3 className="text-[14px] font-semibold text-text-main">
               Category Breakdown
             </h3>
           </div>
           <div className="p-0">
             {Object.keys(dailyReportData.categoryBreakdown).length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="clarity-table w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-mountain-50 border-b border-mountain-200">
-                      <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <tr className="bg-surface-2 border-b border-border-base">
+                      <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                         Category
                       </th>
-                      <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                      <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                         Count
                       </th>
                     </tr>
@@ -416,13 +417,13 @@ export default function PathologyDailyReportTab({
                       .map(([category, count]) => (
                         <tr
                           key={category}
-                          className="hover:bg-mountain-50/40 border-b border-mountain-100"
+                          className="hover:bg-surface-2/50 border-b border-border-base/50"
                         >
-                          <td className="px-4 py-2 text-[13px] text-mountain-800">
+                          <td className="px-4 py-2 text-[13px] text-text-main">
                             {category}
                           </td>
                           <td className="px-4 py-2">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-health-100 text-health-700 border-health-200">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-health-500/10 text-health-600 border-health-500/20">
                               {count}
                             </span>
                           </td>
@@ -432,7 +433,7 @@ export default function PathologyDailyReportTab({
                 </table>
               </div>
             ) : (
-              <div className="text-center py-4 text-mountain-500 text-[13.5px]">
+              <div className="text-center py-4 text-text-muted text-[13.5px]">
                 No category data
               </div>
             )}
@@ -442,21 +443,21 @@ export default function PathologyDailyReportTab({
 
       {/* Lab Technician Breakdown */}
       {Object.keys(dailyReportData.technicianBreakdown).length > 0 && (
-        <div className="clarity-card border border-mountain-200 rounded">
-          <div className="px-4 py-3 border-b border-mountain-100 bg-mountain-50/60">
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+        <div className="bg-surface border border-border-base rounded">
+          <div className="px-4 py-3 border-b border-border-base/50 bg-surface-2">
+            <h3 className="text-[14px] font-semibold text-text-main">
               Lab Technician Breakdown
             </h3>
           </div>
           <div className="p-0">
             <div className="overflow-x-auto">
-              <table className="clarity-table w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-200">
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                  <tr className="bg-surface-2 border-b border-border-base">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Technician
                     </th>
-                    <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                    <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                       Tests Performed
                     </th>
                   </tr>
@@ -467,13 +468,13 @@ export default function PathologyDailyReportTab({
                     .map(([technician, count]) => (
                       <tr
                         key={technician}
-                        className="hover:bg-mountain-50/40 border-b border-mountain-100"
+                        className="hover:bg-surface-2/50 border-b border-border-base/50"
                       >
-                        <td className="px-4 py-2 text-[13px] text-mountain-800">
+                        <td className="px-4 py-2 text-[13px] text-text-main">
                           {technician}
                         </td>
                         <td className="px-4 py-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-teal-100 text-teal-700 border-teal-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
                             {count}
                           </span>
                         </td>

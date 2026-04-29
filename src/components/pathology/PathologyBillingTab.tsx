@@ -781,7 +781,7 @@ export default function PathologyBillingTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-default-500">Loading billing data...</p>
+        <p className="text-text-muted">Loading billing data...</p>
       </div>
     );
   }
@@ -796,7 +796,7 @@ export default function PathologyBillingTab({
         {/* Create Invoice Tab */}
         <Tab key="create" title="Create Invoice">
           <div className="space-y-4 py-4">
-            <Card className="border border-mountain-100" shadow="none">
+            <Card className="border border-border-base" shadow="none">
               <CardHeader>
                 <h3 className="text-lg font-semibold">New Pathology Invoice</h3>
               </CardHeader>
@@ -1093,8 +1093,8 @@ export default function PathologyBillingTab({
                   </div>
 
                   {formData.referringDoctors.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 bg-default-50/50 rounded-2xl border-2 border-dashed border-default-200 transition-all hover:bg-default-100/50">
-                      <div className="p-4 rounded-full bg-white shadow-sm mb-3">
+                    <div className="flex flex-col items-center justify-center py-12 bg-surface-2/50 rounded-2xl border-2 border-dashed border-border-base transition-all hover:bg-surface-2">
+                      <div className="p-4 rounded-full bg-surface shadow-sm mb-3">
                         <IoMedkitOutline className="text-3xl text-primary/60" />
                       </div>
                       <p className="text-sm font-medium text-default-600">
@@ -1114,7 +1114,7 @@ export default function PathologyBillingTab({
                         return (
                           <div
                             key={index}
-                            className="bg-white border border-default-200 rounded-xl p-4 transition-all hover:shadow-md group"
+                            className="bg-surface border border-border-base rounded-xl p-4 transition-all hover:shadow-md group"
                           >
                             <div className="grid grid-cols-12 gap-4 items-center">
                               {/* Left: Info */}
@@ -1142,7 +1142,7 @@ export default function PathologyBillingTab({
 
                               {/* Middle: Controls */}
                               <div className="col-span-12 md:col-span-7 flex flex-wrap items-center gap-3">
-                                <div className="flex items-center gap-2 bg-default-50 p-1.5 rounded-lg border border-default-100">
+                                <div className="flex items-center gap-2 bg-surface-2 p-1.5 rounded-lg border border-border-base/50">
                                   <Select
                                     aria-label="Commission Type"
                                     className="w-28"
@@ -1249,18 +1249,20 @@ export default function PathologyBillingTab({
                   }
                 />
 
-                <Button
-                  className="w-full"
-                  color="primary"
-                  isDisabled={
-                    !formData.patientName.trim() || formData.items.length === 0
-                  }
-                  isLoading={submitting}
-                  size="lg"
-                  onPress={handleSubmit}
-                >
-                  Create Invoice
-                </Button>
+                <div className="flex justify-end pt-2">
+                  <Button
+                    className="px-8"
+                    color="primary"
+                    isDisabled={
+                      !formData.patientName.trim() || formData.items.length === 0
+                    }
+                    isLoading={submitting}
+                    size="lg"
+                    onPress={handleSubmit}
+                  >
+                    Create Invoice
+                  </Button>
+                </div>
               </CardBody>
             </Card>
           </div>
@@ -1537,11 +1539,11 @@ export default function PathologyBillingTab({
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-default-500">Patient Name</p>
+                    <p className="text-sm text-text-muted">Patient Name</p>
                     <p className="font-medium">{selectedBilling.patientName}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-default-500">Invoice Date</p>
+                    <p className="text-sm text-text-muted">Invoice Date</p>
                     <p className="font-medium">
                       {new Date(
                         selectedBilling.invoiceDate,
@@ -1550,7 +1552,7 @@ export default function PathologyBillingTab({
                   </div>
                   {selectedBilling.patientPhone && (
                     <div>
-                      <p className="text-sm text-default-500">Phone</p>
+                      <p className="text-sm text-text-muted">Phone</p>
                       <p className="font-medium">
                         {selectedBilling.patientPhone}
                       </p>
@@ -1558,7 +1560,7 @@ export default function PathologyBillingTab({
                   )}
                   {selectedBilling.patientEmail && (
                     <div>
-                      <p className="text-sm text-default-500">Email</p>
+                      <p className="text-sm text-text-muted">Email</p>
                       <p className="font-medium">
                         {selectedBilling.patientEmail}
                       </p>
@@ -1566,7 +1568,7 @@ export default function PathologyBillingTab({
                   )}
                   {selectedBilling.patientAge && (
                     <div>
-                      <p className="text-sm text-default-500">Age</p>
+                      <p className="text-sm text-text-muted">Age</p>
                       <p className="font-medium">
                         {selectedBilling.patientAge}
                       </p>
@@ -1574,7 +1576,7 @@ export default function PathologyBillingTab({
                   )}
                   {selectedBilling.patientGender && (
                     <div>
-                      <p className="text-sm text-default-500">Gender</p>
+                      <p className="text-sm text-text-muted">Gender</p>
                       <p className="font-medium">
                         {selectedBilling.patientGender.charAt(0).toUpperCase() +
                           selectedBilling.patientGender.slice(1)}
@@ -1584,7 +1586,7 @@ export default function PathologyBillingTab({
                 </div>
 
                 <div>
-                  <p className="text-sm text-default-500 mb-2">Test Items</p>
+                  <p className="text-sm text-text-muted mb-2">Test Items</p>
                   <Table>
                     <TableHeader>
                       <TableColumn>Test Name</TableColumn>

@@ -46,7 +46,6 @@ export const labTechnicianService = {
         techniciansRef,
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
       );
 
       if (branchId) {
@@ -55,7 +54,6 @@ export const labTechnicianService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("isActive", "==", true),
-          orderBy("name"),
         );
       }
 
@@ -73,7 +71,8 @@ export const labTechnicianService = {
         } as LabTechnician);
       });
 
-      return technicians;
+      // Sort by name ascending in memory to avoid index error
+      return technicians.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting lab technicians by clinic:", error);
       throw error;

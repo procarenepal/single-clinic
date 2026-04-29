@@ -50,8 +50,8 @@ function Badge({
   variant?: "critical" | "normal" | "primary" | "default";
 }) {
   const cls = {
-    critical: "bg-red-500/10 text-red-600 border border-red-500/20",
-    normal: "bg-green-500/10 text-green-600 border border-green-500/20",
+    critical: "bg-error/10 text-error border border-error/20",
+    normal: "bg-success/10 text-success border border-success/20",
     primary: "bg-primary/10 text-primary border border-primary/20",
     default: "bg-surface-2 text-text-muted border border-border-base",
   }[variant];
@@ -74,10 +74,10 @@ function FilterChip({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] bg-teal-500/10 text-teal-600 border border-teal-200/50 dark:border-teal-500/30 px-2 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded">
       {label}
       <button
-        className="hover:text-red-500 ml-0.5"
+        className="hover:text-error ml-0.5"
         type="button"
         onClick={onRemove}
       >
@@ -101,7 +101,7 @@ function NativeSelect({
 }) {
   return (
     <select
-      className={`h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 ${className}`}
+      className={`h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 ${className}`}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
@@ -188,7 +188,7 @@ function Pagination({
     <div className="flex items-center gap-1.5">
       <button
         aria-label="Previous page"
-        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-600 hover:bg-surface-2 transition-all"
+        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-primary hover:text-primary hover:bg-surface-2 transition-all"
         disabled={page === 1}
         onClick={() => onChange(page - 1)}
       >
@@ -198,8 +198,8 @@ function Pagination({
         <button
           key={p}
           className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${p === page
-            ? "bg-teal-700 text-white border-teal-700 shadow-sm"
-            : "border-border-base text-text-muted hover:border-teal-400 hover:text-teal-600 hover:bg-surface-2"
+            ? "bg-primary text-white border-primary shadow-sm"
+            : "border-border-base text-text-muted hover:border-primary hover:text-primary hover:bg-surface-2"
             }`}
           onClick={() => onChange(p)}
         >
@@ -208,7 +208,7 @@ function Pagination({
       ))}
       <button
         aria-label="Next page"
-        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-600 hover:bg-surface-2 transition-all"
+        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-primary hover:text-primary hover:bg-surface-2 transition-all"
         disabled={page === total}
         onClick={() => onChange(page + 1)}
       >
@@ -1023,7 +1023,7 @@ export default function PatientsPage() {
                         </p>
                         {filtered.length === 0 && patients.length > 0 && (
                           <button
-                            className="mt-1 text-[12px] text-teal-600 hover:underline"
+                            className="mt-1 text-[12px] text-primary hover:underline"
                             type="button"
                             onClick={clearFilters}
                           >
@@ -1061,7 +1061,7 @@ export default function PatientsPage() {
                                   </Badge>
                                 )}
                                 <Link
-                                  className="text-[12.5px] font-medium text-text-main hover:text-teal-700 no-underline"
+                                  className="text-[12.5px] font-medium text-text-main hover:text-primary no-underline"
                                   to={`/dashboard/patients/${patient.id}`}
                                 >
                                   {patient.name}
@@ -1147,23 +1147,23 @@ export default function PatientsPage() {
                                   New Appointment
                                 </Link>
                               </DropdownItem>
-                              {patient.isCritical ? (
-                                <DropdownItem
-                                  key="remove-critical"
-                                  className="text-health-600"
-                                  onClick={() => removeCritical(patient)}
-                                >
-                                  ✓ Remove Critical Status
-                                </DropdownItem>
-                              ) : (
-                                <DropdownItem
-                                  key="mark-critical"
-                                  className="text-red-600"
-                                  onClick={() => openMarkCritical(patient)}
-                                >
-                                  ⚠ Mark as Critical
-                                </DropdownItem>
-                              )}
+                                {patient.isCritical ? (
+                                  <DropdownItem
+                                    key="remove-critical"
+                                    className="text-success"
+                                    onClick={() => removeCritical(patient)}
+                                  >
+                                    ✓ Remove Critical Status
+                                  </DropdownItem>
+                                ) : (
+                                  <DropdownItem
+                                    key="mark-critical"
+                                    className="text-error"
+                                    onClick={() => openMarkCritical(patient)}
+                                  >
+                                    ⚠ Mark as Critical
+                                  </DropdownItem>
+                                )}
                             </DropdownMenu>
                           </Dropdown>
                         </td>
@@ -1257,19 +1257,19 @@ export default function PatientsPage() {
         onClose={() => setCriticalModal(false)}
       >
         <div className="space-y-3">
-          <div className="flex gap-2.5 p-3 bg-red-500/10 border border-red-500/20 rounded">
-            <IoAlertCircleOutline className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-[12px] text-red-600/90">
+          <div className="flex gap-2.5 p-3 bg-error/10 border border-error/20 rounded">
+            <IoAlertCircleOutline className="w-4 h-4 text-error shrink-0 mt-0.5" />
+            <p className="text-[12px] text-error/90">
               This patient will be highlighted in the patient list and flagged
               for priority attention. The reason will be visible to all staff.
             </p>
           </div>
           <div>
             <label className="block text-[12px] font-medium text-text-main mb-1">
-              Reason <span className="text-red-500">*</span>
+              Reason <span className="text-error">*</span>
             </label>
             <textarea
-              className="w-full px-2.5 py-2 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 resize-none"
+              className="w-full px-2.5 py-2 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 resize-none placeholder:text-text-muted/60"
               placeholder="Enter the reason for marking as critical…"
               rows={3}
               value={criticalReason}
@@ -1317,12 +1317,12 @@ export default function PatientsPage() {
               {
                 label: "Filtered",
                 value: filtered.length,
-                cls: "text-teal-600",
+                cls: "text-primary",
               },
               {
                 label: "Critical",
                 value: patients.filter((p) => p.isCritical).length,
-                cls: "text-red-500",
+                cls: "text-error",
               },
             ].map((s) => (
               <div key={s.label} className="text-center">
@@ -1343,7 +1343,7 @@ export default function PatientsPage() {
             </label>
             <div className="flex gap-2">
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
                 placeholder="Min"
                 type="number"
                 value={ageMin}
@@ -1353,7 +1353,7 @@ export default function PatientsPage() {
                 –
               </span>
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
                 placeholder="Max"
                 type="number"
                 value={ageMax}
@@ -1369,7 +1369,7 @@ export default function PatientsPage() {
             </label>
             <div className="flex gap-2">
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
                 type="date"
                 value={regStart}
                 onChange={(e) => setRegStart(e.target.value)}
@@ -1378,7 +1378,7 @@ export default function PatientsPage() {
                 –
               </span>
               <input
-                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-teal-500"
+                className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
                 type="date"
                 value={regEnd}
                 onChange={(e) => setRegEnd(e.target.value)}

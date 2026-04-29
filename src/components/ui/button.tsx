@@ -48,61 +48,61 @@ const RADIUS: Record<NonNullable<ButtonProps["radius"]>, string> = {
 // Solid: filled background
 const SOLID: Record<BtnColor, string> = {
   default:
-    "bg-mountain-100 text-mountain-900 hover:bg-mountain-200 border border-mountain-200",
-  primary: "bg-teal-700 text-white hover:bg-teal-600 border border-teal-700",
+    "bg-surface-2 text-text-main hover:bg-surface-3 border border-border-base",
+  primary: "bg-primary text-white hover:opacity-90 border border-primary",
   secondary:
-    "bg-health-600 text-white hover:bg-health-700 border border-health-600",
+    "bg-success text-white hover:opacity-90 border border-success",
   success:
-    "bg-health-600 text-white hover:bg-health-700 border border-health-600",
+    "bg-success text-white hover:opacity-90 border border-success",
   warning:
-    "bg-saffron-500 text-white hover:bg-saffron-600 border border-saffron-500",
-  danger: "bg-red-600 text-white hover:bg-red-700 border border-red-600",
+    "bg-warning text-white hover:opacity-90 border border-warning",
+  danger: "bg-error text-white hover:opacity-90 border border-error",
 };
 
 // Flat: tinted background, no border
 const FLAT: Record<BtnColor, string> = {
   default:
-    "bg-mountain-100 text-mountain-800 hover:bg-mountain-200 border border-transparent",
+    "bg-surface-2 text-text-muted hover:bg-surface-3 border border-transparent",
   primary:
-    "bg-teal-100 text-teal-700 hover:bg-teal-200 border border-transparent",
+    "bg-primary/10 text-primary hover:bg-primary/20 border border-transparent",
   secondary:
-    "bg-health-100 text-health-700 hover:bg-health-200 border border-transparent",
+    "bg-success/10 text-success hover:bg-success/20 border border-transparent",
   success:
-    "bg-health-100 text-health-700 hover:bg-health-200 border border-transparent",
+    "bg-success/10 text-success hover:bg-success/20 border border-transparent",
   warning:
-    "bg-saffron-100 text-saffron-700 hover:bg-saffron-200 border border-transparent",
-  danger: "bg-red-100 text-red-700 hover:bg-red-200 border border-transparent",
+    "bg-warning/10 text-warning hover:bg-warning/20 border border-transparent",
+  danger: "bg-error/10 text-error hover:bg-error/20 border border-transparent",
 };
 
 // Bordered: transparent bg, colored border
 const BORDERED: Record<BtnColor, string> = {
   default:
-    "bg-transparent border border-mountain-200 text-mountain-800 hover:bg-mountain-50",
+    "bg-transparent border border-border-base text-text-main hover:bg-surface-2",
   primary:
-    "bg-transparent border border-teal-600 text-teal-700 hover:bg-teal-50",
+    "bg-transparent border border-primary text-primary hover:bg-primary/10",
   secondary:
-    "bg-transparent border border-health-600 text-health-700 hover:bg-health-50",
+    "bg-transparent border border-success text-success hover:bg-success/10",
   success:
-    "bg-transparent border border-health-600 text-health-700 hover:bg-health-50",
+    "bg-transparent border border-success text-success hover:bg-success/10",
   warning:
-    "bg-transparent border border-saffron-500 text-saffron-700 hover:bg-saffron-50",
-  danger: "bg-transparent border border-red-500 text-red-600 hover:bg-red-50",
+    "bg-transparent border border-warning text-warning hover:bg-warning/10",
+  danger: "bg-transparent border border-error text-error hover:bg-error/10",
 };
 
 // Light: text-only with hover bg
 const LIGHT: Record<BtnColor, string> = {
   default:
-    "bg-transparent text-mountain-700 hover:bg-mountain-100 border border-transparent",
+    "bg-transparent text-text-muted hover:bg-surface-2 border border-transparent",
   primary:
-    "bg-transparent text-teal-700 hover:bg-teal-50 border border-transparent",
+    "bg-transparent text-primary hover:bg-primary/10 border border-transparent",
   secondary:
-    "bg-transparent text-health-700 hover:bg-health-50 border border-transparent",
+    "bg-transparent text-success hover:bg-success/10 border border-transparent",
   success:
-    "bg-transparent text-health-700 hover:bg-health-50 border border-transparent",
+    "bg-transparent text-success hover:bg-success/10 border border-transparent",
   warning:
-    "bg-transparent text-saffron-700 hover:bg-saffron-50 border border-transparent",
+    "bg-transparent text-warning hover:bg-warning/10 border border-transparent",
   danger:
-    "bg-transparent text-red-600 hover:bg-red-50 border border-transparent",
+    "bg-transparent text-error hover:bg-error/10 border border-transparent",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────

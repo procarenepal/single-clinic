@@ -30,7 +30,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
           isBlurred && "glass-morphism shadow-xl shadow-black/5",
           isPressable && "cursor-pointer select-none",
           (isPressable || isHoverable) &&
-          "hover-glow hover:border-teal-500/30 dark:hover:border-teal-500/20",
+          "hover-glow hover:border-primary/30",
           className,
         )}
         role={isPressable ? "button" : undefined}

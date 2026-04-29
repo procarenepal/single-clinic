@@ -37,9 +37,9 @@ export default function PathologyParametersTab({
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="relative w-80">
-          <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-mountain-400" />
+          <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
-            className="w-full h-[32px] pl-9 pr-3 border border-mountain-200 rounded text-[13.5px] text-mountain-800 bg-white focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100"
+            className="w-full h-[32px] pl-9 pr-3 border border-border-base rounded text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
             placeholder="Search"
             type="text"
             value={searchQuery}
@@ -53,22 +53,22 @@ export default function PathologyParametersTab({
 
       {filteredParameters.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="clarity-table w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-mountain-50 border-b border-mountain-200">
-                <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+              <tr className="bg-surface-2 border-b border-border-base">
+                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Name
                 </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Category
                 </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Reference Range
                 </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Unit
                 </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.08em]">
+                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Actions
                 </th>
               </tr>
@@ -80,24 +80,24 @@ export default function PathologyParametersTab({
                 return (
                   <tr
                     key={parameter.id}
-                    className="hover:bg-mountain-50/40 border-b border-mountain-100"
+                    className="hover:bg-surface-2/50 border-b border-border-base/50"
                   >
                     <td className="px-4 py-2">
-                      <p className="text-[13.5px] font-medium text-mountain-900">
+                      <p className="text-[13.5px] font-medium text-text-main">
                         {parameter.name}
                       </p>
                     </td>
                     <td className="px-4 py-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-mountain-100 text-mountain-700 border-mountain-200">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-surface-2 text-text-main border-border-base">
                         {categories.find((c) => c.id === parameter.categoryId)
                           ?.name || "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-[13px] text-mountain-700">
+                    <td className="px-4 py-2 text-[13px] text-text-main">
                       {parameter.referenceRange}
                     </td>
                     <td className="px-4 py-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-teal-100 text-teal-700 border-teal-200">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
                         {unitObj?.name || parameter.unit}
                       </span>
                     </td>
@@ -131,7 +131,7 @@ export default function PathologyParametersTab({
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-mountain-500 text-[13.5px]">
+          <p className="text-text-muted text-[13.5px]">
             {searchQuery
               ? "No parameters found"
               : "No pathology parameters yet"}

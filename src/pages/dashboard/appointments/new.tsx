@@ -75,18 +75,18 @@ function CustomSearchSelect({
   return (
     <div className="flex flex-col gap-1.5 relative">
       {(label || required) && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <div
-        className={`flex flex-wrap items-center min-h-[38px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex flex-wrap items-center min-h-[38px] border border-border-base rounded-xl focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface transition-all ${disabled ? "bg-surface-2 opacity-70 cursor-not-allowed" : ""}`}
         onClick={() => !disabled && setOpen(true)}
       >
-        <IoSearchOutline className="ml-3 w-4 h-4 text-mountain-400 shrink-0" />
+        <IoSearchOutline className="ml-3 w-4 h-4 text-text-muted shrink-0" />
         <input
-          className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-400 w-full"
+          className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/60 w-full disabled:cursor-not-allowed"
           disabled={disabled}
           placeholder={
             selected && !open ? selected.primary : placeholder || `Search…`
@@ -100,7 +100,7 @@ function CustomSearchSelect({
         />
         {value && !disabled && (
           <button
-            className="mr-3 text-mountain-400 hover:text-mountain-700"
+            className="mr-3 text-text-muted hover:text-text-main transition-colors"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -112,7 +112,7 @@ function CustomSearchSelect({
           </button>
         )}
       </div>
-      {hint && <p className="text-[11.5px] text-mountain-500 mt-0.5">{hint}</p>}
+      {hint && <p className="text-[11.5px] font-medium text-text-muted mt-1">{hint}</p>}
       {open && !disabled && (
         <>
           <div
@@ -122,16 +122,16 @@ function CustomSearchSelect({
               setOpen(false);
             }}
           />
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded shadow-lg max-h-64 overflow-y-auto">
+          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded-xl shadow-lg shadow-black/5 max-h-64 overflow-y-auto custom-scrollbar glass-morphism overflow-hidden">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-mountain-500 text-center">
+              <p className="px-3 py-3 text-[13px] text-text-muted text-center font-medium">
                 No results
               </p>
             ) : (
               filtered.map((i) => (
                 <button
                   key={i.id}
-                  className={`flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-mountain-50 last:border-0 ${i.id === value ? "bg-teal-50/50" : ""}`}
+                  className={`flex flex-col w-full text-left px-3 py-2.5 hover:bg-surface-2 border-b border-border-base/50 last:border-0 transition-colors ${i.id === value ? "bg-primary/5 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"}`}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -140,11 +140,11 @@ function CustomSearchSelect({
                     setOpen(false);
                   }}
                 >
-                  <span className="text-[13.5px] font-medium text-mountain-800 leading-tight">
+                  <span className="text-[13.5px] font-bold text-text-main leading-tight group-hover:text-primary transition-colors">
                     {i.primary}
                   </span>
                   {i.secondary && (
-                    <span className="text-[11.5px] text-mountain-500 mt-0.5 leading-tight">
+                    <span className="text-[11px] font-medium text-text-muted mt-0.5 leading-tight">
                       {i.secondary}
                     </span>
                   )}
@@ -174,16 +174,16 @@ function CustomInput({
   return (
     <div className="flex flex-col gap-1.5 w-full relative">
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <div
-        className={`flex items-center border border-mountain-200 rounded min-h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${disabled || readOnly ? "bg-mountain-50" : ""}`}
+        className={`flex items-center border border-border-base rounded-xl min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all ${disabled || readOnly ? "bg-surface-2 opacity-70 cursor-not-allowed" : ""}`}
       >
         <input
-          className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
+          className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/60 disabled:cursor-not-allowed"
           disabled={disabled}
           name={name}
           placeholder={placeholder}
@@ -194,13 +194,13 @@ function CustomInput({
           onChange={onChange}
         />
         {endContent && (
-          <div className="px-3 border-l border-mountain-100 h-full flex items-center bg-mountain-50">
+          <div className="px-3 border-l border-border-base h-full flex items-center bg-surface-2 rounded-r-xl">
             {endContent}
           </div>
         )}
       </div>
       {description && (
-        <p className="text-[11.5px] text-mountain-500">{description}</p>
+        <p className="text-[11.5px] font-medium text-text-muted mt-1">{description}</p>
       )}
     </div>
   );
@@ -703,11 +703,11 @@ export default function NewAppointmentPage() {
       <div className="flex flex-col gap-6">
         <div>
           <h1 className={title({ size: "sm" })}>Schedule New Appointment</h1>
-          <p className="text-mountain-500 mt-1 text-[13.5px]">
+          <p className="text-text-muted mt-1 text-[13.5px] font-medium">
             Create a new appointment for a patient
           </p>
         </div>
-        <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
+        <div className="bg-surface border border-border-base rounded-2xl p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
         </div>
       </div>
@@ -721,7 +721,7 @@ export default function NewAppointmentPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className={title({ size: "sm" })}>Schedule New Appointment</h1>
-            <p className="text-mountain-500 mt-1 text-[13.5px]">
+            <p className="text-text-muted mt-1 text-[13.5px] font-medium">
               Create a new appointment for a patient
             </p>
           </div>
@@ -750,10 +750,10 @@ export default function NewAppointmentPage() {
         </div>
 
         {/* Form Container */}
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-            <h4 className="font-semibold text-[15px] text-mountain-900 flex items-center gap-2">
-              <IoCalendarOutline className="w-5 h-5 text-teal-600" />
+        <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border-base bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main flex items-center gap-2">
+              <IoCalendarOutline className="w-5 h-5 text-primary" />
               Appointment Details
             </h4>
           </div>
@@ -882,11 +882,11 @@ export default function NewAppointmentPage() {
             </div>
 
             <div className="mt-6 flex flex-col gap-1.5 w-full">
-              <label className="text-[13px] font-medium text-mountain-700">
+              <label className="text-[13px] font-medium text-text-main">
                 Reason for Visit
               </label>
               <textarea
-                className="w-full text-[13.5px] px-3 py-2 bg-white border border-mountain-200 rounded min-h-[80px] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 text-mountain-800 placeholder:text-mountain-400"
+                className="w-full text-[13.5px] px-3 py-2.5 bg-surface border border-border-base rounded-xl min-h-[80px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main placeholder:text-text-muted/60 transition-all custom-scrollbar"
                 name="reason"
                 placeholder="Brief description of why the patient is visiting..."
                 value={appointmentInfo.reason}
@@ -895,11 +895,11 @@ export default function NewAppointmentPage() {
             </div>
 
             <div className="mt-6 flex flex-col gap-1.5 w-full">
-              <label className="text-[13px] font-medium text-mountain-700">
+              <label className="text-[13px] font-medium text-text-main">
                 Notes (Optional)
               </label>
               <textarea
-                className="w-full text-[13.5px] px-3 py-2 bg-white border border-mountain-200 rounded min-h-[80px] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 text-mountain-800 placeholder:text-mountain-400"
+                className="w-full text-[13.5px] px-3 py-2.5 bg-surface border border-border-base rounded-xl min-h-[80px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main placeholder:text-text-muted/60 transition-all custom-scrollbar"
                 name="notes"
                 placeholder="Any additional information..."
                 value={appointmentInfo.notes}
@@ -911,14 +911,14 @@ export default function NewAppointmentPage() {
 
         {/* Existing Appointments Section */}
         {appointmentInfo.appointmentDate && (
-          <div className="bg-white border border-mountain-200 rounded shadow-sm">
-            <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50 flex justify-between items-center">
+          <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-hidden mt-6">
+            <div className="px-5 py-4 border-b border-border-base bg-surface-2/50 flex justify-between items-center">
               <div>
-                <h4 className="font-semibold text-[15px] text-mountain-900 flex items-center gap-2">
-                  <IoTimeOutline className="w-5 h-5 text-teal-600" />
+                <h4 className="font-semibold text-[15px] text-text-main flex items-center gap-2">
+                  <IoTimeOutline className="w-5 h-5 text-primary" />
                   Existing Appointments
                 </h4>
-                <p className="text-[12.5px] text-mountain-500 mt-0.5">
+                <p className="text-[12.5px] font-medium text-text-muted mt-0.5">
                   Scheduled for{" "}
                   {new Date(appointmentInfo.appointmentDate).toLocaleDateString(
                     "en-US",
@@ -941,39 +941,39 @@ export default function NewAppointmentPage() {
                 </div>
               ) : existingAppointments.length === 0 ? (
                 <div className="text-center py-12 flex flex-col items-center">
-                  <div className="w-12 h-12 mb-3 rounded-full bg-mountain-50 border border-mountain-100 flex items-center justify-center text-mountain-300">
+                  <div className="w-12 h-12 mb-3 rounded-full bg-surface-2 border border-border-base flex items-center justify-center text-text-muted">
                     <IoCalendarOutline className="w-6 h-6" />
                   </div>
-                  <h3 className="text-[14.5px] font-medium text-mountain-800 mb-1">
+                  <h3 className="text-[14.5px] font-bold text-text-main mb-1">
                     No appointments scheduled
                   </h3>
-                  <p className="text-[13px] text-mountain-500">
+                  <p className="text-[13px] font-medium text-text-muted">
                     The schedule is clear for this date.
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-mountain-50 border-b border-mountain-200">
-                        <th className="py-2.5 px-5 text-[12px] font-semibold text-mountain-600 uppercase tracking-wider">
+                      <tr className="bg-surface-2/50 border-b border-border-base">
+                        <th className="py-2.5 px-5 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                           Patient
                         </th>
-                        <th className="py-2.5 px-5 text-[12px] font-semibold text-mountain-600 uppercase tracking-wider">
+                        <th className="py-2.5 px-5 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                           Doctor
                         </th>
-                        <th className="py-2.5 px-5 text-[12px] font-semibold text-mountain-600 uppercase tracking-wider">
+                        <th className="py-2.5 px-5 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                           Time
                         </th>
-                        <th className="py-2.5 px-5 text-[12px] font-semibold text-mountain-600 uppercase tracking-wider">
+                        <th className="py-2.5 px-5 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                           Type
                         </th>
-                        <th className="py-2.5 px-5 text-[12px] font-semibold text-mountain-600 uppercase tracking-wider">
+                        <th className="py-2.5 px-5 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                           Status
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-mountain-100">
+                    <tbody className="divide-y divide-border-base/50">
                       {existingAppointments.map((app) => {
                         const patName = getPatientNameById(app.patientId);
                         const initials =
@@ -989,26 +989,26 @@ export default function NewAppointmentPage() {
                         return (
                           <tr
                             key={app.id}
-                            className="hover:bg-mountain-50/50 transition-colors"
+                            className="hover:bg-surface-2/30 transition-colors"
                           >
                             <td className="py-3 px-5 whitespace-nowrap">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded border border-mountain-200 bg-white text-mountain-600 flex items-center justify-center text-[11px] font-bold">
+                                <div className="w-8 h-8 rounded-lg border border-border-base bg-surface-2 text-text-muted flex items-center justify-center text-[11px] font-bold">
                                   {initials}
                                 </div>
-                                <span className="text-[13.5px] font-medium text-mountain-900">
+                                <span className="text-[13.5px] font-bold text-text-main">
                                   {patName}
                                 </span>
                               </div>
                             </td>
-                            <td className="py-3 px-5 whitespace-nowrap text-[13.5px] text-mountain-700">
+                            <td className="py-3 px-5 whitespace-nowrap text-[13px] font-medium text-text-muted">
                               {getDoctorNameById(app.doctorId)}
                             </td>
-                            <td className="py-3 px-5 whitespace-nowrap text-[13.5px] text-mountain-800">
+                            <td className="py-3 px-5 whitespace-nowrap text-[13px] font-medium text-text-main">
                               {app.startTime ? (
                                 formatTime(app.startTime)
                               ) : (
-                                <span className="text-mountain-400">
+                                <span className="text-text-muted/50 italic">
                                   Not set
                                 </span>
                               )}
@@ -1016,7 +1016,7 @@ export default function NewAppointmentPage() {
                                 app.endTime &&
                                 ` - ${formatTime(app.endTime)}`}
                             </td>
-                            <td className="py-3 px-5 whitespace-nowrap text-[13.5px] text-mountain-700">
+                            <td className="py-3 px-5 whitespace-nowrap text-[13px] font-medium text-text-muted">
                               {getAppointmentTypeNameById(
                                 app.appointmentTypeId,
                               )}

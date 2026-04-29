@@ -61,17 +61,17 @@ function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 w-full relative ${className || ""}`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <div
-        className={`flex items-center border border-mountain-200 rounded min-h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${disabled || readOnly ? "bg-mountain-50" : ""}`}
+        className={`flex items-center border border-border-base rounded min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 ${disabled || readOnly ? "bg-surface-2" : ""}`}
       >
         {type === "textarea" ? (
           <textarea
-            className="flex-1 w-full text-[13.5px] px-3 py-2 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500 min-h-[80px]"
+            className="flex-1 w-full text-[13.5px] px-3 py-2 bg-transparent outline-none text-text-main placeholder:text-text-muted/70 disabled:text-text-muted min-h-[80px]"
             disabled={disabled}
             name={name}
             placeholder={placeholder}
@@ -82,7 +82,7 @@ function CustomInput({
           />
         ) : (
           <input
-            className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500"
+            className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/70 disabled:text-text-muted"
             disabled={disabled}
             name={name}
             placeholder={placeholder}
@@ -95,7 +95,7 @@ function CustomInput({
         )}
       </div>
       {description && (
-        <p className="text-[11.5px] text-mountain-500">{description}</p>
+        <p className="text-[11.5px] text-text-muted">{description}</p>
       )}
     </div>
   );
@@ -136,18 +136,18 @@ function SearchSelect({
   return (
     <div className="flex flex-col gap-1.5 relative w-full">
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <div
-        className={`flex flex-wrap items-center min-h-[38px] border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex flex-wrap items-center min-h-[38px] border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface ${disabled ? "bg-surface-2" : ""}`}
         onClick={() => !disabled && setOpen(true)}
       >
-        <IoSearchOutline className="ml-3 w-4 h-4 text-mountain-400 shrink-0" />
+        <IoSearchOutline className="ml-3 w-4 h-4 text-text-muted/70 shrink-0" />
         <input
-          className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-400 w-full"
+          className="flex-1 text-[13.5px] px-2 py-1.5 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/70 w-full"
           disabled={disabled}
           placeholder={
             selected && !open ? selected.primary : placeholder || `Search…`
@@ -161,7 +161,7 @@ function SearchSelect({
         />
         {value && !disabled && (
           <button
-            className="mr-3 text-mountain-400 hover:text-mountain-700"
+            className="mr-3 text-text-muted/70 hover:text-text-main"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -174,7 +174,7 @@ function SearchSelect({
         )}
       </div>
       {description && (
-        <p className="text-[11.5px] text-mountain-500">{description}</p>
+        <p className="text-[11.5px] text-text-muted">{description}</p>
       )}
       {open && !disabled && (
         <>
@@ -185,16 +185,16 @@ function SearchSelect({
               setOpen(false);
             }}
           />
-          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded shadow-lg max-h-60 overflow-y-auto w-full min-w-max">
+          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded shadow-lg max-h-60 overflow-y-auto w-full min-w-max">
             {filtered.length === 0 ? (
-              <p className="px-3 py-3 text-[13px] text-mountain-500 text-center">
+              <p className="px-3 py-3 text-[13px] text-text-muted text-center">
                 No results found
               </p>
             ) : (
               filtered.map((i) => (
                 <button
                   key={i.id}
-                  className={`flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-mountain-50 last:border-0 ${i.id === value ? "bg-teal-50/50" : ""}`}
+                  className={`flex flex-col w-full text-left px-3 py-2 hover:bg-primary/10 border-b border-border-base/30 last:border-0 ${i.id === value ? "bg-primary/5" : ""}`}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -203,11 +203,11 @@ function SearchSelect({
                     setOpen(false);
                   }}
                 >
-                  <span className="text-[13.5px] font-medium text-mountain-800 leading-tight">
+                  <span className="text-[13.5px] font-medium text-text-main leading-tight">
                     {i.primary}
                   </span>
                   {i.secondary && (
-                    <span className="text-[11.5px] text-mountain-500 mt-0.5 leading-tight">
+                    <span className="text-[11.5px] text-text-muted mt-0.5 leading-tight">
                       {i.secondary}
                     </span>
                   )}
@@ -558,7 +558,7 @@ export default function EditPrescriptionPage() {
         <div>
           <h1 className={title({ size: "lg" })}>Edit Prescription</h1>
         </div>
-        <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
+        <div className="bg-surface border border-border-base rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
         </div>
       </div>
@@ -579,13 +579,13 @@ export default function EditPrescriptionPage() {
             </Button>
             <div>
               <h1 className={title({ size: "lg" })}>Edit Prescription</h1>
-              <p className="text-[13.5px] text-mountain-500 mt-1">
+              <p className="text-[13.5px] text-text-muted mt-1">
                 {accessError}
               </p>
             </div>
           </div>
         </div>
-        <div className="bg-white border border-mountain-200 rounded p-8 text-center text-mountain-600">
+        <div className="bg-surface border border-border-base rounded p-8 text-center text-text-main/80">
           You don&apos;t have access to this prescription. It may belong to
           another branch.
         </div>
@@ -606,7 +606,7 @@ export default function EditPrescriptionPage() {
           </Button>
           <div>
             <h1 className={title({ size: "lg" })}>Edit Prescription</h1>
-            <p className="text-[13.5px] text-mountain-500 mt-1">
+            <p className="text-[13.5px] text-text-muted mt-1">
               Update prescription details
             </p>
           </div>
@@ -615,9 +615,9 @@ export default function EditPrescriptionPage() {
 
       <div className="space-y-6">
         {/* General Information */}
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-            <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+        <div className="bg-surface border border-border-base rounded shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
               General Information
             </h4>
           </div>
@@ -671,9 +671,9 @@ export default function EditPrescriptionPage() {
         </div>
 
         {/* Add Medicine */}
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-            <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+        <div className="bg-surface border border-border-base rounded shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
               Add Medicine
             </h4>
           </div>
@@ -732,34 +732,34 @@ export default function EditPrescriptionPage() {
         </div>
 
         {/* Medicines List */}
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-            <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+        <div className="bg-surface border border-border-base rounded shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
               Prescription Summary ({items.length})
             </h4>
           </div>
           {items.length === 0 ? (
-            <div className="p-8 text-center text-[13.5px] text-mountain-500">
+            <div className="p-8 text-center text-[13.5px] text-text-muted">
               No medicines added yet
             </div>
           ) : (
             <div className="w-full overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-200">
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/4">
+                  <tr className="bg-surface-2 border-b border-border-base">
+                    <th className="px-5 py-3 text-[13px] font-semibold text-text-main w-1/4">
                       Medicine
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/6">
+                    <th className="px-5 py-3 text-[13px] font-semibold text-text-main w-1/6">
                       Dosage
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/6">
+                    <th className="px-5 py-3 text-[13px] font-semibold text-text-main w-1/6">
                       Duration
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/6">
+                    <th className="px-5 py-3 text-[13px] font-semibold text-text-main w-1/6">
                       Time & Freq
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-24">
+                    <th className="px-5 py-3 text-[13px] font-semibold text-text-main w-24">
                       Action
                     </th>
                   </tr>
@@ -768,24 +768,24 @@ export default function EditPrescriptionPage() {
                   {items.map((item) => (
                     <tr
                       key={item.id}
-                      className="hover:bg-mountain-50/30 transition-colors"
+                      className="hover:bg-surface-2/30 transition-colors"
                     >
                       <td className="px-5 py-3">
-                        <span className="text-[13.5px] font-medium text-mountain-900">
+                        <span className="text-[13.5px] font-medium text-text-main">
                           {item.medicineName}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-[13.5px] text-mountain-700">
+                      <td className="px-5 py-3 text-[13.5px] text-text-main">
                         {item.dosage || "-"}
                       </td>
-                      <td className="px-5 py-3 text-[13.5px] text-mountain-700">
+                      <td className="px-5 py-3 text-[13.5px] text-text-main">
                         {item.duration || "-"}
                       </td>
                       <td className="px-5 py-3">
-                        <span className="text-[13.5px] text-mountain-700 capitalize block leading-tight">
+                        <span className="text-[13.5px] text-text-main capitalize block leading-tight">
                           {item.time || "-"}
                         </span>
-                        <span className="text-[11.5px] text-mountain-500 capitalize block">
+                        <span className="text-[11.5px] text-text-muted capitalize block">
                           {item.interval || "-"}
                         </span>
                       </td>
@@ -809,9 +809,9 @@ export default function EditPrescriptionPage() {
         </div>
 
         {/* Notes */}
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-            <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+        <div className="bg-surface border border-border-base rounded shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
               Additional Notes
             </h4>
           </div>

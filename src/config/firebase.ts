@@ -20,27 +20,51 @@ const validateEnvVars = () => {
     "VITE_FIREBASE_APP_ID",
   ];
 
-  const missingVars = requiredVars.filter(
-    (varName) => !import.meta.env[varName],
-  );
+  const missingVars = requiredVars.filter((varName) => {
+    try {
+      // Check import.meta.env (Vite) or process.env (Node)
+      return !(
+        (typeof import.meta !== "undefined" &&
+          import.meta.env &&
+          import.meta.env[varName]) ||
+        process.env[varName]
+      );
+    } catch (e) {
+      return !process.env[varName];
+    }
+  });
 
   if (missingVars.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missingVars.join(", ")}. ` +
-        `Please add them to your .env file.`,
+      `Please add them to your .env file.`,
     );
+  }
+};
+
+// Helper function to get environment variables
+const getEnv = (name: string) => {
+  try {
+    return (
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        import.meta.env[name]) ||
+      process.env[name]
+    );
+  } catch (e) {
+    return process.env[name];
   }
 };
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: getEnv("VITE_FIREBASE_API_KEY"),
+  authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: getEnv("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
+  appId: getEnv("VITE_FIREBASE_APP_ID"),
+  measurementId: getEnv("VITE_FIREBASE_MEASUREMENT_ID"),
 };
 
 // Validate environment variables
@@ -62,8 +86,12 @@ setPersistence(auth, browserLocalPersistence).catch((error) => {
 
 // Configure custom action code settings for password reset
 const getActionCodeSettings = () => {
-  const customDomain = import.meta.env.VITE_PASSWORD_RESET_DOMAIN;
-  const baseUrl = customDomain || window.location.origin;
+  const customDomain = getEnv("VITE_PASSWORD_RESET_DOMAIN");
+  let baseUrl = customDomain || "";
+
+  if (!baseUrl && typeof window !== "undefined") {
+    baseUrl = window.location.origin;
+  }
 
   return {
     url: `${baseUrl}/reset-password`,

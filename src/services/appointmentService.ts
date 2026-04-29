@@ -33,14 +33,21 @@ const mapAppointmentDoc = (
     throw new Error("Appointment data is undefined");
   }
 
+  const parseDate = (val: any) => {
+    if (!val) return undefined;
+    if (typeof val.toDate === 'function') return val.toDate();
+    if (typeof val === 'string' || typeof val === 'number') return new Date(val);
+    return undefined;
+  };
+
   return {
     id: docSnap.id,
     ...data,
-    appointmentDate: data.appointmentDate?.toDate() || new Date(),
-    appointmentBS: data.appointmentBS?.toDate(),
-    registrationDate: data.registrationDate?.toDate() || new Date(),
-    createdAt: data.createdAt?.toDate() || new Date(),
-    updatedAt: data.updatedAt?.toDate() || new Date(),
+    appointmentDate: parseDate(data.appointmentDate) || new Date(),
+    appointmentBS: parseDate(data.appointmentBS),
+    registrationDate: parseDate(data.registrationDate) || new Date(),
+    createdAt: parseDate(data.createdAt) || new Date(),
+    updatedAt: parseDate(data.updatedAt) || new Date(),
   } as Appointment;
 };
 
@@ -180,7 +187,6 @@ export const appointmentService = {
       const q = query(
         appointmentsCollection,
         where("patientId", "==", patientId),
-        orderBy("appointmentDate", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -190,7 +196,8 @@ export const appointmentService = {
         appointments.push(mapAppointmentDoc(doc));
       });
 
-      return appointments;
+      // Sort by date descending in memory to avoid index error
+      return appointments.sort((a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime());
     } catch (error) {
       console.error("Error fetching patient appointments:", error);
       throw new Error("Failed to fetch patient appointments");
@@ -209,7 +216,6 @@ export const appointmentService = {
       const q = query(
         appointmentsCollection,
         where("doctorId", "==", doctorId),
-        orderBy("appointmentDate", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -219,7 +225,8 @@ export const appointmentService = {
         appointments.push(mapAppointmentDoc(doc));
       });
 
-      return appointments;
+      // Sort by date descending in memory to avoid index error
+      return appointments.sort((a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime());
     } catch (error) {
       console.error("Error fetching doctor appointments:", error);
       throw new Error("Failed to fetch doctor appointments");

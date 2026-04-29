@@ -17,12 +17,14 @@ import {
   IoSettingsOutline,
   IoChevronDownOutline,
   IoCloseOutline,
+  IoChatbubbleEllipsesOutline,
 } from "react-icons/io5";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { enquiryService } from "@/services/enquiryService";
 import { clinicService } from "@/services/clinicService";
 import { Clinic } from "@/types/models";
 import { storage, APPWRITE_BUCKET_ID } from "@/config/appwrite";
@@ -140,9 +142,12 @@ export const DashboardHeader = ({
 
       setIsSearching(true);
       try {
-        const [patients, doctors] = await Promise.all([
+        const [patients, doctors, enquiries] = await Promise.all([
           patientService.getPatientsByClinic(clinicId),
           doctorService.getDoctorsByClinic(clinicId),
+          enquiryService.getEnquiries(clinicId, undefined, {
+            dateField: "createdAt",
+          }),
         ]);
 
         const ql = query.toLowerCase();
@@ -183,20 +188,38 @@ export const DashboardHeader = ({
           }
         });
 
-        // Patients first, then sort by match position
-        results.sort((a, b) => {
-          if (a.type === "patient" && b.type === "doctor") return -1;
-          if (a.type === "doctor" && b.type === "patient") return 1;
-
-          return (
-            a.title.toLowerCase().indexOf(ql) -
-            b.title.toLowerCase().indexOf(ql)
-          );
+        enquiries.forEach((e) => {
+          if (
+            e.fullName?.toLowerCase().includes(ql) ||
+            e.phone?.toLowerCase().includes(ql) ||
+            e.reasonForVisit?.toLowerCase().includes(ql)
+          ) {
+            results.push({
+              id: e.id,
+              type: "enquiry" as any,
+              title: e.fullName,
+              subtitle: `Enquiry: ${e.reasonForVisit || "General"}`,
+              extraInfo: e.phone,
+              href: "/dashboard/enquiries",
+            });
+          }
         });
 
-        setSearchResults(results.slice(0, 8));
+        // Sort by match position and type
+        results.sort((a, b) => {
+          const aIndex = a.title.toLowerCase().indexOf(ql);
+          const bIndex = b.title.toLowerCase().indexOf(ql);
+
+          if (aIndex !== bIndex) return aIndex - bIndex;
+          
+          const typeOrder = { patient: 0, doctor: 1, enquiry: 2 };
+          return (typeOrder[a.type as keyof typeof typeOrder] ?? 99) - (typeOrder[b.type as keyof typeof typeOrder] ?? 99);
+        });
+
+        setSearchResults(results.slice(0, 10));
         setShowResults(true);
-      } catch {
+      } catch (err) {
+        console.error("Search error:", err);
         addToast({ title: "Search failed", color: "danger" });
       } finally {
         setIsSearching(false);
@@ -263,31 +286,14 @@ export const DashboardHeader = ({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <header className="fixed top-0 left-0 right-0 z-30 h-14 bg-white/85 dark:bg-zinc-950/85 backdrop-blur-lg border-b border-mountain-200/60 dark:border-zinc-800/60 flex items-center px-4 gap-4 print:hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] dark:shadow-none transition-all duration-300">
+    <header className="fixed top-0 left-0 right-0 z-30 h-14 bg-surface/80 backdrop-blur-xl border-b border-border-base flex items-center px-4 gap-4 print:hidden shadow-sm transition-all duration-300">
       {/* ── Left: toggle + logo ─────────────────────────────────────────── */}
       <div className="flex items-center gap-3 shrink-0">
-        <Button
-          isIconOnly
-          aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-          className="text-mountain-600 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-mountain-50 dark:hover:bg-zinc-800 border border-mountain-200/60 dark:border-zinc-800/60 shadow-sm transition-all"
-          color="default"
-          radius="md"
-          size="sm"
-          variant="flat"
-          onClick={toggleSidebar}
-        >
-          {isSidebarOpen ? (
-            <IoGridOutline className="w-[18px] h-[18px]" />
-          ) : (
-            <IoMenuOutline className="w-[18px] h-[18px]" />
-          )}
-        </Button>
-
         <Link
-          className="flex items-center gap-2.5 text-mountain-900 dark:text-zinc-100 no-underline font-bold transition-all hover:opacity-90 ml-1"
+          className="flex items-center gap-2.5 text-text-main no-underline font-bold transition-all hover:opacity-90"
           to="/"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center shrink-0 overflow-hidden shadow-sm shadow-teal-600/30 ring-1 ring-white/20 dark:ring-white/10">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shrink-0 overflow-hidden shadow-sm shadow-primary/20 ring-1 ring-white/20 dark:ring-white/10">
             {clinicData?.logo ? (
               <img
                 alt="logo"
@@ -301,43 +307,66 @@ export const DashboardHeader = ({
               </span>
             )}
           </div>
-          <span className="font-bold text-[14px] hidden sm:block leading-none text-mountain-900 dark:text-zinc-100 tracking-tight">
+          <span className="font-bold text-[14.5px] hidden sm:block leading-none text-text-main tracking-tight">
             {clinicData?.name || "ProCare Software"}
           </span>
         </Link>
+
+        <Button
+          isIconOnly
+          aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          className="text-text-muted bg-surface-2 hover:bg-surface-3 hover:text-primary border border-border-base/50 shadow-sm transition-all duration-200 ml-1"
+          color="default"
+          radius="lg"
+          size="sm"
+          variant="flat"
+          onClick={toggleSidebar}
+        >
+          {isSidebarOpen ? (
+            <IoMenuOutline className="w-[18px] h-[18px]" />
+          ) : (
+            <IoMenuOutline className="w-[18px] h-[18px]" />
+          )}
+        </Button>
       </div>
 
       {/* ── Center: search ─────────────────────────────────────────────── */}
       <div
-        className="hidden md:block absolute left-1/2 -translate-x-1/2 w-full max-w-[480px] transition-all"
+        className="hidden md:block absolute left-1/2 -translate-x-1/2 w-full max-w-[440px] transition-all"
       >
         <Input
           ref={searchInputRef}
           fullWidth
           classNames={{
-            inputWrapper: "rounded-xl bg-mountain-50/80 dark:bg-zinc-900/60 border border-mountain-200/50 dark:border-zinc-800/50 hover:bg-mountain-100/80 dark:hover:bg-zinc-800/80 focus-within:!bg-white dark:focus-within:!bg-zinc-950 focus-within:shadow-sm focus-within:!border-teal-500/50 h-9 px-3 transition-all duration-300",
-            input: "text-[13px]"
+            inputWrapper: "rounded-xl bg-surface-2/50 border border-border-base/50 hover:bg-surface-2/80 focus-within:!bg-surface focus-within:shadow-md focus-within:shadow-primary/5 focus-within:!border-primary/50 h-9 px-3 transition-all duration-300",
+            input: "text-[13px] text-text-main placeholder:text-text-muted/60"
           }}
           endContent={
-            searchQuery && (
-              <button
-                className="text-mountain-400 hover:text-mountain-600 dark:hover:text-zinc-300 transition-colors bg-mountain-100 dark:bg-zinc-800 rounded-full p-0.5 ml-1"
-                type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setShowResults(false);
-                }}
-              >
-                <IoCloseOutline className="w-3.5 h-3.5" />
-              </button>
-            )
+            <div className="flex items-center gap-1.5 ml-1">
+              {searchQuery ? (
+                <button
+                  className="text-text-muted hover:text-text-main transition-colors bg-surface-3 rounded-md p-0.5"
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setShowResults(false);
+                  }}
+                >
+                  <IoCloseOutline className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <kbd className="hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border border-border-base bg-surface-3 px-1.5 font-mono text-[10px] font-medium text-text-muted opacity-100">
+                  <span className="text-[10px]">⌘</span>K
+                </kbd>
+              )}
+            </div>
           }
-          placeholder="Search specialists, patients, or records… (⌘K)"
+          placeholder="Search specialists, patients, or records…"
           startContent={
             isSearching ? (
-              <span className="w-3.5 h-3.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+              <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             ) : (
-              <IoSearchOutline className="w-3.5 h-3.5 text-mountain-400/80 dark:text-zinc-500" />
+              <IoSearchOutline className="w-3.5 h-3.5 text-text-muted/60 group-focus-within:text-primary transition-colors" />
             )
           }
           value={searchQuery}
@@ -372,14 +401,18 @@ export const DashboardHeader = ({
                         {/* Icon */}
                         <div
                           className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${result.type === "patient"
-                            ? "bg-teal-100 text-teal-700"
-                            : "bg-health-100 text-health-700"
+                            ? "bg-primary/10 text-primary"
+                            : result.type === "doctor"
+                              ? "bg-success/10 text-success"
+                              : "bg-amber-500/10 text-amber-600"
                             }`}
                         >
                           {result.type === "patient" ? (
                             <IoPersonOutline className="w-3.5 h-3.5" />
-                          ) : (
+                          ) : result.type === "doctor" ? (
                             <IoMedicalOutline className="w-3.5 h-3.5" />
+                          ) : (
+                            <IoChatbubbleEllipsesOutline className="w-3.5 h-3.5" />
                           )}
                         </div>
                         {/* Text */}
@@ -415,14 +448,20 @@ export const DashboardHeader = ({
           <DropdownTrigger>
             <button
               aria-label="User menu"
-              className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-transparent hover:bg-mountain-50/80 hover:border-mountain-200/50 dark:hover:bg-zinc-900/50 dark:hover:border-zinc-800/50 transition-all duration-200 ml-1 group"
+              className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-border-base/40 bg-surface-2/30 hover:bg-surface-2 hover:border-border-base transition-all duration-200 ml-1 group"
               type="button"
             >
-              <Avatar src={userData?.photoURL || currentUser?.photoURL || ""} color="primary" name={displayName} size="sm" className="ring-2 ring-white dark:ring-zinc-950 shadow-sm w-7 h-7" />
-              <span className="hidden sm:block text-[13px] font-medium text-mountain-900 dark:text-zinc-200 max-w-[100px] truncate ml-0.5">
+              <Avatar
+                className="ring-2 ring-surface shadow-sm w-7 h-7"
+                color="primary"
+                name={displayName}
+                size="sm"
+                src={userData?.photoURL || currentUser?.photoURL || ""}
+              />
+              <span className="hidden sm:block text-[13px] font-semibold text-text-main max-w-[100px] truncate ml-0.5">
                 {displayName}
               </span>
-              <IoChevronDownOutline className="w-3.5 h-3.5 text-mountain-400 dark:text-zinc-500 group-hover:text-mountain-600 dark:group-hover:text-zinc-300 transition-colors" />
+              <IoChevronDownOutline className="w-3.5 h-3.5 text-text-muted group-hover:text-primary transition-colors" />
             </button>
           </DropdownTrigger>
 
@@ -430,10 +469,10 @@ export const DashboardHeader = ({
             {/* Header info */}
             <DropdownSection showDivider>
               <div className="px-3 py-1.5">
-                <p className="text-[11px] font-semibold text-mountain-900 truncate">
+                <p className="text-[11px] font-semibold text-text-main truncate">
                   {displayName}
                 </p>
-                <p className="text-[10px] text-mountain-400 truncate">
+                <p className="text-[10px] text-text-muted truncate">
                   {currentUser?.email}
                 </p>
               </div>

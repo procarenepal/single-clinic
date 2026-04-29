@@ -61,26 +61,26 @@ export const Checkbox: React.FC<CheckboxProps> = ({
 
   const activeClasses =
     color === "primary"
-      ? "bg-nepal-500 border-nepal-500 text-white"
+      ? "bg-primary border-primary text-white"
       : color === "secondary" || color === "success"
-        ? "bg-health-600 border-health-600 text-white"
+        ? "bg-success border-success text-white"
         : color === "warning"
-          ? "bg-saffron-500 border-saffron-500 text-white"
+          ? "bg-warning border-warning text-white"
           : color === "danger"
-            ? "bg-red-600 border-red-600 text-white"
-            : "bg-mountain-800 border-mountain-800 text-white";
+            ? "bg-error border-error text-white"
+            : "bg-text-main border-text-main text-white";
 
   return (
     <label
       className={clsx(
-        "inline-flex items-center gap-2 text-sm text-mountain-800",
+        "inline-flex items-center gap-2 text-sm text-text-main",
         disabled && "cursor-not-allowed opacity-60",
         className,
       )}
     >
       <span
         className={clsx(
-          "inline-flex items-center justify-center rounded border border-mountain-400 bg-white",
+          "inline-flex items-center justify-center rounded border border-border-base bg-surface",
           boxSize,
           (value || isIndeterminate) && activeClasses,
         )}

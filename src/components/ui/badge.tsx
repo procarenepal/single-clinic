@@ -19,30 +19,30 @@ const baseBadge =
   "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium";
 
 const solidMap: Record<BadgeColor, string> = {
-  default: "bg-mountain-100 text-mountain-800",
-  primary: "bg-nepal-100 text-nepal-800",
-  secondary: "bg-health-100 text-health-800",
-  success: "bg-health-100 text-health-800",
-  warning: "bg-saffron-100 text-saffron-800",
-  danger: "bg-red-100 text-red-700",
+  default: "bg-surface-2 text-text-main",
+  primary: "bg-primary text-white",
+  secondary: "bg-success text-white",
+  success: "bg-success text-white",
+  warning: "bg-warning text-white",
+  danger: "bg-error text-white",
 };
 
 const flatMap: Record<BadgeColor, string> = {
-  default: "bg-mountain-50 text-mountain-800",
-  primary: "bg-nepal-50 text-nepal-700",
-  secondary: "bg-health-50 text-health-700",
-  success: "bg-health-50 text-health-700",
-  warning: "bg-saffron-50 text-saffron-700",
-  danger: "bg-red-50 text-red-700",
+  default: "bg-surface-2 text-text-muted",
+  primary: "bg-primary/10 text-primary",
+  secondary: "bg-success/10 text-success",
+  success: "bg-success/10 text-success",
+  warning: "bg-warning/10 text-warning",
+  danger: "bg-error/10 text-error",
 };
 
 const borderedMap: Record<BadgeColor, string> = {
-  default: "border border-mountain-200 text-mountain-800",
-  primary: "border border-nepal-400 text-nepal-700",
-  secondary: "border border-health-400 text-health-700",
-  success: "border border-health-400 text-health-700",
-  warning: "border border-saffron-400 text-saffron-700",
-  danger: "border border-red-400 text-red-700",
+  default: "border border-border-base text-text-main",
+  primary: "border border-primary text-primary",
+  secondary: "border border-success text-success",
+  success: "border border-success text-success",
+  warning: "border border-warning text-warning",
+  danger: "border border-error text-error",
 };
 
 export const Badge: React.FC<BadgeProps> = ({

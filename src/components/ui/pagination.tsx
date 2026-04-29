@@ -34,7 +34,7 @@ export const Pagination: React.FC<PaginationProps> = ({
       <button
         aria-label="Previous page"
         className={clsx(
-          "w-8 h-8 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all",
+          "w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-primary/50 hover:text-primary hover:bg-surface-2 transition-all",
         )}
         disabled={page <= 1}
         type="button"
@@ -48,8 +48,8 @@ export const Pagination: React.FC<PaginationProps> = ({
           className={clsx(
             "w-8 h-8 flex items-center justify-center rounded border text-sm font-medium transition-all",
             p === page
-              ? "bg-teal-700 text-white border-teal-700 shadow-sm"
-              : "border-mountain-300 text-mountain-600 hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50",
+              ? "bg-primary text-white border-primary shadow-sm"
+              : "border-border-base text-text-muted hover:border-primary/50 hover:text-primary hover:bg-surface-2",
           )}
           type="button"
           onClick={() => handleChange(p)}
@@ -60,7 +60,7 @@ export const Pagination: React.FC<PaginationProps> = ({
       <button
         aria-label="Next page"
         className={clsx(
-          "w-8 h-8 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all",
+          "w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-primary/50 hover:text-primary hover:bg-surface-2 transition-all",
         )}
         disabled={page >= total}
         type="button"

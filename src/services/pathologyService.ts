@@ -59,7 +59,6 @@ export const pathologyService = {
         testsRef,
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("createdAt", "desc"),
       );
 
       if (branchId) {
@@ -68,7 +67,6 @@ export const pathologyService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("isActive", "==", true),
-          orderBy("createdAt", "desc"),
         );
       }
 
@@ -90,7 +88,12 @@ export const pathologyService = {
         } as PathologyTest);
       });
 
-      return tests;
+      // Sort by createdAt descending in memory to avoid index error
+      return tests.sort((a, b) => {
+        const dateA = a.createdAt?.getTime() || 0;
+        const dateB = b.createdAt?.getTime() || 0;
+        return dateB - dateA;
+      });
     } catch (error) {
       console.error("Error getting pathology tests by clinic:", error);
       throw error;
@@ -211,7 +214,6 @@ export const pathologyService = {
         categoriesRef,
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
       );
 
       if (branchId) {
@@ -220,7 +222,6 @@ export const pathologyService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("isActive", "==", true),
-          orderBy("name"),
         );
       }
 
@@ -238,7 +239,8 @@ export const pathologyService = {
         } as PathologyCategory);
       });
 
-      return categories;
+      // Sort by name ascending in memory
+      return categories.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting pathology categories by clinic:", error);
       throw error;
@@ -359,7 +361,6 @@ export const pathologyService = {
         unitsRef,
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
       );
 
       if (branchId) {
@@ -368,7 +369,6 @@ export const pathologyService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("isActive", "==", true),
-          orderBy("name"),
         );
       }
 
@@ -386,7 +386,8 @@ export const pathologyService = {
         } as PathologyUnit);
       });
 
-      return units;
+      // Sort by name ascending in memory
+      return units.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting pathology units by clinic:", error);
       throw error;
@@ -507,7 +508,6 @@ export const pathologyService = {
         parametersRef,
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
       );
 
       if (branchId) {
@@ -516,7 +516,6 @@ export const pathologyService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("isActive", "==", true),
-          orderBy("name"),
         );
       }
 
@@ -534,7 +533,8 @@ export const pathologyService = {
         } as PathologyParameter);
       });
 
-      return parameters;
+      // Sort by name ascending in memory
+      return parameters.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting pathology parameters by clinic:", error);
       throw error;
@@ -657,7 +657,6 @@ export const pathologyService = {
         testTypesRef,
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
       );
 
       if (branchId) {
@@ -666,7 +665,6 @@ export const pathologyService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("isActive", "==", true),
-          orderBy("name"),
         );
       }
 
@@ -684,7 +682,8 @@ export const pathologyService = {
         } as PathologyTestType);
       });
 
-      return testTypes;
+      // Sort by name ascending in memory
+      return testTypes.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error("Error getting pathology test types by clinic:", error);
       throw error;

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, lazy, Suspense } from "react";
+import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { isToday, isFuture, isPast, startOfDay, format } from "date-fns";
 
 // Services
@@ -16,6 +16,10 @@ import {
   IoStarOutline,
   IoDocumentTextOutline,
   IoCloseOutline,
+  IoPersonAddOutline,
+  IoChatbubbleEllipsesOutline,
+  IoSettingsOutline,
+  IoTimeOutline,
 } from "react-icons/io5";
 
 import { appointmentService } from "@/services/appointmentService";
@@ -158,42 +162,122 @@ function StatCard({
   value,
   sub,
   icon,
-  iconBg = "bg-teal-100 text-teal-700",
+  iconBg = "bg-primary/10 text-primary",
   href,
   alert,
 }: StatCardProps) {
   return (
-    <motion.div variants={itemVariants}>
-      <Link className="block group no-underline" to={href}>
-        <div className="bg-surface border border-border-base rounded-xl p-4 hover-glow hover:border-primary/30 transition-all duration-300 relative overflow-hidden group">
-          {/* Subtle background glow on hover */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
+    <motion.div variants={itemVariants} className="h-full">
+      <Link className="block group no-underline h-full" to={href}>
+        <div className="h-full bg-surface border border-border-base rounded-2xl p-4 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between gap-3">
+          
+          {/* Subtle radial gradient */}
+          <div className="absolute -top-8 -right-8 w-24 h-24 bg-primary/5 rounded-full blur-xl group-hover:bg-primary/10 transition-colors duration-500" />
+          
           <div className="relative z-10 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1.5 opacity-80">
-                {label}
-              </p>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-1.5 h-1.5 rounded-full ${alert ? 'bg-red-500 animate-pulse' : 'bg-primary'}`} />
+                <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-text-muted">
+                  {label}
+                </p>
+              </div>
               <p
-                className={`text-stat-sm font-bold leading-none tracking-tight ${alert ? "text-red-500" : "text-text-main"}`}
+                className={`text-[22px] font-black leading-none tracking-tight ${alert ? "text-red-500" : "text-text-main"}`}
               >
                 {typeof value === "number" ? value.toLocaleString() : value}
               </p>
-              {sub && <p className="text-[11px] text-text-muted mt-2 font-medium">{sub}</p>}
             </div>
+            
+            {/* Icon Container */}
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 ${iconBg}`}
+              className={`w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5 ${iconBg}`}
             >
-              {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
+              {React.cloneElement(icon as React.ReactElement, { className: "w-4 h-4" })}
             </div>
           </div>
 
-          <div className="relative z-10 mt-4 flex items-center gap-1.5 text-[11px] font-bold text-text-muted group-hover:text-primary transition-colors">
-            <span>Details</span>
-            <IoChevronForwardOutline className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+          <div className="relative z-10 flex items-center justify-between pt-1 mt-auto">
+             {sub && (
+              <p className="text-[11px] text-text-muted font-medium">
+                {sub}
+              </p>
+            )}
+            <div className="flex items-center gap-0.5 text-[10.5px] font-bold text-primary opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
+              <span>View</span>
+              <IoChevronForwardOutline className="w-3 h-3" />
+            </div>
           </div>
         </div>
       </Link>
+    </motion.div>
+  );
+}
+
+/** Welcome Hero Component */
+function WelcomeHero({
+  name,
+  stats,
+}: {
+  name: string;
+  stats: DashboardStats;
+}) {
+  const hour = new Date().getHours();
+  let greeting = "Good evening";
+  if (hour < 12) greeting = "Good morning";
+  else if (hour < 18) greeting = "Good afternoon";
+
+  return (
+    <motion.div
+      variants={itemVariants}
+      className="relative overflow-hidden rounded-2xl bg-surface border border-border-base p-6 shadow-sm mb-2"
+    >
+      {/* Abstract background elements */}
+      <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
+
+      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h2 className="text-[22px] font-extrabold text-text-main leading-tight tracking-tight">
+            {greeting}, <span className="text-primary">{name}</span>! 👋
+          </h2>
+          <p className="text-[14px] text-text-muted mt-1.5 font-medium max-w-[480px] leading-relaxed">
+            Welcome back to the clinic command center. You have{" "}
+            <span className="text-text-main font-bold">
+              {stats.todaysAppointments} appointments
+            </span>{" "}
+            scheduled for today.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-center px-4 py-2 bg-surface-2 rounded-xl border border-border-base/50">
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+              Appointments
+            </p>
+            <p className="text-[18px] font-black text-primary">
+              {stats.todaysAppointments}
+            </p>
+          </div>
+          <div className="flex flex-col items-center px-4 py-2 bg-surface-2 rounded-xl border border-border-base/50">
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+              Critical
+            </p>
+            <p className="text-[18px] font-black text-red-500">
+              {stats.criticalPatients}
+            </p>
+          </div>
+          <div className="h-10 w-[1px] bg-border-base hidden sm:block mx-2" />
+          <div className="hidden sm:flex flex-col items-end">
+            <p className="text-[12px] font-bold text-text-main">
+              {format(new Date(), "h:mm a")}
+            </p>
+            <p className="text-[10px] text-text-muted font-medium">
+              {format(new Date(), "EEEE, MMM d")}
+            </p>
+          </div>
+        </div>
+      </div>
     </motion.div>
   );
 }
@@ -235,6 +319,78 @@ function TabStrip({ tabs, selected, onChange }: TabStripProps) {
   );
 }
 
+function QuickActions() {
+  const actions = [
+    { label: "New Appointment", icon: <IoCalendarOutline />, href: "/dashboard/appointments/new", color: "text-blue-500", bg: "bg-blue-500/10" },
+    { label: "Register Patient", icon: <IoPersonAddOutline />, href: "/dashboard/patients/new", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { label: "Add Enquiry", icon: <IoChatbubbleEllipsesOutline />, href: "/dashboard/enquiries?action=new", color: "text-amber-500", bg: "bg-amber-500/10" },
+    { label: "Clinic Settings", icon: <IoSettingsOutline />, href: "/dashboard/settings", color: "text-purple-500", bg: "bg-purple-500/10" },
+  ];
+
+  return (
+    <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+      {actions.map((action, idx) => (
+        <Link key={idx} to={action.href} className="block group no-underline">
+          <div className="bg-surface border border-border-base rounded-2xl p-3.5 flex items-center gap-3.5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all duration-400 hover:-translate-y-1 relative overflow-hidden">
+            <div className={`absolute inset-0 bg-gradient-to-br from-surface to-${action.color.split('-')[1]}-500/5 opacity-0 group-hover:opacity-100 transition-opacity`} />
+            <div className={`relative z-10 w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${action.bg} ${action.color} group-hover:scale-110 group-hover:-rotate-6 transition-all duration-500 ring-1 ring-inset ring-black/5 dark:ring-white/5`}>
+               {React.cloneElement(action.icon, { className: "w-5 h-5" })}
+            </div>
+            <div className="relative z-10">
+              <p className="text-[12px] font-black text-text-main tracking-tight group-hover:text-primary transition-colors leading-none">{action.label}</p>
+              <p className="text-[10px] font-bold text-text-muted mt-1 uppercase tracking-wider">Quick Create</p>
+            </div>
+          </div>
+        </Link>
+      ))}
+    </motion.div>
+  );
+}
+
+function RecentActivityFeed({ activities }: { activities: any[] }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="bg-surface border border-border-base rounded-2xl flex flex-col shadow-sm h-[320px]">
+      <div className="px-4 py-3 border-b border-border-base flex items-center justify-between">
+        <h3 className="text-[12.5px] font-semibold text-text-main flex items-center gap-2">
+          <IoTimeOutline className="w-4 h-4 text-primary" />
+          Recent Activity
+        </h3>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        {activities.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+             <IoTimeOutline className="w-8 h-8 mb-2" />
+             <p className="text-[12px] font-medium">No recent activity</p>
+          </div>
+        ) : (
+          <div className="relative border-l border-border-base/80 ml-2 space-y-6 pt-1 pb-2">
+            {activities.map((item, idx) => (
+              <div key={idx} className="relative pl-5 group cursor-default">
+                <div className={`absolute -left-[7px] top-1 w-3 h-3 rounded-full border-2 border-surface ${item.color} group-hover:scale-125 transition-transform`} />
+                <div>
+                  <p className="text-[12.5px] font-bold text-text-main group-hover:text-primary transition-colors leading-tight">{item.title}</p>
+                  <p className="text-[11px] text-text-muted mt-0.5 leading-tight">{item.desc}</p>
+                  <p className="text-[9px] font-black text-text-muted/60 mt-1.5 uppercase tracking-[0.1em]">{item.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="p-2 border-t border-border-base text-center bg-surface-2/30 mt-auto rounded-b-2xl">
+        <button 
+          className="text-[11px] font-bold text-primary hover:text-primary/80 transition-all uppercase tracking-wider py-1"
+          onClick={() => navigate("/dashboard/activity-log")}
+        >
+          View Full Log
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Section card header row */
 function SectionHeader({ title, href }: { title: string; href: string }) {
   return (
@@ -253,7 +409,8 @@ function SectionHeader({ title, href }: { title: string; href: string }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function DashboardIndexPage() {
   const { isDark } = useTheme();
-  const { clinicId, userData, branchId } = useAuthContext();
+  const navigate = useNavigate();
+  const { clinicId, userData, branchId, currentUser } = useAuthContext();
   const isClinicAdmin =
     userData?.role === "system-owner" ||
     userData?.role === "clinic-admin";
@@ -305,15 +462,17 @@ export default function DashboardIndexPage() {
   };
 
   // ── Filters ───────────────────────────────────────────────────────────────
-  const todayAppts = recentAppointments.filter((a) =>
+  const todayAppts = appointments.filter((a) =>
     isToday(a.appointmentDate),
-  );
-  const upcomingAppts = recentAppointments.filter((a) =>
+  ).sort((a, b) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime());
+
+  const upcomingAppts = appointments.filter((a) =>
     isFuture(startOfDay(a.appointmentDate)),
-  );
-  const pastAppts = recentAppointments.filter(
+  ).sort((a, b) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime());
+
+  const pastAppts = appointments.filter(
     (a) => isPast(startOfDay(a.appointmentDate)) && !isToday(a.appointmentDate),
-  );
+  ).sort((a, b) => new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime());
 
   const filteredAppts =
     apptTab === "today"
@@ -322,7 +481,7 @@ export default function DashboardIndexPage() {
         ? upcomingAppts
         : apptTab === "past"
           ? pastAppts
-          : recentAppointments.slice(0, 6);
+          : appointments.slice(0, 6);
 
   const filteredEnquiries =
     enquiryTab === "all"
@@ -521,6 +680,48 @@ export default function DashboardIndexPage() {
 
   const chartData = getChartData();
 
+  // ── Generate real activity feed ───────────────────────────────────────────
+  const activityFeed = useMemo(() => {
+    const items: any[] = [];
+    
+    // Appointments
+    appointments.slice(0, 5).forEach(a => {
+      const patient = patients.find(p => p.id === a.patientId);
+      const doctor = doctors.find(d => d.id === a.doctorId);
+      items.push({
+        type: 'appointment',
+        title: 'New Appointment',
+        desc: `${patient?.name || 'Patient'} with ${doctor?.name || 'Specialist'}`,
+        time: format(new Date(a.createdAt), 'h:mm a'),
+        color: 'bg-blue-500'
+      });
+    });
+
+    // Patients
+    patients.slice(0, 3).forEach(p => {
+      items.push({
+        type: 'patient',
+        title: 'Patient Registered',
+        desc: `${p.name} joined the clinic`,
+        time: format(new Date(p.createdAt), 'h:mm a'),
+        color: 'bg-emerald-500'
+      });
+    });
+
+    // Enquiries
+    enquiries.slice(0, 3).forEach(e => {
+      items.push({
+        type: 'enquiry',
+        title: 'New Enquiry',
+        desc: `Lead from ${e.fullName}`,
+        time: format(new Date(e.createdAt), 'h:mm a'),
+        color: 'bg-amber-500'
+      });
+    });
+
+    return items.sort((a, b) => b.time.localeCompare(a.time)).slice(0, 10);
+  }, [appointments, patients, enquiries]);
+
   const chartOpts = {
     responsive: true,
     maintainAspectRatio: false,
@@ -551,15 +752,10 @@ export default function DashboardIndexPage() {
   const doughnutOpts = {
     responsive: true,
     maintainAspectRatio: false,
+    cutout: "70%",
     plugins: {
       legend: {
-        position: "bottom" as const,
-        labels: {
-          color: isDark ? "#e2e8f0" : "#475569",
-          boxWidth: 10,
-          padding: 12,
-          font: { size: 11 },
-        },
+        display: false,
       },
       tooltip: {
         callbacks: { label: (c: any) => `${c.label}: ${c.parsed} appts` },
@@ -607,76 +803,14 @@ export default function DashboardIndexPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full flex flex-col gap-4">
-      {/* ── Page header — spec: clarity-page-header pattern ────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          {/* spec: page title 15px/700/-0.02em */}
-          <h1 className="text-page-title text-text-main leading-tight">
-            Dashboard
-          </h1>
-          {/* spec: body 13px/400 */}
-          <p className="text-[13px] text-text-muted mt-0.5">
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
-        </div>
+      {/* Header removed as requested */}
 
-        {/* Branch selector (clinic admins without fixed branch) + Quick actions */}
-        <div className="flex flex-wrap gap-2 items-center">
-          {!branchId && isClinicAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-text-muted">Branch</span>
-              <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                value={selectedBranchId ?? ""}
-                onChange={(e) => setSelectedBranchId(e.target.value || null)}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.isMainBranch ? " (all branches)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+      <WelcomeHero
+        name={currentUser?.displayName || currentUser?.email?.split("@")[0] || "Expert"}
+        stats={stats}
+      />
 
-          {/* Quick actions — spec: clarity-btn compact */}
-          <Link className="no-underline" to="/dashboard/appointments/new">
-            <Button
-              color="primary"
-              size="sm"
-              startContent={<IoAddOutline className="w-3.5 h-3.5" />}
-            >
-              New Appointment
-            </Button>
-          </Link>
-          <Link className="no-underline" to="/dashboard/patients/new">
-            <Button
-              color="primary"
-              size="sm"
-              startContent={<IoPersonOutline className="w-3.5 h-3.5" />}
-              variant="bordered"
-            >
-              New Patient
-            </Button>
-          </Link>
-          <Link className="no-underline" to="/dashboard/daily-report">
-            <Button
-              color="default"
-              size="sm"
-              startContent={<IoDocumentTextOutline className="w-3.5 h-3.5" />}
-              variant="bordered"
-            >
-              Daily Report
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <QuickActions />
 
       {/* ── KPI stat cards — 4-col grid ────────────────────────────────── */}
       <motion.div
@@ -688,34 +822,34 @@ export default function DashboardIndexPage() {
         <StatCard
           href="/dashboard/patients"
           icon={<IoPersonOutline className="w-4 h-4" />}
-          iconBg="bg-teal-100 text-teal-700"
+          iconBg="bg-teal-500/10 text-teal-600 dark:text-teal-400"
           label="Total Patients"
-          sub="All registered"
+          sub="Clinic-wide"
           value={stats.totalPatients}
         />
         <StatCard
           alert={stats.criticalPatients > 0}
           href="/dashboard/patients"
           icon={<IoWarningOutline className="w-4 h-4" />}
-          iconBg="bg-red-100 text-red-600"
-          label="Critical Patients"
-          sub="Need attention"
+          iconBg="bg-red-500/10 text-red-600 dark:text-red-400"
+          label="Critical Care"
+          sub="Requires attention"
           value={stats.criticalPatients}
         />
         <StatCard
           href="/dashboard/appointments"
           icon={<IoCalendarOutline className="w-4 h-4" />}
-          iconBg="bg-sky-100 text-sky-600"
-          label="Today's Appointments"
-          sub="Scheduled today"
+          iconBg="bg-sky-500/10 text-sky-600 dark:text-sky-400"
+          label="Today's Bookings"
+          sub="Scheduled for today"
           value={stats.todaysAppointments}
         />
         <StatCard
           href="/dashboard/doctors"
           icon={<IoMedicalOutline className="w-4 h-4" />}
-          iconBg="bg-health-100 text-health-700"
-          label="Active Doctors"
-          sub="Currently available"
+          iconBg="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          label="Active Experts"
+          sub="Currently on duty"
           value={stats.activeDoctors}
         />
       </motion.div>
@@ -727,12 +861,11 @@ export default function DashboardIndexPage() {
         animate="visible"
         className="flex flex-col gap-3"
       >
-        {/* ── Row 2: Patient visits chart + Appointments list ────────────── */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {/* Patient visits (line chart) */}
+        {/* ── Row 2: Patient visits chart + Appointments list + Activity Feed ────────────── */}
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* Patient registrations (line chart) */}
           <div className="bg-surface border border-border-base rounded-xl overflow-hidden shadow-sm shadow-black/5">
             <div className="px-3 py-2 border-b border-border-base">
-              {/* spec: section label 11px/600/uppercase */}
               <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
                 Patient Registrations
               </p>
@@ -756,11 +889,42 @@ export default function DashboardIndexPage() {
             </div>
           </div>
 
-          {/* Appointments tabbed list */}
-          <div className="bg-surface border border-border-base rounded overflow-hidden flex flex-col">
-            <SectionHeader href="/dashboard/appointments" title="Appointments" />
+          {/* Appointments tabbed list (Live Schedule) */}
+          <div className="bg-surface border border-border-base rounded-2xl overflow-hidden flex flex-col shadow-sm">
+            <SectionHeader href="/dashboard/appointments" title="Live Schedule" />
 
-            <div className="px-3 pt-2">
+            {/* Next Up Highlight */}
+            {todayAppts.length > 0 && (
+              <div className="px-3 pt-3">
+                <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex items-center justify-between group hover:bg-primary/10 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
+                      <IoCalendarOutline className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Next Appointment</p>
+                      <h4 className="text-[14px] font-bold text-text-main leading-tight">
+                        {patients.find(p => p.id === todayAppts[0].patientId)?.name || "Patient"}
+                      </h4>
+                      <p className="text-[11px] text-text-muted">
+                        {formatTime12(todayAppts[0].startTime ?? "")} · Dr. {doctors.find(d => d.id === todayAppts[0].doctorId)?.name || "Expert"}
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="flat" 
+                    color="primary" 
+                    className="h-8 text-[11px] font-bold"
+                    onClick={() => navigate(`/dashboard/appointments/${todayAppts[0].id}`)}
+                  >
+                    Check In
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="px-3 pt-4">
               <TabStrip
                 selected={apptTab}
                 tabs={[
@@ -778,80 +942,130 @@ export default function DashboardIndexPage() {
 
             <div
               className="flex-1 overflow-y-auto px-1 pb-2"
-              style={{ maxHeight: "234px" }}
+              style={{ maxHeight: "280px" }}
             >
               {filteredAppts.length === 0 ? (
-                <div className="py-8 text-center">
-                  <IoCalendarOutline className="w-6 h-6 mx-auto mb-1.5 text-mountain-300" />
-                  <p className="text-[12px] text-mountain-400">No appointments</p>
+                <div className="py-12 text-center">
+                  <div className="w-12 h-12 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <IoCalendarOutline className="w-6 h-6 text-text-muted/40" />
+                  </div>
+                  <p className="text-[13px] font-medium text-text-muted">No appointments found</p>
+                  <p className="text-[11px] text-text-muted opacity-60">Try changing the tab filter</p>
                 </div>
               ) : (
-                filteredAppts.slice(0, 6).map((appt) => {
-                  const doctor = doctors.find((d) => d.id === appt.doctorId);
-                  const patient = patients.find((p) => p.id === appt.patientId);
+                <div className="space-y-1">
+                  {filteredAppts.slice(0, 6).map((appt) => {
+                    const doctor = doctors.find((d) => d.id === appt.doctorId);
+                    const patient = patients.find((p) => p.id === appt.patientId);
 
-                  return (
-                    <div
-                      key={appt.id}
-                      className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-surface-2 rounded transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <Link
-                          className="text-[12.5px] font-medium text-text-main hover:text-primary truncate block no-underline"
-                          to={`/dashboard/patients/${patient?.id}`}
-                        >
-                          {patient?.name ?? "Unknown Patient"}
-                        </Link>
-                        <p className="text-[11px] text-text-muted truncate">
-                          Dr. {doctor?.name ?? "Unknown"} ·{" "}
-                          {apptTypeName(appt.appointmentTypeId)} ·{" "}
-                          {formatTime12(appt.startTime ?? "")}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded ${statusBadge(appt.status)}`}
+                    return (
+                      <div
+                        key={appt.id}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2/50 rounded-xl transition-colors group"
                       >
-                        {appt.status}
-                      </span>
-                    </div>
-                  );
-                })
+                        <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center shrink-0 text-text-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                          <span className="text-[11px] font-bold">
+                            {formatTime12(appt.startTime ?? "").split(" ")[0]}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <Link
+                              className="text-[13px] font-bold text-text-main hover:text-primary truncate block no-underline"
+                              to={`/dashboard/patients/${patient?.id}`}
+                            >
+                              {patient?.name ?? "Unknown Patient"}
+                            </Link>
+                            <span
+                              className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge(appt.status)}`}
+                            >
+                              {appt.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-text-muted truncate mt-0.5">
+                            Expert: <span className="text-text-main/70 font-medium">{doctor?.name ?? "N/A"}</span> · {apptTypeName(appt.appointmentTypeId)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
+
+          {/* Recent Activity Feed */}
+          <RecentActivityFeed activities={activityFeed} />
         </motion.div>
 
         {/* ── Row 3: Status doughnut + Enquiries ─────────────────────────── */}
         <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-3 pb-8">
           {/* Appointment status breakdown (doughnut) — 2/3 width */}
-          <div className="lg:col-span-2 bg-surface border border-border-base rounded overflow-hidden">
-            <div className="px-3 py-2 border-b border-border-base">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
-                Status Breakdown
-              </p>
-              <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
-                Appointment distribution
-              </p>
+          <div className="lg:col-span-2 bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-3 py-2 border-b border-border-base flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
+                  Status Breakdown
+                </p>
+                <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
+                  Appointment distribution
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-text-muted uppercase">Total</p>
+                <p className="text-[16px] font-black text-primary leading-none">{appointments.length}</p>
+              </div>
             </div>
-            <div className="p-3 h-[220px]">
-              <Suspense
-                fallback={
-                  <div className="h-full flex items-center justify-center">
-                    <Spinner label="Loading chart…" size="sm" />
+            <div className="p-5 flex flex-col md:flex-row items-center gap-8">
+              {/* Chart Container - Fixed Square for Perfect Centering */}
+              <div className="w-full md:w-2/5 flex justify-center">
+                <div className="w-[160px] h-[160px] relative">
+                  <Suspense
+                    fallback={
+                      <div className="h-full flex items-center justify-center">
+                        <Spinner label="Loading chart…" size="sm" />
+                      </div>
+                    }
+                  >
+                    <AppointmentStatusChart
+                      data={chartData.appointmentStatus}
+                      options={doughnutOpts}
+                    />
+                    {/* Center Text */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <p className="text-[24px] font-black text-text-main leading-none mt-1">
+                        {appointments.length > 0 ? Math.round((appointments.filter(a => a.status === 'completed').length / appointments.length) * 100) : 0}%
+                      </p>
+                      <p className="text-[9px] font-bold text-text-muted uppercase tracking-wider mt-0.5">Efficiency</p>
+                    </div>
+                  </Suspense>
+                </div>
+              </div>
+
+              {/* Legend Container */}
+              <div className="w-full md:w-3/5 grid grid-cols-2 gap-x-3 gap-y-2.5">
+                {[
+                  { label: "Confirmed", count: appointments.filter(a => a.status === 'confirmed').length, color: "bg-teal-500" },
+                  { label: "Scheduled", count: appointments.filter(a => a.status === 'scheduled').length, color: "bg-primary" },
+                  { label: "In Progress", count: appointments.filter(a => a.status === 'in-progress').length, color: "bg-amber-500" },
+                  { label: "Completed", count: appointments.filter(a => a.status === 'completed').length, color: "bg-purple-500" },
+                  { label: "Cancelled", count: appointments.filter(a => a.status === 'cancelled').length, color: "bg-red-500" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-2 border border-border-base/40 hover:border-border-base transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-2 h-2 rounded-full ${item.color} shadow-sm`} />
+                      <span className="text-[11.5px] font-semibold text-text-muted">{item.label}</span>
+                    </div>
+                    <span className="text-[13px] font-black text-text-main">{item.count}</span>
                   </div>
-                }
-              >
-                <AppointmentStatusChart
-                  data={chartData.appointmentStatus}
-                  options={doughnutOpts}
-                />
-              </Suspense>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* Enquiries — 1/3 width */}
-          <div className="bg-surface border border-border-base rounded overflow-hidden flex flex-col">
-            <SectionHeader href="/dashboard/enquiries" title="Enquiries" />
+          <div className="bg-surface border border-border-base rounded-2xl overflow-hidden flex flex-col shadow-sm">
+            <SectionHeader href="/dashboard/enquiries" title="Lead Enquiries" />
 
             <div className="px-3 pt-2">
               <TabStrip
@@ -860,13 +1074,8 @@ export default function DashboardIndexPage() {
                   { key: "new", label: "New", count: enquiryCount("new") },
                   {
                     key: "contacted",
-                    label: "Contacted",
+                    label: "Pending",
                     count: enquiryCount("contacted"),
-                  },
-                  {
-                    key: "converted",
-                    label: "Done",
-                    count: enquiryCount("converted"),
                   },
                   { key: "all", label: "All", count: enquiryCount("all") },
                 ]}
@@ -876,38 +1085,46 @@ export default function DashboardIndexPage() {
 
             <div
               className="flex-1 overflow-y-auto px-1 pb-2"
-              style={{ maxHeight: "234px" }}
+              style={{ maxHeight: "280px" }}
             >
               {filteredEnquiries.length === 0 ? (
-                <div className="py-8 text-center">
-                  <IoStarOutline className="w-6 h-6 mx-auto mb-1.5 text-text-muted/30" />
-                  <p className="text-[12px] text-text-muted">No enquiries</p>
+                <div className="py-12 text-center">
+                  <div className="w-12 h-12 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <IoStarOutline className="w-6 h-6 text-text-muted/40" />
+                  </div>
+                  <p className="text-[13px] font-medium text-text-muted">No new leads</p>
                 </div>
               ) : (
-                filteredEnquiries.map((enq) => (
-                  <div
-                    key={enq.id}
-                    className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-surface-2 rounded transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12.5px] font-medium text-text-main truncate">
-                        {enq.fullName}
-                      </p>
-                      <p className="text-[11px] text-text-muted truncate">
-                        {enq.phone}
-                        {enq.source ? ` · ${enq.source}` : ""} ·{" "}
-                        {enq.createdAt
-                          ? format(new Date(enq.createdAt), "MMM dd")
-                          : ""}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded ${enquiryBadge(enq.status)}`}
+                <div className="space-y-1">
+                  {filteredEnquiries.map((enq) => (
+                    <div
+                      key={enq.id}
+                      className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2/50 rounded-xl transition-colors group"
                     >
-                      {enq.status}
-                    </span>
-                  </div>
-                ))
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[13px] font-bold text-text-main truncate">
+                            {enq.fullName}
+                          </p>
+                          <span
+                            className={`shrink-0 text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded ${enquiryBadge(enq.status)}`}
+                          >
+                            {enq.status}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-muted truncate mt-0.5">
+                          {enq.phone}
+                          {enq.source ? ` · ${enq.source}` : ""} ·{" "}
+                          <span className="font-medium text-primary/70">
+                            {enq.createdAt
+                              ? format(new Date(enq.createdAt), "MMM dd")
+                              : ""}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

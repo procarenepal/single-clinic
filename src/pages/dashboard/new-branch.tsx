@@ -1,17 +1,16 @@
 import React, { useState } from "react";
-import { Card, CardBody, CardHeader } from "@heroui/card";
-import { Button } from "@heroui/button";
-import { Input } from "@heroui/input";
-import { Textarea } from "@heroui/input";
-import { Switch } from "@heroui/switch";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Modal,
   ModalBody,
   ModalContent,
   ModalFooter,
   ModalHeader,
-} from "@heroui/modal";
-import { addToast } from "@heroui/toast";
+} from "@/components/ui/modal";
+import { addToast } from "@/components/ui/toast";
 import { useNavigate } from "react-router-dom";
 import {
   IoStorefrontOutline,
@@ -321,15 +320,15 @@ export default function NewBranchPage() {
   if (!isSystemOwner) {
     return (
       <div className="max-w-7xl mx-auto p-6">
-        <Card className="border border-warning-200 bg-warning-50">
+        <Card className="border border-warning/20 bg-warning/5">
           <CardBody className="p-6">
             <div className="flex items-center gap-3">
               <IoStorefrontOutline className="text-warning text-2xl" />
               <div>
-                <h3 className="text-lg font-semibold text-warning-800">
+                <h3 className="text-lg font-semibold text-warning">
                   Access Restricted
                 </h3>
-                <p className="text-warning-700">
+                <p className="text-text-muted">
                   Only clinic super administrators can create branches.
                 </p>
               </div>
@@ -365,7 +364,7 @@ export default function NewBranchPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className={title({ size: "lg" })}>Create New Branch</h1>
-          <p className="text-default-600 mt-1">
+          <p className="text-text-muted mt-1">
             Add a new branch location to your clinic
           </p>
         </div>
@@ -380,11 +379,11 @@ export default function NewBranchPage() {
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         {/* Basic Information */}
-        <Card className="border border-default-200">
-          <CardHeader className="bg-default-50 border-b border-default-200 px-6 py-4">
+        <Card className="border border-border-base">
+          <CardHeader className="bg-surface-2/30 border-b border-border-base px-6 py-4">
             <div className="flex items-center gap-3">
               <IoStorefrontOutline className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-default-900">
+              <h2 className="text-lg font-semibold text-text-main">
                 Basic Information
               </h2>
             </div>
@@ -396,7 +395,7 @@ export default function NewBranchPage() {
                 label="Branch Name"
                 placeholder="e.g., Downtown Branch"
                 startContent={
-                  <IoStorefrontOutline className="text-default-400" />
+                  <IoStorefrontOutline className="text-text-muted/60" />
                 }
                 value={formData.name}
                 variant="bordered"
@@ -408,7 +407,7 @@ export default function NewBranchPage() {
                 label="Branch Code"
                 placeholder="e.g., DT, MB"
                 startContent={
-                  <IoCodeSlashOutline className="text-default-400" />
+                  <IoCodeSlashOutline className="text-text-muted/60" />
                 }
                 value={formData.code}
                 variant="bordered"
@@ -423,7 +422,6 @@ export default function NewBranchPage() {
               label="Address"
               placeholder="Enter branch address"
               value={formData.address}
-              variant="bordered"
               onChange={(e) => handleInputChange("address", e.target.value)}
             />
 
@@ -433,7 +431,7 @@ export default function NewBranchPage() {
                 label="City"
                 placeholder="Enter city"
                 startContent={
-                  <IoLocationOutline className="text-default-400" />
+                  <IoLocationOutline className="text-text-muted/60" />
                 }
                 value={formData.city}
                 variant="bordered"
@@ -443,7 +441,7 @@ export default function NewBranchPage() {
                 isRequired
                 label="Phone Number"
                 placeholder="e.g., 9801234567"
-                startContent={<IoCallOutline className="text-default-400" />}
+                startContent={<IoCallOutline className="text-text-muted/60" />}
                 value={formData.phone}
                 variant="bordered"
                 onChange={(e) => handleInputChange("phone", e.target.value)}
@@ -453,18 +451,18 @@ export default function NewBranchPage() {
             <Input
               label="Email Address (Optional)"
               placeholder="branch@clinic.com"
-              startContent={<IoMailOutline className="text-default-400" />}
+              startContent={<IoMailOutline className="text-text-muted/60" />}
               value={formData.email}
               variant="bordered"
               onChange={(e) => handleInputChange("email", e.target.value)}
             />
 
-            <div className="flex items-center justify-between p-4 bg-default-50 rounded-lg border border-default-200">
+            <div className="flex items-center justify-between p-4 bg-surface-2 rounded-lg border border-border-base">
               <div>
-                <h4 className="font-medium text-default-900">
+                <h4 className="font-medium text-text-main">
                   Set as Main Branch
                 </h4>
-                <p className="text-sm text-default-500">
+                <p className="text-sm text-text-muted">
                   This will be the primary branch for your clinic
                 </p>
               </div>
@@ -480,11 +478,11 @@ export default function NewBranchPage() {
         </Card>
 
         {/* Operating Hours */}
-        <Card className="border border-default-200">
-          <CardHeader className="bg-default-50 border-b border-default-200 px-6 py-4">
+        <Card className="border border-border-base">
+          <CardHeader className="bg-surface-2/30 border-b border-border-base px-6 py-4">
             <div className="flex items-center gap-3">
               <IoTimeOutline className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-default-900">
+              <h2 className="text-lg font-semibold text-text-main">
                 Operating Hours
               </h2>
             </div>
@@ -493,10 +491,10 @@ export default function NewBranchPage() {
             {days.map((day, index) => (
               <div
                 key={day}
-                className="flex items-center gap-4 p-4 bg-default-50 rounded-lg"
+                className="flex items-center gap-4 p-4 bg-surface-2 rounded-lg"
               >
                 <div className="w-24">
-                  <p className="font-medium text-default-900">
+                  <p className="font-medium text-text-main">
                     {dayLabels[index]}
                   </p>
                 </div>
@@ -507,7 +505,6 @@ export default function NewBranchPage() {
                       day as keyof typeof formData.operatingHours
                     ]?.isOpen || false
                   }
-                  size="sm"
                   onValueChange={(value) =>
                     handleOperatingHoursChange(day, "isOpen", value)
                   }
@@ -530,7 +527,7 @@ export default function NewBranchPage() {
                           handleOperatingHoursChange(day, "open", e.target.value)
                         }
                       />
-                      <span className="text-default-500">to</span>
+                      <span className="text-text-muted">to</span>
                       <Input
                         className="w-32"
                         size="sm"
@@ -550,7 +547,7 @@ export default function NewBranchPage() {
                 {!formData.operatingHours[
                   day as keyof typeof formData.operatingHours
                 ]?.isOpen && (
-                    <span className="text-default-400 text-sm">Closed</span>
+                    <span className="text-text-muted/50 text-sm">Closed</span>
                   )}
               </div>
             ))}
@@ -558,26 +555,26 @@ export default function NewBranchPage() {
         </Card>
 
         {/* Branch Admin Information */}
-        <Card className="border border-default-200">
-          <CardHeader className="bg-default-50 border-b border-default-200 px-6 py-4">
+        <Card className="border border-border-base">
+          <CardHeader className="bg-surface-2/30 border-b border-border-base px-6 py-4">
             <div className="flex items-center gap-3">
               <IoPersonOutline className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-default-900">
+              <h2 className="text-lg font-semibold text-text-main">
                 Branch Administrator
               </h2>
             </div>
           </CardHeader>
           <CardBody className="p-6 space-y-4">
-            <div className="bg-primary-50 p-4 rounded-lg border border-primary-200 mb-4">
+            <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 mb-4">
               <div className="flex gap-3">
                 <div className="min-w-[20px] mt-0.5">
                   <IoInformationCircleOutline className="text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-primary-800 font-medium mb-1">
+                  <p className="text-sm text-primary font-medium mb-1">
                     Branch Administrator Setup
                   </p>
-                  <p className="text-xs text-primary-700">
+                  <p className="text-xs text-text-muted">
                     Each branch requires a dedicated administrator who will
                     manage day-to-day operations, staff, and branch-specific
                     settings. The admin will receive login credentials and can
@@ -592,7 +589,7 @@ export default function NewBranchPage() {
                 isRequired
                 label="Admin Name"
                 placeholder="Enter branch admin name"
-                startContent={<IoPersonOutline className="text-default-400" />}
+                startContent={<IoPersonOutline className="text-text-muted/60" />}
                 value={formData.adminName}
                 variant="bordered"
                 onChange={(e) => handleInputChange("adminName", e.target.value)}
@@ -602,7 +599,7 @@ export default function NewBranchPage() {
                 description="Admin will receive login credentials at this email"
                 label="Admin Email"
                 placeholder="admin@clinic.com"
-                startContent={<IoMailOutline className="text-default-400" />}
+                startContent={<IoMailOutline className="text-text-muted/60" />}
                 type="email"
                 value={formData.adminEmail}
                 variant="bordered"
@@ -617,7 +614,7 @@ export default function NewBranchPage() {
               description="Minimum 6 characters required"
               label="Admin Password"
               placeholder="Set a strong password"
-              startContent={<IoShieldOutline className="text-default-400" />}
+              startContent={<IoShieldOutline className="text-text-muted/60" />}
               type="password"
               value={formData.adminPassword}
               variant="bordered"
@@ -626,16 +623,16 @@ export default function NewBranchPage() {
               }
             />
 
-            <div className="bg-secondary-50 p-4 rounded-lg border border-secondary-200">
+            <div className="bg-success/5 p-4 rounded-lg border border-success/20">
               <div className="flex gap-3">
                 <div className="min-w-[20px] mt-0.5">
-                  <IoKeyOutline className="text-secondary" />
+                  <IoKeyOutline className="text-success" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-default-800 mb-1">
+                  <h4 className="text-sm font-medium text-text-main mb-1">
                     Access & Security Features
                   </h4>
-                  <ul className="text-xs text-default-700 space-y-1">
+                  <ul className="text-xs text-text-muted space-y-1">
                     <li>
                       • Admin will be automatically assigned to this specific
                       branch
@@ -691,7 +688,7 @@ export default function NewBranchPage() {
           <ModalHeader>
             <div className="flex flex-col gap-1">
               <h1 className="text-xl font-semibold">Confirm Your Password</h1>
-              <p className="text-sm text-default-600">
+              <p className="text-sm text-text-muted">
                 Please enter your password to complete the branch admin creation
               </p>
             </div>
@@ -701,7 +698,7 @@ export default function NewBranchPage() {
               description="Required to maintain your session while creating the branch admin"
               label="Your Password"
               placeholder="Enter your password"
-              startContent={<IoShieldOutline className="text-default-400" />}
+              startContent={<IoShieldOutline className="text-text-muted/60" />}
               type="password"
               value={adminPassword}
               onChange={(e) => setAdminPassword(e.target.value)}

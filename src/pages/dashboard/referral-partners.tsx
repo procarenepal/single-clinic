@@ -19,62 +19,10 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { branchService } from "@/services/branchService";
 import { Branch, ReferralPartner } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
+import { Input } from "@/components/ui/input";
+import { Chip } from "@/components/ui/chip";
+import { Select, SelectItem } from "@/components/ui/select";
 
-// ── Custom UI Helpers ────────────────────────────────────────────────────────
-function CustomInput({
-  value,
-  onChange,
-  placeholder,
-  startContent,
-  className,
-  type = "text",
-}: any) {
-  return (
-    <div
-      className={`flex items-center border border-mountain-200 rounded min-h-[36px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${className || ""}`}
-    >
-      {startContent && (
-        <div className="pl-3 pr-2 text-mountain-400 flex items-center">
-          {startContent}
-        </div>
-      )}
-      <input
-        className="flex-1 w-full text-[13px] px-2 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
-        placeholder={placeholder}
-        type={type}
-        value={value}
-        onChange={onChange}
-      />
-    </div>
-  );
-}
-
-function CustomSelect({
-  value,
-  onChange,
-  options,
-  className,
-  placeholder,
-}: any) {
-  return (
-    <select
-      className={`h-[36px] bg-white border border-mountain-200 text-mountain-800 text-[13px] rounded px-3 py-1 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow ${className || ""}`}
-      value={value}
-      onChange={onChange}
-    >
-      {placeholder && (
-        <option disabled hidden value="">
-          {placeholder}
-        </option>
-      )}
-      {options.map((opt: any) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 export default function ReferralPartnersPage() {
   const { clinicId, userData } = useAuth();
@@ -241,7 +189,7 @@ export default function ReferralPartnersPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className={title({ size: "lg" })}>Referral Partners</h1>
-          <p className="text-[13.5px] text-mountain-500 mt-1">
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage external referral sources and commission rates
           </p>
         </div>
@@ -250,7 +198,7 @@ export default function ReferralPartnersPage() {
             <div className="flex items-center gap-1 mr-2">
               <span className="text-[11px] text-mountain-500">Branch</span>
               <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                 value={selectedBranchId ?? ""}
                 onChange={(e) => setSelectedBranchId(e.target.value || null)}
               >
@@ -275,30 +223,31 @@ export default function ReferralPartnersPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-mountain-200 rounded shadow-sm flex flex-col">
-        <div className="p-5 border-b border-mountain-100 flex flex-col gap-4">
+      <div className="bg-surface border border-border-base rounded shadow-none flex flex-col">
+        <div className="p-5 border-b border-border-base flex flex-col gap-4">
           <div className="flex flex-col md:flex-row justify-between gap-4">
             <div className="flex flex-col md:flex-row gap-3 flex-1">
-              <CustomInput
+              <Input
                 className="w-full md:max-w-[320px]"
-                placeholder="Search by name, email, phone..."
-                startContent={<IoSearchOutline className="w-4 h-4" />}
+                placeholder="Search partners..."
+                startContent={<IoSearchOutline className="text-text-muted" />}
                 value={searchQuery}
+                variant="bordered"
                 onChange={(e: any) => setSearchQuery(e.target.value)}
               />
-              <CustomSelect
-                className="w-full md:w-36"
-                options={[
-                  { value: "all", label: "All Status" },
-                  { value: "active", label: "Active" },
-                  { value: "inactive", label: "Inactive" },
-                ]}
+              <Select
+                className="w-full md:w-40"
                 value={selectedStatus}
+                variant="bordered"
                 onChange={(e: any) => {
                   setSelectedStatus(e.target.value);
                   setCurrentPage(1);
                 }}
-              />
+              >
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </Select>
             </div>
           </div>
         </div>
@@ -310,62 +259,64 @@ export default function ReferralPartnersPage() {
             </div>
           ) : currentPartners.length === 0 ? (
             <div className="flex flex-col justify-center items-center h-[300px] gap-3 text-center">
-              <h3 className="text-[14px] font-semibold text-mountain-800">
+              <h3 className="text-[14px] font-semibold text-text-main">
                 No referral partners found
               </h3>
-              <p className="text-[13px] text-mountain-500 max-w-sm">
+              <p className="text-[13px] text-text-muted max-w-sm">
                 Start by adding a referral partner to your clinic.
               </p>
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                <tr className="bg-surface-2/30 border-b border-border-base">
+                  <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Partner
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Contact
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Commission
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600 text-right">
+                  <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider text-right">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-border-base/50">
                 {currentPartners.map((p) => (
                   <tr
                     key={p.id}
-                    className="hover:bg-mountain-50/30 transition-colors"
+                    className="hover:bg-surface-2/50 transition-colors group"
                   >
-                    <td className="px-5 py-3 font-semibold text-[13.5px] text-mountain-900">
+                    <td className="px-5 py-4 font-semibold text-[13.5px] text-text-main">
                       {p.name}
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="text-[13px] text-mountain-800">
+                    <td className="px-5 py-4">
+                      <div className="text-[13px] text-text-main">
                         {p.phone}
                       </div>
                       {p.email && (
-                        <div className="text-[11.5px] text-mountain-500">
+                        <div className="text-[12px] text-text-muted">
                           {p.email}
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-3 font-medium text-[13px] text-mountain-800">
+                    <td className="px-5 py-4 font-bold text-[13px] text-primary">
                       {p.defaultCommission}%
                     </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${p.isActive ? "bg-teal-50 text-teal-700 border-teal-200" : "bg-red-50 text-red-700 border-red-200"}`}
+                    <td className="px-5 py-4">
+                      <Chip
+                        color={p.isActive ? "success" : "danger"}
+                        size="sm"
+                        variant="flat"
                       >
                         {p.isActive ? "Active" : "Inactive"}
-                      </span>
+                      </Chip>
                     </td>
                     <td className="px-5 py-3 text-right">
                       <Dropdown>
@@ -374,7 +325,7 @@ export default function ReferralPartnersPage() {
                             {actionLoading === p.id ? (
                               <Spinner size="sm" />
                             ) : (
-                              <IoEllipsisVerticalOutline className="w-4 h-4 text-mountain-600" />
+                              <IoEllipsisVerticalOutline className="w-4 h-4 text-text-muted group-hover:text-text-main transition-colors" />
                             )}
                           </Button>
                         </DropdownTrigger>

@@ -9,62 +9,10 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { branchService } from "@/services/branchService";
 import { addToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
+import { Input } from "@/components/ui/input";
+import { Select, SelectItem } from "@/components/ui/select";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
 
-// ── Custom UI Helpers ────────────────────────────────────────────────────────
-function CustomInput({
-  label,
-  name,
-  value,
-  onChange,
-  type = "text",
-  required,
-  placeholder,
-  description,
-  disabled,
-  isInvalid,
-  errorMessage,
-  min,
-  max,
-  step,
-}: any) {
-  return (
-    <div className={`flex flex-col gap-1.5 w-full`}>
-      {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
-          {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
-        </label>
-      )}
-      <div
-        className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${isInvalid
-          ? "border-red-300 focus-within:ring-red-100"
-          : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
-          } focus-within:ring-1 ${disabled ? "bg-mountain-50" : ""}`}
-      >
-        <input
-          className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500"
-          disabled={disabled}
-          max={max}
-          min={min}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-          step={step}
-          type={type}
-          value={value}
-          onChange={onChange}
-        />
-      </div>
-      {(description || errorMessage) && (
-        <p
-          className={`text-[11.5px] ${isInvalid ? "text-red-500" : "text-mountain-500"}`}
-        >
-          {errorMessage || description}
-        </p>
-      )}
-    </div>
-  );
-}
 
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function NewReferralPartnerPage() {
@@ -217,38 +165,40 @@ export default function NewReferralPartnerPage() {
           <h1 className={title({ size: "lg" })}>
             {isEdit ? "Edit Partner" : "Add Referral Partner"}
           </h1>
-          <p className="text-[14px] text-mountain-500 mt-1">
+          <p className="text-[14px] text-text-muted mt-1">
             Manage external referral contact details
           </p>
         </div>
       </div>
 
       <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-            <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+        <Card>
+          <CardHeader>
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
               Partner Details
             </h4>
-          </div>
-          <div className="p-6">
+          </CardHeader>
+          <CardBody className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <CustomInput
-                required
+              <Input
+                isRequired
                 label="Name"
                 name="name"
                 placeholder="Enter partner name"
                 value={partnerProfile.name}
+                variant="bordered"
                 onChange={handleChange}
               />
-              <CustomInput
-                required
+              <Input
+                isRequired
                 label="Phone Number"
                 name="phone"
                 placeholder="Enter phone number"
                 value={partnerProfile.phone}
+                variant="bordered"
                 onChange={handleChange}
               />
-              <CustomInput
+              <Input
                 label="Default Commission (%)"
                 max="100"
                 min="0"
@@ -257,42 +207,42 @@ export default function NewReferralPartnerPage() {
                 step="0.01"
                 type="number"
                 value={partnerProfile.defaultCommission}
+                variant="bordered"
                 onChange={handleChange}
               />
-              <CustomInput
+              <Input
                 label="Email"
                 name="email"
                 placeholder="Enter email"
                 type="email"
                 value={partnerProfile.email}
+                variant="bordered"
                 onChange={handleChange}
               />
-              <CustomInput
+              <Input
                 label="Address"
                 name="address"
                 placeholder="Enter address"
                 value={partnerProfile.address}
+                variant="bordered"
                 onChange={handleChange}
               />
-              <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-[13px] font-medium text-mountain-700">
-                  Partner Type
-                </label>
-                <select
-                  className="w-full min-h-[38px] bg-white border border-mountain-200 text-mountain-800 text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow"
-                  name="partnerType"
-                  value={partnerProfile.partnerType}
-                  onChange={handleChange}
-                >
-                  <option value="individual">Individual</option>
-                  <option value="lab">Laboratory</option>
-                  <option value="clinic">Clinic</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
+              <Select
+                label="Partner Type"
+                name="partnerType"
+                placeholder="Select type"
+                value={partnerProfile.partnerType}
+                variant="bordered"
+                onChange={handleChange}
+              >
+                <SelectItem value="individual">Individual</SelectItem>
+                <SelectItem value="lab">Laboratory</SelectItem>
+                <SelectItem value="clinic">Clinic</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </Select>
             </div>
-          </div>
-        </div>
+          </CardBody>
+        </Card>
 
         <div className="flex justify-end gap-3 mt-2">
           <Button
