@@ -36,6 +36,7 @@ const getFieldStyle = (
   ...defaults,
   color: (layoutConfig.fieldColors?.[field] as string) || (defaults.color as string) || "inherit",
   fontSize: layoutConfig.fieldSizes?.[field] ? `${layoutConfig.fieldSizes[field]}px` : (defaults.fontSize as string),
+  fontFamily: layoutConfig.fontFamily || (defaults.fontFamily as string) || "inherit",
   fontWeight: layoutConfig.boldFields?.includes(field)
     ? "bold"
     : (defaults.fontWeight as string | number),
@@ -170,40 +171,44 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
   const currentLogoWidth = layoutConfig.logoWidth || logoBaseWidth;
 
   // Use fresh coordinate IDs for clinical info to reset any "off-center" drags
-  const clinicNameX = (layoutConfig as any).clinic_name_pos?.x || 0;
-  const clinicNameY = (layoutConfig as any).clinic_name_pos?.y || 0;
-  const taglineX = (layoutConfig as any).tagline_pos?.x || 0;
-  const taglineY = (layoutConfig as any).tagline_pos?.y || 0;
-  const addressX = (layoutConfig as any).address_pos?.x || 0;
-  const addressY = (layoutConfig as any).address_pos?.y || 0;
-  const contactsX = (layoutConfig as any).contacts_pos?.x || 0;
-  const contactsY = (layoutConfig as any).contacts_pos?.y || 0;
-  const websiteX = (layoutConfig as any).website_pos?.x || 0;
-  const websiteY = (layoutConfig as any).website_pos?.y || 0;
+  const clinicNameX = layoutConfig.clinicNamePos?.x || 0;
+  const clinicNameY = layoutConfig.clinicNamePos?.y || 0;
+  const taglineX = layoutConfig.taglinePos?.x || 0;
+  const taglineY = layoutConfig.taglinePos?.y || 0;
+  const addressX = layoutConfig.addressPos?.x || 0;
+  const addressY = layoutConfig.addressPos?.y || 0;
+  const contactsX = layoutConfig.phonePos?.x || 0;
+  const contactsY = layoutConfig.phonePos?.y || 0;
+  const websiteX = layoutConfig.websitePos?.x || 0;
+  const websiteY = layoutConfig.websitePos?.y || 0;
 
-  const headerHeight = layoutConfig.headerHeight === "compact" ? 180 : layoutConfig.headerHeight === "expanded" ? 300 : 240;
+  const headerHeight = layoutConfig.headerHeight === "compact" ? 140 : layoutConfig.headerHeight === "expanded" ? 220 : 180;
 
   const clinicNameStyle = getFieldStyle(layoutConfig, "clinicName", {
-    fontSize: layoutConfig.fontSize === "small" ? "20px" : layoutConfig.fontSize === "large" ? "24px" : "20px",
-    fontWeight: "400",
-    color: "#475569",
+    fontSize: layoutConfig.fontSize === "small" ? "18px" : layoutConfig.fontSize === "large" ? "26px" : "22px",
+    fontWeight: "800",
+    color: layoutConfig.primaryColor || "#1e3a8a",
     lineHeight: "1.1",
-    letterSpacing: "-0.01em",
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    textAlign: "center",
+    fontFamily: layoutConfig.fontFamily || "'Inter', sans-serif",
   });
 
   const taglineStyle = getFieldStyle(layoutConfig, "tagline", {
     fontSize: "11px",
-    fontWeight: "600",
-    color: "#475569",
+    fontWeight: "700",
+    color: layoutConfig.textColor || "#64748b",
     letterSpacing: "0.15em",
-    textTransform: "uppercase" as any,
+    fontFamily: layoutConfig.fontFamily || "'Inter', sans-serif",
   });
 
   const addressStyle = getFieldStyle(layoutConfig, "address", {
-    fontSize: "12px",
+    fontSize: "11px",
     lineHeight: "1.4",
-    color: "#475569",
-    textAlign: "center" as any
+    color: layoutConfig.textColor || "#475569",
+    textAlign: "center" as any,
+    fontFamily: layoutConfig.fontFamily || "'Inter', sans-serif",
   });
 
   return (
@@ -233,7 +238,7 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             style={{
               left: layoutConfig.logoPosition === "left" ? "40px" : (layoutConfig.logoPosition === "right" ? "auto" : "50%"),
               right: layoutConfig.logoPosition === "right" ? "40px" : "auto",
-              top: "40px",
+              top: "20px",
               marginLeft: layoutConfig.logoPosition === "center" ? `-${currentLogoWidth / 2}px` : "0px",
               cursor: isDesignMode ? "move" : "default",
               pointerEvents: "auto",
@@ -251,7 +256,7 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
         )}
 
         {/* IDENTITY STACK (Perfectly Centered) */}
-        <div className="flex flex-col items-center justify-center h-full px-20">
+        <div className="flex flex-col items-center justify-center h-full px-20" style={{ gap: '6px' }}>
 
           {/* 1. Clinic Name */}
           <DesignHandle
@@ -259,7 +264,7 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             x={clinicNameX} y={clinicNameY}
             style={{ position: "relative", zIndex: 30 }}
             onElementClick={onElementClick}
-            onDragEnd={(info) => onCoordinateChange?.("clinic_name_pos", { x: snapToGrid(clinicNameX + info.offset.x), y: snapToGrid(clinicNameY + info.offset.y) })}
+            onDragEnd={(info) => onCoordinateChange?.("clinicName", { x: snapToGrid(clinicNameX + info.offset.x), y: snapToGrid(clinicNameY + info.offset.y) })}
           >
             <h1
               contentEditable={isEditable} suppressContentEditableWarning
@@ -277,7 +282,7 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
               x={taglineX} y={taglineY}
               style={{ position: "relative", zIndex: 29, marginTop: "4px" }}
               onElementClick={onElementClick}
-              onDragEnd={(info) => onCoordinateChange?.("tagline_pos", { x: snapToGrid(taglineX + info.offset.x), y: snapToGrid(taglineY + info.offset.y) })}
+              onDragEnd={(info) => onCoordinateChange?.("tagline", { x: snapToGrid(taglineX + info.offset.x), y: snapToGrid(taglineY + info.offset.y) })}
             >
               <p
                 contentEditable={isEditable} suppressContentEditableWarning
@@ -295,21 +300,16 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             x={addressX} y={addressY}
             style={{ position: "relative", zIndex: 28, marginTop: "12px" }}
             onElementClick={onElementClick}
-            onDragEnd={(info) => onCoordinateChange?.("address_pos", { x: snapToGrid(addressX + info.offset.x), y: snapToGrid(addressY + info.offset.y) })}
+            onDragEnd={(info) => onCoordinateChange?.("address", { x: snapToGrid(addressX + info.offset.x), y: snapToGrid(addressY + info.offset.y) })}
           >
             <div className="flex flex-col items-center text-center">
               <div
                 contentEditable={isEditable} suppressContentEditableWarning
-                style={{ ...addressStyle, textAlign: "center" }}
+                style={{ ...addressStyle, textAlign: "center", whiteSpace: "pre-wrap" }}
                 onBlur={(e) => onTextChange?.("address", e.currentTarget.textContent || "")}
               >
                 {layoutConfig.address}
               </div>
-              {(layoutConfig.city || layoutConfig.zipCode) && (
-                <div style={{ ...addressStyle, fontSize: "11px", color: "#475569", marginTop: "2px" }}>
-                  {layoutConfig.city}{layoutConfig.state ? `, ${layoutConfig.state}` : ""} {layoutConfig.zipCode} • {layoutConfig.country}
-                </div>
-              )}
             </div>
           </DesignHandle>
 
@@ -319,15 +319,15 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             x={contactsX} y={contactsY}
             style={{ position: "relative", zIndex: 26, width: "100%", display: "flex", justifyContent: "center", marginTop: "16px" }}
             onElementClick={onElementClick}
-            onDragEnd={(info) => onCoordinateChange?.("contacts_pos", { x: snapToGrid(contactsX + info.offset.x), y: snapToGrid(contactsY + info.offset.y) })}
+            onDragEnd={(info) => onCoordinateChange?.("phone", { x: snapToGrid(contactsX + info.offset.x), y: snapToGrid(contactsY + info.offset.y) })}
           >
             <div className="flex items-center gap-6 pt-4 border-t border-gray-100 max-w-md w-full justify-center">
               {layoutConfig.phone && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-bold text-gray-400 uppercase">Phone:</span>
+                  <span className="text-[10px] font-bold text-gray-400 lowercase">phone:</span>
                   <span
                     contentEditable={isEditable} suppressContentEditableWarning
-                    className="text-[12px] font-bold text-[#475569]"
+                    className="text-[11px] font-bold text-[#475569]"
                     onBlur={(e) => onTextChange?.("phone", e.currentTarget.textContent || "")}
                   >
                     {layoutConfig.phone}
@@ -336,10 +336,10 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
               )}
               {layoutConfig.email && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-bold text-gray-400 uppercase">Email:</span>
+                  <span className="text-[10px] font-bold text-gray-400 lowercase">email:</span>
                   <span
                     contentEditable={isEditable} suppressContentEditableWarning
-                    className="text-[12px] font-bold text-[#475569]"
+                    className="text-[11px] font-bold text-[#475569]"
                     onBlur={(e) => onTextChange?.("email", e.currentTarget.textContent || "")}
                   >
                     {layoutConfig.email}
@@ -356,13 +356,14 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
               x={websiteX} y={websiteY}
               style={{ position: "relative", zIndex: 27, marginTop: "8px" }}
               onElementClick={onElementClick}
-              onDragEnd={(info) => onCoordinateChange?.("website_pos", { x: snapToGrid(websiteX + info.offset.x), y: snapToGrid(websiteY + info.offset.y) })}
+              onDragEnd={(info) => onCoordinateChange?.("website", { x: snapToGrid(websiteX + info.offset.x), y: snapToGrid(websiteY + info.offset.y) })}
             >
               <div
                 contentEditable={isEditable} suppressContentEditableWarning
-                style={{ color: "#475569", fontWeight: "bold", fontSize: "12px", textAlign: "center" }}
+                style={{ color: "#475569", fontWeight: "bold", fontSize: "11px", textAlign: "center" }}
                 onBlur={(e) => onTextChange?.("website", e.currentTarget.textContent || "")}
               >
+                <span className="text-[10px] font-bold text-gray-400 lowercase mr-1">website:</span>
                 {layoutConfig.website}
               </div>
             </DesignHandle>

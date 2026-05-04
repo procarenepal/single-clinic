@@ -11,6 +11,7 @@ import { useDisclosure } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/context/AuthContext";
 import { clinicService } from "@/services/clinicService";
+import { title } from "@/components/primitives";
 
 export default function ProfilePage() {
   const { currentUser, userData, isClinicAdmin, isSystemOwner } =
@@ -85,7 +86,7 @@ export default function ProfilePage() {
 
           <div className="flex-1 text-center md:text-left space-y-3">
             <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <h1 className="text-page-title font-extrabold text-text-main tracking-tight">
+              <h1 className={`${title({ size: "lg" })} text-primary`}>
                 {displayName}
               </h1>
               <div className="flex justify-center md:justify-start">

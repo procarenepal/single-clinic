@@ -363,7 +363,7 @@ export default function NewBranchPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className={title({ size: "lg" })}>Create New Branch</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Create New Branch</h1>
           <p className="text-text-muted mt-1">
             Add a new branch location to your clinic
           </p>

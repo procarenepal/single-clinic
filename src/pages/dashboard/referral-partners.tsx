@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -25,6 +26,7 @@ import { Select, SelectItem } from "@/components/ui/select";
 
 
 export default function ReferralPartnersPage() {
+  const navigate = useNavigate();
   const { clinicId, userData } = useAuth();
   const [partners, setPartners] = useState<ReferralPartner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -188,7 +190,7 @@ export default function ReferralPartnersPage() {
     <div className="flex flex-col gap-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "lg" })}>Referral Partners</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Referral Partners</h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Manage external referral sources and commission rates
           </p>
@@ -215,7 +217,7 @@ export default function ReferralPartnersPage() {
             color="primary"
             startContent={<IoAddOutline className="w-4 h-4" />}
             onClick={() =>
-              (window.location.href = "/dashboard/settings/referral-partners/new")
+              navigate("/dashboard/settings/referral-partners/new")
             }
           >
             Add Partner
@@ -332,14 +334,14 @@ export default function ReferralPartnersPage() {
                         <DropdownMenu>
                           <DropdownItem
                             onClick={() =>
-                              (window.location.href = `/dashboard/settings/referral-partners/${p.id}`)
+                              navigate(`/dashboard/settings/referral-partners/${p.id}`)
                             }
                           >
                             View Profile
                           </DropdownItem>
                           <DropdownItem
                             onClick={() =>
-                              (window.location.href = `/dashboard/settings/referral-partners/${p.id}/edit`)
+                              navigate(`/dashboard/settings/referral-partners/${p.id}/edit`)
                             }
                           >
                             Edit

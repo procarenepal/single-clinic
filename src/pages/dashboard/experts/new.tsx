@@ -164,7 +164,7 @@ export default function NewExpertPage() {
           <IoArrowBackOutline className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className={title({ size: "lg" })}>Add New Expert</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Add New Expert</h1>
           <p className="text-[14px] text-text-muted mt-1">
             Enter expert information below
           </p>

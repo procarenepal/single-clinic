@@ -48,12 +48,12 @@ function StatusBadge({
   type?: "status" | "payment";
 }) {
   const S_COLORS: Record<string, string> = {
-    paid: "bg-health-100 text-health-700 border-health-200",
-    finalized: "bg-teal-100 text-teal-700 border-teal-200",
-    partial: "bg-saffron-100 text-saffron-700 border-saffron-200",
-    unpaid: "bg-red-100 text-red-700 border-red-200",
-    cancelled: "bg-red-100 text-red-700 border-red-200",
-    default: "bg-mountain-100 text-mountain-600 border-mountain-200",
+    paid: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    finalized: "bg-primary/10 text-primary border-primary/20",
+    partial: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    unpaid: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+    cancelled: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+    default: "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))]",
   };
   const color = S_COLORS[status] || S_COLORS.default;
 
@@ -93,20 +93,20 @@ function FlatInput({
 }) {
   return (
     <div className="flex flex-col gap-1 w-full">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-muted">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <div
-        className={`flex items-center h-8 border border-mountain-200 rounded bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex items-center h-8 border border-[rgb(var(--color-border))] rounded bg-[rgb(var(--color-surface))] focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10 ${disabled ? "opacity-60" : ""}`}
       >
         {prefixText && (
-          <span className="pl-2.5 text-[12px] text-mountain-400 shrink-0">
+          <span className="pl-2.5 text-[12px] text-[rgb(var(--color-text-muted))] shrink-0">
             {prefixText}
           </span>
         )}
         <input
-          className="flex-1 w-full px-2.5 text-[12.5px] bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300 disabled:text-mountain-400"
+          className="flex-1 w-full px-2.5 text-[12.5px] bg-transparent focus:outline-none text-[rgb(var(--color-text))] placeholder:text-[rgb(var(--color-text-muted))] disabled:opacity-50"
           disabled={disabled}
           min={min}
           placeholder={placeholder}
@@ -116,7 +116,7 @@ function FlatInput({
           onChange={(e) => onChange?.(e.target.value)}
         />
       </div>
-      {hint && <p className="text-[10.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-[rgb(var(--color-text-muted))]">{hint}</p>}
     </div>
   );
 }
@@ -160,23 +160,23 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
             </h3>
             {subtitle && (
-              <div className="mt-1 text-[12px] text-mountain-500">
+              <div className="mt-1 text-[12px] text-[rgb(var(--color-text-muted))]">
                 {subtitle}
               </div>
             )}
           </div>
           {!disabled && (
             <button
-              className="text-mountain-400 hover:text-mountain-700 mt-0.5"
+              className="text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] mt-0.5 transition-colors"
               type="button"
               onClick={onClose}
             >
@@ -185,7 +185,7 @@ function ModalShell({
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))]/50 shrink-0">
           {footer}
         </div>
       </div>
@@ -357,17 +357,12 @@ export default function InvoiceDetailPage() {
   };
 
   // Calculate age from date of birth or use stored age
-  const getPatientAge = (p: Patient | null): number | null => {
+  const getPatientAge = (p: Patient | null): string | number | null => {
     if (!p) return null;
 
     // Prefer explicitly stored age
-    if (typeof p.age === "number" && p.age > 0) {
+    if (p.age) {
       return p.age;
-    }
-    if (typeof p.age === "string") {
-      const parsed = parseInt(p.age, 10);
-
-      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
     }
 
     // Fallback to DOB-based calculation
@@ -515,17 +510,17 @@ export default function InvoiceDetailPage() {
       <div className="flex flex-col gap-4 px-4 pb-12">
         <div className="clarity-page-header flex flex-wrap items-center gap-3">
           <button
-            className="p-2 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded border border-transparent hover:border-mountain-200"
+            className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded border border-transparent hover:border-border-base transition-all"
             type="button"
             onClick={() => navigate(-1)}
           >
             <IoArrowBackOutline className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="clarity-page-title text-[15px] font-bold text-mountain-900 tracking-tight">
+            <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
               Invoice Details
             </h1>
-            <p className="clarity-page-subtitle text-[12.5px] text-mountain-500 mt-0.5">
+            <p className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5">
               {authLoading
                 ? "Authenticating..."
                 : !clinicId
@@ -534,8 +529,8 @@ export default function InvoiceDetailPage() {
             </p>
           </div>
         </div>
-        <div className="bg-white border border-mountain-200 rounded p-6 flex items-center justify-center min-h-[200px]">
-          <p className="text-[13px] text-mountain-500">
+        <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded p-6 flex items-center justify-center min-h-[200px]">
+          <p className="text-[13px] text-[rgb(var(--color-text-muted))]">
             {authLoading
               ? "Authenticating..."
               : !clinicId
@@ -559,10 +554,10 @@ export default function InvoiceDetailPage() {
             <IoArrowBackOutline className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="clarity-page-title text-[15px] font-bold text-mountain-900 tracking-tight">
+            <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
               Invoice Not Found
             </h1>
-            <p className="clarity-page-subtitle text-[12.5px] text-mountain-500 mt-0.5">
+            <p className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5">
               The requested invoice could not be found
             </p>
           </div>
@@ -606,10 +601,10 @@ export default function InvoiceDetailPage() {
               <IoArrowBackOutline className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="clarity-page-title text-[15px] font-bold text-mountain-900 tracking-tight">
-                Invoice Details
-              </h1>
-              <div className="clarity-page-subtitle text-[12.5px] text-mountain-500 mt-0.5 space-y-0.5">
+            <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
+              Invoice Details
+            </h1>
+            <div className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5 space-y-0.5">
                 <p>
                   {invoice.invoiceNumber} •{" "}
                   {formatDateWithBS(invoice.invoiceDate).ad}
@@ -662,36 +657,36 @@ export default function InvoiceDetailPage() {
         </div>
 
         {/* Payment status bar — clarity-card, no shadow */}
-        <div className="bg-white border border-mountain-200 rounded p-4">
+        <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded p-4">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div>
-              <p className="text-[12px] text-mountain-500 mb-0.5">
+              <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-0.5">
                 Total Amount
               </p>
-              <p className="text-stat-sm text-mountain-900 tracking-tight">
+              <p className="text-stat-sm text-[rgb(var(--color-text))] tracking-tight">
                 {formatCurrency(invoice.totalAmount)}
               </p>
             </div>
             <div>
-              <p className="text-[12px] text-mountain-500 mb-0.5">
+              <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-0.5">
                 Paid Amount
               </p>
-              <p className="text-[22px] font-bold text-health-700 tracking-tight">
+              <p className="text-[22px] font-bold text-primary tracking-tight">
                 {formatCurrency(invoice.paidAmount)}
               </p>
             </div>
             <div>
-              <p className="text-[12px] text-mountain-500 mb-0.5">
+              <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-0.5">
                 Balance Amount
               </p>
               <p
-                className={`text-[22px] font-bold tracking-tight ${invoice.balanceAmount > 0 ? "text-red-600" : "text-health-700"}`}
+                className={`text-[22px] font-bold tracking-tight ${invoice.balanceAmount > 0 ? "text-rose-400" : "text-primary"}`}
               >
                 {formatCurrency(invoice.balanceAmount)}
               </p>
             </div>
             <div>
-              <p className="text-[12px] text-mountain-500 mb-0.5">
+              <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-0.5">
                 Payment Status
               </p>
               <div className="flex items-center gap-1.5 mt-0.5">
@@ -702,21 +697,21 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="mt-4">
             <div className="flex justify-between items-center mb-1.5">
-              <span className="text-[12px] text-mountain-500">
+              <span className="text-[12px] text-[rgb(var(--color-text-muted))]">
                 Payment Progress
               </span>
-              <span className="text-[12px] font-medium text-mountain-700">
+              <span className="text-[12px] font-medium text-[rgb(var(--color-text))]">
                 {paymentProgress.toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 bg-mountain-100 rounded overflow-hidden">
+            <div className="h-2 bg-[rgb(var(--color-surface-2))] rounded overflow-hidden">
               <div
                 className="h-full rounded transition-[width] ease-out"
                 style={{
                   width: `${Math.min(100, paymentProgress)}%`,
                   backgroundColor:
                     paymentProgress >= 100
-                      ? "rgb(22 163 74)"
+                      ? "rgb(var(--color-primary))"
                       : paymentProgress > 0
                         ? "rgb(217 119 6)"
                         : "rgb(225 29 72)",
@@ -729,10 +724,10 @@ export default function InvoiceDetailPage() {
         {/* Invoice details — two cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Invoice Items — clarity-table */}
-          <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-            <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-200 flex items-center gap-2">
-              <IoReceiptOutline className="w-4 h-4 text-teal-700" />
-              <h3 className="text-[13px] font-semibold text-mountain-900 uppercase tracking-wide">
+          <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded overflow-hidden">
+            <div className="px-4 py-3 bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))] flex items-center gap-2">
+              <IoReceiptOutline className="w-4 h-4 text-primary" />
+              <h3 className="text-[13px] font-semibold text-[rgb(var(--color-text))] uppercase tracking-wide">
                 Invoice Items
               </h3>
             </div>
@@ -750,16 +745,16 @@ export default function InvoiceDetailPage() {
                 <tbody>
                   {invoice.items.map((item, index) => (
                     <tr key={index}>
-                      <td className="text-center text-[13px] text-mountain-400">
+                      <td className="text-center text-[13px] text-[rgb(var(--color-text-muted))]">
                         {index + 1}
                       </td>
                       <td>
                         <div>
-                          <p className="font-medium text-mountain-800 text-[13px]">
+                          <p className="font-medium text-[rgb(var(--color-text))] text-[13px]">
                             {item.appointmentTypeName}
                           </p>
                           {item.commission > 0 && (
-                            <p className="text-[11px] text-mountain-500">
+                            <p className="text-[11px] text-[rgb(var(--color-text-muted))]">
                               Commission: {item.commission}%
                             </p>
                           )}
@@ -779,14 +774,14 @@ export default function InvoiceDetailPage() {
                 </tbody>
               </table>
             </div>
-            <div className="p-4 border-t border-mountain-200 bg-mountain-50 space-y-1.5 text-[13px] text-mountain-700">
+            <div className="p-4 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))]/60 space-y-1.5 text-[13px] text-[rgb(var(--color-text))]">
               <div className="flex justify-between">
                 <span>Subtotal:</span>
                 <span>{formatCurrency(invoice.subtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Discount ({invoice.discountType}):</span>
-                <span className="text-red-600">
+                <span className="text-rose-400">
                   - {formatCurrency(invoice.discountAmount)}
                 </span>
               </div>
@@ -796,7 +791,7 @@ export default function InvoiceDetailPage() {
                   <span>{formatCurrency(invoice.taxAmount)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold text-mountain-900 text-[14px] pt-1.5 border-t border-mountain-200 mt-1.5">
+              <div className="flex justify-between font-bold text-[rgb(var(--color-text))] text-[14px] pt-1.5 border-t border-[rgb(var(--color-border))] mt-1.5">
                 <span>Total Amount:</span>
                 <span>{formatCurrency(invoice.totalAmount)}</span>
               </div>
@@ -804,19 +799,19 @@ export default function InvoiceDetailPage() {
           </div>
 
           {/* Invoice Information */}
-          <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-            <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-200 flex items-center gap-2">
-              <IoCashOutline className="w-4 h-4 text-teal-700" />
-              <h3 className="text-[13px] font-semibold text-mountain-900 uppercase tracking-wide">
+          <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded overflow-hidden">
+            <div className="px-4 py-3 bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))] flex items-center gap-2">
+              <IoCashOutline className="w-4 h-4 text-primary" />
+              <h3 className="text-[13px] font-semibold text-[rgb(var(--color-text))] uppercase tracking-wide">
                 Invoice Information
               </h3>
             </div>
             <div className="p-4 space-y-5 text-[13px]">
               <div>
-                <h4 className="text-[11px] font-semibold text-mountain-500 uppercase tracking-wider mb-1.5">
+                <h4 className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5">
                   Patient Information
                 </h4>
-                <div className="space-y-0.5 text-mountain-800">
+                <div className="space-y-0.5 text-[rgb(var(--color-text))]">
                   <p>
                     <span className="font-medium">Name:</span>{" "}
                     {invoice.patientName}
@@ -824,7 +819,7 @@ export default function InvoiceDetailPage() {
                   {getPatientAge(patient) !== null && (
                     <p>
                       <span className="font-medium">Age:</span>{" "}
-                      {getPatientAge(patient)} years
+                      {getPatientAge(patient)}
                     </p>
                   )}
                   {patient?.gender && (
@@ -842,7 +837,7 @@ export default function InvoiceDetailPage() {
                 </div>
               </div>
               <div>
-                <h4 className="text-[11px] font-semibold text-mountain-500 uppercase tracking-wider mb-1.5">
+                <h4 className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5">
                   {((): boolean => {
                     const docIds = new Set(
                       invoice.items
@@ -885,12 +880,12 @@ export default function InvoiceDetailPage() {
                     return docs.map((doc, idx) => (
                       <div
                         key={idx}
-                        className="space-y-0.5 text-mountain-800 border-l-2 border-teal-100 pl-2"
+                        className="space-y-0.5 text-[rgb(var(--color-text))] border-l-2 border-primary/30 pl-2"
                       >
                         <p className="flex items-center gap-2">
                           <span className="font-medium">Name:</span> {doc.name}
                           {doc.isPrimary && docs.length > 1 && (
-                            <span className="text-[9px] font-bold text-teal-600 bg-teal-50 px-1 border border-teal-100 rounded">
+                            <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 border border-primary/20 rounded">
                               Primary
                             </span>
                           )}
@@ -909,10 +904,10 @@ export default function InvoiceDetailPage() {
                 </div>
               </div>
               <div>
-                <h4 className="text-[11px] font-semibold text-mountain-500 uppercase tracking-wider mb-1.5">
+                <h4 className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5">
                   Invoice Details
                 </h4>
-                <div className="space-y-0.5 text-mountain-800">
+                <div className="space-y-0.5 text-[rgb(var(--color-text))]">
                   <p>
                     <span className="font-medium">Invoice Number:</span>{" "}
                     {invoice.invoiceNumber}
@@ -948,7 +943,7 @@ export default function InvoiceDetailPage() {
               </div>
               {invoice.notes && (
                 <div>
-                  <h4 className="text-[11px] font-semibold text-mountain-500 uppercase tracking-wider mb-1.5">
+                  <h4 className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5">
                     Notes
                   </h4>
                   <p className="text-mountain-600 text-[12.5px]">

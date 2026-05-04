@@ -8,6 +8,7 @@ import {
   IoTrashOutline,
   IoEllipsisHorizontalOutline,
 } from "react-icons/io5";
+import { title } from "@/components/primitives";
 
 import { addToast } from "@/components/ui/toast";
 import { TextEditorComponent } from "@/components/text-editor/TextEditorComponent";
@@ -277,8 +278,8 @@ export default function TextEditorPage() {
     <div className="space-y-4">
       <div className="clarity-page-header">
         <div>
-          <h1 className="text-page-title">Text Editor & Documents</h1>
-          <p className="text-[13px] text-mountain-400 mt-1">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Text Editor & Documents</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Create, edit, and manage clinical documents and templates
           </p>
         </div>

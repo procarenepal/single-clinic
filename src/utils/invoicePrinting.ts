@@ -62,9 +62,9 @@ export const generateInvoiceHTML = (
       width: 100%;
     }
     body {
-      font-family: Arial, sans-serif;
-      color: #333;
-      font-size: ${isThermal ? "10px" : format === "A4_HALF" ? "11px" : "12px"};
+      font-family: ${layoutConfig?.fontFamily || "Arial, sans-serif"};
+      color: ${layoutConfig?.textColor || "#333"};
+      font-size: ${isThermal ? "9px" : format === "A4_HALF" ? "10px" : (layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "11px")};
     }
     
     ${!isThermal ? brandingCSS : ""}
@@ -72,14 +72,14 @@ export const generateInvoiceHTML = (
     .print-container {
       width: ${isThermal ? thermalWidth : "100%"};
       margin: 0 auto;
-      padding: ${isThermal ? "2mm" : "20mm"};
+      padding: ${isThermal ? "2mm" : "5mm 10mm"};
       display: flex;
       flex-direction: column;
       box-sizing: border-box;
     }
     .content {
       flex: 1;
-      padding: ${isThermal ? "0" : "15mm"};
+      padding: ${isThermal ? "0" : "2mm 5mm"};
       min-height: 0;
       display: flex;
       flex-direction: column;
@@ -87,10 +87,10 @@ export const generateInvoiceHTML = (
 
     .document-title {
       text-align: center;
-      margin: ${isThermal ? "2px 0" : format === "A4_HALF" ? "2px 0" : "5px 0 15px 0"};
+      margin: ${isThermal ? "2px 0" : format === "A4_HALF" ? "2px 0" : "2px 0 8px 0"};
     }
     .document-title h2 {
-      font-size: ${isThermal ? "12px" : "18px"};
+      font-size: ${isThermal ? "11px" : "14px"};
       font-weight: 800;
       margin: 0;
       text-transform: uppercase;
@@ -108,14 +108,14 @@ export const generateInvoiceHTML = (
     .bill-to-section {
       display: flex;
       flex-direction: column;
-      margin-bottom: ${isThermal ? "5px" : "25px"};
-      padding: ${isThermal ? "2px 0" : "15px"};
+      margin-bottom: ${isThermal ? "5px" : "12px"};
+      padding: ${isThermal ? "2px 0" : "8px 12px"};
       background-color: ${isThermal ? "transparent" : "#f8fafc"};
       border-radius: 8px;
       border: ${isThermal ? "none" : "1px solid #f1f5f9"};
     }
     .bill-to-section h3 {
-      margin: 0 0 8px 0;
+      margin: 0 0 4px 0;
       font-size: 11px;
       font-weight: 700;
       color: #64748b;
@@ -123,18 +123,18 @@ export const generateInvoiceHTML = (
       letter-spacing: 0.05em;
     }
     .bill-to-section p {
-      margin: 2px 0;
-      font-size: 13px;
+      margin: 1px 0;
+      font-size: 12px;
       color: #475569;
     }
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: ${isThermal ? "10px" : "30px"};
+      margin-bottom: ${isThermal ? "5px" : "15px"};
     }
     .items-table th, .items-table td {
       border: ${isThermal ? "none" : "1px solid #e2e8f0"};
-      padding: ${isThermal ? "2px 0" : "12px 10px"};
+      padding: ${isThermal ? "2px 0" : "6px 8px"};
       font-size: ${isThermal ? "10px" : "12px"};
       color: #475569;
     }
@@ -150,14 +150,14 @@ export const generateInvoiceHTML = (
     .summary-section {
       display: flex;
       justify-content: flex-end;
-      margin-top: ${isThermal ? "5px" : "20px"};
+      margin-top: ${isThermal ? "5px" : "8px"};
     }
     .summary-table {
       width: ${isThermal ? "100%" : "250px"};
       border-collapse: collapse;
     }
     .summary-table td {
-      padding: ${isThermal ? "3px 4px" : "8px 10px"};
+      padding: ${isThermal ? "3px 4px" : "4px 8px"};
       border-bottom: ${isThermal ? "1px dotted #ccc" : "1px solid #eee"};
     }
     .font-bold { font-weight: bold; }
@@ -331,8 +331,10 @@ export const generateAppointmentInvoiceHTML = (
       width: 100%;
     }
     body {
-      font-family: Arial, sans-serif;
-      color: #333;
+      font-family: ${layoutConfig?.fontFamily || "'Nunito', 'Plus Jakarta Sans', 'Inter', system-ui, Arial, sans-serif"};
+      color: ${layoutConfig?.textColor || "#333"};
+      font-size: ${isThermal ? "9px" : (layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "11px")};
+      line-height: 1.3;
     }
     .print-container {
       width: ${isThermal ? thermalWidth : "100%"};
@@ -341,7 +343,7 @@ export const generateAppointmentInvoiceHTML = (
       display: flex;
       flex-direction: column;
       min-height: auto;
-      padding: ${isThermal ? "2mm" : "20mm"};
+      padding: ${isThermal ? "2mm" : "5mm 8mm"};
       box-sizing: border-box;
     }
     
@@ -349,33 +351,33 @@ export const generateAppointmentInvoiceHTML = (
 
     .content {
       flex: 1;
-      padding: ${isThermal ? "2mm 0" : "15mm"};
+      padding: ${isThermal ? "2mm 0" : "4mm 6mm"};
       min-height: 0;
     }
     .document-title {
       text-align: center;
-      margin: 5px 0 15px 0;
+      margin: 2px 0 8px 0;
     }
     .document-title h2 {
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 800;
       margin: 0;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #475569;
+      letter-spacing: 0.1em;
+      color: #1e293b;
     }
     .bill-to-section {
       display: flex;
       flex-direction: ${isThermal ? "column" : "row"};
       justify-content: space-between;
-      margin-bottom: ${isThermal ? "10px" : "25px"};
-      padding: ${isThermal ? "8px" : "15px"};
+      margin-bottom: ${isThermal ? "10px" : "15px"};
+      padding: ${isThermal ? "8px" : "10px 15px"};
       background-color: #f8fafc;
       border-radius: 8px;
-      border: 1px solid #f1f5f9;
+      border: 1px solid #e2e8f0;
     }
     .bill-to-section h3 {
-      margin: 0 0 8px 0;
+      margin: 0 0 6px 0;
       font-size: 11px;
       font-weight: 700;
       color: #64748b;
@@ -383,48 +385,86 @@ export const generateAppointmentInvoiceHTML = (
       letter-spacing: 0.05em;
     }
     .bill-to-section p {
-      margin: 2px 0;
-      font-size: 13px;
-      color: #475569;
+      margin: 1px 0;
+      font-size: 12px;
+      color: #334155;
     }
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: ${isThermal ? "10px" : "30px"};
+      margin-bottom: ${isThermal ? "10px" : "15px"};
     }
     .items-table th,
     .items-table td {
       border: 1px solid #e2e8f0;
-      padding: ${isThermal ? "6px 4px" : "12px 10px"};
+      padding: ${isThermal ? "6px 4px" : "6px 10px"};
       font-size: ${isThermal ? "11px" : "12px"};
-      color: #475569;
+      color: #334155;
     }
     .items-table th {
-      background-color: #f8fafc;
+      background-color: #f1f5f9;
       font-weight: 700;
       text-align: center;
       text-transform: uppercase;
       font-size: 10px;
       letter-spacing: 0.05em;
-      color: #64748b;
+      color: #475569;
     }
     .summary-section {
       display: flex;
       justify-content: flex-end;
-      margin-top: 20px;
+      margin-top: 10px;
     }
-    .summary-table { width: 250px; border-collapse: collapse; }
+    .summary-table { width: 260px; border-collapse: collapse; }
     .summary-table td {
-      padding: ${isThermal ? "4px 6px" : "8px 10px"};
-      border-bottom: 1px solid #eee;
-      font-size: ${isThermal ? "11px" : "13px"};
+      padding: ${isThermal ? "4px 6px" : "5px 10px"};
+      border-bottom: 1px solid #f1f5f9;
+      font-size: ${isThermal ? "11px" : "12px"};
+      color: #334155;
     }
     .text-right { text-align: right !important; }
     .text-center { text-align: center !important; }
-    .font-bold { font-weight: bold; }
+    .font-bold { font-weight: 700; color: #1e293b; }
+
+    @media screen {
+      body {
+        background-color: #f1f5f9;
+        display: flex;
+        justify-content: center;
+        padding: 40px 20px;
+      }
+      .print-container {
+        width: ${isThermal ? thermalWidth : "210mm"};
+        min-height: ${isThermal ? "auto" : "297mm"};
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        border-radius: 8px;
+        position: relative;
+      }
+      /* Indicator that this is a print preview */
+      .print-container::before {
+        content: "PRINT PREVIEW";
+        position: absolute;
+        top: -25px;
+        left: 0;
+        font-size: 10px;
+        font-weight: 800;
+        color: #94a3b8;
+        letter-spacing: 0.1em;
+      }
+    }
 
     @media print {
-      body { -webkit-print-color-adjust: exact; }
+      body { 
+        -webkit-print-color-adjust: exact;
+        background: white !important;
+        padding: 0 !important;
+      }
+      .print-container {
+        box-shadow: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: ${isThermal ? "2mm" : "10mm"} !important;
+      }
     }
   </style>
 </head>
@@ -602,24 +642,7 @@ export const generatePatientSlipHTML = (
     @page {
       ${format === "A4_HALF" ? "size: A5 landscape; margin: 0;" : format === "A4" ? "size: A4; margin: 0;" : `size: ${thermalWidth} auto; margin: 0;`}
     }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: white;
-      -webkit-print-color-adjust: exact;
-      width: 100%;
-    }
-    body {
-      margin: 0;
-      padding: 0;
-      background: white;
-      color: #333;
-      font-family: Arial, sans-serif;
-      font-size: ${isThermal ? "11px" : "13px"};
-    }
-    
-    ${!isThermal ? brandingCSS : ""}
+    ${brandingCSS}
 
     .print-container {
       width: ${isThermal ? thermalWidth : "100%"};

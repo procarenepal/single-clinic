@@ -382,8 +382,8 @@ export default function ReferralPartnerProfilePage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className={title({ size: "lg" })}>Partner Profile</h1>
-            <p className="text-[14.5px] font-medium text-mountain-500 tracking-wide mt-1">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Partner Profile</h1>
+            <p className="text-[13.5px] text-text-muted mt-1">
               View and manage information
             </p>
           </div>

@@ -247,19 +247,16 @@ export const pharmacyService = {
   ): Promise<MedicinePurchase[]> {
     try {
       const purchasesRef = collection(db, MEDICINE_PURCHASES_COLLECTION);
-      let q = query(purchasesRef);
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
 
-      // Filter by branch if specified
       if (branchId) {
-        q = query(
-          purchasesRef,
-          where("branchId", "==", branchId),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(purchasesRef, ...constraints);
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const purchases = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -269,6 +266,12 @@ export const pharmacyService = {
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
         } as MedicinePurchase;
+      });
+
+      return purchases.sort((a, b) => {
+        const dateA = a.purchaseDate ? (a.purchaseDate instanceof Date ? a.purchaseDate.getTime() : new Date(a.purchaseDate).getTime()) : 0;
+        const dateB = b.purchaseDate ? (b.purchaseDate instanceof Date ? b.purchaseDate.getTime() : new Date(b.purchaseDate).getTime()) : 0;
+        return dateB - dateA;
       });
     } catch (error) {
       console.error("Error getting medicine purchases:", error);

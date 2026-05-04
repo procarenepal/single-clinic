@@ -94,17 +94,17 @@ export default function AddXrayModal({
       }}
     >
       <div
-        className="bg-white border border-mountain-200 rounded w-full max-w-lg flex flex-col max-h-[90vh]"
+        className="bg-surface border border-border-base rounded-[10px] w-full max-w-lg flex flex-col max-h-[90vh]"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
-          <h3 className="text-[14px] font-semibold text-mountain-900">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-base/50 shrink-0">
+          <h3 className="text-[14px] font-semibold text-text-main">
             Add X-ray Record
           </h3>
           {!isUploading && (
             <button
-              className="text-mountain-400 hover:text-mountain-700"
+              className="text-text-muted/60 hover:text-text-main transition-colors"
               type="button"
               onClick={() => {
                 reset();
@@ -121,11 +121,11 @@ export default function AddXrayModal({
           {/* File picker */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-[12px] font-medium text-mountain-700">
+              <label className="text-[12px] font-medium text-text-main">
                 X-ray File <span className="text-red-500">*</span>
               </label>
               <button
-                className="text-[11.5px] font-medium px-2.5 py-1 rounded border border-teal-200 text-teal-700 bg-teal-50 hover:bg-teal-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="text-[11.5px] font-medium px-2.5 py-1 rounded-[10px] border border-primary/20 text-primary bg-primary/5 hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 disabled={!!selectedFile || isUploading}
                 type="button"
                 onClick={() =>
@@ -144,29 +144,29 @@ export default function AddXrayModal({
                 e.target.files?.[0] && setSelectedFile(e.target.files[0])
               }
             />
-            <p className="text-[10.5px] text-mountain-400">
+            <p className="text-[10.5px] text-text-muted">
               Supported: JPG, JPEG, PNG, GIF, WEBP, PDF, DOC, DOCX
             </p>
 
             {/* Selected file card */}
             {selectedFile && (
-              <div className="flex items-center gap-3 border border-teal-200 bg-teal-50 rounded px-3 py-2">
+              <div className="flex items-center gap-3 border border-primary/20 bg-primary/5 rounded-[10px] px-3 py-2">
                 {isImg ? (
-                  <IoImageOutline className="w-4 h-4 text-teal-600 shrink-0" />
+                  <IoImageOutline className="w-4 h-4 text-primary shrink-0" />
                 ) : (
-                  <IoDocumentOutline className="w-4 h-4 text-teal-600 shrink-0" />
+                  <IoDocumentOutline className="w-4 h-4 text-primary shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12.5px] font-medium text-mountain-800 truncate">
+                  <p className="text-[12.5px] font-medium text-text-main truncate">
                     {selectedFile.name}
                   </p>
-                  <p className="text-[10.5px] text-mountain-400">
+                  <p className="text-[10.5px] text-text-muted">
                     {fmtSize(selectedFile.size)}
                   </p>
                 </div>
                 {!isUploading && (
                   <button
-                    className="text-mountain-400 hover:text-red-500 transition-colors shrink-0"
+                    className="text-text-muted/60 hover:text-red-500 transition-colors shrink-0"
                     type="button"
                     onClick={() => setSelectedFile(null)}
                   >
@@ -179,18 +179,18 @@ export default function AddXrayModal({
             {/* Progress bar */}
             {isUploading && (
               <div className="space-y-1">
-                <div className="flex justify-between text-[11.5px] text-mountain-600">
+                <div className="flex justify-between text-[11.5px] text-text-muted">
                   <span className="flex items-center gap-1">
-                    <IoCloudUploadOutline className="w-3.5 h-3.5 text-teal-600" />{" "}
+                    <IoCloudUploadOutline className="w-3.5 h-3.5 text-primary" />{" "}
                     Uploading…
                   </span>
                   <span className="font-semibold">
                     {Math.round(uploadProgress)}%
                   </span>
                 </div>
-                <div className="h-1.5 bg-mountain-100 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-teal-600 rounded-full transition-all duration-300"
+                    className="h-full bg-primary rounded-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -200,13 +200,13 @@ export default function AddXrayModal({
 
           {/* Note */}
           <div className="flex flex-col gap-1">
-            <label className="text-[12px] font-medium text-mountain-700">
+            <label className="text-[12px] font-medium text-text-main">
               Note (Optional)
             </label>
             <textarea
-              className="w-full px-2.5 py-2 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-                placeholder:text-mountain-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
-                disabled:bg-mountain-50 resize-y"
+              className="w-full px-2.5 py-2 text-[12.5px] border border-border-base rounded-[10px] bg-surface text-text-main
+                placeholder:text-text-muted/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10
+                disabled:bg-surface-2 resize-y"
               disabled={isUploading}
               placeholder="Add an optional note or description for this X-ray…"
               rows={4}
@@ -217,7 +217,7 @@ export default function AddXrayModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-border-base/50 shrink-0">
           <Button
             color="default"
             disabled={isUploading}

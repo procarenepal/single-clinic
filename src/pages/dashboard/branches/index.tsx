@@ -17,6 +17,7 @@ import {
   IoPersonAddOutline,
   IoShieldOutline,
 } from "react-icons/io5";
+import { title } from "@/components/primitives";
 
 import { addToast } from "@/components/ui/toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -221,8 +222,8 @@ export default function BranchManagementPage() {
     <div className="space-y-6">
       <div className="clarity-page-header">
         <div>
-          <h1 className="text-page-title">Branch Management</h1>
-          <p className="text-[13px] text-mountain-400 mt-0.5">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Branch Management</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage your clinic branches and locations
           </p>
         </div>

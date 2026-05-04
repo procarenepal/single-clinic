@@ -99,7 +99,7 @@ export const AdminHeader = ({
             />
           </div>
           <span className="font-bold text-[13px] hidden sm:block leading-none text-mountain-900 dark:text-mountain-100">
-            Procare
+            HSC
           </span>
           <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-teal-600/90 text-teal-100 border border-teal-500/30">
             Admin

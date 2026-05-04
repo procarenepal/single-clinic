@@ -171,18 +171,18 @@ export default function PatientMedicalRecordsTab({
     <div className="flex flex-col gap-4">
       {/* Header */}
       <div>
-        <h2 className="text-section-title text-mountain-900">
+        <h2 className="text-section-title text-text-main">
           Medical Records
         </h2>
-        <p className="text-[12.5px] text-mountain-400">
+        <p className="text-[12.5px] text-text-muted">
           Documents and X-ray imaging records
         </p>
       </div>
 
       {/* Card shell */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
         {/* Sub-tab strip */}
-        <div className="flex border-b border-mountain-100 bg-mountain-25 overflow-x-auto">
+        <div className="flex border-b border-border-base/50 bg-surface-2/30 overflow-x-auto">
           {SUB_TABS.map((t) => {
             const count =
               t.key === "documents" ? documents.length : xrays.length;
@@ -194,8 +194,8 @@ export default function PatientMedicalRecordsTab({
                 className={`flex items-center gap-1.5 px-5 py-3 text-[12.5px] font-medium whitespace-nowrap border-b-2 transition-colors
                   ${
                     active
-                      ? "border-teal-700 text-teal-700 bg-white"
-                      : "border-transparent text-mountain-500 hover:text-teal-600 hover:bg-mountain-50"
+                      ? "border-primary text-primary bg-surface"
+                      : "border-transparent text-text-muted hover:text-primary hover:bg-surface-2"
                   }`}
                 type="button"
                 onClick={() => setSubTab(t.key)}
@@ -206,8 +206,8 @@ export default function PatientMedicalRecordsTab({
                   className={`ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border
                   ${
                     active
-                      ? "bg-teal-100 text-teal-700 border-teal-200"
-                      : "bg-mountain-100 text-mountain-500 border-mountain-200"
+                      ? "bg-primary/10 text-primary border-primary/20"
+                      : "bg-surface-2 text-text-muted border-border-base"
                   }`}
                 >
                   {count}

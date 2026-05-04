@@ -26,17 +26,17 @@ interface PatientMedicalReportTabProps {
 }
 
 // ── Shared field input styles ─────────────────────────────────────────────────
-const INPUT_CLS = `w-full h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-  placeholder:text-mountain-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
-  disabled:bg-mountain-50 disabled:text-mountain-400`;
+const INPUT_CLS = `w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+  placeholder:text-text-muted/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10
+  disabled:bg-surface-2 disabled:text-text-muted/60`;
 
-const TEXTAREA_CLS = `w-full px-2.5 py-2 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-  placeholder:text-mountain-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
-  resize-y disabled:bg-mountain-50 disabled:text-mountain-400`;
+const TEXTAREA_CLS = `w-full px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+  placeholder:text-text-muted/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10
+  resize-y disabled:bg-surface-2 disabled:text-text-muted/60`;
 
-const SELECT_CLS = `w-full h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-  focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
-  disabled:bg-mountain-50 disabled:text-mountain-400`;
+const SELECT_CLS = `w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+  focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10
+  disabled:bg-surface-2 disabled:text-text-muted/60`;
 
 // ── Field wrapper ─────────────────────────────────────────────────────────────
 function FieldWrapper({
@@ -48,12 +48,12 @@ function FieldWrapper({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-main">
         {field.fieldLabel}
         {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {field.description && (
-        <p className="text-[10.5px] text-mountain-400">{field.description}</p>
+        <p className="text-[10.5px] text-text-muted">{field.description}</p>
       )}
       {children}
     </div>
@@ -74,7 +74,7 @@ function YesNoField({
 }) {
   return (
     <div className="flex items-center gap-4">
-      <span className="text-[12px] font-medium text-mountain-700 shrink-0">
+      <span className="text-[12px] font-medium text-text-main shrink-0">
         {field.fieldLabel}
         {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
       </span>
@@ -86,14 +86,14 @@ function YesNoField({
           >
             <input
               checked={value === opt}
-              className="w-3.5 h-3.5 accent-teal-600"
+              className="w-3.5 h-3.5 accent-primary"
               disabled={disabled}
               name={field.fieldKey}
               type="radio"
               value={opt}
               onChange={() => onChange(opt)}
             />
-            <span className="text-[12.5px] text-mountain-700 capitalize">
+            <span className="text-[12.5px] text-text-main capitalize">
               {opt}
             </span>
           </label>
@@ -252,14 +252,14 @@ export const PatientMedicalReportTab: React.FC<
               >
                 <input
                   checked={val === opt}
-                  className="w-3.5 h-3.5 accent-teal-600"
+                  className="w-3.5 h-3.5 accent-primary"
                   disabled={dis}
                   name={field.fieldKey}
                   type="radio"
                   value={opt}
                   onChange={() => handleChange(field.fieldKey, opt)}
                 />
-                <span className="text-[12.5px] text-mountain-700">{opt}</span>
+                <span className="text-[12.5px] text-text-main">{opt}</span>
               </label>
             ))}
           </div>
@@ -276,7 +276,7 @@ export const PatientMedicalReportTab: React.FC<
               >
                 <input
                   checked={checked.includes(opt)}
-                  className="w-3.5 h-3.5 accent-teal-600 rounded"
+                  className="w-3.5 h-3.5 accent-primary rounded"
                   disabled={dis}
                   type="checkbox"
                   value={opt}
@@ -289,7 +289,7 @@ export const PatientMedicalReportTab: React.FC<
                     )
                   }
                 />
-                <span className="text-[12.5px] text-mountain-700">{opt}</span>
+                <span className="text-[12.5px] text-text-main">{opt}</span>
               </label>
             ))}
           </div>
@@ -320,11 +320,11 @@ export const PatientMedicalReportTab: React.FC<
   if (fields.length === 0) {
     return (
       <div className="py-16 text-center">
-        <IoWarningOutline className="mx-auto w-10 h-10 text-mountain-300 mb-3" />
-        <h3 className="text-[13px] font-semibold text-mountain-700 mb-1">
+        <IoWarningOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-3" />
+        <h3 className="text-[13px] font-semibold text-text-main mb-1">
           No Medical Report Fields
         </h3>
-        <p className="text-[12px] text-mountain-400">
+        <p className="text-[12px] text-text-muted">
           Contact your clinic administrator to configure medical report fields.
         </p>
       </div>
@@ -342,10 +342,10 @@ export const PatientMedicalReportTab: React.FC<
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-section-title text-mountain-900">
+          <h2 className="text-section-title text-text-main">
             Medical Report
           </h2>
-          <p className="text-[12.5px] text-mountain-400">
+          <p className="text-[12.5px] text-text-muted">
             Complete the medical report fields configured by your clinic
           </p>
         </div>
@@ -354,7 +354,7 @@ export const PatientMedicalReportTab: React.FC<
             {lastSaved &&
               lastSaved instanceof Date &&
               !isNaN(lastSaved.getTime()) && (
-                <div className="flex items-center gap-1 text-[11.5px] text-mountain-400">
+                <div className="flex items-center gap-1 text-[11.5px] text-text-muted">
                   <IoCheckmarkCircleOutline className="w-3.5 h-3.5 text-health-600" />
                   Last saved: {lastSaved.toLocaleDateString()}{" "}
                   {lastSaved.toLocaleTimeString()}

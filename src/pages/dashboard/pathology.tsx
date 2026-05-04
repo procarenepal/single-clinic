@@ -606,6 +606,14 @@ export default function PathologyPage() {
     });
   };
 
+  // Normalization helper to ensure numeric ages have units
+  const normalizeAge = (age: string): string => {
+    if (!age) return "";
+    const trimmed = age.trim();
+    if (/^\d+$/.test(trimmed)) return `${trimmed} Years`;
+    return trimmed;
+  };
+
   const handleSaveQuickPatient = async () => {
     if (!quickPatientForm.name.trim()) {
       addToast({
@@ -618,6 +626,21 @@ export default function PathologyPage() {
     }
     setLoading(true);
     try {
+      // ── Uniqueness Checks ──────────────────────────────────────────────────
+      const [mobileExists] = await Promise.all([
+        patientService.checkMobileExists(quickPatientForm.mobile, clinicId!),
+      ]);
+
+      if (mobileExists && quickPatientForm.mobile && quickPatientForm.mobile !== "N/A") {
+        addToast({
+          title: "Duplicate Mobile",
+          description: "A patient with this mobile number already exists.",
+          color: "danger",
+        });
+        setLoading(false);
+        return;
+      }
+
       const regNumber = await patientService.getNextRegistrationNumber(
         clinicId!,
       );
@@ -635,7 +658,7 @@ export default function PathologyPage() {
       };
 
       if (quickPatientForm.age)
-        patientData.age = parseInt(quickPatientForm.age);
+        patientData.age = normalizeAge(quickPatientForm.age);
 
       const patientId = await patientService.createPatient(patientData);
 
@@ -691,10 +714,24 @@ export default function PathologyPage() {
         return;
       }
       try {
+        // ── Uniqueness Checks ──────────────────────────────────────────────────
+        const [mobileExists] = await Promise.all([
+          patientService.checkMobileExists(testForm.walkInPhone, clinicId!),
+        ]);
+
+        if (mobileExists && testForm.walkInPhone && testForm.walkInPhone !== "N/A") {
+          addToast({
+            title: "Duplicate Mobile",
+            description: "A patient with this mobile number already exists.",
+            color: "danger",
+          });
+          return;
+        }
+
         const patientData = {
           name: testForm.patientName,
           mobile: testForm.walkInPhone || "N/A",
-          age: parseInt(testForm.patientAge) || undefined,
+          age: normalizeAge(testForm.patientAge) || undefined,
           gender:
             (testForm.patientGender as "male" | "female" | "other") || "other",
           clinicId: clinicId!,
@@ -736,7 +773,7 @@ export default function PathologyPage() {
         patientId: finalPatientId,
         patientName: finalPatientName,
         patientAge: testForm.patientAge
-          ? parseInt(testForm.patientAge)
+          ? normalizeAge(testForm.patientAge)
           : undefined,
         patientGender:
           (testForm.patientGender as "male" | "female" | "other") || "other",
@@ -1352,7 +1389,7 @@ export default function PathologyPage() {
       { label: "Patient Name", value: test.patientName },
       {
         label: "Age",
-        value: test.patientAge ? `${test.patientAge} Years` : "",
+        value: test.patientAge ? `${test.patientAge}` : "",
       },
       {
         label: "Gender",
@@ -1389,17 +1426,7 @@ export default function PathologyPage() {
     <head>
       <title>Pathology Report - ${test.patientName}</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
         @page { margin: 0; size: A4; }
-        body {
-          font-family: 'Inter', -apple-system, sans-serif;
-          margin: 0;
-          padding: 0;
-          background: white;
-          color: #111827;
-          line-height: 1.5;
-        }
 
         ${brandingCSS}
 
@@ -1438,7 +1465,7 @@ export default function PathologyPage() {
           text-transform: uppercase;
           letter-spacing: 0.05em;
           margin-bottom: 12px;
-          border-left: 4px solid #475569;
+          border-left: 4px solid ${layoutConfig?.primaryColor || "#475569"};
           padding-left: 10px;
         }
 
@@ -1817,7 +1844,7 @@ export default function PathologyPage() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className={title()}>Pathology</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Pathology</h1>
             <p className="text-text-muted mt-2 text-[13.5px]">
               Manage pathology tests, categories, units, and parameters
             </p>

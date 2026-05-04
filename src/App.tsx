@@ -215,6 +215,9 @@ const EditExpertPage = lazy(
 );
 const ProfilePage = lazy(() => import("@/pages/dashboard/profile"));
 const ActivityLogPage = lazy(() => import("@/pages/dashboard/activity-log"));
+const HomepageSettingsPage = lazy(
+  () => import("@/pages/dashboard/settings/homepage"),
+);
 
 export default function App() {
   // Initialize scrollbar theme observer during idle time to avoid blocking first paint
@@ -722,6 +725,10 @@ export default function App() {
                           <Route
                             element={<ThemeSettingsPage />}
                             path="settings/theme"
+                          />
+                          <Route
+                            element={<HomepageSettingsPage />}
+                            path="settings/homepage"
                           />
 
                           {/* Feature-specific Settings Routes - Keep RBAC protection */}

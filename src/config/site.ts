@@ -1,9 +1,9 @@
 export type SiteConfig = typeof siteConfig;
 
 export const siteConfig = {
-  name: "Procare Software Nepal",
+  name: "HSC Laser Hospital",
   description:
-    "Nepal's leading healthcare management platform designed specifically for medical professionals and healthcare facilities across the country.",
+    "Kathmandu's premier destination for advanced laser therapies, authentic Korean aesthetic excellence, and specialized dermatological care.",
   navItems: [
     {
       label: "Home",

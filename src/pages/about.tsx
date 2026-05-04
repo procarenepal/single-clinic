@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Building2,
@@ -10,251 +11,207 @@ import {
   Handshake,
   ArrowRight,
   MonitorSmartphone,
-  BarChart3,
-  Globe2,
+  ShieldCheck,
+  Sparkles,
+  Stethoscope,
+  Clock,
 } from "lucide-react";
 
+import { useAuthContext } from "@/context/AuthContext";
+import { clinicService } from "@/services/clinicService";
+import { siteConfig } from "@/config/site";
+import { Carousel } from "@/components/ui/Carousel";
+
 export default function AboutPage() {
+  const { clinicId } = useAuthContext();
+  const [clinicName, setClinicName] = useState<string>(siteConfig.name);
+
+  // Fetch clinic branding
+  useEffect(() => {
+    if (!clinicId) return;
+    
+    let cancelled = false;
+    clinicService.getClinicById(clinicId).then((clinic) => {
+      if (cancelled || !clinic) return;
+      setClinicName(clinic.name);
+    }).catch(() => {/* silently fall back */ });
+
+    return () => { cancelled = true; };
+  }, [clinicId]);
+
   return (
-    <div className="bg-slate-50 text-slate-800 font-sans min-h-screen">
-      {/* Hero Section */}
-      <section className="relative px-4 py-20 lg:py-28 max-w-4xl mx-auto flex flex-col items-center text-center overflow-hidden">
-        <div className="flex flex-wrap gap-2 justify-center mb-8 relative z-10">
-          <span className="flex items-center gap-1.5 bg-teal-100 text-teal-800 px-3 py-1 rounded-md text-xs font-semibold tracking-wide uppercase border border-teal-200">
-            <Building2 className="w-4 h-4" /> Proudly Nepali
-          </span>
-          <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-md text-xs font-semibold tracking-wide uppercase border border-slate-200">
-            <HeartPulse className="w-4 h-4" /> Healthcare Innovation
-          </span>
+    <div className="bg-[rgb(var(--color-bg))] text-[rgb(var(--color-text))] min-h-screen selection:bg-[rgb(var(--color-primary)/0.2)]">
+      {/* Hero Section - Split Layout */}
+      <section className="relative pt-16 pb-24 lg:pt-24 lg:pb-32 px-4 overflow-hidden">
+        {/* Subtle Background Tints */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <div className="absolute top-0 right-0 w-1/2 h-full bg-[rgb(var(--color-primary)/0.02)] rounded-bl-[100px]" />
         </div>
 
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-slate-900 tracking-tight leading-tight relative z-10">
-          About <span className="text-teal-700">Procare Nepal</span>
-        </h1>
-
-        <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-3xl font-medium leading-relaxed relative z-10">
-          Empowering healthcare providers across Nepal with technology
-          engineered specifically for local operational realities. Constructed
-          by Nepalis, securing Nepal’s digital medical future.
-        </p>
-
-        <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-bold uppercase tracking-widest text-slate-500 relative z-10">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-slate-400" />
-            <span>Founded in 2023</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-slate-400" />
-            <span>100% Local Team</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-slate-400" />
-            <span>500+ Clinics</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Narrative Section */}
-      <section className="py-24 border-y border-slate-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          <div className="max-w-xl">
-            <h2 className="text-3xl font-bold text-slate-900 mb-6 tracking-tight">
-              Our Development Story
-            </h2>
-            <div className="space-y-6 text-lg text-slate-600 leading-relaxed font-medium">
-              <p>
-                Procare Software Nepal emerged in 2023 from a vital
-                collaboration between seasoned medical professionals and
-                dedicated software engineers who identified critical systemic
-                frictions across clinical management in our country.
-              </p>
-              <p>
-                Witnessing facilities grapple with fragile paper architectures
-                or exorbitant, incompatible foreign software, we committed to
-                engineering a resilient, highly optimized, and fiscally
-                accessible platform calibrated purely for the dynamic Nepali
-                healthcare environment.
-              </p>
-              <p>
-                We execute continuous field testing—from high-density Kathmandu
-                hospitals to rural outposts—ensuring our infrastructure remains
-                robust through bandwidth latency, variable technical literacy,
-                and complex localized billing requirements.
-              </p>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+          <div className="flex-1 text-center lg:text-left max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] mb-6">
+              <span className="flex h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-primary))]" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[rgb(var(--color-text-muted))]">
+                Laser Hospital
+              </span>
             </div>
-          </div>
 
-          <div className="relative group">
-            <div className="absolute inset-0 bg-teal-100 rounded-xl transform rotate-2 group-hover:rotate-3 transition-transform duration-500 border border-teal-200" />
-            <div className="clarity-card p-3 bg-white border border-slate-200 rounded-xl relative z-10 transition-transform duration-500 group-hover:-translate-y-1">
-              <div className="rounded-lg border border-slate-100 overflow-hidden bg-slate-50">
-                <img
-                  alt="Modern abstract Nepali healthcare tech"
-                  className="w-full h-auto object-cover aspect-video"
-                  src="/images/banner_about.png"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=2070&q=80";
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            <h1 className="text-4xl lg:text-6xl font-bold mb-6 text-[rgb(var(--color-text))] leading-[1.2] tracking-tight">
+              Empowering Your Glow at <span className="text-[rgb(var(--color-primary))]">{clinicName}</span>
+            </h1>
 
-      {/* Core Mission */}
-      <section className="py-24 px-4 bg-slate-50">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-slate-200 text-slate-800 px-4 py-1.5 rounded-md text-sm font-bold uppercase tracking-wide border border-slate-300 mb-8">
-            <Activity className="w-5 h-5 text-slate-700" />
-            Our Mission Directive
-          </div>
+            <p className="text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed mb-10 max-w-xl mx-auto lg:mx-0">
+              Redefining aesthetic standards in Kathmandu through the fusion of authentic 
+              Korean skincare philosophy and advanced medical technology.
+            </p>
 
-          <blockquote className="text-2xl lg:text-3xl text-slate-900 leading-relaxed font-bold mb-16 tracking-tight">
-            "We systematically dismantle clinical inefficiencies in Nepal by
-            deploying robust, localized software architecture, optimizing
-            patient outcomes while respecting operational realities."
-          </blockquote>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-            {[
-              {
-                icon: <MapPin className="w-8 h-8 text-teal-700" />,
-                title: "Geographic Context",
-                desc: "Codebases tailored strictly for Nepal's infrastructural boundaries and medical operational standards.",
-              },
-              {
-                icon: <Lightbulb className="w-8 h-8 text-teal-700" />,
-                title: "Architectural Innovation",
-                desc: "Modern zero-latency interfaces fused with practical, flat, low-strain clinical design aesthetics.",
-              },
-              {
-                icon: <Handshake className="w-8 h-8 text-teal-700" />,
-                title: "Strategic Partnerships",
-                desc: "We don't just sell software; we commit to the technological evolution of your clinic.",
-              },
-            ].map((value, index) => (
-              <div
-                key={index}
-                className="bg-white p-8 border border-slate-200 rounded-md clarity-card"
-              >
-                <div className="w-14 h-14 bg-teal-50 rounded bg-opacity-50 border border-teal-100 flex items-center justify-center mb-6">
-                  {value.icon}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-10 lg:gap-16 pt-10 border-t border-[rgb(var(--color-border))]">
+              {[
+                { value: "2023", label: "Established" },
+                { value: "5k+", label: "Journeys" },
+                { value: "100%", label: "Authentic" },
+              ].map((stat, i) => (
+                <div key={i} className="relative group">
+                  <div className="absolute -left-4 top-1/2 -translate-y-1/2 w-0.5 h-8 bg-[rgb(var(--color-primary)/0.15)] rounded-full group-hover:bg-[rgb(var(--color-primary))] transition-all duration-500" />
+                  <div className="flex flex-col">
+                    <p className="text-2xl lg:text-3xl font-black text-[rgb(var(--color-primary))] tracking-tighter tabular-nums leading-none mb-2">
+                      {stat.value}
+                    </p>
+                    <p className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 group-hover:opacity-100 transition-opacity duration-500">
+                      {stat.label}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">
-                  {value.title}
-                </h3>
-                <p className="text-slate-600 leading-relaxed font-medium">
-                  {value.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Executive Leadership */}
-      <section className="py-24 border-y border-slate-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-16 max-w-2xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-1.5 rounded-md text-sm font-bold uppercase tracking-wide border border-slate-200 mb-4">
-              <Users className="w-5 h-5 text-slate-600" />
-              Executive Leadership
+              ))}
             </div>
-            <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4 tracking-tight">
-              Meet Our CEO
-            </h2>
-            <p className="text-lg text-slate-600">
-              Sanjeev Baral spearheads Procare Software Nepal with
-              uncompromising dedication. His technical vision accelerates our
-              mission to supply high-fidelity, locally-adapted clinical systems.
-            </p>
           </div>
 
-          <div className="max-w-md mx-auto">
-            <div className="p-8 bg-slate-50 border border-slate-200 rounded-md clarity-card text-center hover:border-teal-400 transition-colors">
-              <div className="relative mb-6 inline-block">
-                <div className="absolute inset-0 bg-teal-200 rounded-full blur-md opacity-50 transform scale-110" />
-                <img
-                  alt="Sanjeev Baral"
-                  className="w-32 h-32 rounded-full object-cover relative z-10 border-2 border-slate-200 shadow-sm"
-                  src="https://procarenepal.com/assets/founder-DS_eS69g.jpeg"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=256&q=80"; // Professional placeholder
-                  }}
+          <div className="flex-1 w-full relative">
+            <div className="relative bg-[rgb(var(--color-surface))] p-2 rounded-2xl border border-[rgb(var(--color-border))] shadow-[0_10px_40px_-10px_rgba(var(--color-primary)/0.15)] overflow-hidden">
+              <div className="h-[350px] lg:h-[450px]">
+                <Carousel
+                  autoPlayInterval={5000}
+                  items={[
+                    <div key="c1" className="w-full h-full relative">
+                      <img src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Clinic Interior" className="w-full h-full object-cover rounded-xl" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                    </div>,
+                    <div key="c2" className="w-full h-full relative">
+                      <img src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Skincare Technology" className="w-full h-full object-cover rounded-xl" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                    </div>,
+                    <div key="c3" className="w-full h-full relative">
+                      <img src="https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Clinical Procedure" className="w-full h-full object-cover rounded-xl" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                    </div>
+                  ]}
                 />
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-1">
-                Sanjeev Baral
-              </h3>
-              <p className="text-teal-700 font-bold uppercase tracking-wider text-sm mb-4">
-                Founder & CEO
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Philosophy Section */}
+      <section className="py-24 border-y border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] relative">
+        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+          <div className="relative group order-2 lg:order-1">
+            <div className="absolute -inset-4 bg-[rgb(var(--color-primary)/0.05)] rounded-2xl -rotate-2 scale-95 group-hover:rotate-0 group-hover:scale-100 transition-all duration-700" />
+            <div className="relative aspect-[4/5] rounded-xl overflow-hidden shadow-2xl border border-[rgb(var(--color-border))]">
+              <img
+                alt="The Science of Glow"
+                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                src="https://images.unsplash.com/photo-1616391182219-e080b4d1043a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
+              />
+            </div>
+          </div>
+
+          <div className="max-w-xl order-1 lg:order-2">
+            <div className="inline-block px-3 py-1 rounded-md bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] text-[10px] font-bold uppercase tracking-widest text-[rgb(var(--color-text-muted))] mb-6">
+              Our Clinical Philosophy
+            </div>
+            <h2 className="text-3xl lg:text-4xl font-bold text-[rgb(var(--color-primary))] mb-8 tracking-tight">
+              The "Glow" Science
+            </h2>
+            <div className="space-y-6 text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed font-medium">
+              <p>
+                At ProCare, we believe that true beauty stems from biological health. 
+                Our journey began with a singular vision: to bring the legendary "Glass Skin" 
+                expertise of Seoul to the heart of Kathmandu.
               </p>
-              <p className="text-slate-600 leading-relaxed font-medium">
-                Sanjeev anchors Procare Nepal's technical and operational
-                roadmap. Fusing years of cross-sector expertise, he drives the
-                deployment of resilient industry standards directly into
-                previously underserved medical facilities.
+              <p>
+                We have meticulously curated every treatment, from our signature 10-step 
+                facials to advanced laser therapies, ensuring they meet the rigorous 
+                standards of K-Beauty certification while respecting the unique 
+                environmental factors of the Himalayan region.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Pillar Approach */}
-      <section className="py-24 px-4 bg-slate-50 border-b border-slate-200">
+      {/* Core Values */}
+      <section className="py-24 px-4 bg-[rgb(var(--color-bg))]">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16 max-w-3xl mx-auto">
-            <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-6 tracking-tight">
-              Our Development Methodology
+          <div className="text-center mb-16">
+            <h2 className="text-3xl lg:text-4xl font-bold text-[rgb(var(--color-primary))] mb-6 tracking-tight">
+              Clinical Pillars
             </h2>
-            <p className="text-lg text-slate-600">
-              Four concrete pillars defining our architecture, strategy, and
-              execution.
+            <p className="text-base lg:text-lg text-[rgb(var(--color-text-muted))] font-medium max-w-2xl mx-auto">
+              Four concrete values defining our patient care and clinical execution.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {[
               {
-                title: "Engineered strict for Nepal",
+                title: "K-Beauty Precision",
                 description:
-                  "Built ground-up for erratic connectivity and power fluctuations mapping precisely to non-standardized clinical workflows. Features natively integrate Nepali linguistic and calendric requirements.",
-                icon: <Globe2 className="w-6 h-6 text-teal-700" />,
+                  "Fusing centuries-old Korean skincare wisdom with modern pharmacological breakthroughs for unprecedented results.",
+                icon: <Sparkles className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
+                image: "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
               },
               {
-                title: "Natively Local Engineering",
+                title: "Medical Authority",
                 description:
-                  "Abandon heavy legacy support channels. Our core engineering team resides in Nepal, supplying high-velocity remote resolution and strategic on-site integration without international friction.",
-                icon: <Users className="w-6 h-6 text-teal-700" />,
+                  "All procedures are supervised by board-certified clinicians using FDA-approved and K-certified medical technologies.",
+                icon: <ShieldCheck className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
+                image: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
               },
               {
-                title: "Iterative Rapid Enhancement",
+                title: "Himalayan Adaptation",
                 description:
-                  "We execute bi-weekly deployment cycles dictated by actual ground-floor telemetry. If a workflow introduces friction to a receptionist, we refactor it immediately.",
-                icon: <BarChart3 className="w-6 h-6 text-teal-700" />,
+                  "Treatment protocols specifically optimized for the high-altitude and environmental conditions of Kathmandu.",
+                icon: <Activity className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
+                image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
               },
               {
-                title: "Defensible Scalable Pricing",
+                title: "Bespoke Care",
                 description:
-                  "Enterprise features shouldn't mandate enterprise bloat. We aggressively optimized our cloud layer to pass unprecedented cost-efficiency to growing facilities.",
-                icon: <MonitorSmartphone className="w-6 h-6 text-teal-700" />,
+                  "Every patient undergoes a 3D digital skin analysis before a customized treatment roadmap is engineered.",
+                icon: <MonitorSmartphone className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
+                image: "https://images.unsplash.com/photo-1516533075015-a3838414c3ca?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
               },
             ].map((approach, index) => (
               <div
                 key={index}
-                className="flex gap-4 p-6 bg-white border border-slate-200 rounded-md clarity-card hover:border-teal-500 transition-colors"
+                className="group relative flex gap-6 p-8 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl hover:shadow-xl hover:border-[rgb(var(--color-primary)/0.3)] transition-all duration-500 overflow-hidden"
               >
-                <div className="w-12 h-12 bg-slate-50 flex-shrink-0 border border-slate-100 rounded-md flex items-center justify-center mb-4">
+                {/* Background Image Accent */}
+                <div className="absolute inset-0 z-0 opacity-10 group-hover:opacity-20 transition-opacity duration-700 pointer-events-none">
+                  <img src={approach.image} alt="" className="w-full h-full object-cover grayscale" />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--color-surface))] via-[rgb(var(--color-surface))/0.98] to-[rgb(var(--color-surface))/0.9] z-[1] pointer-events-none" />
+
+                <div className="relative z-10 w-12 h-12 bg-white flex-shrink-0 border border-[rgb(var(--color-border))] rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 group-hover:shadow-md transition-all duration-500">
                   {approach.icon}
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-2">
+                <div className="relative z-10">
+                  <h3 className="text-xl font-bold text-[rgb(var(--color-primary))] mb-3 tracking-tight">
                     {approach.title}
                   </h3>
-                  <p className="text-slate-600 font-medium leading-relaxed">
+                  <p className="text-base text-[rgb(var(--color-text-muted))] font-medium leading-relaxed">
                     {approach.description}
                   </p>
                 </div>
@@ -264,62 +221,64 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Dynamic Statistics */}
-      <section className="py-20 px-4 bg-slate-900 text-white text-center">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {[
-              { number: "100+", label: "Active Deployments" },
-              { number: "75", label: "Districts Supported" },
-              { number: "30k+", label: "Patients Processed" },
-              { number: "99.9%", label: "Cloud Uptime" },
-            ].map((stat, index) => (
-              <div
-                key={index}
-                className="p-4 border-l border-slate-800 first:border-l-0"
-              >
-                <p className="text-4xl lg:text-5xl font-bold text-teal-400 mb-2 tracking-tight">
-                  {stat.number}
-                </p>
-                <p className="text-slate-400 font-semibold uppercase tracking-wider text-sm">
-                  {stat.label}
-                </p>
+      {/* Leadership Section */}
+      <section className="py-24 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] relative">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+            <div className="max-w-xl">
+              <div className="inline-block px-3 py-1 rounded-md bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] text-[10px] font-bold uppercase tracking-widest text-[rgb(var(--color-text-muted))] mb-6">
+                Our Founder
               </div>
-            ))}
+              <h2 className="text-3xl lg:text-4xl font-bold text-[rgb(var(--color-primary))] mb-8 tracking-tight">
+                Visionary Care
+              </h2>
+              <p className="text-xl text-[rgb(var(--color-text))] font-bold mb-6 leading-relaxed">
+                "Our mission is to democratize high-end clinical skincare in Nepal, 
+                ensuring every patient has access to the world's most advanced aesthetic 
+                solutions right here in Kathmandu."
+              </p>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-[rgb(var(--color-text))]">Sanjeev Baral</h3>
+                <p className="text-[10px] font-bold text-[rgb(var(--color-primary))] uppercase tracking-widest">Founder & Medical Director</p>
+              </div>
+            </div>
+
+            <div className="relative group">
+              <div className="absolute inset-0 bg-[rgb(var(--color-primary))] opacity-[0.03] rounded-full blur-3xl" />
+              <div className="relative w-full max-w-md mx-auto aspect-square rounded-2xl overflow-hidden border border-[rgb(var(--color-border))] shadow-2xl">
+                <img
+                  alt="Sanjeev Baral"
+                  className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                  src="https://procarenepal.com/assets/founder-DS_eS69g.jpeg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80";
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Terminal CTA */}
-      <section className="py-24 bg-teal-800 px-4 text-center">
-        <div className="max-w-4xl mx-auto flex flex-col items-center">
-          <h2 className="text-4xl font-bold mb-6 text-white tracking-tight">
-            Initiate Consultation Sequence
+      <section className="py-24 bg-[rgb(var(--color-text))] text-[rgb(var(--color-bg))] px-4 relative overflow-hidden">
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <h2 className="text-4xl font-bold mb-8 tracking-tight">
+            Begin Your Glow Journey
           </h2>
-          <p className="text-teal-100 text-lg mb-10 font-medium leading-relaxed">
-            Our technical specialists will run a comprehensive diagnostic of
-            your clinic's digital needs and demonstrate precise optimization
-            strategies.
+          <p className="text-[rgb(var(--color-bg))] opacity-70 text-lg mb-12 font-medium leading-relaxed max-w-2xl mx-auto">
+            Book your comprehensive digital skin analysis and experience the 
+            standard of authentic Korean clinical care.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 mb-12 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
             <Link
-              className="bg-white text-teal-900 font-bold px-10 py-4 text-sm uppercase tracking-wider hover:bg-slate-100 transition-colors rounded border-2 border-transparent focus:outline-none flex items-center justify-center gap-2"
-              to="/demo"
+              className="bg-[rgb(var(--color-primary))] text-white font-bold px-12 py-5 text-xs uppercase tracking-widest hover:bg-white hover:text-[rgb(var(--color-text))] transition-all duration-500 rounded-xl shadow-lg"
+              to="/book"
             >
-              Request Live Diagnostics <ArrowRight className="w-4 h-4" />
+              Book Appointment
             </Link>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-8 justify-center text-teal-200 text-sm font-semibold tracking-wide border-t border-teal-700 pt-8 w-full">
-            <div className="flex items-center gap-2 justify-center">
-              <MapPin className="w-5 h-5 text-teal-400" /> Tripureshwor,
-              Kathmandu, Nepal
-            </div>
-            <div className="flex items-center gap-2 justify-center">
-              <MonitorSmartphone className="w-5 h-5 text-teal-400" /> +977
-              986-0577865
-            </div>
           </div>
         </div>
       </section>

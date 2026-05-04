@@ -47,38 +47,30 @@ export const bedService = {
   ): Promise<BedCategory[]> {
     try {
       const categoriesRef = collection(db, BED_CATEGORIES_COLLECTION);
-      let q = query(
-        categoriesRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("name"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          categoriesRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-          orderBy("name"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(categoriesRef, ...constraints);
       const querySnapshot = await getDocs(q);
-      const categories: BedCategory[] = [];
-
-      querySnapshot.forEach((doc) => {
+      const categories: BedCategory[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
-        categories.push({
+        return {
           id: doc.id,
           ...data,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
-        } as BedCategory);
+        } as BedCategory;
       });
 
-      return categories;
+      // Sort by name in memory
+      return categories.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     } catch (error) {
       console.error("Error getting bed categories by clinic:", error);
       throw error;
@@ -189,38 +181,30 @@ export const bedService = {
   async getBedsByClinic(clinicId: string, branchId?: string): Promise<Bed[]> {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
-      let q = query(
-        bedsRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("isActive", "==", true),
-        orderBy("bedNumber"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          bedsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-          orderBy("bedNumber"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(bedsRef, ...constraints);
       const querySnapshot = await getDocs(q);
-      const beds: Bed[] = [];
-
-      querySnapshot.forEach((doc) => {
+      const beds: Bed[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
-        beds.push({
+        return {
           id: doc.id,
           ...data,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
-        } as Bed);
+        } as Bed;
       });
 
-      return beds;
+      // Sort by bedNumber in memory
+      return beds.sort((a, b) => (a.bedNumber || "").localeCompare(b.bedNumber || ""));
     } catch (error) {
       console.error("Error getting beds by clinic:", error);
       throw error;
@@ -236,40 +220,31 @@ export const bedService = {
   ): Promise<Bed[]> {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
-      let q = query(
-        bedsRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("status", "==", "available"),
         where("isActive", "==", true),
-        orderBy("bedNumber"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          bedsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("status", "==", "available"),
-          where("isActive", "==", true),
-          orderBy("bedNumber"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(bedsRef, ...constraints);
       const querySnapshot = await getDocs(q);
-      const beds: Bed[] = [];
-
-      querySnapshot.forEach((doc) => {
+      const beds: Bed[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
-        beds.push({
+        return {
           id: doc.id,
           ...data,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
-        } as Bed);
+        } as Bed;
       });
 
-      return beds;
+      // Sort by bedNumber in memory
+      return beds.sort((a, b) => (a.bedNumber || "").localeCompare(b.bedNumber || ""));
     } catch (error) {
       console.error("Error getting available beds by clinic:", error);
       throw error;
@@ -404,38 +379,33 @@ export const bedService = {
   ): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      let q = query(
-        allotmentsRef,
-        where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
-      );
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
 
       if (branchId) {
-        q = query(
-          allotmentsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          orderBy("createdAt", "desc"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(allotmentsRef, ...constraints);
       const querySnapshot = await getDocs(q);
-      const allotments: BedAllotment[] = [];
-
-      querySnapshot.forEach((doc) => {
+      const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
-        allotments.push({
+        return {
           id: doc.id,
           ...data,
           allotmentDate: data.allotmentDate?.toDate(),
           dischargeDate: data.dischargeDate?.toDate(),
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
-        } as BedAllotment);
+        } as BedAllotment;
       });
 
-      return allotments;
+      // Sort by createdAt desc in memory
+      return allotments.sort((a, b) => {
+        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
+        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        return dateB - dateA;
+      });
     } catch (error) {
       console.error("Error getting bed allotments by clinic:", error);
       throw error;
@@ -451,40 +421,36 @@ export const bedService = {
   ): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      let q = query(
-        allotmentsRef,
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
         where("status", "==", "active"),
-        orderBy("createdAt", "desc"),
-      );
+      ];
 
       if (branchId) {
-        q = query(
-          allotmentsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("status", "==", "active"),
-          orderBy("createdAt", "desc"),
-        );
+        constraints.push(where("branchId", "==", branchId));
       }
 
+      const q = query(allotmentsRef, ...constraints);
       const querySnapshot = await getDocs(q);
-      const allotments: BedAllotment[] = [];
-
-      querySnapshot.forEach((doc) => {
+      const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
-        allotments.push({
+        return {
           id: doc.id,
           ...data,
           allotmentDate: data.allotmentDate?.toDate(),
           dischargeDate: data.dischargeDate?.toDate(),
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
-        } as BedAllotment);
+        } as BedAllotment;
       });
 
-      return allotments;
+      // Sort by createdAt desc in memory
+      return allotments.sort((a, b) => {
+        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
+        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        return dateB - dateA;
+      });
     } catch (error) {
       console.error("Error getting active bed allotments by clinic:", error);
       throw error;
@@ -500,26 +466,28 @@ export const bedService = {
       const q = query(
         allotmentsRef,
         where("bedId", "==", bedId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
-      const allotments: BedAllotment[] = [];
-
-      querySnapshot.forEach((doc) => {
+      const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
-        allotments.push({
+        return {
           id: doc.id,
           ...data,
           allotmentDate: data.allotmentDate?.toDate(),
           dischargeDate: data.dischargeDate?.toDate(),
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
-        } as BedAllotment);
+        } as BedAllotment;
       });
 
-      return allotments;
+      // Sort by createdAt desc in memory
+      return allotments.sort((a, b) => {
+        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
+        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        return dateB - dateA;
+      });
     } catch (error) {
       console.error("Error getting bed allotments by bed:", error);
       throw error;
@@ -535,26 +503,28 @@ export const bedService = {
       const q = query(
         allotmentsRef,
         where("patientId", "==", patientId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
-      const allotments: BedAllotment[] = [];
-
-      querySnapshot.forEach((doc) => {
+      const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
-        allotments.push({
+        return {
           id: doc.id,
           ...data,
           allotmentDate: data.allotmentDate?.toDate(),
           dischargeDate: data.dischargeDate?.toDate(),
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
-        } as BedAllotment);
+        } as BedAllotment;
       });
 
-      return allotments;
+      // Sort by createdAt desc in memory
+      return allotments.sort((a, b) => {
+        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
+        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        return dateB - dateA;
+      });
     } catch (error) {
       console.error("Error getting bed allotments by patient:", error);
       throw error;

@@ -29,6 +29,11 @@ export interface PrintLayoutConfig {
   headerHeight: "compact" | "standard" | "expanded";
   footerText?: string;
   showFooter: boolean;
+  showTagline?: boolean;
+  showAddress?: boolean;
+  showPhone?: boolean;
+  showEmail?: boolean;
+  showWebsite?: boolean;
 
   // Content spacing when printing without letterhead (for preprinted paper)
   contentTopMarginWithoutLetterheadMm?: number;
@@ -42,10 +47,16 @@ export interface PrintLayoutConfig {
   defaultPrintFormat?: string;
   margins: "narrow" | "normal" | "wide";
   fontSize: "small" | "medium" | "large";
+  contentFontSize?: number;
+
+  // Typography
+  fontFamily?: string;
 
   // Colors (for colored prints)
   primaryColor?: string;
   secondaryColor?: string;
+  titleColor?: string;
+  textColor?: string;
 
   // Granular Positioning (px offsets from classic positions)
   logoPos?: { x: number; y: number };
@@ -89,11 +100,20 @@ export const DEFAULT_PRINT_LAYOUT: Omit<
   logoWidth: 80,
   headerHeight: "expanded",
   showFooter: true,
+  showTagline: true,
+  showAddress: true,
+  showPhone: true,
+  showEmail: true,
+  showWebsite: true,
   paperSize: "A4",
   margins: "normal",
   fontSize: "medium",
+  contentFontSize: 12,
+  fontFamily: "'Inter', sans-serif",
   primaryColor: "#0ea5e9",
   secondaryColor: "#64748b",
+  titleColor: "#1e293b",
+  textColor: "#475569",
   contentTopMarginWithoutLetterheadMm: 20,
   defaultPathologyPrintWithoutLetterhead: false,
   thermalPaperWidthMm: 80,

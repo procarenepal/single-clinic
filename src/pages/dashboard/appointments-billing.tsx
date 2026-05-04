@@ -33,6 +33,7 @@ import {
 import DashboardNotFoundPage from "./not-found";
 
 import { useAuth } from "@/hooks/useAuth";
+import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 
@@ -270,7 +271,7 @@ function Toggle({
   return (
     <label className="flex items-center gap-2 cursor-pointer">
       <div
-        className={`relative inline-flex items-center w-9 h-5 rounded-full transition-colors duration-200 ease-in-out border border-border-base ${checked ? "bg-primary" : "bg-mountain-600"}`}
+        className={`relative inline-flex items-center w-9 h-5 rounded-full transition-colors duration-200 ease-in-out border border-border-base ${checked ? "bg-primary" : "bg-surface-3"}`}
       >
         <div
           className={`absolute left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out shadow-sm ${checked ? "translate-x-4" : "translate-x-0"}`}
@@ -1071,10 +1072,10 @@ export default function AppointmentBillingPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-page-title text-text-main">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
             Appointment Billing
           </h1>
-          <p className="text-[12.5px] text-text-muted mt-1">
+          <p className="text-[13.5px] text-text-muted mt-1">
             Create and manage appointment invoices
           </p>
         </div>
@@ -1157,7 +1158,7 @@ export default function AppointmentBillingPage() {
 
             <div>
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-[14px] font-semibold text-text-main">
+                <h3 className="text-[14px] font-semibold text-primary">
                   Invoice Items
                 </h3>
                 <Button
@@ -1369,7 +1370,7 @@ export default function AppointmentBillingPage() {
                     />
                   </div>
                   <div className="bg-surface-2 border border-border-base rounded p-4 text-[13px] space-y-2 text-text-muted">
-                    <h4 className="font-semibold text-text-main mb-2">
+                    <h4 className="font-semibold text-primary mb-2">
                       Summary
                     </h4>
                     <div className="flex justify-between">
@@ -1506,7 +1507,7 @@ export default function AppointmentBillingPage() {
                         ].map((h) => (
                           <th
                             key={h}
-                            className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
+                            className="px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider"
                           >
                             {h}
                           </th>
@@ -1583,6 +1584,7 @@ export default function AppointmentBillingPage() {
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1.5">
                               <button
+                                type="button"
                                 className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                 title="View"
                                 onClick={() =>
@@ -1596,6 +1598,7 @@ export default function AppointmentBillingPage() {
                               <Dropdown>
                                 <DropdownTrigger>
                                   <button
+                                    type="button"
                                     className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded flex items-center gap-0.5"
                                     title="Print"
                                   >
@@ -1605,58 +1608,69 @@ export default function AppointmentBillingPage() {
                                 </DropdownTrigger>
                                 <DropdownMenu aria-label="Print Formats">
                                   <DropdownItem
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
                                       window.open(
                                         `/dashboard/appointments-billing/${b.id}?print=true&format=A4`,
                                         "_blank",
-                                      )
-                                    }
+                                      );
+                                    }}
                                   >
                                     A4 Full Page
                                   </DropdownItem>
                                   <DropdownItem
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
                                       window.open(
                                         `/dashboard/appointments-billing/${b.id}?print=true&format=A4_HALF`,
                                         "_blank",
-                                      )
-                                    }
+                                      );
+                                    }}
                                   >
                                     A4 Half Page
                                   </DropdownItem>
                                   <DropdownItem
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
                                       window.open(
                                         `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_80MM`,
                                         "_blank",
-                                      )
-                                    }
+                                      );
+                                    }}
                                   >
                                     Thermal (80mm)
                                   </DropdownItem>
                                   <DropdownItem
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
                                       window.open(
                                         `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_58MM`,
                                         "_blank",
-                                      )
-                                    }
+                                      );
+                                    }}
                                   >
                                     Thermal (58mm)
                                   </DropdownItem>
                                   <DropdownItem
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
                                       window.open(
                                         `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_4INCH`,
                                         "_blank",
-                                      )
-                                    }
+                                      );
+                                    }}
                                   >
                                     Label (4-inch)
                                   </DropdownItem>
                                 </DropdownMenu>
                               </Dropdown>
                               <button
+                                type="button"
                                 className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                 title="Edit"
                                 onClick={() =>
@@ -1669,6 +1683,7 @@ export default function AppointmentBillingPage() {
                               </button>
                               {b.paymentStatus !== "paid" && (
                                 <button
+                                  type="button"
                                   className="p-1.5 text-text-muted hover:text-green-600 hover:bg-green-500/10 rounded"
                                   title="Pay"
                                   onClick={() => {
@@ -1684,6 +1699,7 @@ export default function AppointmentBillingPage() {
                                 </button>
                               )}
                               <button
+                                type="button"
                                 className="p-1.5 text-text-muted hover:text-red-600 hover:bg-red-500/10 rounded"
                                 title="Delete"
                                 onClick={() => {
@@ -1714,6 +1730,7 @@ export default function AppointmentBillingPage() {
                     </span>
                     <div className="flex gap-1">
                       <button
+                        type="button"
                         className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                         disabled={currentPage === 1}
                         onClick={() => setCurrentPage((p) => p - 1)}
@@ -1721,7 +1738,8 @@ export default function AppointmentBillingPage() {
                         Prev
                       </button>
                       <button
-                        className="px-2 py-1 border border-mountain-200 rounded hover:bg-mountain-50 disabled:opacity-50 text-mountain-800"
+                        type="button"
+                        className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                         disabled={currentPage === totalPages}
                         onClick={() => setCurrentPage((p) => p + 1)}
                       >
@@ -1742,7 +1760,7 @@ export default function AppointmentBillingPage() {
               {/* Add form */}
               <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
                 <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
-                  <h4 className="text-[13.5px] font-semibold text-text-main">
+                  <h4 className={title({ size: "sm", color: "primary" })}>
                     Add Payment Method
                   </h4>
                 </div>
@@ -1844,7 +1862,7 @@ export default function AppointmentBillingPage() {
               {/* List */}
               <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
                 <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
-                  <h4 className="text-[13.5px] font-semibold text-text-main">
+                  <h4 className={title({ size: "sm", color: "primary" })}>
                     Current Methods
                   </h4>
                 </div>
@@ -1881,7 +1899,8 @@ export default function AppointmentBillingPage() {
                         />
                         {m.isCustom && (
                           <button
-                            className="text-red-400 hover:text-red-600 transition-colors"
+                            type="button"
+                            className="p-1 hover:bg-red-500/10 hover:text-red-500 rounded text-text-muted"
                             onClick={() => handleDeleteMethod(m.id)}
                           >
                             <IoTrashOutline />
@@ -1895,13 +1914,13 @@ export default function AppointmentBillingPage() {
             </div>
 
             <div className="border-t border-border-base pt-8 mt-8">
-              <h3 className="text-[16px] font-bold text-text-main mb-4">
+              <h3 className={title({ size: "md", color: "primary", fullWidth: true })}>
                 Treatment Categories
               </h3>
               <div className="flex flex-col lg:flex-row gap-6 items-start">
                 <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
                   <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
-                    <h4 className="text-[13.5px] font-semibold text-text-main">
+                    <h4 className={title({ size: "sm", color: "primary" })}>
                       Add Category
                     </h4>
                   </div>
@@ -1937,7 +1956,7 @@ export default function AppointmentBillingPage() {
 
                 <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
                   <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
-                    <h4 className="text-[13.5px] font-semibold text-text-main">
+                    <h4 className={title({ size: "sm", color: "primary" })}>
                       Current Categories
                     </h4>
                   </div>
@@ -2016,12 +2035,13 @@ export default function AppointmentBillingPage() {
                   color="primary"
                   size="sm"
                   variant="bordered"
-                  onClick={() =>
+                  onClick={(e) => {
+                    e.preventDefault();
                     window.open(
                       `/dashboard/appointments-billing/${selectedBilling.id}?print=true`,
                       "_blank",
-                    )
-                  }
+                    );
+                  }}
                 >
                   Print
                 </Button>

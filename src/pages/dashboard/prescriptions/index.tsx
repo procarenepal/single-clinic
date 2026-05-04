@@ -30,7 +30,7 @@ import * as XLSX from "xlsx";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
 import {
   Dropdown,
   DropdownTrigger,
@@ -64,7 +64,7 @@ function CustomInput({
 }: any) {
   return (
     <div
-      className={`flex items-center border border-border-base rounded-lg min-h-[36px] bg-surface-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all ${className || ""}`}
+      className={`flex items-center border border-border-base rounded-[10px] min-h-[36px] bg-surface-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all ${className || ""}`}
     >
       {startContent && (
         <div className="pl-3 pr-2 text-text-muted flex items-center">
@@ -100,7 +100,7 @@ function CustomSelect({
       )}
       <Dropdown placement="bottom-start" className="w-full">
         <DropdownTrigger className="w-full">
-          <div className="w-full h-[36px] bg-surface-2 border border-border-base rounded-lg px-3 flex items-center justify-between text-[13px] font-medium text-text-main hover:bg-surface-3 transition-all cursor-pointer">
+          <div className="w-full h-[36px] bg-surface-2 border border-border-base rounded-[10px] px-3 flex items-center justify-between text-[13px] font-medium text-text-main hover:bg-surface-3 transition-all cursor-pointer">
             <span className="truncate">
               {selectedOption?.label || "Select..."}
             </span>
@@ -142,7 +142,7 @@ function ModalShell({ isOpen, onClose, title, children, size = "md" }: any) {
       />
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none">
         <div
-          className={`bg-surface border border-border-base rounded-2xl shadow-2xl w-full ${maxWidth} pointer-events-auto flex flex-col max-h-[90vh] overflow-hidden`}
+          className={`bg-surface border border-border-base rounded-[10px] shadow-2xl w-full ${maxWidth} pointer-events-auto flex flex-col max-h-[90vh] overflow-hidden`}
         >
           <div className="flex items-center justify-between px-6 py-5 border-b border-border-base bg-surface-2/50">
             <h3 className="text-lg font-bold text-text-main">
@@ -492,7 +492,7 @@ export default function PrescriptionsPage() {
       const printContent = `
         <!DOCTYPE html><html><head><title>Prescriptions Report</title>
         <style>
-          body { font-family: Arial; margin: 0; padding: 0; background: white; color: #333; }
+          ${brandingCSS}
           .print-container { width: 100%; display: flex; flex-direction: column; }
           .content { flex: 1; padding: 15mm; }
           h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; font-size: 20px; text-align: center; margin-top: 20px; }
@@ -543,14 +543,14 @@ export default function PrescriptionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "lg" })}>Prescriptions</h1>
-          <p className="text-xs font-medium text-text-muted mt-1">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Prescriptions</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage patient prescriptions and medical records
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {!branchId && isClinicAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-surface-2 border border-border-base px-2.5 py-1 rounded-lg">
+            <div className="flex items-center gap-1.5 bg-surface-2 border border-border-base px-2.5 py-1 rounded-[10px]">
               <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Branch</span>
               <Dropdown placement="bottom-end">
                 <DropdownTrigger>
@@ -616,7 +616,7 @@ export default function PrescriptionsPage() {
       </div>
 
       {/* Filter and Table Container */}
-      <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-surface border border-border-base rounded-[10px] shadow-sm overflow-hidden">
         {/* Controls */}
         <div className="p-5 border-b border-border-base bg-surface-2/50 flex flex-col gap-4">
           <div className="flex justify-between items-center">
@@ -688,7 +688,7 @@ export default function PrescriptionsPage() {
           {hasAdvancedFilters && (
             <div className="flex flex-wrap gap-2 pt-1 border-t border-mountain-100">
               {selectedStatus !== "all" && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-md text-[12px] font-semibold text-primary">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-[10px] text-[12px] font-semibold text-primary">
                   Status: <span className="capitalize">{selectedStatus}</span>
                   <button
                     className="text-primary hover:text-primary-dark transition-colors"
@@ -699,7 +699,7 @@ export default function PrescriptionsPage() {
                 </div>
               )}
               {selectedDoctor !== "all" && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-base rounded-md text-[12px] font-semibold text-text-main">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-base rounded-[10px] text-[12px] font-semibold text-text-main">
                   Doctor:{" "}
                   {allDoctors.find((d) => d.id === selectedDoctor)?.name}
                   <button
@@ -711,7 +711,7 @@ export default function PrescriptionsPage() {
                 </div>
               )}
               {(dateRange.start || dateRange.end) && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-md text-[12px] font-semibold text-primary">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-[10px] text-[12px] font-semibold text-primary">
                   Date: {dateRange.start || "Any"} - {dateRange.end || "Any"}
                   <button
                     className="text-primary hover:text-primary-dark transition-colors"
@@ -738,7 +738,7 @@ export default function PrescriptionsPage() {
                 From Date
               </label>
               <input
-                className="h-[36px] bg-surface-2 border border-border-base rounded-lg px-3 text-sm text-text-main focus:outline-none focus:border-primary transition-all font-medium"
+                className="h-[36px] bg-surface-2 border border-border-base rounded-[10px] px-3 text-sm text-text-main focus:outline-none focus:border-primary transition-all font-medium"
                 type="date"
                 value={dateRange.start}
                 onChange={(e) =>
@@ -751,7 +751,7 @@ export default function PrescriptionsPage() {
                 To Date
               </label>
               <input
-                className="h-[36px] bg-surface-2 border border-border-base rounded-lg px-3 text-sm text-text-main focus:outline-none focus:border-primary transition-all font-medium"
+                className="h-[36px] bg-surface-2 border border-border-base rounded-[10px] px-3 text-sm text-text-main focus:outline-none focus:border-primary transition-all font-medium"
                 type="date"
                 value={dateRange.end}
                 onChange={(e) =>
@@ -779,8 +779,8 @@ export default function PrescriptionsPage() {
         {/* Table/Content Area */}
         <div className="p-0 overflow-x-auto min-h-[300px]">
           {loading ? (
-            <div className="flex justify-center items-center h-[400px]">
-              <Spinner size="md" />
+            <div className="p-6">
+              <TableSkeleton cols={6} rows={10} />
             </div>
           ) : error ? (
             <div className="flex flex-col justify-center items-center h-[400px] gap-4 text-center p-6">
@@ -799,7 +799,7 @@ export default function PrescriptionsPage() {
             </div>
           ) : currentPrescriptions.length === 0 ? (
             <div className="flex flex-col justify-center items-center h-[400px] gap-6 text-center p-6 bg-surface-2/30">
-              <div className="w-20 h-20 rounded-3xl bg-surface-2 flex items-center justify-center border border-border-base shadow-inner">
+              <div className="w-20 h-20 rounded-[10px] bg-surface-2 flex items-center justify-center border border-border-base shadow-inner">
                 <IoReceiptOutline className="w-10 h-10 text-text-muted/40" />
               </div>
               <div>
@@ -939,7 +939,7 @@ export default function PrescriptionsPage() {
             <div className="flex items-center gap-2">
               <Button
                 isIconOnly
-                className="w-8 h-8 rounded-lg border-border-base"
+                className="w-8 h-8 rounded-[10px] border-border-base"
                 disabled={currentPage === 1}
                 size="sm"
                 variant="bordered"
@@ -947,12 +947,12 @@ export default function PrescriptionsPage() {
               >
                 <IoChevronBack className="w-3.5 h-3.5" />
               </Button>
-              <div className="px-4 py-1.5 bg-surface-2 border border-border-base rounded-lg text-xs font-bold text-text-main min-w-[60px] text-center">
+              <div className="px-4 py-1.5 bg-surface-2 border border-border-base rounded-[10px] text-xs font-bold text-text-main min-w-[60px] text-center">
                 {currentPage} / {totalPages}
               </div>
               <Button
                 isIconOnly
-                className="w-8 h-8 rounded-lg border-border-base"
+                className="w-8 h-8 rounded-[10px] border-border-base"
                 disabled={currentPage === totalPages}
                 size="sm"
                 variant="bordered"

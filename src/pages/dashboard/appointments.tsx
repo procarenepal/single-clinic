@@ -31,7 +31,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
 import {
   Dropdown,
   DropdownTrigger,
@@ -752,7 +752,7 @@ export default function AppointmentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "lg" })}>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
             Appointments
             {currentDoctorId && (
               <span className="ml-3 text-[11px] font-semibold tracking-wider text-teal-700 bg-teal-100 uppercase px-2 py-0.5 rounded border border-teal-200">
@@ -901,8 +901,8 @@ export default function AppointmentsPage() {
 
         <div className="p-4">
           {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <Spinner size="lg" />
+            <div className="py-8">
+              <TableSkeleton cols={layoutType === "table" ? 6 : 4} rows={itemsPerPage} />
             </div>
           ) : error ? (
             <div className="py-12 text-center flex flex-col items-center">
@@ -964,7 +964,7 @@ export default function AppointmentsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-surface-2 border-b border-border-base text-[12px] uppercase font-semibold text-text-muted tracking-wider">
+                  <tr className="bg-surface-2 border-b border-border-base text-[12px] uppercase font-semibold text-primary tracking-wider">
                     <th className="py-2.5 px-4 font-semibold">Patient</th>
                     <th className="py-2.5 px-4 font-semibold">Doctor</th>
                     <th className="py-2.5 px-4 font-semibold">Date & Time</th>
@@ -1060,7 +1060,7 @@ export default function AppointmentsPage() {
                               <DropdownItem
                                 key="view"
                                 onClick={() =>
-                                  (window.location.href = `/dashboard/appointments/${app.id}`)
+                                  navigate(`/dashboard/appointments/${app.id}`)
                                 }
                               >
                                 View Details
@@ -1070,7 +1070,7 @@ export default function AppointmentsPage() {
                                 <DropdownItem
                                   key="edit"
                                   onClick={() =>
-                                    (window.location.href = `/dashboard/appointments/${app.id}/edit`)
+                                    navigate(`/dashboard/appointments/${app.id}/edit`)
                                   }
                                 >
                                   Edit

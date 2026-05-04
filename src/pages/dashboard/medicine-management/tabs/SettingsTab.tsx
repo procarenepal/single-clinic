@@ -12,6 +12,7 @@ import { useAuthContext } from "@/context/AuthContext";
 
 interface MedicineSettings {
   canSellMedicines: boolean;
+  enableInventoryManagement: boolean;
   enableLowStockAlerts: boolean;
   lowStockThreshold: number;
   enableExpiryAlerts: boolean;
@@ -64,6 +65,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const { clinicId, userData } = useAuthContext();
   const [settings, setSettings] = useState<MedicineSettings>({
     canSellMedicines: false,
+    enableInventoryManagement: false,
     enableLowStockAlerts: false,
     lowStockThreshold: 10,
     enableExpiryAlerts: false,
@@ -84,6 +86,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
       setSettings({
         canSellMedicines: clinicSettings?.sellsMedicines || false,
+        enableInventoryManagement: clinicSettings?.enableInventoryManagement || false,
         enableLowStockAlerts: clinicSettings?.enableLowStockAlerts || false,
         lowStockThreshold: clinicSettings?.lowStockThreshold || 10,
         enableExpiryAlerts: clinicSettings?.enableExpiryAlerts || false,
@@ -109,7 +112,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       const settingsData = {
         clinicId,
         sellsMedicines: settings.canSellMedicines,
-        enableInventoryManagement: false,
+        enableInventoryManagement: settings.enableInventoryManagement,
         enableLowStockAlerts: settings.enableLowStockAlerts,
         lowStockThreshold: settings.lowStockThreshold,
         enableExpiryAlerts: settings.enableExpiryAlerts,
@@ -126,6 +129,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       const updatedClinicSettings = {
         ...clinicSettings,
         sellsMedicines: settings.canSellMedicines,
+        enableInventoryManagement: settings.enableInventoryManagement,
         enableLowStockAlerts: settings.enableLowStockAlerts,
         lowStockThreshold: settings.lowStockThreshold,
         enableExpiryAlerts: settings.enableExpiryAlerts,
@@ -159,7 +163,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="flex flex-col items-center gap-2 text-mountain-500 text-[12.5px]">
+        <div className="flex flex-col items-center gap-2 text-text-muted text-[12.5px]">
           <div className="h-6 w-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
           <span>Loading settings...</span>
         </div>
@@ -216,6 +220,24 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               }
             />
           </div>
+
+          <div className="flex justify-between items-center gap-4 pt-4 border-t border-border-base">
+            <div>
+              <p className="text-[13px] font-medium text-text-main">
+                Enable Inventory Management
+              </p>
+              <p className="text-[12px] text-text-muted mt-0.5">
+                Track stock levels, batches, and expiries
+              </p>
+            </div>
+            <Toggle
+              aria-label="Enable inventory management"
+              checked={settings.enableInventoryManagement}
+              onChange={(value) =>
+                handleSettingChange("enableInventoryManagement", value)
+              }
+            />
+          </div>
         </div>
       </div>
 
@@ -249,8 +271,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
 
             {settings.enableLowStockAlerts && (
-              <div className="ml-1 pl-4 border-l-2 border-mountain-200">
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+              <div className="ml-1 pl-4 border-l-2 border-border-base">
+                <label className="text-sm font-medium text-text-muted mb-1.5 block">
                   Alert Threshold (minimum stock quantity)
                 </label>
                 <input
@@ -266,7 +288,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                     )
                   }
                 />
-                <p className="text-[11.5px] text-mountain-500 mt-1">
+                <p className="text-[11.5px] text-text-muted/70 mt-1">
                   Alert when stock falls below this quantity
                 </p>
               </div>
@@ -294,8 +316,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
 
             {settings.enableExpiryAlerts && (
-              <div className="ml-1 pl-4 border-l-2 border-mountain-200">
-                <label className="text-sm font-medium text-mountain-700 mb-1.5 block">
+              <div className="ml-1 pl-4 border-l-2 border-border-base">
+                <label className="text-sm font-medium text-text-muted mb-1.5 block">
                   Alert Days Before Expiry
                 </label>
                 <input
@@ -312,7 +334,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                     )
                   }
                 />
-                <p className="text-[11.5px] text-mountain-500 mt-1">
+                <p className="text-[11.5px] text-text-muted/70 mt-1">
                   Alert this many days before medicines expire
                 </p>
               </div>
@@ -323,14 +345,14 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
       {/* Warning Card */}
       {!settings.canSellMedicines && (
-        <div className="bg-amber-50 border border-amber-200 rounded p-4">
+        <div className="bg-amber-900/20 border border-amber-900/30 rounded p-4">
           <div className="flex items-start gap-3">
             <IoWarningOutline className="text-amber-600 w-5 h-5 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="text-[13px] font-semibold text-amber-800">
                 Prescription-Only Mode
               </h4>
-              <p className="text-[12.5px] text-amber-700 mt-1">
+              <p className="text-[12.5px] text-amber-200/80 mt-1">
                 Medicine sales are disabled. Your clinic is configured for
                 prescription-only mode. Enable medicine sales above to access
                 full inventory and billing features.

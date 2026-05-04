@@ -17,6 +17,8 @@ import {
   IoMailOutline,
   IoGlobeOutline,
   IoTrashOutline,
+  IoTextOutline,
+  IoColorPaletteOutline,
 } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
 import { addToast } from "@heroui/toast";
@@ -302,21 +304,24 @@ export default function PrintLayoutPage() {
         <title>Print Layout - ${clinic?.name || "Clinic"}</title>
         <style>
           @page { margin: 0; size: A4; }
-          body {
-            margin: 0;
-            padding: 0;
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100%;
             width: 210mm;
-            height: 297mm;
             background: white;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            overflow: hidden !important;
           }
           .print-container {
             width: 210mm;
-            height: 297mm;
+            height: 100%;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            position: relative;
+            background: white;
           }
           
           ${brandingCSS}
@@ -500,11 +505,16 @@ export default function PrintLayoutPage() {
                 </CardHeader>
                 <CardBody className="space-y-4">
                   <Input
-                    isReadOnly
-                    description="Clinic name is always fetched from your clinic profile. To change it, update your clinic profile."
+                    description={clinic?.name ? `Default: ${clinic.name}` : "You can override the clinic name for printing"}
                     label="Clinic Name"
-                    value={clinic?.name || ""}
-                    variant="flat"
+                    placeholder="Clinic name to show on print"
+                    value={layoutConfig.clinicName || ""}
+                    onChange={(e) =>
+                      setLayoutConfig((prev) => ({
+                        ...prev,
+                        clinicName: e.target.value,
+                      }))
+                    }
                   />
 
                   <Input
@@ -652,6 +662,90 @@ export default function PrintLayoutPage() {
                       }))
                     }
                   />
+                </CardBody>
+              </Card>
+
+              {/* Typography & Colors */}
+              <Card>
+                <CardHeader className="bg-default-50 border-b border-default-200">
+                  <div className="flex items-center gap-2">
+                    <IoColorPaletteOutline className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-semibold">Typography & Colors</h3>
+                  </div>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <Select
+                    label="Font Family"
+                    selectedKeys={layoutConfig.fontFamily ? [layoutConfig.fontFamily] : ["'Inter', sans-serif"]}
+                    onSelectionChange={(keys) => {
+                      const font = Array.from(keys)[0] as string;
+                      setLayoutConfig((prev) => ({
+                        ...prev,
+                        fontFamily: font,
+                      }));
+                    }}
+                  >
+                    <SelectItem key="'Inter', sans-serif">Inter (Modern)</SelectItem>
+                    <SelectItem key="'Nunito', sans-serif">Nunito (Friendly)</SelectItem>
+                    <SelectItem key="'Plus Jakarta Sans', sans-serif">Jakarta Sans (Tech)</SelectItem>
+                    <SelectItem key="'Roboto', sans-serif">Roboto (Classic)</SelectItem>
+                    <SelectItem key="'Outfit', sans-serif">Outfit (Premium)</SelectItem>
+                    <SelectItem key="Arial, sans-serif">Arial</SelectItem>
+                    <SelectItem key="'Times New Roman', serif">Times New Roman</SelectItem>
+                  </Select>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Title Color"
+                      type="color"
+                      value={layoutConfig.titleColor || "#1e293b"}
+                      onChange={(e) =>
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          titleColor: e.target.value,
+                        }))
+                      }
+                    />
+                    <Input
+                      label="Text/Label Color"
+                      type="color"
+                      value={layoutConfig.textColor || "#475569"}
+                      onChange={(e) =>
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          textColor: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Brand Primary Color"
+                      type="color"
+                      value={layoutConfig.primaryColor || "#0ea5e9"}
+                      onChange={(e) =>
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          primaryColor: e.target.value,
+                        }))
+                      }
+                    />
+                    <Input
+                      label="Content Font Size (px)"
+                      max={18}
+                      min={8}
+                      type="number"
+                      value={layoutConfig.contentFontSize?.toString() || "12"}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          contentFontSize: isNaN(val) ? 12 : val,
+                        }));
+                      }}
+                    />
+                  </div>
                 </CardBody>
               </Card>
 
@@ -1134,7 +1228,6 @@ export default function PrintLayoutPage() {
                 >
                   <PrintLayoutTemplate
                     className="min-h-[842px] print-preview shadow-2xl"
-                    clinicName={clinic?.name}
                     isDesignMode={!previewMode}
                     layoutConfig={layoutConfig}
                     selectedElementId={selectedElementId}

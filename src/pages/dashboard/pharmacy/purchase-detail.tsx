@@ -29,6 +29,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui";
+import { title } from "@/components/primitives";
 
 // --- Components ---
 function ModalShell({
@@ -1110,10 +1111,10 @@ export default function PurchaseDetailPage() {
             <IoArrowBackOutline />
           </Button>
           <div>
-            <h1 className="text-page-title text-mountain-900">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
               Purchase Details
             </h1>
-            <p className="text-[12.5px] text-mountain-500 mt-1">
+            <p className="text-[13.5px] text-text-muted mt-1">
               Loading purchase information...
             </p>
           </div>
@@ -1137,10 +1138,10 @@ export default function PurchaseDetailPage() {
             <IoArrowBackOutline />
           </Button>
           <div>
-            <h1 className="text-page-title text-mountain-900">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
               Purchase Not Found
             </h1>
-            <p className="text-[12.5px] text-mountain-500 mt-1">
+            <p className="text-[13.5px] text-text-muted mt-1">
               The requested purchase record could not be found
             </p>
           </div>
@@ -1228,10 +1229,10 @@ export default function PurchaseDetailPage() {
               <IoArrowBackOutline />
             </Button>
             <div>
-              <h1 className="text-page-title text-mountain-900">
+              <h1 className={`${title({ size: "lg" })} text-primary`}>
                 Purchase Details
               </h1>
-              <p className="text-[12.5px] text-mountain-400 mt-1">
+              <p className="text-[13.5px] text-text-muted mt-1">
                 {purchase.purchaseNo} •{" "}
                 {purchase.purchaseDate.toLocaleDateString()}
               </p>
@@ -1708,9 +1709,9 @@ export default function PurchaseDetailPage() {
       <div
         className="print-only"
         style={{
-          fontFamily: "'Courier New', monospace",
-          fontSize: 12,
-          color: "#000",
+          fontFamily: layoutConfig?.fontFamily || "'Inter', sans-serif",
+          fontSize: layoutConfig?.contentFontSize || 12,
+          color: layoutConfig?.textColor || "#000",
           lineHeight: 1.3,
         }}
       >

@@ -46,21 +46,29 @@ export const medicalReportFieldService = {
   // Get all fields for a clinic
   async getFieldsByClinic(clinicId: string): Promise<MedicalReportField[]> {
     try {
+      // Simplify query to avoid composite index requirement
       const q = query(
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        orderBy("displayOrder", "asc"),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
+      const fields = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
       })) as MedicalReportField[];
+
+      // Sort in memory to avoid index errors
+      return fields.sort((a, b) => {
+        const orderA = a.displayOrder ?? 0;
+        const orderB = b.displayOrder ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        // Secondary sort by createdAt desc
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
     } catch (error) {
       console.error("Error getting medical report fields:", error);
       throw error;
@@ -72,21 +80,30 @@ export const medicalReportFieldService = {
     clinicId: string,
   ): Promise<MedicalReportField[]> {
     try {
+      // Simplify query to avoid composite index requirement
       const q = query(
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        where("isActive", "==", true),
-        orderBy("displayOrder", "asc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-      })) as MedicalReportField[];
+      const fields = querySnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        })) as MedicalReportField[];
+
+      // Filter and sort in memory
+      return fields
+        .filter((f) => f.isActive)
+        .sort((a, b) => {
+          const orderA = a.displayOrder ?? 0;
+          const orderB = b.displayOrder ?? 0;
+          return orderA - orderB;
+        });
     } catch (error) {
       console.error("Error getting active medical report fields:", error);
       throw error;

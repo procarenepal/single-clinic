@@ -1,13 +1,47 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
 import { Navbar } from "@/components/navbar";
 import { siteConfig } from "@/config/site";
+import { useAuthContext } from "@/context/AuthContext";
+import { clinicService } from "@/services/clinicService";
+import { storage, APPWRITE_BUCKET_ID } from "@/config/appwrite";
 
 export default function DefaultLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { clinicId } = useAuthContext();
+  const [clinicName, setClinicName] = useState<string>(siteConfig.name);
+  const [clinicLogo, setClinicLogo] = useState<string | null>(null);
+
+  // Helper to map DB file ID to Appwrite URL
+  const getLogoUrl = (logo?: string) => {
+    if (!logo) return null;
+    if (logo.startsWith("http")) return logo;
+    try {
+      const url = storage.getFileView(APPWRITE_BUCKET_ID, logo);
+      return `${url.toString()}&t=${Date.now()}`;
+    } catch {
+      return null;
+    }
+  };
+
+  // Fetch clinic branding
+  useEffect(() => {
+    if (!clinicId) return;
+    let cancelled = false;
+
+    clinicService.getClinicById(clinicId).then((clinic) => {
+      if (cancelled || !clinic) return;
+      setClinicName(clinic.name);
+      if (clinic.logo) setClinicLogo(getLogoUrl(clinic.logo));
+    }).catch(() => {/* silently fall back to defaults */ });
+
+    return () => { cancelled = true; };
+  }, [clinicId]);
+
   return (
     <div className="relative flex flex-col min-h-screen bg-[rgb(var(--color-bg))] font-sans text-[rgb(var(--color-text))] transition-colors duration-300">
       <Navbar />
@@ -24,24 +58,22 @@ export default function DefaultLayout({
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 border border-[rgb(var(--color-border))] rounded-lg bg-[rgb(var(--color-surface-2))] shadow-sm flex items-center justify-center">
                   <img
-                    alt="Procare Software Logo"
+                    alt={`${clinicName} Logo`}
                     className="w-8 h-8 object-contain"
-                    src="/logo.png"
+                    src={clinicLogo || "/logo.png"}
                   />
                 </div>
                 <div>
                   <h3 className="font-bold text-xl text-[rgb(var(--color-text))] tracking-tight">
-                    Procare Software
+                    {clinicName}
                   </h3>
                   <p className="text-xs text-[rgb(var(--color-primary))] font-bold uppercase tracking-wider">
-                    Nepal
+                    Aesthetic Sanctuary
                   </p>
                 </div>
               </div>
               <p className="text-[rgb(var(--color-text-muted))] text-sm leading-relaxed mb-6 pr-4">
-                Nepal's premier clinical management platform. We empower
-                healthcare professionals with modern, reliable, and compliant
-                digital solutions that streamline everyday operations.
+                {siteConfig.description}
               </p>
               <div className="flex gap-4">
                 <a
@@ -85,7 +117,7 @@ export default function DefaultLayout({
 
             {/* Product Links */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-text))] mb-5">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-primary))] mb-5">
                 Platform
               </h4>
               <ul className="space-y-3">
@@ -126,7 +158,7 @@ export default function DefaultLayout({
 
             {/* Company Links */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-text))] mb-5">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-primary))] mb-5">
                 Company
               </h4>
               <ul className="space-y-3">
@@ -167,7 +199,7 @@ export default function DefaultLayout({
 
             {/* Support Space */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-text))] mb-5">
+              <h4 className="font-bold text-sm uppercase tracking-wider text-[rgb(var(--color-primary))] mb-5">
                 Support
               </h4>
               <ul className="space-y-3 mb-6">
@@ -224,7 +256,7 @@ export default function DefaultLayout({
           <div className="pt-8 border-t border-[rgb(var(--color-border))] flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-col items-center md:items-start gap-1">
               <p className="text-[rgb(var(--color-text-muted))] text-sm font-medium">
-                © {new Date().getFullYear()} Procare Software Nepal. All rights
+                © {new Date().getFullYear()} {clinicName}. All rights
                 reserved.
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[rgb(var(--color-text-muted))] opacity-70">

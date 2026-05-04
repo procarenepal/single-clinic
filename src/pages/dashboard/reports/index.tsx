@@ -23,7 +23,8 @@ import { Divider } from "@/components/ui/divider";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import { title } from "@/components/primitives";
+import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
 import { Checkbox } from "@/components/ui/checkbox";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
@@ -873,8 +874,13 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <Spinner color="primary" label="Loading reports..." size="lg" />
+      <div className="flex flex-col gap-4 animate-in fade-in duration-500">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-[500px] w-full rounded-2xl" />
       </div>
     );
   }
@@ -886,8 +892,8 @@ export default function ReportsPage() {
       {/* Page Header — spec: clarity-page-header, clarity-page-title, clarity-page-subtitle */}
       <div className="clarity-page-header flex-col sm:flex-row gap-4 !items-start sm:!items-center">
         <div>
-          <h1 className="clarity-page-title">Reports & Analytics</h1>
-          <p className="clarity-page-subtitle">
+          <h1 className={title({ size: "lg", color: "primary" })}>Reports & Analytics</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Generate comprehensive reports and analyze clinic performance
           </p>
         </div>

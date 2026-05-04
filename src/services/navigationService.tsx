@@ -30,7 +30,14 @@ class NavigationService {
    * Helper to assign categories based on title
    */
   private assignCategory(title: string): NavItem["category"] {
-    const CORE = ["Dashboard", "Patients", "Appointments", "Prescriptions"];
+    const CORE = [
+      "Dashboard",
+      "Patients",
+      "Appointments",
+      "Prescriptions",
+      "Enquiry Management",
+      "Enquiries",
+    ];
     const CLINICAL = [
       "Doctors",
       "Experts",
@@ -45,8 +52,6 @@ class NavigationService {
       "Billing",
       "Appointment Billing",
       "Front Office",
-      "Enquiry Management",
-      "Enquiries",
     ];
 
     if (CORE.includes(title)) return "MAIN";
@@ -62,20 +67,33 @@ class NavigationService {
   private renderIcon(iconName?: string): React.ReactNode {
     const className = "w-5 h-5";
 
-    if (!iconName) return <Icons.IoGridOutline className={className} />;
+    // Mapping for more premium icons
+    const iconMapping: Record<string, string> = {
+      IoGridOutline: "IoAppsOutline",
+      IoPeopleOutline: "IoPeopleCircleOutline",
+      IoCalendarOutline: "IoCalendarClearOutline",
+      IoDocumentTextOutline: "IoDocumentAttachOutline",
+      IoChatboxEllipsesOutline: "IoChatbubbleEllipsesOutline",
+    };
+
+    const resolvedIconName =
+      iconName && iconMapping[iconName] ? iconMapping[iconName] : iconName;
+
+    if (!resolvedIconName)
+      return <Icons.IoAppsOutline className={className} />;
 
     // Resolve icon component dynamically from Ionicons by key
     const iconsRegistry = Icons as unknown as Record<
       string,
       React.ComponentType<{ className?: string }>
     >;
-    const IconComponent = iconsRegistry[iconName];
+    const IconComponent = iconsRegistry[resolvedIconName];
 
     if (IconComponent) {
       return <IconComponent className={className} />;
     }
 
-    return <Icons.IoGridOutline className={className} />;
+    return <Icons.IoAppsOutline className={className} />;
   }
 
   /**
@@ -89,7 +107,7 @@ class NavigationService {
       {
         title: "Dashboard",
         href: "/dashboard",
-        icon: <Icons.IoGridOutline className="w-5 h-5" />,
+        icon: <Icons.IoAppsOutline className="w-5 h-5" />,
         children: [],
       },
     ];
@@ -108,7 +126,6 @@ class NavigationService {
       availablePages.forEach((page) => {
         if (
           page.path !== "/dashboard" &&
-          page.showInSidebar !== false &&
           !page.parentId
         ) {
           // Filter children
@@ -189,7 +206,7 @@ class NavigationService {
       {
         title: "Dashboard",
         href: "/dashboard",
-        icon: <Icons.IoGridOutline className="w-5 h-5" />,
+        icon: <Icons.IoAppsOutline className="w-5 h-5" />,
         children: [],
       },
     ];
@@ -225,7 +242,6 @@ class NavigationService {
       userAccessiblePages.forEach((page) => {
         if (
           page.path !== "/dashboard" &&
-          page.showInSidebar !== false &&
           !page.parentId
         ) {
           // Filter out billing-related pages if billing is disabled
@@ -386,7 +402,7 @@ class NavigationService {
         {
           title: "Dashboard",
           href: "/dashboard",
-          icon: <Icons.IoGridOutline className="w-5 h-5" />,
+          icon: <Icons.IoAppsOutline className="w-5 h-5" />,
           children: [],
           category: "MAIN",
         },

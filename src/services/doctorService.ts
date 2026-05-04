@@ -111,12 +111,22 @@ export const doctorService = {
    * @param {string} [branchId] - Optional branch ID to filter doctors by
    * @returns {Promise<Doctor[]>} - Array of doctors (excluding deleted)
    */
-  async getDoctors(_branchId?: string): Promise<Doctor[]> {
+  async getDoctors(clinicId?: string): Promise<Doctor[]> {
     try {
-      const doctorsRef = collection(db, DOCTORS_COLLECTION);
-      const querySnapshot = await getDocs(doctorsRef);
+      const cacheKey = clinicId || "standalone";
+      const cached = cacheService.getClinicDoctors(cacheKey);
+      if (cached) return cached as Doctor[];
 
-      return querySnapshot.docs
+      const doctorsRef = collection(db, DOCTORS_COLLECTION);
+      const constraints: any[] = [];
+      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+        constraints.push(where("clinicId", "==", clinicId));
+      }
+      const q = query(doctorsRef, ...constraints);
+        
+      const querySnapshot = await getDocs(q);
+
+      const doctors = querySnapshot.docs
         .map((doc) => {
           const data = doc.data();
           const createdAt = data.createdAt
@@ -134,6 +144,9 @@ export const doctorService = {
           } as Doctor;
         })
         .filter((doctor) => !doctor.isDeleted);
+
+      cacheService.setClinicDoctors(cacheKey, doctors);
+      return doctors;
     } catch (error) {
       console.error("Error getting doctors:", error);
       throw error;
@@ -144,10 +157,10 @@ export const doctorService = {
    * Alias for backward compatibility
    */
   async getDoctorsByClinic(
-    _clinicId?: string,
+    clinicId?: string,
     _branchId?: string,
   ): Promise<Doctor[]> {
-    return this.getDoctors();
+    return this.getDoctors(clinicId);
   },
 
   /**

@@ -93,6 +93,14 @@ const settingsSections: SettingsSection[] = [
     href: "/dashboard/settings/referral-partners",
     category: "clinic",
   },
+  {
+    id: "homepage-management",
+    title: "Homepage Management",
+    description: "Customize the public landing page for your clinic",
+    icon: <IoBusinessOutline className="w-6 h-6" />,
+    href: "/dashboard/settings/homepage",
+    category: "clinic",
+  },
 ];
 
 const categoryLabels: Record<string, string> = {

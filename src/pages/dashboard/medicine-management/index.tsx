@@ -16,7 +16,7 @@ import MedicinesTab from "./tabs/MedicinesTab";
 
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton, TableSkeleton, CardSkeleton, Spinner } from "@/components/ui";
 import { useAuthContext } from "@/context/AuthContext";
 import { medicineService } from "@/services/medicineService";
 import { clinicSettingsService } from "@/services/clinicSettingsService";
@@ -346,76 +346,22 @@ export default function MedicineManagementPage() {
       setFilterType(null);
     }
   }, []);
-  // Skeleton component for initial load (avoids spinner flash, keeps layout stable)
-  const Skeleton = () => (
-    <div className="max-w-7xl mx-auto animate-pulse">
-      {/* Header skeleton */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="space-y-2 w-full max-w-md">
-            <div className="h-6 bg-default-200 rounded w-48" />
-            <div className="h-4 bg-default-200 rounded w-72" />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-40 bg-default-200 rounded-full" />
-          </div>
+  // Main Loading State
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto flex flex-col gap-6 animate-in fade-in duration-500">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
         </div>
-      </div>
-
-      {/* Stats cards skeleton */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="border border-default-200 rounded-medium shadow-sm p-4 space-y-3"
-          >
-            <div className="h-8 w-8 bg-default-200 rounded" />
-            <div className="h-5 bg-default-200 rounded w-12" />
-            <div className="h-3 bg-default-200 rounded w-20" />
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs skeleton */}
-      <div className="border border-default-200 rounded-medium shadow-sm">
-        <div className="bg-default-50 border-b border-default-200 px-6 py-3 flex gap-6 overflow-x-auto">
-          {[
-            "Medicines",
-            "Stock",
-            "Brands",
-            "Categories",
-            "Suppliers",
-            "Settings",
-          ].map((label) => (
-            <div key={label} className="flex flex-col items-start gap-2">
-              <div className="h-4 bg-default-200 rounded w-20" />
-              <div className="h-1 bg-default-100 rounded w-full" />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
           ))}
         </div>
-        <div className="p-6 space-y-4">
-          <div className="h-5 bg-default-200 rounded w-40" />
-          <div className="space-y-2">
-            <div className="h-3 bg-default-200 rounded w-full" />
-            <div className="h-3 bg-default-200 rounded w-11/12" />
-            <div className="h-3 bg-default-200 rounded w-10/12" />
-            <div className="h-3 bg-default-200 rounded w-9/12" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-24 border border-default-200 rounded-medium bg-default-100"
-              />
-            ))}
-          </div>
-        </div>
+        <Skeleton className="h-[400px] w-full rounded-2xl" />
       </div>
-    </div>
-  );
-
-  if (isLoading) {
-    return <Skeleton />;
+    );
   }
 
   if (!clinicId) {
@@ -446,17 +392,17 @@ export default function MedicineManagementPage() {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className={title({ size: "lg" })}>Medicine Management</h1>
-              <p className="text-default-600 mt-1">
+              <h1 className={title({ size: "lg", color: "primary" })}>Medicine Management</h1>
+              <p className="text-[13.5px] text-text-muted mt-1">
                 Manage medicines, inventory, brands, and supplier information
               </p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               {!branchId && isClinicAdmin && branches.length > 0 && (
                 <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-mountain-500">Branch</span>
+                  <span className="text-[11px] text-[rgb(var(--color-text-muted))]">Branch</span>
                   <select
-                    className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
+                    className="h-8 px-2.5 py-0 text-[12px] border border-[rgb(var(--color-border))] rounded bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text))] focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary)/0.2)]"
                     value={selectedBranchId ?? ""}
                     onChange={(e) =>
                       setSelectedBranchId(e.target.value || null)
@@ -474,7 +420,7 @@ export default function MedicineManagementPage() {
               <span
                 className={`text-xs font-semibold px-2.5 py-1 rounded-sm border ${clinicSettings?.sellsMedicines
                   ? "bg-health-100 text-health-700 border-health-200"
-                  : "bg-mountain-100 text-mountain-700 border-mountain-200"
+                  : "text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-3))]"
                   } flex items-center gap-1.5`}
               >
                 <IoMedicalOutline />
@@ -489,14 +435,14 @@ export default function MedicineManagementPage() {
         {/* Medicine selling status info */}
         {!clinicSettings?.sellsMedicines && (
           <div className="mb-6">
-            <div className="clarity-card bg-saffron-50 border-saffron-200 p-4">
+            <div className="clarity-card bg-saffron-500/10 border-saffron-500/20 p-4">
               <div className="flex items-start gap-3">
-                <IoWarningOutline className="text-saffron-600 text-stat-sm mt-0.5 flex-shrink-0" />
+                <IoWarningOutline className="text-saffron-500 text-stat-sm mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-medium text-saffron-800 mb-1">
+                  <h3 className="font-medium text-saffron-500 mb-1">
                     Prescription Only Mode
                   </h3>
-                  <p className="text-sm text-saffron-700">
+                  <p className="text-sm text-saffron-500/80">
                     Your clinic is currently configured for prescription only.
                     Medicine prices won't be included in invoices. To enable
                     medicine selling, go to the Settings tab and configure your
@@ -532,34 +478,36 @@ export default function MedicineManagementPage() {
         {(!requiresBranchSelection || hasBranchScope) && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8 relative">
             {isLoadingStats && (
-              <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
-                <div className="text-sm text-default-600 flex items-center gap-2">
-                  <Spinner size="sm" />
-                  Updating stats...
+              <div className="absolute inset-0 bg-surface/40 backdrop-blur-[2px] flex items-center justify-center z-10 rounded-lg">
+                <div className="flex flex-col items-center gap-2">
+                   <div className="w-32 h-1 bg-border-base overflow-hidden rounded-full">
+                      <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2" />
+                   </div>
+                   <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Updating Stats</span>
                 </div>
               </div>
             )}
 
             <div
-              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-4 block"
+              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-3 block"
               role="button"
               onClick={() => handleStatCardClick("medicines")}
             >
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <div className="p-2 bg-teal-100 rounded-lg">
-                    <IoMedkitOutline className="text-teal-700 text-stat-sm" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg">
+                    <IoMedkitOutline className="text-primary text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-stat font-bold text-mountain-900">
+                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
                   {dashboardStats.totalMedicines}
                 </p>
-                <p className="text-[12px] text-mountain-600">Total Medicines</p>
+                <p className="text-[11.5px] text-text-muted">Total Medicines</p>
               </div>
             </div>
 
             <div
-              className={`clarity-card transition-colors p-4 ${dashboardStats.lowStockItems > 0
+              className={`clarity-card transition-colors p-3 ${dashboardStats.lowStockItems > 0
                 ? "cursor-pointer hover:border-saffron-300"
                 : ""
                 }`}
@@ -571,23 +519,23 @@ export default function MedicineManagementPage() {
             >
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <div className="p-2 bg-saffron-100 rounded-lg">
-                    <IoWarningOutline className="text-saffron-600 text-stat-sm" />
+                  <div className="p-1.5 bg-warning/10 rounded-lg">
+                    <IoWarningOutline className="text-warning text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-stat font-bold text-mountain-900">
+                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
                   {dashboardStats.lowStockItems}
                 </p>
-                <p className="text-[12px] text-mountain-600">
+                <p className="text-[11.5px] text-text-muted">
                   Low Stock
                   {dashboardStats.lowStockItems > 0 && (
-                    <span className="block text-[11px] text-saffron-600 font-medium mt-1">
+                    <span className="block text-[10.5px] text-warning font-medium mt-1">
                       Click to view
                     </span>
                   )}
                 </p>
                 {clinicSettings && (
-                  <p className="text-[11px] text-mountain-400 mt-1">
+                  <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] mt-1">
                     Threshold: ≤{clinicSettings.lowStockThreshold || 10}
                   </p>
                 )}
@@ -595,7 +543,7 @@ export default function MedicineManagementPage() {
             </div>
 
             <div
-              className={`clarity-card transition-colors p-4 ${dashboardStats.expiringItems > 0
+              className={`clarity-card transition-colors p-3 ${dashboardStats.expiringItems > 0
                 ? "cursor-pointer hover:border-rose-300"
                 : ""
                 }`}
@@ -607,23 +555,18 @@ export default function MedicineManagementPage() {
             >
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <div className="p-2 bg-rose-100 rounded-lg">
-                    <IoAlertCircleOutline className="text-rose-600 text-stat-sm" />
+                  <div className="p-1.5 bg-danger/10 rounded-lg">
+                    <IoAlertCircleOutline className="text-danger text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-stat font-bold text-mountain-900">
+                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
                   {dashboardStats.expiringItems}
                 </p>
-                <p className="text-[12px] text-mountain-600">
+                <p className="text-[11.5px] text-text-muted">
                   Expiring Soon
-                  {dashboardStats.expiringItems > 0 && (
-                    <span className="block text-[11px] text-rose-600 font-medium mt-1">
-                      Click to view
-                    </span>
-                  )}
                 </p>
                 {clinicSettings && (
-                  <p className="text-[11px] text-mountain-400 mt-1">
+                  <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] mt-1">
                     Within {clinicSettings.expiryAlertDays || 30} days
                   </p>
                 )}
@@ -631,38 +574,38 @@ export default function MedicineManagementPage() {
             </div>
 
             <div
-              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-4"
+              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-3"
               role="button"
               onClick={() => handleStatCardClick("brands")}
             >
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <div className="p-2 bg-slate-100 rounded-lg">
-                    <IoBusinessOutline className="text-slate-600 text-stat-sm" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg">
+                    <IoBusinessOutline className="text-primary text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-stat font-bold text-mountain-900">
+                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
                   {dashboardStats.totalBrands}
                 </p>
-                <p className="text-[12px] text-mountain-600">Brands</p>
+                <p className="text-[11.5px] text-text-muted">Brands</p>
               </div>
             </div>
 
             <div
-              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-4"
+              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-3"
               role="button"
               onClick={() => handleStatCardClick("categories")}
             >
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <div className="p-2 bg-health-100 rounded-lg">
-                    <IoFlaskOutline className="text-health-700 text-stat-sm" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg">
+                    <IoFlaskOutline className="text-primary text-stat-sm" />
                   </div>
                 </div>
-                <p className="text-stat font-bold text-mountain-900">
+                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
                   {dashboardStats.totalCategories}
                 </p>
-                <p className="text-[12px] text-mountain-600">Categories</p>
+                <p className="text-[11.5px] text-text-muted">Categories</p>
               </div>
             </div>
           </div>
@@ -671,16 +614,16 @@ export default function MedicineManagementPage() {
         {/* Medicine Management Tabs */}
         {(!requiresBranchSelection || hasBranchScope) && (
           <div className="clarity-card pb-0 rounded-b-none">
-            <div className="bg-slate-50 border-b border-mountain-200 px-4 py-3 rounded-t-lg">
+            <div className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))] px-4 py-3 rounded-t-lg">
               <div className="flex items-center gap-2">
-                <IoMedicalOutline className="w-5 h-5 text-teal-700" />
-                <h2 className="text-[15px] font-semibold text-mountain-900">
+                <IoMedicalOutline className="w-5 h-5 text-primary" />
+                <h2 className="text-[15px] font-semibold text-primary">
                   Medicine Management
                 </h2>
               </div>
             </div>
             <div>
-              <div className="flex overflow-x-auto w-full border-b border-mountain-200 bg-slate-50">
+              <div className="flex overflow-x-auto w-full border-b border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))]">
                 {[
                   {
                     key: "medicines",
@@ -688,15 +631,13 @@ export default function MedicineManagementPage() {
                     title: "Medicines",
                     count: dashboardStats.totalMedicines,
                   },
-                  clinicSettings?.enableInventoryManagement
-                    ? {
-                      key: "stock",
-                      icon: <IoArchiveOutline />,
-                      title: "Stock",
-                      count: dashboardStats.lowStockItems,
-                      countStyle: "bg-saffron-100 text-saffron-700",
-                    }
-                    : null,
+                  {
+                    key: "stock",
+                    icon: <IoArchiveOutline />,
+                    title: "Stock",
+                    count: dashboardStats.lowStockItems,
+                    countStyle: "bg-saffron-100 text-saffron-700",
+                  },
                   {
                     key: "brands",
                     icon: <IoBusinessOutline />,
@@ -709,20 +650,16 @@ export default function MedicineManagementPage() {
                     title: "Categories",
                     count: dashboardStats.totalCategories,
                   },
-                  clinicSettings?.sellsMedicines
-                    ? {
-                      key: "suppliers",
-                      icon: <IoPeopleOutline />,
-                      title: "Suppliers",
-                    }
-                    : null,
-                  clinicSettings?.sellsMedicines
-                    ? {
-                      key: "purchase-records",
-                      icon: <IoReceiptOutline />,
-                      title: "Purchase Records",
-                    }
-                    : null,
+                  {
+                    key: "suppliers",
+                    icon: <IoPeopleOutline />,
+                    title: "Suppliers",
+                  },
+                  {
+                    key: "purchase-records",
+                    icon: <IoReceiptOutline />,
+                    title: "Purchase Records",
+                  },
                   {
                     key: "settings",
                     icon: <IoSettingsOutline />,
@@ -735,9 +672,9 @@ export default function MedicineManagementPage() {
                       tab && (
                         <button
                           key={tab.key}
-                          className={`flex items-center gap-2 px-4 h-11 text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTab === tab.key
-                            ? "text-teal-700 border-b-2 border-teal-600 bg-white relative top-[1px]"
-                            : "text-mountain-600 hover:text-mountain-800 hover:bg-slate-100"
+                          className={`flex items-center gap-2 px-4 h-11 text-[13px] font-semibold transition-colors whitespace-nowrap ${selectedTab === tab.key
+                            ? "text-primary border-b-2 border-primary bg-primary/5 relative top-[1px]"
+                            : "text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-3))]"
                             }`}
                           onClick={() => handleTabChange(tab.key)}
                         >
@@ -745,7 +682,7 @@ export default function MedicineManagementPage() {
                           <span>{tab.title}</span>
                           {tab.count !== undefined && tab.count > 0 && (
                             <span
-                              className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full ${tab.countStyle || "bg-teal-100 text-teal-800"}`}
+                              className={`ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full ${tab.countStyle || "bg-primary/20 text-primary border border-primary/20"}`}
                             >
                               {tab.count}
                             </span>
@@ -755,7 +692,7 @@ export default function MedicineManagementPage() {
                   )}
               </div>
 
-              <div className="bg-white rounded-b-lg border border-t-0 border-mountain-200">
+              <div className="bg-[rgb(var(--color-surface))] rounded-b-lg border border-t-0 border-[rgb(var(--color-border))]">
                 {selectedTab === "medicines" && (
                   <div className="p-4">
                     <MedicinesTab
@@ -767,16 +704,15 @@ export default function MedicineManagementPage() {
                   </div>
                 )}
 
-                {selectedTab === "stock" &&
-                  clinicSettings?.enableInventoryManagement && (
-                    <div className="p-4">
-                      <StockTab
-                        clinicSettings={clinicSettings}
-                        effectiveBranchId={effectiveBranchId}
-                        onStatsChange={refreshStats}
-                      />
-                    </div>
-                  )}
+                {selectedTab === "stock" && (
+                  <div className="p-4">
+                    <StockTab
+                      clinicSettings={clinicSettings}
+                      effectiveBranchId={effectiveBranchId}
+                      onStatsChange={refreshStats}
+                    />
+                  </div>
+                )}
 
                 {selectedTab === "brands" && (
                   <div className="p-4">
@@ -796,22 +732,20 @@ export default function MedicineManagementPage() {
                   </div>
                 )}
 
-                {selectedTab === "suppliers" &&
-                  clinicSettings?.sellsMedicines && (
-                    <div className="p-4">
-                      <SuppliersTab effectiveBranchId={effectiveBranchId} />
-                    </div>
-                  )}
+                {selectedTab === "suppliers" && (
+                  <div className="p-4">
+                    <SuppliersTab effectiveBranchId={effectiveBranchId} />
+                  </div>
+                )}
 
-                {selectedTab === "purchase-records" &&
-                  clinicSettings?.sellsMedicines && (
-                    <div className="p-4">
-                      <PurchaseRecordsTab
-                        effectiveBranchId={effectiveBranchId}
-                        onStatsChange={refreshStats}
-                      />
-                    </div>
-                  )}
+                {selectedTab === "purchase-records" && (
+                  <div className="p-4">
+                    <PurchaseRecordsTab
+                      effectiveBranchId={effectiveBranchId}
+                      onStatsChange={refreshStats}
+                    />
+                  </div>
+                )}
 
                 {selectedTab === "settings" && (
                   <div className="p-4">

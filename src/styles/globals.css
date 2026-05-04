@@ -62,6 +62,187 @@
   @apply transition-transform duration-300 hover:-translate-y-1 active:scale-95;
 }
 
+/* ── Animation Utilities ──────────────────────────────────────────────── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-bottom {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce-slow {
+
+  0%,
+  100% {
+    transform: translateY(-5%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+
+  50% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+@keyframes pulse-slow {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.zoom-in {
+  animation-name: zoom-in;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: slide-in-from-bottom;
+}
+
+.slide-in-from-bottom-6 {
+  animation-name: slide-in-from-bottom;
+}
+
+.slide-in-from-bottom-8 {
+  animation-name: slide-in-from-bottom;
+}
+
+.slide-in-from-bottom-10 {
+  animation-name: slide-in-from-bottom;
+}
+
+.slide-in-from-bottom-12 {
+  animation-name: slide-in-from-bottom;
+}
+
+.slide-in-from-left-8 {
+  animation: slide-in-from-left 1s both;
+}
+
+@keyframes slide-in-from-left {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.slide-in-from-right-8 {
+  animation: slide-in-from-right 1s both;
+}
+
+@keyframes slide-in-from-right {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 3s infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 4s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.delay-100 {
+  animation-delay: 100ms;
+}
+
+.delay-200 {
+  animation-delay: 200ms;
+}
+
+.delay-300 {
+  animation-delay: 300ms;
+}
+
+.delay-500 {
+  animation-delay: 500ms;
+}
+
+.delay-700 {
+  animation-delay: 700ms;
+}
+
+.duration-700 {
+  animation-duration: 700ms;
+}
+
+.duration-1000 {
+  animation-duration: 1000ms;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.rotate-y-2 {
+  transform: rotateY(2deg);
+}
+
+.rotate-x-2 {
+  transform: rotateX(2deg);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    CLINIC CLARITY — Design Language v2
    Flat, no-shadow, compact. Depth via 1px borders + tinted backgrounds.
@@ -112,17 +293,17 @@
 
   :root {
 
-    /* ── ProCare Blue (redefined from teal) ─────────────────────── */
-    --teal-50: 240 247 255;
-    --teal-100: 224 239 254;
-    --teal-200: 186 224 253;
-    --teal-300: 124 200 252;
-    --teal-400: 56 169 248;
-    --teal-500: 14 132 233;
-    --teal-600: 2 109 199;
-    --teal-700: 3 86 161;
-    --teal-800: 7 71 133;
-    --teal-900: 12 59 110;
+    /* ── HSC Purple (redefined from teal) ─────────────────────── */
+    --teal-50: 245 243 255;
+    --teal-100: 237 233 254;
+    --teal-200: 221 214 254;
+    --teal-300: 196 181 253;
+    --teal-400: 167 139 250;
+    --teal-500: 139 92 246;
+    --teal-600: 124 58 237;
+    --teal-700: 109 40 217;
+    --teal-800: 91 33 182;
+    --teal-900: 76 29 149;
 
     /* ── Legacy Nepal Colors (backward compat) ──────────────────── */
     --nepal-50: 240 249 255;
@@ -173,14 +354,14 @@
     --saffron-900: 120 53 15;
 
     /* ── Scrollbar tokens (theme-aware) ────────────────────────── */
-    --scrollbar-thumb: 15 118 110;
-    /* teal-700 */
-    --scrollbar-track: 204 251 241;
-    /* teal-100 */
-    --scrollbar-border: 153 246 228;
-    /* teal-200 */
-    --scrollbar-hover: 13 148 136;
-    /* teal-600 */
+    --scrollbar-thumb: 124 58 237;
+    /* violet-600 */
+    --scrollbar-track: 245 243 255;
+    /* violet-50 */
+    --scrollbar-border: 221 214 254;
+    /* violet-200 */
+    --scrollbar-hover: 109 40 217;
+    /* violet-700 */
 
     /* ── Layout Tokens ──────────────────────────────────────────── */
     --sidebar-width: 260px;
@@ -236,26 +417,26 @@
   --color-surface: 255 255 255;
   --color-surface-2: 248 250 252;
   /* hover/alt rows */
-  --color-border: 226 232 240;
-  /* slate-200 */
-  --color-border-focus: 3 86 161;
-  /* ProCare Blue 700 */
+  --color-border: 203 213 225;
+  /* slate-300 (was slate-200) */
+  --color-border-focus: 109 40 217;
+  /* HSC Purple 700 */
   --color-text: 15 23 42;
   /* slate-900 */
   --color-text-muted: 100 116 139;
   /* slate-500 */
-  --color-primary: 3 86 161;
-  /* ProCare Blue 700 */
-  --color-primary-hover: 2 109 199;
-  /* ProCare Blue 600 */
-  --color-primary-light: 224 239 254;
-  /* ProCare Blue 100 */
+  --color-primary: 109 40 217;
+  /* HSC Purple 700 */
+  --color-primary-hover: 124 58 237;
+  /* HSC Purple 600 */
+  --color-primary-light: 237 233 254;
+  /* HSC Purple 100 */
   --color-success: 22 163 74;
   --color-warning: 217 119 6;
   --color-danger: 225 29 72;
   /* Scrollbar */
-  --scrollbar-thumb: 3 86 161;
-  --scrollbar-track: 240 247 255;
+  --scrollbar-thumb: 124 58 237;
+  --scrollbar-track: 245 243 255;
 }
 
 /* ── Dark ───────────────────────────────────────────────────────────────── */
@@ -270,19 +451,20 @@
   /* zinc-900 */
   --color-border: 39 39 42;
   /* zinc-800 */
-  --color-border-focus: 56 169 248;
-  /* ProCare Blue 400 */
-  --color-text: #ffffff;
-  --color-text-muted: #cbd5e1; /* slate-300 */
+  --color-border-focus: 192 132 252;
+  /* purple-400 */
+  --color-text: 250 250 250;
+  --color-text-muted: 203 213 225;
+  /* slate-300 */
   /* zinc-400 */
-  --color-primary: 56 169 248;
-  /* ProCare Blue 400 */
-  --color-primary-hover: 124 200 252;
-  /* ProCare Blue 300 */
-  --color-primary-light: 12 59 110;
-  /* ProCare Blue 900 */
+  --color-primary: 192 132 252;
+  /* purple-400 — vivid purple */
+  --color-primary-hover: 216 180 254;
+  /* purple-300 */
+  --color-primary-light: 59 7 100;
+  /* purple-950 tint */
   /* Scrollbar */
-  --scrollbar-thumb: 56 169 248;
+  --scrollbar-thumb: 168 85 247;
   --scrollbar-track: 15 15 17;
 }
 
@@ -310,15 +492,16 @@
 /* ── Native Element Overrides ─────────────────────────────────────────── */
 .dark select,
 .dark option {
-  background-color: #18181b !important; /* zinc-900 */
-  color: #fafafa !important; /* zinc-50 */
-  border: none !important;
+  background-color: #18181b;
+  /* zinc-900 */
+  color: #fafafa;
+  /* zinc-50 */
+  border: none;
 }
 
 select {
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
+  background: transparent;
+  outline: none;
 }
 
 /* ── Violet Clinical ────────────────────────────────────────────────────── */
@@ -356,7 +539,7 @@ select {
   --color-primary-hover: 20 184 166;
   --color-primary-light: 19 78 74;
   /* Scrollbar */
-  --scrollbar-thumb: 13 148 136;
+  --scrollbar-thumb: 124 58 237;
   --scrollbar-track: 17 17 20;
 }
 
@@ -375,7 +558,7 @@ select {
   --color-primary-hover: 3 105 161;
   --color-primary-light: 224 242 254;
   /* Scrollbar */
-  --scrollbar-thumb: 2 132 199;
+  --scrollbar-thumb: 124 58 237;
   --scrollbar-track: 240 249 255;
 }
 
@@ -982,6 +1165,9 @@ select {
     color: rgb(15 118 110);
   }
 
+}
+
+@layer components {
   /* ═════════════════════════════════════════════════════════════════════════
      CLINIC CLARITY — Component Styles
      Flat, compact, no shadows. Borders define structure.
@@ -1029,8 +1215,24 @@ select {
     background-color: rgb(var(--color-surface));
     color: rgb(var(--color-text));
     padding: 0 0.625rem;
-    transition: border-color 100ms;
+    transition: all 100ms;
     outline: none;
+  }
+
+  /* Specific handling for selects to ensure border visibility and custom arrow */
+  select.clarity-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1rem;
+    padding-right: 2.25rem;
+    cursor: pointer;
+  }
+
+  select.clarity-input:invalid,
+  select.clarity-input option[value=""][disabled] {
+    color: rgb(var(--color-text-muted) / 0.7);
   }
 
   .clarity-input:focus {

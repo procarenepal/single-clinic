@@ -85,13 +85,19 @@ export const appointmentTypeService = {
   /**
    * Get all appointment types (excluding deleted)
    */
-  async getAppointmentTypes(_branchId?: string): Promise<AppointmentType[]> {
+  async getAppointmentTypes(clinicId?: string): Promise<AppointmentType[]> {
     try {
-      const cached = cacheService.getClinicAppointmentTypes("standalone");
+      const cacheKey = clinicId || "standalone";
+      const cached = cacheService.getClinicAppointmentTypes(cacheKey);
       if (cached) return cached as AppointmentType[];
 
       const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
-      const querySnapshot = await getDocs(appointmentTypesRef);
+      // For single clinic, we fetch all if clinicId is not provided or if we want to be inclusive
+      const q = clinicId 
+        ? query(appointmentTypesRef, where("clinicId", "==", clinicId))
+        : query(appointmentTypesRef);
+        
+      const querySnapshot = await getDocs(q);
 
       const appointmentTypes: AppointmentType[] = [];
 
@@ -112,7 +118,7 @@ export const appointmentTypeService = {
         } as AppointmentType);
       });
 
-      cacheService.setClinicAppointmentTypes("standalone", appointmentTypes);
+      cacheService.setClinicAppointmentTypes(cacheKey, appointmentTypes);
       return appointmentTypes;
     } catch (error) {
       console.error("Error getting appointment types:", error);
@@ -124,10 +130,10 @@ export const appointmentTypeService = {
    * Alias for backward compatibility
    */
   async getAppointmentTypesByClinic(
-    _clinicId?: string,
+    clinicId?: string,
     branchId?: string,
   ): Promise<AppointmentType[]> {
-    const types = await this.getAppointmentTypes();
+    const types = await this.getAppointmentTypes(clinicId);
     if (branchId) {
       return types.filter((t) => t.branchId === branchId);
     }

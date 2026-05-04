@@ -2,7 +2,7 @@
  * Experts List Page
  */
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -85,6 +85,7 @@ function CustomSelect({
 }
 
 export default function ExpertsPage() {
+  const navigate = useNavigate();
   const { clinicId, userData, isClinicAdmin, isSystemOwner } = useAuth();
   const [experts, setExperts] = useState<Expert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,7 +290,7 @@ export default function ExpertsPage() {
     <div className="flex flex-col gap-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "lg" })}>Experts</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Experts</h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Manage and access expert records
           </p>
@@ -315,7 +316,7 @@ export default function ExpertsPage() {
           <Button
             color="primary"
             startContent={<IoAddOutline className="w-4 h-4" />}
-            onClick={() => (window.location.href = "/dashboard/experts/new")}
+            onClick={() => navigate("/dashboard/experts/new")}
           >
             Add Expert
           </Button>
@@ -391,7 +392,7 @@ export default function ExpertsPage() {
                   color="primary"
                   startContent={<IoAddOutline />}
                   onClick={() =>
-                    (window.location.href = "/dashboard/experts/new")
+                    navigate("/dashboard/experts/new")
                   }
                 >
                   Add First Expert
@@ -502,7 +503,7 @@ export default function ExpertsPage() {
                           <DropdownItem
                             key="view"
                             onClick={() =>
-                              (window.location.href = `/dashboard/experts/${expert.id}`)
+                              navigate(`/dashboard/experts/${expert.id}`)
                             }
                           >
                             View Profile
@@ -510,7 +511,7 @@ export default function ExpertsPage() {
                           <DropdownItem
                             key="edit"
                             onClick={() =>
-                              (window.location.href = `/dashboard/experts/${expert.id}/edit`)
+                              navigate(`/dashboard/experts/${expert.id}/edit`)
                             }
                           >
                             Edit

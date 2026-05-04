@@ -28,7 +28,7 @@ interface PatientNotesTabProps {
 // ── Section badge ────────────────────────────────────────────────────────────
 function SectionBadge({ label }: { label: string }) {
   return (
-    <span className="text-[10.5px] font-semibold bg-teal-100 text-teal-700 border border-teal-200 px-2 py-0.5 rounded">
+    <span className="text-[10.5px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded">
       {label}
     </span>
   );
@@ -50,9 +50,9 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-      <div className="bg-white border border-mountain-200 rounded w-full max-w-xl max-h-[90vh] flex flex-col">
-        <div className="px-4 py-3 border-b border-mountain-100">
-          <p className="text-[14px] font-semibold text-mountain-900">{title}</p>
+      <div className="bg-surface border border-border-base rounded w-full max-w-xl max-h-[90vh] flex flex-col shadow-xl">
+        <div className="px-4 py-3 border-b border-border-base/50">
+          <p className="text-[14px] font-semibold text-text-main">{title}</p>
           {subtitle && <div className="mt-1">{subtitle}</div>}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
@@ -219,11 +219,11 @@ export default function PatientNotesTab({
   if (sections.length === 0) {
     return (
       <div className="py-16 text-center">
-        <IoWarningOutline className="mx-auto w-10 h-10 text-mountain-300 mb-3" />
-        <h3 className="text-[13px] font-semibold text-mountain-700 mb-1">
+        <IoWarningOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-3" />
+        <h3 className="text-[13px] font-semibold text-text-main mb-1">
           No Notes Sections Configured
         </h3>
-        <p className="text-[12px] text-mountain-400">
+        <p className="text-[12px] text-text-muted">
           Contact your clinic administrator to configure notes sections.
         </p>
       </div>
@@ -236,10 +236,10 @@ export default function PatientNotesTab({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-section-title text-mountain-900">
+          <h2 className="text-section-title text-text-main">
             Patient Notes
           </h2>
-          <p className="text-[12.5px] text-mountain-400">
+          <p className="text-[12.5px] text-text-muted">
             Document patient notes in configured sections
           </p>
         </div>
@@ -268,27 +268,27 @@ export default function PatientNotesTab({
       )}
 
       {/* Form */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-mountain-50 border-b border-mountain-100">
-          <IoDocumentTextOutline className="w-4 h-4 text-teal-600" />
-          <h3 className="text-[13px] font-semibold text-mountain-800">
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
+          <IoDocumentTextOutline className="w-4 h-4 text-primary" />
+          <h3 className="text-[13px] font-semibold text-text-main">
             Add New Notes
           </h3>
         </div>
         <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
           {sections.map((s) => (
             <div key={s.id} className="flex flex-col gap-1">
-              <label className="text-[12px] font-medium text-mountain-700">
+              <label className="text-[12px] font-medium text-text-main">
                 {s.sectionLabel}
               </label>
               {s.description && (
-                <p className="text-[10.5px] text-mountain-400">
+                <p className="text-[10.5px] text-text-muted">
                   {s.description}
                 </p>
               )}
               <textarea
-                className="w-full px-2.5 py-2 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-                  placeholder:text-mountain-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
+                className="w-full px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+                  placeholder:text-text-muted/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10
                   resize-y"
                 placeholder={`Enter notes for ${s.sectionLabel.toLowerCase()}…`}
                 rows={4}
@@ -302,15 +302,15 @@ export default function PatientNotesTab({
 
       {/* History table */}
       {noteEntries.length > 0 && (
-        <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2.5 bg-mountain-50 border-b border-mountain-100">
+        <div className="bg-surface border border-border-base rounded overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
             <div className="flex items-center gap-2">
-              <IoTimeOutline className="w-4 h-4 text-teal-600" />
-              <h3 className="text-[13px] font-semibold text-mountain-800">
+              <IoTimeOutline className="w-4 h-4 text-primary" />
+              <h3 className="text-[13px] font-semibold text-text-main">
                 Notes History
               </h3>
             </div>
-            <span className="text-[10.5px] font-semibold bg-teal-100 text-teal-700 border border-teal-200 px-2 py-0.5 rounded">
+            <span className="text-[10.5px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded">
               {noteEntries.length}{" "}
               {noteEntries.length === 1 ? "entry" : "entries"}
             </span>
@@ -318,11 +318,11 @@ export default function PatientNotesTab({
           <div className="overflow-x-auto">
             <table className="min-w-full">
               <thead>
-                <tr className="border-b border-mountain-100">
+                <tr className="border-b border-border-base/50">
                   {["Section", "Content", "Date & Time", "Actions"].map((h) => (
                     <th
                       key={h}
-                      className="py-2 px-3 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-mountain-400"
+                      className="py-2 px-3 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-muted/60"
                     >
                       {h}
                     </th>
@@ -331,16 +331,16 @@ export default function PatientNotesTab({
               </thead>
               <tbody className="divide-y divide-mountain-100">
                 {noteEntries.map((e) => (
-                  <tr key={e.id} className="hover:bg-slate-50">
+                  <tr key={e.id} className="hover:bg-surface-2 transition-colors">
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       <SectionBadge label={e.sectionLabel} />
                     </td>
                     <td className="py-2.5 px-3 max-w-xs">
-                      <p className="text-[12px] text-mountain-600 line-clamp-3">
+                      <p className="text-[12px] text-text-main/80 line-clamp-3">
                         {e.content}
                       </p>
                     </td>
-                    <td className="py-2.5 px-3 text-[11.5px] text-mountain-400 whitespace-nowrap">
+                    <td className="py-2.5 px-3 text-[11.5px] text-text-muted whitespace-nowrap">
                       {fmtDateTime(e.createdAt)}
                     </td>
                     <td className="py-2.5 px-3">
@@ -375,12 +375,12 @@ export default function PatientNotesTab({
       )}
 
       {noteEntries.length === 0 && (
-        <div className="bg-mountain-50 border border-dashed border-mountain-200 rounded py-10 text-center">
-          <IoDocumentTextOutline className="mx-auto w-8 h-8 text-mountain-300 mb-2" />
-          <h3 className="text-[13px] font-medium text-mountain-600 mb-1">
+        <div className="bg-surface-2/50 border border-dashed border-border-base rounded py-10 text-center">
+          <IoDocumentTextOutline className="mx-auto w-8 h-8 text-text-muted/30 mb-2" />
+          <h3 className="text-[13px] font-medium text-text-main mb-1">
             No Notes Yet
           </h3>
-          <p className="text-[12px] text-mountain-400">
+          <p className="text-[12px] text-text-muted">
             Start documenting patient notes using the form above.
           </p>
         </div>
@@ -421,8 +421,8 @@ export default function PatientNotesTab({
           onClose={() => setEditEntry(null)}
         >
           <textarea
-            className="w-full px-2.5 py-2 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-              focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 resize-y"
+            className="w-full px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+              focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 resize-y"
             placeholder="Enter note content…"
             rows={6}
             value={editContent}
@@ -461,7 +461,7 @@ export default function PatientNotesTab({
             </>
           }
           subtitle={
-            <span className="text-[11.5px] text-mountain-400">
+            <span className="text-[11.5px] text-text-muted">
               This action cannot be undone.
             </span>
           }
@@ -477,20 +477,20 @@ export default function PatientNotesTab({
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-[11.5px] font-medium text-mountain-600">
+                <span className="text-[11.5px] font-medium text-text-muted">
                   Section:
                 </span>
                 <SectionBadge label={deleteEntry.sectionLabel} />
               </div>
               <div>
-                <span className="text-[11.5px] font-medium text-mountain-600">
+                <span className="text-[11.5px] font-medium text-text-muted">
                   Content preview:
                 </span>
-                <p className="text-[12px] text-mountain-500 bg-mountain-50 border border-mountain-100 rounded p-2 mt-1 line-clamp-3">
+                <p className="text-[12px] text-text-muted bg-surface-2 border border-border-base/50 rounded p-2 mt-1 line-clamp-3">
                   {deleteEntry.content}
                 </p>
               </div>
-              <p className="text-[11px] text-mountain-400">
+              <p className="text-[11px] text-text-muted/60">
                 Created: {fmtDateTime(deleteEntry.createdAt)}
               </p>
             </div>

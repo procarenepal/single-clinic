@@ -413,10 +413,10 @@ export default function StockTab({
                 <IoArchiveOutline className="text-primary text-xl" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-default-900">
+            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
               {stockItems.length}
             </p>
-            <p className="text-sm text-default-600">Total Items</p>
+            <p className="text-sm text-text-muted">Total Items</p>
           </CardBody>
         </Card>
 
@@ -427,10 +427,10 @@ export default function StockTab({
                 <IoWarningOutline className="text-warning text-xl" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-default-900">
+            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
               {lowStockItems.length}
             </p>
-            <p className="text-sm text-default-600">Low Stock</p>
+            <p className="text-sm text-text-muted">Low Stock</p>
           </CardBody>
         </Card>
 
@@ -441,10 +441,10 @@ export default function StockTab({
                 <IoAlertCircleOutline className="text-danger text-xl" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-default-900">
+            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
               {outOfStockItems.length}
             </p>
-            <p className="text-sm text-default-600">Out of Stock</p>
+            <p className="text-sm text-text-muted">Out of Stock</p>
           </CardBody>
         </Card>
 
@@ -455,10 +455,10 @@ export default function StockTab({
                 <IoCheckmarkCircleOutline className="text-success text-xl" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-default-900">
+            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
               {stockItems.length - lowStockItems.length}
             </p>
-            <p className="text-sm text-default-600">Adequate Stock</p>
+            <p className="text-sm text-text-muted">Adequate Stock</p>
           </CardBody>
         </Card>
       </div>
@@ -523,11 +523,11 @@ export default function StockTab({
                         <TableRow key={item.id}>
                           <TableCell>
                             <div>
-                              <p className="font-medium">
+                              <p className="font-medium text-text">
                                 {item.medicine.name}
                               </p>
                               {item.medicine.genericName && (
-                                <p className="text-sm text-default-500">
+                                <p className="text-sm text-text-muted">
                                   {item.medicine.genericName}
                                 </p>
                               )}
@@ -535,7 +535,7 @@ export default function StockTab({
                           </TableCell>
                           <TableCell>
                             <div className="space-y-1">
-                              <p className="font-medium">
+                              <p className="font-medium text-text">
                                 Regular: {item.currentStock}{" "}
                                 {item.medicine.unit}
                                 {item.schemeStock > 0 && (
@@ -620,13 +620,15 @@ export default function StockTab({
             <Tab key="low-stock" title="Low Stock Alerts">
               <div className="p-6">
                 {lowStockItems.length === 0 ? (
-                  <div className="text-center py-8">
-                    <IoCheckmarkCircleOutline className="mx-auto mb-4 text-4xl text-success" />
-                    <h3 className="text-xl font-semibold text-success mb-2">
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 mb-4">
+                      <IoCheckmarkCircleOutline className="text-3xl text-emerald-500" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-emerald-500">
                       All Good!
                     </h3>
-                    <p className="text-default-600">
-                      No items are currently running low on stock.
+                    <p className="text-[13px] text-text-muted mt-1 max-w-xs">
+                      No items are currently running low on stock. Your inventory levels are adequate.
                     </p>
                   </div>
                 ) : (
@@ -704,13 +706,15 @@ export default function StockTab({
             <Tab key="transactions" title="Recent Transactions">
               <div className="p-6">
                 {stockTransactions.length === 0 ? (
-                  <div className="text-center py-8">
-                    <IoReceiptOutline className="mx-auto mb-4 text-4xl text-default-400" />
-                    <h3 className="text-xl font-semibold text-default-600 mb-2">
-                      No Transactions
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 mb-4">
+                      <IoReceiptOutline className="text-3xl text-primary" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-[rgb(var(--color-text))]">
+                      No Transactions Found
                     </h3>
-                    <p className="text-default-500">
-                      No recent stock transactions found.
+                    <p className="text-[13px] text-text-muted mt-1 max-w-xs">
+                      No recent stock transactions recorded for this medicine.
                     </p>
                   </div>
                 ) : (

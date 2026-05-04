@@ -24,18 +24,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { branchService } from "@/services/branchService";
+import { clinicService } from "@/services/clinicService";
 // Types
 import { Patient, Branch } from "@/types/models";
+import { PrintLayoutConfig } from "@/types/printLayout";
+import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "@/utils/printBranding";
 // Custom UI
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
-import { Avatar } from "@/components/ui/avatar";
-import {
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
-} from "@/components/ui/dropdown";
+import { title } from "@/components/primitives";
+import { Button, TableSkeleton, Spinner, Avatar, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@/components/ui";
 import { addToast } from "@/components/ui/toast";
 // Icons
 
@@ -365,7 +361,21 @@ export default function PatientsPage() {
     ],
   );
 
+  const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(null);
+  const [clinic, setClinic] = useState<any>(null);
+
   // ── Data load ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!clinicId) return;
+    Promise.all([
+      clinicService.getClinicById(clinicId),
+      clinicService.getPrintLayoutConfig(clinicId),
+    ]).then(([c, lc]) => {
+      if (c) setClinic(c);
+      if (lc) setLayoutConfig(lc);
+    }).catch(console.error);
+  }, [clinicId]);
+
   useEffect(() => {
     if (!clinicId || !isSystemOwner) return;
     branchService
@@ -505,29 +515,34 @@ export default function PatientsPage() {
   ]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
-  const getAge = (p: Patient): number => {
-    if (typeof (p as any).age === "number" && (p as any).age > 0)
-      return (p as any).age;
-    if (typeof (p as any).age === "string") {
-      const n = parseInt((p as any).age, 10);
+  const getAge = (p: Patient): string => {
+    if (typeof p.age === "string" && p.age !== "") return p.age;
+    if (typeof p.age === "number" && p.age > 0) return `${p.age} Years`;
 
-      if (!isNaN(n) && n > 0) return n;
-    }
-    if ((p as any).dob) {
-      const d = new Date((p as any).dob);
+    if (p.dob) {
+      const b = new Date(p.dob);
       const t = new Date();
-      let a = t.getFullYear() - d.getFullYear();
+      let years = t.getFullYear() - b.getFullYear();
+      let months = t.getMonth() - b.getMonth();
+      let days = t.getDate() - b.getDate();
 
-      if (
-        t.getMonth() < d.getMonth() ||
-        (t.getMonth() === d.getMonth() && t.getDate() < d.getDate())
-      )
-        a--;
+      if (days < 0) {
+        months--;
+        const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+        days += prevMonth;
+      }
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
 
-      return a;
+      if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
+      if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
+      if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+      return "0 Days";
     }
 
-    return 0;
+    return "";
   };
 
   const fmt = (d: Date) => {
@@ -553,10 +568,11 @@ export default function PatientsPage() {
         return false;
       if (criticalFilter === "critical" && !p.isCritical) return false;
       if (criticalFilter === "non-critical" && p.isCritical) return false;
-      const age = getAge(p);
+      const ageStr = getAge(p);
+      const ageVal = parseInt(ageStr, 10) || 0;
 
-      if (ageMin && age < parseInt(ageMin)) return false;
-      if (ageMax && age > parseInt(ageMax)) return false;
+      if (ageMin && ageVal < parseInt(ageMin)) return false;
+      if (ageMax && ageVal > parseInt(ageMax)) return false;
       const reg = new Date(p.createdAt);
 
       if (regStart && reg < new Date(regStart)) return false;
@@ -761,11 +777,19 @@ export default function PatientsPage() {
 
       return;
     }
+
+    const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
+    const headerHtml = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic) : "";
+    const footerHtml = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
+
     w.document.write(`<!DOCTYPE html><html><head><title>Patients</title>
-      <style>body{font-family:Arial,sans-serif;margin:20px}table{width:100%;border-collapse:collapse}
-      th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;font-size:12px}
-      th{background:#f5f5f5;font-weight:600}.crit{background:#fff0f0;color:#b91c1c}</style>
-      </head><body><h2>Patients — ${new Date().toLocaleDateString()}</h2>
+      <style>
+        ${brandingCSS}
+        table{width:100%;border-collapse:collapse}
+        th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;font-size:12px}
+        th{background:#f5f5f5;font-weight:600}.crit{background:#fff0f0;color:#b91c1c}
+      </style>
+      </head><body><div class="print-container">${headerHtml}<div class="content"><h2>Patients — ${new Date().toLocaleDateString()}</h2>
       <p>Total: ${filtered.length} | Critical: ${filtered.filter((p) => p.isCritical).length}</p>
       <table><thead><tr><th>Name</th><th>Reg#</th><th>Mobile</th><th>Gender</th><th>Age</th><th>Status</th><th>Reg Date</th></tr></thead>
       <tbody>${filtered
@@ -776,7 +800,7 @@ export default function PatientsPage() {
         <td>${p.isCritical ? "Critical" : "Normal"}</td><td>${fmt(p.createdAt)}</td></tr>`,
         )
         .join("")}
-      </tbody></table></body></html>`);
+      </tbody></table></div>${footerHtml}</div></body></html>`);
     w.document.close();
     w.print();
     w.close();
@@ -797,11 +821,11 @@ export default function PatientsPage() {
         {/* ── Page header ──────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h1 className="text-page-title text-text-main leading-tight flex items-center gap-2">
+            <h1 className={`${title({ size: "lg" })} text-primary flex items-center gap-2`}>
               Patients
               {currentDoctorId && <Badge variant="primary">Doctor View</Badge>}
             </h1>
-            <p className="text-[13px] text-text-muted mt-0.5">
+            <p className="text-[13.5px] text-text-muted mt-1">
               {currentDoctorId
                 ? "Your assigned patient records"
                 : branchId
@@ -993,8 +1017,8 @@ export default function PatientsPage() {
 
           {/* ── Table ───────────────────────────────────────────────────── */}
           {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Spinner label="Loading patients…" size="md" />
+            <div className="p-4">
+              <TableSkeleton cols={5} rows={10} />
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1005,7 +1029,7 @@ export default function PatientsPage() {
                       (h) => (
                         <th
                           key={h}
-                          className={`py-2 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted ${h === "" ? "text-right" : "text-left"}`}
+                          className={`py-2 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-primary ${h === "" ? "text-right" : "text-left"}`}
                         >
                           {h}
                         </th>

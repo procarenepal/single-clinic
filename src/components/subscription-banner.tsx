@@ -10,6 +10,7 @@ import {
   IoTimeOutline,
   IoRefreshOutline,
 } from "react-icons/io5";
+import { useNavigate } from "react-router-dom";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { clinicService } from "@/services/clinicService";
@@ -134,6 +135,7 @@ const BTN_COLOR: Record<AlertLevel, "danger" | "warning" | "primary"> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function SubscriptionBanner() {
+  const navigate = useNavigate();
   const { userData, isSystemOwner, logout } = useAuthContext();
 
   const [clinic, setClinic] = useState<Clinic | null>(null);
@@ -228,7 +230,7 @@ export function SubscriptionBanner() {
                         "mailto:support@procaresoft.com?subject=Subscription Support",
                       );
                     } else {
-                      window.location.href = "/dashboard/settings/clinic";
+                      navigate("/dashboard/settings/clinic");
                     }
                   }}
                 >

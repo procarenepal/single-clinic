@@ -64,14 +64,14 @@ function XrayFilePreview({
 
   if (loading) {
     return (
-      <div className="aspect-square bg-mountain-50 border border-mountain-100 rounded flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+      <div className="aspect-square bg-surface-2 border border-border-base/50 rounded-[10px] flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="aspect-square bg-mountain-50 border border-mountain-100 rounded flex items-center justify-center overflow-hidden">
+    <div className="aspect-square bg-surface-2 border border-border-base/50 rounded-[10px] flex items-center justify-center overflow-hidden">
       {isImage && imageUrl ? (
         <img
           alt="X-ray"
@@ -81,10 +81,10 @@ function XrayFilePreview({
         />
       ) : (
         <div className="text-center p-3">
-          <IoDocumentOutline className="mx-auto w-10 h-10 text-teal-400 mb-1" />
-          <p className="text-[11.5px] font-medium text-teal-600">Document</p>
+          <IoDocumentOutline className="mx-auto w-10 h-10 text-primary/40 mb-1" />
+          <p className="text-[11.5px] font-medium text-primary">Document</p>
           {fileName && (
-            <p className="text-[10.5px] text-mountain-400 mt-0.5 truncate max-w-[120px]">
+            <p className="text-[10.5px] text-text-muted mt-0.5 truncate max-w-[120px]">
               {fileName.length > 20
                 ? `${fileName.substring(0, 20)}…`
                 : fileName}
@@ -140,10 +140,10 @@ export default function XraysTab({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-[13px] font-semibold text-mountain-800">
+          <h4 className="text-[13px] font-semibold text-text-main">
             X-rays & Imaging
           </h4>
-          <p className="text-[11.5px] text-mountain-400">
+          <p className="text-[11.5px] text-text-muted">
             {xrayRecords.length}{" "}
             {xrayRecords.length === 1 ? "record" : "records"}
           </p>
@@ -160,12 +160,12 @@ export default function XraysTab({
 
       {/* Empty state */}
       {xrayRecords.length === 0 ? (
-        <div className="py-12 text-center border border-dashed border-mountain-200 rounded">
-          <IoImageOutline className="mx-auto w-10 h-10 text-mountain-300 mb-3" />
-          <p className="text-[13px] font-medium text-mountain-600 mb-1">
+        <div className="py-12 text-center border border-dashed border-border-base rounded">
+          <IoImageOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-3" />
+          <p className="text-[13px] font-medium text-text-main mb-1">
             No X-rays
           </p>
-          <p className="text-[12px] text-mountain-400 mb-4">
+          <p className="text-[12px] text-text-muted mb-4">
             No X-ray files have been added yet.
           </p>
           <Button
@@ -182,19 +182,19 @@ export default function XraysTab({
           {xrayRecords.map((record) => (
             <div
               key={record.id}
-              className="border border-mountain-200 rounded overflow-hidden hover:border-teal-200 transition-colors"
+              className="border border-border-base rounded-[10px] overflow-hidden hover:border-primary/50 transition-colors"
             >
               {/* Card header */}
-              <div className="flex items-center justify-between px-3 py-2 bg-mountain-50 border-b border-mountain-100">
+              <div className="flex items-center justify-between px-3 py-2 bg-surface-2 border-b border-border-base/50">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-teal-50 border border-teal-100 rounded">
-                    <IoImageOutline className="w-3.5 h-3.5 text-teal-600" />
+                  <div className="p-1.5 bg-primary/10 border border-primary/20 rounded">
+                    <IoImageOutline className="w-3.5 h-3.5 text-primary" />
                   </div>
-                  <p className="text-[12.5px] font-semibold text-mountain-800">
+                  <p className="text-[12.5px] font-semibold text-text-main">
                     X-ray Record
                   </p>
                 </div>
-                <p className="text-[11px] text-mountain-400">
+                <p className="text-[11px] text-text-muted">
                   {fmtDate(record.createdAt)}
                 </p>
               </div>
@@ -207,10 +207,10 @@ export default function XraysTab({
                     fileName={`xray-${record.id}`}
                   />
                 ) : (
-                  <div className="aspect-square bg-mountain-50 border border-mountain-100 rounded flex items-center justify-center">
+                  <div className="aspect-square bg-surface-2 border border-border-base/50 rounded-[10px] flex items-center justify-center">
                     <div className="text-center">
-                      <IoImageOutline className="mx-auto w-8 h-8 text-mountain-300 mb-1" />
-                      <p className="text-[11.5px] text-mountain-400">
+                      <IoImageOutline className="mx-auto w-8 h-8 text-text-muted/30 mb-1" />
+                      <p className="text-[11.5px] text-text-muted">
                         No file attached
                       </p>
                     </div>
@@ -219,7 +219,7 @@ export default function XraysTab({
 
                 {/* Note */}
                 {record.note && (
-                  <p className="text-[12px] text-mountain-500 bg-mountain-50 border border-mountain-100 rounded px-2 py-1.5 mt-2 line-clamp-2">
+                  <p className="text-[12px] text-text-muted bg-surface-2 border border-border-base/50 rounded-[10px] px-2 py-1.5 mt-2 line-clamp-2">
                     {record.note}
                   </p>
                 )}
@@ -248,7 +248,7 @@ export default function XraysTab({
                       </Button>
                     </>
                   ) : (
-                    <span className="text-[11.5px] text-mountain-400">
+                    <span className="text-[11.5px] text-text-muted">
                       No file
                     </span>
                   )}

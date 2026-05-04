@@ -8,7 +8,7 @@ import { IoArrowBackOutline, IoSaveOutline } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { doctorService } from "@/services/doctorService";
 import { specialityService } from "@/services/specialityService";
@@ -35,20 +35,20 @@ function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 w-full`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-white transition-colors ${
+        className={`flex items-center border rounded-[10px] min-h-[38px] bg-surface transition-colors ${
           isInvalid
-            ? "border-red-300 focus-within:ring-red-100"
-            : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
-        } focus-within:ring-1 ${disabled ? "bg-mountain-50" : ""}`}
+            ? "border-red-500/50 focus-within:ring-red-500/10"
+            : "border-border-base focus-within:border-primary focus-within:ring-primary/10"
+        } focus-within:ring-1 ${disabled ? "bg-surface-2" : ""}`}
       >
         <input
-          className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500"
+          className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/40 disabled:text-text-muted/60"
           disabled={disabled}
           max={max}
           min={min}
@@ -63,7 +63,7 @@ function CustomInput({
       </div>
       {(description || errorMessage) && (
         <p
-          className={`text-[11.5px] ${isInvalid ? "text-red-500" : "text-mountain-500"}`}
+          className={`text-[11.5px] ${isInvalid ? "text-red-500" : "text-text-muted"}`}
         >
           {errorMessage || description}
         </p>
@@ -84,13 +84,13 @@ function CustomSelect({
   return (
     <div className={`flex flex-col gap-1.5 w-full`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <select
-        className={`w-full min-h-[38px] bg-white border border-mountain-200 text-mountain-800 text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow`}
+        className={`w-full min-h-[38px] bg-surface border border-border-base text-text-main text-[13.5px] rounded-[10px] px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-shadow`}
         name={name}
         required={required}
         value={value}
@@ -102,7 +102,7 @@ function CustomSelect({
           </option>
         )}
         {options.map((opt: any) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} className="bg-surface text-text-main">
             {opt.label}
           </option>
         ))}
@@ -304,8 +304,8 @@ export default function EditDoctorPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <Spinner size="md" />
+      <div className="p-2">
+        <PageSkeleton />
       </div>
     );
   }
@@ -322,7 +322,7 @@ export default function EditDoctorPage() {
         </Button>
         <div>
           <h1 className={title({ size: "sm" })}>Edit Doctor</h1>
-          <p className="text-[14px] text-mountain-500 mt-1">
+          <p className="text-[14px] text-text-muted mt-1">
             Update the doctor information below
           </p>
         </div>
@@ -333,9 +333,9 @@ export default function EditDoctorPage() {
         id="doctor-edit-form"
         onSubmit={handleSubmit}
       >
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-            <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
               Doctor Profile
             </h4>
           </div>

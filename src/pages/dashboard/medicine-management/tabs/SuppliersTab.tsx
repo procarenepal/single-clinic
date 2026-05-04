@@ -72,12 +72,12 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
             </h3>
             {subtitle && <div className="mt-1">{subtitle}</div>}
@@ -85,7 +85,7 @@ function ModalShell({
           {!disabled && (
             <button
               aria-label="Close modal"
-              className="text-mountain-400 hover:text-mountain-700 mt-0.5"
+              className="text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] mt-0.5 transition-colors"
               type="button"
               onClick={onClose}
             >
@@ -94,7 +94,7 @@ function ModalShell({
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))]/50 shrink-0">
           {footer}
         </div>
       </div>
@@ -323,8 +323,8 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
   if (isLoading && suppliers.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="flex flex-col items-center gap-2 text-mountain-500 text-[12.5px]">
-          <div className="h-6 w-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted))] text-[12.5px]">
+          <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           <span>Loading suppliers...</span>
         </div>
       </div>
@@ -358,9 +358,9 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
       </div>
 
       {/* Suppliers Table */}
-      <div className="bg-white border border-mountain-200 rounded">
-        <div className="p-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center justify-between">
-          <span className="text-[13px] text-mountain-500">
+      <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded">
+        <div className="p-4 border-b border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))]/50 flex items-center justify-between">
+          <span className="text-[13px] text-[rgb(var(--color-text-muted))]">
             {filteredSuppliers.length} supplier
             {filteredSuppliers.length !== 1 ? "s" : ""}
           </span>
@@ -369,84 +369,86 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
         <div className="overflow-x-auto min-h-[200px]">
           {isLoading ? (
             <div className="flex justify-center items-center h-48">
-              <div className="flex flex-col items-center gap-2 text-mountain-500 text-[12.5px]">
-                <div className="h-5 w-5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+              <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted))] text-[12.5px]">
+                <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                 <span>Loading suppliers...</span>
               </div>
             </div>
           ) : filteredSuppliers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-              <div className="w-10 h-10 rounded-full bg-mountain-50 flex items-center justify-center border border-mountain-100">
-                <IoPeopleOutline className="w-5 h-5 text-mountain-400" />
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                <IoPeopleOutline className="w-6 h-6 text-primary" />
               </div>
-              <p className="text-[13.5px] font-medium text-mountain-700">
-                No suppliers found
-              </p>
-              <p className="text-[12.5px] text-mountain-400">
-                Add a supplier or adjust your search.
-              </p>
+              <div>
+                <p className="text-[15px] font-semibold text-[rgb(var(--color-text))]">
+                  No suppliers found
+                </p>
+                <p className="text-[13px] text-[rgb(var(--color-text-muted))] mt-1">
+                  Add a supplier or adjust your search to see results.
+                </p>
+              </div>
             </div>
           ) : (
-            <table className="clarity-table w-full text-left border-collapse min-w-[900px]">
+            <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Supplier Name
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Contact Person
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Contact Info
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Address
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     License
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase w-36">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-44">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-[rgb(var(--color-border))]">
                 {filteredSuppliers.map((supplier) => (
                   <tr
                     key={supplier.id}
-                    className="hover:bg-mountain-50/30 transition-colors"
+                    className="hover:bg-[rgb(var(--color-surface-2))]/50 transition-colors"
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <IoPeopleOutline className="text-teal-700 w-4 h-4" />
-                        <span className="text-[13.5px] font-semibold text-mountain-900">
+                        <IoPeopleOutline className="text-primary w-4 h-4" />
+                        <span className="text-[13.5px] font-semibold text-[rgb(var(--color-text))]">
                           {supplier.name}
                         </span>
                       </div>
                     </td>
                     <td className="px-5 py-3">
                       {supplier.contactPerson ? (
-                        <span className="text-[13px] text-mountain-700">
+                        <span className="text-[13px] text-[rgb(var(--color-text))]">
                           {supplier.contactPerson}
                         </span>
                       ) : (
-                        <span className="text-[12.5px] text-mountain-400">
+                        <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
                           No contact person
                         </span>
                       )}
                     </td>
                     <td className="px-5 py-3">
                       <div className="space-y-1">
-                        <div className="flex items-center gap-1 text-[12.5px]">
-                          <IoCallOutline className="text-mountain-400 w-3 h-3" />
+                        <div className="flex items-center gap-1 text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                          <IoCallOutline className="w-3 h-3" />
                           <span>{supplier.phone || "—"}</span>
                         </div>
                         {supplier.email && (
-                          <div className="flex items-center gap-1 text-[12.5px]">
-                            <IoMailOutline className="text-mountain-400 w-3 h-3" />
+                          <div className="flex items-center gap-1 text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                            <IoMailOutline className="w-3 h-3" />
                             <span>{supplier.email}</span>
                           </div>
                         )}
@@ -454,55 +456,56 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
                     </td>
                     <td className="px-5 py-3">
                       {supplier.address ? (
-                        <div className="flex items-start gap-1 text-[12.5px]">
-                          <IoLocationOutline className="text-mountain-400 mt-0.5 flex-shrink-0 w-3 h-3" />
-                          <span className="line-clamp-2 text-mountain-700">
+                        <div className="flex items-start gap-1 text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                          <IoLocationOutline className="mt-0.5 flex-shrink-0 w-3 h-3" />
+                          <span className="line-clamp-2">
                             {supplier.address}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-[12.5px] text-mountain-400">
+                        <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
                           No address
                         </span>
                       )}
                     </td>
                     <td className="px-5 py-3">
                       {supplier.licenseNumber ? (
-                        <span className="text-[13px] text-mountain-700">
+                        <span className="text-[13px] text-[rgb(var(--color-text))]">
                           {supplier.licenseNumber}
                         </span>
                       ) : (
-                        <span className="text-[12.5px] text-mountain-400">
+                        <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
                           No license
                         </span>
                       )}
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`clarity-badge inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
                           supplier.isActive
-                            ? "bg-teal-50 text-teal-700 border-teal-200"
-                            : "bg-red-50 text-red-700 border-red-200"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : "bg-rose-500/10 text-rose-400 border-rose-500/20"
                         }`}
                       >
                         {supplier.isActive ? (
-                          <IoCheckmarkCircleOutline className="w-3 h-3" />
+                          <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
                         ) : (
-                          <IoCloseCircleOutline className="w-3 h-3" />
+                          <IoCloseCircleOutline className="w-3.5 h-3.5" />
                         )}
                         {supplier.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-nowrap">
                         <button
                           aria-label="Edit supplier"
-                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-mountain-200 text-mountain-500 hover:text-teal-700 hover:border-teal-300 hover:bg-teal-50 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
                           title="Edit"
                           type="button"
                           onClick={() => openEditModal(supplier)}
                         >
-                          <IoCreateOutline className="w-4 h-4" />
+                          <IoCreateOutline className="w-3.5 h-3.5" />
+                          <span>Edit</span>
                         </button>
                         <button
                           aria-label={
@@ -510,29 +513,36 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
                               ? "Deactivate supplier"
                               : "Activate supplier"
                           }
-                          className={`inline-flex items-center justify-center w-7 h-7 rounded border transition-colors ${
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold border transition-colors ${
                             supplier.isActive
-                              ? "border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600"
-                              : "border-teal-200 text-teal-400 hover:bg-teal-50 hover:text-teal-600"
+                              ? "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20"
+                              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
                           }`}
                           title={supplier.isActive ? "Deactivate" : "Activate"}
                           type="button"
                           onClick={() => handleToggleStatus(supplier)}
                         >
                           {supplier.isActive ? (
-                            <IoCloseCircleOutline className="w-4 h-4" />
+                            <>
+                              <IoCloseCircleOutline className="w-3.5 h-3.5" />
+                              <span>Deactivate</span>
+                            </>
                           ) : (
-                            <IoCheckmarkCircleOutline className="w-4 h-4" />
+                            <>
+                              <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
+                              <span>Activate</span>
+                            </>
                           )}
                         </button>
                         <button
                           aria-label="Delete supplier"
-                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
                           title="Delete"
                           type="button"
                           onClick={() => openDeleteModal(supplier)}
                         >
-                          <IoTrashOutline className="w-4 h-4" />
+                          <IoTrashOutline className="w-3.5 h-3.5" />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -708,14 +718,14 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
           onClose={() => setIsDeleteModalOpen(false)}
         >
           <div className="space-y-3">
-            <div className="bg-red-50 border border-red-200 rounded p-3">
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded p-3">
               <div className="flex items-start gap-2">
-                <IoWarningOutline className="text-red-600 mt-0.5 flex-shrink-0 w-4 h-4" />
-                <div className="text-[12.5px] text-red-700">
+                <IoWarningOutline className="text-rose-400 mt-0.5 flex-shrink-0 w-4 h-4" />
+                <div className="text-[12.5px] text-rose-400">
                   <p className="font-semibold mb-1">
                     This action cannot be undone.
                   </p>
-                  <p>
+                  <p className="text-[rgb(var(--color-text-muted))]">
                     The supplier will be permanently removed. Purchase orders or
                     medicine records associated with this supplier may lose
                     their supplier information.

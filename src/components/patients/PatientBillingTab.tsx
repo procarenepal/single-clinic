@@ -61,15 +61,15 @@ interface InvoiceFormData {
 
 // ── Design helpers ────────────────────────────────────────────────────────────
 const PAY_STATUS: Record<string, string> = {
-  paid: "bg-health-100 text-health-700 border-health-200",
-  partial: "bg-saffron-100 text-saffron-700 border-saffron-200",
-  unpaid: "bg-red-100 text-red-700 border-red-200",
+  paid: "bg-health-500/10 text-health-500 border-health-500/20",
+  partial: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  unpaid: "bg-red-500/10 text-red-400 border-red-500/20",
 };
 
 function PayBadge({ status }: { status: string }) {
   return (
     <span
-      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border capitalize ${PAY_STATUS[status] || "bg-mountain-100 text-mountain-600 border-mountain-200"}`}
+      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border capitalize ${PAY_STATUS[status] || "bg-surface-2 text-text-muted border-border-base"}`}
     >
       {status}
     </span>
@@ -86,10 +86,10 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="bg-white border border-mountain-200 rounded p-3 text-center">
-      <p className="text-[18px] font-bold text-mountain-900">{value}</p>
-      {sub && <p className="text-[10px] text-mountain-400 mt-0.5">{sub}</p>}
-      <p className="text-[11.5px] text-mountain-500 mt-0.5">{label}</p>
+    <div className="bg-surface border border-border-base rounded p-3 text-center">
+      <p className="text-[18px] font-bold text-text-main">{value}</p>
+      {sub && <p className="text-[10px] text-text-muted mt-0.5">{sub}</p>}
+      <p className="text-[11.5px] text-text-muted mt-0.5">{label}</p>
     </div>
   );
 }
@@ -104,6 +104,7 @@ function SearchSelect({
   required,
   hint,
   placeholder,
+  emptyContent,
 }: {
   label: string;
   items: { id: string; primary: string; secondary?: string }[];
@@ -113,6 +114,7 @@ function SearchSelect({
   required?: boolean;
   hint?: string;
   placeholder?: string;
+  emptyContent?: React.ReactNode;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -123,17 +125,17 @@ function SearchSelect({
 
   return (
     <div className="flex flex-col gap-1 relative">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-main">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <div
-        className={`flex items-center h-9 border border-mountain-200 rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white ${disabled ? "bg-mountain-50" : ""}`}
+        className={`flex items-center h-9 border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10 bg-surface ${disabled ? "bg-surface-2" : ""}`}
         onClick={() => !disabled && setOpen(true)}
       >
-        <IoSearchOutline className="ml-2.5 w-3.5 h-3.5 text-mountain-400 shrink-0" />
+        <IoSearchOutline className="ml-2.5 w-3.5 h-3.5 text-text-muted/60 shrink-0" />
         <input
-          className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300"
+          className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40"
           disabled={disabled}
           placeholder={placeholder || `Search ${label.toLowerCase()}…`}
           value={selected && !open ? selected.primary : q}
@@ -145,7 +147,7 @@ function SearchSelect({
         />
         {value && !disabled && (
           <button
-            className="mr-2 text-mountain-400 hover:text-mountain-700"
+            className="mr-2 text-text-muted/60 hover:text-text-muted"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -157,20 +159,22 @@ function SearchSelect({
           </button>
         )}
       </div>
-      {hint && <p className="text-[10.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-text-muted/60">{hint}</p>}
       {open && !disabled && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded max-h-48 overflow-y-auto shadow-none">
+          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-xl">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-mountain-400">
-                No results
-              </p>
+              emptyContent || (
+                <p className="px-3 py-2 text-[12px] text-text-muted/60">
+                  No results
+                </p>
+              )
             ) : (
               filtered.map((i) => (
                 <button
                   key={i.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-teal-50 ${i.id === value ? "bg-teal-50" : ""}`}
+                  className={`w-full text-left px-3 py-2 hover:bg-primary/10 ${i.id === value ? "bg-primary/10" : ""}`}
                   type="button"
                   onClick={() => {
                     onChange(i.id);
@@ -178,9 +182,9 @@ function SearchSelect({
                     setOpen(false);
                   }}
                 >
-                  <p className="text-[12.5px] text-mountain-800">{i.primary}</p>
+                  <p className="text-[12.5px] text-text-main">{i.primary}</p>
                   {i.secondary && (
-                    <p className="text-[11px] text-mountain-400">
+                    <p className="text-[11px] text-text-muted">
                       {i.secondary}
                     </p>
                   )}
@@ -219,17 +223,17 @@ function FlatInput({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-main">
         {label}
       </label>
-      <div className="flex items-center h-9 border border-mountain-200 rounded bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100">
+      <div className="flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10">
         {prefixText && (
-          <span className="pl-2.5 text-[12px] text-mountain-400 shrink-0">
+          <span className="pl-2.5 text-[12px] text-text-muted shrink-0">
             {prefixText}
           </span>
         )}
         <input
-          className="flex-1 px-2.5 text-[12.5px] bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300 disabled:text-mountain-400"
+          className="flex-1 px-2.5 text-[12.5px] bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 disabled:text-text-muted"
           disabled={disabled || readOnly}
           placeholder={placeholder}
           readOnly={readOnly}
@@ -238,12 +242,12 @@ function FlatInput({
           onChange={(e) => onChange?.(e.target.value)}
         />
         {suffixText && (
-          <span className="pr-2.5 text-[12px] text-mountain-400 shrink-0">
+          <span className="pr-2.5 text-[12px] text-text-muted shrink-0">
             {suffixText}
           </span>
         )}
       </div>
-      {hint && <p className="text-[10.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-text-muted/60">{hint}</p>}
     </div>
   );
 }
@@ -298,20 +302,20 @@ function ModalShell({
     >
       {/* Modal panel */}
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-surface border border-border-base rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] shadow-2xl`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header — pinned */}
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-border-base/50 shrink-0">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-text-main">
               {title}
             </h3>
             {subtitle && <div className="mt-1">{subtitle}</div>}
           </div>
           {!disabled && (
             <button
-              className="text-mountain-400 hover:text-mountain-700 mt-0.5"
+              className="text-text-muted/60 hover:text-text-main mt-0.5"
               type="button"
               onClick={onClose}
             >
@@ -322,7 +326,7 @@ function ModalShell({
         {/* Body — scrolls internally */}
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
         {/* Footer — pinned */}
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-border-base/50 shrink-0">
           {footer}
         </div>
       </div>
@@ -399,6 +403,33 @@ export default function PatientBillingTab({
   });
 
   // ── Load ────────────────────────────────────────────────────────────────────
+  const handleSeedServices = async () => {
+    if (!clinicId || !currentUser?.uid) return;
+    try {
+      setLoading(true);
+      await appointmentTypeService.seedDefaultAppointmentTypes(
+        clinicId,
+        userData?.branchId || undefined,
+        currentUser.uid
+      );
+      addToast({
+        title: "Services Seeded",
+        description: "Default appointment types have been added successfully.",
+        color: "success",
+      });
+      await loadBillingData(); // Refresh
+    } catch (error) {
+      console.error("Error seeding services:", error);
+      addToast({
+        title: "Seed Failed",
+        description: "Could not add default services.",
+        color: "danger",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadBillingData = async () => {
     if (!clinicId || !patientId) return;
     setLoading(true);
@@ -787,11 +818,11 @@ export default function PatientBillingTab({
   if (!billingSettings?.enabledByAdmin || !billingSettings?.isActive) {
     return (
       <div className="py-16 text-center">
-        <IoWalletOutline className="mx-auto w-12 h-12 text-mountain-300 mb-3" />
-        <h3 className="text-[13px] font-semibold text-mountain-700 mb-1">
+        <IoWalletOutline className="mx-auto w-12 h-12 text-text-muted/30 mb-3" />
+        <h3 className="text-[13px] font-semibold text-text-main mb-1">
           Billing Not Available
         </h3>
-        <p className="text-[12px] text-mountain-400">
+        <p className="text-[12px] text-text-muted">
           The billing system is not enabled for this clinic.
         </p>
       </div>
@@ -803,10 +834,10 @@ export default function PatientBillingTab({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-section-title text-mountain-900">
+          <h2 className="text-section-title text-text-main">
             Billing & Payments
           </h2>
-          <p className="text-[12.5px] text-mountain-400">
+          <p className="text-[12.5px] text-text-muted/60">
             Invoices, payments, and financial records
           </p>
         </div>
@@ -814,7 +845,12 @@ export default function PatientBillingTab({
           color="primary"
           size="sm"
           startContent={<IoAddOutline className="w-3.5 h-3.5" />}
-          onClick={() => setShowInvoiceModal(true)}
+          onClick={() => {
+            setShowInvoiceModal(true);
+            if (formData.items.length === 0) {
+              addItem();
+            }
+          }}
         >
           Create Invoice
         </Button>
@@ -831,10 +867,10 @@ export default function PatientBillingTab({
 
       {/* Pending summary banner */}
       {pendingInvs.length > 0 && (
-        <div className="bg-saffron-50 border border-saffron-200 rounded overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-saffron-100">
-            <IoTimeOutline className="w-4 h-4 text-saffron-600" />
-            <h4 className="text-[13px] font-semibold text-saffron-700">
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-amber-500/10 bg-amber-500/5">
+            <IoTimeOutline className="w-4 h-4 text-amber-500" />
+            <h4 className="text-[13px] font-semibold text-amber-500">
               Pending Payments
             </h4>
           </div>
@@ -842,21 +878,21 @@ export default function PatientBillingTab({
             {pendingInvs.slice(0, 3).map((inv) => (
               <div
                 key={inv.id}
-                className="flex items-center justify-between bg-white border border-saffron-100 rounded px-3 py-2"
+                className="flex items-center justify-between bg-surface-2/50 border border-amber-500/10 rounded px-3 py-2"
               >
                 <div>
-                  <p className="text-[12.5px] font-medium text-mountain-800">
+                  <p className="text-[12.5px] font-medium text-text-main">
                     {inv.invoiceNumber}
                   </p>
-                  <p className="text-[11.5px] text-mountain-500">
+                  <p className="text-[11.5px] text-text-muted">
                     {inv.doctorName}
                   </p>
-                  <p className="text-[11px] text-mountain-400">
+                  <p className="text-[11px] text-text-muted/60">
                     Date: {fmtDate(inv.invoiceDate)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[13px] font-bold text-mountain-900">
+                  <p className="text-[13px] font-bold text-text-main">
                     {fmtCur(inv.totalAmount)}
                   </p>
                   <PayBadge status={inv.paymentStatus} />
@@ -864,7 +900,7 @@ export default function PatientBillingTab({
               </div>
             ))}
             {pendingInvs.length > 3 && (
-              <p className="text-[11px] text-center text-mountain-400">
+              <p className="text-[11px] text-center text-text-muted/60">
                 +{pendingInvs.length - 3} more pending
               </p>
             )}
@@ -873,14 +909,14 @@ export default function PatientBillingTab({
       )}
 
       {/* Billing list */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+      <div className="bg-surface dark:bg-surface-2 border border-border-base rounded overflow-hidden">
         {/* Header row */}
-        <div className="flex items-center justify-between px-3 py-2.5 bg-mountain-50 border-b border-mountain-100">
-          <h4 className="text-[13px] font-semibold text-mountain-800">
+        <div className="flex items-center justify-between px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
+          <h4 className="text-[13px] font-semibold text-text-main">
             Billing History
           </h4>
           <select
-            className="h-8 px-2 text-[12px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+            className="h-8 px-2 text-[12px] bg-surface text-text-main border border-border-base rounded focus:outline-none focus:border-primary"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
           >
@@ -894,11 +930,11 @@ export default function PatientBillingTab({
         <div className="p-3">
           {filtered.length === 0 ? (
             <div className="py-12 text-center">
-              <IoWalletOutline className="mx-auto w-10 h-10 text-mountain-300 mb-3" />
-              <p className="text-[13px] font-medium text-mountain-600">
+              <IoWalletOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-3" />
+              <p className="text-[13px] font-medium text-text-muted">
                 No billing records found
               </p>
-              <p className="text-[12px] text-mountain-400">
+              <p className="text-[12px] text-text-muted/60">
                 No billing history for this patient.
               </p>
             </div>
@@ -907,24 +943,24 @@ export default function PatientBillingTab({
               {filtered.map((b) => (
                 <div
                   key={b.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between border border-mountain-100 rounded px-3 py-3 hover:bg-mountain-25 gap-3"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between border border-border-base/50 rounded px-3 py-3 hover:bg-surface-2/30 gap-3"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-teal-50 border border-teal-100 rounded shrink-0">
-                      <IoReceiptOutline className="w-4 h-4 text-teal-600" />
+                    <div className="p-2 bg-primary/5 border border-primary/10 rounded shrink-0">
+                      <IoReceiptOutline className="w-4 h-4 text-primary" />
                     </div>
                     <div>
                       <div className="flex items-center flex-wrap gap-2 mb-1">
-                        <p className="text-[13px] font-semibold text-mountain-900">
+                        <p className="text-[13px] font-semibold text-text-main">
                           {b.invoiceNumber}
                         </p>
                         <PayBadge status={b.paymentStatus} />
                       </div>
-                      <p className="text-[12px] text-mountain-600">
+                      <p className="text-[12px] text-text-muted">
                         {b.doctorName} —{" "}
                         {b.items.map((i) => i.appointmentTypeName).join(", ")}
                       </p>
-                      <div className="flex flex-wrap gap-3 text-[11.5px] text-mountain-400 mt-0.5">
+                      <div className="flex flex-wrap gap-3 text-[11.5px] text-text-muted/60 mt-0.5">
                         <span>Date: {fmtDate(b.invoiceDate)}</span>
                         {b.paymentMethod && (
                           <span>
@@ -945,7 +981,7 @@ export default function PatientBillingTab({
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <p className="text-[18px] font-bold text-mountain-900">
+                    <p className="text-[18px] font-bold text-text-main">
                       {fmtCur(b.totalAmount)}
                     </p>
                     <div className="flex gap-1.5">
@@ -1008,8 +1044,8 @@ export default function PatientBillingTab({
           }
           size="5xl"
           subtitle={
-            <p className="text-[11.5px] text-mountain-400">
-              For {patient?.name} ({patient?.regNumber})
+            <p className="text-[11.5px] text-text-muted/60">
+              For {patient?.name || "Patient"} ({patient?.regNumber || "..."})
             </p>
           }
           title="Create New Invoice"
@@ -1026,12 +1062,12 @@ export default function PatientBillingTab({
               />
             </div>
 
-            <div className="border-t border-mountain-100" />
+            <div className="border-t border-border-base/50" />
 
             {/* Items */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-[13px] font-semibold text-mountain-800">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-[13px] font-semibold text-text-main">
                   Invoice Details
                 </h4>
                 <Button
@@ -1045,9 +1081,9 @@ export default function PatientBillingTab({
               </div>
 
               {formData.items.length === 0 ? (
-                <div className="py-10 text-center border border-dashed border-mountain-200 rounded">
-                  <IoReceiptOutline className="mx-auto w-8 h-8 text-mountain-300 mb-2" />
-                  <p className="text-[12.5px] text-mountain-500 mb-3">
+                <div className="py-10 text-center border border-dashed border-border-base rounded bg-surface-2/30">
+                  <IoReceiptOutline className="mx-auto w-8 h-8 text-text-muted/30 mb-2" />
+                  <p className="text-[12.5px] text-text-main mb-3">
                     No items added yet
                   </p>
                   <Button
@@ -1060,34 +1096,52 @@ export default function PatientBillingTab({
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {formData.items.map((item, idx) => (
                     <div
                       key={item.id}
-                      className="border border-mountain-200 rounded p-3"
+                      className="border border-border-base rounded-lg p-4 bg-surface-2/20"
                     >
-                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 items-end">
-                        <div className="col-span-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+                        {/* Row 1: Type, Price, Doctor */}
+                        <div className="sm:col-span-4">
                           <SearchSelect
                             items={appointmentTypes.map((t) => ({
                               id: t.id,
                               primary: t.name,
                               secondary: `NPR ${t.price.toLocaleString()}`,
                             }))}
+                            emptyContent={
+                              <div className="p-4 text-center">
+                                <p className="text-[12px] text-text-muted mb-2">No services found.</p>
+                                <Button 
+                                  color="primary" 
+                                  size="sm" 
+                                  className="w-full h-8 text-[11px]"
+                                  onClick={handleSeedServices}
+                                  isLoading={loading}
+                                >
+                                  Seed Default Services
+                                </Button>
+                              </div>
+                            }
                             label="Appointment Type"
+                            placeholder="Search or seed services..."
                             value={item.appointmentTypeId}
                             onChange={(id) =>
                               updateItem(idx, { appointmentTypeId: id })
                             }
                           />
                         </div>
-                        <FlatInput
-                          readOnly
-                          label="Price"
-                          prefixText="NPR"
-                          value={item.price.toString()}
-                        />
-                        <div className="col-span-2">
+                        <div className="sm:col-span-2">
+                          <FlatInput
+                            readOnly
+                            label="Price"
+                            prefixText="NPR"
+                            value={item.price.toString()}
+                          />
+                        </div>
+                        <div className="sm:col-span-6">
                           <SearchSelect
                             items={doctors.map((d) => ({
                               id: d.id,
@@ -1111,35 +1165,43 @@ export default function PatientBillingTab({
                             }}
                           />
                         </div>
-                        <FlatInput
-                          label="Quantity"
-                          type="number"
-                          value={item.quantity.toString()}
-                          onChange={(v) =>
-                            updateItem(idx, { quantity: parseInt(v) || 1 })
-                          }
-                        />
-                        <FlatInput
-                          label="Commission (%)"
-                          suffixText="%"
-                          type="number"
-                          value={item.commission.toString()}
-                          onChange={(v) =>
-                            updateItem(idx, { commission: parseFloat(v) || 0 })
-                          }
-                        />
-                        <div className="flex items-end gap-1.5">
+
+                        {/* Row 2: Qty, Commission, Amount, Action */}
+                        <div className="sm:col-span-2">
+                          <FlatInput
+                            label="Quantity"
+                            type="number"
+                            value={item.quantity.toString()}
+                            onChange={(v) =>
+                              updateItem(idx, { quantity: parseInt(v) || 1 })
+                            }
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <FlatInput
+                            label="Commission (%)"
+                            suffixText="%"
+                            type="number"
+                            value={item.commission.toString()}
+                            onChange={(v) =>
+                              updateItem(idx, { commission: parseFloat(v) || 0 })
+                            }
+                          />
+                        </div>
+                        <div className="sm:col-span-5">
                           <FlatInput
                             readOnly
                             label="Amount"
                             value={fmtCur(item.amount)}
                           />
+                        </div>
+                        <div className="sm:col-span-2 flex justify-end">
                           <button
-                            className="mb-0 p-2 rounded text-red-400 hover:text-red-700 hover:bg-red-50 shrink-0 self-end"
+                            className="p-2.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50/50 transition-colors border border-transparent hover:border-red-100"
                             type="button"
                             onClick={() => removeItem(idx)}
                           >
-                            <IoTrashOutline className="w-4 h-4" />
+                            <IoTrashOutline className="w-4.5 h-4.5" />
                           </button>
                         </div>
                       </div>
@@ -1152,19 +1214,19 @@ export default function PatientBillingTab({
             {/* Discount + Summary */}
             {formData.items.length > 0 && (
               <>
-                <div className="border-t border-mountain-100" />
+                <div className="border-t border-border-base/50" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
-                    <h4 className="text-[13px] font-semibold text-mountain-800">
+                    <h4 className="text-[13px] font-semibold text-text-main">
                       Discount & Tax
                     </h4>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1">
-                        <label className="text-[12px] font-medium text-mountain-700">
+                        <label className="text-[12px] font-medium text-text-muted">
                           Discount Type
                         </label>
                         <select
-                          className="h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500 bg-white"
+                          className="h-9 px-2.5 text-[12.5px] border border-border-base rounded focus:outline-none focus:border-primary bg-surface"
                           value={formData.discountType}
                           onChange={(e) =>
                             setFormData((p) => ({
@@ -1202,10 +1264,10 @@ export default function PatientBillingTab({
                     />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-semibold text-mountain-800 mb-2">
+                    <h4 className="text-[13px] font-semibold text-text-main mb-2">
                       Summary
                     </h4>
-                    <div className="bg-mountain-50 border border-mountain-100 rounded p-3 space-y-1.5 text-[12.5px]">
+                    <div className="bg-surface-2 border border-border-base/50 rounded p-3 space-y-1.5 text-[12.5px]">
                       {[
                         ["Subtotal", fmtCur(calculations.subtotal)],
                         ...(calculations.itemDiscountAmount > 0
@@ -1235,13 +1297,13 @@ export default function PatientBillingTab({
                       ].map(([l, v]) => (
                         <div
                           key={String(l)}
-                          className="flex justify-between text-mountain-600"
+                          className="flex justify-between text-text-muted"
                         >
                           <span>{l}</span>
                           <span>{v}</span>
                         </div>
                       ))}
-                      <div className="border-t border-mountain-200 pt-1.5 flex justify-between font-bold text-mountain-900 text-[13px]">
+                      <div className="border-t border-border-base pt-1.5 flex justify-between font-bold text-text-main text-[13px]">
                         <span>Total</span>
                         <span>{fmtCur(calculations.totalAmount)}</span>
                       </div>
@@ -1284,13 +1346,13 @@ export default function PatientBillingTab({
           }
           size="md"
           subtitle={
-            <div className="space-y-0.5 text-[11.5px] text-mountain-500">
+            <div className="space-y-0.5 text-[11.5px] text-text-muted">
               <p>
-                <span className="font-medium text-mountain-700">Invoice:</span>{" "}
+                <span className="font-medium text-text-muted">Invoice:</span>{" "}
                 {selectedBilling.invoiceNumber}
               </p>
               <p>
-                <span className="font-medium text-mountain-700">Patient:</span>{" "}
+                <span className="font-medium text-text-muted">Patient:</span>{" "}
                 {selectedBilling.patientName}
               </p>
               <p className="text-red-600 font-semibold">
@@ -1314,11 +1376,11 @@ export default function PatientBillingTab({
 
             {/* Method */}
             <div className="flex flex-col gap-1">
-              <label className="text-[12px] font-medium text-mountain-700">
+              <label className="text-[12px] font-medium text-text-muted">
                 Payment Method *
               </label>
               <select
-                className="h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500 bg-white"
+                className="h-9 px-2.5 text-[12.5px] border border-border-base rounded focus:outline-none focus:border-primary bg-surface"
                 value={paymentForm.method}
                 onChange={(e) =>
                   setPaymentForm((p) => ({
@@ -1359,8 +1421,8 @@ export default function PatientBillingTab({
 
             {/* Summary */}
             {paymentForm.amount && (
-              <div className="bg-mountain-50 border border-mountain-100 rounded p-3 space-y-1.5 text-[12px]">
-                <h4 className="text-[12px] font-semibold text-mountain-800 mb-2">
+              <div className="bg-surface-2 border border-border-base/50 rounded p-3 space-y-1.5 text-[12px]">
+                <h4 className="text-[12px] font-semibold text-text-main mb-2">
                   Payment Summary
                 </h4>
                 {[
@@ -1373,19 +1435,19 @@ export default function PatientBillingTab({
                   [
                     "Current Payment",
                     fmtCur(parseFloat(paymentForm.amount) || 0),
-                    "text-teal-700 font-semibold",
+                    "text-primary/80 font-semibold",
                   ],
                 ].map(([l, v, cls]) => (
                   <div
                     key={String(l)}
-                    className="flex justify-between text-mountain-600"
+                    className="flex justify-between text-text-muted"
                   >
                     <span>{l}</span>
                     <span className={cls}>{v}</span>
                   </div>
                 ))}
-                <div className="border-t border-mountain-200 pt-1.5 flex justify-between font-semibold">
-                  <span className="text-mountain-700">New Balance</span>
+                <div className="border-t border-border-base pt-1.5 flex justify-between font-semibold">
+                  <span className="text-text-muted">New Balance</span>
                   <span
                     className={
                       newBalance <= 0 ? "text-health-600" : "text-red-600"
@@ -1395,7 +1457,7 @@ export default function PatientBillingTab({
                   </span>
                 </div>
                 <div className="flex justify-between text-[11.5px]">
-                  <span className="text-mountain-500">
+                  <span className="text-text-muted">
                     Status after payment
                   </span>
                   <span

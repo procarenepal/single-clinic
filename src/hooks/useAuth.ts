@@ -61,7 +61,8 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
       const userDoc = await getDoc(userDocRef);
 
       if (userDoc.exists()) {
-        return userDoc.data() as User;
+        const data = userDoc.data();
+        return { ...data, id: userDoc.id } as User;
       }
 
       return null;
@@ -351,8 +352,9 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
             extendedUser.isActive = userDataFromFirestore.isActive;
             extendedUser.userData = userDataFromFirestore;
             // Set user data and preload permissions
+            const userDataWithId = { ...userDataFromFirestore, id: firebaseUser.uid };
             setCurrentUser(extendedUser);
-            setUserData(userDataFromFirestore);
+            setUserData(userDataWithId);
             const effectiveClinicId = userDataFromFirestore.clinicId || "default";
             setClinicId(effectiveClinicId);
 

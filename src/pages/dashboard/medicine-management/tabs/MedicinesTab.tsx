@@ -41,14 +41,16 @@ function ModalShell({
   onClose: () => void;
   children: React.ReactNode;
   footer: React.ReactNode;
-  size?: "md" | "lg" | "xl" | "3xl";
+  size?: "md" | "lg" | "xl" | "3xl" | "4xl" | "5xl";
   disabled?: boolean;
 }) {
-  const widthMap: Record<"md" | "lg" | "xl" | "3xl", string> = {
+  const widthMap: Record<"md" | "lg" | "xl" | "3xl" | "4xl" | "5xl", string> = {
     md: "max-w-md",
     lg: "max-w-2xl",
-    xl: "max-w-3xl",
-    "3xl": "max-w-4xl",
+    xl: "max-w-4xl",
+    "3xl": "max-w-5xl",
+    "4xl": "max-w-6xl",
+    "5xl": "max-w-7xl",
   };
 
   React.useEffect(() => {
@@ -65,25 +67,25 @@ function ModalShell({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md px-4 overflow-hidden"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !disabled) onClose();
       }}
     >
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
             </h3>
             {subtitle && <div className="mt-1">{subtitle}</div>}
           </div>
           {!disabled && (
             <button
-              className="text-mountain-400 hover:text-mountain-700 mt-0.5"
+              className="text-[rgb(var(--color-text-muted)/0.4)] hover:text-[rgb(var(--color-text-muted))] mt-0.5"
               type="button"
               onClick={onClose}
             >
@@ -92,7 +94,7 @@ function ModalShell({
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))] shrink-0">
           {footer}
         </div>
       </div>
@@ -105,12 +107,12 @@ interface MedicinesTabProps {
   clinicSettings: ClinicSettings | null;
   onStatsChange: () => void;
   filterType?:
-    | "lowStock"
-    | "expiring"
-    | "medicines"
-    | "brands"
-    | "categories"
-    | null;
+  | "lowStock"
+  | "expiring"
+  | "medicines"
+  | "brands"
+  | "categories"
+  | null;
   /**
    * Effective branch scope for this view.
    * For branch users this matches their fixed branchId.
@@ -154,24 +156,35 @@ export default function MedicinesTab({
   const [cursorByPage, setCursorByPage] = useState<
     Record<number, QueryDocumentSnapshot | null>
   >({});
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [nameSuggestions, setNameSuggestions] = useState<Medicine[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
+  const [newTypeName, setNewTypeName] = useState("");
 
-  const [formData, setFormData] = useState({
-    name: "",
-    genericName: "",
-    brandId: "",
-    categoryId: "",
-    type: "tablet" as Medicine["type"],
-    strength: "",
-    unit: "tablet" as Medicine["unit"],
-    description: "",
-    supplierId: "",
-    batchNumber: "",
-    expiryDate: "",
-    price: "",
-    costPrice: "",
-    barcode: "",
-    currentStock: "",
-  });
+  const [formDataList, setFormDataList] = useState<any[]>([
+    {
+      name: "",
+      genericName: "",
+      brandId: "",
+      categoryId: "",
+      type: "tablet",
+      strength: "",
+      unit: "tablet",
+      description: "",
+      supplierId: "",
+      batchNumber: "",
+      expiryDate: "",
+      price: "",
+      costPrice: "",
+      barcode: "",
+      currentStock: "",
+      isAddingSupplier: false,
+      newSupplierName: "",
+      isAddingType: false,
+      newTypeName: "",
+    },
+  ]);
 
   const [refillFormData, setRefillFormData] = useState({
     regularQuantity: "",
@@ -415,15 +428,92 @@ export default function MedicinesTab({
   };
 
   const handleChange = (
+    index: number,
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value, type } = e.target;
 
-    setFormData((prev) => ({
+    setFormDataList((prev) => {
+      const newList = [...prev];
+      newList[index] = {
+        ...newList[index],
+        [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
+      };
+
+      // Handle medicine name suggestions for this specific row
+      if (name === "name") {
+        if (value.trim().length >= 2) {
+          const filtered = medicines.filter((m) =>
+            m.name.toLowerCase().includes(value.toLowerCase().trim()),
+          );
+          setNameSuggestions(filtered.slice(0, 5));
+          setShowSuggestions(true);
+          // Set current focused index so we know which row to update
+          setFocusedRowIndex(index);
+        } else {
+          setNameSuggestions([]);
+          setShowSuggestions(false);
+        }
+      }
+
+      return newList;
+    });
+  };
+
+  const handleSelectChangeRow = (index: number, name: string, value: string) => {
+    modalState.handleDropdownInteraction();
+    setTimeout(() => {
+      setFormDataList((prev) => {
+        const newList = [...prev];
+        newList[index] = {
+          ...newList[index],
+          [name]: value,
+        };
+        return newList;
+      });
+    }, 0);
+  };
+
+  const addRow = () => {
+    setFormDataList((prev) => [
       ...prev,
-      [name]:
-        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
-    }));
+      {
+        ...prev[0], // Copy defaults from first row
+        name: "",
+        genericName: "",
+        batchNumber: "",
+        barcode: "",
+        currentStock: "",
+        description: "",
+      },
+    ]);
+  };
+
+  const removeRow = (index: number) => {
+    if (formDataList.length > 1) {
+      setFormDataList((prev) => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleSelectSuggestion = (index: number, medicine: Medicine) => {
+    setFormDataList((prev) => {
+      const newList = [...prev];
+      newList[index] = {
+        ...newList[index],
+        name: medicine.name,
+        genericName: medicine.genericName || "",
+        brandId: medicine.brandId || "",
+        categoryId: medicine.categoryId || "",
+        type: medicine.type,
+        strength: medicine.strength || "",
+        unit: medicine.unit,
+        description: medicine.description || "",
+        supplierId: medicine.supplierId || "",
+      };
+      return newList;
+    });
+    setNameSuggestions([]);
+    setShowSuggestions(false);
   };
 
   const handleKeyDown = (
@@ -434,36 +524,46 @@ export default function MedicinesTab({
     }
   };
 
-  const handleSelectChange = (name: string, value: string) => {
+  const handleSelectChange = (index: number, name: string, value: string) => {
     // Prevent modal from closing due to select events
     modalState.handleDropdownInteraction();
     setTimeout(() => {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      setFormDataList((prev) => {
+        const newList = [...prev];
+        newList[index] = {
+          ...newList[index],
+          [name]: value,
+        };
+        return newList;
+      });
     }, 0);
   };
 
   const openAddModal = () => {
     setCurrentMedicine(null);
-    setFormData({
-      name: "",
-      genericName: "",
-      brandId: "",
-      categoryId: "",
-      type: "tablet",
-      strength: "",
-      unit: "tablet",
-      description: "",
-      supplierId: "",
-      batchNumber: "",
-      expiryDate: "",
-      price: "",
-      costPrice: "",
-      barcode: "",
-      currentStock: "",
-    });
+    setFormDataList([
+      {
+        name: "",
+        genericName: "",
+        brandId: "",
+        categoryId: "",
+        type: "tablet",
+        strength: "",
+        unit: "tablet",
+        description: "",
+        supplierId: "",
+        batchNumber: "",
+        expiryDate: "",
+        price: "",
+        costPrice: "",
+        barcode: "",
+        currentStock: "",
+        isAddingSupplier: false,
+        newSupplierName: "",
+        isAddingType: false,
+        newTypeName: "",
+      },
+    ]);
     modalState.open();
   };
 
@@ -492,223 +592,132 @@ export default function MedicinesTab({
       }
     }
 
-    setFormData({
-      name: medicine.name,
-      genericName: medicine.genericName || "",
-      brandId: medicine.brandId || "",
-      categoryId: medicine.categoryId || "",
-      type: medicine.type,
-      strength: medicine.strength || "",
-      unit: medicine.unit,
-      description: medicine.description || "",
-      supplierId: medicine.supplierId || "",
-      batchNumber: medicine.batchNumber || "",
-      expiryDate: medicine.expiryDate
-        ? medicine.expiryDate.toISOString().split("T")[0]
-        : "",
-      price: medicine.price?.toString() || "",
-      costPrice: medicine.costPrice?.toString() || "",
-      barcode: medicine.barcode || "",
-      currentStock: currentStockValue,
-    });
+    setFormDataList([
+      {
+        name: medicine.name,
+        genericName: medicine.genericName || "",
+        brandId: medicine.brandId || "",
+        categoryId: medicine.categoryId || "",
+        type: medicine.type,
+        strength: medicine.strength || "",
+        unit: medicine.unit,
+        description: medicine.description || "",
+        supplierId: medicine.supplierId || "",
+        batchNumber: medicine.batchNumber || "",
+        expiryDate: medicine.expiryDate
+          ? medicine.expiryDate.toISOString().split("T")[0]
+          : "",
+        price: medicine.price?.toString() || "",
+        costPrice: medicine.costPrice?.toString() || "",
+        barcode: medicine.barcode || "",
+        currentStock: currentStockValue,
+        isAddingSupplier: false,
+        newSupplierName: "",
+        isAddingType: false,
+        newTypeName: "",
+      },
+    ]);
     modalState.open();
   };
 
   const handleSave = async () => {
-    // Validate required fields
-    if (!formData.name.trim()) {
-      addToast({
-        title: "Validation Error",
-        description: "Medicine name is required",
-      });
-
-      return;
-    }
-
-    // Validate price fields if medicine sales are enabled
-    if (clinicSettings?.sellsMedicines) {
-      if (!formData.price.trim()) {
-        addToast({
-          title: "Validation Error",
-          description: "Sale price is required when medicine sales are enabled",
-        });
-
-        return;
-      }
-      if (isNaN(parseFloat(formData.price))) {
-        addToast({
-          title: "Validation Error",
-          description: "Please enter a valid price",
-        });
-
-        return;
-      }
-      if (formData.costPrice && isNaN(parseFloat(formData.costPrice))) {
-        addToast({
-          title: "Validation Error",
-          description: "Please enter a valid cost price",
-        });
-
-        return;
-      }
-    }
-
-    // Validate stock field
-    if (formData.currentStock && isNaN(parseFloat(formData.currentStock))) {
-      addToast({
-        title: "Validation Error",
-        description: "Please enter a valid stock quantity",
-      });
-
-      return;
-    }
-
-    // Check if medicine name already exists (for new medicines)
-    if (
-      !currentMedicine &&
-      medicines.some(
-        (medicine) =>
-          medicine.name.toLowerCase() === formData.name.trim().toLowerCase(),
-      )
-    ) {
-      addToast({
-        title: "Validation Error",
-        description: "A medicine with this name already exists",
-      });
-
-      return;
-    }
-
+    console.log("HandleSave triggered", { clinicId, userDataId: userData?.id, formDataList });
     if (!clinicId || !userData?.id) {
       addToast({
         title: "Error",
         description: "Missing required information. Please try again.",
       });
-
       return;
     }
 
+    // Validate all rows
+    for (let i = 0; i < formDataList.length; i++) {
+      const row = formDataList[i];
+      const rowNum = formDataList.length > 1 ? ` (Row ${i + 1})` : "";
+
+      if (!row.name.trim()) {
+        addToast({ title: "Validation Error", description: `Medicine name is required${rowNum}`, color: "danger" });
+        return;
+      }
+      if (!row.type) {
+        addToast({ title: "Validation Error", description: `Medicine type is required${rowNum}`, color: "danger" });
+        return;
+      }
+      if (!row.unit) {
+        addToast({ title: "Validation Error", description: `Medicine unit is required${rowNum}`, color: "danger" });
+        return;
+      }
+
+      if (clinicSettings?.sellsMedicines && !row.price.trim()) {
+        addToast({ title: "Validation Error", description: `Sale price is required${rowNum}` });
+        return;
+      }
+
+      if (!currentMedicine && medicines.some(m => m.name.toLowerCase() === row.name.trim().toLowerCase())) {
+        console.warn(`Medicine already exists: ${row.name}`);
+        addToast({ title: "Validation Error", description: `Medicine "${row.name}" already exists` });
+        return;
+      }
+    }
+
+    console.log("Validation passed, starting save loop...");
+
     setIsLoading(true);
     try {
-      const medicineData: any = {
-        name: formData.name.trim(),
-        type: formData.type,
-        unit: formData.unit,
-        isActive: true,
-        clinicId,
-        branchId: branchScopeId || "",
-        createdBy: userData.id,
-      };
+      for (const row of formDataList) {
+        let finalSupplierId = row.supplierId;
 
-      // Only include optional fields if they have values
-      if (formData.genericName.trim()) {
-        medicineData.genericName = formData.genericName.trim();
-      }
-      if (formData.brandId) {
-        medicineData.brandId = formData.brandId;
-      }
-      if (formData.categoryId) {
-        medicineData.categoryId = formData.categoryId;
-      }
-      if (formData.strength.trim()) {
-        medicineData.strength = formData.strength.trim();
-      }
-      if (formData.description.trim()) {
-        medicineData.description = formData.description.trim();
-      }
-      if (formData.supplierId) {
-        medicineData.supplierId = formData.supplierId;
-      }
-      if (formData.batchNumber.trim()) {
-        medicineData.batchNumber = formData.batchNumber.trim();
-      }
-      if (formData.expiryDate) {
-        medicineData.expiryDate = new Date(formData.expiryDate);
-      }
-      if (formData.price) {
-        medicineData.price = parseFloat(formData.price);
-      }
-      if (formData.costPrice) {
-        medicineData.costPrice = parseFloat(formData.costPrice);
-      }
-      if (formData.barcode.trim()) {
-        medicineData.barcode = formData.barcode.trim();
-      }
-
-      if (currentMedicine) {
-        await medicineService.updateMedicine(currentMedicine.id, medicineData);
-
-        // Update stock if provided
-        if (formData.currentStock) {
-          try {
-            const existingStock = await medicineService.getMedicineStock(
-              currentMedicine.id,
-              clinicId,
-            );
-
-            if (existingStock) {
-              await medicineService.updateMedicineStock(existingStock.id, {
-                currentStock: parseFloat(formData.currentStock),
-                updatedBy: userData.id,
-              });
-            } else {
-              // Create new stock record
-              const initialStock = parseFloat(formData.currentStock);
-
-              await medicineService.createMedicineStock({
-                medicineId: currentMedicine.id,
-                currentStock: initialStock,
-                schemeStock: 0,
-                minimumStock: 10,
-                reorderLevel: 20,
-                clinicId,
-                branchId: branchScopeId || "",
-                updatedBy: userData.id,
-              });
-
-              // Create stock transaction for initial stock entry
-              try {
-                await medicineService.createStockTransaction({
-                  medicineId: currentMedicine.id,
-                  type: "adjustment",
-                  quantity: initialStock,
-                  previousStock: 0,
-                  newStock: initialStock,
-                  reason: "Initial stock entry",
-                  clinicId,
-                  branchId: branchScopeId || "",
-                  createdBy: userData.id,
-                });
-              } catch (transactionError) {
-                console.warn(
-                  "Could not create stock transaction:",
-                  transactionError,
-                );
-                // Don't fail the whole operation if transaction creation fails
-              }
-            }
-          } catch (stockError) {
-            console.warn("Could not update stock:", stockError);
-            // Show a specific warning about stock update failure
-            addToast({
-              title: "Warning",
-              description: "Medicine saved but stock data could not be updated",
-            });
-          }
+        // Handle Quick Add Supplier for this row
+        if (row.isAddingSupplier && row.newSupplierName.trim()) {
+          const supplierData = {
+            name: row.newSupplierName.trim(),
+            clinicId,
+            branchId: branchScopeId || "",
+            isActive: true,
+            createdBy: userData.id,
+          };
+          finalSupplierId = await medicineService.createSupplier(supplierData);
+          // fetchSuppliers moved outside the loop for performance
         }
 
-        addToast({
-          title: "Success",
-          description: "Medicine updated successfully",
-        });
-      } else {
-        const medicineId = await medicineService.createMedicine(medicineData);
+        const medicineData: any = {
+          name: row.name.trim(),
+          type: row.type,
+          unit: row.unit,
+          isActive: true,
+          clinicId,
+          branchId: branchScopeId || "",
+          createdBy: userData.id,
+          supplierId: finalSupplierId,
+          prescriptionRequired: false, // Default for now
+        };
 
-        // Create stock record if provided
-        if (formData.currentStock) {
-          try {
-            const initialStock = parseFloat(formData.currentStock);
+        if (row.genericName.trim()) medicineData.genericName = row.genericName.trim();
+        if (row.brandId) medicineData.brandId = row.brandId;
+        if (row.categoryId) medicineData.categoryId = row.categoryId;
+        if (row.strength.trim()) medicineData.strength = row.strength.trim();
+        if (row.description.trim()) medicineData.description = row.description.trim();
+        if (row.batchNumber.trim()) medicineData.batchNumber = row.batchNumber.trim();
+        if (row.expiryDate) medicineData.expiryDate = new Date(row.expiryDate);
+        if (row.price) medicineData.price = parseFloat(row.price);
+        if (row.costPrice) medicineData.costPrice = parseFloat(row.costPrice);
+        if (row.barcode.trim()) medicineData.barcode = row.barcode.trim();
 
+        if (currentMedicine) {
+          await medicineService.updateMedicine(currentMedicine.id, medicineData);
+          if (row.currentStock) {
+            const existingStock = await medicineService.getMedicineStock(currentMedicine.id, clinicId);
+            if (existingStock) {
+              await medicineService.updateMedicineStock(existingStock.id, {
+                currentStock: parseFloat(row.currentStock),
+                updatedBy: userData.id,
+              });
+            }
+          }
+        } else {
+          const medicineId = await medicineService.createMedicine(medicineData);
+          if (row.currentStock) {
+            const initialStock = parseFloat(row.currentStock);
             await medicineService.createMedicineStock({
               medicineId,
               currentStock: initialStock,
@@ -719,60 +728,25 @@ export default function MedicinesTab({
               branchId: branchScopeId || "",
               updatedBy: userData.id,
             });
-
-            // Create stock transaction for initial stock entry
-            try {
-              await medicineService.createStockTransaction({
-                medicineId,
-                type: "adjustment",
-                quantity: initialStock,
-                previousStock: 0,
-                newStock: initialStock,
-                reason: "Initial stock entry",
-                clinicId,
-                branchId: branchScopeId || "",
-                createdBy: userData.id,
-              });
-            } catch (transactionError) {
-              console.warn(
-                "Could not create stock transaction:",
-                transactionError,
-              );
-              // Don't fail the whole operation if transaction creation fails
-            }
-          } catch (stockError) {
-            console.warn("Could not create stock record:", stockError);
-            // Show a specific warning about stock creation failure
-            addToast({
-              title: "Warning",
-              description:
-                "Medicine created but stock record could not be created",
-            });
           }
         }
-
-        addToast({
-          title: "Success",
-          description: "Medicine created successfully",
-        });
+        console.log(`Saved row: ${row.name}`);
       }
+
+      console.log("All rows processed, fetching suppliers...");
+      await fetchSuppliers();
+
+      addToast({
+        title: "Success",
+        description: currentMedicine ? "Medicine updated successfully" : `Successfully added ${formDataList.length} medicines`,
+      });
 
       modalState.forceClose();
-      if (useServerPagination) {
-        fetchMedicinesPaginated(
-          page,
-          page === 1 ? undefined : (cursorByPage[page] ?? null),
-        );
-      } else {
-        fetchMedicines();
-      }
-      onStatsChange();
+      fetchMedicines();
+      if (onStatsChange) onStatsChange();
     } catch (error) {
-      console.error("Error saving medicine:", error);
-      addToast({
-        title: "Error",
-        description: "Failed to save medicine",
-      });
+      console.error("Error saving medicines:", error);
+      addToast({ title: "Error", description: "Failed to save medicines. Please try again." });
     } finally {
       setIsLoading(false);
     }
@@ -802,6 +776,36 @@ export default function MedicinesTab({
       addToast({
         title: "Error",
         description: "Failed to update medicine status",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSeedMedicines = async () => {
+    if (!clinicId || !userData?.id) return;
+    setIsLoading(true);
+    try {
+      await medicineService.seedDefaultMedicines(
+        clinicId,
+        branchScopeId || undefined,
+        userData.id,
+      );
+      addToast({
+        title: "Success",
+        description: "Default medicines seeded successfully",
+      });
+      if (useServerPagination) {
+        fetchMedicinesPaginated(1);
+      } else {
+        fetchMedicines();
+      }
+      onStatsChange();
+    } catch (error) {
+      console.error("Error seeding medicines:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to seed medicines",
       });
     } finally {
       setIsLoading(false);
@@ -1053,27 +1057,27 @@ export default function MedicinesTab({
   const filteredMedicines = useServerPagination
     ? medicines
     : medicines.filter((medicine) => {
-        const supplierOrManufacturer = getSupplierOrManufacturer(medicine);
-        const matchesSearch =
-          medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          medicine.genericName
-            ?.toLowerCase()
-            .includes(searchQuery.toLowerCase()) ||
-          supplierOrManufacturer
-            ?.toLowerCase()
-            .includes(searchQuery.toLowerCase());
+      const supplierOrManufacturer = getSupplierOrManufacturer(medicine);
+      const matchesSearch =
+        medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        medicine.genericName
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        supplierOrManufacturer
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase());
 
-        if (!matchesSearch) return false;
-        if (!filterType) return true;
-        switch (filterType) {
-          case "lowStock":
-            return isLowStock(medicine);
-          case "expiring":
-            return isExpiring(medicine);
-          default:
-            return true;
-        }
-      });
+      if (!matchesSearch) return false;
+      if (!filterType) return true;
+      switch (filterType) {
+        case "lowStock":
+          return isLowStock(medicine);
+        case "expiring":
+          return isExpiring(medicine);
+        default:
+          return true;
+      }
+    });
 
   const totalPages = useServerPagination
     ? Math.ceil((totalCount ?? 0) / rowsPerPage)
@@ -1122,7 +1126,7 @@ export default function MedicinesTab({
   if (isLoading && medicines.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="flex flex-col items-center gap-2 text-mountain-500 text-[12.5px]">
+        <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted)/0.7)] text-[12.5px]">
           <div className="h-6 w-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
           <span>Loading medicines...</span>
         </div>
@@ -1136,7 +1140,7 @@ export default function MedicinesTab({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="w-full sm:max-w-md">
           <div className="relative flex items-center">
-            <IoSearchOutline className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-mountain-400 w-4 h-4" />
+            <IoSearchOutline className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.4)] w-4 h-4" />
             <input
               className="clarity-input with-left-icon h-8 w-full pr-2 text-[13px]"
               placeholder="Search medicines..."
@@ -1165,13 +1169,12 @@ export default function MedicinesTab({
       {filterType && (
         <div className="flex items-center gap-2">
           <span
-            className={`clarity-badge inline-flex items-center px-2 py-0.5 text-[11px] rounded ${
-              filterType === "lowStock"
-                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                : filterType === "expiring"
-                  ? "bg-red-50 text-red-700 border border-red-200"
-                  : "bg-teal-50 text-teal-700 border border-teal-200"
-            }`}
+            className={`clarity-badge inline-flex items-center px-2 py-0.5 text-[11px] rounded ${filterType === "lowStock"
+              ? "bg-amber-50 text-amber-700 border border-amber-200"
+              : filterType === "expiring"
+                ? "bg-red-50 text-red-700 border border-red-200"
+                : "bg-teal-50 text-teal-700 border border-teal-200"
+              }`}
           >
             {filterType === "lowStock"
               ? "Low Stock Medicines"
@@ -1179,7 +1182,7 @@ export default function MedicinesTab({
                 ? "Expiring Soon Medicines"
                 : "All Medicines"}
           </span>
-          <span className="text-sm text-default-500">
+          <span className="text-sm text-[rgb(var(--color-text-muted))]">
             Showing{" "}
             {useServerPagination ? (totalCount ?? 0) : filteredMedicines.length}{" "}
             medicines
@@ -1188,10 +1191,10 @@ export default function MedicinesTab({
       )}
 
       {/* Medicines table */}
-      <div className="bg-white border border-mountain-200 rounded shadow-sm">
+      <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded shadow-sm">
         {/* Table controls bar */}
-        <div className="p-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center justify-between gap-3">
-          <span className="text-[13px] text-mountain-500">
+        <div className="p-4 border-b border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] flex items-center justify-between gap-3">
+          <span className="text-[13px] text-[rgb(var(--color-text-muted)/0.7)]">
             {useServerPagination ? (totalCount ?? 0) : filteredMedicines.length}{" "}
             medicine
             {(useServerPagination
@@ -1201,13 +1204,12 @@ export default function MedicinesTab({
               : ""}
             {filterType && (
               <span
-                className={`ml-2 inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium ${
-                  filterType === "lowStock"
-                    ? "bg-amber-50 text-amber-700 border border-amber-200"
-                    : filterType === "expiring"
-                      ? "bg-red-50 text-red-700 border border-red-200"
-                      : "bg-teal-50 text-teal-700 border border-teal-200"
-                }`}
+                className={`ml-2 inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium ${filterType === "lowStock"
+                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                  : filterType === "expiring"
+                    ? "bg-red-50 text-red-700 border border-red-200"
+                    : "bg-teal-50 text-teal-700 border border-teal-200"
+                  }`}
               >
                 {filterType === "lowStock"
                   ? "Low Stock"
@@ -1223,56 +1225,68 @@ export default function MedicinesTab({
         <div className="overflow-x-auto min-h-[200px]">
           {isLoading ? (
             <div className="flex justify-center items-center h-48">
-              <div className="flex flex-col items-center gap-2 text-mountain-500 text-[12.5px]">
+              <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted)/0.7)] text-[12.5px]">
                 <div className="h-5 w-5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
                 <span>Loading medicines...</span>
               </div>
             </div>
           ) : currentMedicines.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-              <div className="w-10 h-10 rounded-full bg-mountain-50 flex items-center justify-center border border-mountain-100">
-                <IoMedkitOutline className="w-5 h-5 text-mountain-400" />
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                <IoMedkitOutline className="w-6 h-6 text-primary" />
               </div>
-              <p className="text-[13.5px] font-medium text-mountain-700">
-                No medicines found
-              </p>
-              <p className="text-[12.5px] text-mountain-400">
-                Add a medicine or adjust your search.
-              </p>
+              <div>
+                <p className="text-[15px] font-semibold text-[rgb(var(--color-text))]">
+                  No medicines found
+                </p>
+                <p className="text-[13px] text-text-muted mt-1">
+                  Add a medicine or adjust your search to see results.
+                </p>
+                {!searchQuery && (
+                  <button
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded text-[13px] font-semibold bg-primary text-white hover:opacity-90 transition-all shadow-sm"
+                    type="button"
+                    onClick={handleSeedMedicines}
+                  >
+                    <IoAddCircleOutline className="w-4 h-4" />
+                    Seed Default Medicines
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))]">
                     MEDICINE
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))]">
                     BRAND / CATEGORY
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))]">
                     TYPE & STRENGTH
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))]">
                     STOCK
                   </th>
                   {clinicSettings?.sellsMedicines && (
-                    <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                    <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))]">
                       PRICE
                     </th>
                   )}
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))]">
                     EXPIRY
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))]">
                     STATUS
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600 w-36">
+                  <th className="px-5 py-3 text-[12.5px] font-semibold text-[rgb(var(--color-text-muted))] w-36">
                     ACTIONS
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-[rgb(var(--color-border))]">
                 {currentMedicines.map((medicine) => {
                   const regularStock = medicineStocks[medicine.id] ?? 0;
                   const schemeStock = medicineSchemeStocks[medicine.id] ?? 0;
@@ -1280,8 +1294,14 @@ export default function MedicinesTab({
                   const hasStockData =
                     medicineStocks[medicine.id] !== undefined ||
                     medicineSchemeStocks[medicine.id] !== undefined;
-                  const expiryDate =
-                    medicineExpiryDates[medicine.id] || medicine.expiryDate;
+                  const rawExpiry = medicineExpiryDates[medicine.id] || medicine.expiryDate;
+                  const expiryDate = rawExpiry 
+                    ? (rawExpiry instanceof Date 
+                        ? rawExpiry 
+                        : (typeof (rawExpiry as any)?.toDate === 'function' 
+                            ? (rawExpiry as any).toDate() 
+                            : new Date(rawExpiry)))
+                    : null;
                   const isExpired = expiryDate && expiryDate < new Date();
                   const isLowStock =
                     hasStockData && totalStock > 0 && totalStock <= 10;
@@ -1291,20 +1311,20 @@ export default function MedicinesTab({
                   return (
                     <tr
                       key={medicine.id}
-                      className="hover:bg-mountain-50/30 transition-colors"
+                      className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors"
                     >
                       {/* Medicine */}
                       <td className="px-5 py-3">
-                        <p className="text-[13.5px] font-semibold text-mountain-900">
+                        <p className="text-[13.5px] font-semibold text-[rgb(var(--color-text))]">
                           {medicine.name}
                         </p>
                         {medicine.genericName && (
-                          <p className="text-[12px] text-mountain-500 mt-0.5">
+                          <p className="text-[12px] text-[rgb(var(--color-text-muted)/0.7)] mt-0.5">
                             {medicine.genericName}
                           </p>
                         )}
                         {supplierOrManufacturer && (
-                          <p className="text-[11.5px] text-mountain-400 mt-0.5">
+                          <p className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.4)] mt-0.5">
                             by {supplierOrManufacturer}
                           </p>
                         )}
@@ -1312,21 +1332,21 @@ export default function MedicinesTab({
 
                       {/* Brand / Category */}
                       <td className="px-5 py-3">
-                        <p className="text-[13px] text-mountain-800">
+                        <p className="text-[13px] text-[rgb(var(--color-text))]">
                           {getBrandName(medicine.brandId)}
                         </p>
-                        <p className="text-[12px] text-mountain-500 mt-0.5">
+                        <p className="text-[12px] text-[rgb(var(--color-text-muted)/0.7)] mt-0.5">
                           {getCategoryName(medicine.categoryId)}
                         </p>
                       </td>
 
                       {/* Type & Strength */}
                       <td className="px-5 py-3">
-                        <span className="inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium bg-mountain-100 text-mountain-700 border border-mountain-200 capitalize">
+                        <span className="inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] border border-[rgb(var(--color-border))] capitalize">
                           {medicine.type}
                         </span>
                         {medicine.strength && (
-                          <p className="text-[12px] text-mountain-500 mt-1">
+                          <p className="text-[12px] text-[rgb(var(--color-text-muted)/0.7)] mt-1">
                             {medicine.strength}
                           </p>
                         )}
@@ -1335,19 +1355,19 @@ export default function MedicinesTab({
                       {/* Stock */}
                       <td className="px-5 py-3">
                         {!hasStockData ? (
-                          <span className="text-[12.5px] text-mountain-400">
+                          <span className="text-[12.5px] text-[rgb(var(--color-text-muted)/0.4)]">
                             No tracking
                           </span>
                         ) : (
                           <div>
-                            <p className="text-[13px] font-medium text-mountain-800">
+                            <p className="text-[13px] font-medium text-[rgb(var(--color-text))]">
                               {totalStock > 0 ? (
                                 <>
                                   <span>
                                     {regularStock} {medicine.unit}
                                   </span>
                                   {schemeStock > 0 && (
-                                    <span className="text-mountain-500">
+                                    <span className="text-[rgb(var(--color-text-muted)/0.7)]">
                                       {" "}
                                       +{schemeStock} scheme
                                     </span>
@@ -1373,17 +1393,17 @@ export default function MedicinesTab({
                         <td className="px-5 py-3">
                           {medicine.price ? (
                             <div>
-                              <p className="text-[13px] font-semibold text-mountain-900">
+                              <p className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
                                 NPR {medicine.price}
                               </p>
                               {medicine.costPrice && (
-                                <p className="text-[12px] text-mountain-500">
+                                <p className="text-[12px] text-[rgb(var(--color-text-muted)/0.7)]">
                                   Cost: NPR {medicine.costPrice}
                                 </p>
                               )}
                             </div>
                           ) : (
-                            <span className="text-[12.5px] text-mountain-400">
+                            <span className="text-[12.5px] text-[rgb(var(--color-text-muted)/0.4)]">
                               —
                             </span>
                           )}
@@ -1394,22 +1414,26 @@ export default function MedicinesTab({
                       <td className="px-5 py-3">
                         {expiryDate ? (
                           <div>
-                            <p className="text-[13px] text-mountain-700">
-                              {expiryDate.toLocaleDateString()}
+                            <p className="text-[13px] text-[rgb(var(--color-text-muted))]">
+                              {expiryDate instanceof Date 
+                                ? expiryDate.toLocaleDateString() 
+                                : typeof (expiryDate as any)?.toDate === 'function'
+                                  ? (expiryDate as any).toDate().toLocaleDateString()
+                                  : new Date(expiryDate).toLocaleDateString()}
                             </p>
                             {isExpired && (
-                              <span className="inline-flex mt-1 px-2 py-0.5 rounded text-[11px] font-medium bg-red-50 text-red-700 border border-red-200">
+                              <span className="inline-flex mt-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
                                 Expired
                               </span>
                             )}
                           </div>
                         ) : (
                           <div>
-                            <span className="text-[12.5px] text-mountain-400">
+                            <span className="text-[12.5px] text-[rgb(var(--color-text-muted)/0.4)]">
                               No expiry
                             </span>
                             {clinicSettings?.sellsMedicines && (
-                              <span className="inline-flex ml-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="inline-flex ml-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                                 Required
                               </span>
                             )}
@@ -1420,16 +1444,15 @@ export default function MedicinesTab({
                       {/* Status */}
                       <td className="px-5 py-3">
                         <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium ${
-                            medicine.isActive
-                              ? "bg-teal-50 text-teal-700 border border-teal-200"
-                              : "bg-red-50 text-red-700 border border-red-200"
-                          }`}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${medicine.isActive
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            }`}
                         >
                           {medicine.isActive ? (
-                            <IoCheckmarkCircleOutline className="w-3 h-3" />
+                            <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
                           ) : (
-                            <IoCloseCircleOutline className="w-3 h-3" />
+                            <IoCloseCircleOutline className="w-3.5 h-3.5" />
                           )}
                           {medicine.isActive ? "Active" : "Inactive"}
                         </span>
@@ -1439,7 +1462,7 @@ export default function MedicinesTab({
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-1.5">
                           <button
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[12px] font-medium bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
                             onClick={() => {
                               setMedicineForRefill(medicine);
                               setRefillFormData({
@@ -1459,31 +1482,37 @@ export default function MedicinesTab({
                               refillModalState.open();
                             }}
                           >
-                            <IoAddCircleOutline className="w-3.5 h-3.5" />{" "}
-                            Refill
+                            <IoAddCircleOutline className="w-3.5 h-3.5" />
+                            <span>Refill</span>
                           </button>
                           <button
-                            className="inline-flex items-center justify-center w-7 h-7 rounded border border-mountain-200 text-mountain-500 hover:text-nepal-700 hover:border-nepal-300 hover:bg-nepal-50 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
                             title="Edit"
                             onClick={() => openEditModal(medicine)}
                           >
-                            <IoCreateOutline className="w-4 h-4" />
+                            <IoCreateOutline className="w-3.5 h-3.5" />
+                            <span>Edit</span>
                           </button>
                           <button
-                            className={`inline-flex items-center justify-center w-7 h-7 rounded border transition-colors ${
-                              medicine.isActive
-                                ? "border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600"
-                                : "border-teal-200 text-teal-400 hover:bg-teal-50 hover:text-teal-600"
-                            }`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold transition-colors ${medicine.isActive
+                              ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                              }`}
                             title={
                               medicine.isActive ? "Deactivate" : "Activate"
                             }
                             onClick={() => handleToggleStatus(medicine)}
                           >
                             {medicine.isActive ? (
-                              <IoCloseCircleOutline className="w-4 h-4" />
+                              <>
+                                <IoCloseCircleOutline className="w-3.5 h-3.5" />
+                                <span>Deactivate</span>
+                              </>
                             ) : (
-                              <IoCheckmarkCircleOutline className="w-4 h-4" />
+                              <>
+                                <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
+                                <span>Activate</span>
+                              </>
                             )}
                           </button>
                         </div>
@@ -1498,14 +1527,14 @@ export default function MedicinesTab({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-5 py-3 border-t border-mountain-100 bg-mountain-50/30 flex items-center justify-between">
-            <p className="text-[12.5px] text-mountain-500">
+          <div className="px-5 py-3 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] flex items-center justify-between">
+            <p className="text-[12.5px] text-[rgb(var(--color-text-muted)/0.7)]">
               Showing{" "}
-              <span className="font-medium text-mountain-900">
+              <span className="font-medium text-[rgb(var(--color-text))]">
                 {(page - 1) * rowsPerPage + 1}
               </span>{" "}
               to{" "}
-              <span className="font-medium text-mountain-900">
+              <span className="font-medium text-[rgb(var(--color-text))]">
                 {Math.min(
                   page * rowsPerPage,
                   useServerPagination
@@ -1514,7 +1543,7 @@ export default function MedicinesTab({
                 )}
               </span>{" "}
               of{" "}
-              <span className="font-medium text-mountain-900">
+              <span className="font-medium text-[rgb(var(--color-text))]">
                 {useServerPagination
                   ? (totalCount ?? 0)
                   : filteredMedicines.length}
@@ -1523,7 +1552,7 @@ export default function MedicinesTab({
             <div className="flex items-center gap-1.5">
               <button
                 aria-label="Previous page"
-                className="w-8 h-8 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all font-medium"
+                className="w-8 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all font-medium"
                 disabled={page === 1}
                 type="button"
                 onClick={() => {
@@ -1542,17 +1571,17 @@ export default function MedicinesTab({
               >
                 <IoChevronBackOutline className="w-4 h-4" />
               </button>
-              <span className="text-[12.5px] text-mountain-600 px-2 min-w-[90px] text-center">
+              <span className="text-[12.5px] text-[rgb(var(--color-text-muted))] px-2 min-w-[90px] text-center">
                 Page{" "}
-                <span className="font-semibold text-mountain-900">{page}</span>{" "}
+                <span className="font-semibold text-[rgb(var(--color-text))]">{page}</span>{" "}
                 of{" "}
-                <span className="font-semibold text-mountain-900">
+                <span className="font-semibold text-[rgb(var(--color-text))]">
                   {totalPages}
                 </span>
               </span>
               <button
                 aria-label="Next page"
-                className="w-8 h-8 flex items-center justify-center rounded border border-mountain-300 text-mountain-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all font-medium"
+                className="w-8 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] disabled:opacity-30 disabled:cursor-not-allowed hover:border-teal-400 hover:text-teal-700 hover:bg-mountain-50 transition-all font-medium"
                 disabled={page === totalPages}
                 type="button"
                 onClick={() => {
@@ -1597,258 +1626,363 @@ export default function MedicinesTab({
               </button>
             </>
           }
-          size="xl"
+          size="5xl"
           subtitle={
-            <p className="text-[11.5px] text-mountain-400">
+            <p className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.4)]">
               Manage core details, pricing, and inventory metadata.
             </p>
           }
           title={currentMedicine ? "Edit Medicine" : "Add Medicine"}
           onClose={modalState.forceClose}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Basic Information */}
-            <div className="md:col-span-2">
-              <h3 className="text-lg font-semibold mb-3">Basic Information</h3>
-            </div>
+          <div className="space-y-8">
+            {formDataList.map((formData, index) => (
+              <div key={index} className={`relative p-6 rounded-lg border border-[rgb(var(--color-border))] ${formDataList.length > 1 ? 'bg-[rgb(var(--color-surface-2))/0.3]' : ''}`}>
+                {formDataList.length > 1 && (
+                  <div className="absolute -top-3 -right-3">
+                    <button
+                      className="w-7 h-7 rounded-full bg-red-50 text-red-600 border border-red-200 flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm"
+                      type="button"
+                      title="Remove this medicine"
+                      onClick={() => removeRow(index)}
+                    >
+                      <IoCloseOutline className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
 
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Medicine Name <span className="text-danger">*</span>
-              </label>
-              <input
-                required
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="name"
-                placeholder="Enter medicine name"
-                value={formData.name}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm border border-primary/20">
+                    {index + 1}
+                  </div>
+                  <h3 className="text-[15px] font-bold text-[rgb(var(--color-text))]">
+                    {currentMedicine ? "Edit Medicine" : `Medicine Details #${index + 1}`}
+                  </h3>
+                </div>
 
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Generic Name
-              </label>
-              <input
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="genericName"
-                placeholder="Enter generic name"
-                value={formData.genericName}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Brand
-              </label>
-              <select
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="brandId"
-                value={formData.brandId}
-                onChange={(e) => handleSelectChange("brandId", e.target.value)}
-              >
-                <option value="">No Brand</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Category
-              </label>
-              <select
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="categoryId"
-                value={formData.categoryId}
-                onChange={(e) =>
-                  handleSelectChange("categoryId", e.target.value)
-                }
-              >
-                <option value="">No Category</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Type
-              </label>
-              <select
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="type"
-                value={formData.type}
-                onChange={(e) => handleSelectChange("type", e.target.value)}
-              >
-                {medicineTypes.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Strength
-              </label>
-              <input
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="strength"
-                placeholder="e.g., 500mg, 10ml"
-                value={formData.strength}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Unit
-              </label>
-              <select
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="unit"
-                value={formData.unit}
-                onChange={(e) => handleSelectChange("unit", e.target.value)}
-              >
-                {medicineUnits.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Supplier
-              </label>
-              <select
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="supplierId"
-                value={formData.supplierId}
-                onChange={(e) =>
-                  handleSelectChange("supplierId", e.target.value)
-                }
-              >
-                <option value="">No Supplier</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                    {supplier.contactPerson
-                      ? ` (${supplier.contactPerson})`
-                      : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Additional Details */}
-            <div className="md:col-span-2 mt-2">
-              <h3 className="text-[12px] font-semibold text-mountain-700 tracking-[0.08em] uppercase mb-2">
-                Additional Details
-              </h3>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Batch Number
-              </label>
-              <input
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="batchNumber"
-                placeholder="Enter batch number"
-                value={formData.batchNumber}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-
-            {clinicSettings?.sellsMedicines && (
-              <>
-                <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                    Sale Price (NPR) <span className="text-danger">*</span>
-                  </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                  {/* Medicine Name */}
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-default-400 text-[11px]">
-                      NPR
-                    </span>
+                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                      Medicine Name <span className="text-danger">*</span>
+                    </label>
                     <input
                       required
-                      className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
-                      name="price"
-                      placeholder="Enter sale price"
-                      type="number"
-                      value={formData.price}
-                      onChange={handleChange}
+                      autoComplete="off"
+                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                      name="name"
+                      placeholder="Enter medicine name"
+                      value={formData.name}
+                      onChange={(e) => handleChange(index, e)}
                       onKeyDown={handleKeyDown}
                     />
-                  </div>
-                </div>
 
-                <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                    Cost Price (NPR)
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-default-400 text-[11px]">
-                      NPR
-                    </span>
+                    {/* Suggestions (only for the active row) */}
+                    {focusedRowIndex === index && showSuggestions && nameSuggestions.length > 0 && (
+                      <div className="absolute z-[100] left-0 right-0 mt-1 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-md shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                        <div className="bg-[rgb(var(--color-surface-2))] px-3 py-1.5 border-b border-[rgb(var(--color-border))]">
+                          <p className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider">Suggested from your clinic</p>
+                        </div>
+                        {nameSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion.id}
+                            className="w-full text-left px-3 py-2 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
+                            type="button"
+                            onClick={() => {
+                              handleSelectSuggestion(index, suggestion);
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13px] font-semibold text-[rgb(var(--color-text))] group-hover:text-primary transition-colors">
+                                {suggestion.name}
+                              </span>
+                              <span className="text-[11px] text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1.5 py-0.5 rounded border border-[rgb(var(--color-border))]">
+                                {suggestion.type}
+                              </span>
+                            </div>
+                            {suggestion.genericName && (
+                              <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.7)] mt-0.5">
+                                {suggestion.genericName}
+                              </p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Supplier */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
+                        Supplier
+                      </label>
+                      <button
+                        className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
+                        type="button"
+                        onClick={() => {
+                          const newList = [...formDataList];
+                          newList[index].isAddingSupplier = !newList[index].isAddingSupplier;
+                          if (!newList[index].isAddingSupplier) newList[index].newSupplierName = "";
+                          setFormDataList(newList);
+                        }}
+                      >
+                        {formData.isAddingSupplier ? "Select Existing" : "Add New"}
+                      </button>
+                    </div>
+                    {formData.isAddingSupplier ? (
+                      <input
+                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
+                        placeholder="New supplier name"
+                        value={formData.newSupplierName}
+                        onChange={(e) => {
+                          const newList = [...formDataList];
+                          newList[index].newSupplierName = e.target.value;
+                          setFormDataList(newList);
+                        }}
+                      />
+                    ) : (
+                      <select
+                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                        name="supplierId"
+                        value={formData.supplierId}
+                        onChange={(e) => handleSelectChange(index, "supplierId", e.target.value)}
+                      >
+                        <option value="">No Supplier</option>
+                        {suppliers.map((supplier) => (
+                          <option key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Generic Name */}
+                  <div>
+                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                      Generic Name
+                    </label>
                     <input
-                      className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
-                      name="costPrice"
-                      placeholder="Enter cost price"
-                      type="number"
-                      value={formData.costPrice}
-                      onChange={handleChange}
-                      onKeyDown={handleKeyDown}
+                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                      name="genericName"
+                      placeholder="Generic name"
+                      value={formData.genericName}
+                      onChange={(e) => handleChange(index, e)}
                     />
                   </div>
+
+                  {/* Type */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
+                        Type
+                      </label>
+                      <button
+                        className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
+                        type="button"
+                        onClick={() => {
+                          const newList = [...formDataList];
+                          newList[index].isAddingType = !newList[index].isAddingType;
+                          if (!newList[index].isAddingType) newList[index].newTypeName = "";
+                          setFormDataList(newList);
+                        }}
+                      >
+                        {formData.isAddingType ? "Select Existing" : "Add New"}
+                      </button>
+                    </div>
+                    {formData.isAddingType ? (
+                      <input
+                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
+                        placeholder="New type name"
+                        value={formData.newTypeName}
+                        onChange={(e) => {
+                          const newList = [...formDataList];
+                          newList[index].newTypeName = e.target.value;
+                          newList[index].type = e.target.value;
+                          setFormDataList(newList);
+                        }}
+                      />
+                    ) : (
+                      <select
+                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                        name="type"
+                        value={formData.type}
+                        onChange={(e) => handleSelectChange(index, "type", e.target.value)}
+                      >
+                        {medicineTypes.map((item) => (
+                          <option key={item.key} value={item.key}>{item.label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Strength */}
+                  <div>
+                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                      Strength
+                    </label>
+                    <input
+                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                      name="strength"
+                      placeholder="e.g. 500mg"
+                      value={formData.strength}
+                      onChange={(e) => handleChange(index, e)}
+                    />
+                  </div>
+
+                  {/* Unit */}
+                  <div>
+                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                      Unit
+                    </label>
+                    <select
+                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                      name="unit"
+                      value={formData.unit}
+                      onChange={(e) => handleSelectChange(index, "unit", e.target.value)}
+                    >
+                      {medicineUnits.map((item) => (
+                        <option key={item.key} value={item.key}>{item.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Initial Stock */}
+                  <div>
+                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                      Initial Stock
+                    </label>
+                    <input
+                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                      name="currentStock"
+                      placeholder="Enter initial quantity"
+                      type="number"
+                      value={formData.currentStock}
+                      onChange={(e) => handleChange(index, e)}
+                    />
+                  </div>
+
+                  {/* Additional Details Section */}
+                  <div className="col-span-full mt-4 pt-4 border-t border-[rgb(var(--color-border)/0.5)]">
+                    <h4 className="text-[12px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-4">
+                      Additional Details
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Batch Number */}
+                      <div>
+                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                          Batch Number
+                        </label>
+                        <input
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          name="batchNumber"
+                          placeholder="Enter batch number"
+                          value={formData.batchNumber}
+                          onChange={(e) => handleChange(index, e)}
+                        />
+                      </div>
+
+                      {/* Expiry Date */}
+                      <div>
+                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                          Expiry Date
+                        </label>
+                        <input
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          name="expiryDate"
+                          type="date"
+                          value={formData.expiryDate}
+                          onChange={(e) => handleChange(index, e)}
+                        />
+                      </div>
+
+                      {/* Sale Price */}
+                      {clinicSettings?.sellsMedicines && (
+                        <div>
+                          <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                            Sale Price (NPR) <span className="text-danger">*</span>
+                          </label>
+                          <div className="flex clarity-input h-9 w-full p-0 overflow-hidden focus-within:border-primary transition-colors">
+                            <div className="bg-[rgb(var(--color-surface-2))] px-3 border-r border-[rgb(var(--color-border))] flex items-center text-[10px] text-[rgb(var(--color-text-muted))] font-bold shrink-0">
+                              NPR
+                            </div>
+                            <input
+                              className="flex-1 bg-transparent px-3 text-[13px] outline-none h-full w-full"
+                              name="price"
+                              placeholder="0.00"
+                              type="number"
+                              value={formData.price}
+                              onChange={(e) => handleChange(index, e)}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cost Price */}
+                      <div>
+                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                          Cost Price (NPR)
+                        </label>
+                        <div className="flex clarity-input h-9 w-full p-0 overflow-hidden focus-within:border-primary transition-colors">
+                          <div className="bg-[rgb(var(--color-surface-2))] px-3 border-r border-[rgb(var(--color-border))] flex items-center text-[10px] text-[rgb(var(--color-text-muted))] font-bold shrink-0">
+                            NPR
+                          </div>
+                          <input
+                            className="flex-1 bg-transparent px-3 text-[13px] outline-none h-full w-full"
+                            name="costPrice"
+                            placeholder="0.00"
+                            type="number"
+                            value={formData.costPrice}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Barcode */}
+                      <div>
+                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                          Barcode
+                        </label>
+                        <input
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          name="barcode"
+                          placeholder="Enter barcode"
+                          value={formData.barcode}
+                          onChange={(e) => handleChange(index, e)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Description - Full Width */}
+                    <div className="mt-4">
+                      <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                        Description
+                      </label>
+                      <textarea
+                        className="clarity-input w-full text-[13px] px-3 py-2 rounded-md min-h-[60px]"
+                        name="description"
+                        placeholder="Enter medicine description"
+                        rows={2}
+                        value={formData.description}
+                        onChange={(e) => handleChange(index, e)}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </>
+              </div>
+            ))}
+
+            {!currentMedicine && (
+              <button
+                className="w-full py-4 border-2 border-dashed border-[rgb(var(--color-border))] rounded-lg flex items-center justify-center gap-2 text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-surface-2))] hover:text-primary hover:border-primary/30 transition-all group"
+                type="button"
+                onClick={addRow}
+              >
+                <IoAddCircleOutline className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-[14px]">Add Another Medicine to Batch</span>
+              </button>
             )}
-
-            <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Barcode
-              </label>
-              <input
-                className="clarity-input h-8 w-full text-[13px] px-2"
-                name="barcode"
-                placeholder="Enter barcode"
-                value={formData.barcode}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Description
-              </label>
-              <textarea
-                className="clarity-input w-full text-[13px] px-2 py-2 min-h-[80px]"
-                name="description"
-                placeholder="Enter medicine description"
-                rows={3}
-                value={formData.description}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
           </div>
         </ModalShell>
       )}
@@ -1882,10 +2016,10 @@ export default function MedicinesTab({
               </button>
             </>
           }
-          size="lg"
+          size="xl"
           subtitle={
-            <div className="text-[11.5px] text-mountain-500">
-              <span className="font-medium text-mountain-700">Medicine:</span>{" "}
+            <div className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.7)]">
+              <span className="font-medium text-[rgb(var(--color-text-muted))]">Medicine:</span>{" "}
               {medicineForRefill?.name}
             </div>
           }
@@ -1894,9 +2028,9 @@ export default function MedicinesTab({
         >
           <div className="space-y-6">
             {/* Transaction Type Toggle */}
-            <div className="flex bg-mountain-100 p-1 rounded-md w-full mb-4">
+            <div className="flex bg-[rgb(var(--color-surface-2))] p-1 rounded-md w-full mb-4">
               <button
-                className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "add" ? "bg-white shadow text-teal-700 font-semibold" : "text-mountain-500 hover:text-mountain-800"}`}
+                className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "add" ? "bg-[rgb(var(--color-surface))] shadow text-teal-700 font-semibold" : "text-[rgb(var(--color-text-muted)/0.7)] hover:text-[rgb(var(--color-text))]"}`}
                 type="button"
                 onClick={() =>
                   setRefillFormData((prev) => ({
@@ -1911,7 +2045,7 @@ export default function MedicinesTab({
                 </div>
               </button>
               <button
-                className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "sub" ? "bg-white shadow text-red-600 font-semibold" : "text-mountain-500 hover:text-mountain-800"}`}
+                className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "sub" ? "bg-[rgb(var(--color-surface))] shadow text-red-600 font-semibold" : "text-[rgb(var(--color-text-muted)/0.7)] hover:text-[rgb(var(--color-text))]"}`}
                 type="button"
                 onClick={() =>
                   setRefillFormData((prev) => ({
@@ -1929,12 +2063,12 @@ export default function MedicinesTab({
 
             {/* Regular Stock Section */}
             <div>
-              <h4 className="text-md font-semibold text-default-700 mb-3">
+              <h4 className="text-md font-semibold text-[rgb(var(--color-text))] mb-3">
                 Regular Stock
               </h4>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     Regular Quantity
                   </label>
                   <input
@@ -1960,11 +2094,11 @@ export default function MedicinesTab({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Regular Sale Price (NPR)
                     </label>
                     <div className="relative">
-                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-default-400 text-[11px]">
+                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
                         NPR
                       </span>
                       <input
@@ -1991,11 +2125,11 @@ export default function MedicinesTab({
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Regular Cost Price (NPR)
                     </label>
                     <div className="relative">
-                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-default-400 text-[11px]">
+                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
                         NPR
                       </span>
                       <input
@@ -2026,12 +2160,12 @@ export default function MedicinesTab({
 
             {/* Scheme Stock Section */}
             <div className="pt-4 border-t border-default-200">
-              <h4 className="text-md font-semibold text-default-700 mb-3">
+              <h4 className="text-md font-semibold text-[rgb(var(--color-text))] mb-3">
                 Scheme Stock
               </h4>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     Scheme Quantity
                   </label>
                   <input
@@ -2056,11 +2190,11 @@ export default function MedicinesTab({
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     Scheme Price (NPR)
                   </label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-default-400 text-[11px]">
+                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
                       NPR
                     </span>
                     <input
@@ -2087,11 +2221,11 @@ export default function MedicinesTab({
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     Scheme Cost Price (NPR)
                   </label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-default-400 text-[11px]">
+                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
                       NPR
                     </span>
                     <input
@@ -2121,12 +2255,12 @@ export default function MedicinesTab({
 
             {/* Common Fields */}
             <div className="pt-4 border-t border-default-200">
-              <h4 className="text-[12px] font-semibold text-default-700 tracking-[0.08em] uppercase mb-3">
+              <h4 className="text-[12px] font-semibold text-[rgb(var(--color-text))] tracking-[0.08em] uppercase mb-3">
                 Additional Information
               </h4>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     Expiry Date <span className="text-danger">*</span>
                   </label>
                   <input
@@ -2150,7 +2284,7 @@ export default function MedicinesTab({
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     Batch Number
                   </label>
                   <input
@@ -2173,11 +2307,11 @@ export default function MedicinesTab({
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                     Unit Price (NPR) - Legacy
                   </label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-default-400 text-[11px]">
+                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
                       NPR
                     </span>
                     <input
@@ -2205,7 +2339,7 @@ export default function MedicinesTab({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Invoice Number
                     </label>
                     <input
@@ -2228,7 +2362,7 @@ export default function MedicinesTab({
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Supplier
                     </label>
                     <select
@@ -2262,3 +2396,4 @@ export default function MedicinesTab({
     </div>
   );
 }
+

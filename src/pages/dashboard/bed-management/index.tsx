@@ -614,19 +614,26 @@ export default function BedManagementPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className={title()}>Bed Management</h1>
-          <p className="text-default-500 mt-2">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Bed Management</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage beds, bed categories, and bed allotments
           </p>
         </div>
       </div>
 
       {/* Main Content */}
-      <Card>
-        <CardBody>
+      <Card shadow="none" className="bg-surface border border-border-base rounded-[10px]">
+        <CardBody className="p-0">
           <Tabs
-            className="w-full"
+            aria-label="Bed management tabs"
+            classNames={{
+              tabList: "w-full border-b border-border-base bg-surface-2 p-1 rounded-none",
+              cursor: "bg-surface border border-border-base rounded-[10px]",
+              tab: "max-w-fit px-6 h-9",
+              tabContent: "font-semibold text-text-muted group-data-[selected=true]:text-primary"
+            }}
             selectedKey={activeTab}
+            variant="light"
             onSelectionChange={(key) => setActiveTab(key as string)}
           >
             {/* Beds Tab */}
@@ -635,12 +642,16 @@ export default function BedManagementPage() {
                 <div className="flex justify-between items-center">
                   <Input
                     className="w-80"
+                    classNames={{
+                      inputWrapper: "rounded-[10px] border-border-base bg-surface",
+                    }}
                     placeholder="Search"
                     startContent={<IoSearchOutline />}
                     value={bedsSearchQuery}
                     onValueChange={setBedsSearchQuery}
                   />
                   <Button
+                    className="rounded-[10px]"
                     color="primary"
                     startContent={<IoAddOutline />}
                     onPress={() => {
@@ -653,37 +664,49 @@ export default function BedManagementPage() {
                 </div>
 
                 {filteredBeds.length > 0 ? (
-                  <Table aria-label="Beds table">
-                    <TableHeader>
-                      <TableColumn>BED NUMBER</TableColumn>
-                      <TableColumn>ROOM NUMBER</TableColumn>
-                      <TableColumn>CATEGORY</TableColumn>
-                      <TableColumn>STATUS</TableColumn>
-                      <TableColumn>ACTIONS</TableColumn>
+                  <Table shadow="none" aria-label="Beds table">
+                    <TableHeader className="bg-surface-2">
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">BED NUMBER</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">ROOM NUMBER</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">CATEGORY</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">STATUS</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">ACTIONS</TableColumn>
                     </TableHeader>
                     <TableBody>
                       {filteredBeds.map((bed) => (
                         <TableRow key={bed.id}>
-                          <TableCell>
-                            <p className="font-medium">{bed.bedNumber}</p>
+                          <TableCell className="px-5 py-4">
+                            <p className="font-medium text-text-main">{bed.bedNumber}</p>
                           </TableCell>
                           <TableCell>{bed.roomNumber || "—"}</TableCell>
                           <TableCell>
-                            <Chip color="primary" size="sm" variant="flat">
+                            <Chip
+                              classNames={{
+                                base: "bg-primary/10 border-primary/20",
+                                content: "text-primary font-semibold"
+                              }}
+                              size="sm"
+                              variant="bordered"
+                            >
                               {bed.categoryName}
                             </Chip>
                           </TableCell>
                           <TableCell>
                             <Chip
-                              color={
-                                bed.status === "available"
-                                  ? "success"
+                              classNames={{
+                                base: bed.status === "available"
+                                  ? "bg-emerald-500/20 border-emerald-500/30"
                                   : bed.status === "occupied"
-                                    ? "danger"
-                                    : "warning"
-                              }
+                                    ? "bg-rose-500/20 border-rose-500/30"
+                                    : "bg-amber-500/20 border-amber-500/30",
+                                content: bed.status === "available"
+                                  ? "text-emerald-400 font-semibold"
+                                  : bed.status === "occupied"
+                                    ? "text-rose-400 font-semibold"
+                                    : "text-amber-400 font-semibold"
+                              }}
                               size="sm"
-                              variant="flat"
+                              variant="bordered"
                             >
                               {bed.status.charAt(0).toUpperCase() +
                                 bed.status.slice(1)}
@@ -692,18 +715,18 @@ export default function BedManagementPage() {
                           <TableCell>
                             <div className="flex gap-2 flex-wrap">
                               <Button
-                                color="primary"
+                                className="h-8 min-w-unit-12 px-unit-3 bg-primary/10 text-primary hover:bg-primary/20 rounded-[10px] font-semibold"
                                 size="sm"
-                                startContent={<IoCreateOutline />}
+                                startContent={<IoCreateOutline className="w-3.5 h-3.5" />}
                                 variant="flat"
                                 onPress={() => editBed(bed)}
                               >
                                 Edit
                               </Button>
                               <Button
-                                color="danger"
+                                className="h-8 min-w-unit-12 px-unit-3 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border-rose-500/20 rounded-[10px] font-semibold"
                                 size="sm"
-                                startContent={<IoTrashOutline />}
+                                startContent={<IoTrashOutline className="w-3.5 h-3.5" />}
                                 variant="flat"
                                 onPress={() =>
                                   openDeleteModal("bed", bed.id, bed.bedNumber)
@@ -719,7 +742,7 @@ export default function BedManagementPage() {
                   </Table>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <p className="text-default-500">
+                    <p className="text-text-muted">
                       {bedsSearchQuery ? "No beds found" : "No beds yet"}
                     </p>
                   </div>
@@ -733,12 +756,16 @@ export default function BedManagementPage() {
                 <div className="flex justify-between items-center">
                   <Input
                     className="w-80"
+                    classNames={{
+                      inputWrapper: "rounded-[10px] border-border-base bg-surface",
+                    }}
                     placeholder="Search"
                     startContent={<IoSearchOutline />}
                     value={categoriesSearchQuery}
                     onValueChange={setCategoriesSearchQuery}
                   />
                   <Button
+                    className="rounded-[10px]"
                     color="primary"
                     startContent={<IoAddOutline />}
                     onPress={() => {
@@ -751,34 +778,34 @@ export default function BedManagementPage() {
                 </div>
 
                 {filteredCategories.length > 0 ? (
-                  <Table aria-label="Bed categories table">
-                    <TableHeader>
-                      <TableColumn>NAME</TableColumn>
-                      <TableColumn>DESCRIPTION</TableColumn>
-                      <TableColumn>ACTIONS</TableColumn>
+                  <Table shadow="none" aria-label="Bed categories table">
+                    <TableHeader className="bg-surface-2">
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">NAME</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">DESCRIPTION</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">ACTIONS</TableColumn>
                     </TableHeader>
                     <TableBody>
                       {filteredCategories.map((category) => (
                         <TableRow key={category.id}>
-                          <TableCell>
-                            <p className="font-medium">{category.name}</p>
+                          <TableCell className="px-5 py-4">
+                            <p className="font-medium text-text-main">{category.name}</p>
                           </TableCell>
                           <TableCell>{category.description || "—"}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
                               <Button
-                                color="primary"
+                                className="h-8 min-w-unit-12 px-unit-3 bg-primary/10 text-primary hover:bg-primary/20 rounded-[10px] font-semibold"
                                 size="sm"
-                                startContent={<IoCreateOutline />}
+                                startContent={<IoCreateOutline className="w-3.5 h-3.5" />}
                                 variant="flat"
                                 onPress={() => editCategory(category)}
                               >
                                 Edit
                               </Button>
                               <Button
-                                color="danger"
+                                className="h-8 min-w-unit-12 px-unit-3 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border-rose-500/20 rounded-[10px] font-semibold"
                                 size="sm"
-                                startContent={<IoTrashOutline />}
+                                startContent={<IoTrashOutline className="w-3.5 h-3.5" />}
                                 variant="flat"
                                 onPress={() =>
                                   openDeleteModal(
@@ -798,7 +825,7 @@ export default function BedManagementPage() {
                   </Table>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <p className="text-default-500">
+                    <p className="text-text-muted">
                       {categoriesSearchQuery
                         ? "No categories found"
                         : "No bed categories yet"}
@@ -814,12 +841,16 @@ export default function BedManagementPage() {
                 <div className="flex justify-between items-center">
                   <Input
                     className="w-80"
+                    classNames={{
+                      inputWrapper: "rounded-[10px] border-border-base bg-surface",
+                    }}
                     placeholder="Search"
                     startContent={<IoSearchOutline />}
                     value={allotmentsSearchQuery}
                     onValueChange={setAllotmentsSearchQuery}
                   />
                   <Button
+                    className="rounded-[10px]"
                     color="primary"
                     startContent={<IoAddOutline />}
                     onPress={() => {
@@ -832,21 +863,21 @@ export default function BedManagementPage() {
                 </div>
 
                 {filteredAllotments.length > 0 ? (
-                  <Table aria-label="Bed allotments table">
-                    <TableHeader>
-                      <TableColumn>BED NUMBER</TableColumn>
-                      <TableColumn>PATIENT</TableColumn>
-                      <TableColumn>DOCTOR</TableColumn>
-                      <TableColumn>ALLOTMENT DATE</TableColumn>
-                      <TableColumn>DISCHARGE DATE</TableColumn>
-                      <TableColumn>STATUS</TableColumn>
-                      <TableColumn>ACTIONS</TableColumn>
+                  <Table shadow="none" aria-label="Bed allotments table">
+                    <TableHeader className="bg-surface-2">
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">BED NUMBER</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">PATIENT</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">DOCTOR</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">ALLOTMENT DATE</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">DISCHARGE DATE</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">STATUS</TableColumn>
+                      <TableColumn className="text-[11px] font-semibold text-text-muted tracking-[0.06em] uppercase px-5 py-3">ACTIONS</TableColumn>
                     </TableHeader>
                     <TableBody>
                       {filteredAllotments.map((allotment) => (
                         <TableRow key={allotment.id}>
-                          <TableCell>
-                            <p className="font-medium">{allotment.bedNumber}</p>
+                          <TableCell className="px-5 py-4">
+                            <p className="font-medium text-text-main">{allotment.bedNumber}</p>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -877,15 +908,20 @@ export default function BedManagementPage() {
                           </TableCell>
                           <TableCell>
                             <Chip
-                              color={
-                                allotment.status === "active"
-                                  ? "success"
+                              classNames={{
+                                base: allotment.status === "active"
+                                  ? "bg-emerald-500/20 border-emerald-500/30"
                                   : allotment.status === "discharged"
-                                    ? "default"
-                                    : "warning"
-                              }
+                                    ? "bg-slate-500/20 border-slate-500/30"
+                                    : "bg-amber-500/20 border-amber-500/30",
+                                content: allotment.status === "active"
+                                  ? "text-emerald-400 font-semibold"
+                                  : allotment.status === "discharged"
+                                    ? "text-slate-400 font-semibold"
+                                    : "text-amber-400 font-semibold"
+                              }}
                               size="sm"
-                              variant="flat"
+                              variant="bordered"
                             >
                               {allotment.status.charAt(0).toUpperCase() +
                                 allotment.status.slice(1)}
@@ -895,9 +931,9 @@ export default function BedManagementPage() {
                             <div className="flex gap-2 flex-wrap">
                               {allotment.status === "active" && (
                                 <Button
-                                  color="success"
+                                  className="h-8 min-w-unit-12 px-unit-3 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20 rounded-[10px] font-semibold"
                                   size="sm"
-                                  startContent={<IoCheckmarkCircleOutline />}
+                                  startContent={<IoCheckmarkCircleOutline className="w-3.5 h-3.5" />}
                                   variant="flat"
                                   onPress={() =>
                                     handleDischargeAllotment(allotment)
@@ -907,18 +943,18 @@ export default function BedManagementPage() {
                                 </Button>
                               )}
                               <Button
-                                color="primary"
+                                className="h-8 min-w-unit-12 px-unit-3 bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 rounded-[10px] font-semibold"
                                 size="sm"
-                                startContent={<IoCreateOutline />}
+                                startContent={<IoCreateOutline className="w-3.5 h-3.5" />}
                                 variant="flat"
                                 onPress={() => editAllotment(allotment)}
                               >
                                 Edit
                               </Button>
                               <Button
-                                color="danger"
+                                className="h-8 min-w-unit-12 px-unit-3 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border-rose-500/20 rounded-[10px] font-semibold"
                                 size="sm"
-                                startContent={<IoTrashOutline />}
+                                startContent={<IoTrashOutline className="w-3.5 h-3.5" />}
                                 variant="flat"
                                 onPress={() =>
                                   openDeleteModal(
@@ -938,7 +974,7 @@ export default function BedManagementPage() {
                   </Table>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <p className="text-default-500">
+                    <p className="text-text-muted">
                       {allotmentsSearchQuery
                         ? "No allotments found"
                         : "No bed allotments yet"}

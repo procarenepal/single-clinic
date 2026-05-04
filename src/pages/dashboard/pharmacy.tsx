@@ -44,6 +44,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Chip } from "@/components/ui/chip";
+import { title } from "@/components/primitives";
 const Divider = () => <hr className="border-border-base my-2" />;
 
 function CustomSelect({
@@ -60,7 +61,7 @@ function CustomSelect({
   return (
     <div className={`flex flex-col gap-1.5 w-full ${className || ""}`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
@@ -84,7 +85,7 @@ function CustomSelect({
         ))}
       </select>
       {description && (
-        <p className="text-[11.5px] text-text-muted/60">{description}</p>
+        <p className="text-[11.5px] text-text-main/60">{description}</p>
       )}
     </div>
   );
@@ -112,7 +113,7 @@ function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 w-full ${classNames?.base || ""}`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
@@ -124,12 +125,12 @@ function CustomInput({
           } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
       >
         {startContent && (
-          <div className="pl-3 pr-1 text-text-muted flex items-center justify-center shrink-0">
+          <div className="pl-3 pr-1 text-text-main flex items-center justify-center shrink-0">
             {startContent}
           </div>
         )}
         <input
-          className={`flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/40 disabled:text-text-muted/60 ${classNames?.input || ""}`}
+          className={`flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-main/40 disabled:text-text-main/60 ${classNames?.input || ""}`}
           disabled={disabled}
           max={max}
           min={min}
@@ -145,7 +146,7 @@ function CustomInput({
       </div>
       {(description || errorMessage) && (
         <p
-          className={`text-[11.5px] ${isInvalid ? "text-red-500" : "text-text-muted/60"}`}
+          className={`text-[11.5px] ${isInvalid ? "text-red-500" : "text-text-main/60"}`}
         >
           {errorMessage || description}
         </p>
@@ -185,7 +186,7 @@ function SearchSelect({
   return (
     <div className="flex flex-col gap-1 relative w-full">
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
@@ -194,9 +195,9 @@ function SearchSelect({
         className={`flex items-center h-[38px] border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface ${disabled ? "bg-surface-2" : ""}`}
         onClick={() => !disabled && setOpen(true)}
       >
-        <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-muted shrink-0" />
+        <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-main shrink-0" />
         <input
-          className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full outline-none"
+          className="flex-1 text-[13.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-main/40 w-full outline-none"
           disabled={disabled}
           placeholder={placeholder || `Search…`}
           value={selected && !open ? selected.primary : q}
@@ -208,7 +209,7 @@ function SearchSelect({
         />
         {value && !disabled && (
           <button
-            className="mr-2 text-text-muted hover:text-text-main"
+            className="mr-2 text-text-main hover:text-text-main"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -220,13 +221,13 @@ function SearchSelect({
           </button>
         )}
       </div>
-      {hint && <p className="text-[11.5px] text-text-muted/60">{hint}</p>}
+      {hint && <p className="text-[11.5px] text-text-main/60">{hint}</p>}
       {open && !disabled && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-xl">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-text-muted/50">
+              <p className="px-3 py-2 text-[13px] text-text-main/50">
                 No results
               </p>
             ) : (
@@ -243,7 +244,7 @@ function SearchSelect({
                 >
                   <p className="text-[13.5px] text-text-main">{i.primary}</p>
                   {i.secondary && (
-                    <p className="text-[11.5px] text-text-muted/60">
+                    <p className="text-[11.5px] text-text-main/60">
                       {i.secondary}
                     </p>
                   )}
@@ -2878,9 +2879,6 @@ export default function PharmacyPage() {
 <head>
   <title>Supplier Ledger - ${selectedSupplierForTransactions.name}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: white; color: #333; line-height: 1.5; }
-    .print-container { max-width: 100%; margin: 0; background: white; display: flex; flex-direction: column; padding: 0; box-sizing: border-box; }
-    
     ${brandingCSS}
 
     .content { flex: 1; padding: 15mm; min-height: 0; }
@@ -3241,11 +3239,11 @@ export default function PharmacyPage() {
   if (loading) {
     return (
       <div className="flex flex-col gap-5 px-4 pb-12">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-page-title font-bold text-text-main tracking-tight">
+        <div className="flex flex-col">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
             Pharmacy
           </h1>
-          <p className="text-[12.5px] text-text-muted">
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage medicine purchases and usage
           </p>
         </div>
@@ -3261,11 +3259,11 @@ export default function PharmacyPage() {
       <div className="flex flex-col gap-5 px-4 pb-12">
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-page-title font-bold text-text-main tracking-tight">
+          <div className="flex flex-col">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
               Pharmacy
             </h1>
-            <p className="text-[12.5px] text-text-muted">
+            <p className="text-[13.5px] text-text-muted mt-1">
               Manage medicine & item purchases and usage
             </p>
           </div>
@@ -3545,7 +3543,7 @@ export default function PharmacyPage() {
                             ].map((h) => (
                               <th
                                 key={h}
-                                className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
+                                className="px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider"
                               >
                                 {h}
                               </th>
@@ -3779,7 +3777,7 @@ export default function PharmacyPage() {
                           ].map((h) => (
                             <th
                               key={h}
-                              className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
+                              className="px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider"
                             >
                               {h}
                             </th>
@@ -4124,7 +4122,7 @@ export default function PharmacyPage() {
                                   ].map((h) => (
                                     <th
                                       key={h}
-                                      className="px-3 py-2 text-[10.5px] font-semibold text-text-muted uppercase tracking-wider"
+                                      className="px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider"
                                     >
                                       {h}
                                     </th>
@@ -4246,7 +4244,7 @@ export default function PharmacyPage() {
                   <div className="max-w-4xl mx-auto space-y-8">
                     <div className="flex justify-between items-center">
                       <div>
-                        <h3 className="text-stat-sm font-semibold">
+                        <h3 className="text-stat-sm font-semibold text-primary">
                           Pharmacy Settings
                         </h3>
                         <p className="text-default-500 mt-1">
@@ -4267,7 +4265,7 @@ export default function PharmacyPage() {
                     {/* Tax Configuration */}
                     <Card>
                       <CardHeader className="bg-default-50 border-b border-default-200">
-                        <h4 className="text-stat-sm font-semibold">
+                        <h4 className="text-stat-sm font-semibold text-primary">
                           Tax Configuration
                         </h4>
                       </CardHeader>
@@ -4332,7 +4330,7 @@ export default function PharmacyPage() {
                       <CardHeader className="bg-default-50 border-b border-default-200">
                         <div className="flex justify-between items-center w-full">
                           <div>
-                            <h4 className="text-stat-sm font-semibold">
+                            <h4 className="text-stat-sm font-semibold text-primary">
                               Payment Methods
                             </h4>
                             <p className="text-sm text-default-500">
@@ -4518,7 +4516,7 @@ export default function PharmacyPage() {
                     {/* Other Settings */}
                     <Card>
                       <CardHeader className="bg-default-50 border-b border-default-200">
-                        <h4 className="text-stat-sm font-semibold">Other Settings</h4>
+                        <h4 className="text-stat-sm font-semibold text-primary">Other Settings</h4>
                       </CardHeader>
                       <CardBody className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -5766,10 +5764,10 @@ export default function PharmacyPage() {
       >
         <ModalContent>
           <ModalHeader>
-            <span className="text-[13px] font-semibold text-mountain-900 tracking-[-0.01em]">
+            <span className="text-[13px] font-semibold text-[rgb(var(--color-text))] tracking-[-0.01em]">
               New Record
             </span>
-            <span className="text-[11px] font-normal text-mountain-500">
+            <span className="text-[11px] font-normal text-[rgb(var(--color-text-muted))]">
               Record a medicine / item purchase
             </span>
           </ModalHeader>
@@ -5779,10 +5777,10 @@ export default function PharmacyPage() {
               {/* ── Section: Customer ─────────────────────────────── */}
               <section>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-mountain-500">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[rgb(var(--color-text-muted)/0.7)]">
                     Customer
                   </span>
-                  <div className="flex-1 h-px bg-mountain-100" />
+                  <div className="flex-1 h-px bg-[rgb(var(--color-border))]" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <CustomSelect
@@ -5886,10 +5884,10 @@ export default function PharmacyPage() {
               <section>
                 <div className="flex items-center mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-mountain-500">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[rgb(var(--color-text-muted)/0.7)]">
                       Purchase Items
                     </span>
-                    <div className="h-px w-24 bg-mountain-100" />
+                    <div className="h-px w-24 bg-[rgb(var(--color-border))]" />
                   </div>
                 </div>
 
@@ -5897,11 +5895,11 @@ export default function PharmacyPage() {
                   {purchaseItems.map((item, index) => (
                     <div
                       key={item.id}
-                      className="border border-mountain-200 rounded bg-white"
+                      className="border border-border-base rounded bg-surface-2"
                     >
                       {/* item header row */}
-                      <div className="flex items-center justify-between px-3 py-1.5 bg-mountain-50/70 border-b border-mountain-100">
-                        <span className="text-[11px] font-semibold text-mountain-600 uppercase tracking-[0.05em]">
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-2 border-b border-[rgb(var(--color-border))]">
+                        <span className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.05em]">
                           Item #{index + 1}
                         </span>
                         {purchaseItems.length > 1 && (
@@ -6035,7 +6033,7 @@ export default function PharmacyPage() {
                                     required
                                     label="Regular Sale Price (NPR)"
                                     startContent={
-                                      <span className="text-[11px] text-mountain-400">
+                                      <span className="text-[11px] text-text-muted/40">
                                         NPR
                                       </span>
                                     }
@@ -6061,7 +6059,7 @@ export default function PharmacyPage() {
                                     required
                                     label="Scheme Sale Price (NPR)"
                                     startContent={
-                                      <span className="text-[11px] text-mountain-400">
+                                      <span className="text-[11px] text-text-muted/40">
                                         NPR
                                       </span>
                                     }
@@ -6088,7 +6086,7 @@ export default function PharmacyPage() {
                               required
                               label="Sale Price"
                               startContent={
-                                <span className="text-[11px] text-mountain-400">
+                                <span className="text-[11px] text-text-muted/40">
                                   NPR
                                 </span>
                               }
@@ -6126,7 +6124,7 @@ export default function PharmacyPage() {
                             }}
                             label="Amount"
                             startContent={
-                              <span className="text-[11px] text-mountain-400">
+                              <span className="text-[11px] text-text-muted/40">
                                 NPR
                               </span>
                             }
@@ -6155,14 +6153,14 @@ export default function PharmacyPage() {
               {/* ── Section: Summary ──────────────────────────────── */}
               <section>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-mountain-500">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-text-main/80">
                     Summary & Payment
                   </span>
-                  <div className="flex-1 h-px bg-mountain-100" />
+                  <div className="flex-1 h-px bg-[rgb(var(--color-border))]" />
                 </div>
 
                 {/* Totals strip */}
-                <div className="flex items-stretch gap-0 rounded border border-mountain-200 overflow-hidden mb-3">
+                <div className="flex items-stretch gap-0 rounded border border-border-base overflow-hidden mb-3">
                   {[
                     {
                       label: "Subtotal",
@@ -6179,21 +6177,21 @@ export default function PharmacyPage() {
                   ].map((col, i) => (
                     <div
                       key={i}
-                      className={`flex-1 px-3 py-2 text-center ${i < 2 ? "border-r border-mountain-200" : ""}`}
+                      className={`flex-1 px-3 py-2 text-center ${i < 2 ? "border-r border-[rgb(var(--color-border))]" : ""}`}
                     >
-                      <p className="text-[10.5px] text-mountain-400 uppercase tracking-[0.06em]">
+                      <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] uppercase tracking-[0.06em]">
                         {col.label}
                       </p>
-                      <p className="text-[13px] font-semibold text-mountain-800 mt-0.5">
+                      <p className="text-[13px] font-semibold text-[rgb(var(--color-text))] mt-0.5">
                         {col.value}
                       </p>
                     </div>
                   ))}
-                  <div className="flex-1 px-3 py-2 text-center bg-teal-50 border-l border-teal-200">
-                    <p className="text-[10.5px] text-teal-600 uppercase tracking-[0.06em] font-semibold">
+                  <div className="flex-1 px-3 py-2 text-center bg-[rgb(var(--color-primary)/0.1)] border-l border-[rgb(var(--color-primary)/0.2)]">
+                    <p className="text-[10.5px] text-[rgb(var(--color-primary))] uppercase tracking-[0.06em] font-semibold">
                       Net
                     </p>
-                    <p className="text-[15px] font-bold text-teal-700 mt-0.5">
+                    <p className="text-[15px] font-bold text-[rgb(var(--color-primary))] mt-0.5">
                       NPR {(purchaseForm.netAmount || 0).toLocaleString()}
                     </p>
                   </div>
@@ -6227,7 +6225,7 @@ export default function PharmacyPage() {
                       label="Discount (NPR)"
                       min="0"
                       startContent={
-                        <span className="text-[11px] text-mountain-400">
+                        <span className="text-[11px] text-text-muted/40">
                           NPR
                         </span>
                       }
@@ -6247,7 +6245,7 @@ export default function PharmacyPage() {
                       max="100"
                       min="0"
                       startContent={
-                        <span className="text-[11px] text-mountain-400">%</span>
+                        <span className="text-[11px] text-text-muted/40">%</span>
                       }
                       step="any"
                       type="number"
@@ -6264,7 +6262,7 @@ export default function PharmacyPage() {
                   <CustomInput
                     label={`${settingsForm.taxLabel || "Tax"} % (default: ${settingsForm.defaultTaxPercentage || 0})`}
                     startContent={
-                      <span className="text-[11px] text-mountain-400">%</span>
+                      <span className="text-[11px] text-text-muted/40">%</span>
                     }
                     type="number"
                     value={(purchaseForm.taxPercentage || 0).toString()}

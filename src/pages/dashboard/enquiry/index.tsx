@@ -22,6 +22,7 @@ import { Enquiry, EnquiryStatus } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { title } from "@/components/primitives";
 
 type DatePreset = "all" | "today" | "yesterday" | "tomorrow";
 
@@ -436,10 +437,10 @@ export default function EnquiriesPage() {
     <div className="space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
-          <h1 className="text-page-title font-bold tracking-tight text-text-main">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
             Enquiries
           </h1>
-          <p className="text-sm font-medium text-text-muted mt-1">
+          <p className="text-[13.5px] text-text-muted mt-1">
             Log social media and marketing leads in one place.
           </p>
         </div>

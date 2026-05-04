@@ -2,7 +2,7 @@
  * Doctors List Page — Clinic Clarity without HeroUI
  */
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -19,7 +19,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
 import {
   Dropdown,
   DropdownTrigger,
@@ -90,6 +90,7 @@ function CustomSelect({
 }
 
 export default function DoctorsPage() {
+  const navigate = useNavigate();
   const { clinicId, userData, isClinicAdmin, isSystemOwner } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,7 +301,7 @@ export default function DoctorsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "lg" })}>Doctors</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Doctors</h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Manage and access doctor records
           </p>
@@ -343,7 +344,7 @@ export default function DoctorsPage() {
             }
             variant="bordered"
             onClick={() =>
-              (window.location.href = "/dashboard/settings/doctor-speciality")
+              navigate("/dashboard/settings/doctor-speciality")
             }
           >
             Manage Specialities
@@ -351,7 +352,7 @@ export default function DoctorsPage() {
           <Button
             color="primary"
             startContent={<IoAddOutline className="w-4 h-4" />}
-            onClick={() => (window.location.href = "/dashboard/doctors/new")}
+            onClick={() => navigate("/dashboard/doctors/new")}
           >
             Add Doctor
           </Button>
@@ -442,8 +443,8 @@ export default function DoctorsPage() {
         {/* Content Area */}
         <div className="p-0 overflow-x-auto min-h-[300px]">
           {loading ? (
-            <div className="flex justify-center items-center h-[300px]">
-              <Spinner size="md" />
+            <div className="p-5">
+              <TableSkeleton cols={7} rows={itemsPerPage} />
             </div>
           ) : currentDoctors.length === 0 ? (
             <div className="flex flex-col justify-center items-center h-[300px] gap-3 text-center">
@@ -465,7 +466,7 @@ export default function DoctorsPage() {
                   color="primary"
                   startContent={<IoAddOutline />}
                   onClick={() =>
-                    (window.location.href = "/dashboard/doctors/new")
+                    navigate("/dashboard/doctors/new")
                   }
                 >
                   Add First Doctor
@@ -475,26 +476,26 @@ export default function DoctorsPage() {
           ) : (
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-surface-2 border-b border-border-base">
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
+                <tr className="bg-surface-2 border-b border-border-base text-[12px] uppercase font-semibold text-primary tracking-wider">
+                  <th className="px-5 py-3">
                     Doctor
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
+                  <th className="px-5 py-3">
                     Contact
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
+                  <th className="px-5 py-3">
                     Speciality
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
+                  <th className="px-5 py-3">
                     Type
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
+                  <th className="px-5 py-3">
                     Commission
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
+                  <th className="px-5 py-3">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600 text-right">
+                  <th className="px-5 py-3 text-right">
                     Actions
                   </th>
                 </tr>
@@ -585,7 +586,7 @@ export default function DoctorsPage() {
                           <DropdownItem
                             startContent={<IoEyeOutline className="w-4 h-4" />}
                             onClick={() =>
-                              (window.location.href = `/dashboard/doctors/${doctor.id}`)
+                              navigate(`/dashboard/doctors/${doctor.id}`)
                             }
                           >
                             View Profile
@@ -593,7 +594,7 @@ export default function DoctorsPage() {
                           <DropdownItem
                             startContent={<IoCreateOutline className="w-4 h-4" />}
                             onClick={() =>
-                              (window.location.href = `/dashboard/doctors/${doctor.id}/edit`)
+                              navigate(`/dashboard/doctors/${doctor.id}/edit`)
                             }
                           >
                             Edit
@@ -601,7 +602,7 @@ export default function DoctorsPage() {
                           <DropdownItem
                             startContent={<IoCalendarOutline className="w-4 h-4" />}
                             onClick={() =>
-                              (window.location.href = `/dashboard/doctors/${doctor.id}/schedule`)
+                              navigate(`/dashboard/doctors/${doctor.id}/schedule`)
                             }
                           >
                             Schedule
@@ -609,7 +610,7 @@ export default function DoctorsPage() {
                           <DropdownItem
                             startContent={<IoListOutline className="w-4 h-4" />}
                             onClick={() =>
-                              (window.location.href = `/dashboard/appointments?doctorId=${doctor.id}`)
+                              navigate(`/dashboard/appointments?doctorId=${doctor.id}`)
                             }
                           >
                             Appointments

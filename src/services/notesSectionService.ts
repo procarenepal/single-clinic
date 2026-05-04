@@ -46,21 +46,29 @@ export const notesSectionService = {
   // Get all sections for a clinic
   async getSectionsByClinic(clinicId: string): Promise<NotesSection[]> {
     try {
+      // Simplify query to avoid composite index requirement
       const q = query(
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        orderBy("displayOrder", "asc"),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
+      const sections = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
       })) as NotesSection[];
+
+      // Sort in memory to avoid index errors
+      return sections.sort((a, b) => {
+        const orderA = a.displayOrder ?? 0;
+        const orderB = b.displayOrder ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        // Secondary sort by createdAt desc
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
     } catch (error) {
       console.error("Error getting notes sections:", error);
       throw error;
@@ -70,21 +78,29 @@ export const notesSectionService = {
   // Get active sections for a clinic
   async getActiveSectionsByClinic(clinicId: string): Promise<NotesSection[]> {
     try {
+      // Simplify query to avoid composite index requirement
       const q = query(
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        where("isActive", "==", true),
-        orderBy("displayOrder", "asc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
+      const sections = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
       })) as NotesSection[];
+
+      // Filter and sort in memory
+      return sections
+        .filter((s) => s.isActive)
+        .sort((a, b) => {
+          const orderA = a.displayOrder ?? 0;
+          const orderB = b.displayOrder ?? 0;
+          return orderA - orderB;
+        });
     } catch (error) {
       console.error("Error getting active notes sections:", error);
       throw error;

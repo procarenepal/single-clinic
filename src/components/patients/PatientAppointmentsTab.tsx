@@ -32,12 +32,12 @@ interface PatientAppointmentsTabProps {
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_STYLE: Record<string, string> = {
-  scheduled: "bg-teal-100 text-teal-700 border-teal-200",
-  confirmed: "bg-health-100 text-health-700 border-health-200",
-  "in-progress": "bg-saffron-100 text-saffron-700 border-saffron-200",
-  completed: "bg-mountain-100 text-mountain-600 border-mountain-200",
-  cancelled: "bg-red-100 text-red-700 border-red-200",
-  "no-show": "bg-red-100 text-red-600 border-red-200",
+  scheduled: "bg-primary/10 text-primary border-primary/20",
+  confirmed: "bg-health-500/10 text-health-600 dark:text-health-400 border-health-500/20",
+  "in-progress": "bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 border-saffron-500/20",
+  completed: "bg-surface-2 text-text-muted border-border-base",
+  cancelled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  "no-show": "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
 };
 
 const ALL_STATUSES = [
@@ -81,7 +81,7 @@ function StatusDropdown({
     <Dropdown placement="bottom-start">
       <DropdownTrigger>
         <button
-          className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded border border-teal-200 text-teal-700 bg-teal-50 hover:bg-teal-100 transition-colors"
+          className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded border border-primary/20 text-primary bg-primary/5 hover:bg-primary/10 transition-colors"
           type="button"
         >
           <IoRefreshOutline className="w-3 h-3" /> Change
@@ -241,8 +241,8 @@ export default function PatientAppointmentsTab({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-section-title text-mountain-900">Appointments</h2>
-          <p className="text-[12.5px] text-mountain-400">
+          <h2 className="text-section-title text-text-main">Appointments</h2>
+          <p className="text-[12.5px] text-text-muted">
             Appointment history and schedule
           </p>
         </div>
@@ -268,8 +268,8 @@ export default function PatientAppointmentsTab({
             className={`text-[11.5px] font-medium px-3 py-1 rounded border transition-colors
               ${
                 filter === f.key
-                  ? "bg-teal-700 text-white border-teal-700"
-                  : "bg-white text-mountain-600 border-mountain-200 hover:border-teal-400 hover:text-teal-700"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-surface text-text-muted border-border-base hover:border-primary hover:text-primary"
               }`}
             type="button"
             onClick={() => setFilter(f.key as any)}
@@ -281,12 +281,12 @@ export default function PatientAppointmentsTab({
 
       {/* Table / empty */}
       {filtered.length === 0 ? (
-        <div className="bg-white border border-mountain-200 rounded py-12 text-center">
-          <IoCalendarOutline className="mx-auto w-10 h-10 text-mountain-300 mb-3" />
-          <p className="text-[13px] font-medium text-mountain-600 mb-1">
+        <div className="bg-surface border border-border-base rounded py-12 text-center">
+          <IoCalendarOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-3" />
+          <p className="text-[13px] font-medium text-text-main mb-1">
             No appointments found
           </p>
-          <p className="text-[12px] text-mountain-400 mb-4">
+          <p className="text-[12px] text-text-muted mb-4">
             {filter === "all"
               ? "No appointments scheduled yet."
               : `No ${filter} appointments.`}
@@ -305,11 +305,11 @@ export default function PatientAppointmentsTab({
           </Link>
         </div>
       ) : (
-        <div className="bg-white border border-mountain-200 rounded overflow-visible">
+        <div className="bg-surface border border-border-base rounded overflow-visible">
           <div className="overflow-visible">
             <table className="w-full">
               <thead>
-                <tr className="bg-mountain-50 border-b border-mountain-100">
+                <tr className="bg-surface-2 border-b border-border-base/50">
                   {[
                     "Date & Time",
                     "Type",
@@ -320,35 +320,35 @@ export default function PatientAppointmentsTab({
                   ].map((h) => (
                     <th
                       key={h}
-                      className="py-2 px-3 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-mountain-400 whitespace-nowrap"
+                      className="py-2 px-3 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-muted/60 whitespace-nowrap"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-border-base/50">
                 {filtered.map((a) => (
                   <tr
                     key={a.id}
-                    className="hover:bg-slate-50 transition-colors"
+                    className="hover:bg-surface-2 transition-colors"
                   >
                     <td className="py-2.5 px-3">
-                      <p className="text-[12.5px] font-medium text-mountain-800">
+                      <p className="text-[12.5px] font-medium text-text-main">
                         {fmtDate(a.appointmentDate)}
                       </p>
                       {(a.startTime || a.endTime) && (
-                        <p className="text-[11px] text-mountain-400">
+                        <p className="text-[11px] text-text-muted">
                           {a.startTime && fmtTime(a.startTime)}
                           {a.startTime && a.endTime && " – "}
                           {a.endTime && fmtTime(a.endTime)}
                         </p>
                       )}
                     </td>
-                    <td className="py-2.5 px-3 text-[12.5px] text-mountain-700">
+                    <td className="py-2.5 px-3 text-[12.5px] text-text-main/80">
                       {getTypeName(a.appointmentTypeId)}
                     </td>
-                    <td className="py-2.5 px-3 text-[12.5px] text-mountain-600">
+                    <td className="py-2.5 px-3 text-[12.5px] text-text-muted">
                       {getDoctorName(a.doctorId)}
                     </td>
                     <td className="py-2.5 px-3">

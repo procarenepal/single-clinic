@@ -20,6 +20,14 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { expertService } from "@/services/expertService";
 import { Patient, Doctor, ReferralPartner, Expert } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
+import {
+  adToBSApi,
+  bsToADApi,
+  validateADDate,
+  validateBSDateFormat,
+  debounce,
+} from "@/utils/dateConverterApi";
+import { useCallback } from "react";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
 function CustomInput({
@@ -38,17 +46,17 @@ function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 w-full relative ${className || ""}`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-foreground-700">
           {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
+          {required && <span className="text-danger ml-0.5">*</span>}
         </label>
       )}
       <div
-        className={`flex items-center border border-mountain-200 rounded min-h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${disabled || readOnly ? "bg-mountain-50" : ""}`}
+        className={`flex items-center border border-default-200 rounded min-h-[38px] bg-background focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 ${disabled || readOnly ? "bg-default-50" : ""}`}
       >
         {type === "textarea" ? (
           <textarea
-            className="flex-1 w-full text-[13.5px] px-3 py-2 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500 min-h-[80px]"
+            className="flex-1 w-full text-[13.5px] px-3 py-2 bg-transparent outline-none text-foreground placeholder:text-foreground-400 disabled:text-foreground-500 min-h-[80px]"
             disabled={disabled}
             name={name}
             placeholder={placeholder}
@@ -59,7 +67,7 @@ function CustomInput({
           />
         ) : (
           <input
-            className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400 disabled:text-mountain-500"
+            className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-foreground placeholder:text-foreground-400 disabled:text-foreground-500"
             disabled={disabled}
             name={name}
             placeholder={placeholder}
@@ -72,7 +80,7 @@ function CustomInput({
         )}
       </div>
       {description && (
-        <p className="text-[11.5px] text-mountain-500">{description}</p>
+        <p className="text-[11.5px] text-foreground-500">{description}</p>
       )}
     </div>
   );
@@ -91,13 +99,13 @@ function CustomSelect({
   return (
     <div className="flex flex-col gap-1.5 w-full">
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-foreground-700">
           {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
+          {required && <span className="text-danger ml-0.5">*</span>}
         </label>
       )}
       <select
-        className="h-[38px] bg-white border border-mountain-200 text-mountain-800 text-[13.5px] rounded px-3 py-1 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow disabled:bg-mountain-50 disabled:text-mountain-500"
+        className="h-[38px] bg-background border border-default-200 text-foreground text-[13.5px] rounded px-3 py-1 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow disabled:bg-default-50 disabled:text-foreground-500"
         disabled={disabled}
         name={name}
         required={required}
@@ -108,13 +116,13 @@ function CustomSelect({
           Select an option
         </option>
         {options.map((opt: any) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} className="bg-content1 text-foreground" value={opt.value}>
             {opt.label}
           </option>
         ))}
       </select>
       {description && (
-        <p className="text-[11.5px] text-mountain-500">{description}</p>
+        <p className="text-[11.5px] text-foreground-500">{description}</p>
       )}
     </div>
   );
@@ -162,16 +170,16 @@ function ReferralSourceSelect({
 
   return (
     <div ref={triggerRef} className="flex flex-col gap-1.5 w-full relative">
-      <label className="text-[13px] font-medium text-mountain-700">
+      <label className="text-[13px] font-medium text-foreground-700">
         Referred By
       </label>
       <div
-        className="flex items-center border border-mountain-200 rounded h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 px-3 cursor-pointer"
+        className="flex items-center border border-default-200 rounded h-[38px] bg-background focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 px-3 cursor-pointer"
         onClick={() => setOpen(!open)}
       >
         <input
           autoComplete="off"
-          className="flex-1 bg-transparent outline-none text-[13.5px] text-mountain-800 placeholder:text-mountain-400"
+          className="flex-1 bg-transparent outline-none text-[13.5px] text-foreground placeholder:text-foreground-400"
           placeholder={loading ? "Loading sources..." : "Search source..."}
           type="text"
           value={selected && !open ? selected.name : q}
@@ -183,7 +191,7 @@ function ReferralSourceSelect({
         />
         {value && (
           <button
-            className="text-mountain-400 hover:text-mountain-700 ml-1"
+            className="text-foreground-400 hover:text-foreground-700 ml-1"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -197,16 +205,16 @@ function ReferralSourceSelect({
       </div>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-[50] bg-white border border-mountain-200 rounded shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full mt-1 z-[50] bg-content1 border border-default-200 rounded shadow-lg max-h-48 overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-[12.5px] text-mountain-400">
+            <p className="px-3 py-2 text-[12.5px] text-foreground-400">
               No sources found
             </p>
           ) : (
             filtered.map((p) => (
               <button
                 key={p.id}
-                className={`w-full text-left px-3 py-2 hover:bg-teal-50 flex flex-col items-start ${p.id === value ? "bg-teal-50" : ""}`}
+                className={`w-full text-left px-3 py-2 hover:bg-primary/10 flex flex-col items-start ${p.id === value ? "bg-primary/10" : ""}`}
                 type="button"
                 onClick={() => {
                   onChange(p.id!, p.name, p.rawType);
@@ -214,10 +222,10 @@ function ReferralSourceSelect({
                   setOpen(false);
                 }}
               >
-                <span className="text-[13.5px] text-mountain-800 font-medium">
+                <span className="text-[13.5px] text-foreground font-medium">
                   {p.name}
                 </span>
-                <span className="text-[11px] text-mountain-400 capitalize">
+                <span className="text-[11px] text-foreground-400 capitalize">
                   {p.type}
                 </span>
               </button>
@@ -326,6 +334,25 @@ export default function PatientEditPage() {
       }
       setPatient(patientData);
 
+      const dobStr = (patientData.dob instanceof Date && !isNaN(patientData.dob.getTime()))
+        ? patientData.dob.toISOString().split("T")[0]
+        : "";
+
+      let bsDateStr = "";
+      if (patientData.bsDate) {
+        if (typeof patientData.bsDate === "string") {
+          bsDateStr = patientData.bsDate;
+        } else if (patientData.bsDate instanceof Date && !isNaN(patientData.bsDate.getTime())) {
+          bsDateStr = patientData.bsDate.toISOString().split("T")[0].replace(/-/g, "/");
+        } else if (typeof (patientData.bsDate as any).toDate === "function") {
+          // Handle Firestore Timestamp
+          const d = (patientData.bsDate as any).toDate();
+          if (!isNaN(d.getTime())) {
+            bsDateStr = d.toISOString().split("T")[0].replace(/-/g, "/");
+          }
+        }
+      }
+
       setFormData({
         regNumber: patientData.regNumber,
         name: patientData.name,
@@ -333,21 +360,10 @@ export default function PatientEditPage() {
         mobile: patientData.mobile,
         email: patientData.email || "",
         gender: patientData.gender || "",
-        dob: patientData.dob
-          ? new Date(patientData.dob).toISOString().split("T")[0]
-          : "",
-        bsDate: patientData.bsDate
-          ? new Date(patientData.bsDate).toISOString().split("T")[0]
-          : "",
+        dob: dobStr,
+        bsDate: bsDateStr,
         bloodGroup: patientData.bloodGroup || "",
-        age:
-          typeof patientData.age === "number" && !isNaN(patientData.age)
-            ? patientData.age.toString()
-            : patientData.dob
-              ? calculateAge(
-                new Date(patientData.dob).toISOString().split("T")[0],
-              )
-              : "",
+        age: patientData.dob ? calculateAge(dobStr) : (patientData.age?.toString() || ""),
         referralPartnerId: patientData.referralPartnerId || "",
         referredBy: patientData.referredBy || "",
         referralType: patientData.referralPartnerId
@@ -360,6 +376,13 @@ export default function PatientEditPage() {
         expert: patientData.assignedExpertId || "",
         medicalConditions: patientData.medicalConditions || [],
       });
+
+      // Trigger conversion if one is missing
+      if (dobStr && !bsDateStr) {
+        debouncedConvert(dobStr, "dob", "ad-to-bs");
+      } else if (!dobStr && bsDateStr) {
+        debouncedConvert(bsDateStr, "bsDate", "bs-to-ad");
+      }
     } catch (error) {
       console.error("Error loading patient data:", error);
       addToast({
@@ -422,19 +445,62 @@ export default function PatientEditPage() {
 
   const calculateAge = (dateOfBirth: string): string => {
     if (!dateOfBirth) return "";
-    const today = new Date();
-    const birthDate = new Date(dateOfBirth);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
+    const b = new Date(dateOfBirth);
+    const t = new Date();
 
-    if (
-      monthDiff < 0 ||
-      (monthDiff === 0 && today.getDate() < birthDate.getDate())
-    )
-      age--;
+    let years = t.getFullYear() - b.getFullYear();
+    let months = t.getMonth() - b.getMonth();
+    let days = t.getDate() - b.getDate();
 
-    return age.toString();
+    if (days < 0) {
+      months--;
+      const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+      days += prevMonth;
+    }
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
+    if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
+    if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+    return "0 Days";
   };
+
+  const debouncedConvert = useCallback(
+    debounce(
+      async (value: string, field: "dob" | "bsDate", type: "ad-to-bs" | "bs-to-ad") => {
+        if (!value.trim()) return;
+        setConvertingDate(true);
+        try {
+          if (type === "ad-to-bs") {
+            const d = new Date(value);
+            const v = validateADDate(d);
+            if (!v.isValid) return;
+            const res = await adToBSApi(d);
+            setFormData(prev => ({ ...prev, bsDate: res.formatted }));
+          } else {
+            const v = validateBSDateFormat(value);
+            if (!v.isValid) return;
+            const res = await bsToADApi(value);
+            const dobStr = res.toISOString().split("T")[0];
+            setFormData(prev => ({
+              ...prev,
+              dob: dobStr,
+              age: calculateAge(dobStr)
+            }));
+          }
+        } catch (error) {
+          console.error("Error converting date:", error);
+        } finally {
+          setConvertingDate(false);
+        }
+      },
+      500
+    ),
+    []
+  );
 
   const handleFormChange = (
     e: React.ChangeEvent<
@@ -460,26 +526,10 @@ export default function PatientEditPage() {
 
     if (name === "dob" && value) {
       const age = calculateAge(value);
-
       updatedFormData.age = age;
-      setConvertingDate(true);
-      try {
-        updatedFormData.bsDate = "";
-      } catch (error) {
-        console.error("Error converting date:", error);
-      } finally {
-        setConvertingDate(false);
-      }
+      debouncedConvert(value, "dob", "ad-to-bs");
     } else if (name === "bsDate" && value) {
-      setConvertingDate(true);
-      try {
-        updatedFormData.dob = "";
-        updatedFormData.age = "";
-      } catch (error) {
-        console.error("Error converting date:", error);
-      } finally {
-        setConvertingDate(false);
-      }
+      debouncedConvert(value, "bsDate", "bs-to-ad");
     }
     setFormData(updatedFormData);
   };
@@ -545,6 +595,33 @@ export default function PatientEditPage() {
 
         return;
       }
+
+      // ── Uniqueness Checks ──────────────────────────────────────────────────
+      const [mobileExists, emailExists] = await Promise.all([
+        patientService.checkMobileExists(formData.mobile, clinicId, patientId),
+        formData.email ? patientService.checkEmailExists(formData.email, clinicId, patientId) : Promise.resolve(false),
+      ]);
+
+      if (mobileExists) {
+        addToast({
+          title: "Duplicate Mobile",
+          description: "Another patient with this mobile number already exists.",
+          color: "danger",
+        });
+        setSaving(false);
+        return;
+      }
+
+      if (emailExists) {
+        addToast({
+          title: "Duplicate Email",
+          description: "Another patient with this email already exists.",
+          color: "danger",
+        });
+        setSaving(false);
+        return;
+      }
+
       const updatedPatientData: any = {
         regNumber: formData.regNumber,
         name: formData.name,
@@ -568,10 +645,9 @@ export default function PatientEditPage() {
       if (formData.bloodGroup)
         updatedPatientData.bloodGroup = formData.bloodGroup;
       if (formData.dob) updatedPatientData.dob = new Date(formData.dob);
-      if (formData.bsDate)
-        updatedPatientData.bsDate = new Date(formData.bsDate);
+      if (formData.bsDate) updatedPatientData.bsDate = formData.bsDate; // Store as string
       if (formData.dob && formData.age)
-        updatedPatientData.age = parseInt(formData.age, 10);
+        updatedPatientData.age = formData.age;
 
       await patientService.updatePatient(patientId, updatedPatientData);
       addToast({
@@ -596,9 +672,9 @@ export default function PatientEditPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "lg" })}>Edit Patient</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Patient</h1>
         </div>
-        <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
+        <div className="bg-content1 border border-default-200 rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
         </div>
       </div>
@@ -607,14 +683,14 @@ export default function PatientEditPage() {
 
   if (!patient) {
     return (
-      <div className="bg-white border border-mountain-200 rounded p-12 text-center shadow-sm">
-        <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4 border border-red-200">
-          <IoWarningOutline className="w-6 h-6 text-red-600" />
+      <div className="bg-content1 border border-default-200 rounded p-12 text-center shadow-sm">
+        <div className="w-12 h-12 rounded-full bg-danger-100 flex items-center justify-center mx-auto mb-4 border border-danger-200">
+          <IoWarningOutline className="w-6 h-6 text-danger" />
         </div>
-        <h3 className="text-[15px] font-semibold text-mountain-900 mb-1">
+        <h3 className="text-[15px] font-semibold text-foreground mb-1">
           Patient Not Found
         </h3>
-        <p className="text-[13.5px] text-mountain-500 mb-6">
+        <p className="text-[13.5px] text-foreground-500 mb-6">
           The patient you're looking for could not be found or doesn't belong to
           this clinic.
         </p>
@@ -638,8 +714,8 @@ export default function PatientEditPage() {
             Back
           </Button>
           <div>
-            <h1 className={title({ size: "lg" })}>Edit Patient</h1>
-            <p className="text-[13.5px] text-mountain-500 mt-1">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Patient</h1>
+            <p className="text-[13.5px] text-foreground-500 mt-1">
               Update patient information
             </p>
           </div>
@@ -666,16 +742,16 @@ export default function PatientEditPage() {
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         {/* Patient Profile Section */}
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center gap-3">
-            <div className="p-1.5 bg-white rounded border border-mountain-200 shadow-sm">
-              <IoPersonOutline className="text-teal-600 text-lg" />
+        <div className="bg-content1 border border-default-200 rounded shadow-sm">
+          <div className="px-5 py-4 border-b border-default-100 bg-default-50/50 flex items-center gap-3">
+            <div className="p-1.5 bg-background rounded border border-default-200 shadow-sm">
+              <IoPersonOutline className="text-primary text-lg" />
             </div>
             <div>
-              <h3 className="font-semibold text-[15px] text-mountain-900 leading-none mb-1">
+              <h3 className="font-semibold text-[15px] text-foreground leading-none mb-1">
                 Patient Information
               </h3>
-              <p className="text-[12.5px] text-mountain-500">
+              <p className="text-[12.5px] text-foreground-500">
                 Basic patient details and contact information
               </p>
             </div>
@@ -752,7 +828,8 @@ export default function PatientEditPage() {
                 disabled={convertingDate}
                 label="Date of Birth (BS)"
                 name="bsDate"
-                type="date"
+                placeholder="YYYY/MM/DD"
+                type="text"
                 value={formData.bsDate}
                 onChange={handleFormChange}
               />
@@ -761,7 +838,7 @@ export default function PatientEditPage() {
                 description="Auto-calculated from DOB"
                 label="Age"
                 name="age"
-                type="number"
+                type="text"
                 value={formData.age}
                 onChange={handleFormChange}
               />
@@ -834,69 +911,75 @@ export default function PatientEditPage() {
           </div>
         </div>
 
-        {/* Medical Conditions Section */}
-        <div className="bg-white border border-mountain-200 rounded shadow-sm">
-          <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center gap-3">
-            <div className="p-1.5 bg-white rounded border border-mountain-200 shadow-sm">
-              <IoMedicalOutline className="text-teal-600 text-lg" />
+        {/* Medical Information Section */}
+        <div className="bg-content1 border border-default-200 rounded shadow-sm">
+          <div className="px-5 py-4 border-b border-default-100 bg-default-50/50 flex items-center gap-3">
+            <div className="p-1.5 bg-background rounded border border-default-200 shadow-sm">
+              <IoMedicalOutline className="text-primary text-lg" />
             </div>
             <div>
-              <h3 className="font-semibold text-[15px] text-mountain-900 leading-none mb-1">
-                Medical Conditions
+              <h3 className="font-semibold text-[15px] text-foreground leading-none mb-1">
+                Medical & Referral Info
               </h3>
-              <p className="text-[12.5px] text-mountain-500">
-                Add any known medical conditions or allergies
+              <p className="text-[12.5px] text-foreground-500">
+                Health history and tracking details
               </p>
             </div>
           </div>
 
           <div className="p-6">
-            <div className="flex gap-3 mb-4">
-              <div className="flex-1">
-                <div className="flex items-center border border-mountain-200 rounded min-h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100">
-                  <input
-                    className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
-                    placeholder="Enter medical condition"
-                    value={medicalConditionInput}
-                    onChange={(e) => setMedicalConditionInput(e.target.value)}
-                    onKeyPress={handleMedicalConditionKeyPress}
-                  />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Medical Conditions */}
+              <div className="flex flex-col gap-4">
+                <label className="text-[13px] font-medium text-foreground-700">
+                  Medical Conditions
+                </label>
+                <div className="flex gap-2">
+                  <div className="flex-1 flex items-center border border-default-200 rounded bg-background focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+                    <input
+                      className="flex-1 px-3 py-2 bg-transparent outline-none text-[13.5px] text-foreground placeholder:text-foreground-400"
+                      placeholder="Add condition (e.g. Diabetes)"
+                      type="text"
+                      value={medicalConditionInput}
+                      onChange={(e) => setMedicalConditionInput(e.target.value)}
+                      onKeyPress={handleMedicalConditionKeyPress}
+                    />
+                  </div>
+                  <Button
+                    isIconOnly
+                    color="primary"
+                    variant="flat"
+                    onClick={handleAddMedicalCondition}
+                  >
+                    <IoAddOutline className="text-xl" />
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {formData.medicalConditions.length === 0 ? (
+                    <p className="text-[12.5px] text-foreground-400 italic py-2">
+                      No medical conditions recorded
+                    </p>
+                  ) : (
+                    formData.medicalConditions.map((condition) => (
+                      <div
+                        key={condition}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary-50 border border-primary-100 rounded text-primary-700 text-[12.5px] font-medium animate-in fade-in zoom-in duration-200"
+                      >
+                        {condition}
+                        <button
+                          className="hover:text-primary-900 transition-colors"
+                          type="button"
+                          onClick={() => handleRemoveMedicalCondition(condition)}
+                        >
+                          <IoCloseOutline className="text-base" />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-              <Button
-                color="primary"
-                disabled={!medicalConditionInput.trim()}
-                startContent={<IoAddOutline />}
-                variant="bordered"
-                onClick={handleAddMedicalCondition}
-              >
-                Add
-              </Button>
             </div>
-
-            {formData.medicalConditions.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {formData.medicalConditions.map((condition, index) => (
-                  <div
-                    key={index}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-mountain-50 border border-mountain-200 rounded text-[12.5px] font-medium text-mountain-800"
-                  >
-                    {condition}
-                    <button
-                      className="text-mountain-400 hover:text-red-500 focus:outline-none"
-                      type="button"
-                      onClick={() => handleRemoveMedicalCondition(condition)}
-                    >
-                      <IoCloseOutline className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[13px] text-mountain-500 italic">
-                No medical conditions added yet. Add conditions above if any.
-              </p>
-            )}
           </div>
         </div>
       </form>

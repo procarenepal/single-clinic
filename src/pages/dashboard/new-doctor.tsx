@@ -327,7 +327,7 @@ export default function NewDoctorPage() {
           <IoArrowBackOutline className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className={title({ size: "lg" })}>Add New Doctor</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Add New Doctor</h1>
           <p className="text-[14px] text-text-muted mt-1">
             Enter the doctor information below
           </p>

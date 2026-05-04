@@ -8,10 +8,8 @@ import {
   getDoc,
   query,
   where,
-  orderBy,
   serverTimestamp,
   limit,
-  startAfter,
   DocumentSnapshot,
 } from "firebase/firestore";
 
@@ -144,38 +142,42 @@ class TextEditorService {
       let q = query(
         collection(db, TEXT_DOCUMENTS_COLLECTION),
         where("clinicId", "==", clinicId),
+        limit(pageSize + 1), // fetch one extra to check hasMore
       );
 
       // Add branch filtering for multi-branch clinics
       if (branchId) {
-        q = query(q, where("branchId", "==", branchId));
-      }
-
-      // Add ordering and pagination
-      q = query(q, orderBy("updatedAt", "desc"), limit(pageSize));
-
-      if (lastDoc) {
-        q = query(q, startAfter(lastDoc));
+        q = query(
+          collection(db, TEXT_DOCUMENTS_COLLECTION),
+          where("clinicId", "==", clinicId),
+          where("branchId", "==", branchId),
+          limit(pageSize + 1),
+        );
       }
 
       const querySnapshot = await getDocs(q);
-      const documents: TextDocument[] = [];
+      const allDocs = querySnapshot.docs;
+      const hasMore = allDocs.length > pageSize;
+      const pageDocs = hasMore ? allDocs.slice(0, pageSize) : allDocs;
 
-      querySnapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
+      // Sort client-side by updatedAt descending (avoids composite index requirement)
+      const documents: TextDocument[] = pageDocs
+        .map((docSnap) => {
+          const data = docSnap.data();
 
-        documents.push({
-          id: docSnap.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as TextDocument);
-      });
+          return {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+          } as TextDocument;
+        })
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
       return {
         documents,
-        hasMore: querySnapshot.docs.length === pageSize,
-        lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
+        hasMore,
+        lastDoc: pageDocs[pageDocs.length - 1],
       };
     } catch (error) {
       console.error("Error getting text documents:", error);
@@ -203,8 +205,7 @@ class TextEditorService {
         q = query(q, where("branchId", "==", branchId));
       }
 
-      q = query(q, orderBy("updatedAt", "desc"));
-
+      // Sort client-side by updatedAt descending (avoids composite index requirement)
       const querySnapshot = await getDocs(q);
       const documents: TextDocument[] = [];
 
@@ -232,12 +233,16 @@ class TextEditorService {
         }
       });
 
-      return documents;
+      // Sort by updatedAt descending
+      return documents.sort(
+        (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+      );
     } catch (error) {
       console.error("Error searching text documents:", error);
       throw error;
     }
   }
+
 }
 
 export const textEditorService = new TextEditorService();

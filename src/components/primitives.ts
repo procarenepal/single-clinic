@@ -5,7 +5,7 @@ export const title = tv({
   base: "tracking-tight inline font-bold leading-tight",
   variants: {
     color: {
-      primary: "text-teal-700",
+      primary: "!text-primary",
       secondary: "text-health-700",
       warning: "text-saffron-600",
       success: "text-health-600",

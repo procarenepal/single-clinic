@@ -190,7 +190,7 @@ export interface Patient {
   dob: Date; // Date of birth
   bsDate?: Date; // B.S Date (Bikram Sambat)
   bloodGroup?: "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
-  age: number;
+  age: string | number;
   referredBy?: string;
   phone?: string;
   picture?: string; // URL to the patient's picture
@@ -488,15 +488,7 @@ export interface Medicine {
   genericName?: string;
   brandId?: string; // Reference to MedicineBrand
   categoryId?: string; // Reference to MedicineCategory
-  type:
-  | "tablet"
-  | "capsule"
-  | "syrup"
-  | "injection"
-  | "cream"
-  | "drops"
-  | "inhaler"
-  | "other";
+  type: string;
   strength?: string; // e.g., "500mg", "10ml"
   unit: "tablet" | "capsule" | "ml" | "bottle" | "vial" | "tube" | "piece";
   description?: string;
@@ -566,7 +558,7 @@ export interface Supplier {
   id: string;
   name: string;
   contactPerson?: string;
-  phone: string;
+  phone?: string;
   email?: string;
   address?: string;
   licenseNumber?: string;
@@ -1409,7 +1401,7 @@ export interface PathologyTest {
   patientId?: string; // Optional - for backward compatibility with existing tests
   patientName: string; // Required - can be any name (including outsiders)
   patientEmail?: string; // Denormalized for display
-  patientAge?: number; // Patient age
+  patientAge?: string | number; // Patient age
   patientGender?: "male" | "female" | "other"; // Patient gender
   testName: string;
   shortName?: string;
@@ -1507,7 +1499,7 @@ export interface PathologyBilling {
   patientEmail?: string;
   patientPhone?: string;
   patientAddress?: string;
-  patientAge?: number;
+  patientAge?: string | number;
   patientGender?: string;
 
   // Invoice Details

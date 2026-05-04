@@ -46,6 +46,7 @@ import {
 
 // Custom UI — zero HeroUI
 import { Button } from "@/components/ui/button";
+import { Skeleton, PageSkeleton } from "@/components/ui";
 import { Spinner } from "@/components/ui/spinner";
 
 // Icons
@@ -96,19 +97,19 @@ interface ChartDataType {
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_BADGE: Record<string, string> = {
-  confirmed: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
-  scheduled: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  "in-progress": "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  completed: "bg-green-500/10 text-green-600 dark:text-green-400",
-  cancelled: "bg-red-500/10 text-red-600 dark:text-red-400",
+  confirmed: "bg-primary/10 text-primary",
+  scheduled: "bg-primary/10 text-primary",
+  "in-progress": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  completed: "bg-green-500/10 text-green-600 border-green-500/20",
+  cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
   default: "bg-surface-2 text-text-muted",
 };
 
 const ENQUIRY_BADGE: Record<string, string> = {
-  new: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
-  contacted: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  scheduled: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  converted: "bg-green-500/10 text-green-600 dark:text-green-400",
+  new: "bg-primary/10 text-primary",
+  contacted: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  scheduled: "bg-primary/10 text-primary",
+  converted: "bg-green-500/10 text-green-600 border-green-500/20",
   closed: "bg-surface-2 text-text-muted",
 };
 
@@ -169,41 +170,43 @@ function StatCard({
   return (
     <motion.div variants={itemVariants} className="h-full">
       <Link className="block group no-underline h-full" to={href}>
-        <div className="h-full bg-surface border border-border-base rounded-2xl p-4 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between gap-3">
-          
+        <div className="h-full bg-surface border border-border-base rounded-[10px] p-2.5 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between gap-1.5">
+
           {/* Subtle radial gradient */}
           <div className="absolute -top-8 -right-8 w-24 h-24 bg-primary/5 rounded-full blur-xl group-hover:bg-primary/10 transition-colors duration-500" />
-          
+
           <div className="relative z-10 flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${alert ? 'bg-red-500 animate-pulse' : 'bg-primary'}`} />
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-text-muted">
-                  {label}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${alert ? 'bg-red-500 animate-pulse' : 'bg-primary'}`} />
+                  <p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-text-muted whitespace-nowrap">
+                    {label}
+                  </p>
+                </div>
+                <p
+                  className={`text-[18px] font-bold leading-none tracking-tight ${alert ? "text-red-500" : "text-text-main"}`}
+                >
+                  {typeof value === "number" ? value.toLocaleString() : value}
                 </p>
               </div>
-              <p
-                className={`text-[22px] font-black leading-none tracking-tight ${alert ? "text-red-500" : "text-text-main"}`}
-              >
-                {typeof value === "number" ? value.toLocaleString() : value}
-              </p>
             </div>
-            
+
             {/* Icon Container */}
             <div
-              className={`w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5 ${iconBg}`}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5 ${iconBg}`}
             >
-              {React.cloneElement(icon as React.ReactElement, { className: "w-4 h-4" })}
+              {React.cloneElement(icon as React.ReactElement, { className: "w-3.5 h-3.5" })}
             </div>
           </div>
 
           <div className="relative z-10 flex items-center justify-between pt-1 mt-auto">
-             {sub && (
-              <p className="text-[11px] text-text-muted font-medium">
+            {sub && (
+              <p className="text-[10px] text-text-muted font-medium">
                 {sub}
               </p>
             )}
-            <div className="flex items-center gap-0.5 text-[10.5px] font-bold text-primary opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
+            <div className="flex items-center gap-0.5 text-[10.5px] font-semibold text-primary opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
               <span>View</span>
               <IoChevronForwardOutline className="w-3 h-3" />
             </div>
@@ -230,7 +233,7 @@ function WelcomeHero({
   return (
     <motion.div
       variants={itemVariants}
-      className="relative overflow-hidden rounded-2xl bg-surface border border-border-base p-6 shadow-sm mb-2"
+      className="relative overflow-hidden rounded-[10px] bg-surface border border-border-base p-3.5 shadow-sm mb-1"
     >
       {/* Abstract background elements */}
       <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
@@ -238,12 +241,12 @@ function WelcomeHero({
 
       <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-[22px] font-extrabold text-text-main leading-tight tracking-tight">
-            {greeting}, <span className="text-primary">{name}</span>! 👋
+          <h2 className="text-[16px] font-bold text-text-main leading-tight tracking-tight">
+            {greeting}, <span className="text-primary">{name}!</span> 👋
           </h2>
-          <p className="text-[14px] text-text-muted mt-1.5 font-medium max-w-[480px] leading-relaxed">
+          <p className="text-[13px] text-text-muted mt-1 font-medium max-w-[480px] leading-relaxed">
             Welcome back to the clinic command center. You have{" "}
-            <span className="text-text-main font-bold">
+            <span className="text-text-main font-semibold">
               {stats.todaysAppointments} appointments
             </span>{" "}
             scheduled for today.
@@ -251,28 +254,28 @@ function WelcomeHero({
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex flex-col items-center px-4 py-2 bg-surface-2 rounded-xl border border-border-base/50">
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+          <div className="flex flex-col items-center px-3.5 py-1.5 bg-surface-2 rounded-lg border border-border-base/50">
+            <p className="text-[9px] font-bold text-text-muted uppercase tracking-wider">
               Appointments
             </p>
-            <p className="text-[18px] font-black text-primary">
+            <p className="text-[16px] font-bold text-primary leading-tight">
               {stats.todaysAppointments}
             </p>
           </div>
-          <div className="flex flex-col items-center px-4 py-2 bg-surface-2 rounded-xl border border-border-base/50">
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+          <div className="flex flex-col items-center px-3.5 py-1.5 bg-surface-2 rounded-lg border border-border-base/50">
+            <p className="text-[9px] font-bold text-text-muted uppercase tracking-wider">
               Critical
             </p>
-            <p className="text-[18px] font-black text-red-500">
+            <p className="text-[16px] font-bold text-red-500 leading-tight">
               {stats.criticalPatients}
             </p>
           </div>
-          <div className="h-10 w-[1px] bg-border-base hidden sm:block mx-2" />
+          <div className="h-8 w-[1px] bg-border-base hidden sm:block mx-1.5" />
           <div className="hidden sm:flex flex-col items-end">
-            <p className="text-[12px] font-bold text-text-main">
+            <p className="text-[11.5px] font-bold text-text-main">
               {format(new Date(), "h:mm a")}
             </p>
-            <p className="text-[10px] text-text-muted font-medium">
+            <p className="text-[9px] text-text-muted font-bold uppercase tracking-tighter">
               {format(new Date(), "EEEE, MMM d")}
             </p>
           </div>
@@ -305,7 +308,7 @@ function TabStrip({ tabs, selected, onChange }: TabStripProps) {
           {t.label}
           {t.count !== undefined && (
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${selected === t.key
+              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${selected === t.key
                 ? "bg-primary/10 text-primary"
                 : "bg-surface-2 text-text-muted"
                 }`}
@@ -328,17 +331,17 @@ function QuickActions() {
   ];
 
   return (
-    <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+    <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-1.5 mb-1.5">
       {actions.map((action, idx) => (
         <Link key={idx} to={action.href} className="block group no-underline">
-          <div className="bg-surface border border-border-base rounded-2xl p-3.5 flex items-center gap-3.5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all duration-400 hover:-translate-y-1 relative overflow-hidden">
+          <div className="bg-surface border border-border-base rounded-[10px] p-2 flex items-center gap-2.5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all duration-400 hover:-translate-y-1 relative overflow-hidden">
             <div className={`absolute inset-0 bg-gradient-to-br from-surface to-${action.color.split('-')[1]}-500/5 opacity-0 group-hover:opacity-100 transition-opacity`} />
-            <div className={`relative z-10 w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${action.bg} ${action.color} group-hover:scale-110 group-hover:-rotate-6 transition-all duration-500 ring-1 ring-inset ring-black/5 dark:ring-white/5`}>
-               {React.cloneElement(action.icon, { className: "w-5 h-5" })}
+            <div className={`relative z-10 w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 ${action.bg} ${action.color} group-hover:scale-110 group-hover:-rotate-6 transition-all duration-500 ring-1 ring-inset ring-black/5 dark:ring-white/5`}>
+              {React.cloneElement(action.icon as React.ReactElement, { className: "w-4 h-4" })}
             </div>
             <div className="relative z-10">
-              <p className="text-[12px] font-black text-text-main tracking-tight group-hover:text-primary transition-colors leading-none">{action.label}</p>
-              <p className="text-[10px] font-bold text-text-muted mt-1 uppercase tracking-wider">Quick Create</p>
+              <p className="text-[11px] font-bold text-primary tracking-tight leading-none">{action.label}</p>
+              <p className="text-[9px] font-semibold text-text-muted mt-0.5 uppercase tracking-wider">Quick Create</p>
             </div>
           </div>
         </Link>
@@ -351,9 +354,9 @@ function RecentActivityFeed({ activities }: { activities: any[] }) {
   const navigate = useNavigate();
 
   return (
-    <div className="bg-surface border border-border-base rounded-2xl flex flex-col shadow-sm h-[320px]">
+    <div className="bg-surface border border-border-base rounded-[10px] flex flex-col shadow-sm h-[320px]">
       <div className="px-4 py-3 border-b border-border-base flex items-center justify-between">
-        <h3 className="text-[12.5px] font-semibold text-text-main flex items-center gap-2">
+        <h3 className="text-[12.5px] font-semibold text-primary flex items-center gap-2">
           <IoTimeOutline className="w-4 h-4 text-primary" />
           Recent Activity
         </h3>
@@ -361,8 +364,8 @@ function RecentActivityFeed({ activities }: { activities: any[] }) {
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         {activities.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
-             <IoTimeOutline className="w-8 h-8 mb-2" />
-             <p className="text-[12px] font-medium">No recent activity</p>
+            <IoTimeOutline className="w-8 h-8 mb-2" />
+            <p className="text-[12px] font-medium">No recent activity</p>
           </div>
         ) : (
           <div className="relative border-l border-border-base/80 ml-2 space-y-6 pt-1 pb-2">
@@ -370,18 +373,18 @@ function RecentActivityFeed({ activities }: { activities: any[] }) {
               <div key={idx} className="relative pl-5 group cursor-default">
                 <div className={`absolute -left-[7px] top-1 w-3 h-3 rounded-full border-2 border-surface ${item.color} group-hover:scale-125 transition-transform`} />
                 <div>
-                  <p className="text-[12.5px] font-bold text-text-main group-hover:text-primary transition-colors leading-tight">{item.title}</p>
+                  <p className="text-[12.5px] font-semibold text-text-main group-hover:text-primary transition-colors leading-tight">{item.title}</p>
                   <p className="text-[11px] text-text-muted mt-0.5 leading-tight">{item.desc}</p>
-                  <p className="text-[9px] font-black text-text-muted/60 mt-1.5 uppercase tracking-[0.1em]">{item.time}</p>
+                  <p className="text-[9px] font-bold text-text-muted/60 mt-1.5 uppercase tracking-[0.1em]">{item.time}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-      <div className="p-2 border-t border-border-base text-center bg-surface-2/30 mt-auto rounded-b-2xl">
-        <button 
-          className="text-[11px] font-bold text-primary hover:text-primary/80 transition-all uppercase tracking-wider py-1"
+      <div className="p-2 border-t border-border-base text-center bg-surface-2/30 mt-auto rounded-b-[10px]">
+        <button
+          className="text-[11px] font-semibold text-primary hover:text-primary/80 transition-all uppercase tracking-wider py-1"
           onClick={() => navigate("/dashboard/activity-log")}
         >
           View Full Log
@@ -395,7 +398,7 @@ function RecentActivityFeed({ activities }: { activities: any[] }) {
 function SectionHeader({ title, href }: { title: string; href: string }) {
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b border-border-base">
-      <p className="text-[12.5px] font-semibold text-text-main">{title}</p>
+      <p className="text-[12.5px] font-semibold text-primary">{title}</p>
       <Link
         className="text-[11px] text-primary hover:text-primary/80 font-medium flex items-center gap-0.5 no-underline"
         to={href}
@@ -574,7 +577,7 @@ export default function DashboardIndexPage() {
   // ── Chart data ────────────────────────────────────────────────────────────
   const getChartData = (): ChartDataType => {
     // ProCare Blue theme colors from globals.css
-    const primaryColor = isDark ? "#38a9f8" : "#0356a1";
+    const primaryColor = isDark ? "#a78bfa" : "#6d28d9"; // HSC Purple
     const secondaryColor = isDark ? "#4ade80" : "#16a34a";
     const warningColor = isDark ? "#fbbf24" : "#d97706";
     const dangerColor = isDark ? "#f87171" : "#e11d48";
@@ -683,7 +686,7 @@ export default function DashboardIndexPage() {
   // ── Generate real activity feed ───────────────────────────────────────────
   const activityFeed = useMemo(() => {
     const items: any[] = [];
-    
+
     // Appointments
     appointments.slice(0, 5).forEach(a => {
       const patient = patients.find(p => p.id === a.patientId);
@@ -777,8 +780,8 @@ export default function DashboardIndexPage() {
   // ── Loading / Error ───────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[320px]">
-        <Spinner label="Loading dashboard…" size="md" />
+      <div className="p-2">
+        <PageSkeleton />
       </div>
     );
   }
@@ -802,7 +805,7 @@ export default function DashboardIndexPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="w-full flex flex-col gap-4">
+    <div className="w-full flex flex-col gap-2">
       {/* Header removed as requested */}
 
       <WelcomeHero
@@ -817,12 +820,12 @@ export default function DashboardIndexPage() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+        className="grid grid-cols-2 lg:grid-cols-4 gap-1.5"
       >
         <StatCard
           href="/dashboard/patients"
           icon={<IoPersonOutline className="w-4 h-4" />}
-          iconBg="bg-teal-500/10 text-teal-600 dark:text-teal-400"
+          iconBg="bg-primary/10 text-primary"
           label="Total Patients"
           sub="Clinic-wide"
           value={stats.totalPatients}
@@ -839,7 +842,7 @@ export default function DashboardIndexPage() {
         <StatCard
           href="/dashboard/appointments"
           icon={<IoCalendarOutline className="w-4 h-4" />}
-          iconBg="bg-sky-500/10 text-sky-600 dark:text-sky-400"
+          iconBg="bg-primary/10 text-primary"
           label="Today's Bookings"
           sub="Scheduled for today"
           value={stats.todaysAppointments}
@@ -847,7 +850,7 @@ export default function DashboardIndexPage() {
         <StatCard
           href="/dashboard/doctors"
           icon={<IoMedicalOutline className="w-4 h-4" />}
-          iconBg="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-primary/10 text-primary"
           label="Active Experts"
           sub="Currently on duty"
           value={stats.activeDoctors}
@@ -859,14 +862,14 @@ export default function DashboardIndexPage() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col gap-3"
+        className="flex flex-col gap-1.5"
       >
         {/* ── Row 2: Patient visits chart + Appointments list + Activity Feed ────────────── */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5">
           {/* Patient registrations (line chart) */}
-          <div className="bg-surface border border-border-base rounded-xl overflow-hidden shadow-sm shadow-black/5">
+          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden shadow-sm shadow-black/5">
             <div className="px-3 py-2 border-b border-border-base">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-primary">
                 Patient Registrations
               </p>
               <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
@@ -876,8 +879,8 @@ export default function DashboardIndexPage() {
             <div className="p-3 h-[220px]">
               <Suspense
                 fallback={
-                  <div className="h-full flex items-center justify-center">
-                    <Spinner label="Loading chart…" size="sm" />
+                  <div className="h-full w-full p-2">
+                    <Skeleton className="h-full w-full rounded-lg" />
                   </div>
                 }
               >
@@ -890,7 +893,7 @@ export default function DashboardIndexPage() {
           </div>
 
           {/* Appointments tabbed list (Live Schedule) */}
-          <div className="bg-surface border border-border-base rounded-2xl overflow-hidden flex flex-col shadow-sm">
+          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
             <SectionHeader href="/dashboard/appointments" title="Live Schedule" />
 
             {/* Next Up Highlight */}
@@ -911,10 +914,10 @@ export default function DashboardIndexPage() {
                       </p>
                     </div>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="flat" 
-                    color="primary" 
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="primary"
                     className="h-8 text-[11px] font-bold"
                     onClick={() => navigate(`/dashboard/appointments/${todayAppts[0].id}`)}
                   >
@@ -999,12 +1002,12 @@ export default function DashboardIndexPage() {
         </motion.div>
 
         {/* ── Row 3: Status doughnut + Enquiries ─────────────────────────── */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-3 pb-8">
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5 pb-8">
           {/* Appointment status breakdown (doughnut) — 2/3 width */}
-          <div className="lg:col-span-2 bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
+          <div className="lg:col-span-2 bg-surface border border-border-base rounded-[10px] overflow-hidden shadow-sm">
             <div className="px-3 py-2 border-b border-border-base flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-primary">
                   Status Breakdown
                 </p>
                 <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
@@ -1022,8 +1025,8 @@ export default function DashboardIndexPage() {
                 <div className="w-[160px] h-[160px] relative">
                   <Suspense
                     fallback={
-                      <div className="h-full flex items-center justify-center">
-                        <Spinner label="Loading chart…" size="sm" />
+                      <div className="h-full w-full flex items-center justify-center">
+                        <Skeleton variant="circle" className="w-32 h-32" />
                       </div>
                     }
                   >
@@ -1064,7 +1067,7 @@ export default function DashboardIndexPage() {
           </div>
 
           {/* Enquiries — 1/3 width */}
-          <div className="bg-surface border border-border-base rounded-2xl overflow-hidden flex flex-col shadow-sm">
+          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
             <SectionHeader href="/dashboard/enquiries" title="Lead Enquiries" />
 
             <div className="px-3 pt-2">

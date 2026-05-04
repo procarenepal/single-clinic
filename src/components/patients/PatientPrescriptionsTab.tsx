@@ -64,15 +64,15 @@ interface PrescriptionFormData {
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 const STATUS_STYLE: Record<string, string> = {
-  active: "bg-health-100 text-health-700 border-health-200",
-  completed: "bg-teal-100 text-teal-700 border-teal-200",
-  cancelled: "bg-red-100 text-red-700 border-red-200",
+  active: "bg-health-500/10 text-health-600 dark:text-health-400 border-health-500/20",
+  completed: "bg-primary/10 text-primary border-primary/20",
+  cancelled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
 };
 
 function StatusBadge({ status }: { status: string }) {
   const cls =
     STATUS_STYLE[status] ||
-    "bg-mountain-100 text-mountain-600 border-mountain-200";
+    "bg-mountain-100 text-text-muted border-border-base";
 
   return (
     <span
@@ -99,13 +99,13 @@ function FlatInput({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-muted">
         {label}
       </label>
       <input
-        className="h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-          placeholder:text-mountain-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100
-          disabled:bg-mountain-50 disabled:text-mountain-400"
+        className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+          placeholder:text-text-muted/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10
+          disabled:bg-surface-2 disabled:text-text-muted/60"
         disabled={disabled}
         placeholder={placeholder}
         value={value}
@@ -140,16 +140,16 @@ function SearchSelect({
 
   return (
     <div className="flex flex-col gap-1 relative">
-      <label className="text-[12px] font-medium text-mountain-700">
+      <label className="text-[12px] font-medium text-text-muted">
         {label}
       </label>
       <div
-        className={`flex items-center h-9 border border-mountain-200 rounded bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 ${disabled ? "bg-mountain-50" : "cursor-text"}`}
+        className={`flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10 ${disabled ? "bg-surface-2" : "cursor-text"}`}
         onClick={() => !disabled && setOpen(true)}
       >
-        <IoSearchOutline className="ml-2.5 w-3.5 h-3.5 text-mountain-400 shrink-0" />
+        <IoSearchOutline className="ml-2.5 w-3.5 h-3.5 text-text-muted/50 shrink-0" />
         <input
-          className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-mountain-800 placeholder:text-mountain-300"
+          className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40"
           disabled={disabled}
           placeholder={`Search ${label.toLowerCase()}…`}
           value={selected && !open ? selected.primary : q}
@@ -161,7 +161,7 @@ function SearchSelect({
         />
         {value && !disabled && (
           <button
-            className="mr-2 text-mountain-400 hover:text-mountain-700"
+            className="mr-2 text-text-muted/60 hover:text-text-muted"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -176,9 +176,9 @@ function SearchSelect({
       {open && !disabled && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-mountain-200 rounded max-h-44 overflow-y-auto">
+          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-44 overflow-y-auto shadow-lg">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-mountain-400">
+              <p className="px-3 py-2 text-[12px] text-text-muted/60">
                 No results
               </p>
             ) : (
@@ -193,9 +193,9 @@ function SearchSelect({
                     setOpen(false);
                   }}
                 >
-                  <p className="text-[12.5px] text-mountain-800">{i.primary}</p>
+                  <p className="text-[12.5px] text-text-main">{i.primary}</p>
                   {i.secondary && (
-                    <p className="text-[11px] text-mountain-400">
+                    <p className="text-[11px] text-text-muted/60">
                       {i.secondary}
                     </p>
                   )}
@@ -205,7 +205,7 @@ function SearchSelect({
           </div>
         </>
       )}
-      {hint && <p className="text-[10.5px] text-mountain-400">{hint}</p>}
+      {hint && <p className="text-[10.5px] text-text-muted/60">{hint}</p>}
     </div>
   );
 }
@@ -243,7 +243,7 @@ function ActionsMenu({
   return (
     <div className="relative">
       <button
-        className="p-1.5 rounded border border-mountain-200 text-mountain-500 hover:text-mountain-800 hover:border-mountain-400 transition-colors"
+        className="p-1.5 rounded border border-border-base text-text-muted hover:text-text-main hover:border-primary transition-colors"
         type="button"
         onClick={() => setOpen((o) => !o)}
       >
@@ -252,7 +252,7 @@ function ActionsMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 bg-white border border-mountain-200 rounded shadow-none min-w-[150px]">
+          <div className="absolute right-0 z-20 mt-1 bg-surface border border-border-base rounded shadow-xl min-w-[150px] overflow-hidden">
             {[
               { label: "View Details", icon: <IoEyeOutline />, action: onView },
               { label: "Edit", icon: <IoCreateOutline />, action: onEdit },
@@ -264,14 +264,14 @@ function ActionsMenu({
             ].map((item) => (
               <button
                 key={item.label}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-mountain-700 hover:bg-teal-50 transition-colors"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-text-main hover:bg-surface-2 transition-colors"
                 type="button"
                 onClick={() => {
                   item.action();
                   setOpen(false);
                 }}
               >
-                <span className="text-mountain-400">{item.icon}</span>
+                <span className="text-text-muted/60">{item.icon}</span>
                 {item.label}
               </button>
             ))}
@@ -295,9 +295,9 @@ function Pagination({
   if (total <= 1) return null;
 
   return (
-    <div className="flex items-center justify-center gap-1 py-3 border-t border-mountain-100">
+    <div className="flex items-center justify-center gap-1 py-3 border-t border-border-base/50">
       <button
-        className="px-2.5 py-1 text-[12px] border border-mountain-200 rounded disabled:opacity-40 hover:border-teal-400 hover:text-teal-700 transition-colors"
+        className="px-2.5 py-1 text-[12px] border border-border-base rounded disabled:opacity-40 hover:border-teal-400 hover:text-primary/80 transition-colors"
         disabled={page === 1}
         type="button"
         onClick={() => onChange(page - 1)}
@@ -308,7 +308,7 @@ function Pagination({
         <button
           key={p}
           className={`w-7 h-7 text-[12px] rounded border transition-colors
-            ${p === page ? "bg-teal-700 text-white border-teal-700" : "border-mountain-200 text-mountain-600 hover:border-teal-400 hover:text-teal-700"}`}
+            ${p === page ? "bg-teal-700 text-white border-teal-700" : "border-border-base text-text-muted hover:border-teal-400 hover:text-primary/80"}`}
           type="button"
           onClick={() => onChange(p)}
         >
@@ -316,7 +316,7 @@ function Pagination({
         </button>
       ))}
       <button
-        className="px-2.5 py-1 text-[12px] border border-mountain-200 rounded disabled:opacity-40 hover:border-teal-400 hover:text-teal-700 transition-colors"
+        className="px-2.5 py-1 text-[12px] border border-border-base rounded disabled:opacity-40 hover:border-teal-400 hover:text-primary/80 transition-colors"
         disabled={page === total}
         type="button"
         onClick={() => onChange(page + 1)}
@@ -634,10 +634,10 @@ export default function PatientPrescriptionsTab({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-section-title text-mountain-900">
+          <h2 className="text-section-title text-text-main">
             Prescriptions & Medications
           </h2>
-          <p className="text-[12.5px] text-mountain-400">
+          <p className="text-[12.5px] text-text-muted">
             Manage patient prescriptions and medication history
           </p>
         </div>
@@ -654,31 +654,31 @@ export default function PatientPrescriptionsTab({
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
-          color="bg-teal-50 text-teal-700 border-teal-200"
+          color="bg-primary/10 text-primary border-primary/20"
           label="Total"
           value={stats.total}
         />
         <StatCard
-          color="bg-health-50 text-health-700 border-health-200"
+          color="bg-health-500/10 text-health-600 dark:text-health-400 border-health-500/20"
           label="Active"
           value={stats.active}
         />
         <StatCard
-          color="bg-mountain-50 text-mountain-600 border-mountain-200"
+          color="bg-surface-2 text-text-muted border-border-base"
           label="Completed"
           value={stats.completed}
         />
         <StatCard
-          color="bg-saffron-50 text-saffron-700 border-saffron-200"
+          color="bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 border-saffron-500/20"
           label="Medicines"
           value={stats.medicines}
         />
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-mountain-200 rounded p-3 flex flex-col gap-2">
+      <div className="bg-surface border border-border-base rounded p-3 flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-[12px] font-medium text-mountain-700">
+          <span className="text-[12px] font-medium text-text-main">
             Search & Filter
           </span>
           {hasFilters() && (
@@ -693,9 +693,9 @@ export default function PatientPrescriptionsTab({
         </div>
         <div className="flex gap-2 flex-wrap">
           <div className="relative flex-[2] min-w-[180px]">
-            <IoSearchOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-mountain-400" />
+            <IoSearchOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted/40" />
             <input
-              className="w-full h-9 pl-8 pr-2.5 text-[12.5px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+              className="w-full h-9 pl-8 pr-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
               placeholder="Search prescriptions…"
               value={searchTerm}
               onChange={(e) => {
@@ -705,7 +705,7 @@ export default function PatientPrescriptionsTab({
             />
           </div>
           <select
-            className="h-9 px-2 text-[12.5px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+            className="h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
             value={selectedStatus}
             onChange={(e) => {
               setSelectedStatus(e.target.value);
@@ -718,7 +718,7 @@ export default function PatientPrescriptionsTab({
             <option value="cancelled">Cancelled</option>
           </select>
           <select
-            className="h-9 px-2 text-[12.5px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+            className="h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
             value={selectedDoctor}
             onChange={(e) => {
               setSelectedDoctor(e.target.value);
@@ -737,7 +737,7 @@ export default function PatientPrescriptionsTab({
         {hasFilters() && (
           <div className="flex flex-wrap gap-1.5">
             {selectedStatus !== "all" && (
-              <span className="inline-flex items-center gap-1 text-[11px] bg-teal-100 text-teal-700 border border-teal-200 px-2 py-0.5 rounded">
+              <span className="inline-flex items-center gap-1 text-[11px] bg-teal-100 text-primary/80 border border-teal-200 px-2 py-0.5 rounded">
                 Status: {selectedStatus}
                 <button type="button" onClick={() => setSelectedStatus("all")}>
                   <IoCloseOutline className="w-3 h-3" />
@@ -745,7 +745,7 @@ export default function PatientPrescriptionsTab({
               </span>
             )}
             {selectedDoctor !== "all" && (
-              <span className="inline-flex items-center gap-1 text-[11px] bg-mountain-100 text-mountain-700 border border-mountain-200 px-2 py-0.5 rounded">
+              <span className="inline-flex items-center gap-1 text-[11px] bg-mountain-100 text-text-muted border border-border-base px-2 py-0.5 rounded">
                 Dr: {uniqueDoctors.find((d) => d.id === selectedDoctor)?.name}
                 <button type="button" onClick={() => setSelectedDoctor("all")}>
                   <IoCloseOutline className="w-3 h-3" />
@@ -757,14 +757,14 @@ export default function PatientPrescriptionsTab({
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-        <div className="flex items-center gap-3 px-3 py-2.5 bg-mountain-50 border-b border-mountain-100">
-          <IoReceiptOutline className="w-4 h-4 text-teal-600" />
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
+        <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
+          <IoReceiptOutline className="w-4 h-4 text-primary" />
           <div>
-            <h4 className="text-[13px] font-semibold text-mountain-800">
+            <h4 className="text-[13px] font-semibold text-text-main">
               Prescription History
             </h4>
-            <p className="text-[11px] text-mountain-400">
+            <p className="text-[11px] text-text-muted">
               Showing {paginated.length} of {filtered.length}
             </p>
           </div>
@@ -779,13 +779,13 @@ export default function PatientPrescriptionsTab({
           </div>
         ) : paginated.length === 0 ? (
           <div className="py-12 text-center">
-            <IoReceiptOutline className="mx-auto w-10 h-10 text-mountain-300 mb-2" />
-            <p className="text-[13px] font-medium text-mountain-600 mb-1">
+            <IoReceiptOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-2" />
+            <p className="text-[13px] font-medium text-text-main mb-1">
               {searchTerm || hasFilters()
                 ? "No prescriptions found"
                 : "No prescriptions yet"}
             </p>
-            <p className="text-[12px] text-mountain-400 mb-4">
+            <p className="text-[12px] text-text-muted mb-4">
               {searchTerm || hasFilters()
                 ? "Try adjusting your search or filters"
                 : "Create the first prescription"}
@@ -806,7 +806,7 @@ export default function PatientPrescriptionsTab({
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead>
-                  <tr className="border-b border-mountain-100">
+                  <tr className="border-b border-border-base/50">
                     {[
                       "Prescription No.",
                       "Doctor",
@@ -817,7 +817,7 @@ export default function PatientPrescriptionsTab({
                     ].map((h) => (
                       <th
                         key={h}
-                        className="py-2 px-3 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-mountain-400 whitespace-nowrap"
+                        className="py-2 px-3 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-text-muted/60 whitespace-nowrap"
                       >
                         {h}
                       </th>
@@ -826,26 +826,26 @@ export default function PatientPrescriptionsTab({
                 </thead>
                 <tbody className="divide-y divide-mountain-100">
                   {paginated.map((rx) => (
-                    <tr key={rx.id} className="hover:bg-slate-50">
+                    <tr key={rx.id} className="hover:bg-surface-2 transition-colors">
                       <td className="py-2.5 px-3">
                         <Link
-                          className="text-[12.5px] font-medium text-teal-700 hover:text-teal-900 hover:underline underline-offset-2"
+                          className="text-[12.5px] font-medium text-primary/80 hover:text-teal-900 hover:underline underline-offset-2"
                           to={`/dashboard/prescriptions/${rx.id}`}
                         >
                           {rx.prescriptionNo}
                         </Link>
                       </td>
-                      <td className="py-2.5 px-3 text-[12.5px] text-mountain-700">
+                      <td className="py-2.5 px-3 text-[12.5px] text-text-muted">
                         {rx.doctorName}
                       </td>
-                      <td className="py-2.5 px-3 text-[12px] text-mountain-500">
+                      <td className="py-2.5 px-3 text-[12px] text-text-muted">
                         {fmtDate(rx.prescriptionDate)}
                       </td>
                       <td className="py-2.5 px-3">
-                        <span className="text-[12.5px] font-medium text-mountain-700">
+                        <span className="text-[12.5px] font-medium text-text-muted">
                           {rx.itemsCount}
                         </span>
-                        <span className="text-[11.5px] text-mountain-400 ml-1">
+                        <span className="text-[11.5px] text-text-muted/60 ml-1">
                           medicine{rx.itemsCount !== 1 ? "s" : ""}
                         </span>
                       </td>
@@ -884,20 +884,20 @@ export default function PatientPrescriptionsTab({
       {/* ── New Prescription Modal ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 bg-black/30 px-4 pb-8 overflow-y-auto">
-          <div className="bg-white border border-mountain-200 rounded w-full max-w-3xl">
+          <div className="bg-surface dark:bg-surface-2 border border-border-base rounded w-full max-w-3xl">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-mountain-100">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-base/50">
               <div>
-                <h3 className="text-[14px] font-semibold text-mountain-900">
+                <h3 className="text-[14px] font-semibold text-text-main">
                   New Prescription
                 </h3>
-                <p className="text-[11.5px] text-mountain-400">
+                <p className="text-[11.5px] text-text-muted/60">
                   For {patient?.name} ({patient?.regNumber})
                 </p>
               </div>
               {!saving && (
                 <button
-                  className="p-1 rounded text-mountain-400 hover:text-mountain-700"
+                  className="p-1 rounded text-text-muted/60 hover:text-text-muted"
                   type="button"
                   onClick={() => setShowModal(false)}
                 >
@@ -951,11 +951,11 @@ export default function PatientPrescriptionsTab({
                 />
               </div>
 
-              <div className="border-t border-mountain-100" />
+              <div className="border-t border-border-base/50" />
 
               {/* Medicine row */}
               <div>
-                <h4 className="text-[13px] font-semibold text-mountain-800 mb-2">
+                <h4 className="text-[13px] font-semibold text-text-main mb-2">
                   Add Medicines
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1010,9 +1010,9 @@ export default function PatientPrescriptionsTab({
               {/* Summary */}
               {formData.items.length > 0 && (
                 <>
-                  <div className="border-t border-mountain-100" />
+                  <div className="border-t border-border-base/50" />
                   <div>
-                    <h4 className="text-[13px] font-semibold text-mountain-800 mb-2">
+                    <h4 className="text-[13px] font-semibold text-text-main mb-2">
                       Prescription Summary ({formData.items.length} medicine
                       {formData.items.length !== 1 ? "s" : ""})
                     </h4>
@@ -1020,7 +1020,7 @@ export default function PatientPrescriptionsTab({
                       {formData.items.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center gap-3 border border-mountain-200 rounded px-3 py-2"
+                          className="flex items-center gap-3 border border-border-base rounded px-3 py-2"
                         >
                           <div className="flex-1 grid grid-cols-2 sm:grid-cols-5 gap-2">
                             {[
@@ -1031,17 +1031,17 @@ export default function PatientPrescriptionsTab({
                               ["Frequency", item.interval],
                             ].map(([l, v]) => (
                               <div key={l}>
-                                <p className="text-[10px] text-mountain-400 uppercase tracking-wider">
+                                <p className="text-[10px] text-text-muted/60 uppercase tracking-wider">
                                   {l}
                                 </p>
-                                <p className="text-[12px] text-mountain-700">
+                                <p className="text-[12px] text-text-muted">
                                   {v || "—"}
                                 </p>
                               </div>
                             ))}
                           </div>
                           <button
-                            className="p-1.5 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition-colors shrink-0"
+                            className="p-1.5 rounded text-red-400 hover:text-red-700 hover:bg-red-500/10 transition-colors transition-colors shrink-0"
                             type="button"
                             onClick={() => removeMedicine(item.id)}
                           >
@@ -1056,12 +1056,12 @@ export default function PatientPrescriptionsTab({
 
               {/* Notes */}
               <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-medium text-mountain-700">
+                <label className="text-[12px] font-medium text-text-muted">
                   Notes & Instructions
                 </label>
                 <textarea
-                  className="w-full px-2.5 py-2 text-[12.5px] border border-mountain-200 rounded bg-white text-mountain-800
-                    placeholder:text-mountain-300 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 resize-y"
+                  className="w-full px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+                    placeholder:text-text-muted/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 resize-y"
                   placeholder="Add special instructions, warnings, or notes…"
                   rows={3}
                   value={formData.notes}

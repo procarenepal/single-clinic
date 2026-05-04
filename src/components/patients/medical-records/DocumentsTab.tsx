@@ -71,10 +71,10 @@ export default function DocumentsTab({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-[13px] font-semibold text-mountain-800">
+          <h4 className="text-[13px] font-semibold text-text-main">
             Documents
           </h4>
-          <p className="text-[11.5px] text-mountain-400">
+          <p className="text-[11.5px] text-text-muted">
             {documentRecords.length}{" "}
             {documentRecords.length === 1 ? "file" : "files"} attached
           </p>
@@ -91,12 +91,12 @@ export default function DocumentsTab({
 
       {/* Empty state */}
       {documentRecords.length === 0 ? (
-        <div className="py-12 text-center border border-dashed border-mountain-200 rounded">
-          <IoDocumentTextOutline className="mx-auto w-10 h-10 text-mountain-300 mb-3" />
-          <p className="text-[13px] font-medium text-mountain-600 mb-1">
+        <div className="py-12 text-center border border-dashed border-border-base rounded">
+          <IoDocumentTextOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-3" />
+          <p className="text-[13px] font-medium text-text-main mb-1">
             No documents
           </p>
-          <p className="text-[12px] text-mountain-400 mb-4">
+          <p className="text-[12px] text-text-muted mb-4">
             No medical documents have been added yet.
           </p>
           <Button
@@ -113,26 +113,26 @@ export default function DocumentsTab({
           {documentRecords.map((record) => (
             <div
               key={record.id}
-              className="flex items-start gap-3 border border-mountain-200 rounded px-3 py-3 hover:bg-mountain-25 transition-colors"
+              className="flex items-start gap-3 border border-border-base rounded px-3 py-3 hover:bg-surface-2 transition-colors"
             >
               {/* Icon */}
-              <div className="p-2 bg-teal-50 border border-teal-100 rounded shrink-0">
-                <IoDocumentTextOutline className="w-4 h-4 text-teal-600" />
+              <div className="p-2 bg-primary/10 border border-primary/20 rounded shrink-0">
+                <IoDocumentTextOutline className="w-4 h-4 text-primary" />
               </div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <p className="text-[12.5px] font-semibold text-mountain-800">
+                  <p className="text-[12.5px] font-semibold text-text-main">
                     Medical Document
                   </p>
-                  <p className="text-[11px] text-mountain-400 shrink-0">
+                  <p className="text-[11px] text-text-muted shrink-0">
                     {fmtDate(record.createdAt)}
                   </p>
                 </div>
 
                 {record.note && (
-                  <p className="text-[12px] text-mountain-500 bg-mountain-50 border border-mountain-100 rounded px-2 py-1.5 mb-2 line-clamp-2">
+                  <p className="text-[12px] text-text-muted bg-surface-2 border border-border-base/50 rounded px-2 py-1.5 mb-2 line-clamp-2">
                     {record.note}
                   </p>
                 )}

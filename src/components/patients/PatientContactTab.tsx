@@ -58,11 +58,11 @@ function InfoCard({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border border-mountain-200 rounded overflow-hidden h-full">
-      <div className="flex items-center justify-between px-3 py-2.5 bg-mountain-50 border-b border-mountain-100">
+    <div className="bg-surface border border-border-base rounded overflow-hidden h-full">
+      <div className="flex items-center justify-between px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
         <div className="flex items-center gap-2">
-          <span className="text-teal-600">{icon}</span>
-          <h3 className="text-[13px] font-semibold text-mountain-800">
+          <span className="text-primary">{icon}</span>
+          <h3 className="text-[13px] font-semibold text-text-main">
             {title}
           </h3>
         </div>
@@ -86,12 +86,12 @@ function ContactRow({
 
   return (
     <div className="flex items-start gap-2.5">
-      <span className="mt-0.5 text-teal-600 shrink-0">{icon}</span>
+      <span className="mt-0.5 text-primary shrink-0">{icon}</span>
       <div>
-        <p className="text-[10.5px] text-mountain-400 font-medium uppercase tracking-[0.05em]">
+        <p className="text-[10.5px] text-text-muted font-medium uppercase tracking-[0.05em]">
           {label}
         </p>
-        <p className="text-[12.5px] text-mountain-800 font-medium">{value}</p>
+        <p className="text-[12.5px] text-text-main font-medium">{value}</p>
       </div>
     </div>
   );
@@ -125,14 +125,14 @@ function AddContactModal({
   const valid = !!(form.name && form.relationship && form.phone);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-      <div className="bg-white border border-mountain-200 rounded w-full max-w-lg">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-mountain-100">
-          <h3 className="text-[14px] font-semibold text-mountain-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 overflow-hidden">
+      <div className="bg-surface dark:bg-surface-2 border border-border-base rounded w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-base/50">
+          <h3 className="text-[14px] font-semibold text-text-main">
             Add Emergency Contact
           </h3>
           <button
-            className="text-mountain-400 hover:text-mountain-700"
+            className="text-text-muted/60 hover:text-text-main"
             type="button"
             onClick={onClose}
           >
@@ -151,11 +151,11 @@ function AddContactModal({
             { k: "email", label: "Email", ph: "Enter email" },
           ].map((f) => (
             <div key={f.k} className="flex flex-col gap-1">
-              <label className="text-[12px] font-medium text-mountain-700">
+              <label className="text-[12px] font-medium text-text-main">
                 {f.label}
               </label>
               <input
-                className="h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+                className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary placeholder:text-text-muted/40"
                 placeholder={f.ph}
                 type="text"
                 value={(form as any)[f.k]}
@@ -164,11 +164,11 @@ function AddContactModal({
             </div>
           ))}
           <div className="flex flex-col gap-1 sm:col-span-2">
-            <label className="text-[12px] font-medium text-mountain-700">
+            <label className="text-[12px] font-medium text-text-main">
               Address
             </label>
             <input
-              className="h-9 px-2.5 text-[12.5px] border border-mountain-200 rounded focus:outline-none focus:border-teal-500"
+              className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary placeholder:text-text-muted/40"
               placeholder="Enter address"
               type="text"
               value={form.address}
@@ -178,13 +178,13 @@ function AddContactModal({
           <label className="flex items-center gap-2 cursor-pointer sm:col-span-2">
             <input
               checked={form.isPrimary}
-              className="w-3.5 h-3.5 accent-teal-600 rounded"
+              className="w-3.5 h-3.5 accent-primary rounded"
               type="checkbox"
               onChange={(e) =>
                 setForm((p) => ({ ...p, isPrimary: e.target.checked }))
               }
             />
-            <span className="text-[12.5px] text-mountain-700">
+            <span className="text-[12.5px] text-text-main">
               Set as primary emergency contact
             </span>
           </label>
@@ -321,47 +321,47 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
         >
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+              <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                 Provider
               </p>
-              <p className="text-[12.5px] font-medium text-mountain-800">
+              <p className="text-[12.5px] font-medium text-text-main">
                 {insuranceInfo.provider}
               </p>
             </div>
             <div>
-              <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+              <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                 Policy No.
               </p>
-              <p className="text-[12.5px] font-medium text-mountain-800">
+              <p className="text-[12.5px] font-medium text-text-main">
                 {insuranceInfo.policyNumber}
               </p>
             </div>
             {insuranceInfo.groupNumber && (
               <div>
-                <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+                <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                   Group No.
                 </p>
-                <p className="text-[12.5px] font-medium text-mountain-800">
+                <p className="text-[12.5px] font-medium text-text-main">
                   {insuranceInfo.groupNumber}
                 </p>
               </div>
             )}
             <div>
-              <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+              <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                 Status
               </p>
               <span
-                className={`text-[10.5px] font-semibold px-2 py-0.5 rounded border capitalize ${INS_BADGE[insuranceInfo.status] || "bg-mountain-100 text-mountain-600 border-mountain-200"}`}
+                className={`text-[10.5px] font-semibold px-2 py-0.5 rounded border capitalize ${INS_BADGE[insuranceInfo.status] || "bg-surface-2 text-text-muted border-border-base"}`}
               >
                 {insuranceInfo.status}
               </span>
             </div>
             {insuranceInfo.expiryDate && (
               <div>
-                <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+                <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                   Expires
                 </p>
-                <p className="text-[12.5px] font-medium text-mountain-800">
+                <p className="text-[12.5px] font-medium text-text-main">
                   {fmtDate(insuranceInfo.expiryDate)}
                 </p>
               </div>
@@ -371,11 +371,11 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
       </div>
 
       {/* Emergency Contacts */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2.5 bg-mountain-50 border-b border-mountain-100">
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
           <div className="flex items-center gap-2">
-            <IoPeopleOutline className="w-4 h-4 text-teal-600" />
-            <h3 className="text-[13px] font-semibold text-mountain-800">
+            <IoPeopleOutline className="w-4 h-4 text-primary" />
+            <h3 className="text-[13px] font-semibold text-text-main">
               Emergency Contacts
             </h3>
           </div>
@@ -392,11 +392,11 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
         <div className="p-3">
           {emergencyContacts.length === 0 ? (
             <div className="py-10 text-center">
-              <IoPeopleOutline className="mx-auto w-10 h-10 text-mountain-300 mb-3" />
-              <p className="text-[13px] font-medium text-mountain-600 mb-1">
+              <IoPeopleOutline className="mx-auto w-10 h-10 text-text-muted/30 mb-3" />
+              <p className="text-[13px] font-medium text-text-main mb-1">
                 No emergency contacts
               </p>
-              <p className="text-[12px] text-mountain-400 mb-3">
+              <p className="text-[12px] text-text-muted mb-3">
                 Add emergency contacts for this patient.
               </p>
               <Button
@@ -413,43 +413,43 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
               {emergencyContacts.map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-start justify-between border border-mountain-100 rounded p-3 hover:bg-mountain-25"
+                  className="flex items-start justify-between border border-border-base/50 rounded p-3 hover:bg-surface-2/50 transition-colors"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-teal-50 border border-teal-100 rounded-full">
-                      <IoPersonOutline className="w-4 h-4 text-teal-600" />
+                    <div className="p-2 bg-primary/10 border border-primary/20 rounded-full">
+                      <IoPersonOutline className="w-4 h-4 text-primary" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-[13px] font-semibold text-mountain-800">
+                        <h4 className="text-[13px] font-semibold text-text-main">
                           {c.name}
                         </h4>
                         {c.isPrimary && (
-                          <span className="text-[10px] font-semibold bg-teal-100 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded">
                             Primary
                           </span>
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        <p className="text-[11.5px] text-mountain-500">
-                          <span className="text-mountain-400">
+                        <p className="text-[11.5px] text-text-muted">
+                          <span className="text-text-muted/60">
                             Relationship:{" "}
                           </span>
                           {c.relationship}
                         </p>
-                        <p className="text-[11.5px] text-mountain-500">
-                          <span className="text-mountain-400">Phone: </span>
+                        <p className="text-[11.5px] text-text-muted">
+                          <span className="text-text-muted/60">Phone: </span>
                           {c.phone}
                         </p>
                         {c.email && (
-                          <p className="text-[11.5px] text-mountain-500">
-                            <span className="text-mountain-400">Email: </span>
+                          <p className="text-[11.5px] text-text-muted">
+                            <span className="text-text-muted/60">Email: </span>
                             {c.email}
                           </p>
                         )}
                         {c.address && (
-                          <p className="text-[11.5px] text-mountain-500">
-                            <span className="text-mountain-400">Address: </span>
+                          <p className="text-[11.5px] text-text-muted">
+                            <span className="text-text-muted/60">Address: </span>
                             {c.address}
                           </p>
                         )}
@@ -506,10 +506,10 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
               ["Work Address", "Putalisadak, Kathmandu"],
             ].map(([l, v]) => (
               <div key={l}>
-                <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+                <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                   {l}
                 </p>
-                <p className="text-[12.5px] font-medium text-mountain-800">
+                <p className="text-[12.5px] font-medium text-text-main">
                   {v}
                 </p>
               </div>
@@ -523,31 +523,31 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
         >
           <div className="space-y-3">
             <div>
-              <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider mb-1">
+              <p className="text-[10.5px] text-text-muted uppercase tracking-wider mb-1">
                 Preferred Contact
               </p>
-              <span className="text-[11px] font-semibold bg-teal-100 text-teal-700 border border-teal-200 px-2 py-0.5 rounded">
+              <span className="text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded">
                 Mobile Phone
               </span>
             </div>
             <div>
-              <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+              <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                 Language
               </p>
-              <p className="text-[12.5px] font-medium text-mountain-800">
+              <p className="text-[12.5px] font-medium text-text-main">
                 English, Nepali
               </p>
             </div>
             <div>
-              <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider">
+              <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                 Best Time
               </p>
-              <p className="text-[12.5px] font-medium text-mountain-800">
+              <p className="text-[12.5px] font-medium text-text-main">
                 9:00 AM – 5:00 PM (Weekdays)
               </p>
             </div>
             <div>
-              <p className="text-[10.5px] text-mountain-400 uppercase tracking-wider mb-1.5">
+              <p className="text-[10.5px] text-text-muted uppercase tracking-wider mb-1.5">
                 Notifications
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -559,7 +559,7 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
                   <span
                     key={String(l)}
                     className={`text-[11px] font-semibold px-2 py-0.5 rounded border
-                    ${on ? "bg-health-100 text-health-700 border-health-200" : "bg-mountain-100 text-mountain-500 border-mountain-200"}`}
+                    ${on ? "bg-health-100 text-health-700 border-health-200" : "bg-surface-2 text-text-muted border-border-base"}`}
                   >
                     {String(l)}
                     {!on && " (off)"}

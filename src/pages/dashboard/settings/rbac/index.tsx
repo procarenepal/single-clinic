@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Card, CardBody, Tabs, Tab, Button } from "@heroui/react";
 import { ShieldIcon, UsersIcon, ArrowLeftIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { title } from "@/components/primitives";
 
 import { RoleManagement, UserManagement } from "../../../../components/rbac";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -32,9 +33,9 @@ export default function RBACManagementPage() {
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-page-title font-bold">Staff & User Management</h1>
-          <p className="text-gray-600">
+        <div className="flex flex-col gap-1">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Staff & User Management</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage roles, permissions, and user assignments for your clinic
           </p>
         </div>

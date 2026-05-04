@@ -187,7 +187,7 @@ export default function AppointmentDetailsPage() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={title({ size: "lg" })}>Appointment Details</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Appointment Details</h1>
           <p className="text-mountain-500 mt-1 text-[13.5px]">
             View appointment information and history
           </p>
@@ -437,7 +437,7 @@ export default function AppointmentDetailsPage() {
                       Age & Gender
                     </h5>
                     <p className="text-[13.5px] text-mountain-900">
-                      {patient.age} years, {patient.gender}
+                      {patient.age}, {patient.gender}
                     </p>
                   </div>
 

@@ -8,6 +8,7 @@ import {
   updateSMSSettings,
   createDefaultSMSSettings,
   SMSSettings,
+  smsService,
 } from "@/services/sendMessageService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 
@@ -29,62 +30,17 @@ const SettingsTab: React.FC = () => {
   const [enableReminders, setEnableReminders] = useState(true);
   const [reminderHours, setReminderHours] = useState(24);
   const [maxDailySMS, setMaxDailySMS] = useState(100);
-  const [smsAppointmentType, setSmsAppointmentType] = useState("");
+  const [smsAppointmentTypes, setSmsAppointmentTypes] = useState<string[]>([]);
+  const [apiKey, setApiKey] = useState("");
+  const [apiUrl, setApiUrl] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
       if (!clinicId) return;
       setLoading(true);
       try {
-        const [settingsData, appointmentTypesData] = await Promise.all([
-          getSMSSettings(clinicId),
-          appointmentTypeService.getActiveAppointmentTypesByClinic(clinicId),
-        ]);
-
-        if (settingsData) {
-          const today = new Date().toISOString().split("T")[0];
-          const lastResetDate = settingsData.lastResetDate || "";
-
-          if (lastResetDate !== today) {
-            await updateSMSSettings(
-              clinicId,
-              { currentDailySMS: 0, lastResetDate: today },
-              currentUser?.uid || "system",
-            );
-            const updatedSettings = {
-              ...settingsData,
-              currentDailySMS: 0,
-              lastResetDate: today,
-            };
-
-            setSettings(updatedSettings);
-            setEnableReminders(updatedSettings.enableReminders);
-            setReminderHours(updatedSettings.reminderHours);
-            setMaxDailySMS(updatedSettings.maxDailySMS);
-            setSmsAppointmentType(updatedSettings.smsAppointmentType || "");
-          } else {
-            setSettings(settingsData);
-            setEnableReminders(settingsData.enableReminders);
-            setReminderHours(settingsData.reminderHours);
-            setMaxDailySMS(settingsData.maxDailySMS);
-            setSmsAppointmentType(settingsData.smsAppointmentType || "");
-          }
-        } else {
-          await createDefaultSMSSettings(
-            clinicId,
-            null,
-            currentUser?.uid || "system",
-          );
-          const newSettings = await getSMSSettings(clinicId);
-
-          if (newSettings) {
-            setSettings(newSettings);
-            setEnableReminders(newSettings.enableReminders);
-            setReminderHours(newSettings.reminderHours);
-            setMaxDailySMS(newSettings.maxDailySMS);
-            setSmsAppointmentType(newSettings.smsAppointmentType || "");
-          }
-        }
+        await refreshUsage();
+        const appointmentTypesData = await appointmentTypeService.getAppointmentTypes(clinicId);
         setAppointmentTypes(appointmentTypesData);
       } catch (error) {
         console.error("Error loading settings:", error);
@@ -100,6 +56,50 @@ const SettingsTab: React.FC = () => {
 
     loadData();
   }, [clinicId]);
+
+  const refreshUsage = async () => {
+    if (clinicId) {
+      const [updatedSettings, logs] = await Promise.all([
+        getSMSSettings(clinicId),
+        smsService.getSMSLogs(clinicId, undefined, 500)
+      ]);
+      
+      if (updatedSettings) {
+        const today = new Date().toDateString();
+        const todayCount = logs.filter(l => 
+          new Date(l.createdAt).toDateString() === today && l.status === "sent"
+        ).length;
+        
+        setSettings({
+          ...updatedSettings,
+          currentDailySMS: todayCount
+        });
+        
+        // Sync local states
+        setEnableReminders(updatedSettings.enableReminders);
+        setReminderHours(updatedSettings.reminderHours);
+        setMaxDailySMS(updatedSettings.maxDailySMS);
+        setSmsAppointmentTypes(
+          Array.isArray(updatedSettings.smsAppointmentTypes)
+            ? updatedSettings.smsAppointmentTypes
+            : updatedSettings.smsAppointmentType 
+              ? [updatedSettings.smsAppointmentType] 
+              : []
+        );
+        setApiKey(updatedSettings.apiKey || "");
+        setApiUrl(updatedSettings.apiUrl || "");
+      } else {
+        await createDefaultSMSSettings(clinicId, null, currentUser?.uid || "system");
+        const freshSettings = await getSMSSettings(clinicId);
+        if (freshSettings) {
+          setSettings(freshSettings);
+          setEnableReminders(freshSettings.enableReminders);
+          setReminderHours(freshSettings.reminderHours);
+          setMaxDailySMS(freshSettings.maxDailySMS);
+        }
+      }
+    }
+  };
 
   const handleSaveSettings = async () => {
     if (!clinicId) {
@@ -117,7 +117,9 @@ const SettingsTab: React.FC = () => {
         enableReminders,
         reminderHours,
         maxDailySMS,
-        smsAppointmentType,
+        smsAppointmentTypes,
+        apiKey,
+        apiUrl,
       };
 
       await updateSMSSettings(
@@ -147,241 +149,257 @@ const SettingsTab: React.FC = () => {
     setEnableReminders(true);
     setReminderHours(24);
     setMaxDailySMS(100);
-    setSmsAppointmentType("");
-  };
-
-  const refreshUsage = () => {
-    if (clinicId) {
-      getSMSSettings(clinicId).then((updated) => {
-        if (updated) setSettings(updated);
-      });
-    }
+    setSmsAppointmentTypes([]);
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12 text-[rgb(var(--color-text-muted))]">
-        Loading...
+        <div className="flex flex-col items-center gap-2">
+          <RefreshCwIcon className="animate-spin text-primary" size={24} />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Initialising Console...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <h4 className="text-base font-semibold text-[rgb(var(--color-text))]">
+    <div className="space-y-5">
+      <div className="space-y-3">
+        <h4 className="text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-2">
+          <RefreshCwIcon size={12} className="text-primary" />
           SMS Configuration
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1">
+            <label className="block text-[9px] font-bold text-text-muted uppercase mb-1 tracking-wide">
               Max Daily SMS
             </label>
             <input
               aria-label="Max daily SMS"
-              className="clarity-input w-full"
+              className="clarity-input w-full text-[11px] h-8"
               max={10000}
               min={1}
               type="number"
               value={maxDailySMS}
               onChange={(e) => setMaxDailySMS(parseInt(e.target.value) || 100)}
             />
-            <p className="text-xs text-[rgb(var(--color-text-muted))] mt-0.5">
-              Maximum number of SMS messages per day
-            </p>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-[rgb(var(--color-text))]">
+              <span className="text-[9px] font-bold text-text-muted uppercase tracking-wide">
                 Current Usage
               </span>
               <button
                 aria-label="Refresh usage"
-                className="clarity-btn clarity-btn-ghost h-8 w-8 p-0 justify-center"
+                className="clarity-btn clarity-btn-ghost h-6 w-6 p-0 justify-center"
                 type="button"
                 onClick={refreshUsage}
               >
-                <RefreshCwIcon aria-hidden size={14} />
+                <RefreshCwIcon aria-hidden size={12} />
               </button>
             </div>
-            <div className="text-sm text-[rgb(var(--color-text-muted))]">
+            <div className="text-[11px] font-bold text-text-main">
               {settings?.currentDailySMS || 0} / {maxDailySMS} SMS sent today
             </div>
-            <div className="w-full h-2 rounded-full bg-[rgb(var(--color-surface-2))] overflow-hidden">
+            <div className="w-full h-1 rounded-full bg-surface-2 overflow-hidden">
               <div
-                className="h-full rounded-full bg-teal-600 transition-all duration-300"
+                className={`h-full rounded-full transition-all duration-500 ${
+                  ((settings?.currentDailySMS || 0) / maxDailySMS) > 0.9 ? "bg-rose-500" : "bg-primary"
+                }`}
                 style={{
                   width: `${Math.min(((settings?.currentDailySMS || 0) / maxDailySMS) * 100, 100)}%`,
                 }}
               />
             </div>
-            <div className="text-xs text-[rgb(var(--color-text-muted))]">
-              {maxDailySMS - (settings?.currentDailySMS || 0)} SMS remaining
-              today
+            <div className="text-[8px] font-bold text-text-muted uppercase">
+              {maxDailySMS - (settings?.currentDailySMS || 0)} SMS remaining today
             </div>
           </div>
         </div>
 
+        {settings?.smsBalance !== undefined && (
+          <div className="clarity-card p-3 bg-teal-500/10 border-teal-500/20">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold text-teal-500 uppercase tracking-widest">SMS Account Balance</span>
+                <button 
+                  className="p-1 text-teal-500 hover:bg-teal-500/20 rounded transition-colors"
+                  title="Sync live balance"
+                  type="button"
+                  disabled={loading}
+                  onClick={async () => {
+                    setLoading(true);
+                    try {
+                      const balance = await smsService.getSMSBalance(settings.apiKey, settings.apiUrl);
+                      if (balance !== null) {
+                        await updateSMSSettings(clinicId!, { smsBalance: balance }, currentUser?.uid || "system");
+                        await refreshUsage();
+                        addToast({ title: "Balance Synced", description: `Your live balance is Rs. ${balance}`, color: "success" });
+                      } else {
+                        addToast({ title: "Sync Failed", description: "Could not fetch balance from provider.", color: "danger" });
+                      }
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                >
+                  <RefreshCwIcon size={10} className={loading ? "animate-spin" : ""} />
+                </button>
+              </div>
+              <span className="text-[8px] bg-teal-500/20 text-teal-400 px-1 py-0.5 rounded font-bold uppercase tracking-tighter">Live</span>
+            </div>
+            <div 
+              className="text-base font-bold text-teal-400 cursor-pointer hover:text-teal-300 transition-colors group flex items-center gap-2"
+              title="Click to edit manually"
+              onClick={() => {
+                const manual = window.prompt("Enter your current SMS balance (Rs.):", settings.smsBalance.toString());
+                if (manual !== null) {
+                  const val = parseFloat(manual);
+                  if (!isNaN(val)) {
+                    updateSMSSettings(clinicId!, { smsBalance: val }, currentUser?.uid || "system").then(() => {
+                      refreshUsage();
+                      addToast({ title: "Balance Updated", description: `Balance manually set to Rs. ${val}`, color: "success" });
+                    });
+                  }
+                }
+              }}
+            >
+              Rs. {settings.smsBalance.toLocaleString()}
+              <span className="text-[9px] opacity-0 group-hover:opacity-100 text-teal-500 font-medium tracking-tight">(Click to edit)</span>
+            </div>
+            <p className="text-[9px] text-teal-500/80 mt-0.5 font-bold uppercase tracking-tight">
+              ~{Math.floor(settings.smsBalance / 1.5)} SMS messages remaining
+            </p>
+          </div>
+        )}
+
         <button
-          className="clarity-btn clarity-btn-ghost text-saffron-600 hover:text-saffron-700"
+          className="text-[9px] font-bold text-rose-500 hover:text-rose-600 uppercase tracking-widest"
           type="button"
           onClick={handleResetDefaults}
         >
-          Reset to Defaults
+          Reset to default settings
         </button>
       </div>
 
-      <div className="clarity-divider" />
+      <div className="pt-4 border-t border-border-base">
+        <h4 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
+          SMS Provider Configuration
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[9px] font-bold text-text-muted uppercase mb-1 tracking-wide">
+              SMS Provider URL
+            </label>
+            <input
+              className="clarity-input w-full text-[11px] h-8"
+              placeholder="e.g. http://api.sparrowsms.com/v2/sms/"
+              type="text"
+              value={apiUrl}
+              onChange={(e) => setApiUrl(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] font-bold text-text-muted uppercase mb-1 tracking-wide">
+              SMS API Key / Token
+            </label>
+            <input
+              className="clarity-input w-full text-[11px] h-8"
+              placeholder="Your API secret token"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
-      <div className="space-y-4">
-        <h4 className="text-base font-semibold text-[rgb(var(--color-text))]">
+      <div className="pt-4 border-t border-border-base">
+        <h4 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
           Appointment Reminders
         </h4>
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
             <input
-              aria-label="Enable reminders"
               checked={enableReminders}
-              className="w-4 h-4 rounded border-mountain-300 text-teal-600 focus:ring-teal-500"
+              className="h-3.5 w-3.5 rounded border-border-base text-primary focus:ring-primary"
+              id="enable-reminders"
               type="checkbox"
               onChange={(e) => setEnableReminders(e.target.checked)}
             />
-            <span className="text-sm text-[rgb(var(--color-text))]">
-              Enable automatic appointment reminders
-            </span>
-          </label>
-        </div>
+            <label
+              className="text-[10px] font-bold text-text-main uppercase tracking-wide"
+              htmlFor="enable-reminders"
+            >
+              Enable automatic reminders
+            </label>
+          </div>
 
-        {enableReminders && (
-          <div className="space-y-4 ml-6">
-            <div className="clarity-card p-4">
-              <h5 className="font-medium text-sm mb-3 text-[rgb(var(--color-text))]">
-                Smart Scheduling Rules
-              </h5>
-              <div className="space-y-2 text-sm text-[rgb(var(--color-text-muted))]">
-                <div className="flex items-center gap-2">
-                  <span className="text-health-600">✅</span>
-                  <span>
-                    <strong>24+ hours away:</strong> Schedule reminder using
-                    your advance notice setting
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-teal-600">🔄</span>
-                  <span>
-                    <strong>4-24 hours away:</strong> Automatically adjust to 2
-                    hours before appointment
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-saffron-600">⚡</span>
-                  <span>
-                    <strong>2-4 hours away:</strong> Schedule 1 hour before
-                    appointment
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-rose-600">❌</span>
-                  <span>
-                    <strong>Less than 2 hours:</strong> Skip reminder (too
-                    close)
-                  </span>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[9px] font-bold text-text-muted uppercase mb-1 tracking-wide">
+                Send reminders (hours before)
+              </label>
+              <select
+                className="clarity-input w-full text-[11px] h-8"
+                value={reminderHours}
+                onChange={(e) => setReminderHours(parseInt(e.target.value))}
+              >
+                <option value={12}>12 hours before</option>
+                <option value={24}>24 hours before</option>
+                <option value={48}>48 hours before</option>
+              </select>
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                  Advance Notice Hours
-                </label>
-                <input
-                  aria-label="Advance notice hours"
-                  className="clarity-input w-full"
-                  max={168}
-                  min={1}
-                  placeholder="24"
-                  type="number"
-                  value={reminderHours}
-                  onChange={(e) =>
-                    setReminderHours(parseInt(e.target.value) || 24)
-                  }
-                />
-                <p className="text-xs text-[rgb(var(--color-text-muted))] mt-0.5">
-                  How many hours before to remind for appointments scheduled 24+
-                  hours in advance
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                  Appointment Type for SMS
-                </label>
-                <select
-                  aria-label="Appointment type for SMS"
-                  className="clarity-input w-full"
-                  value={smsAppointmentType}
-                  onChange={(e) => setSmsAppointmentType(e.target.value)}
+          <div>
+            <label className="block text-[9px] font-bold text-text-muted uppercase mb-2 tracking-wide">
+              Applicable Appointment Categories
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+              {appointmentTypes.map((type) => (
+                <div
+                  key={type.id}
+                  className="flex items-center gap-2 p-1.5 rounded border border-border-base bg-surface-1"
                 >
-                  <option value="">-- Select --</option>
-                  {appointmentTypes.map((type) => (
-                    <option key={type.id} value={type.name}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-[rgb(var(--color-text-muted))] mt-0.5">
-                  Only send reminders for this appointment type
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="clarity-divider" />
-
-      <div className="space-y-4">
-        <h4 className="text-base font-semibold text-[rgb(var(--color-text))]">
-          Statistics
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="clarity-card p-4 text-center">
-            <div className="text-xl font-bold text-teal-700">
-              {settings?.currentDailySMS || 0}
-            </div>
-            <div className="text-sm text-[rgb(var(--color-text-muted))]">
-              SMS Today
-            </div>
-          </div>
-          <div className="clarity-card p-4 text-center">
-            <div className="text-xl font-bold text-health-600">
-              {maxDailySMS - (settings?.currentDailySMS || 0)}
-            </div>
-            <div className="text-sm text-[rgb(var(--color-text-muted))]">
-              Remaining Today
-            </div>
-          </div>
-          <div className="clarity-card p-4 text-center">
-            <div className="text-xl font-bold text-saffron-600">
-              {reminderHours}h
-            </div>
-            <div className="text-sm text-[rgb(var(--color-text-muted))]">
-              Reminder Lead Time
+                  <input
+                    checked={smsAppointmentTypes.includes(type.id)}
+                    className="h-3 w-3 rounded border-border-base text-primary focus:ring-primary"
+                    id={`type-${type.id}`}
+                    type="checkbox"
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSmsAppointmentTypes((prev) => [...prev, type.id]);
+                      } else {
+                        setSmsAppointmentTypes((prev) =>
+                          prev.filter((id) => id !== type.id),
+                        );
+                      }
+                    }}
+                  />
+                  <label
+                    className="text-[9px] font-bold text-text-main uppercase truncate"
+                    htmlFor={`type-${type.id}`}
+                  >
+                    {type.name}
+                  </label>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-end pt-4">
+      <div className="pt-4 border-t border-border-base flex justify-end">
         <button
-          className="clarity-btn clarity-btn-primary"
+          className="clarity-btn clarity-btn-primary min-w-[140px] h-8 justify-center text-[10px] uppercase font-bold tracking-widest"
           disabled={saving}
           type="button"
           onClick={handleSaveSettings}
         >
-          {saving ? "Saving Settings…" : "Save Settings"}
+          {saving ? "Saving..." : "Save Configuration"}
         </button>
       </div>
     </div>

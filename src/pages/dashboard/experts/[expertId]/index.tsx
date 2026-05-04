@@ -157,7 +157,10 @@ export default function ExpertProfilePage() {
             <IoArrowBackOutline />
           </Button>
           <div>
-            <h1 className={title({ size: "lg" })}>Expert Profile</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Expert Profile</h1>
+            <p className="text-[13.5px] text-text-muted mt-1">
+              View and manage expert information
+            </p>
           </div>
         </div>
         <div className="flex gap-3">

@@ -57,6 +57,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Divider } from "@/components/ui/divider";
 import { addToast } from "@/components/ui/toast";
+import { title } from "@/components/primitives";
 
 // Date utils
 import {
@@ -1024,17 +1025,27 @@ const NewPatientPage: React.FC = () => {
   // ── Helpers ─────────────────────────────────────────────────────────────
   const calcAge = (dob: string): string => {
     if (!dob) return "";
-    const b = new Date(dob),
-      t = new Date();
-    let a = t.getFullYear() - b.getFullYear();
+    const b = new Date(dob);
+    const t = new Date();
 
-    if (
-      t.getMonth() < b.getMonth() ||
-      (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())
-    )
-      a--;
+    let years = t.getFullYear() - b.getFullYear();
+    let months = t.getMonth() - b.getMonth();
+    let days = t.getDate() - b.getDate();
 
-    return a.toString();
+    if (days < 0) {
+      months--;
+      const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+      days += prevMonth;
+    }
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
+    if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
+    if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+    return "0 Days";
   };
 
   const fmtTime = (t: string) => {
@@ -1214,6 +1225,32 @@ const NewPatientPage: React.FC = () => {
     }
     setLoading(true);
     try {
+      // ── Uniqueness Checks ──────────────────────────────────────────────────
+      const [mobileExists, emailExists] = await Promise.all([
+        patientService.checkMobileExists(profile.mobile, clinicId),
+        profile.email ? patientService.checkEmailExists(profile.email, clinicId) : Promise.resolve(false),
+      ]);
+
+      if (mobileExists) {
+        addToast({
+          title: "Duplicate Mobile",
+          description: "A patient with this mobile number already exists.",
+          color: "danger",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (emailExists) {
+        addToast({
+          title: "Duplicate Email",
+          description: "A patient with this email already exists.",
+          color: "danger",
+        });
+        setLoading(false);
+        return;
+      }
+
       const patientId = await patientService.createPatient(buildPatientData());
 
       addToast({
@@ -1241,6 +1278,32 @@ const NewPatientPage: React.FC = () => {
     setLoading(true);
 
     try {
+      // ── Uniqueness Checks ──────────────────────────────────────────────────
+      const [mobileExists, emailExists] = await Promise.all([
+        patientService.checkMobileExists(profile.mobile, clinicId),
+        profile.email ? patientService.checkEmailExists(profile.email, clinicId) : Promise.resolve(false),
+      ]);
+
+      if (mobileExists) {
+        addToast({
+          title: "Duplicate Mobile",
+          description: "A patient with this mobile number already exists.",
+          color: "danger",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (emailExists) {
+        addToast({
+          title: "Duplicate Email",
+          description: "A patient with this email already exists.",
+          color: "danger",
+        });
+        setLoading(false);
+        return;
+      }
+
       const patientId = await patientService.createPatient(buildPatientData());
 
       // Handle Referral Commission
@@ -1367,10 +1430,10 @@ const NewPatientPage: React.FC = () => {
           <IoArrowBackOutline className="w-4 h-4" />
         </button>
         <div>
-          <h1 className="text-page-title text-text-main leading-tight">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
             Add New Patient
           </h1>
-          <p className="text-[13px] text-text-muted">
+          <p className="text-[13.5px] text-text-muted mt-1">
             Register a new patient and optionally schedule their first
             appointment
           </p>
@@ -1616,8 +1679,8 @@ const NewPatientPage: React.FC = () => {
                   label="Age"
                 >
                   <FlatInput
-                    placeholder="e.g. 35"
-                    type="number"
+                    placeholder="e.g. 35 or 2 Months"
+                    type="text"
                     value={profile.age}
                     onChange={(v) => setProfile((p) => ({ ...p, age: v }))}
                   />
@@ -2004,7 +2067,7 @@ const NewPatientPage: React.FC = () => {
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-mountain-100">
+                      <tbody className="divide-y divide-default-100">
                         {existingAppointments.map((a) => (
                           <tr key={a.id} className="hover:bg-surface-2/50">
                             <td className="py-2 px-3 text-[12px] text-text-main">

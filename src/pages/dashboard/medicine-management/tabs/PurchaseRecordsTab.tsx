@@ -15,6 +15,7 @@ import {
   IoCloseOutline,
 } from "react-icons/io5";
 
+import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { medicineService } from "@/services/medicineService";
@@ -24,8 +25,8 @@ interface PurchaseRecordFormData {
   supplierId: string;
   purchaseDate: string;
   billNumber: string;
-  totalAmount: number;
-  paidAmount: number;
+  totalAmount: string;
+  paidAmount: string;
   paymentDone: boolean;
   notes: string;
 }
@@ -88,7 +89,7 @@ function ModalShell({
       >
         <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
             </h3>
             {subtitle && <div className="mt-1">{subtitle}</div>}
@@ -136,8 +137,8 @@ export default function PurchaseRecordsTab({
     supplierId: "",
     purchaseDate: new Date().toISOString().split("T")[0],
     billNumber: "",
-    totalAmount: 0,
-    paidAmount: 0,
+    totalAmount: "",
+    paidAmount: "",
     paymentDone: false,
     notes: "",
   });
@@ -199,7 +200,7 @@ export default function PurchaseRecordsTab({
     if (
       !formData.supplierId ||
       !formData.billNumber ||
-      formData.totalAmount <= 0
+      (parseFloat(formData.totalAmount) || 0) <= 0
     ) {
       addToast({
         title: "Validation Error",
@@ -217,11 +218,13 @@ export default function PurchaseRecordsTab({
         throw new Error("Selected supplier not found");
       }
 
-      const dueAmount = formData.totalAmount - formData.paidAmount;
+      const totalAmount = parseFloat(formData.totalAmount) || 0;
+      const paidAmount = parseFloat(formData.paidAmount) || 0;
+      const dueAmount = totalAmount - paidAmount;
       const paymentStatus: "paid" | "pending" | "partial" | "overdue" =
-        formData.paidAmount >= formData.totalAmount
+        paidAmount >= totalAmount
           ? "paid"
-          : formData.paidAmount > 0
+          : paidAmount > 0
             ? "partial"
             : "pending";
 
@@ -233,8 +236,8 @@ export default function PurchaseRecordsTab({
         supplierName: supplier.name,
         purchaseDate: new Date(formData.purchaseDate),
         billNumber: formData.billNumber,
-        totalAmount: formData.totalAmount,
-        paidAmount: formData.paidAmount,
+        totalAmount: totalAmount,
+        paidAmount: paidAmount,
         dueAmount: dueAmount,
         paymentStatus: paymentStatus,
         paymentDone: formData.paymentDone,
@@ -283,8 +286,8 @@ export default function PurchaseRecordsTab({
       supplierId: record.supplierId,
       purchaseDate: record.purchaseDate.toISOString().split("T")[0],
       billNumber: record.billNumber,
-      totalAmount: record.totalAmount,
-      paidAmount: record.paidAmount,
+      totalAmount: record.totalAmount.toString(),
+      paidAmount: record.paidAmount.toString(),
       paymentDone: record.paymentDone,
       notes: record.notes || "",
     });
@@ -325,8 +328,8 @@ export default function PurchaseRecordsTab({
       supplierId: "",
       purchaseDate: new Date().toISOString().split("T")[0],
       billNumber: "",
-      totalAmount: 0,
-      paidAmount: 0,
+      totalAmount: "",
+      paidAmount: "",
       paymentDone: false,
       notes: "",
     });
@@ -369,7 +372,9 @@ export default function PurchaseRecordsTab({
     }
   };
 
-  const dueAmount = formData.totalAmount - formData.paidAmount;
+  const currentTotalAmount = parseFloat(formData.totalAmount) || 0;
+  const currentPaidAmount = parseFloat(formData.paidAmount) || 0;
+  const dueAmountDisplay = currentTotalAmount - currentPaidAmount;
 
   if (isLoading && purchaseRecords.length === 0) {
     return (
@@ -387,10 +392,10 @@ export default function PurchaseRecordsTab({
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-[15px] font-bold text-mountain-900 tracking-tight">
+          <h2 className={title({ size: "md", color: "primary" })}>
             Purchase Records
           </h2>
-          <p className="text-[12.5px] text-mountain-500 mt-1">
+          <p className="text-[12.5px] text-text-muted mt-1">
             Track purchases from suppliers with payment information
           </p>
         </div>
@@ -403,8 +408,8 @@ export default function PurchaseRecordsTab({
               supplierId: "",
               purchaseDate: new Date().toISOString().split("T")[0],
               billNumber: "",
-              totalAmount: 0,
-              paidAmount: 0,
+              totalAmount: "",
+              paidAmount: "",
               paymentDone: false,
               notes: "",
             });
@@ -449,18 +454,20 @@ export default function PurchaseRecordsTab({
               </div>
             </div>
           ) : filteredRecords.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-              <div className="w-10 h-10 rounded-full bg-mountain-50 flex items-center justify-center border border-mountain-100">
-                <IoReceiptOutline className="w-5 h-5 text-mountain-400" />
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                <IoReceiptOutline className="w-6 h-6 text-primary" />
               </div>
-              <p className="text-[13.5px] font-medium text-mountain-700">
-                No Purchase Records
-              </p>
-              <p className="text-[12.5px] text-mountain-400">
-                {searchQuery
-                  ? "No records match your search criteria."
-                  : "Start by adding your first purchase record."}
-              </p>
+              <div>
+                <p className="text-[15px] font-semibold text-[rgb(var(--color-text))]">
+                  No purchase records found
+                </p>
+                <p className="text-[13px] text-text-muted mt-1">
+                  {searchQuery
+                    ? "No records match your search criteria."
+                    : "Start by adding your first purchase record."}
+                </p>
+              </div>
             </div>
           ) : (
             <table className="clarity-table w-full text-left border-collapse min-w-[900px]">
@@ -619,6 +626,7 @@ export default function PurchaseRecordsTab({
                 Supplier <span className="text-red-600">*</span>
               </label>
               <select
+                disabled={saving}
                 required
                 className="clarity-input h-8 w-full text-[13px] px-2"
                 value={formData.supplierId}
@@ -645,6 +653,7 @@ export default function PurchaseRecordsTab({
                 </label>
                 <input
                   className="clarity-input h-8 w-full text-[13px] px-2"
+                  disabled={saving}
                   type="date"
                   value={formData.purchaseDate}
                   onChange={(e) =>
@@ -661,6 +670,7 @@ export default function PurchaseRecordsTab({
                 </label>
                 <input
                   className="clarity-input h-8 w-full text-[13px] px-2"
+                  disabled={saving}
                   placeholder="Enter bill number"
                   type="text"
                   value={formData.billNumber}
@@ -680,24 +690,25 @@ export default function PurchaseRecordsTab({
                   Total Amount <span className="text-red-600">*</span>
                 </label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-2 text-[13px] text-mountain-500">
+                  <span className="absolute left-2 text-[13px] text-mountain-500 pointer-events-none">
                     ₹
                   </span>
                   <input
                     className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                    disabled={saving}
                     min={0}
                     placeholder="Enter total amount"
                     step={0.01}
                     type="number"
-                    value={
-                      formData.totalAmount === 0 ? "" : formData.totalAmount
-                    }
-                    onChange={(e) =>
+                    value={formData.totalAmount}
+                    onChange={(e) => {
+                      const totalAmount = e.target.value;
                       setFormData((prev) => ({
                         ...prev,
-                        totalAmount: parseFloat(e.target.value) || 0,
-                      }))
-                    }
+                        totalAmount,
+                        paymentDone: (parseFloat(prev.paidAmount) || 0) >= (parseFloat(totalAmount) || 0) && (parseFloat(totalAmount) || 0) > 0,
+                      }));
+                    }}
                   />
                 </div>
               </div>
@@ -706,23 +717,23 @@ export default function PurchaseRecordsTab({
                   Paid Amount
                 </label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-2 text-[13px] text-mountain-500">
+                  <span className="absolute left-2 text-[13px] text-mountain-500 pointer-events-none">
                     ₹
                   </span>
                   <input
                     className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                    disabled={saving}
                     min={0}
                     placeholder="Enter paid amount"
                     step={0.01}
                     type="number"
-                    value={formData.paidAmount === 0 ? "" : formData.paidAmount}
+                    value={formData.paidAmount}
                     onChange={(e) => {
-                      const paidAmount = parseFloat(e.target.value) || 0;
-
+                      const paidAmount = e.target.value;
                       setFormData((prev) => ({
                         ...prev,
                         paidAmount,
-                        paymentDone: paidAmount >= prev.totalAmount,
+                        paymentDone: (parseFloat(paidAmount) || 0) >= (parseFloat(prev.totalAmount) || 0) && (parseFloat(prev.totalAmount) || 0) > 0,
                       }));
                     }}
                   />
@@ -737,12 +748,12 @@ export default function PurchaseRecordsTab({
                 </label>
                 <div
                   className={`h-8 w-full text-[13px] px-2 flex items-center rounded border border-mountain-200 bg-mountain-50/50 ${
-                    dueAmount > 0
+                    dueAmountDisplay > 0
                       ? "text-red-600 font-medium"
                       : "text-teal-700 font-medium"
                   }`}
                 >
-                  ₹{dueAmount.toLocaleString()}
+                  ₹{dueAmountDisplay.toLocaleString()}
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-6">
@@ -767,6 +778,7 @@ export default function PurchaseRecordsTab({
               </label>
               <input
                 className="clarity-input h-8 w-full text-[13px] px-2"
+                disabled={saving}
                 placeholder="Additional notes (optional)"
                 type="text"
                 value={formData.notes}

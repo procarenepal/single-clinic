@@ -70,12 +70,12 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
           <div>
-            <h3 className="text-[14px] font-semibold text-mountain-900">
+            <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
             </h3>
             {subtitle && <div className="mt-1">{subtitle}</div>}
@@ -83,7 +83,7 @@ function ModalShell({
           {!disabled && (
             <button
               aria-label="Close modal"
-              className="text-mountain-400 hover:text-mountain-700 mt-0.5"
+              className="text-[rgb(var(--color-text-muted)/0.5)] hover:text-[rgb(var(--color-text-muted))] mt-0.5"
               type="button"
               onClick={onClose}
             >
@@ -92,7 +92,7 @@ function ModalShell({
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))] shrink-0">
           {footer}
         </div>
       </div>
@@ -321,7 +321,7 @@ export default function CategoriesTab({
   if (isLoading && categories.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="flex flex-col items-center gap-2 text-mountain-500 text-[12.5px]">
+        <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted)/0.7)] text-[12.5px]">
           <div className="h-6 w-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
           <span>Loading categories...</span>
         </div>
@@ -335,7 +335,7 @@ export default function CategoriesTab({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="w-full sm:max-w-md">
           <div className="relative flex items-center">
-            <IoSearchOutline className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-mountain-400 w-4 h-4" />
+            <IoSearchOutline className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.5)] w-4 h-4" />
             <input
               className="clarity-input with-left-icon h-8 w-full pr-2 text-[13px]"
               placeholder="Search categories..."
@@ -356,9 +356,9 @@ export default function CategoriesTab({
       </div>
 
       {/* Categories table */}
-      <div className="bg-white border border-mountain-200 rounded">
-        <div className="p-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center justify-between">
-          <span className="text-[13px] text-mountain-500">
+      <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded">
+        <div className="p-4 border-b border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] flex items-center justify-between">
+          <span className="text-[13px] text-[rgb(var(--color-text-muted)/0.7)]">
             {filteredCategories.length} categor
             {filteredCategories.length !== 1 ? "ies" : "y"}
           </span>
@@ -367,87 +367,89 @@ export default function CategoriesTab({
         <div className="overflow-x-auto min-h-[200px]">
           {isLoading ? (
             <div className="flex justify-center items-center h-48">
-              <div className="flex flex-col items-center gap-2 text-mountain-500 text-[12.5px]">
+              <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted)/0.7)] text-[12.5px]">
                 <div className="h-5 w-5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
                 <span>Loading categories...</span>
               </div>
             </div>
           ) : filteredCategories.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-3 text-center">
-              <div className="w-10 h-10 rounded-full bg-mountain-50 flex items-center justify-center border border-mountain-100">
-                <IoFlaskOutline className="w-5 h-5 text-mountain-400" />
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                <IoFlaskOutline className="w-6 h-6 text-primary" />
               </div>
-              <p className="text-[13.5px] font-medium text-mountain-700">
-                No categories found
-              </p>
-              <p className="text-[12.5px] text-mountain-400">
-                Add a category or adjust your search.
-              </p>
+              <div>
+                <p className="text-[15px] font-semibold text-[rgb(var(--color-text))]">
+                  No categories found
+                </p>
+                <p className="text-[13px] text-text-muted mt-1">
+                  Add a category or adjust your search to see results.
+                </p>
+              </div>
             </div>
           ) : (
             <table className="clarity-table w-full text-left border-collapse min-w-[700px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Category Name
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Description
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Status
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Created
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase w-36">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-36">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-[rgb(var(--color-border))]">
                 {filteredCategories.map((category) => (
                   <tr
                     key={category.id}
-                    className="hover:bg-mountain-50/30 transition-colors"
+                    className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors"
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <IoFlaskOutline className="text-teal-700 w-4 h-4" />
-                        <span className="text-[13.5px] font-semibold text-mountain-900">
+                        <IoFlaskOutline className="text-primary w-4 h-4" />
+                        <span className="text-[13.5px] font-semibold text-[rgb(var(--color-text))]">
                           {category.name}
                         </span>
                       </div>
                     </td>
                     <td className="px-5 py-3">
                       {category.description ? (
-                        <span className="text-[13px] text-mountain-700">
+                        <span className="text-[13px] text-[rgb(var(--color-text-muted))]">
                           {category.description}
                         </span>
                       ) : (
-                        <span className="text-[12.5px] text-mountain-400">
+                        <span className="text-[12.5px] text-[rgb(var(--color-text-muted)/0.5)]">
                           No description
                         </span>
                       )}
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`clarity-badge inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
                           category.isActive
-                            ? "bg-teal-50 text-teal-700 border-teal-200"
-                            : "bg-red-50 text-red-700 border-red-200"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : "bg-rose-500/10 text-rose-400 border-rose-500/20"
                         }`}
                       >
                         {category.isActive ? (
-                          <IoCheckmarkCircleOutline className="w-3 h-3" />
+                          <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
                         ) : (
-                          <IoCloseCircleOutline className="w-3 h-3" />
+                          <IoCloseCircleOutline className="w-3.5 h-3.5" />
                         )}
                         {category.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span className="text-[13px] text-mountain-700">
+                      <span className="text-[13px] text-[rgb(var(--color-text-muted))]">
                         {category.createdAt
                           ? category.createdAt.toLocaleDateString()
                           : "N/A"}
@@ -457,12 +459,13 @@ export default function CategoriesTab({
                       <div className="flex items-center gap-1.5">
                         <button
                           aria-label="Edit category"
-                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-mountain-200 text-mountain-500 hover:text-teal-700 hover:border-teal-300 hover:bg-teal-50 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
                           title="Edit"
                           type="button"
                           onClick={() => openEditModal(category)}
                         >
-                          <IoCreateOutline className="w-4 h-4" />
+                          <IoCreateOutline className="w-3.5 h-3.5" />
+                          <span>Edit</span>
                         </button>
                         <button
                           aria-label={
@@ -470,29 +473,36 @@ export default function CategoriesTab({
                               ? "Deactivate category"
                               : "Activate category"
                           }
-                          className={`inline-flex items-center justify-center w-7 h-7 rounded border transition-colors ${
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors border ${
                             category.isActive
-                              ? "border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600"
-                              : "border-teal-200 text-teal-400 hover:bg-teal-50 hover:text-teal-600"
+                              ? "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20"
+                              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
                           }`}
                           title={category.isActive ? "Deactivate" : "Activate"}
                           type="button"
                           onClick={() => handleToggleStatus(category)}
                         >
                           {category.isActive ? (
-                            <IoCloseCircleOutline className="w-4 h-4" />
+                            <>
+                              <IoCloseCircleOutline className="w-3.5 h-3.5" />
+                              <span>Deactivate</span>
+                            </>
                           ) : (
-                            <IoCheckmarkCircleOutline className="w-4 h-4" />
+                            <>
+                              <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
+                              <span>Activate</span>
+                            </>
                           )}
                         </button>
                         <button
                           aria-label="Delete category"
-                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
                           title="Delete"
                           type="button"
                           onClick={() => openDeleteModal(category)}
                         >
-                          <IoTrashOutline className="w-4 h-4" />
+                          <IoTrashOutline className="w-3.5 h-3.5" />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -530,7 +540,7 @@ export default function CategoriesTab({
           }
           size="lg"
           subtitle={
-            <p className="text-[11.5px] text-mountain-400">
+            <p className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.5)]">
               Category metadata for medicine grouping.
             </p>
           }
@@ -539,7 +549,7 @@ export default function CategoriesTab({
         >
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                 Category Name <span className="text-danger">*</span>
               </label>
               <input
@@ -553,7 +563,7 @@ export default function CategoriesTab({
             </div>
 
             <div>
-              <label className="text-sm font-medium text-default-700 mb-1.5 block">
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                 Description
               </label>
               <textarea
@@ -601,9 +611,9 @@ export default function CategoriesTab({
           }
           size="md"
           subtitle={
-            <p className="text-[11.5px] text-mountain-500">
+            <p className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.7)]">
               You are about to delete{" "}
-              <span className="font-semibold text-mountain-800">
+              <span className="font-semibold text-[rgb(var(--color-text))]">
                 "{categoryToDelete?.name}"
               </span>
               .

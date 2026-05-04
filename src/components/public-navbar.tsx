@@ -30,14 +30,14 @@ export const PublicNavbar = () => {
           >
             <div className="p-1 bg-white rounded-lg">
               <img
-                alt="Procare Software Logo"
+                alt="HSC Laser Hospital Logo"
                 className="w-7 h-7 object-contain"
                 src="/logo.png"
               />
             </div>
             <div className="flex flex-col max-w-xs">
               <p className="font-bold text-lg text-mountain-900 truncate">
-                Procare Software
+                HSC Laser Hospital
               </p>
               <p className="text-xs text-red-600 font-medium truncate">Nepal</p>
             </div>

@@ -17,6 +17,7 @@ import { Divider } from "@/components/ui/divider";
 import { Chip } from "@/components/ui/chip";
 import { Spinner } from "@/components/ui/spinner";
 import { addToast } from "@/components/ui/toast";
+import { title } from "@/components/primitives";
 import { useAuth } from "@/hooks/useAuth";
 import {
   dailyReportService,
@@ -324,11 +325,11 @@ export default function DailyReportPage() {
         {/* Page header — spec: clarity-page-header, clarity-page-title */}
         <div className="clarity-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="clarity-page-title text-[15px] font-bold text-mountain-900 tracking-tight">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
               Daily Report
               {currentBranchName ? ` — ${currentBranchName}` : ""}
             </h1>
-            <p className="clarity-page-subtitle text-mountain-500 text-[13px] mt-1">
+            <p className="text-[13.5px] text-text-muted mt-1">
               View and export daily statistics for patients, appointments, and
               finance
             </p>

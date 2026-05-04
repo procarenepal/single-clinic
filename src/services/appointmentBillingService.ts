@@ -605,7 +605,6 @@ export const appointmentBillingService = {
         billingRef,
         where("patientId", "==", patientId),
         where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -625,7 +624,8 @@ export const appointmentBillingService = {
         } as AppointmentBilling);
       });
 
-      return billingRecords;
+      // Sort in-memory to avoid index requirement
+      return billingRecords.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     } catch (error) {
       console.error("Error getting billing records by patient:", error);
       throw error;

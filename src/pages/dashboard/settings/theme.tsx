@@ -3,6 +3,7 @@ import { Button } from "@heroui/button";
 import { Divider } from "@heroui/divider";
 import { Chip } from "@heroui/chip";
 import clsx from "clsx";
+import { title } from "@/components/primitives";
 
 import { useTheme, ThemeVariant } from "@/context/ThemeContext";
 
@@ -109,8 +110,8 @@ export default function ThemeSettingsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-page-title font-bold text-foreground">Theme Settings</h1>
-        <p className="text-foreground-500 mt-1">
+        <h1 className={`${title({ size: "lg" })} text-primary`}>Theme Settings</h1>
+        <p className="text-[13.5px] text-text-muted mt-1">
           Customize your clinic dashboard appearance and visual preferences
         </p>
       </div>

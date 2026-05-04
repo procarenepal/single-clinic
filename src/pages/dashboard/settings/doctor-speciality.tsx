@@ -16,6 +16,7 @@ import {
   IoEllipsisVerticalOutline,
 } from "react-icons/io5";
 
+import { title } from "@/components/primitives";
 import { useAuth } from "@/hooks/useAuth";
 import { specialityService } from "@/services/specialityService";
 import { DoctorSpeciality } from "@/types/models";
@@ -326,10 +327,10 @@ const DoctorSpecialityPage: React.FC = () => {
         {/* Page header — spec: clarity-page-header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-page-title font-bold text-mountain-900 tracking-[-0.02em]">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
               Doctor Specialities
             </h1>
-            <p className="text-[13px] text-mountain-500 mt-0.5">
+            <p className="text-[13.5px] text-text-muted mt-1">
               Manage medical specialities and subspecialties for doctors
             </p>
           </div>

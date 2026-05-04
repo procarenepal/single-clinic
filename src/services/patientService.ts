@@ -21,6 +21,7 @@ import { db } from "../config/firebase";
 import { Patient } from "../types/models";
 
 import { cacheService } from "@/services/cacheService";
+import { sendWelcomeSMS } from "@/services/sendMessageService";
 
 const PATIENTS_COLLECTION = "patients";
 
@@ -126,6 +127,18 @@ export const patientService = {
         }
       }
 
+      // Trigger Welcome SMS
+      if (patientData.mobile && patientData.clinicId) {
+        // Run in background without blocking the UI
+        sendWelcomeSMS({
+          id: docRef.id,
+          name: patientData.name || "Patient",
+          mobile: patientData.mobile,
+          clinicId: patientData.clinicId,
+          branchId: (patientData as any).branchId,
+        }).catch(err => console.error("Auto-welcome SMS failed:", err));
+      }
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating patient:", error);
@@ -181,21 +194,22 @@ export const patientService = {
    * @param {string} [branchId] - Optional branch ID to filter patients by
    * @returns {Promise<Patient[]>} - Array of patients for the clinic (ordered by registration number descending)
    */
-  async getPatients(_branchId?: string): Promise<Patient[]> {
+  async getPatients(clinicId?: string): Promise<Patient[]> {
     try {
+      const cacheKey = clinicId || "standalone";
+      const cached = cacheService.getClinicPatients(cacheKey);
+      if (cached) return cached as Patient[];
+
       const patientsRef = collection(db, PATIENTS_COLLECTION);
-
-      // Prefer numeric ordering when available
-      let q: any;
-
-      try {
-        q = query(patientsRef, orderBy("regNumberNumeric", "desc"));
-        await getDocs(query(q, limit(1)));
-      } catch {
-        q = query(patientsRef, orderBy("regNumber", "desc"));
+      const constraints: any[] = [];
+      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+        constraints.push(where("clinicId", "==", clinicId));
       }
+      const baseQ = query(patientsRef, ...constraints);
 
-      const querySnapshot = await getDocs(q);
+      // Fetch all patients for the clinic (or all if standalone)
+      // We remove the database-level orderBy to avoid composite index requirements
+      const querySnapshot = await getDocs(baseQ);
       const patients: Patient[] = [];
 
       querySnapshot.forEach((docSnap) => {
@@ -221,6 +235,15 @@ export const patientService = {
         } as Patient);
       });
 
+      // Sort in-memory by regNumber (descending)
+      patients.sort((a, b) => {
+        const aVal = (a as any).regNumberNumeric ?? 0;
+        const bVal = (b as any).regNumberNumeric ?? 0;
+        if (bVal !== aVal) return bVal - aVal;
+        return (b.regNumber || "").localeCompare(a.regNumber || "");
+      });
+
+      cacheService.setClinicPatients(cacheKey, patients);
       return patients;
     } catch (error) {
       console.error("Error getting patients:", error);
@@ -232,10 +255,10 @@ export const patientService = {
    * Alias for backward compatibility
    */
   async getPatientsByClinic(
-    _clinicId?: string,
+    clinicId?: string,
     _branchId?: string,
   ): Promise<Patient[]> {
-    return this.getPatients();
+    return this.getPatients(clinicId);
   },
 
   /**
@@ -597,6 +620,59 @@ export const patientService = {
     }
 
     return count;
+  },
+  /**
+   * Check if a mobile number already exists in a specific clinic
+   * @param {string} mobile - Mobile number to check
+   * @param {string} clinicId - ID of the clinic to check within
+   * @param {string} [excludeId] - Optional patient ID to exclude from check (for updates)
+   * @returns {Promise<boolean>} - True if mobile exists
+   */
+  async checkMobileExists(mobile: string, clinicId: string, excludeId?: string): Promise<boolean> {
+    if (!mobile || !clinicId) return false;
+    try {
+      const q = query(
+        collection(db, PATIENTS_COLLECTION),
+        where("clinicId", "==", clinicId),
+        where("mobile", "==", mobile.trim())
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return false;
+      if (excludeId) {
+        return snap.docs.some(doc => doc.id !== excludeId);
+      }
+      return true;
+    } catch (error) {
+      console.error("Error checking mobile existence:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Check if an email already exists in a specific clinic
+   * @param {string} email - Email address to check
+   * @param {string} clinicId - ID of the clinic to check within
+   * @param {string} [excludeId] - Optional patient ID to exclude from check (for updates)
+   * @returns {Promise<boolean>} - True if email exists
+   */
+  async checkEmailExists(email: string, clinicId: string, excludeId?: string): Promise<boolean> {
+    if (!email || !clinicId) return false;
+    try {
+      const q = query(
+        collection(db, PATIENTS_COLLECTION),
+        where("clinicId", "==", clinicId),
+        where("email", "==", email.trim().toLowerCase())
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return false;
+      if (excludeId) {
+        return snap.docs.some(doc => doc.id !== excludeId);
+      }
+      return true;
+    } catch (error) {
+      console.error("Error checking email existence:", error);
+      return false;
+    }
   },
 };
 

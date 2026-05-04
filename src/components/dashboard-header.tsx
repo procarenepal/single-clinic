@@ -211,7 +211,7 @@ export const DashboardHeader = ({
           const bIndex = b.title.toLowerCase().indexOf(ql);
 
           if (aIndex !== bIndex) return aIndex - bIndex;
-          
+
           const typeOrder = { patient: 0, doctor: 1, enquiry: 2 };
           return (typeOrder[a.type as keyof typeof typeOrder] ?? 99) - (typeOrder[b.type as keyof typeof typeOrder] ?? 99);
         });
@@ -293,7 +293,7 @@ export const DashboardHeader = ({
           className="flex items-center gap-2.5 text-text-main no-underline font-bold transition-all hover:opacity-90"
           to="/"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shrink-0 overflow-hidden shadow-sm shadow-primary/20 ring-1 ring-white/20 dark:ring-white/10">
+          <div className="w-10 h-10 rounded-md bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shrink-0 overflow-hidden shadow-sm shadow-primary/20 ring-1 ring-white/20 dark:ring-white/10">
             {clinicData?.logo ? (
               <img
                 alt="logo"
@@ -302,14 +302,11 @@ export const DashboardHeader = ({
                 onError={(e) => (e.currentTarget.style.display = "none")}
               />
             ) : (
-              <span className="text-white text-[15px] font-bold">
-                {clinicData?.name?.charAt(0) || "P"}
+              <span className="text-white text-[18px] font-bold">
+                {clinicData?.name?.charAt(0) || "H"}
               </span>
             )}
           </div>
-          <span className="font-bold text-[14.5px] hidden sm:block leading-none text-text-main tracking-tight">
-            {clinicData?.name || "ProCare Software"}
-          </span>
         </Link>
 
         <Button

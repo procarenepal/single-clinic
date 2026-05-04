@@ -23,6 +23,7 @@ import { Select, SelectItem } from "@heroui/select";
 import { Spinner } from "@heroui/spinner";
 import { addToast } from "@heroui/toast";
 import { format } from "date-fns";
+import { title } from "@/components/primitives";
 import {
   IoAdd,
   IoSearch,
@@ -51,8 +52,6 @@ import { issuedItemService } from "@/services/issuedItemService";
 import { Item, ItemCategory, IssuedItem } from "@/types/models";
 
 // Icons
-
-import { title } from "@/components/primitives";
 
 export default function InventoryPage() {
   const { currentUser, userData, clinicId } = useAuth();
@@ -473,8 +472,8 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className={title()}>Inventory Management</h1>
-          <p className="text-default-500 mt-2">
+          <h1 className={title({ size: "lg", color: "primary" })}>Inventory Management</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage your clinic's inventory items, categories, and issued items
           </p>
         </div>
@@ -592,21 +591,20 @@ export default function InventoryPage() {
                     </TableBody>
                   </Table>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-12 px-4">
-                    <div className="text-center space-y-4">
-                      <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center mx-auto">
-                        <IoAdd className="w-8 h-8 text-default-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-medium text-default-700 mb-2">
-                          {searchQuery ? "No items found" : "No items yet"}
-                        </h3>
-                        <p className="text-sm text-default-500 max-w-sm">
-                          {searchQuery
-                            ? `No items match your search "${searchQuery}". Try adjusting your search terms.`
-                            : "Start building your inventory by adding your first item."}
-                        </p>
-                      </div>
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 mb-4 mx-auto">
+                      <IoAdd className="text-3xl text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-[rgb(var(--color-text))]">
+                        {searchQuery ? "No items found" : "No items yet"}
+                      </h3>
+                      <p className="text-[13px] text-text-muted mt-1 max-w-sm mx-auto">
+                        {searchQuery
+                          ? `No items match your search "${searchQuery}". Try adjusting your search terms.`
+                          : "Start building your inventory by adding your first item."}
+                      </p>
+                    </div>
                       {!searchQuery && (
                         <Button
                           color="primary"
@@ -620,7 +618,6 @@ export default function InventoryPage() {
                         </Button>
                       )}
                     </div>
-                  </div>
                 )}
               </div>
             </Tab>
@@ -650,7 +647,7 @@ export default function InventoryPage() {
                       <thead>
                         <tr className="bg-surface-2 border-b border-border-base">
                           {["CATEGORY NAME", "DESCRIPTION", "ITEMS COUNT", "ACTIONS"].map((h) => (
-                            <th key={h} className="px-4 py-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                            <th key={h} className="px-4 py-3 text-[11px] font-semibold text-primary uppercase tracking-wider">
                               {h}
                             </th>
                           ))}
@@ -740,7 +737,7 @@ export default function InventoryPage() {
                             "STATUS",
                             "ACTIONS",
                           ].map((h) => (
-                            <th key={h} className="px-4 py-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                            <th key={h} className="px-4 py-3 text-[11px] font-semibold text-primary uppercase tracking-wider">
                               {h}
                             </th>
                           ))}

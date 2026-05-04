@@ -220,12 +220,18 @@ export const medicineService = {
   },
 
   async getMedicinesByClinic(
-    clinicId: string,
+    clinicId?: string,
     isActive?: boolean,
     branchId?: string,
   ): Promise<Medicine[]> {
     try {
-      const constraints: any[] = [where("clinicId", "==", clinicId)];
+      const constraints: any[] = [];
+      // Standalone mode: Fetch all medicines regardless of clinicId
+      /*
+      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+        constraints.push(where("clinicId", "==", clinicId));
+      }
+      */
 
       if (typeof isActive === "boolean") {
         constraints.push(where("isActive", "==", isActive));
@@ -238,14 +244,12 @@ export const medicineService = {
       const q = query(collection(db, MEDICINES_COLLECTION), ...constraints);
 
       const querySnapshot = await getDocs(q);
-
       const medicines = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate(),
-        expiryDate: doc.data().expiryDate?.toDate(),
       })) as Medicine[];
+
+      console.log(`[Diagnostic] clinicId: "${clinicId}", Found: ${medicines.length} medicines`);
 
       // Sort in memory by name
       return medicines.sort((a, b) => a.name.localeCompare(b.name));
@@ -256,49 +260,35 @@ export const medicineService = {
   },
 
   async getMedicinesByClinicPaginated(
-    clinicId: string,
+    clinicId?: string,
     options: {
       pageSize: number;
       lastDoc?: QueryDocumentSnapshot | null;
       searchPrefix?: string;
       branchId?: string;
-    },
+    } = {} as any,
   ): Promise<{ medicines: Medicine[]; lastDoc: QueryDocumentSnapshot | null }> {
     try {
       const { pageSize, lastDoc, searchPrefix, branchId } = options;
-
-      const baseConstraints: any[] = [where("clinicId", "==", clinicId)];
+      const baseConstraints: any[] = [];
+      /*
+      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+        baseConstraints.push(where("clinicId", "==", clinicId));
+      }
+      */
 
       if (branchId) {
         baseConstraints.push(where("branchId", "==", branchId));
       }
 
-      let q = query(
+      // Fetch all to handle in-memory search and pagination without composite indices
+      const q = query(
         collection(db, MEDICINES_COLLECTION),
         ...baseConstraints,
-        orderBy("name"),
       );
 
-      if (searchPrefix != null && searchPrefix !== "") {
-        const prefix = searchPrefix.trim();
-        const prefixEnd = prefix + "\uf8ff";
-
-        q = query(
-          collection(db, MEDICINES_COLLECTION),
-          ...baseConstraints,
-          where("name", ">=", prefix),
-          where("name", "<=", prefixEnd),
-          orderBy("name"),
-        );
-      }
-
-      if (lastDoc) {
-        q = query(q, startAfter(lastDoc));
-      }
-
-      q = query(q, limit(pageSize));
       const querySnapshot = await getDocs(q);
-      const medicines = querySnapshot.docs.map((d) => {
+      let allMedicines = querySnapshot.docs.map((d) => {
         const data = d.data();
 
         return {
@@ -309,12 +299,31 @@ export const medicineService = {
           expiryDate: data.expiryDate?.toDate(),
         } as Medicine;
       });
+
+      // Handle search in memory
+      if (searchPrefix != null && searchPrefix !== "") {
+        const prefix = searchPrefix.toLowerCase().trim();
+        allMedicines = allMedicines.filter((m) => 
+          m.name.toLowerCase().startsWith(prefix)
+        );
+      }
+
+      // Sort by name in memory
+      allMedicines.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+      // Handle pagination in memory
+      let startIndex = 0;
+      if (lastDoc) {
+        startIndex = allMedicines.findIndex((m) => m.id === lastDoc.id) + 1;
+      }
+      
+      const paginatedMedicines = allMedicines.slice(startIndex, startIndex + pageSize);
       const last =
-        querySnapshot.docs.length === pageSize
-          ? querySnapshot.docs[querySnapshot.docs.length - 1]
+        paginatedMedicines.length === pageSize
+          ? querySnapshot.docs.find(d => d.id === paginatedMedicines[paginatedMedicines.length - 1].id) || null
           : null;
 
-      return { medicines, lastDoc: last };
+      return { medicines: paginatedMedicines, lastDoc: last as any };
     } catch (error) {
       console.error("Error fetching medicines (paginated):", error);
       throw error;
@@ -322,38 +331,38 @@ export const medicineService = {
   },
 
   async getMedicinesCountByClinic(
-    clinicId: string,
+    clinicId?: string,
     searchPrefix?: string,
     branchId?: string,
   ): Promise<number> {
     try {
-      const baseConstraints: any[] = [where("clinicId", "==", clinicId)];
+      const baseConstraints: any[] = [];
+      /*
+      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+        baseConstraints.push(where("clinicId", "==", clinicId));
+      }
+      */
 
       if (branchId) {
         baseConstraints.push(where("branchId", "==", branchId));
       }
 
-      let q = query(
+      const q = query(
         collection(db, MEDICINES_COLLECTION),
         ...baseConstraints,
-        orderBy("name"),
       );
 
+      const querySnapshot = await getDocs(q);
+      let count = querySnapshot.size;
+
       if (searchPrefix != null && searchPrefix !== "") {
-        const prefix = searchPrefix.trim();
-        const prefixEnd = prefix + "\uf8ff";
-
-        q = query(
-          collection(db, MEDICINES_COLLECTION),
-          ...baseConstraints,
-          where("name", ">=", prefix),
-          where("name", "<=", prefixEnd),
-          orderBy("name"),
-        );
+        const prefix = searchPrefix.toLowerCase().trim();
+        count = querySnapshot.docs.filter((doc) => 
+          (doc.data().name || "").toLowerCase().startsWith(prefix)
+        ).length;
       }
-      const snapshot = await getCountFromServer(q);
 
-      return snapshot.data().count;
+      return count;
     } catch (error) {
       console.error("Error fetching medicines count:", error);
       throw error;
@@ -661,7 +670,12 @@ export const medicineService = {
           isSchemeStock: data.isSchemeStock ?? false, // Default to false for backward compatibility
         } as StockTransaction;
       });
-    } catch (error) {
+    } catch (error: any) {
+      // If it's an index error, log a warning instead of an error and return empty array
+      if (error?.message?.includes("index")) {
+        console.warn("Stock transactions query requires an index. Expiry date features may be limited until index is created. Fallback active.");
+        return [];
+      }
       console.error("Error fetching stock transactions:", error);
       throw error;
     }
@@ -729,13 +743,7 @@ export const medicineService = {
         constraints.push(where("type", "==", type));
       }
 
-      if (startDate || endDate) {
-        // For date filtering, we need to filter after fetching since Firestore doesn't support date range queries easily
-        // We'll order by createdAt and filter in memory
-        constraints.push(orderBy("createdAt", "desc"));
-      } else {
-        constraints.push(orderBy("createdAt", "desc"));
-      }
+      // We'll filter in memory
 
       const q = query(
         collection(db, STOCK_TRANSACTIONS_COLLECTION),
@@ -753,6 +761,13 @@ export const medicineService = {
           expiryDate: data.expiryDate?.toDate(),
           isSchemeStock: data.isSchemeStock ?? false,
         } as StockTransaction;
+      });
+
+      // Sort by createdAt desc in memory
+      transactions.sort((a, b) => {
+        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
+        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        return dateB - dateA;
       });
 
       // Filter by date range if provided
@@ -812,18 +827,16 @@ export const medicineService = {
           collection(db, SUPPLIERS_COLLECTION),
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
-          orderBy("name"),
         );
       } else {
         q = query(
           collection(db, SUPPLIERS_COLLECTION),
           where("clinicId", "==", clinicId),
-          orderBy("name"),
         );
       }
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const suppliers = querySnapshot.docs.map((doc) => {
         const data = doc.data() as any;
 
         return {
@@ -833,6 +846,9 @@ export const medicineService = {
           updatedAt: data.updatedAt?.toDate(),
         } as Supplier;
       });
+
+      // Sort by name in memory
+      return suppliers.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     } catch (error) {
       console.error("Error fetching suppliers:", error);
       throw error;
@@ -924,19 +940,17 @@ export const medicineService = {
           collection(db, PURCHASE_RECORDS_COLLECTION),
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
-          orderBy("purchaseDate", "desc"),
         );
       } else {
         q = query(
           collection(db, PURCHASE_RECORDS_COLLECTION),
           where("clinicId", "==", clinicId),
-          orderBy("purchaseDate", "desc"),
         );
       }
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const records = querySnapshot.docs.map((doc) => {
         const data = doc.data() as any;
 
         return {
@@ -947,6 +961,9 @@ export const medicineService = {
           updatedAt: data.updatedAt.toDate(),
         } as SupplierPurchaseRecord;
       });
+
+      // Sort by purchaseDate desc in memory
+      return records.sort((a, b) => b.purchaseDate.getTime() - a.purchaseDate.getTime());
     } catch (error) {
       console.error("Error fetching purchase records:", error);
       throw error;
@@ -993,19 +1010,17 @@ export const medicineService = {
           collection(db, PURCHASE_RECORDS_COLLECTION),
           where("supplierId", "==", supplierId),
           where("branchId", "==", branchId),
-          orderBy("purchaseDate", "desc"),
         );
       } else {
         q = query(
           collection(db, PURCHASE_RECORDS_COLLECTION),
           where("supplierId", "==", supplierId),
-          orderBy("purchaseDate", "desc"),
         );
       }
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const records = querySnapshot.docs.map((doc) => {
         const data = doc.data() as any;
 
         return {
@@ -1016,6 +1031,9 @@ export const medicineService = {
           updatedAt: data.updatedAt.toDate(),
         } as SupplierPurchaseRecord;
       });
+
+      // Sort by purchaseDate desc in memory
+      return records.sort((a, b) => b.purchaseDate.getTime() - a.purchaseDate.getTime());
     } catch (error) {
       console.error("Error fetching purchase records by supplier:", error);
       throw error;
@@ -1035,14 +1053,12 @@ export const medicineService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("paymentStatus", "in", ["pending", "partial"]),
-          orderBy("purchaseDate", "asc"),
         );
       } else {
         q = query(
           collection(db, PURCHASE_RECORDS_COLLECTION),
           where("clinicId", "==", clinicId),
           where("paymentStatus", "in", ["pending", "partial"]),
-          orderBy("purchaseDate", "asc"),
         );
       }
 
@@ -1058,6 +1074,9 @@ export const medicineService = {
           updatedAt: data.updatedAt.toDate(),
         } as SupplierPurchaseRecord;
       });
+
+      // Sort by purchaseDate asc in memory
+      records.sort((a, b) => a.purchaseDate.getTime() - b.purchaseDate.getTime());
 
       // Filter for records that are overdue (older than 30 days and not paid)
       const thirtyDaysAgo = new Date();
@@ -1160,19 +1179,17 @@ export const medicineService = {
           collection(db, SUPPLIER_PAYMENTS_COLLECTION),
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
-          orderBy("date", "desc"),
         );
       } else {
         q = query(
           collection(db, SUPPLIER_PAYMENTS_COLLECTION),
           where("clinicId", "==", clinicId),
-          orderBy("date", "desc"),
         );
       }
 
       const snapshot = await getDocs(q);
 
-      return snapshot.docs.map((doc) => {
+      const payments = snapshot.docs.map((doc) => {
         const data = doc.data() as any;
 
         return {
@@ -1182,6 +1199,13 @@ export const medicineService = {
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
         } as SupplierPayment;
+      });
+
+      // Sort by date desc in memory
+      return payments.sort((a, b) => {
+        const dateA = a.date ? (a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime()) : 0;
+        const dateB = b.date ? (b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime()) : 0;
+        return dateB - dateA;
       });
     } catch (error) {
       console.error("Error loading supplier payments:", error);
@@ -1203,20 +1227,18 @@ export const medicineService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("supplierId", "==", supplierId),
-          orderBy("date", "desc"),
         );
       } else {
         q = query(
           collection(db, SUPPLIER_PAYMENTS_COLLECTION),
           where("clinicId", "==", clinicId),
           where("supplierId", "==", supplierId),
-          orderBy("date", "desc"),
         );
       }
 
       const snapshot = await getDocs(q);
 
-      return snapshot.docs.map((doc) => {
+      const payments = snapshot.docs.map((doc) => {
         const data = doc.data() as any;
 
         return {
@@ -1226,6 +1248,13 @@ export const medicineService = {
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
         } as SupplierPayment;
+      });
+
+      // Sort by date desc in memory
+      return payments.sort((a, b) => {
+        const dateA = a.date ? (a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime()) : 0;
+        const dateB = b.date ? (b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime()) : 0;
+        return dateB - dateA;
       });
     } catch (error) {
       console.error("Error loading supplier payments by supplier:", error);
@@ -1712,6 +1741,100 @@ export const medicineService = {
       console.error("Error getting daily stock snapshot:", error);
 
       return null;
+    }
+  },
+  // ============= SEEDING =============
+  async seedDefaultMedicines(
+    clinicId: string,
+    branchId: string | undefined,
+    userId: string,
+  ): Promise<void> {
+    try {
+      // 1. Create a few categories
+      const categories = [
+        { name: "Analgesic", description: "Pain relief" },
+        { name: "Antibiotic", description: "Infection treatment" },
+        { name: "Antihistamine", description: "Allergy relief" },
+        { name: "Supplements", description: "Vitamins and minerals" },
+      ];
+
+      const catMap: Record<string, string> = {};
+
+      for (const cat of categories) {
+        const id = await this.createMedicineCategory({
+          ...cat,
+          clinicId,
+          branchId: branchId || "",
+          isActive: true,
+          createdBy: userId,
+        });
+
+        catMap[cat.name] = id;
+      }
+
+      // 2. Create medicines
+      const meds = [
+        {
+          name: "Paracetamol 500mg",
+          genericName: "Paracetamol",
+          categoryId: catMap["Analgesic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "500mg",
+          prescriptionRequired: false,
+          price: 5,
+          costPrice: 2,
+          isActive: true,
+        },
+        {
+          name: "Amoxicillin 250mg",
+          genericName: "Amoxicillin",
+          categoryId: catMap["Antibiotic"],
+          type: "capsule" as const,
+          unit: "capsule" as const,
+          strength: "250mg",
+          prescriptionRequired: true,
+          price: 15,
+          costPrice: 8,
+          isActive: true,
+        },
+        {
+          name: "Cetirizine 10mg",
+          genericName: "Cetirizine",
+          categoryId: catMap["Antihistamine"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: false,
+          price: 8,
+          costPrice: 3,
+          isActive: true,
+        },
+        {
+          name: "Vitamin D3",
+          genericName: "Cholecalciferol",
+          categoryId: catMap["Supplements"],
+          type: "capsule" as const,
+          unit: "capsule" as const,
+          strength: "60000 IU",
+          prescriptionRequired: false,
+          price: 25,
+          costPrice: 12,
+          isActive: true,
+        },
+      ];
+
+      for (const med of meds) {
+        await this.createMedicine({
+          ...med,
+          clinicId,
+          branchId: branchId || "",
+          createdBy: userId,
+        });
+      }
+    } catch (error) {
+      console.error("Error seeding medicines:", error);
+      throw error;
     }
   },
 };

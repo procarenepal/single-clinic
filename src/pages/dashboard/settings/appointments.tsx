@@ -314,8 +314,8 @@ export default function AppointmentSettingsPage() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "lg" })}>Appointment Configuration</h1>
-            <p className={subtitle({ class: "mt-1" })}>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Appointment Configuration</h1>
+            <p className="text-[13.5px] text-text-muted mt-1">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
           </div>
@@ -343,8 +343,8 @@ export default function AppointmentSettingsPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={title({ size: "lg" })}>Appointment Configuration</h1>
-            <p className="mt-1 text-text-muted">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Appointment Configuration</h1>
+            <p className="text-[13.5px] text-text-muted mt-1">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
           </div>

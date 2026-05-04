@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { title } from "@/components/primitives";
 import {
   IoPeopleOutline,
   IoCallOutline,
@@ -122,8 +123,8 @@ export default function FrontOfficeDesk() {
       {/* Page header */}
       <div className="clarity-page-header">
         <div>
-          <h1 className="text-page-title">Front Office Desk</h1>
-          <p className="text-[13px] text-mountain-400 mt-1">
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Front Office Desk</h1>
+          <p className="text-[13.5px] text-text-muted mt-1">
             Manage visitors and call logs
           </p>
         </div>

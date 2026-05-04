@@ -23,6 +23,7 @@ import { useAuthContext } from "@/context/AuthContext";
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { title } from "@/components/primitives";
 
 interface Activity {
   id: string;
@@ -114,10 +115,10 @@ export default function ActivityLogPage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-[18px] font-black text-text-main leading-tight tracking-tight">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
               Activity Log
             </h1>
-            <p className="text-[12px] text-text-muted font-medium">
+            <p className="text-[13.5px] text-text-muted mt-1">
               A comprehensive history of clinic events and changes
             </p>
           </div>

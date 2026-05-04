@@ -22,7 +22,7 @@ export const Navbar = () => {
   const location = useLocation();
 
   // Clinic branding state
-  const [clinicName, setClinicName] = useState<string>("Procare Software");
+  const [clinicName, setClinicName] = useState<string>("HSC Laser Hospital");
   const [clinicLogo, setClinicLogo] = useState<string | null>(null);
 
   // Helper to map DB file ID to Appwrite URL
@@ -97,7 +97,7 @@ export const Navbar = () => {
                 />
               ) : (
                 <img
-                  alt="Procare Software Logo"
+                  alt="HSC Laser Hospital Logo"
                   className="w-6 h-6 object-contain relative z-10"
                   src="/logo.png"
                 />
@@ -105,10 +105,10 @@ export const Navbar = () => {
             </div>
             <div className="flex flex-col justify-center translate-y-[2px]">
               <span className="font-bold text-[15px] text-[rgb(var(--color-text))] leading-none tracking-tight">
-                {clinicName}
+                {clinicName || siteConfig.name}
               </span>
               <span className="text-[10px] uppercase font-bold text-[rgb(var(--color-primary))] tracking-wider">
-                Nepal
+                Laser Hospital
               </span>
             </div>
           </Link>

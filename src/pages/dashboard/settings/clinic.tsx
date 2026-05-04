@@ -21,15 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
 import { Divider } from "@/components/ui/divider";
-import { Spinner } from "@/components/ui/spinner";
-import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-} from "@/components/ui/modal";
+import { Skeleton, TableSkeleton, CardSkeleton, Spinner, Badge, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@/components/ui";
 import { Link } from "@/components/ui/link";
 import { Clinic, ClinicType, SubscriptionPlan } from "@/types/models";
 import { clinicService } from "@/services/clinicService";
@@ -731,43 +723,17 @@ export default function ClinicSettingsPage() {
     return !hasValidationErrors;
   }, [validationErrors, formData, touchedFields]);
 
-  // Loading state
   if (loadingStates.data) {
     return (
-      <div
-        aria-label="Clinic Settings"
-        className="flex flex-col gap-6"
-        role="main"
-      >
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className={title({ size: "lg" })}>Clinic Information</h1>
-            <p className={subtitle({ class: "mt-1" })}>
-              Manage your clinic details and contact information
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <Link aria-label="Back to Settings" to="/dashboard/settings">
-              <Button startContent={<IoArrowBackOutline />} variant="light">
-                Back to Settings
-              </Button>
-            </Link>
-          </div>
+      <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
         </div>
-
-        <Card>
-          <CardBody className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <Spinner size="lg" />
-              <p className="mt-4 text-mountain-500">
-                {loadingStates.retrying
-                  ? `Retrying... (${retryCount}/${RETRY_ATTEMPTS})`
-                  : "Loading clinic information..."}
-              </p>
-            </div>
-          </CardBody>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-[400px] rounded-2xl" />
+          <Skeleton className="h-[400px] rounded-2xl" />
+        </div>
       </div>
     );
   }
@@ -913,7 +879,12 @@ export default function ClinicSettingsPage() {
                     <div className="relative group">
                       <div className="w-24 h-24 rounded-lg overflow-hidden border-2 border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] flex items-center justify-center shadow-sm">
                         {isUploadingLogo ? (
-                          <Spinner size="sm" />
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                             <div className="w-12 h-1 bg-border-base overflow-hidden rounded-full">
+                                <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2" />
+                             </div>
+                             <span className="text-[8px] font-bold text-primary uppercase">Uploading</span>
+                          </div>
                         ) : logoPreview ? (
                           <img
                             alt="Clinic Logo"

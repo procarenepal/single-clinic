@@ -14,16 +14,16 @@ export interface ScrollbarThemeConfig {
 export const scrollbarThemes: Record<string, ScrollbarThemeConfig> = {
   // ── Clinic Clarity (new themes) ───────────────────────────────────────────
   "theme-light": {
-    thumb: "3 86 161", // teal-700 (ProCare Blue)
-    track: "240 247 255", // teal-50
-    border: "224 239 254", // teal-100
-    hover: "2 109 199", // teal-600
+    thumb: "109 40 217", // violet-700
+    track: "245 243 255", // violet-50
+    border: "237 233 254", // violet-100
+    hover: "124 58 237", // violet-600
   },
   "theme-dark": {
-    thumb: "45 212 191", // teal-400
+    thumb: "139 92 246", // violet-500
     track: "9 9 11", // zinc-950
     border: "24 24 27", // zinc-900
-    hover: "94 234 212", // teal-300
+    hover: "167 139 250", // violet-400
   },
   "theme-rose-clinic": {
     thumb: "225 29 72", // rose-600
@@ -38,16 +38,16 @@ export const scrollbarThemes: Record<string, ScrollbarThemeConfig> = {
     hover: "109 40 217", // violet-700
   },
   "theme-carbon-dark": {
-    thumb: "13 148 136", // teal-600
+    thumb: "124 58 237", // violet-600
     track: "9 9 11", // zinc-950
     border: "17 17 20", // near-black
-    hover: "20 184 166", // teal-500
+    hover: "139 92 246", // violet-500
   },
   "theme-arctic": {
-    thumb: "2 132 199", // sky-600
-    track: "240 249 255", // sky-50
-    border: "224 242 254", // sky-100
-    hover: "3 105 161", // sky-700
+    thumb: "124 58 237", // violet-600
+    track: "240 249 255", // violet-50
+    border: "237 233 254", // violet-100
+    hover: "109 40 217", // violet-700
   },
 
   // ── Legacy themes (backward compat) ────────────────────────────────────────

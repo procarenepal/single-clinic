@@ -12,7 +12,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { addToast } from "@/components/ui/toast";
 import { prescriptionService } from "@/services/prescriptionService";
 import { patientService } from "@/services/patientService";
@@ -32,7 +32,7 @@ import {
 
 interface PrescriptionWithDetails extends Prescription {
   patientName?: string;
-  patientAge?: number;
+  patientAge?: string | number;
   patientGender?: string;
   patientPhone?: string;
   doctorName?: string;
@@ -209,7 +209,7 @@ export default function PrescriptionDetailPage() {
 <head>
   <title>Prescription - ${prescription.prescriptionNo}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: white; color: #333; line-height: 1.5; }
+    body { ${brandingCSS} }
     .print-container { max-width: 100%; margin: 0; background: white; display: flex; flex-direction: column; padding: 0; box-sizing: border-box; }
     
     ${brandingCSS}
@@ -272,19 +272,22 @@ export default function PrescriptionDetailPage() {
         <div class="info-section">
           <h3>Patient Detail</h3>
           <div class="info-item"><span class="info-label">Name:</span><span class="info-value">${prescription.patientName}</span></div>
-          <div class="info-item"><span class="info-label">Age/Gen:</span><span class="info-value">${prescription.patientAge || "N/A"}Y / ${prescription.patientGender || "N/A"}</span></div>
-          <div class="info-item"><span class="info-label">Contact:</span><span class="info-value">${prescription.patientPhone || "N/A"}</span></div>
+          ${prescription.patientAge || prescription.patientGender ? `
+            <div class="info-item"><span class="info-label">Age/Gen:</span><span class="info-value">${[prescription.patientAge, prescription.patientGender].filter(Boolean).join(" / ")}</span></div>
+          ` : ""}
+          ${prescription.patientPhone ? `
+            <div class="info-item"><span class="info-label">Contact:</span><span class="info-value">${prescription.patientPhone}</span></div>
+          ` : ""}
         </div>
         <div class="info-section">
           <h3>Doctor Detail</h3>
           <div class="info-item"><span class="info-label">Physician:</span><span class="info-value">${prescription.doctorName}</span></div>
-          <div class="info-item"><span class="info-label">Speciality:</span><span class="info-value">${prescription.doctorSpeciality || "N/A"}</span></div>
-          ${prescription.appointmentInfo
-          ? `
-            <div class="info-item"><span class="info-label">Visit Type:</span><span class="info-value">${prescription.appointmentTypeName || "Consultation"}</span></div>
-          `
-          : ""
-        }
+          ${prescription.doctorSpeciality ? `
+            <div class="info-item"><span class="info-label">Speciality:</span><span class="info-value">${prescription.doctorSpeciality}</span></div>
+          ` : ""}
+          ${prescription.appointmentInfo && prescription.appointmentTypeName ? `
+            <div class="info-item"><span class="info-label">Visit Type:</span><span class="info-value">${prescription.appointmentTypeName}</span></div>
+          ` : ""}
         </div>
       </div>
 
@@ -348,27 +351,22 @@ export default function PrescriptionDetailPage() {
     });
 
   const statusColors: Record<string, string> = {
-    active: "bg-teal-50 text-teal-700 border-teal-200",
-    completed: "bg-mountain-100 text-mountain-800 border-mountain-200",
-    cancelled: "bg-red-50 text-red-700 border-red-200",
+    active: "bg-primary/10 text-primary border-primary/20",
+    completed: "bg-surface-2 text-text-muted border-border-base",
+    cancelled: "bg-red-500/10 text-red-500 border-red-500/20",
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6">
-        <div>
-          <h1 className={title({ size: "lg" })}>Prescription Details</h1>
-        </div>
-        <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
-          <Spinner size="md" />
-        </div>
+      <div className="p-2">
+        <PageSkeleton />
       </div>
     );
   }
 
   if (error || !prescription) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 bg-white border border-mountain-200 rounded shadow-sm">
+      <div className="flex flex-col items-center justify-center h-64 bg-surface border border-border-base rounded-[10px] shadow-sm">
         <p className="text-red-500 text-lg mb-4">
           {error || "Prescription not found"}
         </p>
@@ -392,8 +390,8 @@ export default function PrescriptionDetailPage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className={title({ size: "lg" })}>Prescription Details</h1>
-            <p className="text-[14.5px] font-semibold text-mountain-800 tracking-wide mt-1">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Prescription Details</h1>
+            <p className="text-[14.5px] font-bold text-text-main tracking-wide mt-1">
               #{prescription.prescriptionNo}
             </p>
           </div>
@@ -426,43 +424,43 @@ export default function PrescriptionDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Col */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-mountain-200 rounded shadow-sm">
-            <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-              <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+          <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+            <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+              <h4 className="font-semibold text-[15px] text-text-main leading-none">
                 Patient Information
               </h4>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
-                  <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                  <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                     Name
                   </p>
-                  <p className="font-medium text-[14.5px] text-mountain-900">
+                  <p className="font-medium text-[14.5px] text-text-main">
                     {prescription.patientName}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                  <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                     Age
                   </p>
-                  <p className="font-medium text-[14.5px] text-mountain-900">
-                    {prescription.patientAge} years
+                  <p className="font-medium text-[14.5px] text-text-main">
+                    {prescription.patientAge}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                  <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                     Gender
                   </p>
-                  <p className="font-medium text-[14.5px] text-mountain-900 capitalize">
+                  <p className="font-medium text-[14.5px] text-text-main capitalize">
                     {prescription.patientGender}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                  <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                     Phone
                   </p>
-                  <p className="font-medium text-[14.5px] text-mountain-900">
+                  <p className="font-medium text-[14.5px] text-text-main">
                     {prescription.patientPhone}
                   </p>
                 </div>
@@ -470,27 +468,27 @@ export default function PrescriptionDetailPage() {
             </div>
           </div>
 
-          <div className="bg-white border border-mountain-200 rounded shadow-sm">
-            <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-              <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+          <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+            <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+              <h4 className="font-semibold text-[15px] text-text-main leading-none">
                 Doctor Information
               </h4>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                  <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                     Name
                   </p>
-                  <p className="font-medium text-[14.5px] text-mountain-900">
+                  <p className="font-medium text-[14.5px] text-text-main">
                     {prescription.doctorName}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                  <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                     Speciality
                   </p>
-                  <p className="font-medium text-[14.5px] text-mountain-900">
+                  <p className="font-medium text-[14.5px] text-text-main">
                     {prescription.doctorSpeciality}
                   </p>
                 </div>
@@ -499,27 +497,27 @@ export default function PrescriptionDetailPage() {
           </div>
 
           {prescription.appointmentInfo && (
-            <div className="bg-white border border-mountain-200 rounded shadow-sm">
-              <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-                <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+            <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+              <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+                <h4 className="font-semibold text-[15px] text-text-main leading-none">
                   Appointment Information
                 </h4>
               </div>
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                   <div>
-                    <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                    <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                       Appointment Date
                     </p>
-                    <p className="font-medium text-[14.5px] text-mountain-900">
+                    <p className="font-medium text-[14.5px] text-text-main">
                       {formatDate(prescription.appointmentInfo.appointmentDate)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                    <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                       Type
                     </p>
-                    <p className="font-medium text-[14.5px] text-mountain-900 capitalize">
+                    <p className="font-medium text-[14.5px] text-text-main capitalize">
                       {prescription.appointmentTypeName ||
                         (prescription.appointmentInfo.appointmentType
                           ? prescription.appointmentInfo.appointmentType.replace(
@@ -530,30 +528,30 @@ export default function PrescriptionDetailPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                    <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                       Status
                     </p>
-                    <p className="font-medium text-[14.5px] text-mountain-900 capitalize">
+                    <p className="font-medium text-[14.5px] text-text-main capitalize">
                       {prescription.appointmentInfo.status || "N/A"}
                     </p>
                   </div>
                   {prescription.appointmentInfo.reason && (
                     <div>
-                      <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                      <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                         Reason
                       </p>
-                      <p className="font-medium text-[14.5px] text-mountain-900">
+                      <p className="font-medium text-[14.5px] text-text-main">
                         {prescription.appointmentInfo.reason}
                       </p>
                     </div>
                   )}
                 </div>
                 {prescription.appointmentInfo.notes && (
-                  <div className="pt-2 border-t border-mountain-100">
-                    <p className="text-[12.5px] text-mountain-500 font-medium tracking-wide pb-1">
+                  <div className="pt-2 border-t border-border-base/50">
+                    <p className="text-[12.5px] text-text-muted font-medium tracking-wide pb-1">
                       Notes
                     </p>
-                    <p className="font-medium text-[14.5px] text-mountain-900">
+                    <p className="font-medium text-[14.5px] text-text-main">
                       {prescription.appointmentInfo.notes}
                     </p>
                   </div>
@@ -562,54 +560,54 @@ export default function PrescriptionDetailPage() {
             </div>
           )}
 
-          <div className="bg-white border border-mountain-200 rounded shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-              <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+          <div className="bg-surface border border-border-base rounded-[10px] shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+              <h4 className="font-semibold text-[15px] text-text-main leading-none">
                 Prescribed Medicines
               </h4>
             </div>
             <div className="overflow-x-auto min-w-full">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-mountain-50 border-b border-mountain-200">
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/4">
+                  <tr className="bg-surface-2/50 border-b border-border-base">
+                    <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider w-1/4">
                       Medicine
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/6">
+                    <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider w-1/6">
                       Dosage
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/6">
+                    <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider w-1/6">
                       Duration
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/6">
+                    <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider w-1/6">
                       Time
                     </th>
-                    <th className="px-5 py-3 text-[13px] font-semibold text-mountain-700 w-1/6">
+                    <th className="px-5 py-3 text-[11px] font-bold text-text-muted uppercase tracking-wider w-1/6">
                       Frequency
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-mountain-100">
+                <tbody className="divide-y divide-border-base">
                   {prescription.items?.map((item) => (
                     <tr
                       key={item.id}
-                      className="hover:bg-mountain-50/30 transition-colors"
+                      className="hover:bg-surface-2/30 transition-colors"
                     >
                       <td className="px-5 py-3">
-                        <div className="font-medium text-[13.5px] text-mountain-900">
+                        <div className="font-medium text-[13.5px] text-text-main">
                           {item.medicineName}
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-[13.5px] text-mountain-700">
+                      <td className="px-5 py-3 text-[13.5px] text-text-muted">
                         {item.dosage}
                       </td>
-                      <td className="px-5 py-3 text-[13.5px] text-mountain-700">
+                      <td className="px-5 py-3 text-[13.5px] text-text-muted">
                         {item.duration}
                       </td>
-                      <td className="px-5 py-3 text-[13.5px] text-mountain-700 capitalize">
+                      <td className="px-5 py-3 text-[13.5px] text-text-muted capitalize">
                         {item.time}
                       </td>
-                      <td className="px-5 py-3 text-[13.5px] text-mountain-700 capitalize">
+                      <td className="px-5 py-3 text-[13.5px] text-text-muted capitalize">
                         {item.frequency}
                       </td>
                     </tr>
@@ -620,14 +618,14 @@ export default function PrescriptionDetailPage() {
           </div>
 
           {prescription.notes && (
-            <div className="bg-white border border-mountain-200 rounded shadow-sm">
-              <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-                <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+            <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+              <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+                <h4 className="font-semibold text-[15px] text-text-main leading-none">
                   Notes & Instructions
                 </h4>
               </div>
               <div className="p-6">
-                <p className="text-[13.5px] text-mountain-800 leading-relaxed">
+                <p className="text-[13.5px] text-text-main leading-relaxed">
                   {prescription.notes}
                 </p>
               </div>
@@ -637,70 +635,70 @@ export default function PrescriptionDetailPage() {
 
         {/* Right Col */}
         <div className="space-y-6">
-          <div className="bg-white border border-mountain-200 rounded shadow-sm">
-            <div className="px-5 py-4 border-b border-mountain-100 bg-mountain-50/50">
-              <h4 className="font-semibold text-[15px] text-mountain-900 leading-none">
+          <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+            <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+              <h4 className="font-semibold text-[15px] text-text-main leading-none">
                 Summary
               </h4>
             </div>
             <div className="p-6 space-y-4">
               <div className="flex justify-between items-center text-[13.5px]">
-                <span className="text-mountain-600 font-medium tracking-wide">
+                <span className="text-text-muted font-medium tracking-wide">
                   Prescription No.
                 </span>
-                <span className="font-bold text-mountain-900">
+                <span className="font-bold text-text-main">
                   {prescription.prescriptionNo}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-mountain-100">
-                <span className="text-mountain-600 font-medium tracking-wide">
+              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-border-base/50">
+                <span className="text-text-muted font-medium tracking-wide">
                   Date
                 </span>
-                <span className="font-semibold text-mountain-900">
+                <span className="font-semibold text-text-main">
                   {formatDate(prescription.prescriptionDate)}
                 </span>
               </div>
               {prescription.appointmentInfo && (
-                <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-mountain-100">
-                  <span className="text-mountain-600 font-medium tracking-wide">
+                <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-border-base/50">
+                  <span className="text-text-muted font-medium tracking-wide">
                     Appt. Date
                   </span>
-                  <span className="font-semibold text-mountain-900">
+                  <span className="font-semibold text-text-main">
                     {formatDate(prescription.appointmentInfo.appointmentDate)}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-mountain-100">
-                <span className="text-mountain-600 font-medium tracking-wide">
+              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-border-base/50">
+                <span className="text-text-muted font-medium tracking-wide">
                   Status
                 </span>
                 <span
-                  className={`inline-flex px-2 py-0.5 border rounded text-[11.5px] font-medium capitalize ${statusColors[prescription.status] || statusColors.completed}`}
+                  className={`inline-flex px-2 py-0.5 border rounded-[10px] text-[11.5px] font-medium capitalize ${statusColors[prescription.status] || statusColors.completed}`}
                 >
                   {prescription.status}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-mountain-100">
-                <span className="text-mountain-600 font-medium tracking-wide">
+              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-border-base/50">
+                <span className="text-text-muted font-medium tracking-wide">
                   Total Medicines
                 </span>
-                <span className="font-bold text-mountain-900">
+                <span className="font-bold text-text-main">
                   {prescription.items?.length || 0}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-mountain-100">
-                <span className="text-mountain-600 font-medium tracking-wide">
+              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-border-base/50">
+                <span className="text-text-muted font-medium tracking-wide">
                   Created
                 </span>
-                <span className="font-semibold text-mountain-900">
+                <span className="font-semibold text-text-main">
                   {formatDate(prescription.createdAt)}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-mountain-100">
-                <span className="text-mountain-600 font-medium tracking-wide">
+              <div className="flex justify-between items-center text-[13.5px] pt-4 border-t border-border-base/50">
+                <span className="text-text-muted font-medium tracking-wide">
                   Last Updated
                 </span>
-                <span className="font-semibold text-mountain-900">
+                <span className="font-semibold text-text-main">
                   {formatDate(prescription.updatedAt)}
                 </span>
               </div>

@@ -59,19 +59,16 @@ export interface SMSLog {
 }
 
 export interface SMSTemplate {
-  id: string;
+  id?: string;
   clinicId: string;
-  branchId?: string;
   name: string;
   message: string;
-  description?: string;
   type: "patient" | "doctor" | "general" | "appointment" | "reminder";
-  category?: string;
+  language?: "en" | "ne";
   isActive: boolean;
-  usageCount: number;
-  placeholders?: string[];
-  createdAt: Date;
-  updatedAt: Date;
+  usageCount?: number;
+  createdAt: any;
+  updatedAt: any;
   createdBy: string;
   updatedBy: string;
 }
@@ -89,7 +86,7 @@ export interface SMSSettings {
   currentDailySMS: number;
   lastResetDate: string;
   enableAutoReminders: boolean;
-  smsAppointmentType?: string;
+  smsAppointmentTypes?: string[];
   defaultSenderId?: string;
   customApiUrl?: string;
   smsBalance?: number;
@@ -127,9 +124,9 @@ export const smsService = {
       }
 
       // Use provided settings or environment variables
-      const apiKey = import.meta.env.VITE_SMS_API_KEY || "";
-      const senderId = import.meta.env.VITE_SMS_SENDER_ID || "";
-      const apiUrl = import.meta.env.VITE_SMS_API_URL || "";
+      const apiKey = settings?.apiKey || import.meta.env.VITE_SMS_API_KEY || "";
+      const senderId = settings?.senderId || settings?.defaultSenderId || import.meta.env.VITE_SMS_SENDER_ID || "";
+      const apiUrl = settings?.apiUrl || settings?.customApiUrl || import.meta.env.VITE_SMS_API_URL || "";
 
       // Clean and validate phone number
       const cleanPhoneNumber = phoneNumber.replace(/\D/g, "");
@@ -177,6 +174,88 @@ export const smsService = {
     } catch (error) {
       console.error("Error sending SMS:", error);
       throw error;
+    }
+  },
+
+  /**
+   * Get live SMS credit balance from provider
+   */
+  async getSMSBalance(apiKey?: string, apiUrl?: string): Promise<number | null> {
+    try {
+      const key = apiKey || import.meta.env.VITE_SMS_API_KEY;
+      const url = apiUrl || import.meta.env.VITE_SMS_API_URL;
+
+      if (!key || !url) return null;
+
+      // Expanded list of common credit check endpoints for various providers
+      const endpoints = [
+        url.replace(/\/smsapi\/?$/, "/smsapi/index.php"), // Samaya SMS potential pattern
+        url.replace(/\/sms\/?$/, "/credit/"),     // Sparrow SMS pattern
+        url.replace(/\/sms\/?$/, "/balance/"),    // Alternative Sparrow/Generic
+        url.replace(/\/v2\/sms\/?$/, "/v2/balance"), // Aakash SMS v2/v3 pattern
+        "https://api.sparrowsms.com/v2/credit/",
+        "https://v3.aakashsms.com/api/v2/balance",
+        "https://samayasms.com.np/smsapi/index.php"
+      ];
+
+      for (const creditUrl of endpoints) {
+        try {
+          // Try direct fetch first
+          const targetUrl = `${creditUrl}${creditUrl.includes("?") ? "&" : "?"}token=${key}&auth_token=${key}`;
+
+          const attemptFetch = async (url: string, timeout = 10000) => {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+              const res = await fetch(url, {
+                signal: controller.signal,
+                headers: { "Accept": "application/json" }
+              });
+              clearTimeout(id);
+              return res;
+            } catch (e) {
+              clearTimeout(id);
+              return null;
+            }
+          };
+
+          let response = await attemptFetch(targetUrl);
+
+          // If direct failed or was blocked, try via proxy
+          if (!response || !response.ok) {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            const proxyResponse = await attemptFetch(proxyUrl);
+            if (proxyResponse && proxyResponse.ok) {
+              const proxyData = await proxyResponse.json();
+              // AllOrigins wraps the response in a 'contents' field
+              if (proxyData.contents) {
+                try {
+                  const data = JSON.parse(proxyData.contents);
+                  const balance = data.credits ?? data.credit ?? data.balance ?? data.amount ?? data.available_balance;
+                  if (balance !== undefined && balance !== null) return Number(balance);
+                } catch (e) {
+                  // If content isn't JSON, it might be raw text balance
+                  const rawVal = parseFloat(proxyData.contents);
+                  if (!isNaN(rawVal)) return rawVal;
+                }
+              }
+            }
+          }
+
+          if (response && response.ok) {
+            const data = await response.json();
+            const balance = data.credits ?? data.credit ?? data.balance ?? data.amount ?? data.available_balance;
+            if (balance !== undefined && balance !== null) return Number(balance);
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error fetching SMS balance:", error);
+      return null;
     }
   },
 
@@ -313,6 +392,18 @@ export const smsService = {
     smsSettings: SMSSettings,
   ): Promise<void> {
     try {
+      // Filter by appointment type if configured
+      if (
+        smsSettings.smsAppointmentTypes &&
+        smsSettings.smsAppointmentTypes.length > 0
+      ) {
+        const appType = appointment.appointmentType || appointment.type;
+
+        if (!smsSettings.smsAppointmentTypes.includes(appType)) {
+          return; // Skip if type not in enabled list
+        }
+      }
+
       const patientId = appointment.patientId || appointment.patientID;
       const doctorId = appointment.doctorId || appointment.doctorID;
 
@@ -409,7 +500,6 @@ export const smsService = {
       let q = query(
         collection(db, SMS_LOGS_COLLECTION),
         where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
         limit(limitCount),
       );
 
@@ -418,23 +508,25 @@ export const smsService = {
           collection(db, SMS_LOGS_COLLECTION),
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
-          orderBy("createdAt", "desc"),
           limit(limitCount),
         );
       }
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
-        const data = doc.data();
+      // Sort client-side by createdAt descending (avoids composite index requirement)
+      return querySnapshot.docs
+        .map((doc) => {
+          const data = doc.data();
 
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        };
-      }) as SMSLog[];
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+          } as SMSLog;
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     } catch (error) {
       console.error("Error fetching SMS logs:", error);
       throw error;
@@ -453,13 +545,28 @@ export const smsService = {
         Object.entries(logData).filter(([_, value]) => value !== undefined),
       );
 
-      const docRef = await addDoc(collection(db, SMS_LOGS_COLLECTION), {
+      // 1. Create the log
+      const logRef = await addDoc(collection(db, SMS_LOGS_COLLECTION), {
         ...cleanLogData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      return docRef.id;
+      // 2. If status is 'sent', increment the daily counter in settings
+      if (cleanLogData.status === "sent") {
+        const settingsRef = doc(db, SMS_SETTINGS_COLLECTION, cleanLogData.clinicId);
+        const settingsSnap = await getDoc(settingsRef);
+
+        if (settingsSnap.exists()) {
+          const currentCount = settingsSnap.data().currentDailySMS || 0;
+          await updateDoc(settingsRef, {
+            currentDailySMS: currentCount + 1,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      return logRef.id;
     } catch (error) {
       console.error("Error creating SMS log:", error);
       throw error;
@@ -474,26 +581,22 @@ export const smsService = {
     branchId?: string,
   ): Promise<SMSTemplate[]> {
     try {
-      let q = query(
-        collection(db, SMS_TEMPLATES_COLLECTION),
-        where("clinicId", "==", clinicId),
-        where("isActive", "==", true),
-        orderBy("createdAt", "desc"),
-      );
-
-      if (branchId) {
-        q = query(
+      const q = branchId
+        ? query(
           collection(db, SMS_TEMPLATES_COLLECTION),
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("isActive", "==", true),
-          orderBy("createdAt", "desc"),
+        )
+        : query(
+          collection(db, SMS_TEMPLATES_COLLECTION),
+          where("clinicId", "==", clinicId),
+          where("isActive", "==", true),
         );
-      }
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const templates = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -503,6 +606,11 @@ export const smsService = {
           updatedAt: data.updatedAt?.toDate() || new Date(),
         };
       }) as SMSTemplate[];
+
+      // Sort in-memory to avoid index requirement
+      return templates.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
     } catch (error) {
       console.error("Error fetching SMS templates:", error);
       throw error;
@@ -833,7 +941,7 @@ export const smsService = {
         remainingToday: Math.max(
           0,
           (smsSettings?.maxDailySMS || 100) -
-            (smsSettings?.currentDailySMS || 0),
+          (smsSettings?.currentDailySMS || 0),
         ),
         templatesCount: templates.length,
         activeTemplatesCount: templates.filter((template) => template.isActive)
@@ -1604,6 +1712,125 @@ export const smsService = {
       return false;
     }
   },
+
+  /**
+   * Send a "Thank You" / Welcome SMS to a newly created patient
+   */
+  async sendWelcomeSMS(patient: {
+    id: string;
+    name: string;
+    mobile?: string;
+    phone?: string;
+    clinicId: string;
+    branchId?: string;
+  }): Promise<boolean> {
+    try {
+      const clinicDoc = await getDoc(doc(db, CLINICS_COLLECTION, patient.clinicId));
+      if (!clinicDoc.exists()) return false;
+      const clinic = clinicDoc.data();
+
+      // Check if welcome SMS is enabled in settings
+      const settings = await this.getSMSSettings(patient.clinicId);
+      if (!settings || !settings.isActive) return false;
+
+      const message = `Dear ${patient.name}, thank you for choosing ${clinic.name}. We are honored to serve your healthcare needs. For appointments, call ${clinic.phone || ""}.`;
+
+      // Try to use a template if available
+      let finalMessage = message;
+      try {
+        const templates = await this.getSMSTemplates(patient.clinicId);
+        const welcomeTemplate = templates.find(t => t.name.includes("Welcome Message") && t.language === "en");
+
+        if (welcomeTemplate) {
+          finalMessage = welcomeTemplate.message
+            .replace(/{patientName}/g, patient.name)
+            .replace(/{clinicName}/g, clinic.name || "our clinic")
+            .replace(/{clinicPhone}/g, clinic.phone || "");
+        }
+      } catch (err) {
+        console.warn("Could not fetch welcome template, using default:", err);
+      }
+
+      const phoneNumber = patient.mobile || patient.phone;
+      if (!phoneNumber) return false;
+
+      // Send the SMS with settings
+      const response = await this.sendMessage(phoneNumber, finalMessage, settings);
+      const isSuccess = response.success || response.isRawText;
+
+      // Log the SMS (Success or Failure)
+      await this.createSMSLog({
+        clinicId: patient.clinicId,
+        branchId: patient.branchId,
+        patientId: patient.id,
+        patientName: patient.name,
+        patientPhone: phoneNumber,
+        message: finalMessage,
+        status: isSuccess ? "sent" : "failed",
+        type: "general",
+        recipientType: "patient",
+        createdBy: "system",
+      });
+
+      return isSuccess;
+    } catch (error) {
+      console.error("Error sending welcome SMS:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Seed default SMS templates for a clinic
+   */
+  async seedTemplates(clinicId: string, userId: string): Promise<{ count: number; skipped: number }> {
+    const defaultTemplates = [
+      // English Templates
+      { name: "Appointment Reminder (EN)", type: "patient", language: "en", message: "Dear {patientName}, your appointment with Dr. {doctorName} is on {date} at {time}. Please arrive 15 minutes early." },
+      { name: "Welcome Message (EN)", type: "general", language: "en", message: "Welcome to {clinicName}! We are honored to serve your healthcare needs. Call us at {clinicPhone} for any queries." },
+      { name: "Lab Report Ready (EN)", type: "patient", language: "en", message: "Dear {patientName}, your lab report is ready. Please visit our clinic or call {clinicPhone} to discuss with your doctor." },
+
+      // Nepali Templates
+      { name: "अपोइन्टमेन्ट रिमाइन्डर (NE)", type: "patient", language: "ne", message: "नमस्ते {patientName}, डा. {doctorName} सँगको तपाईंको अपोइन्टमेन्ट {date} मा {time} बजे छ। कृपया समयमै आउनुहोला।" },
+      { name: "स्वागत सन्देश (NE)", type: "general", language: "ne", message: "हाम्रो क्लिनिकमा स्वागत छ! तपाईंको स्वास्थ्य सेवा गर्न पाउँदा हामी खुसी छौं। जिज्ञासाको लागि {clinicPhone} मा सम्पर्क गर्नुहोस्।" },
+      { name: "रिपोर्ट तयार छ (NE)", type: "patient", language: "ne", message: "नमस्ते {patientName}, तपाईंको ल्याब रिपोर्ट तयार भएको छ। कृपया क्लिनिकमा आएर बुझ्नुहोला।" }
+    ];
+
+    let count = 0;
+    let skipped = 0;
+
+    try {
+      // Get existing templates to avoid duplicates
+      const existingTemplates = await this.getSMSTemplates(clinicId);
+      const existingNames = new Set(existingTemplates.map(t => t.name.toLowerCase()));
+
+      for (const t of defaultTemplates) {
+        if (existingNames.has(t.name.toLowerCase())) {
+          skipped++;
+          continue;
+        }
+
+        await this.createSMSTemplate({
+          clinicId,
+          name: t.name,
+          type: t.type as any,
+          language: t.language as any,
+          message: t.message,
+          createdBy: userId,
+          updatedBy: userId,
+          isActive: true,
+          usageCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        count++;
+      }
+
+      return { count, skipped };
+    } catch (error) {
+      console.error("Error seeding templates:", error);
+      throw error;
+    }
+  },
 };
 
 // Export individual functions for backward compatibility
@@ -1631,6 +1858,8 @@ export const scheduleAppointmentReminder =
   smsService.scheduleAppointmentReminder.bind(smsService);
 export const scheduleDoctorAppointmentReminder =
   smsService.scheduleDoctorAppointmentReminder.bind(smsService);
+export const seedSMSTemplates = smsService.seedTemplates.bind(smsService);
+export const sendWelcomeSMS = smsService.sendWelcomeSMS.bind(smsService);
 
 // Default export
 export default smsService;

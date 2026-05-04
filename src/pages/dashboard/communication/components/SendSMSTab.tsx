@@ -6,7 +6,8 @@ import { addToast } from "@/components/ui/toast";
 import { useAuth } from "@/hooks/useAuth";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
-import { smsService } from "@/services/sendMessageService";
+import { clinicService } from "@/services/clinicService";
+import { smsService, SMSTemplate } from "@/services/sendMessageService";
 import { smsTestService } from "@/services/smsTestService";
 import { Patient, Doctor } from "@/types/models";
 
@@ -40,7 +41,7 @@ function SearchSelect({
         {label}
       </label>
       <div
-        className={`flex items-center h-9 border border-[rgb(var(--color-border))] rounded focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100 bg-white ${disabled ? "bg-[rgb(var(--color-surface-2))]" : ""}`}
+        className={`flex items-center h-9 border border-[rgb(var(--color-border))] rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10 bg-[rgb(var(--color-surface))] ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-text"}`}
         onClick={() => !disabled && setOpen(true)}
       >
         <IoSearchOutline
@@ -80,7 +81,7 @@ function SearchSelect({
             className="fixed inset-0 z-10"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-[rgb(var(--color-border))] rounded max-h-48 overflow-y-auto shadow-none">
+          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded max-h-48 overflow-y-auto shadow-lg">
             {filtered.length === 0 ? (
               <p className="px-3 py-2 text-xs text-[rgb(var(--color-text-muted))]">
                 No results
@@ -89,7 +90,7 @@ function SearchSelect({
               filtered.map((i) => (
                 <button
                   key={i.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-teal-50 text-sm ${i.id === value ? "bg-teal-50" : ""}`}
+                  className={`w-full text-left px-3 py-2 hover:bg-[rgb(var(--color-surface-2))] text-sm transition-colors ${i.id === value ? "bg-primary/10 text-primary" : ""}`}
                   type="button"
                   onClick={() => {
                     onChange(i.id);
@@ -124,6 +125,11 @@ const SendSMSTab: React.FC = () => {
   const [functionStatus, setFunctionStatus] = useState<
     "checking" | "online" | "offline"
   >("checking");
+
+  const [templates, setTemplates] = useState<SMSTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [clinicData, setClinicData] = useState<any>(null);
+  const [associatedDoctorId, setAssociatedDoctorId] = useState<string>("");
 
   const [selectedRecipientType, setSelectedRecipientType] = useState<
     "patient" | "doctor"
@@ -165,13 +171,17 @@ const SendSMSTab: React.FC = () => {
     if (!clinicId) return;
     setLoadingData(true);
     try {
-      const [patientsData, doctorsData] = await Promise.all([
+      const [patientsData, doctorsData, templatesData, clinicDoc] = await Promise.all([
         patientService.getPatientsByClinic(clinicId),
         doctorService.getDoctorsByClinic(clinicId),
+        smsService.getSMSTemplates(clinicId),
+        clinicService.getClinicById(clinicId),
       ]);
 
       setPatients(patientsData);
       setDoctors(doctorsData);
+      setTemplates(templatesData);
+      setClinicData(clinicDoc);
     } catch (error) {
       console.error("Error loading data:", error);
       addToast({
@@ -198,6 +208,15 @@ const SendSMSTab: React.FC = () => {
       if (patient) {
         setPhoneNumber(patient.mobile || patient.phone || "");
         setRecipientName(patient.name);
+        
+        // If a template is already selected, re-process it with the new recipient
+        if (selectedTemplateId) {
+          const template = templates.find(t => t.id === selectedTemplateId);
+          if (template) {
+            const doctor = doctors.find(d => d.id === associatedDoctorId);
+            setMessage(processTemplatePlaceholders(template.message, patient, doctor));
+          }
+        }
       }
     } else {
       const doctor = doctors.find((d) => d.id === value);
@@ -205,16 +224,93 @@ const SendSMSTab: React.FC = () => {
       if (doctor) {
         setPhoneNumber(doctor.phone || "");
         setRecipientName(doctor.name);
+
+        // If a template is already selected, re-process it with the new recipient
+        if (selectedTemplateId) {
+          const template = templates.find(t => t.id === selectedTemplateId);
+          if (template) {
+            setMessage(processTemplatePlaceholders(template.message, doctor));
+          }
+        }
+      }
+    }
+  };
+
+  const handleAssociatedDoctorChange = (doctorId: string) => {
+    setAssociatedDoctorId(doctorId);
+    
+    if (selectedTemplateId) {
+      const template = templates.find(t => t.id === selectedTemplateId);
+      if (template) {
+        const patient = patients.find(p => p.id === selectedRecipient);
+        const doctor = doctors.find(d => d.id === doctorId);
+        // Process with both entities
+        setMessage(processTemplatePlaceholders(template.message, patient, doctor));
       }
     }
   };
 
   const handleRecipientTypeChange = (value: string) => {
-    setSelectedRecipientType(value as "patient" | "doctor");
-    setSelectedRecipient("");
-    setPhoneNumber("");
     setRecipientName("");
     setMessage("");
+    setSelectedTemplateId("");
+  };
+
+  const handleTemplateChange = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!templateId) {
+      setMessage("");
+      return;
+    }
+
+    const template = templates.find((t) => t.id === templateId);
+    if (template) {
+      // Find current recipient object to process placeholders
+      let recipient: any = null;
+      let associatedDoctor: any = null;
+
+      if (selectedRecipientType === "patient") {
+        recipient = patients.find((p) => p.id === selectedRecipient);
+        associatedDoctor = doctors.find((d) => d.id === associatedDoctorId);
+      } else {
+        recipient = doctors.find((d) => d.id === selectedRecipient);
+      }
+
+      const processedMessage = processTemplatePlaceholders(template.message, recipient, associatedDoctor);
+      setMessage(processedMessage);
+    }
+  };
+
+  const processTemplatePlaceholders = (text: string, recipient?: any, associatedDoctor?: any) => {
+    let processed = text;
+
+    // Clinic data from database
+    processed = processed.replace(/{clinicName}/g, clinicData?.hospitalName || clinicData?.name || "Our Clinic");
+    processed = processed.replace(/{clinicPhone}/g, clinicData?.phone || "the clinic");
+
+    // Date/Time
+    const now = new Date();
+    processed = processed.replace(/{date}/g, now.toLocaleDateString());
+    processed = processed.replace(
+      /{time}/g,
+      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    );
+
+    if (recipient) {
+      if (selectedRecipientType === "patient") {
+        processed = processed.replace(/{patientName}/g, recipient.name || "");
+        processed = processed.replace(/{patientId}/g, recipient.id || "");
+      } else {
+        processed = processed.replace(/{doctorName}/g, recipient.name || "");
+      }
+    }
+
+    // Handle associated doctor if present (when sending to patient)
+    if (associatedDoctor) {
+      processed = processed.replace(/{doctorName}/g, associatedDoctor.name || "");
+    }
+
+    return processed;
   };
 
   const handleSendSMS = async () => {
@@ -463,6 +559,53 @@ const SendSMSTab: React.FC = () => {
           value={selectedRecipient}
           onChange={handleRecipientChange}
         />
+
+        {selectedRecipientType === "patient" && (
+          <div>
+            <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1">
+              Related Doctor (Optional)
+            </label>
+            <select
+              className="clarity-input w-full"
+              value={associatedDoctorId}
+              onChange={(e) => handleAssociatedDoctorChange(e.target.value)}
+            >
+              <option value="">No doctor mentioned</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-[rgb(var(--color-text-muted))] mt-1">
+              Fills the {"{doctorName}"} placeholder in your message
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1">
+          Quick templates
+        </label>
+        <select
+          aria-label="Select template"
+          className="clarity-input w-full"
+          value={selectedTemplateId}
+          onChange={(e) => handleTemplateChange(e.target.value)}
+        >
+          <option value="">Custom message (no template)</option>
+          {templates
+            .filter((t) => t.type === selectedRecipientType || t.type === "general")
+            .map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+        </select>
+        <p className="text-[11px] text-[rgb(var(--color-text-muted))] mt-1">
+          Select a template to auto-populate the message field
+        </p>
       </div>
 
       {phoneNumber && (
@@ -506,7 +649,7 @@ const SendSMSTab: React.FC = () => {
           <span className="text-sm text-[rgb(var(--color-text-muted))]">
             Sending to:
           </span>
-          <span className="clarity-badge bg-teal-100 text-teal-700">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
             {recipientName} ({phoneNumber})
           </span>
         </div>

@@ -115,7 +115,7 @@ export const ToastProvider: React.FC<{ children?: ReactNode }> = ({
       <div
         aria-atomic="false"
         aria-live="polite"
-        className="fixed top-3 right-3 z-[999] flex flex-col gap-2 pointer-events-none"
+        className="fixed top-3 right-3 z-[10000] flex flex-col gap-2 pointer-events-none"
       >
         {toasts.map((toast) => (
           <ToastEl

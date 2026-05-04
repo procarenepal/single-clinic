@@ -14,7 +14,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
@@ -58,7 +58,7 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border border-border-base rounded min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 ${disabled || readOnly ? "bg-surface-2" : ""}`}
+        className={`flex items-center border border-border-base rounded-[10px] min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 ${disabled || readOnly ? "bg-surface-2" : ""}`}
       >
         {type === "textarea" ? (
           <textarea
@@ -133,7 +133,7 @@ function SearchSelect({
         </label>
       )}
       <div
-        className={`flex flex-wrap items-center min-h-[38px] border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface ${disabled ? "bg-surface-2" : ""}`}
+        className={`flex flex-wrap items-center min-h-[38px] border border-border-base rounded-[10px] focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface ${disabled ? "bg-surface-2" : ""}`}
         onClick={() => !disabled && setOpen(true)}
       >
         <IoSearchOutline className="ml-3 w-4 h-4 text-text-muted/70 shrink-0" />
@@ -176,7 +176,7 @@ function SearchSelect({
               setOpen(false);
             }}
           />
-          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded shadow-lg max-h-60 overflow-y-auto w-full min-w-max">
+          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded-[10px] shadow-lg max-h-60 overflow-y-auto w-full min-w-max">
             {filtered.length === 0 ? (
               <p className="px-3 py-3 text-[13px] text-text-muted text-center">
                 No results found
@@ -476,13 +476,8 @@ export default function NewPrescriptionPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6">
-        <div>
-          <h1 className={title({ size: "lg" })}>New Prescription</h1>
-        </div>
-        <div className="bg-surface border border-border-base rounded p-12 flex items-center justify-center shadow-sm">
-          <Spinner size="md" />
-        </div>
+      <div className="p-2">
+        <PageSkeleton />
       </div>
     );
   }
@@ -499,7 +494,7 @@ export default function NewPrescriptionPage() {
             Back
           </Button>
           <div>
-            <h1 className={title({ size: "lg" })}>New Prescription</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>New Prescription</h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               Create a new prescription for your patient
             </p>
@@ -509,7 +504,7 @@ export default function NewPrescriptionPage() {
 
       <div className="space-y-6">
         {/* General Information */}
-        <div className="bg-surface border border-border-base rounded shadow-sm">
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
           <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
             <h4 className="font-semibold text-[15px] text-text-main leading-none">
               General Information
@@ -571,7 +566,7 @@ export default function NewPrescriptionPage() {
         </div>
 
         {/* Add Medicine Card */}
-        <div className="bg-surface border border-border-base rounded shadow-sm">
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
           <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
             <h4 className="font-semibold text-[15px] text-text-main leading-none">
               Prescription Details
@@ -629,7 +624,7 @@ export default function NewPrescriptionPage() {
 
         {/* Medicines Table */}
         {items.length > 0 && (
-          <div className="bg-surface border border-border-base rounded shadow-sm">
+          <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
             <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
               <h4 className="font-semibold text-[15px] text-text-main leading-none">
                 Prescription Summary ({items.length}{" "}
@@ -660,7 +655,7 @@ export default function NewPrescriptionPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-mountain-100">
+                <tbody className="divide-y divide-border-base">
                   {items.map((item) => (
                     <tr
                       key={item.id}
@@ -703,7 +698,7 @@ export default function NewPrescriptionPage() {
         )}
 
         {/* Notes */}
-        <div className="bg-surface border border-border-base rounded shadow-sm">
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
           <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
             <h4 className="font-semibold text-[15px] text-text-main leading-none">
               Additional Notes & Instructions

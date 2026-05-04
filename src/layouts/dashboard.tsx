@@ -7,6 +7,7 @@ import {
   IoCloseOutline,
   IoChevronDownOutline,
   IoChevronForwardOutline,
+  IoAppsOutline,
   IoGridOutline,
   IoWarningOutline,
   IoRefreshOutline,
@@ -119,11 +120,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const isActive = isPathActive(item);
 
     const itemBase = clsx(
-      "relative group flex items-center px-3 py-1.5 text-[13.5px] font-medium rounded-lg transition-all duration-300 select-none cursor-pointer",
+      "relative group flex items-center px-3 py-1 text-[13.5px] font-medium rounded-xl transition-all duration-300 select-none cursor-pointer mb-0",
       level > 0 && "ml-3",
       isActive
         ? "text-primary"
-        : "text-text-muted hover:text-text-main hover:bg-surface-2/50",
+        : "text-text-muted hover:text-text-main hover:bg-primary/5 dark:hover:bg-primary/10",
     );
 
     return (
@@ -144,10 +145,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Clickable link area */}
             <Link
               className={clsx(
-                "relative flex items-center flex-1 px-3 py-1.5 text-[13.5px] font-medium transition-all duration-300",
+                "relative flex items-center flex-1 px-3 py-1 text-[13.5px] font-medium transition-all duration-300 rounded-l-xl",
                 isActive
-                  ? "text-primary"
-                  : "text-text-muted hover:text-text-main",
+                  ? "text-primary font-semibold"
+                  : "text-text-muted hover:text-text-main hover:bg-primary/5 dark:hover:bg-primary/10",
               )}
               to={item.href}
             >
@@ -175,10 +176,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <button
               aria-label={isExpanded ? "Collapse" : "Expand"}
               className={clsx(
-                "relative z-10 flex items-center justify-center w-8 py-1.5 shrink-0 transition-all duration-300",
+                "relative z-10 flex items-center justify-center w-8 py-1 shrink-0 transition-all duration-300 rounded-r-xl",
                 isActive
-                  ? "text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 dark:hover:bg-teal-500/20"
-                  : "text-mountain-400 dark:text-zinc-600 hover:bg-mountain-100 dark:hover:bg-zinc-800",
+                  ? "text-primary hover:bg-primary/10"
+                  : "text-text-muted hover:text-text-main hover:bg-primary/5 dark:hover:bg-primary/10",
               )}
               onClick={() => toggleSubMenu(item.href)}
             >
@@ -210,7 +211,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Children */}
         {hasChildren && isExpanded && (
-          <div className="ml-4 mt-1 space-y-1 mb-1 border-l border-mountain-100 dark:border-zinc-800/50 pl-3">
+          <div className="ml-5 mt-1 space-y-0.5 mb-1 border-l-2 border-primary/10 dark:border-primary/5 pl-2">
             {item.children.map((child) => renderNavItem(child, level + 1))}
           </div>
         )}
@@ -251,9 +252,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <aside
           aria-label="Sidebar navigation"
           className={clsx(
-            "fixed inset-y-0 top-14 left-0 z-20 w-[220px]",
-            "transition-transform duration-200 ease-out",
-            "bg-surface border-r border-border-base flex flex-col print:hidden",
+            "fixed inset-y-0 top-14 left-0 z-20 w-[240px]",
+            "transition-all duration-300 ease-in-out",
+            "bg-surface/80 backdrop-blur-xl border-r border-border-base flex flex-col print:hidden",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
           style={{ height: "calc(100vh - 3.5rem)" }}
@@ -261,7 +262,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 py-2 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-950">
+          <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-950">
             {loading ? (
               // Skeleton
               Array.from({ length: 6 }).map((_, i) => (
@@ -304,11 +305,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   return (
                     <div key={cat} className="space-y-0.5">
                       {cat !== "MAIN" && (
-                        <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-mountain-400 dark:text-zinc-500 uppercase tracking-wider">
+                        <div className="px-4 pt-1.5 pb-0 text-[11px] font-bold text-primary/40 uppercase tracking-[0.1em]">
                           {cat}
                         </div>
                       )}
-                      {items.map((item) => renderNavItem(item))}
+                      <div className="px-2 space-y-0.5">
+                        {items.map((item) => renderNavItem(item))}
+                      </div>
                     </div>
                   );
                 });
@@ -317,7 +320,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               renderNavItem({
                 title: "Dashboard",
                 href: "/dashboard",
-                icon: <IoGridOutline />,
+                icon: <IoAppsOutline />,
                 children: [],
                 category: "MAIN",
               })
@@ -356,7 +359,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           className={clsx(
             "flex-1 w-full flex flex-col items-start justify-start transition-all duration-300 ease-in-out overflow-hidden relative",
             "bg-bg mesh-gradient",
-            isSidebarOpen ? "md:pl-[220px]" : "",
+            isSidebarOpen ? "md:pl-[240px]" : "",
           )}
           style={{ height: "calc(100vh - 3.5rem)" }}
         >

@@ -23,7 +23,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
@@ -47,21 +47,21 @@ function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 w-full`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <div
-        className={`flex items-center border border-mountain-200 rounded min-h-[38px] bg-white focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-100`}
+        className={`flex items-center border border-border-base rounded min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10`}
       >
         {startContent && (
-          <div className="pl-3 pr-2 text-mountain-400 font-medium text-[13px]">
+          <div className="pl-3 pr-2 text-text-muted/60 font-medium text-[13px]">
             {startContent}
           </div>
         )}
         <input
-          className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
+          className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/40"
           name={name}
           placeholder={placeholder}
           required={required}
@@ -71,7 +71,7 @@ function CustomInput({
         />
       </div>
       {description && (
-        <p className={`text-[11.5px] text-mountain-500`}>{description}</p>
+        <p className={`text-[11.5px] text-text-muted`}>{description}</p>
       )}
     </div>
   );
@@ -88,13 +88,13 @@ function CustomSelect({
   return (
     <div className={`flex flex-col gap-1.5 w-full`}>
       {label && (
-        <label className="text-[13px] font-medium text-mountain-700">
+        <label className="text-[13px] font-medium text-text-main">
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <select
-        className={`w-full min-h-[38px] bg-white border border-mountain-200 text-mountain-800 text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100 transition-shadow`}
+        className={`w-full min-h-[38px] bg-surface border border-border-base text-text-main text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-shadow`}
         required={required}
         value={value}
         onChange={onChange}
@@ -105,7 +105,7 @@ function CustomSelect({
           </option>
         )}
         {options.map((opt: any) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} className="bg-surface text-text-main">
             {opt.label}
           </option>
         ))}
@@ -136,20 +136,20 @@ function ModalShell({
   return (
     <>
       <div
-        className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
         onClick={() => isDismissable && onClose()}
       />
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none">
         <div
-          className={`bg-white rounded shadow-lg w-full ${maxWidth} pointer-events-auto flex flex-col max-h-[90vh]`}
+          className={`bg-surface border border-border-base rounded-[10px] shadow-2xl w-full ${maxWidth} pointer-events-auto flex flex-col max-h-[90vh]`}
         >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-mountain-100">
-            <h3 className="text-[15px] font-bold text-mountain-900 leading-none">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border-base/50">
+            <h3 className="text-[15px] font-bold text-text-main leading-none">
               {title}
             </h3>
             {!hideCloseButton && (
               <button
-                className="text-mountain-400 hover:text-mountain-600 transition-colors"
+                className="text-text-muted/60 hover:text-text-main transition-colors"
                 onClick={onClose}
               >
                 <IoCloseOutline className="w-5 h-5" />
@@ -405,12 +405,12 @@ export default function DoctorProfilePage() {
   const formatCurrency = (amount: number) => `NPR ${amount.toLocaleString()}`;
 
   const getCommissionStatusColor = (status: string) => {
-    if (status === "paid") return "bg-teal-50 text-teal-700 border-teal-200";
+    if (status === "paid") return "bg-primary/10 text-primary border-primary/20";
     if (status === "pending")
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    if (status === "cancelled") return "bg-red-50 text-red-700 border-red-200";
+      return "bg-amber-500/10 text-amber-600 border-amber-500/20";
+    if (status === "cancelled") return "bg-red-500/10 text-red-600 border-red-500/20";
 
-    return "bg-mountain-50 text-mountain-700 border-mountain-200";
+    return "bg-surface-2 text-text-muted border-border-base";
   };
 
   const totalAppointments = appointments.length;
@@ -450,22 +450,17 @@ export default function DoctorProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6">
-        <div>
-          <h1 className={title({ size: "sm" })}>Doctor Profile</h1>
-        </div>
-        <div className="bg-white border border-mountain-200 rounded p-12 flex items-center justify-center shadow-sm">
-          <Spinner size="md" />
-        </div>
+      <div className="p-2">
+        <PageSkeleton />
       </div>
     );
   }
 
   if (!doctor) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 bg-white border border-mountain-200 rounded shadow-sm">
-        <IoWarningOutline className="text-mountain-300 text-stat mb-4" />
-        <p className="text-mountain-500 font-medium">Doctor not found.</p>
+      <div className="flex flex-col items-center justify-center py-16 bg-surface border border-border-base rounded-[10px] shadow-sm">
+        <IoWarningOutline className="text-text-muted/30 text-stat mb-4" />
+        <p className="text-text-muted font-medium">Doctor not found.</p>
         <Button className="mt-6" color="primary" onClick={() => navigate(-1)}>
           Back
         </Button>
@@ -482,8 +477,8 @@ export default function DoctorProfilePage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className={title({ size: "sm" })}>Doctor Profile</h1>
-            <p className="text-[14.5px] font-medium text-mountain-500 tracking-wide mt-1">
+            <h1 className={`${title({ size: "lg" })} text-primary`}>Doctor Profile</h1>
+            <p className="text-[13.5px] text-text-muted mt-1">
               View and manage information
             </p>
           </div>
@@ -509,50 +504,50 @@ export default function DoctorProfilePage() {
       </div>
 
       {/* Hero Overview */}
-      <div className="bg-white border border-mountain-200 rounded shadow-sm p-6 overflow-hidden relative">
+      <div className="bg-surface border border-border-base rounded-[10px] shadow-sm p-6 overflow-hidden relative">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10 w-full">
-          <div className="w-20 h-20 rounded-full bg-teal-100 flex items-center justify-center border border-teal-200 shrink-0 text-stat font-bold text-teal-800">
+          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0 text-stat font-bold text-primary">
             {doctor.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 text-center md:text-left">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-center md:justify-start">
-              <h2 className="text-page-title font-bold text-mountain-900">
+              <h2 className="text-page-title font-bold text-text-main">
                 {doctor.name}
               </h2>
               <span
-                className={`inline-flex px-2 py-0.5 border rounded-full text-[12px] font-semibold tracking-wide uppercase ${doctor.isActive ? "bg-teal-50 text-teal-700 border-teal-200" : "bg-red-50 text-red-700 border-red-200"}`}
+                className={`inline-flex items-center px-2 py-0.5 border rounded-full text-[12px] font-semibold tracking-wide uppercase ${doctor.isActive ? "bg-primary/10 text-primary border-primary/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full mr-1.5 inline-block ${doctor.isActive ? "bg-teal-500" : "bg-red-500"}`}
+                  className={`w-2 h-2 rounded-full mr-1.5 shrink-0 ${doctor.isActive ? "bg-primary" : "bg-red-500"}`}
                 />
                 {doctor.isActive ? "Active" : "Inactive"}
               </span>
             </div>
-            <p className="text-mountain-600 font-medium text-[15px] mt-1.5">
+            <p className="text-text-muted font-medium text-[15px] mt-1.5">
               {formatSpeciality(doctor.speciality)}
             </p>
             <div className="flex flex-wrap gap-4 mt-4 justify-center md:justify-start">
-              <span className="flex items-center gap-1.5 text-[13.5px] text-mountain-700 font-medium bg-mountain-50 px-3 py-1.5 rounded border border-mountain-100">
-                <IoBusinessOutline className="text-teal-600" />
+              <span className="flex items-center gap-1.5 text-[13.5px] text-text-main font-medium bg-surface-2 px-3 py-1.5 rounded border border-border-base/50">
+                <IoBusinessOutline className="text-primary" />
                 <span className="capitalize">{doctor.doctorType}</span>
               </span>
-              <span className="flex items-center gap-1.5 text-[13.5px] text-mountain-700 font-medium bg-mountain-50 px-3 py-1.5 rounded border border-mountain-100">
-                <IoIdCardOutline className="text-teal-600" />
+              <span className="flex items-center gap-1.5 text-[13.5px] text-text-main font-medium bg-surface-2 px-3 py-1.5 rounded border border-border-base/50">
+                <IoIdCardOutline className="text-primary" />
                 NMC: {doctor.nmcNumber}
               </span>
-              <span className="flex items-center gap-1.5 text-[13.5px] text-mountain-700 font-medium bg-mountain-50 px-3 py-1.5 rounded border border-mountain-100">
-                <IoStatsChartOutline className="text-teal-600" />
+              <span className="flex items-center gap-1.5 text-[13.5px] text-text-main font-medium bg-surface-2 px-3 py-1.5 rounded border border-border-base/50">
+                <IoStatsChartOutline className="text-primary" />
                 Rate: {doctor.defaultCommission}%
               </span>
             </div>
             <div className="flex flex-wrap gap-6 mt-4 justify-center md:justify-start">
-              <span className="flex items-center gap-2 text-[13.5px] text-mountain-600">
-                <IoCallOutline className="text-mountain-400" />
+              <span className="flex items-center gap-2 text-[13.5px] text-text-muted">
+                <IoCallOutline className="text-text-muted/40" />
                 {doctor.phone}
               </span>
               {doctor.email && (
-                <span className="flex items-center gap-2 text-[13.5px] text-mountain-600">
-                  <IoMailOutline className="text-mountain-400" />
+                <span className="flex items-center gap-2 text-[13.5px] text-text-muted">
+                  <IoMailOutline className="text-text-muted/40" />
                   {doctor.email}
                 </span>
               )}
@@ -567,40 +562,40 @@ export default function DoctorProfilePage() {
           {
             label: "Total Patients",
             val: totalPatients,
-            icon: <IoPeopleOutline className="w-6 h-6 text-indigo-600" />,
-            bg: "bg-indigo-50 border-indigo-100",
+            icon: <IoPeopleOutline className="w-6 h-6 text-indigo-500" />,
+            bg: "bg-indigo-500/5 border-indigo-500/20",
           },
           {
             label: "Total Appt.",
             val: totalAppointments,
-            icon: <IoCalendarOutline className="w-6 h-6 text-teal-600" />,
-            bg: "bg-teal-50 border-teal-100",
+            icon: <IoCalendarOutline className="w-6 h-6 text-primary" />,
+            bg: "bg-primary/5 border-primary/20",
           },
           {
             label: "Upcoming Appt.",
             val: upcomingAppointments,
-            icon: <IoTimeOutline className="w-6 h-6 text-amber-600" />,
-            bg: "bg-amber-50 border-amber-100",
+            icon: <IoTimeOutline className="w-6 h-6 text-amber-500" />,
+            bg: "bg-amber-500/5 border-amber-500/20",
           },
           {
             label: "Completed Appt.",
             val: completedAppointments,
             icon: (
-              <IoCheckmarkCircleOutline className="w-6 h-6 text-green-600" />
+              <IoCheckmarkCircleOutline className="w-6 h-6 text-green-500" />
             ),
-            bg: "bg-green-50 border-green-100",
+            bg: "bg-green-500/5 border-green-500/20",
           },
         ].map((s, i) => (
           <div
             key={i}
-            className={`flex items-center gap-4 p-5 rounded shadow-sm border ${s.bg}`}
+            className={`flex items-center gap-4 p-5 rounded-[10px] shadow-sm border bg-surface ${s.bg}`}
           >
-            <div className="p-3 bg-white rounded-full shadow-sm">{s.icon}</div>
+            <div className="p-3 bg-surface border border-border-base rounded-full shadow-sm">{s.icon}</div>
             <div>
-              <p className="text-stat-sm text-mountain-900 leading-none">
+              <p className="text-stat-sm text-text-main leading-none">
                 {s.val}
               </p>
-              <p className="text-[13px] text-mountain-600 font-medium mt-1">
+              <p className="text-[13px] text-text-muted font-medium mt-1">
                 {s.label}
               </p>
             </div>
@@ -609,8 +604,8 @@ export default function DoctorProfilePage() {
       </div>
 
       {/* Data Tabs Container */}
-      <div className="bg-white border border-mountain-200 rounded shadow-sm">
-        <div className="flex border-b border-mountain-100 overflow-x-auto">
+      <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+        <div className="flex border-b border-border-base/50 overflow-x-auto">
           {[
             { key: "overview", label: "Overview" },
             { key: "appointments", label: "Appointments" },
@@ -620,8 +615,8 @@ export default function DoctorProfilePage() {
             <button
               key={t.key}
               className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTab === t.key
-                ? "border-teal-600 text-teal-700 bg-teal-50/30"
-                : "border-transparent text-mountain-600 hover:text-mountain-900 hover:bg-mountain-50"
+                ? "border-primary text-primary bg-primary/5"
+                : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
                 }`}
               onClick={() => handleTabChange(t.key)}
             >
@@ -635,47 +630,47 @@ export default function DoctorProfilePage() {
           {selectedTab === "overview" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <h3 className="text-[15px] font-bold text-mountain-900 uppercase tracking-wider mb-4 border-b border-mountain-100 pb-2">
+                <h3 className="text-[15px] font-bold text-text-main uppercase tracking-wider mb-4 border-b border-border-base pb-2">
                   Professional details
                 </h3>
-                <div className="flex justify-between text-[14px] border-b border-mountain-50 pb-2">
-                  <span className="text-mountain-500">Speciality</span>
-                  <span className="font-semibold text-mountain-900">
+                <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
+                  <span className="text-text-muted">Speciality</span>
+                  <span className="font-semibold text-text-main">
                     {formatSpeciality(doctor.speciality)}
                   </span>
                 </div>
-                <div className="flex justify-between text-[14px] border-b border-mountain-50 pb-2">
-                  <span className="text-mountain-500">Type</span>
-                  <span className="font-semibold capitalize text-mountain-900">
+                <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
+                  <span className="text-text-muted">Type</span>
+                  <span className="font-semibold capitalize text-text-main">
                     {doctor.doctorType}
                   </span>
                 </div>
-                <div className="flex justify-between text-[14px] border-b border-mountain-50 pb-2">
-                  <span className="text-mountain-500">NMC License</span>
-                  <span className="font-semibold text-mountain-900">
+                <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
+                  <span className="text-text-muted">NMC License</span>
+                  <span className="font-semibold text-text-main">
                     {doctor.nmcNumber}
                   </span>
                 </div>
                 <div className="flex justify-between text-[14px] pb-2">
-                  <span className="text-mountain-500">Default Commission</span>
-                  <span className="font-semibold text-mountain-900">
+                  <span className="text-text-muted">Default Commission</span>
+                  <span className="font-semibold text-text-main">
                     {doctor.defaultCommission}%
                   </span>
                 </div>
               </div>
               <div className="space-y-4">
-                <h3 className="text-[15px] font-bold text-mountain-900 uppercase tracking-wider mb-4 border-b border-mountain-100 pb-2">
+                <h3 className="text-[15px] font-bold text-text-main uppercase tracking-wider mb-4 border-b border-border-base pb-2">
                   System
                 </h3>
-                <div className="flex justify-between text-[14px] border-b border-mountain-50 pb-2">
-                  <span className="text-mountain-500">Created At</span>
-                  <span className="font-semibold text-mountain-900">
+                <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
+                  <span className="text-text-muted">Created At</span>
+                  <span className="font-semibold text-text-main">
                     {doctor.createdAt.toLocaleDateString()}
                   </span>
                 </div>
                 <div className="flex justify-between text-[14px] pb-2">
-                  <span className="text-mountain-500">Last Modified</span>
-                  <span className="font-semibold text-mountain-900">
+                  <span className="text-text-muted">Last Modified</span>
+                  <span className="font-semibold text-text-main">
                     {doctor.updatedAt.toLocaleDateString()}
                   </span>
                 </div>
@@ -686,7 +681,7 @@ export default function DoctorProfilePage() {
           {selectedTab === "appointments" && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h3 className="text-[16px] font-bold text-mountain-900">
+                <h3 className="text-[16px] font-bold text-text-main">
                   Recent Appointments
                 </h3>
                 <Button
@@ -699,33 +694,33 @@ export default function DoctorProfilePage() {
                 </Button>
               </div>
               {recentAppointments.length > 0 ? (
-                <div className="overflow-x-auto border border-mountain-100 rounded">
+                <div className="overflow-x-auto border border-border-base rounded-[10px]">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="bg-mountain-50 border-b border-mountain-100">
-                        <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                      <tr className="bg-surface-2 border-b border-border-base">
+                        <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                           Patient
                         </th>
-                        <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                        <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                           Date/Time
                         </th>
-                        <th className="px-5 py-3 text-[12.5px] font-semibold text-mountain-600">
+                        <th className="px-5 py-3 text-[12.5px] font-semibold text-text-muted">
                           Type & Status
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-mountain-100">
+                    <tbody className="divide-y divide-border-base/50">
                       {recentAppointments.map((appointment) => (
                         <tr
                           key={appointment.id}
-                          className="hover:bg-mountain-50/30"
+                          className="hover:bg-surface-2/30"
                         >
                           <td className="px-5 py-3">
-                            <div className="font-medium text-[13.5px] text-mountain-900">
+                            <div className="font-medium text-[13.5px] text-text-main">
                               {patientNames[appointment.patientId] || "Unknown"}
                             </div>
                           </td>
-                          <td className="px-5 py-3 text-[13px] text-mountain-700">
+                          <td className="px-5 py-3 text-[13px] text-text-muted">
                             {appointment.appointmentDate.toLocaleDateString()}{" "}
                             at {appointment.startTime || "N/A"}
                           </td>
@@ -733,17 +728,17 @@ export default function DoctorProfilePage() {
                             <div className="flex items-center gap-2">
                               <span
                                 className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${appointment.status === "completed"
-                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
                                   : appointment.status === "scheduled"
-                                    ? "bg-teal-50 text-teal-700 border-teal-200"
+                                    ? "bg-primary/10 text-primary border-primary/20"
                                     : appointment.status === "cancelled"
-                                      ? "bg-red-50 text-red-700 border-red-200"
-                                      : "bg-amber-50 text-amber-700 border-amber-200"
+                                      ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                      : "bg-amber-500/10 text-amber-500 border-amber-500/20"
                                   }`}
                               >
                                 {appointment.status}
                               </span>
-                              <span className="text-[12px] text-mountain-500">
+                              <span className="text-[12px] text-text-muted">
                                 {appointment.appointmentType}
                               </span>
                             </div>
@@ -754,8 +749,8 @@ export default function DoctorProfilePage() {
                   </table>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center p-12 text-center text-mountain-500 bg-mountain-50 rounded">
-                  <IoCalendarOutline className="text-stat mb-2 text-mountain-300" />
+                <div className="flex flex-col items-center justify-center p-12 text-center text-text-muted bg-surface-2 rounded">
+                  <IoCalendarOutline className="text-stat mb-2 text-text-muted/30" />
                   <p>No appointments created.</p>
                 </div>
               )}
@@ -765,7 +760,7 @@ export default function DoctorProfilePage() {
           {selectedTab === "patients" && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h3 className="text-[16px] font-bold text-mountain-900">
+                <h3 className="text-[16px] font-bold text-text-main">
                   Recent Patients
                 </h3>
                 <Button
@@ -782,19 +777,19 @@ export default function DoctorProfilePage() {
                   {recentPatients.map((patient) => (
                     <div
                       key={patient.id}
-                      className="p-4 border border-mountain-200 rounded hover:border-teal-300 transition-colors flex items-start gap-4 shadow-sm bg-white"
+                      className="p-4 border border-border-base rounded-[10px] hover:border-primary/50 transition-colors flex items-start gap-4 shadow-sm bg-surface"
                     >
-                      <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded flex items-center justify-center font-bold">
+                      <div className="w-10 h-10 bg-indigo-500/10 text-indigo-500 rounded flex items-center justify-center font-bold">
                         {patient.name.charAt(0)}
                       </div>
                       <div>
-                        <p className="font-bold text-[14px] text-mountain-900 leading-tight">
+                        <p className="font-bold text-[14px] text-text-main leading-tight">
                           {patient.name}
                         </p>
-                        <p className="text-[12px] text-mountain-500 mt-1">
+                        <p className="text-[12px] text-text-muted mt-1">
                           Reg: {patient.regNumber} • {patient.age}y
                         </p>
-                        <p className="text-[12.5px] text-mountain-700 font-medium mt-0.5">
+                        <p className="text-[12.5px] text-text-main font-medium mt-0.5">
                           {patient.mobile || patient.phone}
                         </p>
                       </div>
@@ -802,8 +797,8 @@ export default function DoctorProfilePage() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center p-12 text-center text-mountain-500 bg-mountain-50 rounded">
-                  <IoPeopleOutline className="text-stat mb-2 text-mountain-300" />
+                <div className="flex flex-col items-center justify-center p-12 text-center text-text-muted bg-surface-2 rounded-[10px]">
+                  <IoPeopleOutline className="text-stat mb-2 text-text-muted/30" />
                   <p>No patients linked.</p>
                 </div>
               )}
@@ -817,29 +812,29 @@ export default function DoctorProfilePage() {
                   {
                     val: formatCurrency(commissionStats.totalCommission),
                     label: "Total Commission",
-                    color: "text-blue-600",
+                    color: "text-blue-500",
                   },
                   {
                     val: formatCurrency(commissionStats.paidCommission),
                     label: "Paid Commission",
-                    color: "text-green-600",
+                    color: "text-green-500",
                   },
                   {
                     val: formatCurrency(commissionStats.pendingCommission),
                     label: "Pending Commission",
-                    color: "text-amber-600",
+                    color: "text-amber-500",
                   },
                 ].map((s, i) => (
                   <div
                     key={i}
-                    className="p-5 text-center border border-mountain-200 rounded shadow-sm bg-mountain-50/50"
+                    className="p-5 text-center border border-border-base rounded-[10px] shadow-sm bg-surface-2/50"
                   >
                     <p
                       className={`text-stat-sm leading-none ${s.color}`}
                     >
                       {s.val}
                     </p>
-                    <p className="text-[13px] text-mountain-600 font-medium mt-1">
+                    <p className="text-[13px] text-text-muted font-medium mt-1">
                       {s.label}
                     </p>
                   </div>
@@ -847,7 +842,7 @@ export default function DoctorProfilePage() {
               </div>
 
               <div className="flex justify-between items-center mt-6">
-                <h3 className="text-[16px] font-bold text-mountain-900">
+                <h3 className="text-[16px] font-bold text-text-main">
                   Commission Records
                 </h3>
                 <Button
@@ -865,11 +860,11 @@ export default function DoctorProfilePage() {
                   {commissions.map((commission) => (
                     <div
                       key={commission.id}
-                      className="p-4 border border-mountain-200 rounded flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white shadow-sm hover:border-teal-300"
+                      className="p-4 border border-border-base rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface shadow-sm hover:border-primary/50"
                     >
                       <div>
                         <div className="flex items-center gap-3 mb-1">
-                          <span className="font-bold text-[15px] font-mono text-mountain-900">
+                          <span className="font-bold text-[15px] font-mono text-text-main">
                             {commission.invoiceNumber}
                           </span>
                           <span
@@ -878,22 +873,22 @@ export default function DoctorProfilePage() {
                             {commission.status}
                           </span>
                         </div>
-                        <p className="text-[13.5px] font-medium text-mountain-700">
+                        <p className="text-[13.5px] font-medium text-text-main">
                           {commission.patientName} -{" "}
                           {(commission.serviceNames || []).join(", ")}
                         </p>
-                        <p className="text-[12px] text-mountain-500 mt-1">
+                        <p className="text-[12px] text-text-muted mt-1">
                           Rate: {commission.commissionPercentage}% • Invoiced:{" "}
                           {formatCurrency(commission.totalInvoiceAmount)}
                         </p>
                       </div>
                       <div className="text-left md:text-right flex flex-col md:items-end gap-2">
                         <div>
-                          <p className="text-[18px] font-bold text-mountain-900 leading-none">
+                          <p className="text-[18px] font-bold text-text-main leading-none">
                             {formatCurrency(commission.commissionAmount)}
                           </p>
                           {commission.status === "pending" && (
-                            <p className="text-[12px] text-amber-600 font-medium mt-1">
+                            <p className="text-[12px] text-amber-500 font-medium mt-1">
                               Pending:{" "}
                               {formatCurrency(
                                 commission.commissionAmount -
@@ -917,8 +912,8 @@ export default function DoctorProfilePage() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center p-12 text-center text-mountain-500 bg-mountain-50 rounded">
-                  <IoWalletOutline className="text-stat mb-2 text-mountain-300" />
+                <div className="flex flex-col items-center justify-center p-12 text-center text-text-muted bg-surface-2 rounded-[10px]">
+                  <IoWalletOutline className="text-stat mb-2 text-text-muted/30" />
                   <p>No commissions attached yet.</p>
                 </div>
               )}
@@ -936,22 +931,22 @@ export default function DoctorProfilePage() {
       >
         <div className="p-6">
           {selectedCommission && (
-            <div className="mb-6 p-4 bg-mountain-50 border border-mountain-100 rounded text-[13.5px]">
+            <div className="mb-6 p-4 bg-surface-2 border border-border-base rounded-[10px] text-[13.5px]">
               <p>
-                <span className="text-mountain-500">Invoice:</span>{" "}
-                <span className="font-semibold text-mountain-900">
+                <span className="text-text-muted">Invoice:</span>{" "}
+                <span className="font-semibold text-text-main">
                   {selectedCommission.invoiceNumber}
                 </span>
               </p>
               <p>
-                <span className="text-mountain-500">Rate:</span>{" "}
-                <span className="font-semibold text-mountain-900">
+                <span className="text-text-muted">Rate:</span>{" "}
+                <span className="font-semibold text-text-main">
                   {selectedCommission.commissionPercentage}%
                 </span>
               </p>
               <p className="mt-2 text-[15px]">
-                <span className="text-mountain-600">Pending Amount:</span>{" "}
-                <span className="font-bold text-amber-600">
+                <span className="text-text-muted">Pending Amount:</span>{" "}
+                <span className="font-bold text-amber-500">
                   {formatCurrency(
                     selectedCommission.commissionAmount -
                     (selectedCommission.paidAmount || 0),
@@ -1009,7 +1004,7 @@ export default function DoctorProfilePage() {
                 setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))
               }
             />
-            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-mountain-100">
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border-base/50">
               <Button
                 disabled={paymentProcessing}
                 variant="bordered"

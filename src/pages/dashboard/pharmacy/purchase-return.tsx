@@ -394,7 +394,7 @@ export default function PurchaseReturnPage() {
           <Button isIconOnly variant="light" onPress={() => navigate(-1)}>
             <IoArrowBackOutline />
           </Button>
-          <h1 className={title({ size: "lg" })}>Record Return</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Record Return</h1>
         </div>
         <Card>
           <CardBody className="flex items-center justify-center py-12">
@@ -416,7 +416,7 @@ export default function PurchaseReturnPage() {
           >
             <IoArrowBackOutline />
           </Button>
-          <h1 className={title({ size: "lg" })}>Record Return</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Record Return</h1>
         </div>
         <Card>
           <CardBody className="py-10 text-center">
@@ -466,7 +466,7 @@ export default function PurchaseReturnPage() {
               <IoArrowBackOutline />
             </Button>
             <div>
-              <h1 className={title({ size: "lg" })}>Record Return</h1>
+              <h1 className={`${title({ size: "lg" })} text-primary`}>Record Return</h1>
               <p className="text-default-500 mt-1">
                 Purchase No: {purchase.purchaseNo} •{" "}
                 {purchase.purchaseDate.toLocaleDateString()}

@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Divider } from "@/components/ui/divider";
 import { addToast } from "@/components/ui/toast";
+import { title } from "@/components/primitives";
 
 // Import tab components
 import PatientOverviewTab from "@/components/patients/PatientOverviewTab";
@@ -121,25 +122,37 @@ export default function PatientDetailPage() {
   };
 
   // Calculate age from date of birth
-  const calculateAge = (dob: Date): number => {
-    const today = new Date();
-    const birthDate = new Date(dob);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
+  const calculateAge = (dob: Date | any): string => {
+    if (!dob) return "";
+    const b = new Date(dob);
+    if (isNaN(b.getTime())) return "";
+    const t = new Date();
 
-    if (
-      monthDiff < 0 ||
-      (monthDiff === 0 && today.getDate() < birthDate.getDate())
-    ) {
-      age--;
+    let years = t.getFullYear() - b.getFullYear();
+    let months = t.getMonth() - b.getMonth();
+    let days = t.getDate() - b.getDate();
+
+    if (days < 0) {
+      months--;
+      const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+      days += prevMonth;
+    }
+    if (months < 0) {
+      years--;
+      months += 12;
     }
 
-    return age;
+    if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
+    if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
+    if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+    return "0 Days";
   };
 
   // Format date for display
-  const formatDate = (date: Date): string => {
-    return new Date(date).toLocaleDateString("en-US", {
+  const formatDate = (date: Date | any): string => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "Invalid Date";
+    return d.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -348,7 +361,7 @@ export default function PatientDetailPage() {
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; width: 100%; height: 100%; }
-    body { font-family: Arial, sans-serif; color: #333; line-height: 1.4; font-size: 11px; }
+    body { ${brandingCSS} }
     
     ${brandingCSS}
 
@@ -413,7 +426,7 @@ export default function PatientDetailPage() {
         <div class="patient-grid">
           <div class="patient-field"><span class="label">Name:</span><span class="value">${patient.name}</span></div>
           ${patient.regNumber ? `<div class="patient-field"><span class="label">Reg #:</span><span class="value">${patient.regNumber}</span></div>` : ""}
-          ${patient.dob ? `<div class="patient-field"><span class="label">Age:</span><span class="value">${calculateAge(patient.dob)} Years</span></div>` : ""}
+          ${patient.dob ? `<div class="patient-field"><span class="label">Age:</span><span class="value">${calculateAge(patient.dob)}</span></div>` : ""}
           ${patient.gender ? `<div class="patient-field"><span class="label">Gender:</span><span class="value">${patient.gender}</span></div>` : ""}
           ${patient.bloodGroup ? `<div class="patient-field"><span class="label">Blood:</span><span class="value">${patient.bloodGroup}</span></div>` : ""}
           ${patient.mobile ? `<div class="patient-field"><span class="label">Contact:</span><span class="value">${patient.mobile}</span></div>` : ""}
@@ -477,7 +490,7 @@ export default function PatientDetailPage() {
                     <td style="font-weight: 700; color: #1e293b;">${item.medicineName}</td>
                     <td>${item.dosage || "-"} • ${item.frequency || "-"}</td>
                     <td>${item.duration || "-"}</td>
-                    <td style="font-size: 10px; color: #64748b;">${p.prescriptionDate ? new Date(p.prescriptionDate).toLocaleDateString() : "-"}</td>
+                    <td style="font-size: 10px; color: #64748b;">${p.prescriptionDate && !isNaN(new Date(p.prescriptionDate).getTime()) ? new Date(p.prescriptionDate).toLocaleDateString() : "-"}</td>
                   </tr>
                 `).join("") || "")
           .join("")}
@@ -538,7 +551,7 @@ export default function PatientDetailPage() {
             (b: any) => `
                 <tr>
                   <td style="font-weight: 700; color: #1e293b;">${b.invoiceNumber || b.billNumber || "DRAFT"}</td>
-                  <td>${b.invoiceDate ? new Date(b.invoiceDate).toLocaleDateString() : "-"}</td>
+                  <td>${b.invoiceDate && !isNaN(new Date(b.invoiceDate).getTime()) ? new Date(b.invoiceDate).toLocaleDateString() : "-"}</td>
                   <td style="text-align: right; font-weight: 800; color: #0f172a;">NPR ${b.totalAmount?.toLocaleString() || "0"}</td>
                   <td style="text-align: center;"><span style="font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; text-transform: uppercase;">${b.status || "Pending"}</span></td>
                 </tr>
@@ -640,22 +653,22 @@ export default function PatientDetailPage() {
         <div className="flex items-center gap-3">
           <button
             aria-label="Back"
-            className="p-1.5 rounded border border-mountain-200 text-mountain-500 hover:text-teal-700 hover:border-teal-400 transition-colors"
+            className="p-1.5 rounded border border-border-base text-text-muted hover:text-primary hover:border-primary transition-colors"
             type="button"
             onClick={() => navigate(-1)}
           >
             <IoArrowBackOutline className="w-4 h-4" />
           </button>
           <div>
-            <h1 className="text-page-title text-mountain-900 leading-tight">
+            <h1 className={`${title({ size: "lg" })} text-primary leading-tight`}>
               Patient Profile
               {patient?.isCritical && (
-                <span className="ml-2 text-[11px] font-semibold bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded align-middle">
+                <span className="ml-2 text-[11px] font-semibold bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded align-middle">
                   ⚠ CRITICAL
                 </span>
               )}
             </h1>
-            <p className="text-[13px] text-mountain-400 mt-0.5">
+            <p className="text-[13.5px] text-text-muted mt-1">
               View and manage patient information
             </p>
           </div>
@@ -701,9 +714,9 @@ export default function PatientDetailPage() {
       </div>
 
       {/* ── Tabbed content shell ────────────────────────────────────────── */}
-      <div className="bg-white border border-mountain-200 rounded overflow-hidden">
+      <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
         {/* Custom tab strip — matches spec: underline style, teal active */}
-        <div className="flex overflow-x-auto border-b border-mountain-200 scrollbar-none">
+        <div className="flex overflow-x-auto border-b border-border-base scrollbar-none">
           {TABS.map((tab) => (
             <button
               key={tab.key}
@@ -711,8 +724,8 @@ export default function PatientDetailPage() {
                   inline-flex items-center gap-1.5 px-4 py-3 text-[12.5px] font-medium whitespace-nowrap
                   border-b-2 transition-colors shrink-0
                   ${selectedTab === tab.key
-                  ? "border-teal-700 text-teal-700 bg-teal-50/40"
-                  : "border-transparent text-mountain-500 hover:text-mountain-800 hover:bg-mountain-50"
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
                 }
                 `}
               type="button"
@@ -733,7 +746,7 @@ export default function PatientDetailPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* Left: Medical Reports */}
                 <div className="flex flex-col gap-3">
-                  <h3 className="text-section-title text-mountain-800">
+                  <h3 className="text-section-title text-text-main">
                     Medical Reports
                   </h3>
                   <PatientMedicalReportTab
@@ -744,13 +757,13 @@ export default function PatientDetailPage() {
                 {/* Middle: Appointments + Prescriptions */}
                 <div className="flex flex-col gap-5 lg:col-span-2">
                   <div>
-                    <h3 className="text-section-title text-mountain-800 mb-3">
+                    <h3 className="text-section-title text-text-main mb-3">
                       Appointments
                     </h3>
                     <PatientAppointmentsTab patientId={patientId!} />
                   </div>
                   <div>
-                    <h3 className="text-section-title text-mountain-800 mb-3">
+                    <h3 className="text-section-title text-text-main mb-3">
                       Prescriptions
                     </h3>
                     <PatientPrescriptionsTab patientId={patientId!} />

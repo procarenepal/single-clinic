@@ -379,7 +379,7 @@ export default function PurchaseEditPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "lg" })}>Edit Purchase</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Purchase</h1>
           <p className="text-default-500 mt-1">Loading purchase data...</p>
         </div>
         <Card>
@@ -395,7 +395,7 @@ export default function PurchaseEditPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={title({ size: "lg" })}>Edit Purchase</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Purchase</h1>
           <p className="text-default-500 mt-1">Purchase not found</p>
         </div>
         <Card>
@@ -430,7 +430,7 @@ export default function PurchaseEditPage() {
               >
                 <IoArrowBackOutline size={20} />
               </Button>
-              <h1 className={title({ size: "lg" })}>Edit Purchase</h1>
+              <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Purchase</h1>
             </div>
             <p className="text-default-500">
               Purchase No: {purchase.purchaseNo} •{" "}
