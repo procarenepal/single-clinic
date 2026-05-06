@@ -398,7 +398,7 @@ export default function PurchaseRecordsTab({
             ${brandingCSS}
             
             /* High-Density Invoice Styles */
-            .invoice-body { padding: 20px 40px; background: white; min-height: 100vh; position: relative; }
+            .invoice-body { padding: 10px 40px; background: white; position: relative; }
             .invoice-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1.5px solid #f1f5f9; }
             .invoice-title-box h2 { margin: 0; color: #1e293b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
             .invoice-title-box p { margin: 2px 0 0 0; color: #64748b; font-size: 12px; font-weight: 600; }
@@ -418,8 +418,10 @@ export default function PurchaseRecordsTab({
             .summary-row.grand-total { border-top: 1.5px solid #e2e8f0; margin-top: 10px; padding-top: 12px; font-weight: 800; font-size: 17px; color: ${printConfig?.primaryColor || '#0d9488'}; }
             
             @media print {
+              @page { margin: 0; size: auto; }
               .invoice-body { padding: 10px 40px; }
-              body { margin: 0; }
+              body { margin: 0; padding: 0; overflow: hidden; }
+              html, body { height: 100%; }
             }
           </style>
         </head>
