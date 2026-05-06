@@ -834,12 +834,27 @@ export default function PurchaseRecordsTab({
                 required
                 className="clarity-input h-8 w-full text-[13px] px-2"
                 value={formData.supplierId}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    supplierId: e.target.value,
-                  }))
-                }
+                onChange={(e) => {
+                  const newSupplierId = e.target.value;
+                  setFormData((prev) => {
+                    const updated = { ...prev, supplierId: newSupplierId };
+                    
+                    // Check for existing match to auto-populate
+                    if (!editingRecord && prev.billNumber.trim() && newSupplierId) {
+                      const match = purchaseRecords.find(
+                        r => r.billNumber.trim().toLowerCase() === prev.billNumber.trim().toLowerCase() && 
+                        r.supplierId === newSupplierId
+                      );
+                      if (match) {
+                        updated.totalAmount = match.totalAmount.toString();
+                        updated.paidAmount = match.paidAmount.toString();
+                        updated.notes = match.notes || "";
+                        updated.paymentDone = match.paymentDone;
+                      }
+                    }
+                    return updated;
+                  });
+                }}
               >
                 <option value="">Select a supplier</option>
                 {suppliers.map((supplier) => (
@@ -878,17 +893,32 @@ export default function PurchaseRecordsTab({
                   placeholder="Enter bill number"
                   type="text"
                   value={formData.billNumber}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      billNumber: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => {
+                    const newBillNo = e.target.value;
+                    setFormData((prev) => {
+                      const updated = { ...prev, billNumber: newBillNo };
+                      
+                      // Check for existing match to auto-populate
+                      if (!editingRecord && newBillNo.trim() && prev.supplierId) {
+                        const match = purchaseRecords.find(
+                          r => r.billNumber.trim().toLowerCase() === newBillNo.trim().toLowerCase() && 
+                          r.supplierId === prev.supplierId
+                        );
+                        if (match) {
+                          updated.totalAmount = match.totalAmount.toString();
+                          updated.paidAmount = match.paidAmount.toString();
+                          updated.notes = match.notes || "";
+                          updated.paymentDone = match.paymentDone;
+                        }
+                      }
+                      return updated;
+                    });
+                  }}
                 />
                 {!editingRecord && formData.billNumber && formData.supplierId && purchaseRecords.some(r => r.billNumber.trim().toLowerCase() === formData.billNumber.trim().toLowerCase() && r.supplierId === formData.supplierId) && (
-                  <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium animate-pulse">
+                  <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium bg-teal-50 px-2 py-1 rounded border border-teal-100">
                     <IoCheckmarkCircleOutline className="w-3 h-3" />
-                    <span>Existing bill found. This will update the payment.</span>
+                    <span>Existing bill found. Current data loaded.</span>
                   </div>
                 )}
               </div>
