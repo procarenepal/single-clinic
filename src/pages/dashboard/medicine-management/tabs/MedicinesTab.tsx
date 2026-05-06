@@ -242,7 +242,6 @@ export default function MedicinesTab({
             searchPrefix: prefix,
             branchId: branchScopeId || undefined,
           });
-
         setMedicines(pageMedicines);
         setLastDoc(nextLastDoc);
         if (targetPage === 1) {
@@ -583,6 +582,8 @@ export default function MedicinesTab({
         newSupplierName: "",
         isAddingType: false,
         newTypeName: "",
+        isVatApplied: false,
+        vatPercentage: 13,
       },
     ]);
     modalState.open();
@@ -677,6 +678,8 @@ export default function MedicinesTab({
         newSupplierName: "",
         isAddingType: false,
         newTypeName: "",
+        isVatApplied: medicine.isVatApplied || false,
+        vatPercentage: medicine.vatPercentage || 13,
       },
     ]);
     modalState.open();
@@ -1365,12 +1368,12 @@ export default function MedicinesTab({
                     medicineStocks[medicine.id] !== undefined ||
                     medicineSchemeStocks[medicine.id] !== undefined;
                   const rawExpiry = medicineExpiryDates[medicine.id] || medicine.expiryDate;
-                  const expiryDate = rawExpiry 
-                    ? (rawExpiry instanceof Date 
-                        ? rawExpiry 
-                        : (typeof (rawExpiry as any)?.toDate === 'function' 
-                            ? (rawExpiry as any).toDate() 
-                            : new Date(rawExpiry)))
+                  const expiryDate = rawExpiry
+                    ? (rawExpiry instanceof Date
+                      ? rawExpiry
+                      : (typeof (rawExpiry as any)?.toDate === 'function'
+                        ? (rawExpiry as any).toDate()
+                        : new Date(rawExpiry)))
                     : null;
                   const isExpired = expiryDate && expiryDate < new Date();
                   const isLowStock =
@@ -1485,8 +1488,8 @@ export default function MedicinesTab({
                         {expiryDate ? (
                           <div>
                             <p className="text-[13px] text-[rgb(var(--color-text-muted))]">
-                              {expiryDate instanceof Date 
-                                ? expiryDate.toLocaleDateString() 
+                              {expiryDate instanceof Date
+                                ? expiryDate.toLocaleDateString()
                                 : typeof (expiryDate as any)?.toDate === 'function'
                                   ? (expiryDate as any).toDate().toLocaleDateString()
                                   : new Date(expiryDate).toLocaleDateString()}
@@ -1795,6 +1798,7 @@ export default function MedicinesTab({
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Sale Price <span className="text-danger">*</span></th>
                     )}
                     <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Cost Price</th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">VAT (%)</th>
                     {!currentMedicine && <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider text-center">Action</th>}
                   </tr>
                 </thead>
@@ -1802,7 +1806,7 @@ export default function MedicinesTab({
                   {formDataList.map((formData, index) => (
                     <tr key={index} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
                       <td className="px-3 py-2 text-[12px] font-medium text-[rgb(var(--color-text-muted))]">{index + 1}</td>
-                      
+
                       <td className="px-2 py-2 relative">
                         <input
                           required
@@ -1960,6 +1964,42 @@ export default function MedicinesTab({
                           value={formData.costPrice}
                           onChange={(e) => handleChange(index, e)}
                         />
+                        {formData.isVatApplied && formData.costPrice && (
+                          <p className="text-[10px] text-primary font-medium mt-1">
+                            Total: {(parseFloat(formData.costPrice) * (1 + parseFloat(formData.vatPercentage) / 100)).toFixed(2)}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-2">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={formData.isVatApplied}
+                              onChange={(e) => {
+                                const newList = [...formDataList];
+                                newList[index].isVatApplied = e.target.checked;
+                                setFormDataList(newList);
+                              }}
+                            />
+                            <div className="w-8 h-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+                          </label>
+                          {formData.isVatApplied && (
+                            <div className="relative w-16">
+                              <input
+                                className="clarity-input h-8 w-full text-[12px] pl-2 pr-4 rounded"
+                                name="vatPercentage"
+                                type="number"
+                                step="0.1"
+                                value={formData.vatPercentage}
+                                onChange={(e) => handleChange(index, e)}
+                              />
+                              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[rgb(var(--color-text-muted)/0.5)]">%</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {!currentMedicine && (

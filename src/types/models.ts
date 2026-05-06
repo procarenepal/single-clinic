@@ -501,6 +501,8 @@ export interface Medicine {
   barcode?: string;
   prescriptionRequired: boolean;
   isActive: boolean;
+  isVatApplied: boolean;
+  vatPercentage: number;
   clinicId: string;
   branchId: string; // Associated branch
   createdAt: Date;
