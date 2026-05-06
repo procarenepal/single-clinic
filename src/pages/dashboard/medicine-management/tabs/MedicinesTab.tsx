@@ -144,6 +144,13 @@ export default function MedicinesTab({
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const modalState = useModalState(false);
+  const generateBillNumber = () => {
+    const now = new Date();
+    const datePart = now.toISOString().split("T")[0].replace(/-/g, "");
+    const randomPart = Math.floor(1000 + Math.random() * 9000);
+
+    return `BILL-${datePart}-${randomPart}`;
+  };
   const refillModalState = useModalState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentMedicine, setCurrentMedicine] = useState<Medicine | null>(null);
@@ -551,7 +558,7 @@ export default function MedicinesTab({
     setCurrentMedicine(null);
     setGlobalPurchaseDetails({
       supplierId: "",
-      billNumber: "",
+      billNumber: generateBillNumber(),
       isAddingSupplier: false,
       newSupplierName: "",
     });
@@ -1538,7 +1545,7 @@ export default function MedicinesTab({
                                 expiryDate: "",
                                 batchNumber: "",
                                 unitPrice: "",
-                                invoiceNumber: "",
+                                invoiceNumber: generateBillNumber(),
                                 supplierId: "",
                                 transactionType: "add",
                               });
@@ -1748,12 +1755,26 @@ export default function MedicinesTab({
                 <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
                   Bill / Invoice Number
                 </label>
-                <input
-                  className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                  placeholder="Enter bill or invoice number"
-                  value={globalPurchaseDetails.billNumber}
-                  onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, billNumber: e.target.value }))}
-                />
+                <div className="relative">
+                  <input
+                    className="clarity-input h-9 w-full text-[13px] px-3 pr-16 rounded-md"
+                    placeholder="Enter bill or invoice number"
+                    value={globalPurchaseDetails.billNumber}
+                    onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, billNumber: e.target.value }))}
+                  />
+                  <button
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all"
+                    type="button"
+                    onClick={() => {
+                      setGlobalPurchaseDetails(prev => ({
+                        ...prev,
+                        billNumber: generateBillNumber()
+                      }));
+                    }}
+                  >
+                    GENERATE
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2332,23 +2353,37 @@ export default function MedicinesTab({
                     <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
                       Invoice Number
                     </label>
-                    <input
-                      className="clarity-input h-8 w-full text-[13px] px-2"
-                      name="invoiceNumber"
-                      placeholder="Enter invoice number"
-                      value={refillFormData.invoiceNumber}
-                      onChange={(e) =>
-                        setRefillFormData((prev) => ({
-                          ...prev,
-                          invoiceNumber: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
+                    <div className="relative">
+                      <input
+                        className="clarity-input h-8 w-full text-[13px] px-2 pr-16"
+                        name="invoiceNumber"
+                        placeholder="Enter invoice number"
+                        value={refillFormData.invoiceNumber}
+                        onChange={(e) =>
+                          setRefillFormData((prev) => ({
+                            ...prev,
+                            invoiceNumber: e.target.value,
+                          }))
                         }
-                      }}
-                    />
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                          }
+                        }}
+                      />
+                      <button
+                        className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all"
+                        type="button"
+                        onClick={() => {
+                          setRefillFormData(prev => ({
+                            ...prev,
+                            invoiceNumber: generateBillNumber()
+                          }));
+                        }}
+                      >
+                        GENERATE
+                      </button>
+                    </div>
                   </div>
 
                   <div>
