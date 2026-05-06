@@ -603,6 +603,19 @@ export const medicineService = {
     }
   },
 
+  // Helper to remove undefined fields before sending to Firestore
+  stripUndefined(obj: any): any {
+    const newObj: any = {};
+
+    Object.keys(obj).forEach((key) => {
+      if (obj[key] !== undefined) {
+        newObj[key] = obj[key];
+      }
+    });
+
+    return newObj;
+  },
+
   async updateMedicineStock(
     id: string,
     updateData: Partial<MedicineStock>,
@@ -611,7 +624,7 @@ export const medicineService = {
       const docRef = doc(db, MEDICINE_STOCK_COLLECTION, id);
 
       await updateDoc(docRef, {
-        ...updateData,
+        ...this.stripUndefined(updateData),
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -627,7 +640,7 @@ export const medicineService = {
     try {
       const transactionsRef = collection(db, STOCK_TRANSACTIONS_COLLECTION);
       const docRef = await addDoc(transactionsRef, {
-        ...transactionData,
+        ...this.stripUndefined(transactionData),
         createdAt: serverTimestamp(),
       });
 
@@ -805,7 +818,7 @@ export const medicineService = {
     try {
       const suppliersRef = collection(db, SUPPLIERS_COLLECTION);
       const docRef = await addDoc(suppliersRef, {
-        ...supplierData,
+        ...this.stripUndefined(supplierData),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -865,7 +878,7 @@ export const medicineService = {
       const docRef = doc(db, SUPPLIERS_COLLECTION, id);
 
       await updateDoc(docRef, {
-        ...updateData,
+        ...this.stripUndefined(updateData),
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -892,7 +905,7 @@ export const medicineService = {
     try {
       const recordsRef = collection(db, PURCHASE_RECORDS_COLLECTION);
       const docRef = await addDoc(recordsRef, {
-        ...recordData,
+        ...this.stripUndefined(recordData),
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -980,7 +993,7 @@ export const medicineService = {
       const docRef = doc(db, PURCHASE_RECORDS_COLLECTION, id);
 
       await updateDoc(docRef, {
-        ...updateData,
+        ...this.stripUndefined(updateData),
         updatedAt: new Date(),
       });
     } catch (error) {
@@ -1143,7 +1156,7 @@ export const medicineService = {
   ): Promise<string> {
     try {
       const paymentsRef = collection(db, SUPPLIER_PAYMENTS_COLLECTION);
-      const payload: Record<string, any> = {
+      const payload: Record<string, any> = this.stripUndefined({
         ...paymentData,
         date:
           paymentData.date instanceof Date
@@ -1151,14 +1164,7 @@ export const medicineService = {
             : new Date(paymentData.date),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
-
-      if (!payload.referenceNumber) {
-        delete payload.referenceNumber;
-      }
-      if (!payload.notes) {
-        delete payload.notes;
-      }
+      });
 
       const docRef = await addDoc(paymentsRef, payload);
 
@@ -1282,16 +1288,9 @@ export const medicineService = {
     try {
       const docRef = doc(db, SUPPLIER_PAYMENTS_COLLECTION, id);
       const payload: Record<string, any> = {
-        ...updateData,
+        ...this.stripUndefined(updateData),
         updatedAt: serverTimestamp(),
       };
-
-      if (payload.referenceNumber === undefined) {
-        delete payload.referenceNumber;
-      }
-      if (payload.notes === undefined) {
-        delete payload.notes;
-      }
 
       await updateDoc(docRef, payload);
     } catch (error) {

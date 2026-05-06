@@ -13,6 +13,7 @@ export interface Clinic {
   state?: string;   // Added state
   country?: string; // Added country
   logo?: string;
+  panNumber?: string;
   description?: string;
   subscriptionStatus: "active" | "suspended" | "cancelled";
   subscriptionPlan: string;
@@ -795,7 +796,9 @@ export interface SupplierPurchaseRecord {
   dueAmount: number;
   paymentStatus: "paid" | "pending" | "partial" | "overdue";
   paymentDone: boolean;
+  paymentMethod?: string;
   notes?: string;
+  items?: any[]; // List of medicines in this purchase
   clinicId: string;
   branchId: string; // Associated branch
   createdBy: string;

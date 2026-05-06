@@ -73,7 +73,7 @@ function ModalShell({
         className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))/0.5] shrink-0 bg-[rgb(var(--color-surface-2))/0.3]">
           <div>
             <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
@@ -83,16 +83,16 @@ function ModalShell({
           {!disabled && (
             <button
               aria-label="Close modal"
-              className="text-[rgb(var(--color-text-muted)/0.5)] hover:text-[rgb(var(--color-text-muted))] mt-0.5"
+              className="text-[rgb(var(--color-text-muted)/0.6)] hover:text-[rgb(var(--color-text))] mt-0.5 transition-colors"
               type="button"
               onClick={onClose}
             >
-              <IoCloseOutline className="w-4 h-4" />
+              <IoCloseOutline className="w-5 h-5" />
             </button>
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))] shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))/0.5] shrink-0 bg-[rgb(var(--color-surface-2))/0.3]">
           {footer}
         </div>
       </div>
@@ -623,14 +623,14 @@ export default function CategoriesTab({
           onClose={() => setIsDeleteModalOpen(false)}
         >
           <div className="space-y-3">
-            <div className="bg-red-50 border border-red-200 rounded p-3">
+            <div className="bg-red-500/10 border border-red-500/20 rounded p-3">
               <div className="flex items-start gap-2">
-                <IoWarningOutline className="text-red-600 mt-0.5 flex-shrink-0 w-4 h-4" />
-                <div className="text-[12.5px] text-red-700">
+                <IoWarningOutline className="text-red-500 mt-0.5 flex-shrink-0 w-4 h-4" />
+                <div className="text-[12.5px] text-red-500">
                   <p className="font-semibold mb-1">
                     This action cannot be undone.
                   </p>
-                  <p>
+                  <p className="text-[rgb(var(--color-text-muted))]">
                     The category will be permanently removed. Medicines
                     associated with this category may lose their category
                     information.

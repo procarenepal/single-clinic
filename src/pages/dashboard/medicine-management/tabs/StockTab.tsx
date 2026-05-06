@@ -406,61 +406,53 @@ export default function StockTab({
     <div className="space-y-6">
       {/* Stock overview stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border border-default-200">
-          <CardBody className="text-center py-4">
-            <div className="flex items-center justify-center mb-2">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <IoArchiveOutline className="text-primary text-xl" />
-              </div>
+        <div className="clarity-card p-4 text-center">
+          <div className="flex items-center justify-center mb-2">
+            <div className="p-1.5 bg-primary/10 rounded-lg">
+              <IoArchiveOutline className="text-primary text-xl" />
             </div>
-            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
-              {stockItems.length}
-            </p>
-            <p className="text-sm text-text-muted">Total Items</p>
-          </CardBody>
-        </Card>
+          </div>
+          <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
+            {stockItems.length}
+          </p>
+          <p className="text-[12px] text-text-muted">Total Items</p>
+        </div>
 
-        <Card className="border border-default-200">
-          <CardBody className="text-center py-4">
-            <div className="flex items-center justify-center mb-2">
-              <div className="p-2 bg-warning-100 rounded-lg">
-                <IoWarningOutline className="text-warning text-xl" />
-              </div>
+        <div className="clarity-card p-4 text-center">
+          <div className="flex items-center justify-center mb-2">
+            <div className="p-1.5 bg-warning/10 rounded-lg">
+              <IoWarningOutline className="text-warning text-xl" />
             </div>
-            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
-              {lowStockItems.length}
-            </p>
-            <p className="text-sm text-text-muted">Low Stock</p>
-          </CardBody>
-        </Card>
+          </div>
+          <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
+            {lowStockItems.length}
+          </p>
+          <p className="text-[12px] text-text-muted">Low Stock</p>
+        </div>
 
-        <Card className="border border-default-200">
-          <CardBody className="text-center py-4">
-            <div className="flex items-center justify-center mb-2">
-              <div className="p-2 bg-danger-100 rounded-lg">
-                <IoAlertCircleOutline className="text-danger text-xl" />
-              </div>
+        <div className="clarity-card p-4 text-center">
+          <div className="flex items-center justify-center mb-2">
+            <div className="p-1.5 bg-danger/10 rounded-lg">
+              <IoAlertCircleOutline className="text-danger text-xl" />
             </div>
-            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
-              {outOfStockItems.length}
-            </p>
-            <p className="text-sm text-text-muted">Out of Stock</p>
-          </CardBody>
-        </Card>
+          </div>
+          <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
+            {outOfStockItems.length}
+          </p>
+          <p className="text-[12px] text-text-muted">Out of Stock</p>
+        </div>
 
-        <Card className="border border-default-200">
-          <CardBody className="text-center py-4">
-            <div className="flex items-center justify-center mb-2">
-              <div className="p-2 bg-success-100 rounded-lg">
-                <IoCheckmarkCircleOutline className="text-success text-xl" />
-              </div>
+        <div className="clarity-card p-4 text-center">
+          <div className="flex items-center justify-center mb-2">
+            <div className="p-1.5 bg-health-500/10 rounded-lg">
+              <IoCheckmarkCircleOutline className="text-health-500 text-xl" />
             </div>
-            <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
-              {stockItems.length - lowStockItems.length}
-            </p>
-            <p className="text-sm text-text-muted">Adequate Stock</p>
-          </CardBody>
-        </Card>
+          </div>
+          <p className="text-2xl font-bold text-[rgb(var(--color-text))]">
+            {stockItems.length - lowStockItems.length}
+          </p>
+          <p className="text-[12px] text-text-muted">Adequate Stock</p>
+        </div>
       </div>
 
       {/* Header actions */}
@@ -500,211 +492,237 @@ export default function StockTab({
             onSelectionChange={(key) => setSelectedTab(key as string)}
           >
             <Tab key="overview" title="Stock Overview">
-              <div className="p-6">
-                <Table aria-label="Stock overview table">
-                  <TableHeader>
-                    <TableColumn>MEDICINE</TableColumn>
-                    <TableColumn>CURRENT STOCK</TableColumn>
-                    <TableColumn>STOCK LEVEL</TableColumn>
-                    <TableColumn>REORDER LEVEL</TableColumn>
-                    <TableColumn>LOCATION</TableColumn>
-                    <TableColumn>STATUS</TableColumn>
-                    <TableColumn>ACTIONS</TableColumn>
-                  </TableHeader>
-                  <TableBody
-                    emptyContent="No stock items found"
-                    isLoading={isLoading}
-                  >
-                    {filteredStockItems.map((item) => {
-                      const status = getStockStatus(item);
-                      const percentage = getStockPercentage(item);
-
-                      return (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium text-text">
-                                {item.medicine.name}
-                              </p>
-                              {item.medicine.genericName && (
-                                <p className="text-sm text-text-muted">
-                                  {item.medicine.genericName}
-                                </p>
-                              )}
+              <div className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="clarity-table w-full text-left border-collapse min-w-[900px]">
+                    <thead>
+                      <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">MEDICINE</th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">CURRENT STOCK</th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">STOCK LEVEL</th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">REORDER LEVEL</th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">LOCATION</th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">STATUS</th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-24">ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={7} className="px-5 py-10 text-center">
+                            <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted)/0.7)] text-[12.5px]">
+                              <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                              <span>Loading stock...</span>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className="font-medium text-text">
-                                Regular: {item.currentStock}{" "}
-                                {item.medicine.unit}
-                                {item.schemeStock > 0 && (
-                                  <span className="text-default-500">
-                                    {" "}
-                                    | Scheme: {item.schemeStock}{" "}
+                          </td>
+                        </tr>
+                      ) : filteredStockItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-5 py-10 text-center text-[rgb(var(--color-text-muted))]">
+                            No stock items found
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredStockItems.map((item) => {
+                          const status = getStockStatus(item);
+                          const percentage = getStockPercentage(item);
+
+                          return (
+                            <tr key={item.id} className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors">
+                              <td className="px-5 py-3">
+                                <div>
+                                  <p className="font-semibold text-[13.5px] text-[rgb(var(--color-text))]">
+                                    {item.medicine.name}
+                                  </p>
+                                  {item.medicine.genericName && (
+                                    <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.7)]">
+                                      {item.medicine.genericName}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-5 py-3">
+                                <div className="space-y-1">
+                                  <p className="text-[13px] text-[rgb(var(--color-text))]">
+                                    <span className="font-medium text-[rgb(var(--color-text-muted))]">Regular:</span> {item.currentStock}{" "}
                                     {item.medicine.unit}
+                                    {item.schemeStock > 0 && (
+                                      <span className="text-[rgb(var(--color-text-muted)/0.6)]">
+                                        {" "}
+                                        | <span className="font-medium">Scheme:</span> {item.schemeStock}
+                                      </span>
+                                    )}
+                                  </p>
+                                  {item.maximumStock && (
+                                    <div className="w-24 h-1 bg-[rgb(var(--color-surface-3))] rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full ${status.color === "danger" ? "bg-rose-500" : status.color === "warning" ? "bg-saffron-500" : "bg-health-500"}`}
+                                        style={{ width: `${percentage}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-5 py-3">
+                                {item.maximumStock ? (
+                                  <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                                    {item.currentStock + (item.schemeStock || 0)} /{" "}
+                                    {item.maximumStock}
+                                  </span>
+                                ) : (
+                                  <span className="text-[12px] text-[rgb(var(--color-text-muted)/0.4)] italic">
+                                    No max set
                                   </span>
                                 )}
-                              </p>
-                              {item.maximumStock && (
-                                <Progress
-                                  className="max-w-[100px]"
-                                  color={status.color}
-                                  value={percentage}
-                                />
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {item.maximumStock ? (
-                              <span className="text-sm">
-                                {item.currentStock + (item.schemeStock || 0)} /{" "}
-                                {item.maximumStock}
-                              </span>
-                            ) : (
-                              <span className="text-default-400">
-                                No max set
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm">
-                              {item.reorderLevel} {item.medicine.unit}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            {item.location || (
-                              <span className="text-default-400">
-                                No location
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Chip color={status.color} size="sm" variant="flat">
-                              {status.label}
-                            </Chip>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                isIconOnly
-                                color="primary"
-                                size="sm"
-                                variant="bordered"
-                                onClick={() => openStockModal(item)}
-                              >
-                                <IoCreateOutline />
-                              </Button>
-                              <Button
-                                isIconOnly
-                                color="secondary"
-                                size="sm"
-                                variant="bordered"
-                                onClick={() => {
-                                  fetchTransactions(item.medicineId);
-                                  setSelectedTab("transactions");
-                                }}
-                              >
-                                <IoTimeOutline />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                                  {item.reorderLevel} {item.medicine.unit}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3">
+                                {item.location ? (
+                                  <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                                    {item.location}
+                                  </span>
+                                ) : (
+                                  <span className="text-[12px] text-[rgb(var(--color-text-muted)/0.4)] italic">
+                                    No location
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-5 py-3">
+                                <span
+                                  className={`inline-flex px-2 py-0.5 rounded text-[10.5px] font-bold border ${status.color === "danger"
+                                    ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                    : status.color === "warning"
+                                      ? "bg-saffron-500/10 text-saffron-500 border-saffron-500/20"
+                                      : "bg-health-500/10 text-health-500 border-health-500/20"
+                                    }`}
+                                >
+                                  {status.label}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3">
+                                <div className="flex gap-1.5">
+                                  <button
+                                    className="p-1.5 rounded border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-colors"
+                                    title="Edit Stock"
+                                    onClick={() => openStockModal(item)}
+                                  >
+                                    <IoCreateOutline className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    className="p-1.5 rounded border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] hover:text-health-500 hover:border-health-500/30 hover:bg-health-500/5 transition-colors"
+                                    title="History"
+                                    onClick={() => {
+                                      fetchTransactions(item.medicineId);
+                                      setSelectedTab("transactions");
+                                    }}
+                                  >
+                                    <IoTimeOutline className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </Tab>
 
             <Tab key="low-stock" title="Low Stock Alerts">
-              <div className="p-6">
+              <div className="p-0">
                 {lowStockItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 mb-4">
-                      <IoCheckmarkCircleOutline className="text-3xl text-emerald-500" />
+                    <div className="w-16 h-16 rounded-full bg-health-500/10 flex items-center justify-center border border-health-500/20 mb-4">
+                      <IoCheckmarkCircleOutline className="text-3xl text-health-500" />
                     </div>
-                    <h3 className="text-lg font-semibold text-emerald-500">
+                    <h3 className="text-lg font-semibold text-health-500">
                       All Good!
                     </h3>
-                    <p className="text-[13px] text-text-muted mt-1 max-w-xs">
+                    <p className="text-[13px] text-[rgb(var(--color-text-muted))] mt-1 max-w-xs">
                       No items are currently running low on stock. Your inventory levels are adequate.
                     </p>
                   </div>
                 ) : (
-                  <Table aria-label="Low stock items table">
-                    <TableHeader>
-                      <TableColumn>MEDICINE</TableColumn>
-                      <TableColumn>CURRENT STOCK</TableColumn>
-                      <TableColumn>REORDER LEVEL</TableColumn>
-                      <TableColumn>SHORTAGE</TableColumn>
-                      <TableColumn>ACTIONS</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {lowStockItems.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <IoWarningOutline className="text-warning" />
-                              <div>
-                                <p className="font-medium">
-                                  {item.medicine.name}
-                                </p>
-                                {item.medicine.genericName && (
-                                  <p className="text-sm text-default-500">
-                                    {item.medicine.genericName}
+                  <div className="overflow-x-auto">
+                    <table className="clarity-table w-full text-left border-collapse min-w-[700px]">
+                      <thead>
+                        <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">MEDICINE</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">CURRENT STOCK</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">REORDER LEVEL</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">SHORTAGE</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-24">ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
+                        {lowStockItems.map((item) => (
+                          <tr key={item.id} className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2">
+                                <IoWarningOutline className="text-saffron-500 w-4 h-4" />
+                                <div>
+                                  <p className="font-semibold text-[13.5px] text-[rgb(var(--color-text))]">
+                                    {item.medicine.name}
                                   </p>
-                                )}
+                                  {item.medicine.genericName && (
+                                    <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.7)]">
+                                      {item.medicine.genericName}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <span className="font-medium text-warning">
-                              Regular: {item.currentStock} {item.medicine.unit}
-                              {item.schemeStock > 0 && (
-                                <span className="text-default-500">
-                                  {" "}
-                                  | Scheme: {item.schemeStock}{" "}
-                                  {item.medicine.unit}
-                                </span>
-                              )}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span>
-                              {item.reorderLevel} {item.medicine.unit}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-danger font-medium">
-                              {Math.max(
-                                0,
-                                item.reorderLevel -
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="text-[13px] font-medium text-saffron-500">
+                                Regular: {item.currentStock} {item.medicine.unit}
+                                {item.schemeStock > 0 && (
+                                  <span className="text-[rgb(var(--color-text-muted)/0.6)]">
+                                    {" "}
+                                    | Scheme: {item.schemeStock}
+                                  </span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                                {item.reorderLevel} {item.medicine.unit}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="text-rose-500 font-bold text-[13px]">
+                                {Math.max(
+                                  0,
+                                  item.reorderLevel -
                                   (item.currentStock + (item.schemeStock || 0)),
-                              )}{" "}
-                              {item.medicine.unit}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              color="primary"
-                              size="sm"
-                              variant="bordered"
-                              onClick={() => openStockModal(item)}
-                            >
-                              Restock
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                                )}{" "}
+                                {item.medicine.unit}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <button
+                                className="clarity-btn clarity-btn-primary px-3 py-1 text-[11.5px]"
+                                onClick={() => openStockModal(item)}
+                              >
+                                Restock
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </Tab>
 
             <Tab key="transactions" title="Recent Transactions">
-              <div className="p-6">
+              <div className="p-0">
                 {stockTransactions.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 mb-4">
@@ -713,82 +731,82 @@ export default function StockTab({
                     <h3 className="text-lg font-semibold text-[rgb(var(--color-text))]">
                       No Transactions Found
                     </h3>
-                    <p className="text-[13px] text-text-muted mt-1 max-w-xs">
+                    <p className="text-[13px] text-[rgb(var(--color-text-muted))] mt-1 max-w-xs">
                       No recent stock transactions recorded for this medicine.
                     </p>
                   </div>
                 ) : (
-                  <Table aria-label="Stock transactions table">
-                    <TableHeader>
-                      <TableColumn>DATE</TableColumn>
-                      <TableColumn>TYPE</TableColumn>
-                      <TableColumn>QUANTITY</TableColumn>
-                      <TableColumn>STOCK CHANGE</TableColumn>
-                      <TableColumn>AMOUNT</TableColumn>
-                      <TableColumn>REFERENCE</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {stockTransactions.map((transaction) => (
-                        <TableRow key={transaction.id}>
-                          <TableCell>
-                            {transaction.createdAt
-                              ? transaction.createdAt.toLocaleDateString()
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              color={
-                                transaction.type === "purchase"
-                                  ? "success"
-                                  : transaction.type === "sale"
-                                    ? "primary"
-                                    : transaction.type === "adjustment"
-                                      ? "warning"
-                                      : "danger"
-                              }
-                              size="sm"
-                              variant="flat"
-                            >
-                              {transaction.type}
-                            </Chip>
-                          </TableCell>
-                          <TableCell>
-                            <span className="font-medium">
-                              {transaction.quantity}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              {transaction.type === "purchase" ? (
-                                <IoTrendingUpOutline className="text-success" />
-                              ) : (
-                                <IoTrendingDownOutline className="text-danger" />
-                              )}
-                              <span className="text-sm">
-                                {transaction.previousStock} →{" "}
-                                {transaction.newStock}
+                  <div className="overflow-x-auto">
+                    <table className="clarity-table w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">DATE</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">TYPE</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">QUANTITY</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">STOCK CHANGE</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">AMOUNT</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">REFERENCE</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
+                        {stockTransactions.map((transaction) => (
+                          <tr key={transaction.id} className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors">
+                            <td className="px-5 py-3">
+                              <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                                {transaction.createdAt
+                                  ? transaction.createdAt.toLocaleDateString()
+                                  : "N/A"}
                               </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {transaction.totalAmount ? (
-                              <span>NPR {transaction.totalAmount}</span>
-                            ) : (
-                              <span className="text-default-400">N/A</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {transaction.invoiceNumber ||
-                              transaction.reason || (
-                                <span className="text-default-400">
-                                  No reference
+                            </td>
+                            <td className="px-5 py-3">
+                              <span
+                                className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${transaction.type === "purchase"
+                                  ? "bg-health-500/10 text-health-500 border-health-500/20"
+                                  : transaction.type === "sale"
+                                    ? "bg-primary/10 text-primary border-primary/20"
+                                    : transaction.type === "adjustment"
+                                      ? "bg-saffron-500/10 text-saffron-500 border-saffron-500/20"
+                                      : "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                  }`}
+                              >
+                                {transaction.type}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
+                                {transaction.quantity}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-1.5">
+                                {transaction.type === "purchase" ? (
+                                  <IoTrendingUpOutline className="text-health-500 w-3.5 h-3.5" />
+                                ) : (
+                                  <IoTrendingDownOutline className="text-rose-500 w-3.5 h-3.5" />
+                                )}
+                                <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                                  {transaction.previousStock} →{" "}
+                                  <span className="font-medium text-[rgb(var(--color-text))]">{transaction.newStock}</span>
                                 </span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
+                              {transaction.totalAmount ? (
+                                <span className="text-[13px] font-semibold text-[rgb(var(--color-text))]">NPR {transaction.totalAmount}</span>
+                              ) : (
+                                <span className="text-[12px] text-[rgb(var(--color-text-muted)/0.4)]">N/A</span>
                               )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="text-[12.5px] text-[rgb(var(--color-text-muted))] line-clamp-1 max-w-[150px]" title={transaction.invoiceNumber || transaction.reason}>
+                                {transaction.invoiceNumber || transaction.reason || "—"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </Tab>

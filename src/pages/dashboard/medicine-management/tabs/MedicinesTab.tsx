@@ -77,7 +77,7 @@ function ModalShell({
         className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))/0.5] shrink-0 bg-[rgb(var(--color-surface-2))/0.3]">
           <div>
             <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
@@ -86,16 +86,17 @@ function ModalShell({
           </div>
           {!disabled && (
             <button
-              className="text-[rgb(var(--color-text-muted)/0.4)] hover:text-[rgb(var(--color-text-muted))] mt-0.5"
+              aria-label="Close modal"
+              className="text-[rgb(var(--color-text-muted)/0.6)] hover:text-[rgb(var(--color-text))] mt-0.5 transition-colors"
               type="button"
               onClick={onClose}
             >
-              <IoCloseOutline className="w-4 h-4" />
+              <IoCloseOutline className="w-5 h-5" />
             </button>
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))] shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))/0.5] shrink-0 bg-[rgb(var(--color-surface-2))/0.3]">
           {footer}
         </div>
       </div>
@@ -130,6 +131,7 @@ export default function MedicinesTab({
 }: MedicinesTabProps) {
   const { userData, clinicId } = useAuthContext();
   const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [masterMedicines, setMasterMedicines] = useState<Medicine[]>([]);
   const [medicineStocks, setMedicineStocks] = useState<Record<string, number>>(
     {},
   );
@@ -194,6 +196,8 @@ export default function MedicinesTab({
     billNumber: "",
     isAddingSupplier: false,
     newSupplierName: "",
+    paidAmount: "",
+    paymentMethod: "cash",
   });
 
   const purchaseSummary = useMemo(() => {
@@ -333,6 +337,7 @@ export default function MedicinesTab({
     fetchBrands();
     fetchCategories();
     fetchSuppliers();
+    fetchMasterMedicines();
   }, [
     clinicId,
     filterType,
@@ -341,6 +346,20 @@ export default function MedicinesTab({
     fetchMedicinesPaginated,
     branchScopeId,
   ]);
+
+  const fetchMasterMedicines = async () => {
+    if (!clinicId) return;
+    try {
+      const data = await medicineService.getMedicinesByClinic(
+        clinicId,
+        undefined,
+        branchScopeId || undefined,
+      );
+      setMasterMedicines(data);
+    } catch (error) {
+      console.error("Error fetching master medicines:", error);
+    }
+  };
 
   const fetchSuppliers = async () => {
     if (!clinicId) return;
@@ -473,6 +492,20 @@ export default function MedicinesTab({
     }
   };
 
+  const handleFocus = (index: number) => {
+    const value = formDataList[index].name;
+    if (value.trim().length >= 2) {
+      const lowerValue = value.toLowerCase().trim();
+      const filtered = masterMedicines.filter((m) =>
+        m.name.toLowerCase().includes(lowerValue) ||
+        m.genericName?.toLowerCase().includes(lowerValue),
+      );
+      setNameSuggestions(filtered.slice(0, 5));
+      setShowSuggestions(true);
+      setFocusedRowIndex(index);
+    }
+  };
+
   const handleChange = (
     index: number,
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -486,11 +519,13 @@ export default function MedicinesTab({
         [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
       };
 
-      // Handle medicine name suggestions for this specific row
+      // Handle medicine name suggestions for this specific row using master list
       if (name === "name") {
         if (value.trim().length >= 2) {
-          const filtered = medicines.filter((m) =>
-            m.name.toLowerCase().includes(value.toLowerCase().trim()),
+          const lowerValue = value.toLowerCase().trim();
+          const filtered = masterMedicines.filter((m) =>
+            m.name.toLowerCase().includes(lowerValue) ||
+            m.genericName?.toLowerCase().includes(lowerValue),
           );
           setNameSuggestions(filtered.slice(0, 5));
           setShowSuggestions(true);
@@ -555,6 +590,10 @@ export default function MedicinesTab({
         unit: medicine.unit,
         description: medicine.description || "",
         supplierId: medicine.supplierId || "",
+        price: medicine.price?.toString() || "",
+        costPrice: medicine.costPrice?.toString() || "",
+        isVatApplied: medicine.isVatApplied || false,
+        vatPercentage: medicine.vatPercentage || 13,
       };
       return newList;
     });
@@ -592,6 +631,8 @@ export default function MedicinesTab({
       billNumber: generateBillNumber(),
       isAddingSupplier: false,
       newSupplierName: "",
+      paidAmount: "",
+      paymentMethod: "cash",
     });
     setFormDataList([
       {
@@ -687,6 +728,8 @@ export default function MedicinesTab({
       billNumber: "",
       isAddingSupplier: false,
       newSupplierName: "",
+      paidAmount: "",
+      paymentMethod: "cash",
     });
 
     setFormDataList([
@@ -746,11 +789,7 @@ export default function MedicinesTab({
         return;
       }
 
-      if (!currentMedicine && medicines.some(m => m.name.toLowerCase() === row.name.trim().toLowerCase())) {
-        console.warn(`Medicine already exists: ${row.name}`);
-        addToast({ title: "Validation Error", description: `Medicine "${row.name}" already exists` });
-        return;
-      }
+      // Removed validation that blocks adding same medicine name to allow updating existing stocks via Add modal
     }
 
     console.log("Validation passed, starting save loop...");
@@ -758,6 +797,7 @@ export default function MedicinesTab({
     setIsLoading(true);
     try {
       let finalSupplierId = globalPurchaseDetails.supplierId;
+      let finalSupplierName = suppliers.find(s => s.id === finalSupplierId)?.name || "";
 
       // Handle Quick Add Global Supplier
       if (globalPurchaseDetails.isAddingSupplier && globalPurchaseDetails.newSupplierName.trim()) {
@@ -769,6 +809,7 @@ export default function MedicinesTab({
           createdBy: userData.id,
         };
         finalSupplierId = await medicineService.createSupplier(supplierData);
+        finalSupplierName = supplierData.name;
         // We will fetchSuppliers later
       }
 
@@ -799,17 +840,19 @@ export default function MedicinesTab({
         if (currentMedicine) {
           await medicineService.updateMedicine(currentMedicine.id, medicineData);
           if (row.currentStock) {
+            const addedStock = parseFloat(row.currentStock);
             const existingStock = await medicineService.getMedicineStock(currentMedicine.id, clinicId);
+            const previousStock = existingStock?.currentStock || 0;
+
             if (existingStock) {
               await medicineService.updateMedicineStock(existingStock.id, {
-                currentStock: parseFloat(row.currentStock),
+                currentStock: previousStock + addedStock,
                 updatedBy: userData.id,
               });
             } else {
-              // Create stock record if it doesn't exist
               await medicineService.createMedicineStock({
                 medicineId: currentMedicine.id,
-                currentStock: parseFloat(row.currentStock),
+                currentStock: addedStock,
                 schemeStock: 0,
                 minimumStock: 10,
                 reorderLevel: 20,
@@ -818,24 +861,128 @@ export default function MedicinesTab({
                 updatedBy: userData.id,
               });
             }
+
+            // Create stock transaction for audit
+            if (addedStock !== 0) {
+              await medicineService.createStockTransaction({
+                medicineId: currentMedicine.id,
+                type: "purchase",
+                quantity: addedStock,
+                previousStock: previousStock,
+                newStock: previousStock + addedStock,
+                batchNumber: row.batchNumber,
+                expiryDate: row.expiryDate ? new Date(row.expiryDate) : null,
+                supplierId: finalSupplierId,
+                invoiceNumber: globalPurchaseDetails.billNumber,
+                salePrice: row.price ? parseFloat(row.price) : null,
+                costPrice: row.costPrice ? parseFloat(row.costPrice) : null,
+                clinicId,
+                branchId: branchScopeId || "",
+                createdBy: userData.id,
+              });
+            }
           }
         } else {
-          const medicineId = await medicineService.createMedicine(medicineData);
+          // Check if medicine with this name already exists using master list
+          const existingMedicine = masterMedicines.find(m => m.name.toLowerCase() === row.name.trim().toLowerCase());
+
+          let medicineId;
+          if (existingMedicine) {
+            medicineId = existingMedicine.id;
+            await medicineService.updateMedicine(medicineId, medicineData);
+          } else {
+            medicineId = await medicineService.createMedicine(medicineData);
+          }
+
           if (row.currentStock) {
-            const initialStock = parseFloat(row.currentStock);
-            await medicineService.createMedicineStock({
-              medicineId,
-              currentStock: initialStock,
-              schemeStock: 0,
-              minimumStock: 10,
-              reorderLevel: 20,
-              clinicId,
-              branchId: branchScopeId || "",
-              updatedBy: userData.id,
-            });
+            const addedStock = parseFloat(row.currentStock);
+            const existingStock = await medicineService.getMedicineStock(medicineId, clinicId);
+            const previousStock = existingStock?.currentStock || 0;
+
+            if (existingStock) {
+              await medicineService.updateMedicineStock(existingStock.id, {
+                currentStock: previousStock + addedStock,
+                updatedBy: userData.id,
+              });
+            } else {
+              await medicineService.createMedicineStock({
+                medicineId,
+                currentStock: addedStock,
+                schemeStock: 0,
+                minimumStock: 10,
+                reorderLevel: 20,
+                clinicId,
+                branchId: branchScopeId || "",
+                updatedBy: userData.id,
+              });
+            }
+
+            // Create stock transaction for audit
+            if (addedStock !== 0) {
+              await medicineService.createStockTransaction({
+                medicineId: medicineId,
+                type: "purchase",
+                quantity: addedStock,
+                previousStock: previousStock,
+                newStock: previousStock + addedStock,
+                batchNumber: row.batchNumber,
+                expiryDate: row.expiryDate ? new Date(row.expiryDate) : null,
+                supplierId: finalSupplierId,
+                invoiceNumber: globalPurchaseDetails.billNumber,
+                salePrice: row.price ? parseFloat(row.price) : null,
+                costPrice: row.costPrice ? parseFloat(row.costPrice) : null,
+                clinicId,
+                branchId: branchScopeId || "",
+                createdBy: userData.id,
+              });
+            }
           }
         }
         console.log(`Saved row: ${row.name}`);
+      }
+
+      // Create Supplier Purchase Record (Invoice) for new medicines
+      if (!currentMedicine && finalSupplierId && formDataList.length > 0) {
+        try {
+          const paidAmt = parseFloat(globalPurchaseDetails.paidAmount) || 0;
+          const totalAmt = purchaseSummary.grandTotal;
+          const dueAmt = Math.max(0, totalAmt - paidAmt);
+          
+          let paymentStatus: "paid" | "partial" | "pending" = "pending";
+          if (totalAmt > 0) {
+            if (paidAmt >= totalAmt) paymentStatus = "paid";
+            else if (paidAmt > 0) paymentStatus = "partial";
+            else paymentStatus = "pending";
+          }
+
+          await medicineService.createSupplierPurchaseRecord({
+            supplierId: finalSupplierId,
+            supplierName: finalSupplierName || "Unknown Supplier",
+            purchaseDate: new Date(),
+            billNumber: globalPurchaseDetails.billNumber || `AUTO-${Date.now()}`,
+            totalAmount: totalAmt,
+            paidAmount: paidAmt,
+            dueAmount: dueAmt,
+            paymentStatus: paymentStatus,
+            paymentDone: paidAmt >= totalAmt,
+            paymentMethod: globalPurchaseDetails.paymentMethod,
+            notes: `Purchase record for ${formDataList.length} medicines`,
+            items: formDataList.map(row => ({
+              name: row.name,
+              qty: parseFloat(row.currentStock) || 0,
+              costPrice: parseFloat(row.costPrice) || 0,
+              vatPercentage: row.isVatApplied ? parseFloat(row.vatPercentage) : 0,
+              total: (parseFloat(row.costPrice) || 0) * (parseFloat(row.currentStock) || 0) * (1 + (row.isVatApplied ? parseFloat(row.vatPercentage) : 0) / 100)
+            })),
+            clinicId,
+            branchId: branchScopeId || "",
+            createdBy: userData.id,
+          });
+          console.log("Purchase record created successfully");
+        } catch (error) {
+          console.error("Error creating purchase record:", error);
+          // Don't fail the whole process if purchase record creation fails
+        }
       }
 
       console.log("All rows processed, fetching suppliers...");
@@ -843,7 +990,7 @@ export default function MedicinesTab({
 
       addToast({
         title: "Success",
-        description: currentMedicine ? "Medicine updated successfully" : `Successfully added ${formDataList.length} medicines`,
+        description: currentMedicine ? "Medicine updated successfully" : `Successfully added ${formDataList.length} medicines and generated invoice`,
       });
 
       modalState.forceClose();
@@ -1081,6 +1228,45 @@ export default function MedicinesTab({
         });
       }
 
+      // Create Supplier Purchase Record for refill if it's a purchase
+      if (isAdd && refillFormData.supplierId) {
+        try {
+          const regularCost = (parseFloat(refillFormData.regularCostPrice) || 0) * regularQty;
+          const schemeCost = (parseFloat(refillFormData.schemeCostPrice) || 0) * schemeQty;
+          const totalCost = regularCost + schemeCost;
+
+          if (totalCost > 0) {
+            const supplier = suppliers.find(s => s.id === refillFormData.supplierId);
+            await medicineService.createSupplierPurchaseRecord({
+              supplierId: refillFormData.supplierId,
+              supplierName: supplier?.name || "Unknown Supplier",
+              purchaseDate: new Date(),
+              billNumber: refillFormData.invoiceNumber || `REFILL-${Date.now()}`,
+              totalAmount: totalCost,
+              paidAmount: totalCost,
+              dueAmount: 0,
+              paymentStatus: "paid",
+              paymentDone: true,
+              notes: `Stock refill for ${medicineForRefill.name}`,
+              items: [
+                {
+                  name: medicineForRefill.name,
+                  qty: regularQty + schemeQty,
+                  costPrice: (regularCost + schemeCost) / (regularQty + schemeQty || 1),
+                  vatPercentage: 0, // Not tracked in refill modal yet
+                  total: totalCost
+                }
+              ],
+              clinicId,
+              branchId: branchScopeId || "",
+              createdBy: userData.id,
+            });
+          }
+        } catch (error) {
+          console.error("Error creating purchase record for refill:", error);
+        }
+      }
+
       addToast({
         title: "Success",
         description: `Stock refilled successfully. Regular: ${newRegularStock}, Scheme: ${newSchemeStock}`,
@@ -1277,7 +1463,7 @@ export default function MedicinesTab({
             className={`clarity-badge inline-flex items-center px-2 py-0.5 text-[11px] rounded ${filterType === "lowStock"
               ? "bg-amber-50 text-amber-700 border border-amber-200"
               : filterType === "expiring"
-                ? "bg-red-50 text-red-700 border border-red-200"
+                ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
                 : "bg-teal-50 text-teal-700 border border-teal-200"
               }`}
           >
@@ -1312,7 +1498,7 @@ export default function MedicinesTab({
                 className={`ml-2 inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium ${filterType === "lowStock"
                   ? "bg-amber-50 text-amber-700 border border-amber-200"
                   : filterType === "expiring"
-                    ? "bg-red-50 text-red-700 border border-red-200"
+                    ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
                     : "bg-teal-50 text-teal-700 border border-teal-200"
                   }`}
               >
@@ -1568,22 +1754,115 @@ export default function MedicinesTab({
                         <div className="flex items-center gap-1.5">
                           <button
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
-                            onClick={() => {
+                            onClick={async () => {
                               setMedicineForRefill(medicine);
+                              setIsLoading(true);
+
+                              let resolvedBatchNumber = medicine.batchNumber || "";
+                              let resolvedExpiryDate = "";
+                              let resolvedRegularSalePrice =
+                                medicine.price?.toString() || "";
+                              let resolvedRegularCostPrice =
+                                medicine.costPrice?.toString() || "";
+                              let resolvedSchemePrice = "";
+                              let resolvedSchemeCostPrice = "";
+                              let resolvedSupplierId =
+                                medicine.supplierId || "";
+
+                              try {
+                                const txs =
+                                  await medicineService.getStockTransactions(
+                                    medicine.id,
+                                    10,
+                                    branchScopeId || undefined,
+                                  );
+
+                                // Find most recent regular stock transaction for prices
+                                const regularTx = txs.find(
+                                  (t) => !t.isSchemeStock && t.salePrice,
+                                );
+                                if (regularTx) {
+                                  if (!resolvedRegularSalePrice)
+                                    resolvedRegularSalePrice =
+                                      regularTx.salePrice?.toString() || "";
+                                  if (!resolvedRegularCostPrice)
+                                    resolvedRegularCostPrice =
+                                      regularTx.costPrice?.toString() || "";
+                                }
+
+                                // Find most recent scheme stock transaction for prices
+                                const schemeTx = txs.find(
+                                  (t) => t.isSchemeStock && t.salePrice,
+                                );
+                                if (schemeTx) {
+                                  resolvedSchemePrice =
+                                    schemeTx.salePrice?.toString() || "";
+                                  resolvedSchemeCostPrice =
+                                    schemeTx.costPrice?.toString() || "";
+                                }
+
+                                // Find most recent transaction with batch/expiry/supplier
+                                const latestTx = txs[0];
+                                if (latestTx) {
+                                  if (!resolvedBatchNumber)
+                                    resolvedBatchNumber =
+                                      latestTx.batchNumber || "";
+                                  if (!resolvedSupplierId)
+                                    resolvedSupplierId =
+                                      latestTx.supplierId || "";
+
+                                  if (latestTx.expiryDate) {
+                                    const date =
+                                      latestTx.expiryDate instanceof Date
+                                        ? latestTx.expiryDate
+                                        : (latestTx.expiryDate as any).toDate?.() ||
+                                        new Date(latestTx.expiryDate);
+                                    resolvedExpiryDate = date
+                                      .toISOString()
+                                      .split("T")[0];
+                                  }
+                                }
+
+                                // Fallback for expiry if not in transactions
+                                if (
+                                  !resolvedExpiryDate &&
+                                  (medicine.expiryDate ||
+                                    medicineExpiryDates[medicine.id])
+                                ) {
+                                  const rawExp =
+                                    medicine.expiryDate ||
+                                    medicineExpiryDates[medicine.id];
+                                  const date =
+                                    rawExp instanceof Date
+                                      ? rawExp
+                                      : (rawExp as any).toDate?.() ||
+                                      new Date(rawExp);
+                                  resolvedExpiryDate = date
+                                    .toISOString()
+                                    .split("T")[0];
+                                }
+                              } catch (e) {
+                                console.warn(
+                                  "Could not fetch latest transactions for refill",
+                                  e,
+                                );
+                              }
+
                               setRefillFormData({
                                 regularQuantity: "",
                                 schemeQuantity: "",
-                                regularSalePrice: "",
-                                regularCostPrice: "",
-                                schemePrice: "",
-                                schemeCostPrice: "",
-                                expiryDate: "",
-                                batchNumber: "",
+                                regularSalePrice: resolvedRegularSalePrice,
+                                regularCostPrice: resolvedRegularCostPrice,
+                                schemePrice: resolvedSchemePrice,
+                                schemeCostPrice: resolvedSchemeCostPrice,
+                                expiryDate: resolvedExpiryDate,
+                                batchNumber: resolvedBatchNumber,
                                 unitPrice: "",
                                 invoiceNumber: generateBillNumber(),
-                                supplierId: "",
+                                supplierId: resolvedSupplierId,
                                 transactionType: "add",
                               });
+                              setIsLoading(false);
                               refillModalState.open();
                             }}
                           >
@@ -1740,9 +2019,9 @@ export default function MedicinesTab({
           title={currentMedicine ? "Edit Medicine" : "Add Medicine"}
           onClose={modalState.forceClose}
         >
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Global Purchase Details */}
-            <div className="flex flex-wrap gap-4 p-4 rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
+            <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
               <div className="w-full md:w-[300px]">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
@@ -1814,7 +2093,7 @@ export default function MedicinesTab({
             </div>
 
             {/* Medicines Table */}
-            <div className="overflow-x-auto border border-[rgb(var(--color-border))] rounded-lg">
+            <div className="overflow-x-auto border border-[rgb(var(--color-border))] rounded-lg min-h-[140px]">
               <table className="w-full text-left whitespace-nowrap min-w-[1200px]">
                 <thead className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
                   <tr>
@@ -1848,675 +2127,747 @@ export default function MedicinesTab({
                           placeholder="Medicine name"
                           value={formData.name}
                           onChange={(e) => handleChange(index, e)}
+                          onFocus={() => handleFocus(index)}
                           onKeyDown={handleKeyDown}
                         />
                         {/* Suggestions */}
-                        {focusedRowIndex === index && showSuggestions && nameSuggestions.length > 0 && (
-                          <div className="absolute z-[100] left-2 right-2 top-full mt-1 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-md shadow-xl overflow-hidden max-h-48 overflow-y-auto">
-                            {nameSuggestions.map((suggestion) => (
-                              <button
-                                key={suggestion.id}
-                                className="w-full text-left px-3 py-2 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
-                                type="button"
-                                onClick={() => handleSelectSuggestion(index, suggestion)}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[12px] font-semibold text-[rgb(var(--color-text))] group-hover:text-primary transition-colors">
-                                    {suggestion.name}
-                                  </span>
-                                  <span className="text-[10px] text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1.5 py-0.5 rounded border border-[rgb(var(--color-border))]">
-                                    {suggestion.type}
-                                  </span>
-                                </div>
-                                {suggestion.genericName && (
-                                  <p className="text-[10px] text-[rgb(var(--color-text-muted)/0.7)] mt-0.5">
-                                    {suggestion.genericName}
-                                  </p>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <input
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="genericName"
-                          placeholder="Generic name"
-                          value={formData.genericName}
-                          onChange={(e) => handleChange(index, e)}
-                        />
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <div className="flex gap-1 items-center">
-                          <div className="flex-1">
-                            {formData.isAddingType ? (
-                              <input
-                                className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
-                                placeholder="New type"
-                                value={formData.newTypeName}
-                                onChange={(e) => {
-                                  const newList = [...formDataList];
-                                  newList[index].newTypeName = e.target.value;
-                                  newList[index].type = e.target.value;
-                                  setFormDataList(newList);
-                                }}
-                              />
+                        {focusedRowIndex === index && showSuggestions && formDataList[index].name.trim().length >= 2 && (
+                          <div className="absolute z-[100] left-0 right-0 top-full mt-1 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-md shadow-xl overflow-hidden max-h-60 overflow-y-auto min-w-[250px]">
+                            {nameSuggestions.length > 0 ? (
+                              nameSuggestions.map((suggestion) => (
+                                <button
+                                  key={suggestion.id}
+                                  className="w-full text-left px-3 py-2.5 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
+                                  type="button"
+                                  onClick={() => handleSelectSuggestion(index, suggestion)}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex-1 overflow-hidden">
+                                      <div className="text-[12.5px] font-bold text-[rgb(var(--color-text))] group-hover:text-primary transition-colors truncate">
+                                        {suggestion.name}
+                                      </div>
+                                      {suggestion.genericName && (
+                                        <div className="text-[10px] text-[rgb(var(--color-text-muted))] truncate mt-0.5">
+                                          {suggestion.genericName}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                      <span className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 uppercase">
+                                        {suggestion.type}
+                                      </span>
+                                      {suggestion.strength && (
+                                        <span className="text-[9px] text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1.5 py-0.5 rounded border border-[rgb(var(--color-border))]">
+                                          {suggestion.strength}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              ))
                             ) : (
-                              <select
-                                className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                                name="type"
-                                value={formData.type}
-                                onChange={(e) => handleSelectChange(index, "type", e.target.value)}
-                              >
-                                {medicineTypes.map((item) => (
-                                  <option key={item.key} value={item.key}>{item.label}</option>
-                                ))}
-                              </select>
+                              <div className="px-4 py-3 text-center">
+                                <p className="text-[11px] text-[rgb(var(--color-text-muted))] italic">
+                                  No matches found for "{formDataList[index].name}"
+                                </p>
+                                <p className="text-[9px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">
+                                  You can continue typing to add it as a new medicine.
+                                </p>
+                              </div>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
-                            title={formData.isAddingType ? "Select Existing Type" : "Add New Type"}
-                            onClick={() => {
-                              const newList = [...formDataList];
-                              newList[index].isAddingType = !newList[index].isAddingType;
-                              if (!newList[index].isAddingType) newList[index].newTypeName = "";
-                              setFormDataList(newList);
-                            }}
-                          >
-                            {formData.isAddingType ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <input
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="strength"
-                          placeholder="e.g. 500mg"
-                          value={formData.strength}
-                          onChange={(e) => handleChange(index, e)}
-                        />
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <input
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="currentStock"
-                          placeholder="0"
-                          type="number"
-                          value={formData.currentStock}
-                          onChange={(e) => handleChange(index, e)}
-                        />
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <input
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="batchNumber"
-                          placeholder="Batch no."
-                          value={formData.batchNumber}
-                          onChange={(e) => handleChange(index, e)}
-                        />
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <input
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="expiryDate"
-                          type="date"
-                          value={formData.expiryDate}
-                          onChange={(e) => handleChange(index, e)}
-                        />
-                      </td>
-
-                      {clinicSettings?.sellsMedicines && (
-                        <td className="px-2 py-2">
-                          <input
-                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                            name="price"
-                            placeholder="0.00"
-                            type="number"
-                            value={formData.price}
-                            onChange={(e) => handleChange(index, e)}
-                          />
-                        </td>
-                      )}
-
-                      <td className="px-2 py-2">
-                        <input
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="costPrice"
-                          placeholder="0.00"
-                          type="number"
-                          value={formData.costPrice}
-                          onChange={(e) => handleChange(index, e)}
-                        />
-                        {formData.isVatApplied && formData.costPrice && (
-                          <p className="text-[10px] text-primary font-medium mt-1">
-                            Total: {(parseFloat(formData.costPrice) * (1 + parseFloat(formData.vatPercentage) / 100)).toFixed(2)}
-                          </p>
                         )}
                       </td>
 
-                      <td className="px-2 py-2">
-                        <div className="flex items-center gap-2">
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              className="sr-only peer"
-                              checked={formData.isVatApplied}
-                              onChange={(e) => {
-                                const newList = [...formDataList];
-                                newList[index].isVatApplied = e.target.checked;
-                                setFormDataList(newList);
-                              }}
-                            />
-                            <div className="w-8 h-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
-                          </label>
-                          {formData.isVatApplied && (
-                            <div className="relative w-16">
-                              <input
-                                className="clarity-input h-8 w-full text-[12px] pl-2 pr-4 rounded"
-                                name="vatPercentage"
-                                type="number"
-                                step="0.1"
-                                value={formData.vatPercentage}
-                                onChange={(e) => handleChange(index, e)}
-                              />
-                              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[rgb(var(--color-text-muted)/0.5)]">%</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                <td className="px-2 py-2">
+                  <input
+                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                    name="genericName"
+                    placeholder="Generic name"
+                    value={formData.genericName}
+                    onChange={(e) => handleChange(index, e)}
+                  />
+                </td>
 
-                      {!currentMedicine && (
-                        <td className="px-3 py-2 text-center">
-                          {formDataList.length > 1 && (
-                            <button
-                              className="w-7 h-7 mx-auto rounded bg-red-50 text-red-600 border border-red-200 flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm"
-                              type="button"
-                              title="Remove"
-                              onClick={() => removeRow(index)}
-                            >
-                              <IoCloseOutline className="w-4 h-4" />
-                            </button>
-                          )}
-                        </td>
+                <td className="px-2 py-2">
+                  <div className="flex gap-1 items-center">
+                    <div className="flex-1">
+                      {formData.isAddingType ? (
+                        <input
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
+                          placeholder="New type"
+                          value={formData.newTypeName}
+                          onChange={(e) => {
+                            const newList = [...formDataList];
+                            newList[index].newTypeName = e.target.value;
+                            newList[index].type = e.target.value;
+                            setFormDataList(newList);
+                          }}
+                        />
+                      ) : (
+                        <select
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                          name="type"
+                          value={formData.type}
+                          onChange={(e) => handleSelectChange(index, "type", e.target.value)}
+                        >
+                          {medicineTypes.map((item) => (
+                            <option key={item.key} value={item.key}>{item.label}</option>
+                          ))}
+                        </select>
                       )}
-                    </tr>
-                  ))}
-                </tbody>
+                    </div>
+                    <button
+                      type="button"
+                      className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                      title={formData.isAddingType ? "Select Existing Type" : "Add New Type"}
+                      onClick={() => {
+                        const newList = [...formDataList];
+                        newList[index].isAddingType = !newList[index].isAddingType;
+                        if (!newList[index].isAddingType) newList[index].newTypeName = "";
+                        setFormDataList(newList);
+                      }}
+                    >
+                      {formData.isAddingType ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </td>
+
+                <td className="px-2 py-2">
+                  <input
+                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                    name="strength"
+                    placeholder="e.g. 500mg"
+                    value={formData.strength}
+                    onChange={(e) => handleChange(index, e)}
+                  />
+                </td>
+
+                <td className="px-2 py-2">
+                  <input
+                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                    name="currentStock"
+                    placeholder="0"
+                    type="number"
+                    value={formData.currentStock}
+                    onChange={(e) => handleChange(index, e)}
+                  />
+                </td>
+
+                <td className="px-2 py-2">
+                  <input
+                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                    name="batchNumber"
+                    placeholder="Batch no."
+                    value={formData.batchNumber}
+                    onChange={(e) => handleChange(index, e)}
+                  />
+                </td>
+
+                <td className="px-2 py-2">
+                  <input
+                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                    name="expiryDate"
+                    type="date"
+                    value={formData.expiryDate}
+                    onChange={(e) => handleChange(index, e)}
+                  />
+                </td>
+
+                {clinicSettings?.sellsMedicines && (
+                  <td className="px-2 py-2">
+                    <input
+                      className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                      name="price"
+                      placeholder="0.00"
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) => handleChange(index, e)}
+                    />
+                  </td>
+                )}
+
+                <td className="px-2 py-2">
+                  <input
+                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                    name="costPrice"
+                    placeholder="0.00"
+                    type="number"
+                    value={formData.costPrice}
+                    onChange={(e) => handleChange(index, e)}
+                  />
+                  {formData.isVatApplied && formData.costPrice && (
+                    <p className="text-[10px] text-primary font-medium mt-1">
+                      Total: {(parseFloat(formData.costPrice) * (1 + parseFloat(formData.vatPercentage) / 100)).toFixed(2)}
+                    </p>
+                  )}
+                </td>
+
+                <td className="px-2 py-2">
+                  <div className="flex items-center gap-2">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={formData.isVatApplied}
+                        onChange={(e) => {
+                          const newList = [...formDataList];
+                          newList[index].isVatApplied = e.target.checked;
+                          setFormDataList(newList);
+                        }}
+                      />
+                      <div className="w-8 h-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                    {formData.isVatApplied && (
+                      <div className="relative w-16">
+                        <input
+                          className="clarity-input h-8 w-full text-[12px] pl-2 pr-4 rounded"
+                          name="vatPercentage"
+                          type="number"
+                          step="0.1"
+                          value={formData.vatPercentage}
+                          onChange={(e) => handleChange(index, e)}
+                        />
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[rgb(var(--color-text-muted)/0.5)]">%</span>
+                      </div>
+                    )}
+                  </div>
+                </td>
+
+                {!currentMedicine && (
+                  <td className="px-3 py-2 text-center">
+                    {formDataList.length > 1 && (
+                      <button
+                        className="w-7 h-7 mx-auto rounded bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center hover:bg-rose-500/20 transition-colors shadow-sm"
+                        type="button"
+                        title="Remove"
+                        onClick={() => removeRow(index)}
+                      >
+                        <IoCloseOutline className="w-4 h-4" />
+                      </button>
+                    )}
+                  </td>
+                )}
+                  </tr>
+                ))}
+                <tr className="bg-[rgb(var(--color-surface-2))/0.5] border-t border-[rgb(var(--color-border))]">
+                  <td colSpan={clinicSettings?.sellsMedicines ? 12 : 11} className="px-4 py-2.5">
+                    {!currentMedicine && (
+                      <button
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-bold text-primary hover:bg-primary/10 transition-all group"
+                        type="button"
+                        onClick={addRow}
+                      >
+                        <IoAddCircleOutline className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                        <span>Add Another Row</span>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              </tbody>
               </table>
             </div>
 
-            {!currentMedicine && (
-              <div className="flex justify-start">
-                <button
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-[13px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all group"
+      {/* Purchase Summary */}
+      <div className="mt-4 flex justify-end">
+        <div className="w-full md:w-80 space-y-3 bg-[rgb(var(--color-surface-2))] p-4 rounded-lg border border-[rgb(var(--color-border))] shadow-sm">
+          <div className="flex justify-between items-center text-[13px]">
+            <span className="text-[rgb(var(--color-text-muted))]">Subtotal</span>
+            <span className="font-semibold">NPR {purchaseSummary.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="flex justify-between items-center text-[12px]">
+            <span className="text-[rgb(var(--color-text-muted))]">Taxable Amount</span>
+            <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="flex justify-between items-center text-[12px]">
+            <span className="text-[rgb(var(--color-text-muted))]">Non-Taxable Amount</span>
+            <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.nonTaxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="flex justify-between items-center text-[12px] pb-3 border-b border-[rgb(var(--color-border))]">
+            <span className="text-[rgb(var(--color-text-muted))]">Total VAT</span>
+            <span className="text-primary font-medium">+ NPR {purchaseSummary.totalVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="flex justify-between items-center text-[14px] pt-3 border-t border-[rgb(var(--color-border))]">
+            <span className="font-bold text-[rgb(var(--color-text))]">Grand Total</span>
+            <span className="font-bold text-primary text-[16px]">NPR {purchaseSummary.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+
+          <div className="pt-3 space-y-3 border-t border-[rgb(var(--color-border))/0.5]">
+            <div className="flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-[12px] font-semibold text-[rgb(var(--color-text))]">Paid Amount</span>
+                <button 
+                  className="text-[10px] text-primary hover:underline text-left"
                   type="button"
-                  onClick={addRow}
+                  onClick={() => setGlobalPurchaseDetails(prev => ({ ...prev, paidAmount: purchaseSummary.grandTotal.toString() }))}
                 >
-                  <IoAddCircleOutline className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  <span>Add Another Row</span>
+                  Mark Full Paid
                 </button>
               </div>
-            )}
-
-            {/* Purchase Summary */}
-            <div className="mt-6 flex justify-end">
-              <div className="w-full md:w-80 space-y-3 bg-[rgb(var(--color-surface-2))] p-4 rounded-lg border border-[rgb(var(--color-border))] shadow-sm">
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-[rgb(var(--color-text-muted))]">Subtotal</span>
-                  <span className="font-semibold">NPR {purchaseSummary.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between items-center text-[12px]">
-                  <span className="text-[rgb(var(--color-text-muted))]">Taxable Amount</span>
-                  <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between items-center text-[12px]">
-                  <span className="text-[rgb(var(--color-text-muted))]">Non-Taxable Amount</span>
-                  <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.nonTaxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between items-center text-[12px] pb-3 border-b border-[rgb(var(--color-border))]">
-                  <span className="text-[rgb(var(--color-text-muted))]">Total VAT</span>
-                  <span className="text-primary font-medium">+ NPR {purchaseSummary.totalVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between items-center text-[15px] pt-1">
-                  <span className="font-bold text-[rgb(var(--color-text))]">Grand Total</span>
-                  <span className="font-bold text-primary">NPR {purchaseSummary.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
+              <div className="relative w-32">
+                <input
+                  className="clarity-input h-9 w-full text-[13px] pl-8 pr-2 rounded font-bold text-primary border-primary/20 bg-white"
+                  placeholder="0.00"
+                  type="number"
+                  value={globalPurchaseDetails.paidAmount}
+                  onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, paidAmount: e.target.value }))}
+                />
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-primary/40">NPR</span>
               </div>
+            </div>
+
+            <div className="flex justify-between items-center text-[12px]">
+              <span className="text-[rgb(var(--color-text-muted))] font-medium">Remaining Due</span>
+              <span className={`font-bold ${(purchaseSummary.grandTotal - (parseFloat(globalPurchaseDetails.paidAmount) || 0)) > 0 ? 'text-rose-500' : 'text-teal-600'}`}>
+                NPR {Math.max(0, purchaseSummary.grandTotal - (parseFloat(globalPurchaseDetails.paidAmount) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="text-[12px] font-semibold text-[rgb(var(--color-text))]">Payment Method</span>
+              <select
+                className="clarity-input h-9 w-32 text-[12px] px-2 rounded bg-white border-[rgb(var(--color-border))]"
+                value={globalPurchaseDetails.paymentMethod}
+                onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, paymentMethod: e.target.value }))}
+              >
+                <option value="cash">Cash</option>
+                <option value="fonepay">Fonepay</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cheque">Cheque</option>
+              </select>
             </div>
           </div>
-        </ModalShell>
-      )}
 
-      {/* Refill Stock Modal */}
-      {refillModalState.isOpen && (
-        <ModalShell
-          disabled={isLoading}
-          footer={
-            <>
-              <button
-                className="clarity-btn clarity-btn-ghost"
-                disabled={isLoading}
-                type="button"
-                onClick={refillModalState.close}
-              >
-                Cancel
-              </button>
-              <button
-                className="clarity-btn clarity-btn-primary"
-                disabled={
-                  isLoading ||
-                  (!refillFormData.regularQuantity &&
-                    !refillFormData.schemeQuantity) ||
-                  !refillFormData.expiryDate
-                }
-                type="button"
-                onClick={handleRefillStock}
-              >
-                {isLoading ? "Refilling..." : "Refill Stock"}
-              </button>
-            </>
-          }
-          size="xl"
-          subtitle={
-            <div className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.7)]">
-              <span className="font-medium text-[rgb(var(--color-text-muted))]">Medicine:</span>{" "}
-              {medicineForRefill?.name}
-            </div>
-          }
-          title="Refill Stock"
-          onClose={refillModalState.close}
-        >
-          <div className="space-y-6">
-            {/* Transaction Type Toggle */}
-            <div className="flex bg-[rgb(var(--color-surface-2))] p-1 rounded-md w-full mb-4">
-              <button
-                className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "add" ? "bg-[rgb(var(--color-surface))] shadow text-teal-700 font-semibold" : "text-[rgb(var(--color-text-muted)/0.7)] hover:text-[rgb(var(--color-text))]"}`}
-                type="button"
-                onClick={() =>
-                  setRefillFormData((prev) => ({
-                    ...prev,
-                    transactionType: "add",
-                  }))
-                }
-              >
-                <div className="flex items-center justify-center gap-1.5">
-                  <IoAddCircleOutline className="w-4 h-4" />
-                  Add to Stock
-                </div>
-              </button>
-              <button
-                className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "sub" ? "bg-[rgb(var(--color-surface))] shadow text-red-600 font-semibold" : "text-[rgb(var(--color-text-muted)/0.7)] hover:text-[rgb(var(--color-text))]"}`}
-                type="button"
-                onClick={() =>
-                  setRefillFormData((prev) => ({
-                    ...prev,
-                    transactionType: "sub",
-                  }))
-                }
-              >
-                <div className="flex items-center justify-center gap-1.5">
-                  <IoCloseCircleOutline className="w-4 h-4" />
-                  Subtract from Stock
-                </div>
-              </button>
-            </div>
-
-            {/* Regular Stock Section */}
-            <div>
-              <h4 className="text-md font-semibold text-[rgb(var(--color-text))] mb-3">
-                Regular Stock
-              </h4>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Regular Quantity
-                  </label>
-                  <input
-                    className="clarity-input h-8 w-full text-[13px] px-2"
-                    min={0}
-                    name="regularQuantity"
-                    placeholder="Enter regular stock quantity"
-                    type="number"
-                    value={refillFormData.regularQuantity}
-                    onChange={(e) =>
-                      setRefillFormData((prev) => ({
-                        ...prev,
-                        regularQuantity: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                      Regular Sale Price (NPR)
-                    </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
-                        NPR
-                      </span>
-                      <input
-                        className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
-                        min={0}
-                        name="regularSalePrice"
-                        placeholder="Enter sale price"
-                        step="any"
-                        type="number"
-                        value={refillFormData.regularSalePrice}
-                        onChange={(e) =>
-                          setRefillFormData((prev) => ({
-                            ...prev,
-                            regularSalePrice: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                      Regular Cost Price (NPR)
-                    </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
-                        NPR
-                      </span>
-                      <input
-                        className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
-                        min={0}
-                        name="regularCostPrice"
-                        placeholder="Enter cost price"
-                        step="any"
-                        type="number"
-                        value={refillFormData.regularCostPrice}
-                        onChange={(e) =>
-                          setRefillFormData((prev) => ({
-                            ...prev,
-                            regularCostPrice: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Scheme Stock Section */}
-            <div className="pt-4 border-t border-default-200">
-              <h4 className="text-md font-semibold text-[rgb(var(--color-text))] mb-3">
-                Scheme Stock
-              </h4>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Scheme Quantity
-                  </label>
-                  <input
-                    className="clarity-input h-8 w-full text-[13px] px-2"
-                    min={0}
-                    name="schemeQuantity"
-                    placeholder="Enter scheme stock quantity"
-                    type="number"
-                    value={refillFormData.schemeQuantity}
-                    onChange={(e) =>
-                      setRefillFormData((prev) => ({
-                        ...prev,
-                        schemeQuantity: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                      }
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Scheme Price (NPR)
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
-                      NPR
-                    </span>
-                    <input
-                      className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
-                      min={0}
-                      name="schemePrice"
-                      placeholder="Enter scheme stock sale price"
-                      step="any"
-                      type="number"
-                      value={refillFormData.schemePrice}
-                      onChange={(e) =>
-                        setRefillFormData((prev) => ({
-                          ...prev,
-                          schemePrice: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Scheme Cost Price (NPR)
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
-                      NPR
-                    </span>
-                    <input
-                      className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
-                      min={0}
-                      name="schemeCostPrice"
-                      placeholder="Enter cost price"
-                      step="any"
-                      type="number"
-                      value={refillFormData.schemeCostPrice}
-                      onChange={(e) =>
-                        setRefillFormData((prev) => ({
-                          ...prev,
-                          schemeCostPrice: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Common Fields */}
-            <div className="pt-4 border-t border-default-200">
-              <h4 className="text-[12px] font-semibold text-[rgb(var(--color-text))] tracking-[0.08em] uppercase mb-3">
-                Additional Information
-              </h4>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Expiry Date <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    required
-                    className="clarity-input h-8 w-full text-[13px] px-2"
-                    name="expiryDate"
-                    type="date"
-                    value={refillFormData.expiryDate}
-                    onChange={(e) =>
-                      setRefillFormData((prev) => ({
-                        ...prev,
-                        expiryDate: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                      }
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Batch Number
-                  </label>
-                  <input
-                    className="clarity-input h-8 w-full text-[13px] px-2"
-                    name="batchNumber"
-                    placeholder="Enter batch number"
-                    value={refillFormData.batchNumber}
-                    onChange={(e) =>
-                      setRefillFormData((prev) => ({
-                        ...prev,
-                        batchNumber: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                      }
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                    Unit Price (NPR) - Legacy
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
-                      NPR
-                    </span>
-                    <input
-                      className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
-                      min={0}
-                      name="unitPrice"
-                      placeholder="Enter unit price (if sale price not provided)"
-                      step="any"
-                      type="number"
-                      value={refillFormData.unitPrice}
-                      onChange={(e) =>
-                        setRefillFormData((prev) => ({
-                          ...prev,
-                          unitPrice: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                      Invoice Number
-                    </label>
-                    <div className="relative">
-                      <input
-                        className="clarity-input h-8 w-full text-[13px] px-2 pr-16"
-                        name="invoiceNumber"
-                        placeholder="Enter invoice number"
-                        value={refillFormData.invoiceNumber}
-                        onChange={(e) =>
-                          setRefillFormData((prev) => ({
-                            ...prev,
-                            invoiceNumber: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                          }
-                        }}
-                      />
-                      <button
-                        className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all"
-                        type="button"
-                        onClick={() => {
-                          setRefillFormData(prev => ({
-                            ...prev,
-                            invoiceNumber: generateBillNumber()
-                          }));
-                        }}
-                      >
-                        GENERATE
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
-                      Supplier
-                    </label>
-                    <select
-                      className="clarity-input h-8 w-full text-[13px] px-2"
-                      name="refillSupplierId"
-                      value={refillFormData.supplierId}
-                      onChange={(e) =>
-                        setRefillFormData((prev) => ({
-                          ...prev,
-                          supplierId: e.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">No Supplier</option>
-                      {suppliers.map((supplier) => (
-                        <option key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                          {supplier.contactPerson
-                            ? ` (${supplier.contactPerson})`
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ModalShell>
-      )}
+        </div>
+      </div>
     </div>
+        </ModalShell >
+      )
+}
+
+{/* Refill Stock Modal */ }
+{
+  refillModalState.isOpen && (
+    <ModalShell
+      disabled={isLoading}
+      footer={
+        <>
+          <button
+            className="clarity-btn clarity-btn-ghost"
+            disabled={isLoading}
+            type="button"
+            onClick={refillModalState.close}
+          >
+            Cancel
+          </button>
+          <button
+            className="clarity-btn clarity-btn-primary"
+            disabled={
+              isLoading ||
+              (!refillFormData.regularQuantity &&
+                !refillFormData.schemeQuantity) ||
+              !refillFormData.expiryDate
+            }
+            type="button"
+            onClick={handleRefillStock}
+          >
+            {isLoading ? "Refilling..." : "Refill Stock"}
+          </button>
+        </>
+      }
+      size="xl"
+      subtitle={
+        <div className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.7)]">
+          <span className="font-medium text-[rgb(var(--color-text-muted))]">Medicine:</span>{" "}
+          {medicineForRefill?.name}
+        </div>
+      }
+      title="Refill Stock"
+      onClose={refillModalState.close}
+    >
+      <div className="space-y-6">
+        {/* Transaction Type Toggle */}
+        <div className="flex bg-[rgb(var(--color-surface-2))] p-1 rounded-md w-full mb-4">
+          <button
+            className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "add" ? "bg-[rgb(var(--color-surface))] shadow text-teal-700 font-semibold" : "text-[rgb(var(--color-text-muted)/0.7)] hover:text-[rgb(var(--color-text))]"}`}
+            type="button"
+            onClick={() =>
+              setRefillFormData((prev) => ({
+                ...prev,
+                transactionType: "add",
+              }))
+            }
+          >
+            <div className="flex items-center justify-center gap-1.5">
+              <IoAddCircleOutline className="w-4 h-4" />
+              Add to Stock
+            </div>
+          </button>
+          <button
+            className={`flex-1 py-1.5 text-xs rounded transition-all ${refillFormData.transactionType === "sub" ? "bg-[rgb(var(--color-surface))] shadow text-red-600 font-semibold" : "text-[rgb(var(--color-text-muted)/0.7)] hover:text-[rgb(var(--color-text))]"}`}
+            type="button"
+            onClick={() =>
+              setRefillFormData((prev) => ({
+                ...prev,
+                transactionType: "sub",
+              }))
+            }
+          >
+            <div className="flex items-center justify-center gap-1.5">
+              <IoCloseCircleOutline className="w-4 h-4" />
+              Subtract from Stock
+            </div>
+          </button>
+        </div>
+
+        {/* Regular Stock Section */}
+        <div>
+          <h4 className="text-md font-semibold text-[rgb(var(--color-text))] mb-3">
+            Regular Stock
+          </h4>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                Regular Quantity
+              </label>
+              <input
+                className="clarity-input h-8 w-full text-[13px] px-2"
+                min={0}
+                name="regularQuantity"
+                placeholder="Enter regular stock quantity"
+                type="number"
+                value={refillFormData.regularQuantity}
+                onChange={(e) =>
+                  setRefillFormData((prev) => ({
+                    ...prev,
+                    regularQuantity: e.target.value,
+                  }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                  Regular Sale Price (NPR)
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
+                    NPR
+                  </span>
+                  <input
+                    className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                    min={0}
+                    name="regularSalePrice"
+                    placeholder="Enter sale price"
+                    step="any"
+                    type="number"
+                    value={refillFormData.regularSalePrice}
+                    onChange={(e) =>
+                      setRefillFormData((prev) => ({
+                        ...prev,
+                        regularSalePrice: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                  Regular Cost Price (NPR)
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
+                    NPR
+                  </span>
+                  <input
+                    className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                    min={0}
+                    name="regularCostPrice"
+                    placeholder="Enter cost price"
+                    step="any"
+                    type="number"
+                    value={refillFormData.regularCostPrice}
+                    onChange={(e) =>
+                      setRefillFormData((prev) => ({
+                        ...prev,
+                        regularCostPrice: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Scheme Stock Section */}
+        <div className="pt-4 border-t border-default-200">
+          <h4 className="text-md font-semibold text-[rgb(var(--color-text))] mb-3">
+            Scheme Stock
+          </h4>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                Scheme Quantity
+              </label>
+              <input
+                className="clarity-input h-8 w-full text-[13px] px-2"
+                min={0}
+                name="schemeQuantity"
+                placeholder="Enter scheme stock quantity"
+                type="number"
+                value={refillFormData.schemeQuantity}
+                onChange={(e) =>
+                  setRefillFormData((prev) => ({
+                    ...prev,
+                    schemeQuantity: e.target.value,
+                  }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                  }
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                Scheme Price (NPR)
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
+                  NPR
+                </span>
+                <input
+                  className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                  min={0}
+                  name="schemePrice"
+                  placeholder="Enter scheme stock sale price"
+                  step="any"
+                  type="number"
+                  value={refillFormData.schemePrice}
+                  onChange={(e) =>
+                    setRefillFormData((prev) => ({
+                      ...prev,
+                      schemePrice: e.target.value,
+                    }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                Scheme Cost Price (NPR)
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
+                  NPR
+                </span>
+                <input
+                  className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                  min={0}
+                  name="schemeCostPrice"
+                  placeholder="Enter cost price"
+                  step="any"
+                  type="number"
+                  value={refillFormData.schemeCostPrice}
+                  onChange={(e) =>
+                    setRefillFormData((prev) => ({
+                      ...prev,
+                      schemeCostPrice: e.target.value,
+                    }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Common Fields */}
+        <div className="pt-4 border-t border-default-200">
+          <h4 className="text-[12px] font-semibold text-[rgb(var(--color-text))] tracking-[0.08em] uppercase mb-3">
+            Additional Information
+          </h4>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                Expiry Date <span className="text-danger">*</span>
+              </label>
+              <input
+                required
+                className="clarity-input h-8 w-full text-[13px] px-2"
+                name="expiryDate"
+                type="date"
+                value={refillFormData.expiryDate}
+                onChange={(e) =>
+                  setRefillFormData((prev) => ({
+                    ...prev,
+                    expiryDate: e.target.value,
+                  }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                  }
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                Batch Number
+              </label>
+              <input
+                className="clarity-input h-8 w-full text-[13px] px-2"
+                name="batchNumber"
+                placeholder="Enter batch number"
+                value={refillFormData.batchNumber}
+                onChange={(e) =>
+                  setRefillFormData((prev) => ({
+                    ...prev,
+                    batchNumber: e.target.value,
+                  }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                  }
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                Unit Price (NPR) - Legacy
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted)/0.7)] text-[11px]">
+                  NPR
+                </span>
+                <input
+                  className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
+                  min={0}
+                  name="unitPrice"
+                  placeholder="Enter unit price (if sale price not provided)"
+                  step="any"
+                  type="number"
+                  value={refillFormData.unitPrice}
+                  onChange={(e) =>
+                    setRefillFormData((prev) => ({
+                      ...prev,
+                      unitPrice: e.target.value,
+                    }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                  Invoice Number
+                </label>
+                <div className="relative">
+                  <input
+                    className="clarity-input h-8 w-full text-[13px] px-2 pr-16"
+                    name="invoiceNumber"
+                    placeholder="Enter invoice number"
+                    value={refillFormData.invoiceNumber}
+                    onChange={(e) =>
+                      setRefillFormData((prev) => ({
+                        ...prev,
+                        invoiceNumber: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                      }
+                    }}
+                  />
+                  <button
+                    className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all"
+                    type="button"
+                    onClick={() => {
+                      setRefillFormData(prev => ({
+                        ...prev,
+                        invoiceNumber: generateBillNumber()
+                      }));
+                    }}
+                  >
+                    GENERATE
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-[rgb(var(--color-text))] mb-1.5 block">
+                  Supplier
+                </label>
+                <select
+                  className="clarity-input h-8 w-full text-[13px] px-2"
+                  name="refillSupplierId"
+                  value={refillFormData.supplierId}
+                  onChange={(e) =>
+                    setRefillFormData((prev) => ({
+                      ...prev,
+                      supplierId: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">No Supplier</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                      {supplier.contactPerson
+                        ? ` (${supplier.contactPerson})`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ModalShell>
+  )
+}
+    </div >
   );
 }
 

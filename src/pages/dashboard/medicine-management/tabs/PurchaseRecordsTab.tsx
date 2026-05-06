@@ -13,12 +13,20 @@ import {
   IoWarningOutline,
   IoTimeOutline,
   IoCloseOutline,
+  IoPrintOutline,
+  IoDocumentTextOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { medicineService } from "@/services/medicineService";
+import { clinicService } from "@/services/clinicService";
+import {
+  getPrintBrandingCSS,
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+} from "@/utils/printBranding";
 import { Supplier, SupplierPurchaseRecord } from "@/types/models";
 
 interface PurchaseRecordFormData {
@@ -84,10 +92,10 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded shadow-2xl w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))/0.5] shrink-0 bg-[rgb(var(--color-surface-2))/0.3]">
           <div>
             <h3 className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
               {title}
@@ -97,16 +105,16 @@ function ModalShell({
           {!disabled && (
             <button
               aria-label="Close modal"
-              className="text-mountain-400 hover:text-mountain-700 mt-0.5"
+              className="text-[rgb(var(--color-text-muted)/0.6)] hover:text-[rgb(var(--color-text))] mt-0.5 transition-colors"
               type="button"
               onClick={onClose}
             >
-              <IoCloseOutline className="w-4 h-4" />
+              <IoCloseOutline className="w-5 h-5" />
             </button>
           )}
         </div>
         <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-mountain-100 shrink-0">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--color-border))/0.5] shrink-0 bg-[rgb(var(--color-surface-2))/0.3]">
           {footer}
         </div>
       </div>
@@ -152,6 +160,25 @@ export default function PurchaseRecordsTab({
       loadSuppliers();
     }
   }, [clinicId, branchScopeId]);
+
+  // Auto-populate existing bill total when a match is detected during entry
+  useEffect(() => {
+    if (!editingRecord && formData.billNumber && formData.supplierId) {
+      const match = purchaseRecords.find(
+        (r) =>
+          r.billNumber.trim().toLowerCase() ===
+            formData.billNumber.trim().toLowerCase() &&
+          r.supplierId === formData.supplierId,
+      );
+
+      if (match) {
+        setFormData((prev) => ({
+          ...prev,
+          totalAmount: match.totalAmount.toString(),
+        }));
+      }
+    }
+  }, [formData.billNumber, formData.supplierId]);
 
   const loadPurchaseRecords = async () => {
     if (!clinicId) return;
@@ -212,7 +239,7 @@ export default function PurchaseRecordsTab({
 
     setSaving(true);
     try {
-      const supplier = suppliers.find((s) => s.id === formData.supplierId);
+      const supplier = suppliers.map((s) => s).find((s) => s.id === formData.supplierId);
 
       if (!supplier) {
         throw new Error("Selected supplier not found");
@@ -247,14 +274,26 @@ export default function PurchaseRecordsTab({
         createdBy: userData.id,
       };
 
-      if (editingRecord) {
+      // Smart-Merge Logic: Check if a record with this bill number and supplier already exists
+      const existingMatch = !editingRecord ? purchaseRecords.find(
+        (r) =>
+          r.billNumber.trim().toLowerCase() === formData.billNumber.trim().toLowerCase() &&
+          r.supplierId === formData.supplierId
+      ) : null;
+
+      if (editingRecord || existingMatch) {
+        const targetId = editingRecord?.id || existingMatch?.id;
+        if (!targetId) throw new Error("Target record ID not found");
+
         await medicineService.updateSupplierPurchaseRecord(
-          editingRecord.id,
+          targetId,
           purchaseRecordData,
         );
         addToast({
           title: "Success",
-          description: "Purchase record updated successfully",
+          description: existingMatch 
+            ? `Existing bill ${formData.billNumber} updated successfully`
+            : "Purchase record updated successfully",
         });
       } else {
         await medicineService.createSupplierPurchaseRecord(purchaseRecordData);
@@ -321,6 +360,162 @@ export default function PurchaseRecordsTab({
     }
   };
 
+  const handlePrint = async (record: SupplierPurchaseRecord) => {
+    try {
+      const clinic = clinicId ? await clinicService.getClinicById(clinicId) : null;
+      const printConfig = clinicId ? await clinicService.getPrintLayoutConfig(clinicId) : null;
+      
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) return;
+
+      const brandingCSS = printConfig ? getPrintBrandingCSS(printConfig) : "";
+      const headerHTML = printConfig ? getPrintHeaderHTML(printConfig, clinic) : "";
+      const footerHTML = printConfig ? getPrintFooterHTML(printConfig) : "";
+
+      const itemsHtml = record.items?.map((item, idx) => `
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 12px 10px; font-size: 12px;">${idx + 1}</td>
+          <td style="padding: 12px 10px; font-size: 12px;">
+            <div style="font-weight: 700; color: #1e293b;">${item.name}</div>
+          </td>
+          <td style="padding: 12px 10px; font-size: 12px; text-align: center; color: #475569;">${item.qty}</td>
+          <td style="padding: 12px 10px; font-size: 12px; text-align: right; color: #475569;">${item.costPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 12px 10px; font-size: 12px; text-align: center; color: #475569;">${item.vatPercentage}%</td>
+          <td style="padding: 12px 10px; font-size: 12px; text-align: right; font-weight: 700; color: #1e293b;">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        </tr>
+      `).join("") || `
+        <tr>
+          <td colspan="6" style="padding: 30px; text-align: center; color: #94a3b8; font-style: italic;">No item details available for this record.</td>
+        </tr>
+      `;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Purchase Invoice - ${record.billNumber}</title>
+          <style>
+            ${brandingCSS}
+            
+            /* High-Density Invoice Styles */
+            .invoice-body { padding: 20px 40px; background: white; min-height: 100vh; position: relative; }
+            .invoice-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1.5px solid #f1f5f9; }
+            .invoice-title-box h2 { margin: 0; color: #1e293b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+            .invoice-title-box p { margin: 2px 0 0 0; color: #64748b; font-size: 12px; font-weight: 600; }
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 25px; }
+            .info-box h3 { font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 800; letter-spacing: 0.08em; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+            .info-box p { margin: 4px 0; font-size: 12.5px; color: #1e293b; line-height: 1.3; }
+            .info-box strong { font-weight: 700; color: #0f172a; }
+            
+            .table-container { width: 100%; margin-bottom: 25px; border: 1px solid #f1f5f9; border-radius: 6px; overflow: hidden; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #f8fafc; padding: 10px 10px; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; text-align: left; border-bottom: 1.5px solid #f1f5f9; }
+            
+            .summary-container { display: flex; justify-content: flex-end; margin-bottom: 40px; }
+            .summary-box { width: 300px; background: #f8fafc; padding: 15px 20px; border-radius: 8px; border: 1px solid #f1f5f9; }
+            .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12.5px; color: #475569; }
+            .summary-row.grand-total { border-top: 1.5px solid #e2e8f0; margin-top: 10px; padding-top: 12px; font-weight: 800; font-size: 17px; color: ${printConfig?.primaryColor || '#0d9488'}; }
+            
+            @media print {
+              .invoice-body { padding: 10px 40px; }
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${headerHTML}
+          
+          <div class="invoice-body">
+            <div class="invoice-top-bar">
+              <div class="invoice-title-box">
+                <h2>Purchase Invoice</h2>
+                <p>Bill No: <span style="font-family: monospace; font-size: 13px; font-weight: 700;">${record.billNumber}</span></p>
+              </div>
+              <div style="text-align: right;">
+                <p style="margin: 0; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em;">Purchase Date</p>
+                <p style="margin: 2px 0 0 0; font-size: 15px; font-weight: 800; color: #1e293b;">${record.purchaseDate.toLocaleDateString()}</p>
+              </div>
+            </div>
+
+            <div class="info-grid">
+              <div class="info-box">
+                <h3>Supplier Source</h3>
+                <p><strong>${record.supplierName}</strong></p>
+                <p style="color: #64748b; font-size: 11px;">Verified stock entry record.</p>
+              </div>
+              <div class="info-box">
+                <h3>Payment Lifecycle</h3>
+                <p>Status: <span style="display: inline-block; padding: 1px 8px; border-radius: 3px; background: ${record.paymentStatus === 'paid' ? '#ecfdf5' : '#fef2f2'}; text-transform: uppercase; font-weight: 800; font-size: 10px; color: ${record.paymentStatus === 'paid' ? '#059669' : '#e11d48'}; border: 1px solid ${record.paymentStatus === 'paid' ? '#d1fae5' : '#fee2e2'};">${record.paymentStatus}</span></p>
+                <p>Clearing: <strong>${record.paymentDone ? 'Fully Cleared' : 'Balance Pending'}</strong></p>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 40px; text-align: center;">#</th>
+                    <th>Medicine Description</th>
+                    <th style="text-align: center; width: 80px;">Qty</th>
+                    <th style="text-align: right; width: 120px;">Unit Cost</th>
+                    <th style="text-align: center; width: 80px;">VAT</th>
+                    <th style="text-align: right; width: 130px;">Total Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsHtml.replace(/padding: 12px 10px/g, 'padding: 8px 10px')}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="summary-container">
+              <div class="summary-box">
+                <div class="summary-row">
+                  <span>Subtotal</span>
+                  <span style="font-weight: 700;">NPR ${record.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div class="summary-row">
+                  <span>Paid Amount</span>
+                  <span style="color: #059669; font-weight: 700;">NPR ${record.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div class="summary-row">
+                  <span>Due Amount</span>
+                  <span style="color: ${record.dueAmount > 0 ? '#e11d48' : '#475569'}; font-weight: 700;">NPR ${record.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div class="summary-row grand-total">
+                  <span>Invoice Total</span>
+                  <span>NPR ${record.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          ${footerHTML}
+
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (error) {
+      console.error("Error printing invoice:", error);
+      addToast({
+        title: "Print Error",
+        description: "Failed to generate professional print view.",
+        color: "danger"
+      });
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingRecord(null);
@@ -349,13 +544,13 @@ export default function PurchaseRecordsTab({
   const getPaymentStatusBadgeClass = (status: string) => {
     switch (status) {
       case "paid":
-        return "bg-teal-50 text-teal-700 border-teal-200";
+        return "bg-health-500/10 text-health-500 border-health-500/20";
       case "partial":
-        return "bg-amber-50 text-amber-700 border-amber-200";
+        return "bg-saffron-500/10 text-saffron-500 border-saffron-500/20";
       case "overdue":
-        return "bg-red-50 text-red-700 border-red-200";
+        return "bg-rose-500/10 text-rose-500 border-rose-500/20";
       default:
-        return "bg-mountain-50 text-mountain-600 border-mountain-200";
+        return "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))]";
     }
   };
 
@@ -423,7 +618,7 @@ export default function PurchaseRecordsTab({
       </div>
 
       {/* Search Section */}
-      <div className="bg-white border border-mountain-200 rounded p-3">
+      <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded p-3 shadow-sm">
         <div className="relative flex items-center max-w-md">
           <IoSearchOutline className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-mountain-400 w-4 h-4" />
           <input
@@ -437,8 +632,8 @@ export default function PurchaseRecordsTab({
       </div>
 
       {/* Purchase Records Table */}
-      <div className="bg-white border border-mountain-200 rounded">
-        <div className="p-4 border-b border-mountain-100 bg-mountain-50/50 flex items-center justify-between">
+      <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded shadow-sm">
+        <div className="p-4 border-b border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3] flex items-center justify-between">
           <span className="text-[13px] text-mountain-500">
             {filteredRecords.length} record
             {filteredRecords.length !== 1 ? "s" : ""}
@@ -472,61 +667,61 @@ export default function PurchaseRecordsTab({
           ) : (
             <table className="clarity-table w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="bg-mountain-50/50 border-b border-mountain-200">
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                <tr className="bg-[rgb(var(--color-surface-2))/0.5] border-b border-[rgb(var(--color-border))]">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Supplier
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Purchase Date
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Bill Number
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Total Amount
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Paid Amount
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Due Amount
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
                     Payment Status
                   </th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-mountain-600 tracking-[0.06em] uppercase w-28">
+                  <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-28">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-mountain-100">
+              <tbody className="divide-y divide-[rgb(var(--color-border))]">
                 {filteredRecords.map((record) => (
                   <tr
                     key={record.id}
-                    className="hover:bg-mountain-50/30 transition-colors"
+                    className="hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5]"
                   >
                     <td className="px-5 py-3">
-                      <span className="text-[13.5px] font-semibold text-mountain-900">
+                      <span className="text-[13.5px] font-semibold text-[rgb(var(--color-text))]">
                         {record.supplierName}
                       </span>
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <IoCalendarOutline className="text-mountain-400 w-4 h-4" />
-                        <span className="text-[13px] text-mountain-700">
+                        <IoCalendarOutline className="text-[rgb(var(--color-text-muted)/0.7)] w-4 h-4" />
+                        <span className="text-[13px] text-[rgb(var(--color-text-muted))]">
                           {record.purchaseDate.toLocaleDateString()}
                         </span>
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <span className="font-mono text-[12.5px] text-mountain-700">
+                      <span className="font-mono text-[12.5px] text-[rgb(var(--color-text-muted))]">
                         {record.billNumber}
                       </span>
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1">
-                        <IoCashOutline className="text-mountain-400 w-4 h-4" />
-                        <span className="text-[13px] font-medium text-mountain-900">
+                        <IoCashOutline className="text-[rgb(var(--color-text-muted)/0.7)] w-4 h-4" />
+                        <span className="text-[13px] font-medium text-[rgb(var(--color-text))]">
                           ₹{record.totalAmount.toLocaleString()}
                         </span>
                       </div>
@@ -559,8 +754,17 @@ export default function PurchaseRecordsTab({
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">
                         <button
+                          aria-label="Print invoice"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-colors"
+                          title="Print Invoice"
+                          type="button"
+                          onClick={() => handlePrint(record)}
+                        >
+                          <IoPrintOutline className="w-4 h-4" />
+                        </button>
+                        <button
                           aria-label="Edit purchase record"
-                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-mountain-200 text-mountain-500 hover:text-teal-700 hover:border-teal-300 hover:bg-teal-50 transition-colors"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-[rgb(var(--color-border))] text-[rgb(var(--color-text-muted))] hover:text-teal-700 hover:border-teal-300 hover:bg-teal-50 transition-colors"
                           title="Edit record"
                           type="button"
                           onClick={() => handleEdit(record)}
@@ -569,7 +773,7 @@ export default function PurchaseRecordsTab({
                         </button>
                         <button
                           aria-label="Delete purchase record"
-                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-rose-500/20 text-rose-400 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
                           title="Delete record"
                           type="button"
                           onClick={() => openDeleteModal(record)}
@@ -681,6 +885,12 @@ export default function PurchaseRecordsTab({
                     }))
                   }
                 />
+                {!editingRecord && formData.billNumber && formData.supplierId && purchaseRecords.some(r => r.billNumber.trim().toLowerCase() === formData.billNumber.trim().toLowerCase() && r.supplierId === formData.supplierId) && (
+                  <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium animate-pulse">
+                    <IoCheckmarkCircleOutline className="w-3 h-3" />
+                    <span>Existing bill found. This will update the payment.</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -757,7 +967,7 @@ export default function PurchaseRecordsTab({
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-6">
-                <span className="text-[12.5px] text-mountain-600">
+                <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
                   Payment Done:
                 </span>
                 <span
@@ -824,9 +1034,9 @@ export default function PurchaseRecordsTab({
           size="md"
           subtitle={
             recordToDelete && (
-              <p className="text-[11.5px] text-mountain-500">
+              <p className="text-[11.5px] text-[rgb(var(--color-text-muted))]">
                 Bill:{" "}
-                <span className="font-semibold text-mountain-800">
+                <span className="font-semibold text-[rgb(var(--color-text))]">
                   {recordToDelete.billNumber}
                 </span>
                 {" · "}₹{recordToDelete.totalAmount.toLocaleString()}
@@ -842,21 +1052,21 @@ export default function PurchaseRecordsTab({
           }}
         >
           <div className="space-y-3 text-center">
-            <div className="w-12 h-12 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mx-auto">
-              <IoWarningOutline className="w-6 h-6 text-red-600" />
+            <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto">
+              <IoWarningOutline className="w-6 h-6 text-red-500" />
             </div>
-            <p className="text-[13px] text-mountain-700">
+            <p className="text-[13px] text-[rgb(var(--color-text-muted))]">
               Are you sure you want to delete this purchase record?
             </p>
             {recordToDelete && (
-              <div className="mt-3 p-3 bg-mountain-50 border border-mountain-200 rounded text-left">
-                <p className="text-[13px] font-semibold text-mountain-900">
+              <div className="mt-3 p-3 bg-[rgb(var(--color-surface-2))/0.3] border border-[rgb(var(--color-border))] rounded text-left">
+                <p className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
                   {recordToDelete.supplierName}
                 </p>
-                <p className="text-[12px] text-mountain-600">
+                <p className="text-[12px] text-[rgb(var(--color-text-muted))]">
                   Bill: {recordToDelete.billNumber}
                 </p>
-                <p className="text-[12px] text-mountain-600">
+                <p className="text-[12px] text-[rgb(var(--color-text-muted))]">
                   Amount: ₹{recordToDelete.totalAmount.toLocaleString()}
                 </p>
               </div>
