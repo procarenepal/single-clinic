@@ -983,9 +983,26 @@ export default function PurchaseRecordsTab({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                  Due Amount
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium text-default-700">
+                    Due Amount
+                  </label>
+                  {dueAmountDisplay > 0 && (
+                    <button
+                      className="text-[10px] font-bold text-teal-600 hover:text-teal-700 uppercase tracking-wider bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 transition-all hover:bg-teal-100"
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          paidAmount: prev.totalAmount,
+                          paymentDone: true
+                        }));
+                      }}
+                    >
+                      CLEAR BALANCE
+                    </button>
+                  )}
+                </div>
                 <div
                   className={`h-8 w-full text-[13px] px-2 flex items-center rounded border border-mountain-200 bg-mountain-50/50 ${
                     dueAmountDisplay > 0
@@ -996,7 +1013,7 @@ export default function PurchaseRecordsTab({
                   ₹{dueAmountDisplay.toLocaleString()}
                 </div>
               </div>
-              <div className="flex items-center gap-2 pt-6">
+              <div className="flex items-center gap-2 pt-7">
                 <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
                   Payment Done:
                 </span>
