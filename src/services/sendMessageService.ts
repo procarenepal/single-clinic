@@ -195,7 +195,7 @@ export const smsService = {
         url.replace(/\/v2\/sms\/?$/, "/v2/balance"), // Aakash SMS v2/v3 pattern
         "https://api.sparrowsms.com/v2/credit/",
         "https://v3.aakashsms.com/api/v2/balance",
-        "https://samayasms.com.np/smsapi/index.php"
+        "https://your-sms-api.com/smsapi/index.php"
       ];
 
       for (const creditUrl of endpoints) {

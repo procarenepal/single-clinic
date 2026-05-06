@@ -1,6 +1,6 @@
 {
-    "projectId": "procare-chat",
-    "endpoint": "https://fra.cloud.appwrite.io/v1",
+    "projectId": "YOUR_PROJECT_ID",
+    "endpoint": "https://YOUR_ENDPOINT.appwrite.io/v1",
     "projectName": "ProcareSoft SMS Tester",
     "settings": {
         "services": {
@@ -56,13 +56,13 @@
             "specification": "s-1vcpu-512mb",
             "path": "functions/sms-tester",
             "variables": {
-                "SMS_API_KEY": "567C3FE1B7509F",
-                "SMS_SENDER_ID": "SmsBit",
-                "SMS_API_URL": "https://samayasms.com.np/smsapi/index.php",
-                "DATABASE_ID": "sms_tester_db",
-                "APPWRITE_ENDPOINT": "https://fra.cloud.appwrite.io/v1",
-                "APPWRITE_PROJECT_ID": "procare-chat",
-                "APPWRITE_API_KEY": "standard_579143de685af7cc7a95614554afa06aefa86b02b64d859be8e32ad4aa44ff2d3a7fad2b77cb193ce2933722dea66b8da3c8ae711bc4d60ee83fd8e0b76a3b9bd3ccf693a27f1c35b74dd58a8074be518c312f59d85a4f4bdd40696b86551cfeff8e1d39fb75c4e900c0bc0924fcf189fe8e1dbc726d23e947376d67d472e5db"
+                "SMS_API_KEY": "YOUR_SMS_API_KEY",
+                "SMS_SENDER_ID": "YOUR_SENDER_ID",
+                "SMS_API_URL": "https://your-sms-api.com",
+                "DATABASE_ID": "YOUR_DATABASE_ID",
+                "APPWRITE_ENDPOINT": "https://YOUR_ENDPOINT.appwrite.io/v1",
+                "APPWRITE_PROJECT_ID": "YOUR_PROJECT_ID",
+                "APPWRITE_API_KEY": "YOUR_APPWRITE_API_KEY"
             }
         },
         {
@@ -81,20 +81,20 @@
             "specification": "s-1vcpu-512mb",
             "path": "functions/sms-scheduler",
             "variables": {
-                "SMS_API_KEY": "567C3FE1B7509F",
-                "SMS_SENDER_ID": "SmsBit",
-                "SMS_API_URL": "https://samayasms.com.np/smsapi/index.php",
-                "DATABASE_ID": "sms_tester_db",
-                "APPWRITE_ENDPOINT": "https://fra.cloud.appwrite.io/v1",
-                "APPWRITE_PROJECT_ID": "procare-chat",
-                "APPWRITE_API_KEY": "standard_579143de685af7cc7a95614554afa06aefa86b02b64d859be8e32ad4aa44ff2d3a7fad2b77cb193ce2933722dea66b8da3c8ae711bc4d60ee83fd8e0b76a3b9bd3ccf693a27f1c35b74dd58a8074be518c312f59d85a4f4bdd40696b86551cfeff8e1d39fb75c4e900c0bc0924fcf189fe8e1dbc726d23e947376d67d472e5db"
+                "SMS_API_KEY": "YOUR_SMS_API_KEY",
+                "SMS_SENDER_ID": "YOUR_SENDER_ID",
+                "SMS_API_URL": "https://your-sms-api.com",
+                "DATABASE_ID": "YOUR_DATABASE_ID",
+                "APPWRITE_ENDPOINT": "https://YOUR_ENDPOINT.appwrite.io/v1",
+                "APPWRITE_PROJECT_ID": "YOUR_PROJECT_ID",
+                "APPWRITE_API_KEY": "YOUR_APPWRITE_API_KEY"
             }
         }
     ],
     "databases": [
         {
-            "$id": "procare-chat",
-            "name": "procare-chat",
+            "$id": "YOUR_DATABASE_ID",
+            "name": "YOUR_DATABASE_NAME",
             "enabled": true
         },
         {
@@ -219,7 +219,7 @@
     ],
     "buckets": [
         {
-            "$id": "clinic-assets",
+            "$id": "YOUR_BUCKET_ID",
             "$permissions": [
                 "create(\"any\")",
                 "read(\"any\")",
@@ -227,7 +227,7 @@
                 "delete(\"any\")"
             ],
             "fileSecurity": false,
-            "name": "clinic-assets",
+            "name": "YOUR_BUCKET_NAME",
             "enabled": true,
             "maximumFileSize": 5000000000,
             "allowedFileExtensions": [],

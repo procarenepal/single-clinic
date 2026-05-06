@@ -3,7 +3,7 @@ import axios, { AxiosResponse } from "axios";
 
 // Configuration
 const SMS_BACKEND_URL =
-  import.meta.env.VITE_SMS_BACKEND_URL || "http://localhost:3000";
+  import.meta.env.VITE_SMS_BACKEND_URL || "https://your-backend-server.com";
 const API_KEY = import.meta.env.VITE_SMS_BACKEND_API_KEY || "your-api-key";
 
 // Types
