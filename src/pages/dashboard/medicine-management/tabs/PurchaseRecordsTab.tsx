@@ -716,9 +716,26 @@ export default function PurchaseRecordsTab({
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <span className="font-mono text-[12.5px] text-[rgb(var(--color-text-muted))]">
-                        {record.billNumber}
-                      </span>
+                      <div className="flex items-center gap-2 group/copy">
+                        <span className="font-mono text-[12.5px] text-[rgb(var(--color-text-muted))]">
+                          {record.billNumber}
+                        </span>
+                        <button
+                          className="opacity-0 group-hover/copy:opacity-100 p-1 rounded hover:bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] transition-all"
+                          title="Copy Bill Number"
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(record.billNumber);
+                            addToast({
+                              title: "Copied",
+                              description: "Bill number copied to clipboard",
+                              color: "success"
+                            });
+                          }}
+                        >
+                          <IoCopyOutline className="w-3 h-3" />
+                        </button>
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <span className="text-[13px] font-medium text-[rgb(var(--color-text))]">
