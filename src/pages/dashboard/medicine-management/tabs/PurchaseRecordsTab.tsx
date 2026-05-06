@@ -721,12 +721,9 @@ export default function PurchaseRecordsTab({
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-1">
-                        <IoCashOutline className="text-[rgb(var(--color-text-muted)/0.7)] w-4 h-4" />
-                        <span className="text-[13px] font-medium text-[rgb(var(--color-text))]">
-                          Rs.{record.totalAmount.toLocaleString()}
-                        </span>
-                      </div>
+                      <span className="text-[13px] font-medium text-[rgb(var(--color-text))]">
+                        Rs.{record.totalAmount.toLocaleString()}
+                      </span>
                     </td>
                     <td className="px-5 py-3">
                       <span className="text-[13px] font-medium text-teal-700">
