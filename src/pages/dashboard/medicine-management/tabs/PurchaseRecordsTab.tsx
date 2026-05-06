@@ -15,6 +15,7 @@ import {
   IoCloseOutline,
   IoPrintOutline,
   IoDocumentTextOutline,
+  IoCopyOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
