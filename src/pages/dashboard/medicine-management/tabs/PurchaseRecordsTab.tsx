@@ -376,12 +376,12 @@ export default function PurchaseRecordsTab({
         <tr style="border-bottom: 1px solid #f1f5f9;">
           <td style="padding: 12px 10px; font-size: 12px;">${idx + 1}</td>
           <td style="padding: 12px 10px; font-size: 12px;">
-            <div style="font-weight: 700; color: #1e293b;">${item.name}</div>
+            <div style="font-weight: 500; color: #1e293b;">${item.name}</div>
           </td>
           <td style="padding: 12px 10px; font-size: 12px; text-align: center; color: #475569;">${item.qty}</td>
           <td style="padding: 12px 10px; font-size: 12px; text-align: right; color: #475569;">${item.costPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
           <td style="padding: 12px 10px; font-size: 12px; text-align: center; color: #475569;">${item.vatPercentage}%</td>
-          <td style="padding: 12px 10px; font-size: 12px; text-align: right; font-weight: 700; color: #1e293b;">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 12px 10px; font-size: 12px; text-align: right; font-weight: 500; color: #1e293b;">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
         </tr>
       `).join("") || `
         <tr>
@@ -400,22 +400,22 @@ export default function PurchaseRecordsTab({
             /* High-Density Invoice Styles */
             .invoice-body { padding: 10px 40px; background: white; position: relative; }
             .invoice-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1.5px solid #f1f5f9; }
-            .invoice-title-box h2 { margin: 0; color: #1e293b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
-            .invoice-title-box p { margin: 2px 0 0 0; color: #64748b; font-size: 12px; font-weight: 600; }
+            .invoice-title-box h2 { margin: 0; color: #1e293b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+            .invoice-title-box p { margin: 2px 0 0 0; color: #64748b; font-size: 12px; font-weight: 500; }
             
             .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 25px; }
-            .info-box h3 { font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 800; letter-spacing: 0.08em; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+            .info-box h3 { font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 600; letter-spacing: 0.08em; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
             .info-box p { margin: 4px 0; font-size: 12.5px; color: #1e293b; line-height: 1.3; }
-            .info-box strong { font-weight: 700; color: #0f172a; }
+            .info-box strong { font-weight: 500; color: #0f172a; }
             
             .table-container { width: 100%; margin-bottom: 25px; border: 1px solid #f1f5f9; border-radius: 6px; overflow: hidden; }
             table { width: 100%; border-collapse: collapse; }
-            th { background: #f8fafc; padding: 10px 10px; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; text-align: left; border-bottom: 1.5px solid #f1f5f9; }
+            th { background: #f8fafc; padding: 10px 10px; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 600; text-align: left; border-bottom: 1.5px solid #f1f5f9; }
             
             .summary-container { display: flex; justify-content: flex-end; margin-bottom: 40px; }
             .summary-box { width: 300px; background: #f8fafc; padding: 15px 20px; border-radius: 8px; border: 1px solid #f1f5f9; }
             .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12.5px; color: #475569; }
-            .summary-row.grand-total { border-top: 1.5px solid #e2e8f0; margin-top: 10px; padding-top: 12px; font-weight: 800; font-size: 17px; color: ${printConfig?.primaryColor || '#0d9488'}; }
+            .summary-row.grand-total { border-top: 1.5px solid #e2e8f0; margin-top: 10px; padding-top: 12px; font-weight: 600; font-size: 17px; color: ${printConfig?.primaryColor || '#0d9488'}; }
             
             @media print {
               @page { margin: 0; size: auto; }
@@ -432,24 +432,24 @@ export default function PurchaseRecordsTab({
             <div class="invoice-top-bar">
               <div class="invoice-title-box">
                 <h2>Purchase Invoice</h2>
-                <p>Bill No: <span style="font-family: monospace; font-size: 13px; font-weight: 700;">${record.billNumber}</span></p>
+                <p>Bill No: <span style="font-family: monospace; font-size: 13px; font-weight: 500;">${record.billNumber}</span></p>
               </div>
               <div style="text-align: right;">
-                <p style="margin: 0; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em;">Purchase Date</p>
-                <p style="margin: 2px 0 0 0; font-size: 15px; font-weight: 800; color: #1e293b;">${record.purchaseDate.toLocaleDateString()}</p>
+                <p style="margin: 0; font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em;">Purchase Date</p>
+                <p style="margin: 2px 0 0 0; font-size: 15px; font-weight: 600; color: #1e293b;">${record.purchaseDate.toLocaleDateString()}</p>
               </div>
             </div>
 
             <div class="info-grid">
               <div class="info-box">
                 <h3>Supplier Source</h3>
-                <p><strong>${record.supplierName}</strong></p>
+                <p><span style="font-weight: 500;">${record.supplierName}</span></p>
                 <p style="color: #64748b; font-size: 11px;">Verified stock entry record.</p>
               </div>
               <div class="info-box">
                 <h3>Payment Lifecycle</h3>
-                <p>Status: <span style="display: inline-block; padding: 1px 8px; border-radius: 3px; background: ${record.paymentStatus === 'paid' ? '#ecfdf5' : '#fef2f2'}; text-transform: uppercase; font-weight: 800; font-size: 10px; color: ${record.paymentStatus === 'paid' ? '#059669' : '#e11d48'}; border: 1px solid ${record.paymentStatus === 'paid' ? '#d1fae5' : '#fee2e2'};">${record.paymentStatus}</span></p>
-                <p>Clearing: <strong>${record.paymentDone ? 'Fully Cleared' : 'Balance Pending'}</strong></p>
+                <p>Status: <span style="display: inline-block; padding: 1px 8px; border-radius: 3px; background: ${record.paymentStatus === 'paid' ? '#ecfdf5' : '#fef2f2'}; text-transform: uppercase; font-weight: 600; font-size: 10px; color: ${record.paymentStatus === 'paid' ? '#059669' : '#e11d48'}; border: 1px solid ${record.paymentStatus === 'paid' ? '#d1fae5' : '#fee2e2'};">${record.paymentStatus}</span></p>
+                <p>Clearing: <span style="font-weight: 500;">${record.paymentDone ? 'Fully Cleared' : 'Balance Pending'}</span></p>
               </div>
             </div>
 
@@ -475,15 +475,15 @@ export default function PurchaseRecordsTab({
               <div class="summary-box">
                 <div class="summary-row">
                   <span>Subtotal</span>
-                  <span style="font-weight: 700;">NPR ${record.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="font-weight: 500;">NPR ${record.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div class="summary-row">
                   <span>Paid Amount</span>
-                  <span style="color: #059669; font-weight: 700;">NPR ${record.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="color: #059669; font-weight: 500;">NPR ${record.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div class="summary-row">
                   <span>Due Amount</span>
-                  <span style="color: ${record.dueAmount > 0 ? '#e11d48' : '#475569'}; font-weight: 700;">NPR ${record.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="color: ${record.dueAmount > 0 ? '#e11d48' : '#475569'}; font-weight: 500;">NPR ${record.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div class="summary-row grand-total">
                   <span>Invoice Total</span>
