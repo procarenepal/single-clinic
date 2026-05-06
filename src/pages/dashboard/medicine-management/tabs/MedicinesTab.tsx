@@ -1,6 +1,6 @@
 import type { QueryDocumentSnapshot } from "firebase/firestore";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   IoAddOutline,
@@ -144,41 +144,6 @@ export default function MedicinesTab({
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const modalState = useModalState(false);
-  const purchaseSummary = useMemo(() => {
-    let subtotal = 0;
-    let taxableAmount = 0;
-    let nonTaxableAmount = 0;
-    let totalVat = 0;
-
-    formDataList.forEach((item) => {
-      const qty = parseFloat(item.currentStock) || 0;
-      const cost = parseFloat(item.costPrice) || 0;
-      const itemTotal = qty * cost;
-
-      if (item.isVatApplied) {
-        taxableAmount += itemTotal;
-        totalVat += itemTotal * (parseFloat(item.vatPercentage) / 100);
-      } else {
-        nonTaxableAmount += itemTotal;
-      }
-      subtotal += itemTotal;
-    });
-
-    return {
-      subtotal,
-      taxableAmount,
-      nonTaxableAmount,
-      totalVat,
-      grandTotal: subtotal + totalVat,
-    };
-  }, [formDataList]);
-  const generateBillNumber = () => {
-    const now = new Date();
-    const datePart = now.toISOString().split("T")[0].replace(/-/g, "");
-    const randomPart = Math.floor(1000 + Math.random() * 9000);
-
-    return `BILL-${datePart}-${randomPart}`;
-  };
   const refillModalState = useModalState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentMedicine, setCurrentMedicine] = useState<Medicine | null>(null);
@@ -219,6 +184,8 @@ export default function MedicinesTab({
       newSupplierName: "", // Will be deprecated
       isAddingType: false,
       newTypeName: "",
+      isVatApplied: false,
+      vatPercentage: 13,
     },
   ]);
 
@@ -228,6 +195,43 @@ export default function MedicinesTab({
     isAddingSupplier: false,
     newSupplierName: "",
   });
+
+  const purchaseSummary = useMemo(() => {
+    let subtotal = 0;
+    let taxableAmount = 0;
+    let nonTaxableAmount = 0;
+    let totalVat = 0;
+
+    formDataList.forEach((item) => {
+      const qty = parseFloat(item.currentStock) || 0;
+      const cost = parseFloat(item.costPrice) || 0;
+      const itemTotal = qty * cost;
+
+      if (item.isVatApplied) {
+        taxableAmount += itemTotal;
+        totalVat += itemTotal * (parseFloat(item.vatPercentage) / 100);
+      } else {
+        nonTaxableAmount += itemTotal;
+      }
+      subtotal += itemTotal;
+    });
+
+    return {
+      subtotal,
+      taxableAmount,
+      nonTaxableAmount,
+      totalVat,
+      grandTotal: subtotal + totalVat,
+    };
+  }, [formDataList]);
+
+  const generateBillNumber = () => {
+    const now = new Date();
+    const datePart = now.toISOString().split("T")[0].replace(/-/g, "");
+    const randomPart = Math.floor(1000 + Math.random() * 9000);
+
+    return `BILL-${datePart}-${randomPart}`;
+  };
 
   const [refillFormData, setRefillFormData] = useState({
     regularQuantity: "",
