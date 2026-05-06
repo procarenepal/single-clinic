@@ -201,19 +201,19 @@ X-API-Key: your_api_key
 1. **Test with different time scenarios:**
    ```bash
    # 30 hours away (should use clinic advance setting)
-   curl -X POST http://localhost:3000/test-scheduling \
+   curl -X POST https://your-backend-server.com/test-scheduling \
      -H "Content-Type: application/json" \
      -H "X-API-Key: your_key" \
      -d '{"appointmentTime": "future_date_30h"}'
 
    # 6 hours away (should use 2 hours before)
-   curl -X POST http://localhost:3000/test-scheduling \
+   curl -X POST https://your-backend-server.com/test-scheduling \
      -H "Content-Type: application/json" \
      -H "X-API-Key: your_key" \
      -d '{"appointmentTime": "future_date_6h"}'
 
    # 1 hour away (should skip)
-   curl -X POST http://localhost:3000/test-scheduling \
+   curl -X POST https://your-backend-server.com/test-scheduling \
      -H "Content-Type: application/json" \
      -H "X-API-Key: your_key" \
      -d '{"appointmentTime": "future_date_1h"}'

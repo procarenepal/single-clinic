@@ -280,7 +280,7 @@ if (!appointmentTypeCheck.enabled) {
 ### Scenario 1: Enable SMS for Consultations Only
 
 ```bash
-curl -X PUT http://localhost:3000/clinic-settings/clinic123 \
+curl -X PUT https://your-backend-server.com/clinic-settings/clinic123 \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your_key" \
   -d '{
@@ -294,7 +294,7 @@ curl -X PUT http://localhost:3000/clinic-settings/clinic123 \
 ### Scenario 2: Add Emergency Appointments to Enabled Types
 
 ```bash
-curl -X POST http://localhost:3000/bulk-update-appointment-types/clinic123 \
+curl -X POST https://your-backend-server.com/bulk-update-appointment-types/clinic123 \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your_key" \
   -d '{
@@ -306,14 +306,14 @@ curl -X POST http://localhost:3000/bulk-update-appointment-types/clinic123 \
 ### Scenario 3: Get Statistics for All Appointment Types
 
 ```bash
-curl -X GET http://localhost:3000/appointment-types/clinic123 \
+curl -X GET https://your-backend-server.com/appointment-types/clinic123 \
   -H "X-API-Key: your_key"
 ```
 
 ### Scenario 4: Remove Surgery from SMS Reminders
 
 ```bash
-curl -X POST http://localhost:3000/bulk-update-appointment-types/clinic123 \
+curl -X POST https://your-backend-server.com/bulk-update-appointment-types/clinic123 \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your_key" \
   -d '{

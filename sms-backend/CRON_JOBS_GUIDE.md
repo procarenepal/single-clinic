@@ -77,7 +77,7 @@ X-API-Key: your_api_key
 
 **Example:**
 ```bash
-curl -X POST http://localhost:3000/trigger-cron/process-reminders \
+curl -X POST https://your-backend-server.com/trigger-cron/process-reminders \
   -H "X-API-Key: your_key"
 ```
 
@@ -419,11 +419,11 @@ npm run cron:health
 
 ```bash
 # Process reminders manually
-curl -X POST http://localhost:3000/trigger-cron/process-reminders \
+curl -X POST https://your-backend-server.com/trigger-cron/process-reminders \
   -H "X-API-Key: your_key"
 
 # Check system status
-curl -X GET http://localhost:3000/cron-status \
+curl -X GET https://your-backend-server.com/cron-status \
   -H "X-API-Key: your_key"
 ```
 
