@@ -827,25 +827,26 @@ export default function PurchaseRecordsTab({
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                Supplier <span className="text-red-600">*</span>
+                Bill Number <span className="text-red-600">*</span>
               </label>
-              <select
-                disabled={saving}
-                required
+              <input
                 className="clarity-input h-8 w-full text-[13px] px-2"
-                value={formData.supplierId}
+                disabled={saving}
+                placeholder="Enter bill number"
+                type="text"
+                value={formData.billNumber}
                 onChange={(e) => {
-                  const newSupplierId = e.target.value;
+                  const newBillNo = e.target.value;
                   setFormData((prev) => {
-                    const updated = { ...prev, supplierId: newSupplierId };
+                    const updated = { ...prev, billNumber: newBillNo };
                     
-                    // Check for existing match to auto-populate
-                    if (!editingRecord && prev.billNumber.trim() && newSupplierId) {
+                    // Global lookup by Bill Number to auto-populate Supplier and financial data
+                    if (!editingRecord && newBillNo.trim()) {
                       const match = purchaseRecords.find(
-                        r => r.billNumber.trim().toLowerCase() === prev.billNumber.trim().toLowerCase() && 
-                        r.supplierId === newSupplierId
+                        r => r.billNumber.trim().toLowerCase() === newBillNo.trim().toLowerCase()
                       );
                       if (match) {
+                        updated.supplierId = match.supplierId;
                         updated.totalAmount = match.totalAmount.toString();
                         updated.paidAmount = match.paidAmount.toString();
                         updated.notes = match.notes || "";
@@ -855,17 +856,55 @@ export default function PurchaseRecordsTab({
                     return updated;
                   });
                 }}
-              >
-                <option value="">Select a supplier</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </option>
-                ))}
-              </select>
+              />
+              {!editingRecord && formData.billNumber && purchaseRecords.some(r => r.billNumber.trim().toLowerCase() === formData.billNumber.trim().toLowerCase()) && (
+                <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium bg-teal-50 px-2 py-1 rounded border border-teal-100">
+                  <IoCheckmarkCircleOutline className="w-3 h-3" />
+                  <span>Existing bill found. Supplier and data auto-loaded.</span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                  Supplier <span className="text-red-600">*</span>
+                </label>
+                <select
+                  disabled={saving}
+                  required
+                  className="clarity-input h-8 w-full text-[13px] px-2"
+                  value={formData.supplierId}
+                  onChange={(e) => {
+                    const newSupplierId = e.target.value;
+                    setFormData((prev) => {
+                      const updated = { ...prev, supplierId: newSupplierId };
+                      
+                      // Check for existing match to auto-populate if bill already entered
+                      if (!editingRecord && prev.billNumber.trim() && newSupplierId) {
+                        const match = purchaseRecords.find(
+                          r => r.billNumber.trim().toLowerCase() === prev.billNumber.trim().toLowerCase() && 
+                          r.supplierId === newSupplierId
+                        );
+                        if (match) {
+                          updated.totalAmount = match.totalAmount.toString();
+                          updated.paidAmount = match.paidAmount.toString();
+                          updated.notes = match.notes || "";
+                          updated.paymentDone = match.paymentDone;
+                        }
+                      }
+                      return updated;
+                    });
+                  }}
+                >
+                  <option value="">Select a supplier</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-sm font-medium text-default-700 mb-1.5 block">
                   Purchase Date <span className="text-red-600">*</span>
@@ -882,45 +921,6 @@ export default function PurchaseRecordsTab({
                     }))
                   }
                 />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-default-700 mb-1.5 block">
-                  Bill Number <span className="text-red-600">*</span>
-                </label>
-                <input
-                  className="clarity-input h-8 w-full text-[13px] px-2"
-                  disabled={saving}
-                  placeholder="Enter bill number"
-                  type="text"
-                  value={formData.billNumber}
-                  onChange={(e) => {
-                    const newBillNo = e.target.value;
-                    setFormData((prev) => {
-                      const updated = { ...prev, billNumber: newBillNo };
-                      
-                      // Check for existing match to auto-populate
-                      if (!editingRecord && newBillNo.trim() && prev.supplierId) {
-                        const match = purchaseRecords.find(
-                          r => r.billNumber.trim().toLowerCase() === newBillNo.trim().toLowerCase() && 
-                          r.supplierId === prev.supplierId
-                        );
-                        if (match) {
-                          updated.totalAmount = match.totalAmount.toString();
-                          updated.paidAmount = match.paidAmount.toString();
-                          updated.notes = match.notes || "";
-                          updated.paymentDone = match.paymentDone;
-                        }
-                      }
-                      return updated;
-                    });
-                  }}
-                />
-                {!editingRecord && formData.billNumber && formData.supplierId && purchaseRecords.some(r => r.billNumber.trim().toLowerCase() === formData.billNumber.trim().toLowerCase() && r.supplierId === formData.supplierId) && (
-                  <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium bg-teal-50 px-2 py-1 rounded border border-teal-100">
-                    <IoCheckmarkCircleOutline className="w-3 h-3" />
-                    <span>Existing bill found. Current data loaded.</span>
-                  </div>
-                )}
               </div>
             </div>
 
