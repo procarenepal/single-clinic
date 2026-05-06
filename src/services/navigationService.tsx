@@ -340,6 +340,7 @@ class NavigationService {
   /**
    * Get navigation items with ETag caching
    */
+  
   async getNavigationItems(
     userId: string,
     clinicId: string,
@@ -396,6 +397,22 @@ class NavigationService {
           navItems = await this.buildRegularUserNavigation(userId, clinicId);
           break;
       }
+
+      // Temporary filter based on user request
+      const allowedTitles = [
+        "Dashboard",
+        "Patients",
+        "Appointments",
+        "Prescriptions",
+        "Enquiry Management",
+        "Doctors",
+        "Experts",
+        "Medicine Management",
+        "Pharmacy",
+        "Communication",
+        "Settings",
+      ];
+      navItems = navItems.filter((item) => allowedTitles.includes(item.title));
     } catch (error) {
       console.error("Error building navigation:", error);
       navItems = [
@@ -450,5 +467,4 @@ class NavigationService {
     return this.getNavigationItems(userId, clinicId, role);
   }
 }
-
 export const navigationService = new NavigationService();

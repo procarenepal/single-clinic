@@ -24,7 +24,6 @@ import { ClinicSettings, Branch } from "@/types/models";
 import { branchService } from "@/services/branchService";
 
 // Import sub-components
-
 import BrandsTab from "@/pages/dashboard/medicine-management/tabs/BrandsTab";
 import CategoriesTab from "@/pages/dashboard/medicine-management/tabs/CategoriesTab";
 import StockTab from "@/pages/dashboard/medicine-management/tabs/StockTab";
@@ -156,10 +155,9 @@ export default function MedicineManagementPage() {
         const lowStockThreshold = settings?.lowStockThreshold || 10;
         const expiryAlertDays = settings?.expiryAlertDays || 30;
 
-        const lowStockItems = medicines.filter((medicine) => {
-          const stock = medicineStocks[medicine.id] || 0;
-
-          return stock <= lowStockThreshold;
+        const lowStockItems = stockData.filter((stock) => {
+          const totalStock = stock.currentStock + (stock.schemeStock || 0);
+          return totalStock <= stock.reorderLevel;
         });
 
         const alertDate = new Date();
@@ -247,10 +245,9 @@ export default function MedicineManagementPage() {
 
         const lowStockThreshold = settings?.lowStockThreshold || 10;
         const expiryAlertDays = settings?.expiryAlertDays || 30;
-        const lowStockItems = medicines.filter((medicine) => {
-          const stock = medicineStocks[medicine.id] || 0;
-
-          return stock <= lowStockThreshold;
+        const lowStockItems = stockData.filter((stock) => {
+          const totalStock = stock.currentStock + (stock.schemeStock || 0);
+          return totalStock <= stock.reorderLevel;
         });
         const alertDate = new Date();
 
@@ -480,10 +477,10 @@ export default function MedicineManagementPage() {
             {isLoadingStats && (
               <div className="absolute inset-0 bg-surface/40 backdrop-blur-[2px] flex items-center justify-center z-10 rounded-lg">
                 <div className="flex flex-col items-center gap-2">
-                   <div className="w-32 h-1 bg-border-base overflow-hidden rounded-full">
-                      <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2" />
-                   </div>
-                   <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Updating Stats</span>
+                  <div className="w-32 h-1 bg-border-base overflow-hidden rounded-full">
+                    <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2" />
+                  </div>
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Updating Stats</span>
                 </div>
               </div>
             )}

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   IoAddOutline,
+  IoListOutline,
   IoSearchOutline,
   IoCreateOutline,
   IoMedkitOutline,
@@ -172,19 +173,26 @@ export default function MedicinesTab({
       strength: "",
       unit: "tablet",
       description: "",
-      supplierId: "",
+      supplierId: "", // Will be deprecated in favor of global
       batchNumber: "",
       expiryDate: "",
       price: "",
       costPrice: "",
       barcode: "",
       currentStock: "",
-      isAddingSupplier: false,
-      newSupplierName: "",
+      isAddingSupplier: false, // Will be deprecated
+      newSupplierName: "", // Will be deprecated
       isAddingType: false,
       newTypeName: "",
     },
   ]);
+
+  const [globalPurchaseDetails, setGlobalPurchaseDetails] = useState({
+    supplierId: "",
+    billNumber: "",
+    isAddingSupplier: false,
+    newSupplierName: "",
+  });
 
   const [refillFormData, setRefillFormData] = useState({
     regularQuantity: "",
@@ -541,6 +549,12 @@ export default function MedicinesTab({
 
   const openAddModal = () => {
     setCurrentMedicine(null);
+    setGlobalPurchaseDetails({
+      supplierId: "",
+      billNumber: "",
+      isAddingSupplier: false,
+      newSupplierName: "",
+    });
     setFormDataList([
       {
         name: "",
@@ -592,6 +606,49 @@ export default function MedicinesTab({
       }
     }
 
+    const formatDateSafe = (dateObj: any) => {
+      if (!dateObj) return "";
+      try {
+        if (typeof dateObj.toDate === "function") return dateObj.toDate().toISOString().split("T")[0];
+        if (dateObj instanceof Date) return dateObj.toISOString().split("T")[0];
+        return new Date(dateObj).toISOString().split("T")[0];
+      } catch (e) {
+        return "";
+      }
+    };
+
+    let resolvedBatchNumber = medicine.batchNumber || "";
+    let resolvedExpiryDate = formatDateSafe(medicine.expiryDate) || formatDateSafe(medicineExpiryDates[medicine.id]);
+
+    if (!resolvedBatchNumber || !resolvedExpiryDate) {
+      try {
+        const txs = await medicineService.getStockTransactions(
+          medicine.id,
+          5,
+          branchScopeId || undefined
+        );
+        // Find the most recent transaction that has the missing data
+        const txWithBatch = txs.find(t => t.batchNumber);
+        const txWithExpiry = txs.find(t => t.expiryDate);
+
+        if (!resolvedBatchNumber && txWithBatch?.batchNumber) {
+          resolvedBatchNumber = txWithBatch.batchNumber;
+        }
+        if (!resolvedExpiryDate && txWithExpiry?.expiryDate) {
+          resolvedExpiryDate = formatDateSafe(txWithExpiry.expiryDate);
+        }
+      } catch (e) {
+        console.warn("Could not fetch latest transactions for edit modal", e);
+      }
+    }
+
+    setGlobalPurchaseDetails({
+      supplierId: medicine.supplierId || "",
+      billNumber: "",
+      isAddingSupplier: false,
+      newSupplierName: "",
+    });
+
     setFormDataList([
       {
         name: medicine.name,
@@ -603,10 +660,8 @@ export default function MedicinesTab({
         unit: medicine.unit,
         description: medicine.description || "",
         supplierId: medicine.supplierId || "",
-        batchNumber: medicine.batchNumber || "",
-        expiryDate: medicine.expiryDate
-          ? medicine.expiryDate.toISOString().split("T")[0]
-          : "",
+        batchNumber: resolvedBatchNumber,
+        expiryDate: resolvedExpiryDate,
         price: medicine.price?.toString() || "",
         costPrice: medicine.costPrice?.toString() || "",
         barcode: medicine.barcode || "",
@@ -643,10 +698,6 @@ export default function MedicinesTab({
         addToast({ title: "Validation Error", description: `Medicine type is required${rowNum}`, color: "danger" });
         return;
       }
-      if (!row.unit) {
-        addToast({ title: "Validation Error", description: `Medicine unit is required${rowNum}`, color: "danger" });
-        return;
-      }
 
       if (clinicSettings?.sellsMedicines && !row.price.trim()) {
         addToast({ title: "Validation Error", description: `Sale price is required${rowNum}` });
@@ -664,22 +715,22 @@ export default function MedicinesTab({
 
     setIsLoading(true);
     try {
+      let finalSupplierId = globalPurchaseDetails.supplierId;
+
+      // Handle Quick Add Global Supplier
+      if (globalPurchaseDetails.isAddingSupplier && globalPurchaseDetails.newSupplierName.trim()) {
+        const supplierData = {
+          name: globalPurchaseDetails.newSupplierName.trim(),
+          clinicId,
+          branchId: branchScopeId || "",
+          isActive: true,
+          createdBy: userData.id,
+        };
+        finalSupplierId = await medicineService.createSupplier(supplierData);
+        // We will fetchSuppliers later
+      }
+
       for (const row of formDataList) {
-        let finalSupplierId = row.supplierId;
-
-        // Handle Quick Add Supplier for this row
-        if (row.isAddingSupplier && row.newSupplierName.trim()) {
-          const supplierData = {
-            name: row.newSupplierName.trim(),
-            clinicId,
-            branchId: branchScopeId || "",
-            isActive: true,
-            createdBy: userData.id,
-          };
-          finalSupplierId = await medicineService.createSupplier(supplierData);
-          // fetchSuppliers moved outside the loop for performance
-        }
-
         const medicineData: any = {
           name: row.name.trim(),
           type: row.type,
@@ -710,6 +761,18 @@ export default function MedicinesTab({
             if (existingStock) {
               await medicineService.updateMedicineStock(existingStock.id, {
                 currentStock: parseFloat(row.currentStock),
+                updatedBy: userData.id,
+              });
+            } else {
+              // Create stock record if it doesn't exist
+              await medicineService.createMedicineStock({
+                medicineId: currentMedicine.id,
+                currentStock: parseFloat(row.currentStock),
+                schemeStock: 0,
+                minimumStock: 10,
+                reorderLevel: 20,
+                clinicId,
+                branchId: branchScopeId || "",
                 updatedBy: userData.id,
               });
             }
@@ -1635,353 +1698,280 @@ export default function MedicinesTab({
           title={currentMedicine ? "Edit Medicine" : "Add Medicine"}
           onClose={modalState.forceClose}
         >
-          <div className="space-y-8">
-            {formDataList.map((formData, index) => (
-              <div key={index} className={`relative p-6 rounded-lg border border-[rgb(var(--color-border))] ${formDataList.length > 1 ? 'bg-[rgb(var(--color-surface-2))/0.3]' : ''}`}>
-                {formDataList.length > 1 && (
-                  <div className="absolute -top-3 -right-3">
-                    <button
-                      className="w-7 h-7 rounded-full bg-red-50 text-red-600 border border-red-200 flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm"
-                      type="button"
-                      title="Remove this medicine"
-                      onClick={() => removeRow(index)}
-                    >
-                      <IoCloseOutline className="w-5 h-5" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm border border-primary/20">
-                    {index + 1}
-                  </div>
-                  <h3 className="text-[15px] font-bold text-[rgb(var(--color-text))]">
-                    {currentMedicine ? "Edit Medicine" : `Medicine Details #${index + 1}`}
-                  </h3>
+          <div className="space-y-6">
+            {/* Global Purchase Details */}
+            <div className="flex flex-wrap gap-4 p-4 rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
+              <div className="w-full md:w-[300px]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
+                    Supplier
+                  </label>
+                  <button
+                    className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
+                    type="button"
+                    onClick={() => {
+                      setGlobalPurchaseDetails((prev) => ({
+                        ...prev,
+                        isAddingSupplier: !prev.isAddingSupplier,
+                        newSupplierName: !prev.isAddingSupplier ? prev.newSupplierName : "",
+                      }));
+                    }}
+                  >
+                    {globalPurchaseDetails.isAddingSupplier ? "Select Existing" : "Add New"}
+                  </button>
                 </div>
+                {globalPurchaseDetails.isAddingSupplier ? (
+                  <input
+                    className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
+                    placeholder="New supplier name"
+                    value={globalPurchaseDetails.newSupplierName}
+                    onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, newSupplierName: e.target.value }))}
+                  />
+                ) : (
+                  <select
+                    className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                    name="supplierId"
+                    value={globalPurchaseDetails.supplierId}
+                    onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, supplierId: e.target.value }))}
+                  >
+                    <option value="">No Supplier</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
-                  {/* Medicine Name */}
-                  <div className="relative">
-                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                      Medicine Name <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      required
-                      autoComplete="off"
-                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                      name="name"
-                      placeholder="Enter medicine name"
-                      value={formData.name}
-                      onChange={(e) => handleChange(index, e)}
-                      onKeyDown={handleKeyDown}
-                    />
+              <div className="w-full md:w-[250px]">
+                <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                  Bill / Invoice Number
+                </label>
+                <input
+                  className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                  placeholder="Enter bill or invoice number"
+                  value={globalPurchaseDetails.billNumber}
+                  onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, billNumber: e.target.value }))}
+                />
+              </div>
+            </div>
 
-                    {/* Suggestions (only for the active row) */}
-                    {focusedRowIndex === index && showSuggestions && nameSuggestions.length > 0 && (
-                      <div className="absolute z-[100] left-0 right-0 mt-1 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-md shadow-xl overflow-hidden max-h-48 overflow-y-auto">
-                        <div className="bg-[rgb(var(--color-surface-2))] px-3 py-1.5 border-b border-[rgb(var(--color-border))]">
-                          <p className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider">Suggested from your clinic</p>
-                        </div>
-                        {nameSuggestions.map((suggestion) => (
+            {/* Medicines Table */}
+            <div className="overflow-x-auto border border-[rgb(var(--color-border))] rounded-lg">
+              <table className="w-full text-left whitespace-nowrap min-w-[1200px]">
+                <thead className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                  <tr>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider">#</th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[180px]">Medicine Name <span className="text-danger">*</span></th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[140px]">Generic Name</th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Type</th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">Strength</th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">Init. Stock</th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Batch No.</th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[130px]">Expiry Date</th>
+                    {clinicSettings?.sellsMedicines && (
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Sale Price <span className="text-danger">*</span></th>
+                    )}
+                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Cost Price</th>
+                    {!currentMedicine && <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider text-center">Action</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[rgb(var(--color-border))]">
+                  {formDataList.map((formData, index) => (
+                    <tr key={index} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
+                      <td className="px-3 py-2 text-[12px] font-medium text-[rgb(var(--color-text-muted))]">{index + 1}</td>
+                      
+                      <td className="px-2 py-2 relative">
+                        <input
+                          required
+                          autoComplete="off"
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                          name="name"
+                          placeholder="Medicine name"
+                          value={formData.name}
+                          onChange={(e) => handleChange(index, e)}
+                          onKeyDown={handleKeyDown}
+                        />
+                        {/* Suggestions */}
+                        {focusedRowIndex === index && showSuggestions && nameSuggestions.length > 0 && (
+                          <div className="absolute z-[100] left-2 right-2 top-full mt-1 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-md shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                            {nameSuggestions.map((suggestion) => (
+                              <button
+                                key={suggestion.id}
+                                className="w-full text-left px-3 py-2 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
+                                type="button"
+                                onClick={() => handleSelectSuggestion(index, suggestion)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[12px] font-semibold text-[rgb(var(--color-text))] group-hover:text-primary transition-colors">
+                                    {suggestion.name}
+                                  </span>
+                                  <span className="text-[10px] text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1.5 py-0.5 rounded border border-[rgb(var(--color-border))]">
+                                    {suggestion.type}
+                                  </span>
+                                </div>
+                                {suggestion.genericName && (
+                                  <p className="text-[10px] text-[rgb(var(--color-text-muted)/0.7)] mt-0.5">
+                                    {suggestion.genericName}
+                                  </p>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="px-2 py-2">
+                        <input
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                          name="genericName"
+                          placeholder="Generic name"
+                          value={formData.genericName}
+                          onChange={(e) => handleChange(index, e)}
+                        />
+                      </td>
+
+                      <td className="px-2 py-2">
+                        <div className="flex gap-1 items-center">
+                          <div className="flex-1">
+                            {formData.isAddingType ? (
+                              <input
+                                className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
+                                placeholder="New type"
+                                value={formData.newTypeName}
+                                onChange={(e) => {
+                                  const newList = [...formDataList];
+                                  newList[index].newTypeName = e.target.value;
+                                  newList[index].type = e.target.value;
+                                  setFormDataList(newList);
+                                }}
+                              />
+                            ) : (
+                              <select
+                                className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                                name="type"
+                                value={formData.type}
+                                onChange={(e) => handleSelectChange(index, "type", e.target.value)}
+                              >
+                                {medicineTypes.map((item) => (
+                                  <option key={item.key} value={item.key}>{item.label}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
                           <button
-                            key={suggestion.id}
-                            className="w-full text-left px-3 py-2 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
                             type="button"
+                            className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                            title={formData.isAddingType ? "Select Existing Type" : "Add New Type"}
                             onClick={() => {
-                              handleSelectSuggestion(index, suggestion);
+                              const newList = [...formDataList];
+                              newList[index].isAddingType = !newList[index].isAddingType;
+                              if (!newList[index].isAddingType) newList[index].newTypeName = "";
+                              setFormDataList(newList);
                             }}
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[13px] font-semibold text-[rgb(var(--color-text))] group-hover:text-primary transition-colors">
-                                {suggestion.name}
-                              </span>
-                              <span className="text-[11px] text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1.5 py-0.5 rounded border border-[rgb(var(--color-border))]">
-                                {suggestion.type}
-                              </span>
-                            </div>
-                            {suggestion.genericName && (
-                              <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.7)] mt-0.5">
-                                {suggestion.genericName}
-                              </p>
-                            )}
+                            {formData.isAddingType ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
                           </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      </td>
 
-                  {/* Supplier */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
-                        Supplier
-                      </label>
-                      <button
-                        className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
-                        type="button"
-                        onClick={() => {
-                          const newList = [...formDataList];
-                          newList[index].isAddingSupplier = !newList[index].isAddingSupplier;
-                          if (!newList[index].isAddingSupplier) newList[index].newSupplierName = "";
-                          setFormDataList(newList);
-                        }}
-                      >
-                        {formData.isAddingSupplier ? "Select Existing" : "Add New"}
-                      </button>
-                    </div>
-                    {formData.isAddingSupplier ? (
-                      <input
-                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
-                        placeholder="New supplier name"
-                        value={formData.newSupplierName}
-                        onChange={(e) => {
-                          const newList = [...formDataList];
-                          newList[index].newSupplierName = e.target.value;
-                          setFormDataList(newList);
-                        }}
-                      />
-                    ) : (
-                      <select
-                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                        name="supplierId"
-                        value={formData.supplierId}
-                        onChange={(e) => handleSelectChange(index, "supplierId", e.target.value)}
-                      >
-                        <option value="">No Supplier</option>
-                        {suppliers.map((supplier) => (
-                          <option key={supplier.id} value={supplier.id}>
-                            {supplier.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  {/* Generic Name */}
-                  <div>
-                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                      Generic Name
-                    </label>
-                    <input
-                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                      name="genericName"
-                      placeholder="Generic name"
-                      value={formData.genericName}
-                      onChange={(e) => handleChange(index, e)}
-                    />
-                  </div>
-
-                  {/* Type */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
-                        Type
-                      </label>
-                      <button
-                        className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
-                        type="button"
-                        onClick={() => {
-                          const newList = [...formDataList];
-                          newList[index].isAddingType = !newList[index].isAddingType;
-                          if (!newList[index].isAddingType) newList[index].newTypeName = "";
-                          setFormDataList(newList);
-                        }}
-                      >
-                        {formData.isAddingType ? "Select Existing" : "Add New"}
-                      </button>
-                    </div>
-                    {formData.isAddingType ? (
-                      <input
-                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
-                        placeholder="New type name"
-                        value={formData.newTypeName}
-                        onChange={(e) => {
-                          const newList = [...formDataList];
-                          newList[index].newTypeName = e.target.value;
-                          newList[index].type = e.target.value;
-                          setFormDataList(newList);
-                        }}
-                      />
-                    ) : (
-                      <select
-                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                        name="type"
-                        value={formData.type}
-                        onChange={(e) => handleSelectChange(index, "type", e.target.value)}
-                      >
-                        {medicineTypes.map((item) => (
-                          <option key={item.key} value={item.key}>{item.label}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  {/* Strength */}
-                  <div>
-                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                      Strength
-                    </label>
-                    <input
-                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                      name="strength"
-                      placeholder="e.g. 500mg"
-                      value={formData.strength}
-                      onChange={(e) => handleChange(index, e)}
-                    />
-                  </div>
-
-                  {/* Unit */}
-                  <div>
-                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                      Unit
-                    </label>
-                    <select
-                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                      name="unit"
-                      value={formData.unit}
-                      onChange={(e) => handleSelectChange(index, "unit", e.target.value)}
-                    >
-                      {medicineUnits.map((item) => (
-                        <option key={item.key} value={item.key}>{item.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Initial Stock */}
-                  <div>
-                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                      Initial Stock
-                    </label>
-                    <input
-                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                      name="currentStock"
-                      placeholder="Enter initial quantity"
-                      type="number"
-                      value={formData.currentStock}
-                      onChange={(e) => handleChange(index, e)}
-                    />
-                  </div>
-
-                  {/* Additional Details Section */}
-                  <div className="col-span-full mt-4 pt-4 border-t border-[rgb(var(--color-border)/0.5)]">
-                    <h4 className="text-[12px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-4">
-                      Additional Details
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {/* Batch Number */}
-                      <div>
-                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                          Batch Number
-                        </label>
+                      <td className="px-2 py-2">
                         <input
-                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                          name="strength"
+                          placeholder="e.g. 500mg"
+                          value={formData.strength}
+                          onChange={(e) => handleChange(index, e)}
+                        />
+                      </td>
+
+                      <td className="px-2 py-2">
+                        <input
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                          name="currentStock"
+                          placeholder="0"
+                          type="number"
+                          value={formData.currentStock}
+                          onChange={(e) => handleChange(index, e)}
+                        />
+                      </td>
+
+                      <td className="px-2 py-2">
+                        <input
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
                           name="batchNumber"
-                          placeholder="Enter batch number"
+                          placeholder="Batch no."
                           value={formData.batchNumber}
                           onChange={(e) => handleChange(index, e)}
                         />
-                      </div>
+                      </td>
 
-                      {/* Expiry Date */}
-                      <div>
-                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                          Expiry Date
-                        </label>
+                      <td className="px-2 py-2">
                         <input
-                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
                           name="expiryDate"
                           type="date"
                           value={formData.expiryDate}
                           onChange={(e) => handleChange(index, e)}
                         />
-                      </div>
+                      </td>
 
-                      {/* Sale Price */}
                       {clinicSettings?.sellsMedicines && (
-                        <div>
-                          <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                            Sale Price (NPR) <span className="text-danger">*</span>
-                          </label>
-                          <div className="flex clarity-input h-9 w-full p-0 overflow-hidden focus-within:border-primary transition-colors">
-                            <div className="bg-[rgb(var(--color-surface-2))] px-3 border-r border-[rgb(var(--color-border))] flex items-center text-[10px] text-[rgb(var(--color-text-muted))] font-bold shrink-0">
-                              NPR
-                            </div>
-                            <input
-                              className="flex-1 bg-transparent px-3 text-[13px] outline-none h-full w-full"
-                              name="price"
-                              placeholder="0.00"
-                              type="number"
-                              value={formData.price}
-                              onChange={(e) => handleChange(index, e)}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Cost Price */}
-                      <div>
-                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                          Cost Price (NPR)
-                        </label>
-                        <div className="flex clarity-input h-9 w-full p-0 overflow-hidden focus-within:border-primary transition-colors">
-                          <div className="bg-[rgb(var(--color-surface-2))] px-3 border-r border-[rgb(var(--color-border))] flex items-center text-[10px] text-[rgb(var(--color-text-muted))] font-bold shrink-0">
-                            NPR
-                          </div>
+                        <td className="px-2 py-2">
                           <input
-                            className="flex-1 bg-transparent px-3 text-[13px] outline-none h-full w-full"
-                            name="costPrice"
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="price"
                             placeholder="0.00"
                             type="number"
-                            value={formData.costPrice}
+                            value={formData.price}
                             onChange={(e) => handleChange(index, e)}
                           />
-                        </div>
-                      </div>
+                        </td>
+                      )}
 
-                      {/* Barcode */}
-                      <div>
-                        <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                          Barcode
-                        </label>
+                      <td className="px-2 py-2">
                         <input
-                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                          name="barcode"
-                          placeholder="Enter barcode"
-                          value={formData.barcode}
+                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                          name="costPrice"
+                          placeholder="0.00"
+                          type="number"
+                          value={formData.costPrice}
                           onChange={(e) => handleChange(index, e)}
                         />
-                      </div>
-                    </div>
+                      </td>
 
-                    {/* Description - Full Width */}
-                    <div className="mt-4">
-                      <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                        Description
-                      </label>
-                      <textarea
-                        className="clarity-input w-full text-[13px] px-3 py-2 rounded-md min-h-[60px]"
-                        name="description"
-                        placeholder="Enter medicine description"
-                        rows={2}
-                        value={formData.description}
-                        onChange={(e) => handleChange(index, e)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                      {!currentMedicine && (
+                        <td className="px-3 py-2 text-center">
+                          {formDataList.length > 1 && (
+                            <button
+                              className="w-7 h-7 mx-auto rounded bg-red-50 text-red-600 border border-red-200 flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm"
+                              type="button"
+                              title="Remove"
+                              onClick={() => removeRow(index)}
+                            >
+                              <IoCloseOutline className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {!currentMedicine && (
-              <button
-                className="w-full py-4 border-2 border-dashed border-[rgb(var(--color-border))] rounded-lg flex items-center justify-center gap-2 text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-surface-2))] hover:text-primary hover:border-primary/30 transition-all group"
-                type="button"
-                onClick={addRow}
-              >
-                <IoAddCircleOutline className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-[14px]">Add Another Medicine to Batch</span>
-              </button>
+              <div className="flex justify-start">
+                <button
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-[13px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all group"
+                  type="button"
+                  onClick={addRow}
+                >
+                  <IoAddCircleOutline className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  <span>Add Another Row</span>
+                </button>
+              </div>
             )}
           </div>
         </ModalShell>

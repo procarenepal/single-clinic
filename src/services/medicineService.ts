@@ -650,16 +650,13 @@ export const medicineService = {
         constraints.push(where("branchId", "==", branchId));
       }
 
-      constraints.push(orderBy("createdAt", "desc"));
-      constraints.push(limit(limitCount));
-
       const q = query(
         collection(db, STOCK_TRANSACTIONS_COLLECTION),
         ...constraints,
       );
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const transactions = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -670,12 +667,17 @@ export const medicineService = {
           isSchemeStock: data.isSchemeStock ?? false, // Default to false for backward compatibility
         } as StockTransaction;
       });
+
+      // Sort in-memory to avoid compound index requirements
+      transactions.sort((a, b) => {
+        const timeA = a.createdAt?.getTime() || 0;
+        const timeB = b.createdAt?.getTime() || 0;
+        return timeB - timeA; // Descending
+      });
+
+      // Apply limit in memory
+      return transactions.slice(0, limitCount);
     } catch (error: any) {
-      // If it's an index error, log a warning instead of an error and return empty array
-      if (error?.message?.includes("index")) {
-        console.warn("Stock transactions query requires an index. Expiry date features may be limited until index is created. Fallback active.");
-        return [];
-      }
       console.error("Error fetching stock transactions:", error);
       throw error;
     }
@@ -1313,20 +1315,18 @@ export const medicineService = {
           where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("supplierId", "==", supplierId),
-          orderBy("createdAt", "asc"), // Order by creation time to show entries in the order they were created
         );
       } else {
         q = query(
           collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
           where("clinicId", "==", clinicId),
           where("supplierId", "==", supplierId),
-          orderBy("createdAt", "asc"),
         );
       }
 
       const snapshot = await getDocs(q);
 
-      return snapshot.docs.map((doc) => {
+      const entries = snapshot.docs.map((doc) => {
         const data = doc.data() as any;
 
         return {
@@ -1336,6 +1336,13 @@ export const medicineService = {
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
         } as SupplierLedgerEntry;
+      });
+
+      // Sort in memory by createdAt to avoid composite index requirement
+      return entries.sort((a, b) => {
+        const timeA = a.createdAt?.getTime() || 0;
+        const timeB = b.createdAt?.getTime() || 0;
+        return timeA - timeB;
       });
     } catch (error) {
       console.error("Error loading supplier ledger entries:", error);
