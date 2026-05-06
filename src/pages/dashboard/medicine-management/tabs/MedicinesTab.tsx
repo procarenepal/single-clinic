@@ -14,6 +14,9 @@ import {
   IoCloseOutline,
   IoChevronBackOutline,
   IoChevronForwardOutline,
+  IoAlertCircleOutline,
+  IoCalendarOutline,
+  IoLayersOutline,
 } from "react-icons/io5";
 
 import { addToast } from "@/components/ui/toast";
@@ -164,6 +167,18 @@ export default function MedicinesTab({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
   const [newTypeName, setNewTypeName] = useState("");
+  const [expiryStats, setExpiryStats] = useState({
+    expired: 0,
+    urgent: 0,
+    warning: 0,
+    lowStock: 0
+  });
+
+  const [activeFilterType, setActiveFilterType] = useState<string | null>(filterType || null);
+
+  useEffect(() => {
+    if (filterType) setActiveFilterType(filterType);
+  }, [filterType]);
 
   const [formDataList, setFormDataList] = useState<any[]>([
     {
@@ -338,6 +353,7 @@ export default function MedicinesTab({
     fetchCategories();
     fetchSuppliers();
     fetchMasterMedicines();
+    fetchExpiryStats();
   }, [
     clinicId,
     filterType,
@@ -358,6 +374,44 @@ export default function MedicinesTab({
       setMasterMedicines(data);
     } catch (error) {
       console.error("Error fetching master medicines:", error);
+    }
+  };
+
+  const fetchExpiryStats = async () => {
+    if (!clinicId) return;
+    try {
+      // Fetch 90 days ahead to categorize
+      const warnings = await medicineService.getExpiringMedicines(clinicId, 90);
+      const lowStock = await medicineService.getLowStockItems(clinicId);
+      
+      const now = new Date();
+      const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      
+      let expired = 0;
+      let urgent = 0;
+      let warning = 0;
+
+      warnings.forEach(m => {
+        const rawExp = medicineExpiryDates[m.id] || m.expiryDate;
+        const expiryDate = rawExp
+          ? (rawExp instanceof Date ? rawExp : (typeof (rawExp as any)?.toDate === 'function' ? (rawExp as any).toDate() : new Date(rawExp)))
+          : null;
+
+        if (expiryDate) {
+          if (expiryDate < now) expired++;
+          else if (expiryDate < thirtyDays) urgent++;
+          else warning++;
+        }
+      });
+
+      setExpiryStats({
+        expired,
+        urgent,
+        warning,
+        lowStock: lowStock.length
+      });
+    } catch (error) {
+      console.warn("Error fetching expiry stats:", error);
     }
   };
 
@@ -555,6 +609,14 @@ export default function MedicinesTab({
     }, 0);
   };
 
+  const handleBlur = () => {
+    // Small delay to allow click on suggestion to register before closing
+    setTimeout(() => {
+      setShowSuggestions(false);
+      setFocusedRowIndex(null);
+    }, 150);
+  };
+
   const addRow = () => {
     setFormDataList((prev) => [
       ...prev,
@@ -599,6 +661,7 @@ export default function MedicinesTab({
     });
     setNameSuggestions([]);
     setShowSuggestions(false);
+    setFocusedRowIndex(null);
   };
 
   const handleKeyDown = (
@@ -1332,6 +1395,30 @@ export default function MedicinesTab({
     return expiryDate <= alertDate;
   };
 
+  const isExpired = (medicine: Medicine) => {
+    const rawExp = medicineExpiryDates[medicine.id] || medicine.expiryDate;
+    if (!rawExp) return false;
+    const expiryDate = rawExp instanceof Date ? rawExp : (typeof (rawExp as any)?.toDate === 'function' ? (rawExp as any).toDate() : new Date(rawExp));
+    return expiryDate < new Date();
+  };
+
+  const isUrgentExpiry = (medicine: Medicine) => {
+    const rawExp = medicineExpiryDates[medicine.id] || medicine.expiryDate;
+    if (!rawExp) return false;
+    const expiryDate = rawExp instanceof Date ? rawExp : (typeof (rawExp as any)?.toDate === 'function' ? (rawExp as any).toDate() : new Date(rawExp));
+    const thirtyDays = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
+    return expiryDate >= new Date() && expiryDate < thirtyDays;
+  };
+
+  const isWarningExpiry = (medicine: Medicine) => {
+    const rawExp = medicineExpiryDates[medicine.id] || medicine.expiryDate;
+    if (!rawExp) return false;
+    const expiryDate = rawExp instanceof Date ? rawExp : (typeof (rawExp as any)?.toDate === 'function' ? (rawExp as any).toDate() : new Date(rawExp));
+    const thirtyDays = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
+    const ninetyDays = new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000);
+    return expiryDate >= thirtyDays && expiryDate < ninetyDays;
+  };
+
   // Helper function to get supplier/manufacturer display text
   const getSupplierOrManufacturer = (
     medicine: Medicine,
@@ -1359,12 +1446,18 @@ export default function MedicinesTab({
           .includes(searchQuery.toLowerCase());
 
       if (!matchesSearch) return false;
-      if (!filterType) return true;
-      switch (filterType) {
+      if (!activeFilterType) return true;
+      switch (activeFilterType) {
         case "lowStock":
           return isLowStock(medicine);
         case "expiring":
           return isExpiring(medicine);
+        case "expired":
+          return isExpired(medicine);
+        case "urgent":
+          return isUrgentExpiry(medicine);
+        case "warning":
+          return isWarningExpiry(medicine);
         default:
           return true;
       }
@@ -1427,6 +1520,101 @@ export default function MedicinesTab({
 
   return (
     <div className="space-y-6">
+      {/* Medicine Summary Radar */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <button 
+          type="button"
+          onClick={() => setActiveFilterType(activeFilterType === "expired" ? null : "expired")}
+          className={`p-4 rounded-xl border transition-all text-left group ${
+            activeFilterType === "expired" 
+              ? "bg-rose-500/10 border-rose-500/50 shadow-lg shadow-rose-500/5" 
+              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-rose-500/30"
+          }`}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
+              <IoCloseCircleOutline className="w-5 h-5" />
+            </div>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+              expiryStats.expired > 0 ? "bg-rose-500 text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+            }`}>
+              {expiryStats.expired} Items
+            </span>
+          </div>
+          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Expired</h3>
+          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Immediate action required</p>
+        </button>
+
+        <button 
+          type="button"
+          onClick={() => setActiveFilterType(activeFilterType === "urgent" ? null : "urgent")}
+          className={`p-4 rounded-xl border transition-all text-left group ${
+            activeFilterType === "urgent"
+              ? "bg-amber-500/10 border-amber-500/50 shadow-lg shadow-amber-500/5" 
+              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-amber-500/30"
+          }`}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+              <IoAlertCircleOutline className="w-5 h-5" />
+            </div>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+              expiryStats.urgent > 0 ? "bg-amber-500 text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+            }`}>
+              {expiryStats.urgent} Items
+            </span>
+          </div>
+          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Urgent Expiry</h3>
+          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Expiring within 30 days</p>
+        </button>
+
+        <button 
+          type="button"
+          onClick={() => setActiveFilterType(activeFilterType === "warning" ? null : "warning")}
+          className={`p-4 rounded-xl border transition-all text-left group ${
+            activeFilterType === "warning"
+              ? "bg-primary/10 border-primary/50 shadow-lg shadow-primary/5" 
+              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-primary/30"
+          }`}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <IoCalendarOutline className="w-5 h-5" />
+            </div>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+              activeFilterType === "warning" ? "bg-primary text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+            }`}>
+              {expiryStats.warning} Items
+            </span>
+          </div>
+          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Upcoming Expiry</h3>
+          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Expiring within 90 days</p>
+        </button>
+
+        <button 
+          type="button"
+          onClick={() => setActiveFilterType(activeFilterType === "lowStock" ? null : "lowStock")}
+          className={`p-4 rounded-xl border transition-all text-left group ${
+            activeFilterType === "lowStock" 
+              ? "bg-teal-500/10 border-teal-500/50 shadow-lg shadow-teal-500/5" 
+              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-teal-500/30"
+          }`}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <div className="p-2 rounded-lg bg-teal-500/10 text-teal-500">
+              <IoLayersOutline className="w-5 h-5" />
+            </div>
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+              activeFilterType === "lowStock" ? "bg-teal-500 text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+            }`}>
+              {expiryStats.lowStock} Items
+            </span>
+          </div>
+          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Low Stock</h3>
+          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Below reorder levels</p>
+        </button>
+      </div>
+
       {/* Header actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="w-full sm:max-w-md">
@@ -2128,6 +2316,7 @@ export default function MedicinesTab({
                           value={formData.name}
                           onChange={(e) => handleChange(index, e)}
                           onFocus={() => handleFocus(index)}
+                          onBlur={handleBlur}
                           onKeyDown={handleKeyDown}
                         />
                         {/* Suggestions */}
@@ -2139,7 +2328,7 @@ export default function MedicinesTab({
                                   key={suggestion.id}
                                   className="w-full text-left px-3 py-2.5 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
                                   type="button"
-                                  onClick={() => handleSelectSuggestion(index, suggestion)}
+                                  onMouseDown={() => handleSelectSuggestion(index, suggestion)}
                                 >
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="flex-1 overflow-hidden">
