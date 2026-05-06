@@ -120,7 +120,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const isActive = isPathActive(item);
 
     const itemBase = clsx(
-      "relative group flex items-center px-3 py-1 text-[13.5px] font-medium rounded-xl transition-all duration-300 select-none cursor-pointer mb-0",
+      "relative group flex items-center px-3 py-1 text-[14px] font-medium rounded-xl transition-all duration-300 select-none cursor-pointer mb-0",
       level > 0 && "ml-3",
       isActive
         ? "text-primary"
@@ -145,7 +145,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Clickable link area */}
             <Link
               className={clsx(
-                "relative flex items-center flex-1 px-3 py-1 text-[13.5px] font-medium transition-all duration-300 rounded-l-xl",
+                "relative flex items-center flex-1 px-3 py-1 text-[14.5px] font-medium transition-all duration-300 rounded-l-xl",
                 isActive
                   ? "text-primary font-semibold"
                   : "text-text-muted hover:text-text-main hover:bg-primary/5 dark:hover:bg-primary/10",
@@ -305,7 +305,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   return (
                     <div key={cat} className="space-y-0.5">
                       {cat !== "MAIN" && (
-                        <div className="px-4 pt-1.5 pb-0 text-[11px] font-bold text-primary/40 uppercase tracking-[0.1em]">
+                        <div className="px-4 pt-1.5 pb-0 text-[12px] font-bold text-primary/70 uppercase tracking-[0.1em]">
                           {cat}
                         </div>
                       )}
@@ -330,7 +330,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Bottom action */}
           <div className="px-4 py-3 shrink-0 border-t border-border-base bg-surface-2/30 flex gap-2">
             <Button
-              className="flex-1 text-[12.5px] h-[32px] text-text-muted hover:bg-surface-3 hover:text-primary transition-all duration-200"
+              className="flex-1 text-[13.5px] h-[32px] text-text-muted hover:bg-surface-3 hover:text-primary transition-all duration-200"
               color="default"
               size="sm"
               startContent={<IoHeadsetOutline className="w-4 h-4" />}

@@ -180,12 +180,12 @@ function StatCard({
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                   <div className={`w-1.5 h-1.5 rounded-full ${alert ? 'bg-red-500 animate-pulse' : 'bg-primary'}`} />
-                  <p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-text-muted whitespace-nowrap">
+                  <p className="text-[9px] font-black uppercase tracking-[0.08em] text-text-muted whitespace-nowrap">
                     {label}
                   </p>
                 </div>
                 <p
-                  className={`text-[18px] font-bold leading-none tracking-tight ${alert ? "text-red-500" : "text-text-main"}`}
+                  className={`text-[16px] font-black leading-none tracking-tight ${alert ? "text-red-500" : "text-text-main"}`}
                 >
                   {typeof value === "number" ? value.toLocaleString() : value}
                 </p>
@@ -233,7 +233,7 @@ function WelcomeHero({
   return (
     <motion.div
       variants={itemVariants}
-      className="relative overflow-hidden rounded-[10px] bg-surface border border-border-base p-3.5 shadow-sm mb-1"
+      className="relative overflow-hidden rounded-[10px] bg-surface border border-border-base p-3 shadow-sm mb-1"
     >
       {/* Abstract background elements */}
       <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
@@ -241,12 +241,12 @@ function WelcomeHero({
 
       <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-[16px] font-bold text-text-main leading-tight tracking-tight">
+          <h2 className="text-[14px] font-black text-text-main leading-tight tracking-tight">
             {greeting}, <span className="text-primary">{name}!</span> 👋
           </h2>
-          <p className="text-[13px] text-text-muted mt-1 font-medium max-w-[480px] leading-relaxed">
+          <p className="text-[12px] text-text-muted mt-1 font-semibold max-w-[480px] leading-tight">
             Welcome back to the clinic command center. You have{" "}
-            <span className="text-text-main font-semibold">
+            <span className="text-text-main font-bold">
               {stats.todaysAppointments} appointments
             </span>{" "}
             scheduled for today.

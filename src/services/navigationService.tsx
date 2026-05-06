@@ -1,4 +1,5 @@
 // src/services/navigationService.tsx
+// Updated with Accounts and HR
 import {
   IoGridOutline,
 } from "react-icons/io5";
@@ -46,12 +47,15 @@ class NavigationService {
       "Bed Management",
       "Pharmacy",
       "Pathology",
+      "HR Management",
     ];
     const OPERATIONS = [
       "Communication",
       "Billing",
       "Appointment Billing",
       "Front Office",
+      "Accounts",
+      "Inventory",
     ];
 
     if (CORE.includes(title)) return "MAIN";
@@ -110,6 +114,24 @@ class NavigationService {
         icon: <Icons.IoAppsOutline className="w-5 h-5" />,
         children: [],
       },
+      {
+        title: "Accounts",
+        href: "/dashboard/accounts",
+        icon: <Icons.IoCardOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
+        title: "HR Management",
+        href: "/dashboard/hr",
+        icon: <Icons.IoPeopleOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
+        title: "Inventory",
+        href: "/dashboard/inventory",
+        icon: <Icons.IoCubeOutline className="w-5 h-5" />,
+        children: [],
+      },
     ];
 
     // Get pages assigned to the system
@@ -124,6 +146,9 @@ class NavigationService {
     if (availablePages.length > 0) {
       // Filter and add parent pages
       availablePages.forEach((page) => {
+        // Prevent duplicates for core modules
+        if (items.some(item => item.title === page.name)) return;
+
         if (
           page.path !== "/dashboard" &&
           !page.parentId
@@ -169,10 +194,12 @@ class NavigationService {
       "Bed Management",
       "Pharmacy",
       "Pathology",
+      "HR Management",
       "Communication",
       "Billing",
       "Appointment Billing",
       "Front Office",
+      "Accounts",
       "Reports",
       "Inventory",
       "Text Editor",
@@ -209,6 +236,24 @@ class NavigationService {
         icon: <Icons.IoAppsOutline className="w-5 h-5" />,
         children: [],
       },
+      {
+        title: "Accounts",
+        href: "/dashboard/accounts",
+        icon: <Icons.IoCardOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
+        title: "Staff Management",
+        href: "/dashboard/hr",
+        icon: <Icons.IoPeopleOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
+        title: "Inventory",
+        href: "/dashboard/inventory",
+        icon: <Icons.IoCubeOutline className="w-5 h-5" />,
+        children: [],
+      },
     ];
 
     // Get accessible pages through RBAC
@@ -240,6 +285,9 @@ class NavigationService {
     if (userAccessiblePages.length > 0) {
       // Filter and add parent pages that the user has access to
       userAccessiblePages.forEach((page) => {
+        // Prevent duplicates for core modules
+        if (items.some(item => item.title === page.name)) return;
+
         if (
           page.path !== "/dashboard" &&
           !page.parentId
@@ -291,10 +339,12 @@ class NavigationService {
       "Bed Management",
       "Pharmacy",
       "Pathology",
+      "HR Management",
       "Communication",
       "Billing",
       "Appointment Billing",
       "Front Office",
+      "Accounts",
       "Reports",
       "Inventory",
       "Text Editor",
@@ -409,8 +459,11 @@ class NavigationService {
         "Experts",
         "Medicine Management",
         "Pharmacy",
+        "HR Management",
         "Communication",
+        "Accounts",
         "Settings",
+        "Inventory",
       ];
       navItems = navItems.filter((item) => allowedTitles.includes(item.title));
     } catch (error) {

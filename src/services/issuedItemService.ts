@@ -150,19 +150,75 @@ export const issuedItemService = {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
       const now = Timestamp.now();
 
-      const docRef = await addDoc(issuedItemsRef, {
+      // Helper to handle both Date and Timestamp
+      const toTimestamp = (date: any) => {
+        if (!date) return null;
+        if (date instanceof Timestamp) return date;
+        return Timestamp.fromDate(new Date(date));
+      };
+
+      // Sanitize undefined fields
+      const sanitize = (obj: any) => {
+        const cleaned: any = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) cleaned[key] = obj[key];
+        });
+        return cleaned;
+      };
+
+      const docRef = await addDoc(issuedItemsRef, sanitize({
         ...issuedItemData,
-        issuedDate: Timestamp.fromDate(issuedItemData.issuedDate),
-        expectedReturnDate: issuedItemData.expectedReturnDate
-          ? Timestamp.fromDate(issuedItemData.expectedReturnDate)
-          : null,
+        issuedDate: toTimestamp(issuedItemData.issuedDate),
+        expectedReturnDate: toTimestamp(issuedItemData.expectedReturnDate),
         createdAt: now,
         updatedAt: now,
-      });
+      }));
 
       return docRef.id;
     } catch (error) {
       console.error("Error issuing item:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Create an issued item record (internal or manual)
+   */
+  async createIssuedItem(
+    issuedItemData: Omit<IssuedItem, "id">,
+  ): Promise<string> {
+    try {
+      const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
+      const now = Timestamp.now();
+      const { id, ...dataToSave } = issuedItemData as any;
+
+      const toTimestamp = (date: any) => {
+        if (!date) return null;
+        if (date instanceof Timestamp) return date;
+        return Timestamp.fromDate(new Date(date));
+      };
+
+      // Sanitize undefined fields
+      const sanitize = (obj: any) => {
+        const cleaned: any = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) cleaned[key] = obj[key];
+        });
+        return cleaned;
+      };
+
+      const docRef = await addDoc(issuedItemsRef, sanitize({
+        ...dataToSave,
+        issuedDate: toTimestamp(issuedItemData.issuedDate),
+        returnDate: toTimestamp(issuedItemData.returnDate),
+        expectedReturnDate: toTimestamp(issuedItemData.expectedReturnDate),
+        createdAt: issuedItemData.createdAt ? toTimestamp(issuedItemData.createdAt) : now,
+        updatedAt: now,
+      }));
+
+      return docRef.id;
+    } catch (error) {
+      console.error("Error creating issued item:", error);
       throw error;
     }
   },
@@ -199,6 +255,22 @@ export const issuedItemService = {
   ): Promise<void> {
     try {
       const issuedItemRef = doc(db, ISSUED_ITEMS_COLLECTION, issuedItemId);
+      
+      const toTimestamp = (date: any) => {
+        if (!date) return null;
+        if (date instanceof Timestamp) return date;
+        return Timestamp.fromDate(new Date(date));
+      };
+
+      // Sanitize undefined fields
+      const sanitize = (obj: any) => {
+        const cleaned: any = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) cleaned[key] = obj[key];
+        });
+        return cleaned;
+      };
+
       const updateData: any = {
         ...issuedItemData,
         updatedAt: Timestamp.now(),
@@ -206,18 +278,16 @@ export const issuedItemService = {
 
       // Convert dates to Timestamp objects if provided
       if (issuedItemData.issuedDate) {
-        updateData.issuedDate = Timestamp.fromDate(issuedItemData.issuedDate);
+        updateData.issuedDate = toTimestamp(issuedItemData.issuedDate);
       }
       if (issuedItemData.returnDate) {
-        updateData.returnDate = Timestamp.fromDate(issuedItemData.returnDate);
+        updateData.returnDate = toTimestamp(issuedItemData.returnDate);
       }
       if (issuedItemData.expectedReturnDate) {
-        updateData.expectedReturnDate = Timestamp.fromDate(
-          issuedItemData.expectedReturnDate,
-        );
+        updateData.expectedReturnDate = toTimestamp(issuedItemData.expectedReturnDate);
       }
 
-      await updateDoc(issuedItemRef, updateData);
+      await updateDoc(issuedItemRef, sanitize(updateData));
     } catch (error) {
       console.error("Error updating issued item:", error);
       throw error;

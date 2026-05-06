@@ -241,79 +241,38 @@ export const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       )}
 
       {/* Upload Area */}
-      <Card>
-        <CardBody className="p-6">
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragOver
-                ? "border-primary bg-primary-50"
-                : "border-default-300 hover:border-primary hover:bg-default-50"
-            }`}
-            onDragLeave={() => setDragOver(false)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDrop={handleDrop}
-          >
-            {isUploading ? (
-              <div className="space-y-4">
-                <Spinner size="lg" />
-                <div>
-                  <p className="font-medium">Uploading to Appwrite...</p>
-                  <p className="text-sm text-default-500">
-                    Please wait while we securely store your file
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <IoCloudUploadOutline className="w-12 h-12 mx-auto text-default-400" />
-                <div>
-                  <p className="font-medium text-lg">
-                    {uploadType === "image"
-                      ? "Upload Image"
-                      : uploadType === "document"
-                        ? "Upload Document"
-                        : "Upload File"}
-                  </p>
-                  <p className="text-sm text-default-500">
-                    Drag and drop or click to browse (Max {maxSize}MB)
-                  </p>
-                </div>
-
-                <input
-                  accept={getAcceptedTypes()}
-                  className="hidden"
-                  id="file-upload"
-                  type="file"
-                  onChange={handleFileInput}
-                />
-
-                <Button
-                  as="label"
-                  className="cursor-pointer"
-                  color="primary"
-                  htmlFor="file-upload"
-                  startContent={<IoCloudUploadOutline />}
-                  variant="flat"
-                >
-                  Choose File
-                </Button>
-
-                <p className="text-xs text-default-400">
-                  Supported formats:{" "}
-                  {uploadType === "image"
-                    ? "JPG, PNG, GIF, WebP"
-                    : uploadType === "document"
-                      ? "PDF, DOC, DOCX, TXT, CSV, Excel"
-                      : "Images and Documents"}
-                </p>
-              </div>
-            )}
+      {/* Slim Upload Area */}
+      {!currentFile && (
+        <div className="flex items-center gap-4 p-2 border border-dashed border-default-300 rounded-lg bg-default-50/50">
+          <div className="flex-1 flex items-center gap-2 px-1">
+            <IoCloudUploadOutline className="w-5 h-5 text-default-400" />
+            <div className="flex flex-col">
+              <p className="font-semibold text-[11px] text-default-600 leading-tight">
+                {uploadType === "image" ? "Staff Photo" : "Upload File"}
+              </p>
+              <p className="text-[9px] text-default-400 leading-tight">Max {maxSize}MB</p>
+            </div>
           </div>
-        </CardBody>
-      </Card>
+          <input
+            accept={getAcceptedTypes()}
+            className="hidden"
+            id="file-upload"
+            type="file"
+            onChange={handleFileInput}
+          />
+          <Button
+            as="label"
+            className="cursor-pointer h-7 px-3 text-[10px] font-bold"
+            color="primary"
+            htmlFor="file-upload"
+            isLoading={isUploading}
+            size="sm"
+            variant="flat"
+          >
+            {isUploading ? "Uploading..." : "Choose File"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

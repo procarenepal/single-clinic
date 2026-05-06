@@ -43,10 +43,11 @@ export const itemService = {
         const data = doc.data();
 
         items.push({
-          id: doc.id,
           ...data,
+          id: doc.id,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
+          purchaseDate: data.purchaseDate?.toDate(),
         } as Item);
       });
 
@@ -68,12 +69,25 @@ export const itemService = {
       const itemsRef = collection(db, ITEMS_COLLECTION);
 
       const now = Timestamp.now();
-      const data = {
+      
+      // Sanitize undefined fields
+      const sanitize = (obj: any) => {
+        const cleaned: any = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) cleaned[key] = obj[key];
+        });
+        return cleaned;
+      };
+
+      const data = sanitize({
         ...itemData,
+        purchaseDate: itemData.purchaseDate ? 
+          (itemData.purchaseDate instanceof Timestamp ? itemData.purchaseDate : 
+           Timestamp.fromDate(new Date(itemData.purchaseDate))) : null,
         isActive: true,
         createdAt: now,
         updatedAt: now,
-      };
+      });
 
       const docRef = await addDoc(itemsRef, data);
 
@@ -98,10 +112,11 @@ export const itemService = {
         const data = docSnap.data();
 
         return {
-          id: docSnap.id,
           ...data,
+          id: docSnap.id,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
+          purchaseDate: data.purchaseDate?.toDate(),
         } as Item;
       }
 
@@ -123,10 +138,22 @@ export const itemService = {
       const docRef = doc(db, ITEMS_COLLECTION, id);
       const now = Timestamp.now();
 
-      await updateDoc(docRef, {
+      // Sanitize undefined fields
+      const sanitize = (obj: any) => {
+        const cleaned: any = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) cleaned[key] = obj[key];
+        });
+        return cleaned;
+      };
+
+      await updateDoc(docRef, sanitize({
         ...updates,
+        purchaseDate: updates.purchaseDate ? 
+          (updates.purchaseDate instanceof Timestamp ? updates.purchaseDate : 
+           Timestamp.fromDate(new Date(updates.purchaseDate as any))) : undefined,
         updatedAt: now,
-      });
+      }));
 
       console.log("Item updated successfully");
     } catch (error) {
@@ -183,10 +210,11 @@ export const itemService = {
         const data = doc.data();
 
         items.push({
-          id: doc.id,
           ...data,
+          id: doc.id,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
+          purchaseDate: data.purchaseDate?.toDate(),
         } as Item);
       });
 
@@ -231,10 +259,11 @@ export const itemService = {
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         const item = {
-          id: doc.id,
           ...data,
+          id: doc.id,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
+          purchaseDate: data.purchaseDate?.toDate(),
         } as Item;
 
         // Client-side filtering by name (case-insensitive)

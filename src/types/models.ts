@@ -669,6 +669,13 @@ export interface Item {
   category: string;
   unit?: string; // e.g., "piece", "box", "bottle"
   barcode?: string;
+  purchaseDate?: Date;
+  supplierName?: string;
+  condition?: "new" | "used" | "damaged";
+  itemType?: "asset" | "consumable"; // asset needs return, consumable is depleted
+  isDisposed?: boolean;
+  disposalDate?: Date;
+  disposalReason?: string;
   isActive: boolean;
   clinicId: string;
   branchId: string; // Associated branch
@@ -848,7 +855,97 @@ export type EnquiryStatus =
   | "contacted"
   | "scheduled"
   | "converted"
+  | "lost"
   | "closed";
+
+// ============= ACCOUNTS & FINANCIAL MODELS =============
+
+/**
+ * AccountBill model for tracking all purchase bills (Accounts Payable)
+ * This includes medicine purchases, hospital equipment, utilities, rent, etc.
+ */
+export interface AccountBill {
+  id: string;
+  category: "medicine" | "equipment" | "utility" | "salary" | "rent" | "office_supply" | "other";
+  itemName?: string; // Generic name for equipment, inventory, or assets
+  vendorName: string;
+  vendorId?: string; // Optional link to a Vendor or Supplier record
+  billNumber: string;
+  billDate: Date;
+  totalAmount: number;
+  paidAmount: number;
+  dueAmount: number;
+  paymentStatus: "paid" | "partial" | "pending";
+  paymentMethod?: string;
+  description?: string;
+  attachmentUrl?: string; // URL for the scanned bill/receipt file
+  clinicId: string;
+  branchId: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Vendor model for tracking non-medicine suppliers, utility companies, etc.
+ */
+export interface Vendor {
+  id: string;
+  name: string;
+  category: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  isActive: boolean;
+  clinicId: string;
+  branchId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+}
+
+// ============= HR & STAFF MODELS =============
+
+/**
+ * StaffMember model for tracking clinic employees
+ */
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: string;
+  age: number;
+  email: string;
+  phone: string;
+  photoUrl?: string;
+  joiningDate: Date;
+  salary: number;
+  status: "active" | "resigned" | "on_leave";
+  address?: string;
+  clinicId: string;
+  branchId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+}
+
+/**
+ * StaffAttendance model for tracking daily clock-in/out
+ */
+export interface StaffAttendance {
+  id: string;
+  staffId: string;
+  staffName: string;
+  date: Date;
+  checkIn: Date | null;
+  checkOut: Date | null;
+  status: "present" | "absent" | "late" | "half_day";
+  notes?: string;
+  clinicId: string;
+  branchId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface Enquiry {
   id: string;
@@ -1084,8 +1181,11 @@ export interface IssuedItem {
   quantity: number;
   issuedDate: Date;
   returnDate?: Date;
+  returnCondition?: "new" | "used" | "damaged";
+  returnNotes?: string;
   expectedReturnDate?: Date;
-  status: "issued" | "returned" | "overdue";
+  returnedQuantity?: number;
+  status: "issued" | "returned" | "overdue" | "consumed";
   issuedTo?: string; // Person or department
   issuedBy: string; // User ID who issued the item
   returnedBy?: string; // User ID who processed the return

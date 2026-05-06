@@ -46,8 +46,8 @@ export const itemCategoryService = {
         const data = doc.data();
 
         categories.push({
-          id: doc.id,
           ...data,
+          id: doc.id,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
         } as ItemCategory);
@@ -73,8 +73,8 @@ export const itemCategoryService = {
         const data = categorySnap.data();
 
         return {
-          id: categorySnap.id,
           ...data,
+          id: categorySnap.id,
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate(),
         } as ItemCategory;
@@ -97,11 +97,22 @@ export const itemCategoryService = {
       const categoriesRef = collection(db, ITEM_CATEGORIES_COLLECTION);
       const now = Timestamp.now();
 
-      const docRef = await addDoc(categoriesRef, {
-        ...categoryData,
+      const { id, ...dataToSave } = categoryData as any;
+      
+      // Sanitize undefined fields
+      const sanitize = (obj: any) => {
+        const cleaned: any = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) cleaned[key] = obj[key];
+        });
+        return cleaned;
+      };
+
+      const docRef = await addDoc(categoriesRef, sanitize({
+        ...dataToSave,
         createdAt: now,
         updatedAt: now,
-      });
+      }));
 
       return docRef.id;
     } catch (error) {
@@ -117,13 +128,24 @@ export const itemCategoryService = {
     categoryId: string,
     categoryData: Partial<Omit<ItemCategory, "id" | "createdAt" | "updatedAt">>,
   ): Promise<void> {
+    if (!categoryId) throw new Error("Category ID is required for update");
+    
+    // Sanitize undefined fields
+    const sanitize = (obj: any) => {
+      const cleaned: any = {};
+      Object.keys(obj).forEach(key => {
+        if (obj[key] !== undefined) cleaned[key] = obj[key];
+      });
+      return cleaned;
+    };
+
     try {
       const categoryRef = doc(db, ITEM_CATEGORIES_COLLECTION, categoryId);
 
-      await updateDoc(categoryRef, {
+      await updateDoc(categoryRef, sanitize({
         ...categoryData,
         updatedAt: Timestamp.now(),
-      });
+      }));
     } catch (error) {
       console.error("Error updating category:", error);
       throw error;
@@ -134,6 +156,7 @@ export const itemCategoryService = {
    * Delete an item category (soft delete)
    */
   async deleteCategory(categoryId: string): Promise<void> {
+    if (!categoryId) throw new Error("Category ID is required for deletion");
     try {
       const categoryRef = doc(db, ITEM_CATEGORIES_COLLECTION, categoryId);
 

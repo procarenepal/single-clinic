@@ -903,19 +903,20 @@ export default function MedicinesTab({
         if (currentMedicine) {
           await medicineService.updateMedicine(currentMedicine.id, medicineData);
           if (row.currentStock) {
-            const addedStock = parseFloat(row.currentStock);
+            const newAbsoluteStock = parseFloat(row.currentStock);
             const existingStock = await medicineService.getMedicineStock(currentMedicine.id, clinicId);
             const previousStock = existingStock?.currentStock || 0;
+            const delta = newAbsoluteStock - previousStock;
 
             if (existingStock) {
               await medicineService.updateMedicineStock(existingStock.id, {
-                currentStock: previousStock + addedStock,
+                currentStock: newAbsoluteStock,
                 updatedBy: userData.id,
               });
             } else {
               await medicineService.createMedicineStock({
                 medicineId: currentMedicine.id,
-                currentStock: addedStock,
+                currentStock: newAbsoluteStock,
                 schemeStock: 0,
                 minimumStock: 10,
                 reorderLevel: 20,
@@ -925,14 +926,14 @@ export default function MedicinesTab({
               });
             }
 
-            // Create stock transaction for audit
-            if (addedStock !== 0) {
+            // Create stock transaction for audit (as an adjustment during edit)
+            if (delta !== 0) {
               await medicineService.createStockTransaction({
                 medicineId: currentMedicine.id,
-                type: "purchase",
-                quantity: addedStock,
+                type: "adjustment",
+                quantity: delta,
                 previousStock: previousStock,
-                newStock: previousStock + addedStock,
+                newStock: newAbsoluteStock,
                 batchNumber: row.batchNumber,
                 expiryDate: row.expiryDate ? new Date(row.expiryDate) : null,
                 supplierId: finalSupplierId,
@@ -942,6 +943,7 @@ export default function MedicinesTab({
                 clinicId,
                 branchId: branchScopeId || "",
                 createdBy: userData.id,
+                reason: "Stock correction during medicine edit"
               });
             }
           }
@@ -2198,7 +2200,7 @@ export default function MedicinesTab({
               </button>
             </>
           }
-          size="5xl"
+          size={currentMedicine ? "4xl" : "5xl"}
           subtitle={
             <p className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.4)]">
               Manage core details, pricing, and inventory metadata.
@@ -2208,427 +2210,629 @@ export default function MedicinesTab({
           onClose={modalState.forceClose}
         >
           <div className="space-y-4">
-            {/* Global Purchase Details */}
-            <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
-              <div className="w-full md:w-[300px]">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
-                    Supplier
-                  </label>
-                  <button
-                    className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
-                    type="button"
-                    onClick={() => {
-                      setGlobalPurchaseDetails((prev) => ({
-                        ...prev,
-                        isAddingSupplier: !prev.isAddingSupplier,
-                        newSupplierName: !prev.isAddingSupplier ? prev.newSupplierName : "",
-                      }));
-                    }}
-                  >
-                    {globalPurchaseDetails.isAddingSupplier ? "Select Existing" : "Add New"}
-                  </button>
-                </div>
-                {globalPurchaseDetails.isAddingSupplier ? (
-                  <input
-                    className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
-                    placeholder="New supplier name"
-                    value={globalPurchaseDetails.newSupplierName}
-                    onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, newSupplierName: e.target.value }))}
-                  />
-                ) : (
-                  <select
-                    className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
-                    name="supplierId"
-                    value={globalPurchaseDetails.supplierId}
-                    onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, supplierId: e.target.value }))}
-                  >
-                    <option value="">No Supplier</option>
-                    {suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div className="w-full md:w-[250px]">
-                <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
-                  Bill / Invoice Number
-                </label>
-                <div className="relative">
-                  <input
-                    className="clarity-input h-9 w-full text-[13px] px-3 pr-16 rounded-md"
-                    placeholder="Enter bill or invoice number"
-                    value={globalPurchaseDetails.billNumber}
-                    onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, billNumber: e.target.value }))}
-                  />
-                  <button
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all"
-                    type="button"
-                    onClick={() => {
-                      setGlobalPurchaseDetails(prev => ({
-                        ...prev,
-                        billNumber: generateBillNumber()
-                      }));
-                    }}
-                  >
-                    GENERATE
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Medicines Table */}
-            <div className="overflow-x-auto border border-[rgb(var(--color-border))] rounded-lg min-h-[140px]">
-              <table className="w-full text-left whitespace-nowrap min-w-[1200px]">
-                <thead className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
-                  <tr>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider">#</th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[180px]">Medicine Name <span className="text-danger">*</span></th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[140px]">Generic Name</th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Type</th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">Strength</th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">Init. Stock</th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Batch No.</th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[130px]">Expiry Date</th>
-                    {clinicSettings?.sellsMedicines && (
-                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Sale Price <span className="text-danger">*</span></th>
-                    )}
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Cost Price</th>
-                    <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">VAT (%)</th>
-                    {!currentMedicine && <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider text-center">Action</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[rgb(var(--color-border))]">
-                  {formDataList.map((formData, index) => (
-                    <tr key={index} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
-                      <td className="px-3 py-2 text-[12px] font-medium text-[rgb(var(--color-text-muted))]">{index + 1}</td>
-
-                      <td className="px-2 py-2 relative">
-                        <input
-                          required
-                          autoComplete="off"
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="name"
-                          placeholder="Medicine name"
-                          value={formData.name}
-                          onChange={(e) => handleChange(index, e)}
-                          onFocus={() => handleFocus(index)}
-                          onBlur={handleBlur}
-                          onKeyDown={handleKeyDown}
-                        />
-                        {/* Suggestions */}
-                        {focusedRowIndex === index && showSuggestions && formDataList[index].name.trim().length >= 2 && (
-                          <div className="absolute z-[100] left-0 right-0 top-full mt-1 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-md shadow-xl overflow-hidden max-h-60 overflow-y-auto min-w-[250px]">
-                            {nameSuggestions.length > 0 ? (
-                              nameSuggestions.map((suggestion) => (
-                                <button
-                                  key={suggestion.id}
-                                  className="w-full text-left px-3 py-2.5 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
-                                  type="button"
-                                  onMouseDown={() => handleSelectSuggestion(index, suggestion)}
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="flex-1 overflow-hidden">
-                                      <div className="text-[12.5px] font-bold text-[rgb(var(--color-text))] group-hover:text-primary transition-colors truncate">
-                                        {suggestion.name}
-                                      </div>
-                                      {suggestion.genericName && (
-                                        <div className="text-[10px] text-[rgb(var(--color-text-muted))] truncate mt-0.5">
-                                          {suggestion.genericName}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1 shrink-0">
-                                      <span className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 uppercase">
-                                        {suggestion.type}
-                                      </span>
-                                      {suggestion.strength && (
-                                        <span className="text-[9px] text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1.5 py-0.5 rounded border border-[rgb(var(--color-border))]">
-                                          {suggestion.strength}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-4 py-3 text-center">
-                                <p className="text-[11px] text-[rgb(var(--color-text-muted))] italic">
-                                  No matches found for "{formDataList[index].name}"
-                                </p>
-                                <p className="text-[9px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">
-                                  You can continue typing to add it as a new medicine.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                <td className="px-2 py-2">
-                  <input
-                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                    name="genericName"
-                    placeholder="Generic name"
-                    value={formData.genericName}
-                    onChange={(e) => handleChange(index, e)}
-                  />
-                </td>
-
-                <td className="px-2 py-2">
-                  <div className="flex gap-1 items-center">
-                    <div className="flex-1">
-                      {formData.isAddingType ? (
-                        <input
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
-                          placeholder="New type"
-                          value={formData.newTypeName}
-                          onChange={(e) => {
-                            const newList = [...formDataList];
-                            newList[index].newTypeName = e.target.value;
-                            newList[index].type = e.target.value;
-                            setFormDataList(newList);
-                          }}
-                        />
-                      ) : (
-                        <select
-                          className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                          name="type"
-                          value={formData.type}
-                          onChange={(e) => handleSelectChange(index, "type", e.target.value)}
-                        >
-                          {medicineTypes.map((item) => (
-                            <option key={item.key} value={item.key}>{item.label}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
+            {!currentMedicine && (
+              <div className="flex flex-wrap gap-4 p-3 rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
+                <div className="w-full md:w-[300px]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
+                      Supplier
+                    </label>
                     <button
+                      className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
                       type="button"
-                      className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
-                      title={formData.isAddingType ? "Select Existing Type" : "Add New Type"}
                       onClick={() => {
-                        const newList = [...formDataList];
-                        newList[index].isAddingType = !newList[index].isAddingType;
-                        if (!newList[index].isAddingType) newList[index].newTypeName = "";
-                        setFormDataList(newList);
+                        setGlobalPurchaseDetails((prev) => ({
+                          ...prev,
+                          isAddingSupplier: !prev.isAddingSupplier,
+                          newSupplierName: !prev.isAddingSupplier ? prev.newSupplierName : "",
+                        }));
                       }}
                     >
-                      {formData.isAddingType ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                      {globalPurchaseDetails.isAddingSupplier ? "Select Existing" : "Add New"}
                     </button>
                   </div>
-                </td>
-
-                <td className="px-2 py-2">
-                  <input
-                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                    name="strength"
-                    placeholder="e.g. 500mg"
-                    value={formData.strength}
-                    onChange={(e) => handleChange(index, e)}
-                  />
-                </td>
-
-                <td className="px-2 py-2">
-                  <input
-                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                    name="currentStock"
-                    placeholder="0"
-                    type="number"
-                    value={formData.currentStock}
-                    onChange={(e) => handleChange(index, e)}
-                  />
-                </td>
-
-                <td className="px-2 py-2">
-                  <input
-                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                    name="batchNumber"
-                    placeholder="Batch no."
-                    value={formData.batchNumber}
-                    onChange={(e) => handleChange(index, e)}
-                  />
-                </td>
-
-                <td className="px-2 py-2">
-                  <input
-                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                    name="expiryDate"
-                    type="date"
-                    value={formData.expiryDate}
-                    onChange={(e) => handleChange(index, e)}
-                  />
-                </td>
-
-                {clinicSettings?.sellsMedicines && (
-                  <td className="px-2 py-2">
+                  {globalPurchaseDetails.isAddingSupplier ? (
                     <input
-                      className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                      name="price"
-                      placeholder="0.00"
-                      type="number"
-                      value={formData.price}
-                      onChange={(e) => handleChange(index, e)}
+                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
+                      placeholder="New supplier name"
+                      value={globalPurchaseDetails.newSupplierName}
+                      onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, newSupplierName: e.target.value }))}
                     />
-                  </td>
-                )}
-
-                <td className="px-2 py-2">
-                  <input
-                    className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                    name="costPrice"
-                    placeholder="0.00"
-                    type="number"
-                    value={formData.costPrice}
-                    onChange={(e) => handleChange(index, e)}
-                  />
-                  {formData.isVatApplied && formData.costPrice && (
-                    <p className="text-[10px] text-primary font-medium mt-1">
-                      Total: {(parseFloat(formData.costPrice) * (1 + parseFloat(formData.vatPercentage) / 100)).toFixed(2)}
-                    </p>
+                  ) : (
+                    <select
+                      className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                      name="supplierId"
+                      value={globalPurchaseDetails.supplierId}
+                      onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, supplierId: e.target.value }))}
+                    >
+                      <option value="">No Supplier</option>
+                      {suppliers.map((supplier) => (
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </option>
+                      ))}
+                    </select>
                   )}
-                </td>
+                </div>
 
-                <td className="px-2 py-2">
-                  <div className="flex items-center gap-2">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={formData.isVatApplied}
-                        onChange={(e) => {
-                          const newList = [...formDataList];
-                          newList[index].isVatApplied = e.target.checked;
-                          setFormDataList(newList);
-                        }}
-                      />
-                      <div className="w-8 h-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                    {formData.isVatApplied && (
-                      <div className="relative w-16">
+                <div className="w-full md:w-[250px]">
+                  <label className="text-[13px] font-semibold text-[rgb(var(--color-text))] mb-1.5 block">
+                    Bill / Invoice Number
+                  </label>
+                  <div className="relative">
+                    <input
+                      className="clarity-input h-9 w-full text-[13px] px-3 pr-16 rounded-md"
+                      placeholder="Enter bill or invoice number"
+                      value={globalPurchaseDetails.billNumber}
+                      onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, billNumber: e.target.value }))}
+                    />
+                    <button
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary/20 transition-all"
+                      type="button"
+                      onClick={() => {
+                        setGlobalPurchaseDetails(prev => ({
+                          ...prev,
+                          billNumber: generateBillNumber()
+                        }));
+                      }}
+                    >
+                      GENERATE
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Medicines Form or Table */}
+            {currentMedicine ? (
+              /* Single Edit Form Layout */
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-1">
+                {/* Basic Info Section */}
+                <div className="md:col-span-2 space-y-4">
+                  <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.1] space-y-4">
+                    <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2 mb-4">Basic Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Medicine Name <span className="text-danger">*</span></label>
                         <input
-                          className="clarity-input h-8 w-full text-[12px] pl-2 pr-4 rounded"
-                          name="vatPercentage"
-                          type="number"
-                          step="0.1"
-                          value={formData.vatPercentage}
-                          onChange={(e) => handleChange(index, e)}
+                          required
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          value={formDataList[0].name}
+                          onChange={(e) => handleChange(0, e)}
+                          name="name"
+                          placeholder="e.g. Amoxicillin"
                         />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[rgb(var(--color-text-muted)/0.5)]">%</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Generic Name</label>
+                        <input
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          value={formDataList[0].genericName}
+                          onChange={(e) => handleChange(0, e)}
+                          name="genericName"
+                          placeholder="Generic name"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Type</label>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            {formDataList[0].isAddingType ? (
+                              <input
+                                className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
+                                placeholder="New type"
+                                value={formDataList[0].newTypeName}
+                                onChange={(e) => {
+                                  const newList = [...formDataList];
+                                  newList[0].newTypeName = e.target.value;
+                                  newList[0].type = e.target.value;
+                                  setFormDataList(newList);
+                                }}
+                              />
+                            ) : (
+                              <select
+                                className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                                value={formDataList[0].type}
+                                onChange={(e) => handleSelectChange(0, "type", e.target.value)}
+                              >
+                                {medicineTypes.map((item) => (
+                                  <option key={item.key} value={item.key}>{item.label}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="w-9 h-9 flex items-center justify-center rounded-md border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                            onClick={() => {
+                              const newList = [...formDataList];
+                              newList[0].isAddingType = !newList[0].isAddingType;
+                              if (!newList[0].isAddingType) newList[0].newTypeName = "";
+                              setFormDataList(newList);
+                            }}
+                          >
+                            {formDataList[0].isAddingType ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Strength</label>
+                        <input
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          value={formDataList[0].strength}
+                          onChange={(e) => handleChange(0, e)}
+                          name="strength"
+                          placeholder="e.g. 500mg"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.1] space-y-4">
+                    <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2 mb-4">Inventory Details</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Current Stock</label>
+                        <input
+                          type="number"
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md bg-white"
+                          value={formDataList[0].currentStock}
+                          onChange={(e) => handleChange(0, e)}
+                          name="currentStock"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Batch No.</label>
+                        <input
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          value={formDataList[0].batchNumber}
+                          onChange={(e) => handleChange(0, e)}
+                          name="batchNumber"
+                          placeholder="Batch no."
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Expiry Date</label>
+                        <input
+                          type="date"
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          value={formDataList[0].expiryDate}
+                          onChange={(e) => handleChange(0, e)}
+                          name="expiryDate"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pricing Sidebar */}
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4 h-full">
+                    <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-primary/20 pb-2 mb-4">Pricing & VAT</h4>
+                    
+                    {clinicSettings?.sellsMedicines && (
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Sale Price (NPR) <span className="text-danger">*</span></label>
+                        <input
+                          type="number"
+                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md font-bold text-primary"
+                          value={formDataList[0].price}
+                          onChange={(e) => handleChange(0, e)}
+                          name="price"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Cost Price (NPR)</label>
+                      <input
+                        type="number"
+                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                        value={formDataList[0].costPrice}
+                        onChange={(e) => handleChange(0, e)}
+                        name="costPrice"
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div className="pt-4 border-t border-primary/10">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[13px] font-semibold text-[rgb(var(--color-text))]">Apply VAT</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={formDataList[0].isVatApplied}
+                            onChange={(e) => {
+                              const newList = [...formDataList];
+                              newList[0].isVatApplied = e.target.checked;
+                              setFormDataList(newList);
+                            }}
+                          />
+                          <div className="w-9 h-5 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                      </div>
+
+                      {formDataList[0].isVatApplied && (
+                        <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1">
+                          <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">VAT Percentage (%)</label>
+                          <div className="relative">
+                            <input
+                              className="clarity-input h-9 w-full text-[13px] px-3 pr-8 rounded-md"
+                              type="number"
+                              step="0.1"
+                              value={formDataList[0].vatPercentage}
+                              onChange={(e) => handleChange(0, e)}
+                              name="vatPercentage"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[rgb(var(--color-text-muted)/0.5)]">%</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {formDataList[0].isVatApplied && formDataList[0].costPrice && (
+                      <div className="mt-6 p-3 rounded-lg bg-white/50 border border-primary/10 text-center">
+                        <p className="text-[10px] text-[rgb(var(--color-text-muted))] uppercase tracking-widest font-bold mb-1">Total Cost Incl. VAT</p>
+                        <p className="text-[18px] font-bold text-primary">
+                          NPR {(parseFloat(formDataList[0].costPrice) * (1 + parseFloat(formDataList[0].vatPercentage) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </p>
                       </div>
                     )}
                   </div>
-                </td>
-
-                {!currentMedicine && (
-                  <td className="px-3 py-2 text-center">
-                    {formDataList.length > 1 && (
-                      <button
-                        className="w-7 h-7 mx-auto rounded bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center hover:bg-rose-500/20 transition-colors shadow-sm"
-                        type="button"
-                        title="Remove"
-                        onClick={() => removeRow(index)}
-                      >
-                        <IoCloseOutline className="w-4 h-4" />
-                      </button>
-                    )}
-                  </td>
-                )}
-                  </tr>
-                ))}
-                <tr className="bg-[rgb(var(--color-surface-2))/0.5] border-t border-[rgb(var(--color-border))]">
-                  <td colSpan={clinicSettings?.sellsMedicines ? 12 : 11} className="px-4 py-2.5">
-                    {!currentMedicine && (
-                      <button
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-bold text-primary hover:bg-primary/10 transition-all group"
-                        type="button"
-                        onClick={addRow}
-                      >
-                        <IoAddCircleOutline className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                        <span>Add Another Row</span>
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              </tbody>
-              </table>
-            </div>
-
-      {/* Purchase Summary */}
-      <div className="mt-4 flex justify-end">
-        <div className="w-full md:w-80 space-y-3 bg-[rgb(var(--color-surface-2))] p-4 rounded-lg border border-[rgb(var(--color-border))] shadow-sm">
-          <div className="flex justify-between items-center text-[13px]">
-            <span className="text-[rgb(var(--color-text-muted))]">Subtotal</span>
-            <span className="font-semibold">NPR {purchaseSummary.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <div className="flex justify-between items-center text-[12px]">
-            <span className="text-[rgb(var(--color-text-muted))]">Taxable Amount</span>
-            <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <div className="flex justify-between items-center text-[12px]">
-            <span className="text-[rgb(var(--color-text-muted))]">Non-Taxable Amount</span>
-            <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.nonTaxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <div className="flex justify-between items-center text-[12px] pb-3 border-b border-[rgb(var(--color-border))]">
-            <span className="text-[rgb(var(--color-text-muted))]">Total VAT</span>
-            <span className="text-primary font-medium">+ NPR {purchaseSummary.totalVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <div className="flex justify-between items-center text-[14px] pt-3 border-t border-[rgb(var(--color-border))]">
-            <span className="font-bold text-[rgb(var(--color-text))]">Grand Total</span>
-            <span className="font-bold text-primary text-[16px]">NPR {purchaseSummary.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-
-          <div className="pt-3 space-y-3 border-t border-[rgb(var(--color-border))/0.5]">
-            <div className="flex justify-between items-center">
-              <div className="flex flex-col">
-                <span className="text-[12px] font-semibold text-[rgb(var(--color-text))]">Paid Amount</span>
-                <button 
-                  className="text-[10px] text-primary hover:underline text-left"
-                  type="button"
-                  onClick={() => setGlobalPurchaseDetails(prev => ({ ...prev, paidAmount: purchaseSummary.grandTotal.toString() }))}
-                >
-                  Mark Full Paid
-                </button>
+                </div>
               </div>
-              <div className="relative w-32">
-                <input
-                  className="clarity-input h-9 w-full text-[13px] pl-8 pr-2 rounded font-bold text-primary border-primary/20 bg-white"
-                  placeholder="0.00"
-                  type="number"
-                  value={globalPurchaseDetails.paidAmount}
-                  onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, paidAmount: e.target.value }))}
-                />
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-primary/40">NPR</span>
+            ) : (
+              /* Batch Table Layout (For New Entries) */
+              <div className="overflow-x-auto border border-[rgb(var(--color-border))] rounded-lg min-h-[140px]">
+                <table className="w-full text-left whitespace-nowrap min-w-[1200px]">
+                  <thead className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                    <tr>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider">#</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[180px]">Medicine Name <span className="text-danger">*</span></th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[140px]">Generic Name</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Type</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">Strength</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">Init. Stock</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Batch No.</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[130px]">Expiry Date</th>
+                      {clinicSettings?.sellsMedicines && (
+                        <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Sale Price <span className="text-danger">*</span></th>
+                      )}
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Cost Price</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">VAT (%)</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[rgb(var(--color-border))]">
+                    {formDataList.map((formData, index) => (
+                      <tr key={index} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
+                        <td className="px-3 py-2 text-[12px] font-medium text-[rgb(var(--color-text-muted))]">{index + 1}</td>
+
+                        <td className="px-2 py-2 relative">
+                          <input
+                            required
+                            autoComplete="off"
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="name"
+                            placeholder="Medicine name"
+                            value={formData.name}
+                            onChange={(e) => handleChange(index, e)}
+                            onFocus={() => handleFocus(index)}
+                            onBlur={handleBlur}
+                            onKeyDown={handleKeyDown}
+                          />
+                          {/* Suggestions */}
+                          {focusedRowIndex === index && showSuggestions && formDataList[index].name.trim().length >= 2 && (
+                            <div className="absolute z-[100] left-0 right-0 top-full mt-1 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-md shadow-xl overflow-hidden max-h-60 overflow-y-auto min-w-[250px]">
+                              {nameSuggestions.length > 0 ? (
+                                nameSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.id}
+                                    className="w-full text-left px-3 py-2.5 hover:bg-[rgb(var(--color-primary)/0.05)] transition-colors border-b border-[rgb(var(--color-border))/0.5] last:border-0 group"
+                                    type="button"
+                                    onMouseDown={() => handleSelectSuggestion(index, suggestion)}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="flex-1 overflow-hidden">
+                                        <div className="text-[12.5px] font-bold text-[rgb(var(--color-text))] group-hover:text-primary transition-colors truncate">
+                                          {suggestion.name}
+                                        </div>
+                                        {suggestion.genericName && (
+                                          <div className="text-[10px] text-[rgb(var(--color-text-muted))] truncate mt-0.5">
+                                            {suggestion.genericName}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1 shrink-0">
+                                        <span className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 uppercase">
+                                          {suggestion.type}
+                                        </span>
+                                        {suggestion.strength && (
+                                          <span className="text-[9px] text-[rgb(var(--color-text-muted))] bg-[rgb(var(--color-surface-2))] px-1.5 py-0.5 rounded border border-[rgb(var(--color-border))]">
+                                            {suggestion.strength}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="px-4 py-3 text-center">
+                                  <p className="text-[11px] text-[rgb(var(--color-text-muted))] italic">
+                                    No matches found for "{formDataList[index].name}"
+                                  </p>
+                                  <p className="text-[9px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">
+                                    You can continue typing to add it as a new medicine.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="genericName"
+                            placeholder="Generic name"
+                            value={formData.genericName}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <div className="flex gap-1 items-center">
+                            <div className="flex-1">
+                              {formData.isAddingType ? (
+                                <input
+                                  className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
+                                  placeholder="New type"
+                                  value={formData.newTypeName}
+                                  onChange={(e) => {
+                                    const newList = [...formDataList];
+                                    newList[index].newTypeName = e.target.value;
+                                    newList[index].type = e.target.value;
+                                    setFormDataList(newList);
+                                  }}
+                                />
+                              ) : (
+                                <select
+                                  className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                                  name="type"
+                                  value={formData.type}
+                                  onChange={(e) => handleSelectChange(index, "type", e.target.value)}
+                                >
+                                  {medicineTypes.map((item) => (
+                                    <option key={item.key} value={item.key}>{item.label}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                              title={formData.isAddingType ? "Select Existing Type" : "Add New Type"}
+                              onClick={() => {
+                                const newList = [...formDataList];
+                                newList[index].isAddingType = !newList[index].isAddingType;
+                                if (!newList[index].isAddingType) newList[index].newTypeName = "";
+                                setFormDataList(newList);
+                              }}
+                            >
+                              {formData.isAddingType ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="strength"
+                            placeholder="e.g. 500mg"
+                            value={formData.strength}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="currentStock"
+                            placeholder="0"
+                            type="number"
+                            value={formData.currentStock}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="batchNumber"
+                            placeholder="Batch no."
+                            value={formData.batchNumber}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="expiryDate"
+                            type="date"
+                            value={formData.expiryDate}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                        </td>
+
+                        {clinicSettings?.sellsMedicines && (
+                          <td className="px-2 py-2">
+                            <input
+                              className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                              name="price"
+                              placeholder="0.00"
+                              type="number"
+                              value={formData.price}
+                              onChange={(e) => handleChange(index, e)}
+                            />
+                          </td>
+                        )}
+
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="costPrice"
+                            placeholder="0.00"
+                            type="number"
+                            value={formData.costPrice}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                          {formData.isVatApplied && formData.costPrice && (
+                            <p className="text-[10px] text-primary font-medium mt-1">
+                              Total: {(parseFloat(formData.costPrice) * (1 + parseFloat(formData.vatPercentage) / 100)).toFixed(2)}
+                            </p>
+                          )}
+                        </td>
+
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-2">
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={formData.isVatApplied}
+                                onChange={(e) => {
+                                  const newList = [...formDataList];
+                                  newList[index].isVatApplied = e.target.checked;
+                                  setFormDataList(newList);
+                                }}
+                              />
+                              <div className="w-8 h-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                            {formData.isVatApplied && (
+                              <div className="relative w-16">
+                                <input
+                                  className="clarity-input h-8 w-full text-[12px] pl-2 pr-4 rounded"
+                                  name="vatPercentage"
+                                  type="number"
+                                  step="0.1"
+                                  value={formData.vatPercentage}
+                                  onChange={(e) => handleChange(index, e)}
+                                />
+                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[rgb(var(--color-text-muted)/0.5)]">%</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-3 py-2 text-center">
+                          {formDataList.length > 1 && (
+                            <button
+                              className="w-7 h-7 mx-auto rounded bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center hover:bg-rose-500/20 transition-colors shadow-sm"
+                              type="button"
+                              title="Remove"
+                              onClick={() => removeRow(index)}
+                            >
+                              <IoCloseOutline className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[rgb(var(--color-surface-2))/0.5] border-t border-[rgb(var(--color-border))]">
+                      <td colSpan={clinicSettings?.sellsMedicines ? 12 : 11} className="px-4 py-2.5">
+                        <button
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-bold text-primary hover:bg-primary/10 transition-all group"
+                          type="button"
+                          onClick={addRow}
+                        >
+                          <IoAddCircleOutline className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                          <span>Add Another Row</span>
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-            </div>
+            )}
 
-            <div className="flex justify-between items-center text-[12px]">
-              <span className="text-[rgb(var(--color-text-muted))] font-medium">Remaining Due</span>
-              <span className={`font-bold ${(purchaseSummary.grandTotal - (parseFloat(globalPurchaseDetails.paidAmount) || 0)) > 0 ? 'text-rose-500' : 'text-teal-600'}`}>
-                NPR {Math.max(0, purchaseSummary.grandTotal - (parseFloat(globalPurchaseDetails.paidAmount) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
+            {!currentMedicine && (
+              <div className="mt-4 flex justify-end">
+                <div className="w-full md:w-80 space-y-3 bg-[rgb(var(--color-surface-2))] p-4 rounded-lg border border-[rgb(var(--color-border))] shadow-sm">
+                  <div className="flex justify-between items-center text-[13px]">
+                    <span className="text-[rgb(var(--color-text-muted))]">Subtotal</span>
+                    <span className="font-semibold">NPR {purchaseSummary.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[12px]">
+                    <span className="text-[rgb(var(--color-text-muted))]">Taxable Amount</span>
+                    <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[12px]">
+                    <span className="text-[rgb(var(--color-text-muted))]">Non-Taxable Amount</span>
+                    <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.nonTaxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[12px] pb-3 border-b border-[rgb(var(--color-border))]">
+                    <span className="text-[rgb(var(--color-text-muted))]">Total VAT</span>
+                    <span className="text-primary font-medium">+ NPR {purchaseSummary.totalVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[14px] pt-3 border-t border-[rgb(var(--color-border))]">
+                    <span className="font-bold text-[rgb(var(--color-text))]">Grand Total</span>
+                    <span className="font-bold text-primary text-[16px]">NPR {purchaseSummary.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
 
-            <div className="flex justify-between items-center">
-              <span className="text-[12px] font-semibold text-[rgb(var(--color-text))]">Payment Method</span>
-              <select
-                className="clarity-input h-9 w-32 text-[12px] px-2 rounded bg-white border-[rgb(var(--color-border))]"
-                value={globalPurchaseDetails.paymentMethod}
-                onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, paymentMethod: e.target.value }))}
-              >
-                <option value="cash">Cash</option>
-                <option value="fonepay">Fonepay</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cheque">Cheque</option>
-              </select>
-            </div>
-          </div>
+                  <div className="pt-3 space-y-3 border-t border-[rgb(var(--color-border))/0.5]">
+                    <div className="flex justify-between items-center">
+                      <div className="flex flex-col">
+                        <span className="text-[12px] font-semibold text-[rgb(var(--color-text))]">Paid Amount</span>
+                        <button 
+                          className="text-[10px] text-primary hover:underline text-left"
+                          type="button"
+                          onClick={() => setGlobalPurchaseDetails(prev => ({ ...prev, paidAmount: purchaseSummary.grandTotal.toString() }))}
+                        >
+                          Mark Full Paid
+                        </button>
+                      </div>
+                      <div className="relative w-32">
+                        <input
+                          className="clarity-input h-9 w-full text-[13px] pl-8 pr-2 rounded font-bold text-primary border-primary/20 bg-white"
+                          placeholder="0.00"
+                          type="number"
+                          value={globalPurchaseDetails.paidAmount}
+                          onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, paidAmount: e.target.value }))}
+                        />
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-primary/40">NPR</span>
+                      </div>
+                    </div>
 
-        </div>
-      </div>
+                    <div className="flex justify-between items-center text-[12px]">
+                      <span className="text-[rgb(var(--color-text-muted))] font-medium">Remaining Due</span>
+                      <span className={`font-bold ${(purchaseSummary.grandTotal - (parseFloat(globalPurchaseDetails.paidAmount) || 0)) > 0 ? 'text-rose-500' : 'text-teal-600'}`}>
+                        NPR {Math.max(0, purchaseSummary.grandTotal - (parseFloat(globalPurchaseDetails.paidAmount) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-[12px] font-semibold text-[rgb(var(--color-text))]">Payment Method</span>
+                      <select
+                        className="clarity-input h-9 w-32 text-[12px] px-2 rounded bg-white border-[rgb(var(--color-border))]"
+                        value={globalPurchaseDetails.paymentMethod}
+                        onChange={(e) => setGlobalPurchaseDetails(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="fonepay">Fonepay</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="cheque">Cheque</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
     </div>
         </ModalShell >
       )

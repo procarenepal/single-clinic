@@ -218,6 +218,8 @@ const ActivityLogPage = lazy(() => import("@/pages/dashboard/activity-log"));
 const HomepageSettingsPage = lazy(
   () => import("@/pages/dashboard/settings/homepage"),
 );
+const AccountsPage = lazy(() => import("@/pages/dashboard/accounts/index"));
+const HRPage = lazy(() => import("@/pages/dashboard/hr/index"));
 
 export default function App() {
   // Initialize scrollbar theme observer during idle time to avoid blocking first paint
@@ -649,6 +651,22 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="bed-management"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/accounts">
+                                <AccountsPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="accounts"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/hr">
+                                <HRPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="hr"
                           />
                           <Route
                             element={
