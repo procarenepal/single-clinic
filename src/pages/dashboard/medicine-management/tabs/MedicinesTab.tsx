@@ -144,6 +144,34 @@ export default function MedicinesTab({
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const modalState = useModalState(false);
+  const purchaseSummary = useMemo(() => {
+    let subtotal = 0;
+    let taxableAmount = 0;
+    let nonTaxableAmount = 0;
+    let totalVat = 0;
+
+    formDataList.forEach((item) => {
+      const qty = parseFloat(item.currentStock) || 0;
+      const cost = parseFloat(item.costPrice) || 0;
+      const itemTotal = qty * cost;
+
+      if (item.isVatApplied) {
+        taxableAmount += itemTotal;
+        totalVat += itemTotal * (parseFloat(item.vatPercentage) / 100);
+      } else {
+        nonTaxableAmount += itemTotal;
+      }
+      subtotal += itemTotal;
+    });
+
+    return {
+      subtotal,
+      taxableAmount,
+      nonTaxableAmount,
+      totalVat,
+      grandTotal: subtotal + totalVat,
+    };
+  }, [formDataList]);
   const generateBillNumber = () => {
     const now = new Date();
     const datePart = now.toISOString().split("T")[0].replace(/-/g, "");
@@ -2034,6 +2062,32 @@ export default function MedicinesTab({
                 </button>
               </div>
             )}
+
+            {/* Purchase Summary */}
+            <div className="mt-6 flex justify-end">
+              <div className="w-full md:w-80 space-y-3 bg-[rgb(var(--color-surface-2))] p-4 rounded-lg border border-[rgb(var(--color-border))] shadow-sm">
+                <div className="flex justify-between items-center text-[13px]">
+                  <span className="text-[rgb(var(--color-text-muted))]">Subtotal</span>
+                  <span className="font-semibold">NPR {purchaseSummary.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center text-[12px]">
+                  <span className="text-[rgb(var(--color-text-muted))]">Taxable Amount</span>
+                  <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center text-[12px]">
+                  <span className="text-[rgb(var(--color-text-muted))]">Non-Taxable Amount</span>
+                  <span className="text-[rgb(var(--color-text))]">NPR {purchaseSummary.nonTaxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center text-[12px] pb-3 border-b border-[rgb(var(--color-border))]">
+                  <span className="text-[rgb(var(--color-text-muted))]">Total VAT</span>
+                  <span className="text-primary font-medium">+ NPR {purchaseSummary.totalVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center text-[15px] pt-1">
+                  <span className="font-bold text-[rgb(var(--color-text))]">Grand Total</span>
+                  <span className="font-bold text-primary">NPR {purchaseSummary.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </ModalShell>
       )}
