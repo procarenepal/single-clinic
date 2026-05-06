@@ -15,17 +15,17 @@ const testPasswordReset = async () => {
     const testEmail = 'test@example.com';
     
     console.log('📧 Sending password reset email to:', testEmail);
-    console.log('🔗 Expected reset URL: http://localhost:5173/reset-password\n');
+    console.log('🔗 Expected reset URL: https://your-domain.netlify.app/reset-password\n');
     
     // Send password reset email
     await sendPasswordResetEmail(auth, testEmail, {
-      url: 'http://localhost:5173/reset-password',
+      url: 'https://your-domain.netlify.app/reset-password',
       handleCodeInApp: true,
     });
     
     console.log('✅ Password reset email sent successfully!');
     console.log('📬 Check your email for the reset link');
-    console.log('🔗 The link should point to: http://localhost:5173/reset-password');
+    console.log('🔗 The link should point to: https://your-domain.netlify.app/reset-password');
     
   } catch (error) {
     console.error('❌ Error testing password reset:', error.message);

@@ -239,7 +239,7 @@ const main = async () => {
     console.log('\n🎉 Deployment completed successfully!');
     console.log('\nNext steps:');
     console.log('1. Check your Appwrite console to verify the function is deployed');
-    console.log('2. Test the SMS functionality at: http://localhost:5173/sms-tester');
+    console.log('2. Test the SMS functionality at: https://your-domain.netlify.app/sms-tester');
     console.log('3. Configure your SMS provider settings in the environment variables');
     
   } catch (error) {
