@@ -724,13 +724,13 @@ export default function PurchaseRecordsTab({
                       <div className="flex items-center gap-1">
                         <IoCashOutline className="text-[rgb(var(--color-text-muted)/0.7)] w-4 h-4" />
                         <span className="text-[13px] font-medium text-[rgb(var(--color-text))]">
-                          ₹{record.totalAmount.toLocaleString()}
+                          Rs.{record.totalAmount.toLocaleString()}
                         </span>
                       </div>
                     </td>
                     <td className="px-5 py-3">
                       <span className="text-[13px] font-medium text-teal-700">
-                        ₹{record.paidAmount.toLocaleString()}
+                        Rs.{record.paidAmount.toLocaleString()}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -741,7 +741,7 @@ export default function PurchaseRecordsTab({
                             : "text-teal-700"
                         }`}
                       >
-                        ₹{record.dueAmount.toLocaleString()}
+                        Rs.{record.dueAmount.toLocaleString()}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -933,7 +933,7 @@ export default function PurchaseRecordsTab({
                 </label>
                 <div className="relative flex items-center">
                   <span className="absolute left-2 text-[13px] text-mountain-500 pointer-events-none">
-                    ₹
+                    Rs.
                   </span>
                   <input
                     className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
@@ -960,7 +960,7 @@ export default function PurchaseRecordsTab({
                 </label>
                 <div className="relative flex items-center">
                   <span className="absolute left-2 text-[13px] text-mountain-500 pointer-events-none">
-                    ₹
+                    Rs.
                   </span>
                   <input
                     className="clarity-input with-prefix h-8 w-full text-[13px] pr-2"
@@ -1012,7 +1012,7 @@ export default function PurchaseRecordsTab({
                       : "text-teal-700 font-medium"
                   }`}
                 >
-                  ₹{dueAmountDisplay.toLocaleString()}
+                  Rs.{dueAmountDisplay.toLocaleString()}
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-7">
@@ -1088,7 +1088,7 @@ export default function PurchaseRecordsTab({
                 <span className="font-semibold text-[rgb(var(--color-text))]">
                   {recordToDelete.billNumber}
                 </span>
-                {" · "}₹{recordToDelete.totalAmount.toLocaleString()}
+                {" · "}Rs.{recordToDelete.totalAmount.toLocaleString()}
               </p>
             )
           }
@@ -1116,7 +1116,7 @@ export default function PurchaseRecordsTab({
                   Bill: {recordToDelete.billNumber}
                 </p>
                 <p className="text-[12px] text-[rgb(var(--color-text-muted))]">
-                  Amount: ₹{recordToDelete.totalAmount.toLocaleString()}
+                  Amount: Rs.{recordToDelete.totalAmount.toLocaleString()}
                 </p>
               </div>
             )}
