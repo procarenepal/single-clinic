@@ -10,7 +10,11 @@ import {
   IoCalendarOutline,
   IoCloudUploadOutline,
   IoEllipsisHorizontal,
+  IoPrintOutline,
 } from "react-icons/io5";
+
+import { printAccountBill } from "@/utils/accountPrinting";
+import { clinicService } from "@/services/clinicService";
 
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
@@ -193,6 +197,34 @@ export default function AccountsPage() {
       addToast({ title: "Error", description: "Failed to record payment", color: "danger" });
     } finally {
       setSaving(false);
+    }
+  };
+
+
+  const handlePrintBill = async (bill: AccountBill) => {
+    if (!clinicId) return;
+    try {
+      const [clinicData, printConfig] = await Promise.all([
+        clinicService.getClinicById(clinicId),
+        clinicService.getPrintLayoutConfig(clinicId)
+      ]);
+
+      if (!clinicData) throw new Error("Clinic data not found");
+      
+      const effectiveConfig = printConfig || {
+        clinicId,
+        primaryColor: "#7c3aed",
+        fontSize: "medium",
+        showAddress: true,
+        showPhone: true,
+        showEmail: true,
+        headerHeight: "compact"
+      } as any;
+
+      printAccountBill(bill, clinicData, effectiveConfig);
+    } catch (error) {
+      console.error("Failed to print bill:", error);
+      addToast({ title: "Print Error", description: "Could not generate document", color: "danger" });
     }
   };
 
@@ -425,6 +457,13 @@ export default function AccountsPage() {
                             Pay Due
                           </button>
                         )}
+                        <button 
+                          onClick={() => handlePrintBill(bill)}
+                          className="p-2 hover:bg-primary/10 rounded-lg transition-colors text-[rgb(var(--color-text-muted))] hover:text-primary"
+                          title="Print Invoice"
+                        >
+                          <IoPrintOutline className="w-4.5 h-4.5" />
+                        </button>
                         <button className="p-2 hover:bg-[rgb(var(--color-surface-2))] rounded-lg transition-colors text-[rgb(var(--color-text-muted))] hover:text-primary">
                           <IoEllipsisHorizontal className="w-5 h-5" />
                         </button>

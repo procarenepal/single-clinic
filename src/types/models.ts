@@ -920,8 +920,12 @@ export interface StaffMember {
   photoUrl?: string;
   joiningDate: Date;
   salary: number;
-  status: "active" | "resigned" | "on_leave";
+  status: "active" | "resigned" | "on_leave" | "on_break" | "in_surgery";
   address?: string;
+  performanceNotes?: string;
+  taskCompletionScore?: number;
+  shiftStartTime?: string; // Format: "HH:mm"
+  shiftEndTime?: string;   // Format: "HH:mm"
   clinicId: string;
   branchId: string;
   createdAt: Date;
@@ -939,7 +943,9 @@ export interface StaffAttendance {
   date: Date;
   checkIn: Date | null;
   checkOut: Date | null;
-  status: "present" | "absent" | "late" | "half_day";
+  status: "present" | "absent" | "late" | "half_day" | "on_break";
+  totalHours?: number; // Calculated hours for the session
+  lateByMinutes?: number; // Minutes late relative to expected start time
   notes?: string;
   clinicId: string;
   branchId: string;

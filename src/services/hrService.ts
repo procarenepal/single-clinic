@@ -160,7 +160,30 @@ export const hrService = {
       updateData.checkIn = Timestamp.fromDate(new Date(attendance.checkIn));
     }
     if (attendance.checkOut) {
-      updateData.checkOut = Timestamp.fromDate(new Date(attendance.checkOut));
+      const checkOutDate = new Date(attendance.checkOut);
+      updateData.checkOut = Timestamp.fromDate(checkOutDate);
+      
+      // Calculate totalHours if checkIn is available
+      if (attendance.checkIn) {
+        const checkInDate = new Date(attendance.checkIn);
+        const diffMs = checkOutDate.getTime() - checkInDate.getTime();
+        updateData.totalHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+      } else {
+        // Try to fetch current doc to get existing checkIn
+        try {
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const existingData = docSnap.data();
+            const existingCheckIn = existingData.checkIn?.toDate ? existingData.checkIn.toDate() : (existingData.checkIn ? new Date(existingData.checkIn) : null);
+            if (existingCheckIn) {
+              const diffMs = checkOutDate.getTime() - existingCheckIn.getTime();
+              updateData.totalHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching attendance for hour calculation:", e);
+        }
+      }
     }
     
     await updateDoc(docRef, updateData);

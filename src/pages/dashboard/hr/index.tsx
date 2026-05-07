@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -10,6 +10,7 @@ import {
   IoEllipsisHorizontal,
   IoMailOutline,
   IoCallOutline,
+  IoCreateOutline,
 } from "react-icons/io5";
 
 import { addToast } from "@/components/ui/toast";
@@ -17,7 +18,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { hrService } from "@/services/hrService";
 import { accountService } from "@/services/accountService";
 import { StaffMember, StaffAttendance, AccountBill } from "@/types/models";
-import { format, subDays, startOfDay } from "date-fns";
+import { format, subDays, startOfDay, subMonths } from "date-fns";
 import {
   Modal,
   ModalContent,
@@ -34,6 +35,9 @@ import { FileUploadComponent } from "@/components/FileUploadComponent";
 
 import { Tabs, Tab } from "@heroui/tabs";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@heroui/table";
+import { IoPrintOutline } from "react-icons/io5";
+import { printSalarySlip } from "@/utils/salaryPrinting";
+import { clinicService } from "@/services/clinicService";
 
 export default function HRPage() {
   const { clinicId, userData, branchId } = useAuthContext();
@@ -48,13 +52,22 @@ export default function HRPage() {
     amount: 0,
     paymentMethod: "Cash",
     notes: "",
+    selectedMonths: [format(new Date(), 'MMMM yyyy')] as string[],
   });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const availableMonths = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const date = subMonths(new Date(), 8 - i);
+      return format(date, 'MMMM yyyy');
+    });
+  }, []);
+
   const [staffForm, setStaffForm] = useState({
+    id: "",
     name: "",
     role: "Staff",
     age: "",
@@ -65,11 +78,16 @@ export default function HRPage() {
     status: "active" as StaffMember["status"],
     address: "",
     photoUrl: "",
+    performanceNotes: "",
+    taskCompletionScore: "85",
+    shiftStartTime: "09:00",
+    shiftEndTime: "17:00",
   });
 
   useEffect(() => {
     if (!isStaffModalOpen) {
       setStaffForm({
+        id: "",
         name: "",
         role: "Staff",
         age: "",
@@ -80,9 +98,34 @@ export default function HRPage() {
         status: "active",
         address: "",
         photoUrl: "",
+        performanceNotes: "",
+        taskCompletionScore: "85",
+        shiftStartTime: "09:00",
+        shiftEndTime: "17:00",
       });
     }
   }, [isStaffModalOpen]);
+
+  const handleEditStaff = (staff: StaffMember) => {
+    setStaffForm({
+      id: staff.id,
+      name: staff.name,
+      role: staff.role,
+      age: staff.age.toString(),
+      email: staff.email,
+      phone: staff.phone,
+      salary: staff.salary.toString(),
+      joiningDate: format(new Date(staff.joiningDate), "yyyy-MM-dd"),
+      status: staff.status,
+      address: staff.address || "",
+      photoUrl: staff.photoUrl || "",
+      performanceNotes: staff.performanceNotes || "",
+      taskCompletionScore: (staff.taskCompletionScore || 85).toString(),
+      shiftStartTime: staff.shiftStartTime || "09:00",
+      shiftEndTime: staff.shiftEndTime || "17:00",
+    });
+    setIsStaffModalOpen(true);
+  };
 
   useEffect(() => {
     if (clinicId) {
@@ -119,20 +162,32 @@ export default function HRPage() {
 
     setSaving(true);
     try {
-      await hrService.createStaff({
+      const staffData = {
         ...staffForm,
         age: parseInt(staffForm.age) || 0,
         salary: parseFloat(staffForm.salary),
         joiningDate: new Date(staffForm.joiningDate),
+        taskCompletionScore: parseInt(staffForm.taskCompletionScore) || 85,
+        performanceNotes: staffForm.performanceNotes,
+        shiftStartTime: staffForm.shiftStartTime,
+        shiftEndTime: staffForm.shiftEndTime,
         clinicId: clinicId!,
         branchId: branchId || "",
         createdBy: userData?.id || "",
-      });
+      };
 
-      addToast({ title: "Success", description: "Staff member registered successfully", color: "success" });
+      if (staffForm.id) {
+        await hrService.updateStaff(staffForm.id, staffData);
+        addToast({ title: "Success", description: "Staff record updated successfully", color: "success" });
+      } else {
+        await hrService.createStaff(staffData);
+        addToast({ title: "Success", description: "Staff member registered successfully", color: "success" });
+      }
+
       setIsStaffModalOpen(false);
       loadData();
       setStaffForm({
+        id: "",
         name: "",
         role: "Staff",
         age: "",
@@ -143,6 +198,10 @@ export default function HRPage() {
         status: "active",
         address: "",
         photoUrl: "",
+        performanceNotes: "",
+        taskCompletionScore: "85",
+        shiftStartTime: "09:00",
+        shiftEndTime: "17:00",
       });
     } catch (error) {
       console.error("Error saving staff:", error);
@@ -165,7 +224,7 @@ export default function HRPage() {
         dueAmount: 0,
         paymentStatus: "paid",
         paymentMethod: payrollForm.paymentMethod,
-        description: `Salary for ${format(new Date(), 'MMMM yyyy')}. ${payrollForm.notes}`,
+        description: `Salary for ${payrollForm.selectedMonths.join(', ')}. ${payrollForm.notes}`,
         clinicId: clinicId!,
         branchId: branchId || "",
         createdBy: userData?.id || "",
@@ -182,18 +241,75 @@ export default function HRPage() {
 
   const handleClockOut = async (member: StaffMember) => {
     try {
-      const activeAttendance = attendance.find(a => a.staffId === member.id && a.status === 'present');
+      const activeAttendance = attendance.find(a => 
+        a.staffId === member.id && 
+        (a.status === 'present' || a.status === 'on_break') &&
+        format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+      );
       if (!activeAttendance) return;
 
       await hrService.updateAttendance(activeAttendance.id, {
         checkOut: new Date(),
-        status: "absent", // Mark as out for the day
       });
       loadData();
       addToast({ title: "Clocked Out", description: `${member.name} has clocked out`, color: "success" });
     } catch (error) {
       console.error("Failed to clock out:", error);
       addToast({ title: "Error", description: "Failed to clock out", color: "danger" });
+    }
+  };
+
+  const handlePrintSalarySlip = async (bill: AccountBill) => {
+    if (!clinicId || !selectedStaff) return;
+    try {
+      const [clinicData, printConfig] = await Promise.all([
+        clinicService.getClinicById(clinicId),
+        clinicService.getPrintLayoutConfig(clinicId)
+      ]);
+
+      if (!clinicData) throw new Error("Clinic data not found");
+      
+      // Use default config if none exists
+      const effectiveConfig = printConfig || {
+        clinicId,
+        primaryColor: "#0ea5e9",
+        fontSize: "medium",
+        showAddress: true,
+        showPhone: true,
+        showEmail: true,
+        headerHeight: "compact"
+      } as any;
+
+      printSalarySlip(bill, selectedStaff, clinicData, effectiveConfig);
+    } catch (error) {
+      console.error("Failed to print salary slip:", error);
+      addToast({ title: "Print Error", description: "Could not generate salary slip", color: "danger" });
+    }
+  };
+
+  const toggleBreak = async (member: StaffMember) => {
+    try {
+      const todayAttendance = attendance.find(a => 
+        a.staffId === member.id && 
+        format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+      );
+      
+      if (!todayAttendance) return;
+
+      const isCurrentlyOnBreak = todayAttendance.status === 'on_break';
+      const newStatus = isCurrentlyOnBreak ? 'present' : 'on_break';
+      
+      await hrService.updateAttendance(todayAttendance.id, {
+        status: newStatus,
+      });
+      loadData();
+      addToast({ 
+        title: isCurrentlyOnBreak ? "Back to Duty" : "Break Started", 
+        description: `${member.name} is now ${isCurrentlyOnBreak ? 'back on duty' : 'on break'}`, 
+        color: isCurrentlyOnBreak ? "success" : "warning" 
+      });
+    } catch (error) {
+      console.error("Failed to toggle break:", error);
     }
   };
 
@@ -204,13 +320,30 @@ export default function HRPage() {
     }
 
     try {
+      const now = new Date();
+      let status: "present" | "late" = "present";
+      let lateByMinutes = 0;
+
+      if (member.shiftStartTime) {
+        const [shiftH, shiftM] = member.shiftStartTime.split(':').map(Number);
+        const shiftTimeToday = new Date(now);
+        shiftTimeToday.setHours(shiftH, shiftM, 0, 0);
+
+        // 10 minutes grace period
+        if (now.getTime() > shiftTimeToday.getTime() + (10 * 60 * 1000)) {
+          status = "late";
+          lateByMinutes = Math.round((now.getTime() - shiftTimeToday.getTime()) / (1000 * 60));
+        }
+      }
+
       await hrService.markAttendance({
         staffId: member.id,
         staffName: member.name,
         date: new Date(),
-        checkIn: new Date(),
+        checkIn: now,
         checkOut: null,
-        status: "present",
+        status: status,
+        lateByMinutes: lateByMinutes,
         clinicId: clinicId,
         branchId: branchId || "",
       });
@@ -229,7 +362,11 @@ export default function HRPage() {
 
   const stats = {
     total: staff.length,
-    present: attendance.filter(a => a.status === 'present').length,
+    present: attendance.filter(a => 
+      (a.status === 'present' || a.status === 'on_break') && 
+      !a.checkOut &&
+      format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+    ).length,
     payroll: staff.reduce((acc, s) => acc + s.salary, 0),
   };
 
@@ -428,20 +565,73 @@ export default function HRPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border tracking-wider ${isPresent ? 'bg-success/10 text-success border-success/20' : 'bg-default-100 text-default-400 border-default-200'}`}>
-                              {isPresent ? 'On duty' : 'Off duty'}
-                            </span>
+                            {(() => {
+                              const todayAttendance = attendance.find(a => 
+                                a.staffId === member.id && 
+                                format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+                              );
+                              
+                              let statusLabel = "Off duty";
+                              let statusColor = "bg-default-100 text-default-400 border-default-200";
+                              
+                              if (todayAttendance) {
+                                if (todayAttendance.status === 'present') {
+                                  if (todayAttendance.checkOut) {
+                                    statusLabel = "Completed";
+                                    statusColor = "bg-primary/10 text-primary border-primary/20";
+                                  } else {
+                                    statusLabel = "On duty";
+                                    statusColor = "bg-success/10 text-success border-success/20";
+                                  }
+                                } else if (todayAttendance.status === 'on_break') {
+                                  statusLabel = "On break";
+                                  statusColor = "bg-warning/10 text-warning border-warning/20";
+                                } else if (todayAttendance.status === 'absent') {
+                                  statusLabel = "Absent";
+                                  statusColor = "bg-rose-500/10 text-rose-500 border-rose-500/20";
+                                }
+                              } else if (member.status === 'on_leave') {
+                                statusLabel = "On leave";
+                                statusColor = "bg-amber-500/10 text-amber-500 border-amber-500/20";
+                              } else if (member.status === 'in_surgery') {
+                                statusLabel = "In Surgery";
+                                statusColor = "bg-primary/10 text-primary border-primary/20";
+                              }
+
+                              return (
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border tracking-wider uppercase ${statusColor}`}>
+                                  {statusLabel}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell align="center">
-                            <Button 
-                              size="sm" 
-                              color={isPresent ? "danger" : "primary"}
-                              variant="flat"
-                              className="font-semibold text-[10px] h-7 px-3"
-                              onPress={() => isPresent ? handleClockOut(member) : markPresent(member)}
-                            >
-                              {isPresent ? "Clock Out" : "Mark Present"}
-                            </Button>
+                            <div className="flex items-center gap-1 justify-center">
+                              {isPresent && !attendance.find(a => a.staffId === member.id && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))?.checkOut && (
+                                <Button 
+                                  size="sm" 
+                                  color="warning"
+                                  variant="flat"
+                                  className="font-semibold text-[10px] h-7 px-2 min-w-0"
+                                  onPress={() => toggleBreak(member)}
+                                >
+                                  {attendance.find(a => a.staffId === member.id && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))?.status === 'on_break' ? "Resume" : "Break"}
+                                </Button>
+                              )}
+                              {!attendance.find(a => a.staffId === member.id && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))?.checkOut ? (
+                                <Button 
+                                  size="sm" 
+                                  color={isPresent ? "danger" : "primary"}
+                                  variant="flat"
+                                  className="font-semibold text-[10px] h-7 px-3"
+                                  onPress={() => isPresent ? handleClockOut(member) : markPresent(member)}
+                                >
+                                  {isPresent ? "Clock Out" : "Mark Present"}
+                                </Button>
+                              ) : (
+                                <span className="text-[10px] font-bold text-primary/40 uppercase tracking-widest py-1 px-3 bg-primary/5 rounded">Shift Ended</span>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -453,7 +643,44 @@ export default function HRPage() {
           </div>
         </>
       ) : (
-        <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+        <div className="space-y-4">
+          {/* Monthly Attendance Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+              <CardBody className="p-3">
+                <p className="text-[8px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">Avg. Working Hours</p>
+                <h4 className="text-[15px] font-bold text-primary">
+                  {(attendance.filter(a => a.totalHours).reduce((acc, a) => acc + (a.totalHours || 0), 0) / (attendance.filter(a => a.totalHours).length || 1)).toFixed(1)}h / day
+                </h4>
+              </CardBody>
+            </Card>
+            <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+              <CardBody className="p-3">
+                <p className="text-[8px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">Late Arrivals</p>
+                <h4 className="text-[15px] font-bold text-amber-500">
+                  {attendance.filter(a => a.status === 'late').length} Sessions
+                </h4>
+              </CardBody>
+            </Card>
+            <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+              <CardBody className="p-3">
+                <p className="text-[8px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">On Break Now</p>
+                <h4 className="text-[15px] font-bold text-primary">
+                  {attendance.filter(a => a.status === 'on_break' && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')).length} Members
+                </h4>
+              </CardBody>
+            </Card>
+            <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+              <CardBody className="p-3">
+                <p className="text-[8px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">Monthly Absents</p>
+                <h4 className="text-[15px] font-bold text-rose-500">
+                  {attendance.filter(a => a.status === 'absent').length} Days
+                </h4>
+              </CardBody>
+            </Card>
+          </div>
+
+          <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
           <Table 
             aria-label="Attendance logs"
             classNames={{
@@ -489,8 +716,8 @@ export default function HRPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${record.status === 'present' ? 'bg-success/10 text-success' : 'bg-default-100 text-default-400'}`}>
-                      {record.status === 'present' ? 'On Duty' : 'Completed'}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${!record.checkOut ? (record.status === 'on_break' ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success') : 'bg-default-100 text-default-400'}`}>
+                      {!record.checkOut ? (record.status === 'on_break' ? 'On Break' : (record.status === 'late' ? 'Late' : 'On Duty')) : 'Completed'}
                     </span>
                   </TableCell>
                   <TableCell align="center">
@@ -503,7 +730,8 @@ export default function HRPage() {
             </TableBody>
           </Table>
         </Card>
-      )}
+      </div>
+    )}
 
       {/* Add Staff Modal */}
       <Modal 
@@ -523,8 +751,12 @@ export default function HRPage() {
             <form onSubmit={handleSaveStaff}>
               <ModalHeader>
                 <div className="flex flex-col">
-                  <h2 className="text-[17px] font-semibold text-primary tracking-tight">Register new staff</h2>
-                  <p className="text-[11.5px] text-[rgb(var(--color-text-muted))] font-medium">Add a new employee to your clinic's HR system.</p>
+                  <h2 className="text-[17px] font-semibold text-primary tracking-tight">
+                    {staffForm.id ? 'Edit Staff Profile' : 'Register new staff'}
+                  </h2>
+                  <p className="text-[11.5px] text-[rgb(var(--color-text-muted))] font-medium">
+                    {staffForm.id ? 'Update employee records and performance metrics.' : "Add a new employee to your clinic's HR system."}
+                  </p>
                 </div>
               </ModalHeader>
               <ModalBody className="py-6">
@@ -632,11 +864,53 @@ export default function HRPage() {
                       } : undefined}
                     />
                   </div>
+
+                  <div className="col-span-6">
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Internal Performance Dossier Notes</label>
+                    <Textarea
+                      placeholder="e.g. High performance doctor, specializes in surgical support..."
+                      value={staffForm.performanceNotes}
+                      onChange={(e) => setStaffForm({ ...staffForm, performanceNotes: e.target.value })}
+                      size="sm"
+                      minRows={2}
+                    />
+                  </div>
+                  <div className="col-span-6 md:col-span-2">
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Shift Starts</label>
+                    <Input
+                      type="time"
+                      value={staffForm.shiftStartTime}
+                      onChange={(e) => setStaffForm({ ...staffForm, shiftStartTime: e.target.value })}
+                      size="sm"
+                    />
+                  </div>
+                  <div className="col-span-6 md:col-span-2">
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Shift Ends</label>
+                    <Input
+                      type="time"
+                      value={staffForm.shiftEndTime}
+                      onChange={(e) => setStaffForm({ ...staffForm, shiftEndTime: e.target.value })}
+                      size="sm"
+                    />
+                  </div>
+                  <div className="col-span-6 md:col-span-2">
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Task Completion %</label>
+                    <Input
+                      type="number"
+                      placeholder="85"
+                      value={staffForm.taskCompletionScore}
+                      onChange={(e) => setStaffForm({ ...staffForm, taskCompletionScore: e.target.value })}
+                      size="sm"
+                      endContent={<span className="text-[12px] text-text-muted">%</span>}
+                    />
+                  </div>
                 </div>
               </ModalBody>
               <ModalFooter>
                 <Button variant="light" onPress={onClose} className="font-semibold text-[13px]">Cancel</Button>
-                <Button color="primary" type="submit" isLoading={saving} className="font-semibold text-[13px] px-8">Register staff</Button>
+                <Button color="primary" type="submit" isLoading={saving} className="font-semibold text-[13px] px-8">
+                  {staffForm.id ? 'Update Record' : 'Register staff'}
+                </Button>
               </ModalFooter>
             </form>
           )}
@@ -646,11 +920,11 @@ export default function HRPage() {
       <Modal 
         isOpen={isDetailModalOpen} 
         onOpenChange={setIsDetailModalOpen}
-        size="4xl"
-        scrollBehavior="outside"
+        size="5xl"
+        scrollBehavior="inside"
         classNames={{
-          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
-          header: "border-b border-[rgb(var(--color-border))] py-4 bg-[rgb(var(--color-surface))]",
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] min-h-[85vh]",
+          header: "border-b border-[rgb(var(--color-border))] py-5 bg-[rgb(var(--color-surface))]",
           footer: "border-t border-[rgb(var(--color-border))] py-4 bg-[rgb(var(--color-surface))]",
         }}
       >
@@ -658,22 +932,40 @@ export default function HRPage() {
           {() => (
             <>
               <ModalHeader>
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center overflow-hidden">
-                    {selectedStaff?.photoUrl ? (
-                      <img src={selectedStaff.photoUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-[24px] font-black text-primary/40">{selectedStaff?.name.charAt(0)}</span>
-                    )}
-                  </div>
-                  <div>
-                    <h2 className="text-[18px] font-black text-[rgb(var(--color-text))] tracking-tight">{selectedStaff?.name}</h2>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded border border-primary/20 uppercase tracking-widest">{selectedStaff?.role}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${selectedStaff?.status === 'active' ? 'bg-success/10 text-success border-success/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
-                        {selectedStaff?.status}
-                      </span>
+                <div className="flex items-center justify-between w-full pr-8">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center overflow-hidden">
+                      {selectedStaff?.photoUrl ? (
+                        <img src={selectedStaff.photoUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[24px] font-black text-primary/40">{selectedStaff?.name.charAt(0)}</span>
+                      )}
                     </div>
+                    <div>
+                      <h2 className="text-[18px] font-bold text-[rgb(var(--color-text))] tracking-tight">{selectedStaff?.name}</h2>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[9.5px] font-bold text-primary bg-primary/5 px-2.5 py-1 rounded border border-primary/20 uppercase tracking-widest">{selectedStaff?.role}</span>
+                        <span className={`text-[9.5px] font-bold px-2.5 py-1 rounded border uppercase tracking-widest ${selectedStaff?.status === 'active' ? 'bg-success/10 text-success border-success/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
+                          {selectedStaff?.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mr-4">
+                    <Button 
+                      size="sm" 
+                      variant="flat" 
+                      color="primary" 
+                      className="font-bold text-[10px] uppercase tracking-widest h-7"
+                      startContent={<IoCreateOutline />}
+                      onPress={() => {
+                        if (selectedStaff) {
+                          handleEditStaff(selectedStaff);
+                        }
+                      }}
+                    >
+                      Edit Profile
+                    </Button>
                   </div>
                 </div>
               </ModalHeader>
@@ -681,62 +973,119 @@ export default function HRPage() {
                 {selectedStaff && (
                   <div className="space-y-6">
                     {/* Quick Stats Grid */}
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
-                        <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1">Present Days</p>
-                        <p className="text-[16px] font-black text-primary">{attendance.filter(a => a.staffId === selectedStaff.id && (a.status === 'present' || a.status === 'late')).length} Days</p>
+                        <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">Present Days</p>
+                        <p className="text-[16px] font-bold text-primary">{attendance.filter(a => a.staffId === selectedStaff.id && (a.status === 'present' || a.status === 'late')).length} Days</p>
                       </div>
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
-                        <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1">Absent Days</p>
-                        <p className="text-[16px] font-black text-rose-500">{attendance.filter(a => a.staffId === selectedStaff.id && a.status === 'absent').length} Days</p>
+                        <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">Absent Days</p>
+                        <p className="text-[16px] font-bold text-rose-500">{attendance.filter(a => a.staffId === selectedStaff.id && a.status === 'absent').length} Days</p>
                       </div>
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
-                        <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1">Total Paid</p>
-                        <p className="text-[16px] font-black text-[rgb(var(--color-text))]">Rs. {bills.filter(b => b.category === 'salary' && b.vendorName === selectedStaff.name).reduce((acc, b) => acc + b.paidAmount, 0).toLocaleString()}</p>
+                        <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">Total Paid</p>
+                        <p className="text-[16px] font-bold text-[rgb(var(--color-text))]">Rs. {bills.filter(b => b.category === 'salary' && b.vendorName === selectedStaff.name).reduce((acc, b) => acc + b.paidAmount, 0).toLocaleString()}</p>
                       </div>
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
-                        <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1">Current Salary</p>
-                        <p className="text-[16px] font-black text-[rgb(var(--color-text))]">Rs. {selectedStaff.salary.toLocaleString()}</p>
+                        <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">Current Salary</p>
+                        <p className="text-[16px] font-bold text-[rgb(var(--color-text))]">Rs. {selectedStaff.salary.toLocaleString()}</p>
                       </div>
                     </div>
 
                     <Tabs variant="underlined" classNames={{ tabList: "gap-6", tabContent: "font-bold text-[13px]" }}>
                       <Tab key="overview" title="Professional Overview">
-                        <div className="grid grid-cols-2 gap-8 py-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
                           <div className="space-y-4">
-                            <h3 className="text-[11px] font-bold text-[rgb(var(--color-text))] uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2">Contact Dossier</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <h3 className="text-[11px] font-bold text-[rgb(var(--color-text))] uppercase tracking-widest border-b border-[rgb(var(--color-border))] pb-2 mb-4">Contact Dossier</h3>
+                            <div className="grid grid-cols-2 gap-y-5 gap-x-4">
                               <div>
-                                <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter">Direct Phone</p>
-                                <p className="text-[13px] font-medium">{selectedStaff.phone}</p>
+                                <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Direct Phone</p>
+                                <p className="text-[13.5px] font-medium text-[rgb(var(--color-text))]">{selectedStaff.phone}</p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter">Email Address</p>
-                                <p className="text-[13px] font-medium">{selectedStaff.email}</p>
+                                <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Email Address</p>
+                                <p className="text-[13.5px] font-medium text-[rgb(var(--color-text))]">{selectedStaff.email}</p>
                               </div>
                               <div className="col-span-2">
-                                <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter">Residential Address</p>
-                                <p className="text-[13px] font-medium">{selectedStaff.address || 'Not documented'}</p>
+                                <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Residential Address</p>
+                                <p className="text-[13.5px] font-medium text-[rgb(var(--color-text))]">{selectedStaff.address || 'Not documented'}</p>
                               </div>
                             </div>
                           </div>
                           <div className="space-y-4">
-                            <h3 className="text-[11px] font-bold text-[rgb(var(--color-text))] uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2">Employment Registry</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <h3 className="text-[11px] font-bold text-[rgb(var(--color-text))] uppercase tracking-widest border-b border-[rgb(var(--color-border))] pb-2 mb-4">Employment Registry</h3>
+                            <div className="grid grid-cols-2 gap-y-5 gap-x-4">
                               <div>
-                                <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter">Joining Date</p>
-                                <p className="text-[13px] font-medium">{format(new Date(selectedStaff.joiningDate), 'MMM dd, yyyy')}</p>
+                                <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Joining Date</p>
+                                <p className="text-[13.5px] font-medium text-[rgb(var(--color-text))]">{format(new Date(selectedStaff.joiningDate), 'MMM dd, yyyy')}</p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter">Employee Age</p>
-                                <p className="text-[13px] font-medium">{selectedStaff.age} Yrs</p>
+                                <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Employee Age</p>
+                                <p className="text-[13.5px] font-medium text-[rgb(var(--color-text))]">{selectedStaff.age} Yrs</p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter">System ID</p>
-                                <p className="text-[12px] font-mono">{selectedStaff.id.substring(0, 12)}...</p>
+                                <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Total Work Hours</p>
+                                <p className="text-[13.5px] font-bold text-primary">{attendance.filter(a => a.staffId === selectedStaff.id).reduce((acc, a) => acc + (a.totalHours || 0), 0).toFixed(1)} hrs</p>
+                              </div>
+                              <div>
+                                <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">System ID</p>
+                                <p className="text-[12px] font-mono text-[rgb(var(--color-text-muted))]">{selectedStaff.id.substring(0, 12)}...</p>
                               </div>
                             </div>
                           </div>
+                        </div>
+                      </Tab>
+                      <Tab key="performance" title="Performance & Notes">
+                        <div className="py-4 space-y-4">
+                          {(() => {
+                            const staffAttendance = attendance.filter(a => a.staffId === selectedStaff.id);
+                            const lateCount = staffAttendance.filter(a => a.status === 'late' || (a.lateByMinutes && a.lateByMinutes > 0)).length;
+                            const totalSessions = staffAttendance.length || 1;
+                            const punctualityScore = Math.max(0, Math.round(((totalSessions - lateCount) / totalSessions) * 100));
+                            
+                            const taskScore = selectedStaff.taskCompletionScore || 85;
+                            
+                            return (
+                              <>
+                                <div className="p-4 rounded-xl border border-primary/10 bg-primary/5">
+                                  <h4 className="text-[11px] font-bold text-primary uppercase tracking-widest mb-2">Internal Dossier Notes</h4>
+                                  <p className="text-[12.5px] text-[rgb(var(--color-text))] leading-relaxed italic">
+                                    {selectedStaff.performanceNotes || `"High performance staff member. Specializes in ${selectedStaff.role === 'Doctor' ? 'clinical diagnostics' : 'operational support'} and patient care."`}
+                                  </p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <Card className="bg-[rgb(var(--color-surface-2))/0.3] border border-[rgb(var(--color-border))]" shadow="none">
+                                    <CardBody className="p-3">
+                                      <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter mb-1">Punctuality Score</p>
+                                      <div className="h-1.5 w-full bg-default-100 rounded-full overflow-hidden">
+                                        <div className={`h-full ${punctualityScore > 90 ? 'bg-success' : 'bg-warning'} transition-all`} style={{ width: `${punctualityScore}%` }}></div>
+                                      </div>
+                                      <div className="flex justify-between items-center mt-1">
+                                        <p className="text-[9px] text-[rgb(var(--color-text-muted))] uppercase font-bold">{lateCount} Late Sessions</p>
+                                        <p className={`text-[10px] font-bold ${punctualityScore > 90 ? 'text-success' : 'text-warning'}`}>{punctualityScore}% {punctualityScore > 90 ? 'Excellent' : 'Good'}</p>
+                                      </div>
+                                    </CardBody>
+                                  </Card>
+                                  <Card className="bg-[rgb(var(--color-surface-2))/0.3] border border-[rgb(var(--color-border))]" shadow="none">
+                                    <CardBody className="p-3">
+                                      <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-tighter mb-1">Task Completion</p>
+                                      <div className="h-1.5 w-full bg-default-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary transition-all" style={{ width: `${taskScore}%` }}></div>
+                                      </div>
+                                      <p className="text-[10px] mt-1 font-bold text-primary text-right">
+                                        {taskScore}% {
+                                          taskScore >= 90 ? 'Exceptional' : 
+                                          taskScore >= 75 ? 'Very Good' : 
+                                          taskScore >= 50 ? 'Average' : 
+                                          'Needs Improvement'
+                                        }
+                                      </p>
+                                    </CardBody>
+                                  </Card>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </Tab>
                       <Tab key="attendance" title="Attendance History">
@@ -759,8 +1108,8 @@ export default function HRPage() {
                                     <TableCell>{record.checkIn ? format(record.checkIn, 'hh:mm a') : '---'}</TableCell>
                                     <TableCell>{record.checkOut ? format(record.checkOut, 'hh:mm a') : '---'}</TableCell>
                                     <TableCell>
-                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${record.status === 'present' ? 'bg-success/10 text-success' : 'bg-rose-500/10 text-rose-500'}`}>
-                                        {record.status}
+                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${record.status === 'present' ? (record.checkOut ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success') : 'bg-rose-500/10 text-rose-500'}`}>
+                                        {record.status === 'present' ? (record.checkOut ? 'Completed' : 'On Duty') : record.status}
                                       </span>
                                     </TableCell>
                                     <TableCell align="center" className="font-bold text-primary">{formatDuration(record.checkIn, record.checkOut)}</TableCell>
@@ -777,9 +1126,11 @@ export default function HRPage() {
                             <TableHeader>
                               <TableColumn>Bill #</TableColumn>
                               <TableColumn>Payment Date</TableColumn>
+                              <TableColumn>Description</TableColumn>
                               <TableColumn>Amount Paid</TableColumn>
                               <TableColumn>Method</TableColumn>
                               <TableColumn>Status</TableColumn>
+                              <TableColumn align="center">Actions</TableColumn>
                             </TableHeader>
                             <TableBody emptyContent="No salary payments found">
                               {bills
@@ -789,12 +1140,25 @@ export default function HRPage() {
                                   <TableRow key={bill.id}>
                                     <TableCell className="font-mono">{bill.billNumber}</TableCell>
                                     <TableCell>{format(bill.billDate, 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell className="text-[11.5px] text-[rgb(var(--color-text-muted))] max-w-[200px] truncate">{bill.description}</TableCell>
                                     <TableCell className="font-bold text-success">Rs. {bill.paidAmount.toLocaleString()}</TableCell>
                                     <TableCell className="capitalize">{bill.paymentMethod || 'Cash'}</TableCell>
                                     <TableCell>
                                       <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-success/10 text-success">
                                         Paid
                                       </span>
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <Button 
+                                        isIconOnly 
+                                        size="sm" 
+                                        variant="light" 
+                                        color="primary"
+                                        onPress={() => handlePrintSalarySlip(bill)}
+                                        className="h-7 w-7"
+                                      >
+                                        <IoPrintOutline size={16} />
+                                      </Button>
                                     </TableCell>
                                   </TableRow>
                                 ))
@@ -812,7 +1176,13 @@ export default function HRPage() {
                   color="primary" 
                   className="font-bold"
                   onPress={() => {
-                    setPayrollForm({ ...payrollForm, amount: selectedStaff.salary });
+                    const currentMonth = format(new Date(), 'MMMM yyyy');
+                    setPayrollForm({ 
+                      ...payrollForm, 
+                      amount: selectedStaff.salary,
+                      selectedMonths: [currentMonth],
+                      notes: ""
+                    });
                     setIsPayModalOpen(true);
                   }}
                 >
@@ -847,6 +1217,28 @@ export default function HRPage() {
               </ModalHeader>
               <ModalBody className="py-4">
                 <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Salary Month(s)</label>
+                    <Select
+                      size="sm"
+                      selectionMode="multiple"
+                      placeholder="Select months"
+                      selectedKeys={new Set(payrollForm.selectedMonths)}
+                      onSelectionChange={(keys) => {
+                        const selected = Array.from(keys) as string[];
+                        setPayrollForm({ 
+                          ...payrollForm, 
+                          selectedMonths: selected,
+                          amount: (selectedStaff?.salary || 0) * (selected.length || 1)
+                        });
+                      }}
+                      classNames={{ trigger: "h-10" }}
+                    >
+                      {availableMonths.map((month) => (
+                        <SelectItem key={month}>{month}</SelectItem>
+                      ))}
+                    </Select>
+                  </div>
                   <div>
                     <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Amount (Rs.)</label>
                     <Input
