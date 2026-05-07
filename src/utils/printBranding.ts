@@ -29,8 +29,10 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
       padding: 0 !important;
       background: white;
       -webkit-print-color-adjust: exact;
-      height: 100%;
-      overflow: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white;
+      -webkit-print-color-adjust: exact;
     }
 
     .header {
@@ -161,8 +163,6 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
       padding: 15px 40px;
       text-align: center;
       background: #fff;
-      position: absolute;
-      bottom: 0;
       width: 100%;
     }
 

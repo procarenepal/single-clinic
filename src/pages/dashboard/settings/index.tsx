@@ -8,6 +8,7 @@ import {
   IoStarOutline,
   IoChevronForwardOutline,
   IoLinkOutline,
+  IoLockClosedOutline,
 } from "react-icons/io5";
 
 interface SettingsSection {
@@ -100,6 +101,14 @@ const settingsSections: SettingsSection[] = [
     icon: <IoBusinessOutline className="w-6 h-6" />,
     href: "/dashboard/settings/homepage",
     category: "clinic",
+  },
+  {
+    id: "security-account",
+    title: "Security & Account",
+    description: "Manage your admin username, password, and security preferences",
+    icon: <IoLockClosedOutline className="w-6 h-6" />,
+    href: "/dashboard/profile",
+    category: "security",
   },
 ];
 

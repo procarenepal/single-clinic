@@ -82,6 +82,10 @@ export default function HRPage() {
     taskCompletionScore: "85",
     shiftStartTime: "09:00",
     shiftEndTime: "17:00",
+    // Login account fields
+    createAccount: false,
+    password: "",
+    adminPassword: "",
   });
 
   useEffect(() => {
@@ -102,6 +106,9 @@ export default function HRPage() {
         taskCompletionScore: "85",
         shiftStartTime: "09:00",
         shiftEndTime: "17:00",
+        createAccount: false,
+        password: "",
+        adminPassword: "",
       });
     }
   }, [isStaffModalOpen]);
@@ -123,6 +130,9 @@ export default function HRPage() {
       taskCompletionScore: (staff.taskCompletionScore || 85).toString(),
       shiftStartTime: staff.shiftStartTime || "09:00",
       shiftEndTime: staff.shiftEndTime || "17:00",
+      createAccount: false,
+      password: "",
+      adminPassword: "",
     });
     setIsStaffModalOpen(true);
   };
@@ -180,7 +190,29 @@ export default function HRPage() {
         await hrService.updateStaff(staffForm.id, staffData);
         addToast({ title: "Success", description: "Staff record updated successfully", color: "success" });
       } else {
-        await hrService.createStaff(staffData);
+        const staffId = await hrService.createStaff(staffData);
+        
+        // If createAccount is checked, also create a login user
+        if (staffForm.createAccount) {
+          if (!staffForm.password || !staffForm.adminPassword) {
+            throw new Error("Password and Admin confirmation are required for account creation.");
+          }
+          
+          const { userService } = await import("@/services/userService");
+          await userService.createUser(
+            staffForm.email,
+            staffForm.password,
+            {
+              displayName: staffForm.name,
+              role: staffForm.role === "Admin" ? "clinic-admin" : "staff",
+              clinicId: clinicId!,
+              branchId: branchId || "",
+            },
+            staffForm.adminPassword
+          );
+          addToast({ title: "Account Created", description: "Login credentials have been set up.", color: "success" });
+        }
+        
         addToast({ title: "Success", description: "Staff member registered successfully", color: "success" });
       }
 
@@ -202,6 +234,9 @@ export default function HRPage() {
         taskCompletionScore: "85",
         shiftStartTime: "09:00",
         shiftEndTime: "17:00",
+        createAccount: false,
+        password: "",
+        adminPassword: "",
       });
     } catch (error) {
       console.error("Error saving staff:", error);
@@ -904,6 +939,50 @@ export default function HRPage() {
                       endContent={<span className="text-[12px] text-text-muted">%</span>}
                     />
                   </div>
+
+                  {!staffForm.id && (
+                    <div className="col-span-6 mt-4 space-y-4 pt-4 border-t border-[rgb(var(--color-border))]">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          id="createAccount"
+                          checked={staffForm.createAccount}
+                          onChange={(e) => setStaffForm({ ...staffForm, createAccount: e.target.checked })}
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor="createAccount" className="text-[13px] font-bold text-primary cursor-pointer">
+                          Create login account for this staff member
+                        </label>
+                      </div>
+
+                      {staffForm.createAccount && (
+                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="col-span-2 md:col-span-1">
+                            <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Login Password</label>
+                            <Input
+                              type="password"
+                              placeholder="Set staff password"
+                              value={staffForm.password}
+                              onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+                              size="sm"
+                            />
+                            <p className="text-[9px] text-[rgb(var(--color-text-muted))] mt-1">Minimum 6 characters</p>
+                          </div>
+                          <div className="col-span-2 md:col-span-1">
+                            <label className="text-[11px] font-bold text-health-600 uppercase tracking-wider mb-1.5 block">Verify Admin Password</label>
+                            <Input
+                              type="password"
+                              placeholder="Your current password"
+                              value={staffForm.adminPassword}
+                              onChange={(e) => setStaffForm({ ...staffForm, adminPassword: e.target.value })}
+                              size="sm"
+                            />
+                            <p className="text-[9px] text-health-600 mt-1">Required to confirm this action</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </ModalBody>
               <ModalFooter>

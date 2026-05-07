@@ -464,6 +464,7 @@ class NavigationService {
         "Accounts",
         "Settings",
         "Inventory",
+        "Pathology",
       ];
       navItems = navItems.filter((item) => allowedTitles.includes(item.title));
     } catch (error) {

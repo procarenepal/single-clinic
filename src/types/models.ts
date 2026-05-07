@@ -1486,8 +1486,18 @@ export interface PathologyParameter {
   id: string;
   categoryId?: string; // Reference to PathologyCategory (Optional for legacy compatibility)
   name: string;
-  referenceRange: string;
+  referenceRange: string; // Display string (e.g., "135 - 145")
   unit: string; // Unit ID reference or string
+  
+  // Dynamic Configuration
+  resultType: "numeric" | "boolean" | "select" | "text" | "richText";
+  options?: string[]; // Predefined options for 'select' type (e.g., ["Nil", "Trace", "1+"])
+  minValue?: number; // Numeric lower bound for validation
+  maxValue?: number; // Numeric upper bound for validation
+  criticalLow?: number; // Panic value lower bound
+  criticalHigh?: number; // Panic value upper bound
+  defaultValue?: string; // Default result value
+  
   clinicId: string;
   branchId: string;
   isActive: boolean;
@@ -1504,6 +1514,12 @@ export interface PathologyTestParameter {
   patientResult: string;
   referenceRange: string;
   unit: string;
+  resultType?: "numeric" | "boolean" | "select" | "text" | "richText";
+  options?: string[];
+  minValue?: number;
+  maxValue?: number;
+  criticalLow?: number;
+  criticalHigh?: number;
 }
 
 // Pathology Test model
@@ -1596,6 +1612,20 @@ export interface PathologyBillingItem {
   price: number; // Price per test (from test's standardCharge or test type)
   quantity: number; // Number of tests (default 1)
   amount: number; // price * quantity
+  sampleType?: string; // e.g., "Blood", "Urine"
+  isUrgent?: boolean; // Fast-track status
+  itemDiscount?: number; // Specific discount for this test
+}
+
+// Payment Event model for tracking multiple payment installments
+export interface PaymentEvent {
+  id: string;
+  amount: number;
+  method: string; // Key of the payment method
+  reference?: string; // Transaction ID / Reference
+  date: Date;
+  recordedBy: string; // User ID
+  notes?: string;
 }
 
 // Main pathology billing/invoice record
@@ -1606,6 +1636,7 @@ export interface PathologyBilling {
   branchId: string; // Associated branch
 
   // Patient Information (can be external/outsider)
+  patientId?: string; // Reference to existing patient if available
   patientName: string; // Required - can be any name
   patientEmail?: string;
   patientPhone?: string;
@@ -1642,6 +1673,14 @@ export interface PathologyBilling {
 
   // Metadata
   notes?: string; // General notes about the invoice
+  
+  // Robust Pathology Workflow Fields
+  labReferenceNo?: string; // Internal Lab tracking ID
+  sampleCollectionDate?: Date;
+  expectedReportDate?: Date;
+  reportStatus: "pending_collection" | "collected" | "in_lab" | "partially_ready" | "ready" | "delivered";
+  paymentHistory?: PaymentEvent[]; // List of all payments made
+
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the invoice

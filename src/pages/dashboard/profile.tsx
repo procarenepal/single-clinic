@@ -2,7 +2,7 @@ import { IoSettingsOutline, IoLockClosedOutline } from "react-icons/io5";
 import { useState, useEffect } from "react";
 
 import { EditProfileModal } from "./components/EditProfileModal";
-import { ChangePasswordModal } from "./components/ChangePasswordModal";
+import { AdminCredentialsModal } from "./components/AdminCredentialsModal";
 
 import { Card, CardBody } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -22,9 +22,9 @@ export default function ProfilePage() {
     onClose: onEditModalClose,
   } = useDisclosure();
   const {
-    isOpen: isPasswordModalOpen,
-    onOpen: onPasswordModalOpen,
-    onClose: onPasswordModalClose,
+    isOpen: isCredentialsModalOpen,
+    onOpen: onCredentialsModalOpen,
+    onClose: onCredentialsModalClose,
   } = useDisclosure();
   const [clinicName, setClinicName] = useState<string>("");
 
@@ -115,9 +115,9 @@ export default function ProfilePage() {
                 color="default"
                 size="sm"
                 variant="flat"
-                onClick={onPasswordModalOpen}
+                onClick={onCredentialsModalOpen}
               >
-                Security
+                Admin Credentials
               </Button>
             </div>
           </div>
@@ -273,9 +273,9 @@ export default function ProfilePage() {
 
       <EditProfileModal isOpen={isEditModalOpen} onClose={onEditModalClose} />
 
-      <ChangePasswordModal
-        isOpen={isPasswordModalOpen}
-        onClose={onPasswordModalClose}
+      <AdminCredentialsModal
+        isOpen={isCredentialsModalOpen}
+        onClose={onCredentialsModalClose}
       />
     </div >
   );

@@ -283,18 +283,33 @@ export const pathologyBillingService = {
     try {
       const billingRef = collection(db, PATHOLOGY_BILLING_COLLECTION);
 
-      // Filter out undefined values to prevent Firestore errors
-      const cleanedData: any = {};
+      // Recursive function to remove undefined values from objects and arrays
+      const cleanUndefined = (obj: any): any => {
+        if (obj === undefined) return null;
+        if (obj === null || typeof obj !== "object" || obj instanceof Date)
+          return obj;
 
-      Object.keys(billingData).forEach((key) => {
-        const value = (billingData as any)[key];
-
-        if (value !== undefined) {
-          cleanedData[key] = value;
+        if (Array.isArray(obj)) {
+          return obj.map(cleanUndefined);
         }
-      });
 
+        const cleaned: any = {};
+
+        Object.keys(obj).forEach((key) => {
+          const value = obj[key];
+          const cleanedValue = cleanUndefined(value);
+
+          if (cleanedValue !== undefined) {
+            cleaned[key] = cleanedValue;
+          }
+        });
+
+        return cleaned;
+      };
+
+      const cleanedData = cleanUndefined(billingData);
       const now = Timestamp.now();
+
       const data = {
         ...cleanedData,
         invoiceDate: Timestamp.fromDate(billingData.invoiceDate),
@@ -329,16 +344,31 @@ export const pathologyBillingService = {
     try {
       const billingRef = doc(db, PATHOLOGY_BILLING_COLLECTION, id);
 
-      // Filter out undefined values to prevent Firestore errors
-      const cleanedData: any = {};
+      // Recursive function to remove undefined values from objects and arrays
+      const cleanUndefined = (obj: any): any => {
+        if (obj === undefined) return null;
+        if (obj === null || typeof obj !== "object" || obj instanceof Date)
+          return obj;
 
-      Object.keys(billingData).forEach((key) => {
-        const value = (billingData as any)[key];
-
-        if (value !== undefined) {
-          cleanedData[key] = value;
+        if (Array.isArray(obj)) {
+          return obj.map(cleanUndefined);
         }
-      });
+
+        const cleaned: any = {};
+
+        Object.keys(obj).forEach((key) => {
+          const value = obj[key];
+          const cleanedValue = cleanUndefined(value);
+
+          if (cleanedValue !== undefined) {
+            cleaned[key] = cleanedValue;
+          }
+        });
+
+        return cleaned;
+      };
+
+      const cleanedData = cleanUndefined(billingData);
 
       const data: any = {
         ...cleanedData,
@@ -508,6 +538,7 @@ export const pathologyBillingService = {
     paymentMethod: string,
     paymentReference?: string,
     paymentNotes?: string,
+    recordedBy?: string,
   ): Promise<void> {
     try {
       const billing = await this.getBillingById(id);
@@ -516,7 +547,7 @@ export const pathologyBillingService = {
         throw new Error("Billing record not found");
       }
 
-      const newPaidAmount = billing.paidAmount + paymentAmount;
+      const newPaidAmount = (billing.paidAmount || 0) + paymentAmount;
       const newBalanceAmount = billing.totalAmount - newPaidAmount;
 
       let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
@@ -527,6 +558,20 @@ export const pathologyBillingService = {
         paymentStatus = "partial";
       }
 
+      // Create payment event
+      const paymentEvent = {
+        id: Math.random().toString(36).substring(2, 9),
+        amount: paymentAmount,
+        method: paymentMethod,
+        reference: paymentReference || "",
+        notes: paymentNotes || "",
+        date: new Date(),
+        recordedBy: recordedBy || "system",
+      };
+
+      const paymentHistory = billing.paymentHistory || [];
+      paymentHistory.push(paymentEvent);
+
       // Prepare update data, only including non-empty optional fields
       const updateData: Partial<PathologyBilling> = {
         paidAmount: newPaidAmount,
@@ -535,6 +580,7 @@ export const pathologyBillingService = {
         paymentMethod,
         paymentDate: new Date(),
         status: paymentStatus === "paid" ? "paid" : billing.status,
+        paymentHistory,
       };
 
       // Only include paymentReference if it's not empty

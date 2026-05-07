@@ -38,6 +38,10 @@ interface AuthContextType {
     phone?: string;
     photoURL?: string;
   }) => Promise<{ success: boolean }>;
+  updateEmailInfo: (
+    newEmail: string,
+    currentPassword: string,
+  ) => Promise<{ success: boolean; pendingVerification?: boolean }>;
 }
 
 // Create context with a default value
@@ -69,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getAccessiblePages: auth.getAccessiblePages,
     checkClinicSubscription: auth.checkClinicSubscription,
     updateProfileInfo: auth.updateProfileInfo,
+    updateEmailInfo: (auth as any).updateEmailInfo,
     // Add a hasPermission method that uses hasPagePermission for backward compatibility
     hasPermission: (permission: string) => {
       // For now, treat permission as a pageId and use hasPagePermission

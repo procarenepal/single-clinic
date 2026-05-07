@@ -7,6 +7,7 @@ import {
   IoArrowBackOutline,
   IoArrowUpOutline,
   IoCloseOutline,
+  IoMedkitOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
@@ -109,7 +110,7 @@ function PathologySearchSelect({
             placeholder={
               selected && !open ? selected.primary : placeholder || "Search…"
             }
-            value={open ? q : selected ? selected.primary : ""}
+            value={open ? q : selected ? selected.primary : value || ""}
             onChange={(e) => {
               const val = e.target.value;
 
@@ -269,7 +270,13 @@ export default function PathologyPage() {
         patientResult: "",
         referenceRange: "",
         unit: "",
-      },
+        resultType: "numeric",
+        options: [],
+        minValue: undefined,
+        maxValue: undefined,
+        criticalLow: undefined,
+        criticalHigh: undefined,
+      } as PathologyTestParameter,
     ],
   });
   const [quickPatientForm, setQuickPatientForm] = useState({
@@ -282,6 +289,7 @@ export default function PathologyPage() {
   const [categoryForm, setCategoryForm] = useState({
     id: "",
     name: "",
+    parameters: [] as any[],
   });
 
   const [unitForm, setUnitForm] = useState({
@@ -295,6 +303,13 @@ export default function PathologyPage() {
     name: "",
     referenceRange: "",
     unit: "",
+    resultType: "numeric" as any,
+    options: "",
+    minValue: "",
+    maxValue: "",
+    criticalLow: "",
+    criticalHigh: "",
+    defaultValue: "",
   });
 
   const [testTypeForm, setTestTypeForm] = useState({
@@ -311,6 +326,10 @@ export default function PathologyPage() {
     id: string;
     name: string;
   } | null>(null);
+
+  // Quick unit state
+  const [showQuickUnit, setShowQuickUnit] = useState(false);
+  const [quickUnitName, setQuickUnitName] = useState("");
 
   // Load all data
   useEffect(() => {
@@ -528,7 +547,13 @@ export default function PathologyPage() {
           patientResult: "",
           referenceRange: "",
           unit: "",
-        },
+          resultType: "numeric",
+          options: [],
+          minValue: undefined,
+          maxValue: undefined,
+          criticalLow: undefined,
+          criticalHigh: undefined,
+        } as PathologyTestParameter,
       ],
     });
     setIsEditing(false);
@@ -546,7 +571,13 @@ export default function PathologyPage() {
           patientResult: "",
           referenceRange: "",
           unit: "",
-        },
+          resultType: "numeric",
+          options: [],
+          minValue: undefined,
+          maxValue: undefined,
+          criticalLow: undefined,
+          criticalHigh: undefined,
+        } as PathologyTestParameter,
       ],
     }));
   };
@@ -575,6 +606,12 @@ export default function PathologyPage() {
         if (selectedParam) {
           updated[index].parameterName = selectedParam.name;
           updated[index].referenceRange = selectedParam.referenceRange;
+          updated[index].resultType = selectedParam.resultType;
+          updated[index].options = selectedParam.options;
+          updated[index].minValue = selectedParam.minValue;
+          updated[index].maxValue = selectedParam.maxValue;
+          updated[index].criticalLow = selectedParam.criticalLow;
+          updated[index].criticalHigh = selectedParam.criticalHigh;
           // Find unit name
           const unitObj = units.find((u) => u.id === selectedParam.unit);
 
@@ -604,6 +641,23 @@ export default function PathologyPage() {
 
       return { ...prev, parameters: updated };
     });
+  };
+
+  const getResultFlag = (param: any, result: string) => {
+    if (!result || param.resultType !== "numeric") return null;
+    const val = parseFloat(result);
+    if (isNaN(val)) return null;
+
+    if (param.criticalLow !== undefined && val <= param.criticalLow)
+      return { label: "CRITICAL LOW", color: "danger", icon: "!!" };
+    if (param.criticalHigh !== undefined && val >= param.criticalHigh)
+      return { label: "CRITICAL HIGH", color: "danger", icon: "!!" };
+    if (param.minValue !== undefined && val < param.minValue)
+      return { label: "LOW", color: "warning", icon: "↓" };
+    if (param.maxValue !== undefined && val > param.maxValue)
+      return { label: "HIGH", color: "warning", icon: "↑" };
+
+    return { label: "NORMAL", color: "success", icon: "✓" };
   };
 
   // Normalization helper to ensure numeric ages have units
@@ -886,10 +940,146 @@ export default function PathologyPage() {
     testModalState.open();
   };
 
+  const handleRecordResultsFromBilling = (billing: PathologyBilling) => {
+    resetTestForm();
+
+    // 1. Resolve Patient ID or Fallback to Name Search
+    let finalPatientId = billing.patientId || "";
+
+    // Safety: If the patientId is not in our current patients list, treat as walk-in to ensure name shows
+    const isPatientInList = patients.some(p => p.id === finalPatientId);
+    let finalIsWalkIn = !finalPatientId || !isPatientInList;
+
+    if (!finalPatientId || !isPatientInList) {
+      // Fallback: Try to find a matching patient in the system by name + phone
+      const match = patients.find(
+        (p) =>
+          p.name.toLowerCase() === billing.patientName.toLowerCase() &&
+          (p.mobile === billing.patientPhone || p.phone === billing.patientPhone),
+      );
+
+      if (match) {
+        finalPatientId = match.id;
+        finalIsWalkIn = false;
+      }
+    }
+
+    // 2. Aggregate parameters for ALL tests in the invoice
+    const allParameters: any[] = [];
+    const testNames: string[] = [];
+    const testTypeNames: string[] = [];
+    let totalCharge = 0;
+
+    billing.items.forEach((item) => {
+      if (item.testName) {
+        testNames.push(item.testName);
+        if (item.testType) testTypeNames.push(item.testType);
+        totalCharge += item.amount || 0;
+
+        // Find category to load its specific parameters
+        const category = categories.find(
+          (c) => c.name.toLowerCase() === item.testName.toLowerCase(),
+        );
+
+        if (category) {
+          const catParams = parameters.filter(
+            (p) => p.categoryId === category.id,
+          );
+
+          allParameters.push(
+            ...catParams.map((p) => ({
+              parameterId: p.id,
+              parameterName: p.name,
+              categoryId: p.categoryId || "",
+              patientResult: p.defaultValue || "",
+              referenceRange: p.referenceRange,
+              unit: units.find((u) => u.id === p.unit)?.name || p.unit || "",
+              // Include meta for validation/UI
+              resultType: p.resultType,
+              options: p.options,
+              minValue: p.minValue,
+              maxValue: p.maxValue,
+              criticalLow: p.criticalLow,
+              criticalHigh: p.criticalHigh,
+            })),
+          );
+        }
+      }
+    });
+
+    // 3. Set Form State
+    setTestForm((prev) => ({
+      ...prev,
+      isWalkIn: finalIsWalkIn,
+      patientId: finalPatientId,
+      patientName: billing.patientName,
+      patientAge: billing.patientAge?.toString() || "",
+      patientGender: billing.patientGender || "",
+      testName: testNames.join(", "),
+      testType: testTypeNames.length > 0 ? testTypeNames.join(", ") : testNames.join(", "),
+      parameters: allParameters,
+      standardCharge: totalCharge.toString(),
+      // Join category names for display in the SearchSelect
+      categoryId: testNames.join(", "),
+      categoryName: testNames.join(", "),
+    }));
+
+    setActiveTab("tests");
+    testModalState.open();
+  };
+
   // Category handlers
   const resetCategoryForm = () => {
-    setCategoryForm({ id: "", name: "" });
+    setCategoryForm({ id: "", name: "", parameters: [] });
     setIsEditing(false);
+  };
+
+  const addCategoryParameter = () => {
+    setCategoryForm(prev => ({
+      ...prev,
+      parameters: [...prev.parameters, {
+        name: "",
+        referenceRange: "",
+        unit: "",
+        resultType: "numeric",
+        options: "",
+        minValue: "",
+        maxValue: "",
+        criticalLow: "",
+        criticalHigh: "",
+        defaultValue: ""
+      }]
+    }));
+  };
+
+  const removeCategoryParameter = (index: number) => {
+    setCategoryForm(prev => ({
+      ...prev,
+      parameters: prev.parameters.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateCategoryParameter = (index: number, field: string, value: any) => {
+    setCategoryForm(prev => {
+      const updated = [...prev.parameters];
+      let newValues = { [field]: value };
+
+      // Smart Sync: Parse range string if field is referenceRange
+      if (field === "referenceRange" && value) {
+        const regex = /([\d.]+)\s*(?:-|to)\s*([\d.]+)/i;
+        const match = value.match(regex);
+        if (match) {
+          newValues = {
+            ...newValues,
+            minValue: match[1],
+            maxValue: match[2]
+          };
+        }
+      }
+
+      updated[index] = { ...updated[index], ...newValues };
+      return { ...prev, parameters: updated };
+    });
   };
 
   const handleSaveCategory = async () => {
@@ -923,20 +1113,47 @@ export default function PathologyPage() {
           color: "success",
         });
       } else {
-        await pathologyService.createCategory(categoryData);
+        const categoryId = await pathologyService.createCategory(categoryData);
+
+        // Create parameters if any
+        if (categoryForm.parameters.length > 0) {
+          await Promise.all(categoryForm.parameters.map(param => {
+            const parameterData: Omit<PathologyParameter, "id" | "createdAt" | "updatedAt"> = {
+              name: param.name.trim(),
+              categoryId: categoryId,
+              referenceRange: param.referenceRange.trim(),
+              unit: param.unit,
+              resultType: param.resultType,
+              options: param.options ? param.options.split(",").map((o: string) => o.trim()) : undefined,
+              minValue: param.minValue ? parseFloat(param.minValue) : undefined,
+              maxValue: param.maxValue ? parseFloat(param.maxValue) : undefined,
+              criticalLow: param.criticalLow ? parseFloat(param.criticalLow) : undefined,
+              criticalHigh: param.criticalHigh ? parseFloat(param.criticalHigh) : undefined,
+              defaultValue: param.defaultValue || undefined,
+              clinicId: clinicId!,
+              branchId: branchId!,
+              isActive: true,
+              createdBy: currentUser?.uid || "",
+            };
+            return pathologyService.createParameter(parameterData);
+          }));
+        }
+
         addToast({
           title: "Success",
-          description: "Category created successfully",
+          description: `Category and ${categoryForm.parameters.length} parameters created successfully`,
           color: "success",
         });
       }
 
-      const categoriesData = await pathologyService.getCategoriesByClinic(
-        clinicId!,
-        branchId!,
-      );
+      // Refresh both
+      const [categoriesData, parametersData] = await Promise.all([
+        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
+        pathologyService.getParametersByClinic(clinicId!, branchId!)
+      ]);
 
       setCategories(categoriesData);
+      setParameters(parametersData);
 
       categoryModalState.forceClose();
       resetCategoryForm();
@@ -951,7 +1168,7 @@ export default function PathologyPage() {
   };
 
   const editCategory = (category: PathologyCategory) => {
-    setCategoryForm({ id: category.id, name: category.name });
+    setCategoryForm({ id: category.id, name: category.name, parameters: [] });
     setIsEditing(true);
     categoryModalState.open();
   };
@@ -1023,6 +1240,72 @@ export default function PathologyPage() {
     unitModalState.open();
   };
 
+  const handleQuickUnitSave = async () => {
+    if (!quickUnitName.trim()) return;
+
+    try {
+      // Check if a unit with the same name already exists (case-insensitive)
+      const existing = units.find(
+        (u) => u.name.toLowerCase().trim() === quickUnitName.toLowerCase().trim()
+      );
+
+      if (existing) {
+        // Reuse the existing unit instead of creating a duplicate
+        if (parameterModalState.isOpen) {
+          setParameterForm(prev => ({ ...prev, unit: existing.id }));
+        }
+        setQuickUnitName("");
+        setShowQuickUnit(false);
+        addToast({
+          title: "Unit already exists",
+          description: `"${existing.name}" has been selected`,
+          color: "default",
+        });
+        return existing.id;
+      }
+
+      const unitData: Omit<PathologyUnit, "id" | "createdAt" | "updatedAt"> = {
+        name: quickUnitName.trim(),
+        clinicId: clinicId!,
+        branchId: branchId!,
+        isActive: true,
+        createdBy: currentUser?.uid || "",
+      };
+
+      const newUnitId = await pathologyService.createUnit(unitData);
+
+      const unitsData = await pathologyService.getUnitsByClinic(
+        clinicId!,
+        branchId!,
+      );
+      setUnits(unitsData);
+
+      // Auto-select the new unit in the parameter form if that's what's open
+      if (parameterModalState.isOpen) {
+        setParameterForm(prev => ({ ...prev, unit: newUnitId }));
+      }
+
+      setQuickUnitName("");
+      setShowQuickUnit(false);
+
+      addToast({
+        title: "Success",
+        description: "Unit added successfully",
+        color: "success",
+      });
+
+      return newUnitId;
+    } catch (error) {
+      console.error("Error quick saving unit:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to add unit",
+        color: "danger",
+      });
+      return null;
+    }
+  };
+
   // Parameter handlers
   const resetParameterForm = () => {
     setParameterForm({
@@ -1031,6 +1314,13 @@ export default function PathologyPage() {
       name: "",
       referenceRange: "",
       unit: "",
+      resultType: "numeric",
+      options: "",
+      minValue: "",
+      maxValue: "",
+      criticalLow: "",
+      criticalHigh: "",
+      defaultValue: "",
     });
     setIsEditing(false);
   };
@@ -1055,6 +1345,13 @@ export default function PathologyPage() {
         categoryId: parameterForm.categoryId || undefined,
         referenceRange: parameterForm.referenceRange.trim(),
         unit: parameterForm.unit,
+        resultType: parameterForm.resultType,
+        options: parameterForm.options ? parameterForm.options.split(",").map(o => o.trim()) : undefined,
+        minValue: parameterForm.minValue ? parseFloat(parameterForm.minValue) : undefined,
+        maxValue: parameterForm.maxValue ? parseFloat(parameterForm.maxValue) : undefined,
+        criticalLow: parameterForm.criticalLow ? parseFloat(parameterForm.criticalLow) : undefined,
+        criticalHigh: parameterForm.criticalHigh ? parseFloat(parameterForm.criticalHigh) : undefined,
+        defaultValue: parameterForm.defaultValue || undefined,
         clinicId: clinicId!,
         branchId: branchId!,
         isActive: true,
@@ -1103,6 +1400,13 @@ export default function PathologyPage() {
       name: parameter.name,
       referenceRange: parameter.referenceRange,
       unit: parameter.unit,
+      resultType: parameter.resultType || "numeric",
+      options: parameter.options?.join(", ") || "",
+      minValue: parameter.minValue?.toString() || "",
+      maxValue: parameter.maxValue?.toString() || "",
+      criticalLow: parameter.criticalLow?.toString() || "",
+      criticalHigh: parameter.criticalHigh?.toString() || "",
+      defaultValue: parameter.defaultValue || "",
     });
     setIsEditing(true);
     parameterModalState.open();
@@ -1323,7 +1627,7 @@ export default function PathologyPage() {
     test: PathologyTest,
     clinic?: any,
     layoutConfig?: PrintLayoutConfig | null,
-    options?: { hideLetterhead?: boolean },
+    options?: { hideLetterhead?: boolean, categories?: PathologyCategory[] },
   ) => {
     const hideLetterhead = options?.hideLetterhead ?? false;
 
@@ -1336,46 +1640,23 @@ export default function PathologyPage() {
         : 20
       : 10;
 
-    const parametersRows =
-      test.parameters && test.parameters.length > 0
-        ? test.parameters
-          .map(
-            (param) => `
-            <tr>
-              <td>${param.parameterName}</td>
-              <td class="result-cell">${param.patientResult}</td>
-              <td>${param.referenceRange}</td>
-              <td class="unit-cell">${param.unit}</td>
-            </tr>
-          `,
-          )
-          .join("")
-        : `
-        <tr>
-          <td colspan="4" style="text-align:center; padding:24px; color: #6B7280;">
-            No parameter data provided.
-          </td>
-        </tr>
-      `;
+    // Group parameters by category
+    const groupedParameters: { [key: string]: { name: string, params: PathologyTestParameter[] } } = {};
+    test.parameters?.forEach(param => {
+      const catId = param.categoryId || "general";
+      if (!groupedParameters[catId]) {
+        const cat = options?.categories?.find(c => c.id === catId);
+        groupedParameters[catId] = {
+          name: cat?.name || (catId === "general" ? "General Parameters" : "Other Investigation"),
+          params: []
+        };
+      }
+      groupedParameters[catId].params.push(param);
+    });
 
-    const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
-    const headerHtml = hideLetterhead
-      ? ""
-      : layoutConfig
-        ? getPrintHeaderHTML(layoutConfig, clinic)
-        : "";
-
-    const footerHtml = hideLetterhead
-      ? ""
-      : layoutConfig
-        ? getPrintFooterHTML(layoutConfig)
-        : "";
-
-    // Helper to check if a value is meaningful
     const isValid = (val: any) => {
       if (!val) return false;
       const s = String(val).toLowerCase();
-
       return (
         s !== "—" &&
         s !== "unknown" &&
@@ -1384,42 +1665,162 @@ export default function PathologyPage() {
       );
     };
 
-    // Filtered fields for investigation report
     const infofields = [
       { label: "Patient Name", value: test.patientName },
-      {
-        label: "Age",
-        value: test.patientAge ? `${test.patientAge}` : "",
-      },
-      {
-        label: "Gender",
-        value: test.patientGender
-          ? test.patientGender.charAt(0).toUpperCase() +
-          test.patientGender.slice(1)
-          : "",
-      },
+      { label: "Age", value: test.patientAge ? `${test.patientAge}` : "" },
+      { label: "Gender", value: test.patientGender ? test.patientGender.charAt(0).toUpperCase() + test.patientGender.slice(1) : "" },
       { label: "Test Name", value: test.testName },
       { label: "Category", value: test.categoryName },
       { label: "Test Type", value: test.testType },
-      {
-        label: "Sample Date",
-        value: test.createdAt
-          ? new Date(test.createdAt).toLocaleDateString()
-          : "",
-      },
+      { label: "Sample Date", value: test.createdAt ? new Date(test.createdAt).toLocaleDateString() : "" },
       { label: "Report Date", value: new Date().toLocaleDateString() },
     ].filter((f) => isValid(f.value));
 
-    const infoGridHtml = infofields
-      .map(
-        (f) => `
+    const infoGridHtml = infofields.map((f) => `
       <div class="info-item">
         <span class="info-label">${f.label}:</span>
         <span class="info-value">${f.value}</span>
       </div>
-    `,
-      )
-      .join("");
+    `).join("");
+
+    const reportsHtml = Object.values(groupedParameters).map((group, index, arr) => {
+      const rows = group.params.map(param => {
+        let flagLabel = "";
+        let flagClass = "";
+        let flagIcon = "";
+
+        // Robust Value Parsing (Handle commas in numbers like 1,000)
+        const resultVal = param.patientResult ? parseFloat(param.patientResult.toString().replace(/,/g, '').replace(/[^0-9.]/g, '')) : NaN;
+
+        if (!isNaN(resultVal)) {
+          // Attempt to get bounds from explicit fields or parse from referenceRange string
+          let min = (param.minValue !== undefined && param.minValue !== null) ? Number(param.minValue) : NaN;
+          let max = (param.maxValue !== undefined && param.maxValue !== null) ? Number(param.maxValue) : NaN;
+
+          // Fail-safe: Smart Contextual Parsing from referenceRange text
+          if (isNaN(min) || isNaN(max)) {
+            const rangeText = (param.referenceRange || "").replace(/,/g, '');
+
+            // 1. Check for explicit Label-based thresholds (e.g., "Low: < 40", "High: > 60")
+            const lowMatch = rangeText.match(/low:?\s*(?:<|>)?\s*([\d.]+)/i);
+            const highMatch = rangeText.match(/high:?\s*(?:<|>)?\s*([\d.]+)/i);
+
+            if (lowMatch && isNaN(min)) min = parseFloat(lowMatch[1]);
+            if (highMatch && isNaN(max)) max = parseFloat(highMatch[1]);
+
+            // 2. Fallback to standard range parsing if still missing
+            if (isNaN(min) || isNaN(max)) {
+              // Standard "X - Y"
+              const rangeMatch = rangeText.match(/([\d.]+)\s*(?:-|to)\s*([\d.]+)/);
+              if (rangeMatch) {
+                if (isNaN(min)) min = parseFloat(rangeMatch[1]);
+                if (isNaN(max)) max = parseFloat(rangeMatch[2]);
+              }
+
+              // Only apply general < or > if we didn't find specific labels
+              if (isNaN(max) && !highMatch) {
+                const maxOnly = rangeText.match(/<\s*([\d.]+)/);
+                if (maxOnly) max = parseFloat(maxOnly[1]);
+              }
+              if (isNaN(min) && !lowMatch) {
+                const minOnly = rangeText.match(/>\s*([\d.]+)/);
+                if (minOnly) min = parseFloat(minOnly[1]);
+              }
+            }
+          }
+
+          // Flagging Logic
+          const cLow = (param.criticalLow !== undefined && param.criticalLow !== null) ? Number(param.criticalLow) : NaN;
+          const cHigh = (param.criticalHigh !== undefined && param.criticalHigh !== null) ? Number(param.criticalHigh) : NaN;
+
+          if (!isNaN(cLow) && resultVal <= cLow) {
+            flagLabel = "CRITICAL LOW"; flagClass = "flag-critical"; flagIcon = "!!";
+          } else if (!isNaN(cHigh) && resultVal >= cHigh) {
+            flagLabel = "CRITICAL HIGH"; flagClass = "flag-critical"; flagIcon = "!!";
+          } else if (!isNaN(min) && resultVal < min) {
+            flagLabel = "LOW"; flagClass = "flag-low"; flagIcon = "↓";
+          } else if (!isNaN(max) && resultVal > max) {
+            flagLabel = "HIGH"; flagClass = "flag-high"; flagIcon = "↑";
+          } else {
+            flagLabel = "NORMAL"; flagClass = "flag-normal"; flagIcon = "✓";
+          }
+        }
+
+        const flagHtml = flagLabel ? `<span class="flag ${flagClass}">${flagIcon} ${flagLabel}</span>` : "";
+        const isAbnormal = flagLabel && flagLabel !== "NORMAL";
+
+        return `
+          <tr class="parameter-row ${isAbnormal ? 'row-abnormal' : ''}">
+            <td style="font-weight: 500;">${param.parameterName}</td>
+            <td class="result-cell" style="font-weight: ${isAbnormal ? '700' : '400'};">
+              ${param.patientResult}
+            </td>
+            <td style="text-align: center;">${flagHtml}</td>
+            <td style="font-size: 11px; color: #475569;">${param.referenceRange}</td>
+            <td class="unit-cell">${param.unit}</td>
+          </tr>
+        `;
+      }).join("");
+
+      const isLast = index === arr.length - 1;
+
+      return `
+        <div class="report-page" style="${!isLast ? 'page-break-after: always;' : ''}">
+          <div class="print-container">
+            <div class="document-title">
+              <h2>Clinical Investigation Report</h2>
+            </div>
+            
+            <div class="content">
+              <div class="section">
+                <div class="section-header">Patient & Investigation Details</div>
+                <div class="info-grid">
+                  ${infoGridHtml}
+                </div>
+              </div>
+
+              <div class="section">
+                <table class="parameters-table">
+                  <thead class="parameters-header">
+                    <tr class="category-header-row">
+                      <th colspan="5" class="category-title">${group.name}</th>
+                    </tr>
+                    <tr class="column-header-row">
+                      <th style="width: 25%;">Parameter</th>
+                      <th style="width: 18%;">Result</th>
+                      <th style="width: 17%; text-align: center;">Flag</th>
+                      <th style="width: 25%;">Reference Range</th>
+                      <th style="width: 15%;">Unit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rows}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="footer-section">
+              <div class="signature-block">
+                <div>
+                  <p class="meta-text">Report generated via ProCare Platform</p>
+                  <p class="meta-text">Generated on: ${new Date().toLocaleString()}</p>
+                </div>
+                <div class="technician-info">
+                  ${test.labTechnicianName ? `<p style="margin:0; font-weight:700; font-size:13px; color:#1e293b;">${test.labTechnicianName}</p><p style="margin:0; font-size:11px; color:#64748b; margin-bottom:8px;">Lab Technician</p>` : ""}
+                  <div class="sign-line">Authorized Signatory</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
+    const headerHtml = hideLetterhead ? "" : (clinic && layoutConfig) ? getPrintHeaderHTML(layoutConfig, clinic) : "";
+    const footerHtml = hideLetterhead ? "" : layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
+    const headerHeight = layoutConfig?.headerHeight === "compact" ? 140 : layoutConfig?.headerHeight === "expanded" ? 220 : 180;
 
     return `<!DOCTYPE html>
   <html>
@@ -1427,188 +1828,102 @@ export default function PathologyPage() {
       <title>Pathology Report - ${test.patientName}</title>
       <style>
         @page { margin: 0; size: A4; }
-
         ${brandingCSS}
-
-        .print-container {
-          width: 100%;
-          padding: ${topMarginMm}mm 20mm 20mm 20mm;
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-        }
+        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+        .header-fixed { position: fixed; top: 0; width: 100%; z-index: 1000; background: white; }
+        .footer-fixed { position: fixed; bottom: 0; width: 100%; z-index: 1000; background: white; }
+        .report-table { width: 100%; border-collapse: collapse; }
+        .header-spacer { height: ${headerHtml ? `${headerHeight}px` : `${topMarginMm}mm`}; }
+        .footer-spacer { height: ${footerHtml ? 60 : 20}px; }
+        .report-page { width: 100%; page-break-after: always; }
+        .report-page:last-child { page-break-after: auto; }
+        .print-container { width: 100%; padding: 0 20mm; box-sizing: border-box; display: flex; flex-direction: column; }
+        .content { padding: 0; width: 100%; }
         
-        .content {
-            padding: 0;
-        }
-
-        .document-title {
-          text-align: center;
-          margin: 10px 0 20px;
-          border-bottom: 2px solid #475569;
-          padding-bottom: 5px;
-        }
-
-        .document-title h2 {
-          font-size: 20px;
-          font-weight: 800;
-          margin: 0;
+        .document-title { text-align: center; margin: 10px 0 15px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 6px 0; }
+        .document-title h2 { font-size: 16px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 0.15em; color: #1e293b; }
+        
+        .section { margin-bottom: 10px; }
+        .section-header { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+        
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 30px; margin-bottom: 15px; background: #f8fafc; padding: 10px 15px; border-radius: 4px; border: 1px solid #f1f5f9; }
+        .info-item { display: flex; justify-content: space-between; font-size: 11.5px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px; }
+        .info-label { font-weight: 400; color: #64748b; }
+        .info-value { font-weight: 600; color: #1e293b; text-align: right; }
+        
+        .flag { 
+          font-weight: 700; 
+          font-size: 8px; 
+          padding: 2px 5px; 
+          border-radius: 2px; 
+          display: inline-block; 
+          vertical-align: middle; 
           text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: #475569;
+          border: 1px solid #cbd5e1;
+          color: #1e293b;
+          background: #ffffff;
         }
-
-        .section-header {
-          font-size: 13px;
-          font-weight: 700;
-          color: #374151;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          margin-bottom: 12px;
-          border-left: 4px solid ${layoutConfig?.primaryColor || "#475569"};
-          padding-left: 10px;
+        .flag-high, .flag-low, .flag-critical, .flag-normal { 
+          color: #1e293b;
         }
-
-        /* Rest of pathology specific styles */
-        .info-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 12px 40px;
-          margin-bottom: 30px;
-          background: #f9fafb;
-          padding: 20px;
-          border-radius: 8px;
-          border: 1px solid #e5e7eb;
-        }
-
-        .info-item {
-          display: flex;
-          justify-content: space-between;
-          font-size: 13.5px;
-          border-bottom: 1px dashed #e5e7eb;
-          padding-bottom: 4px;
-        }
-
-        .info-label { font-weight: 600; color: #4B5563; }
-        .info-value { font-weight: 700; color: #111827; text-align: right; }
-
-        .parameters-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 10px;
-        }
-
-        .parameters-table th {
-          background: #f3f4f6;
-          color: #374151;
-          font-weight: 700;
-          text-transform: uppercase;
-          font-size: 11px;
-          letter-spacing: 0.05em;
-          padding: 12px 10px;
-          border-top: 2px solid #374151;
-          border-bottom: 1px solid #d1d5db;
-          text-align: left;
-        }
-
-        .parameters-table td {
-          padding: 12px 10px;
-          border-bottom: 1px solid #e5e7eb;
-          font-size: 13.5px;
-          color: #1F2937;
-        }
-
-        .parameters-table tr:last-child td {
-          border-bottom: 2px solid #374151;
-        }
-
-        .unit-cell { color: #6B7280; font-size: 12px; }
-        .result-cell { font-weight: 700; font-size: 14px; }
-
-        .footer-section {
-          margin-top: auto;
-          margin-bottom: 20px;
-          padding: 0 15mm;
-        }
-
-        .signature-block {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          margin-top: 50px;
-        }
-
-        .technician-info { text-align: right; }
-
-        .sign-line {
-          width: 200px;
-          border-top: 1px solid #111827;
-          margin-top: 40px;
-          padding-top: 8px;
+        .flag-normal { 
+          border-color: #e2e8f0; 
+          color: #94a3b8; 
           font-weight: 600;
-          font-size: 12px;
-          text-transform: uppercase;
-          color: #4B5563;
-          text-align: center;
         }
-
-        .meta-text { font-size: 11px; color: #9CA3AF; }
+        .flag-critical { border-width: 2px; }
         
+        .row-abnormal { background: transparent; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        
+        table.parameters-table { width: 100%; border-collapse: collapse; margin-top: 5px; border: 1px solid #cbd5e1; }
+        th { 
+          background: #f8fafc !important; 
+          color: #475569; 
+          font-weight: 600; 
+          text-align: left; 
+          padding: 6px 10px; 
+          border: 1px solid #cbd5e1; 
+          font-size: 9.5px; 
+          text-transform: uppercase; 
+          letter-spacing: 0.05em; 
+        }
+        td { 
+          padding: 6px 10px; 
+          border: 1px solid #cbd5e1; 
+          font-size: 11.5px; 
+          color: #1e293b; 
+          vertical-align: middle;
+        }
+        .category-header-row th { background: #f1f5f9 !important; padding: 8px 10px !important; }
+        .category-title { font-weight: 700; color: #1e293b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+        .result-cell { font-size: 12.5px; }
+        .unit-cell { color: #475569; font-weight: 500; }
+        .font-bold { font-weight: 700; }
+        .footer-section { margin-top: 20px; padding: 0; }
+        .signature-block { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; break-inside: avoid; }
+        .technician-info { text-align: right; }
+        .sign-line { width: 180px; border-top: 1px solid #1e293b; margin-top: 25px; padding-top: 6px; font-weight: 600; font-size: 11px; text-transform: uppercase; color: #475569; text-align: center; }
+        .meta-text { font-size: 10px; color: #94a3b8; margin: 2px 0; }
         @media print {
           body { -webkit-print-color-adjust: exact; }
-          .print-container { padding: ${topMarginMm}mm 0 10mm 0; }
+          .print-container { padding: 0 20mm; width: 100%; }
+          .info-grid { background: #f8fafc !important; border: 1px solid #f1f5f9 !important; }
+          .parameters-table th { background: #f8fafc !important; }
+          .category-header-row th { background: #f1f5f9 !important; }
+          thead { display: table-header-group; }
+          tfoot { display: table-footer-group; }
         }
       </style>
     </head>
     <body>
-      <div class="print-container">
-        ${headerHtml}
-        
-        <div class="document-title">
-          <h2>Clinical Investigation Report</h2>
-        </div>
-        
-        <div class="content">
-          <div class="section">
-            <div class="section-header">Patient & Investigation Details</div>
-            <div class="info-grid">
-              ${infoGridHtml}
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-header">Test Parameters & Results</div>
-            <table class="parameters-table">
-              <thead>
-                <tr>
-                  <th>Parameter</th>
-                  <th>Observation / Result</th>
-                  <th>Reference Range</th>
-                  <th>Unit</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${parametersRows}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="footer-section">
-          <div class="signature-block">
-            <div>
-              <p class="meta-text">Report generated via ProCare Platform</p>
-              <p class="meta-text">Generated on: ${new Date().toLocaleString()}</p>
-            </div>
-            <div class="technician-info">
-              ${test.labTechnicianName ? `<p style="margin:0; font-weight:700; font-size:14px; color:#111827;">${test.labTechnicianName}</p><p style="margin:0; font-size:12px; color:#6B7280; margin-bottom:10px;">Lab Technician</p>` : ""}
-              <div class="sign-line">Authorized Signatory</div>
-            </div>
-          </div>
-        </div>
-        
-        ${footerHtml}
-      </div>
+      <div class="header-fixed">${headerHtml}</div>
+      <div class="footer-fixed">${footerHtml}</div>
+      <table class="report-table">
+        <thead><tr><td><div class="header-spacer"></div></td></tr></thead>
+        <tbody><tr><td>${reportsHtml}</td></tr></tbody>
+        <tfoot><tr><td><div class="footer-spacer"></div></td></tr></tfoot>
+      </table>
 
       <script>
         window.addEventListener('load', function() {
@@ -1813,11 +2128,15 @@ export default function PathologyPage() {
 
     const reportHtml = buildPathologyReportHtml(test, clinic, layoutConfig, {
       hideLetterhead,
+      categories,
     });
 
     printWindow.document.write(reportHtml);
     printWindow.document.close();
   };
+
+  const [seeding, setSeeding] = useState(false);
+  const [seeded, setSeeded] = useState(false);
 
   if (loading) {
     return (
@@ -1838,6 +2157,394 @@ export default function PathologyPage() {
     dailyReport: "Daily Report",
   };
 
+  const seedHIVTest = async () => {
+    if (!clinicId || !branchId) return;
+    setSeeding(true);
+    try {
+      // 1. Check if category already exists
+      let categoryId = categories.find(c => c.name.toLowerCase() === "hiv screening")?.id;
+
+      if (!categoryId) {
+        categoryId = await pathologyService.createCategory({
+          name: "HIV Screening",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      // 2. Seed parameters
+      const params = [
+        {
+          name: "Anti-HIV 1 & 2 (Ab)",
+          referenceRange: "Non-Reactive",
+          resultType: "boolean" as const,
+          unit: "",
+          minValue: undefined,
+          maxValue: undefined,
+          criticalLow: undefined,
+          criticalHigh: undefined,
+        },
+        {
+          name: "p24 Antigen",
+          referenceRange: "Non-Reactive",
+          resultType: "boolean" as const,
+          unit: "",
+          minValue: undefined,
+          maxValue: undefined,
+          criticalLow: undefined,
+          criticalHigh: undefined,
+        },
+        {
+          name: "CD4 Count",
+          referenceRange: "500 - 1500",
+          resultType: "numeric" as const,
+          unit: "cells/μL",
+          minValue: 500,
+          maxValue: 1500,
+          criticalLow: 200,
+          criticalHigh: undefined,
+        },
+        {
+          name: "CD8 Count",
+          referenceRange: "150 - 1000",
+          resultType: "numeric" as const,
+          unit: "cells/μL",
+          minValue: 150,
+          maxValue: 1000,
+          criticalLow: undefined,
+          criticalHigh: undefined,
+        },
+        {
+          name: "CD4/CD8 Ratio",
+          referenceRange: "1.0 - 3.5",
+          resultType: "numeric" as const,
+          unit: "",
+          minValue: 1.0,
+          maxValue: 3.5,
+          criticalLow: 0.5,
+          criticalHigh: undefined,
+        },
+        {
+          name: "HIV Viral Load",
+          referenceRange: "<20",
+          resultType: "numeric" as const,
+          unit: "copies/mL",
+          minValue: 0,
+          maxValue: 20,
+          criticalLow: undefined,
+          criticalHigh: 100000,
+        },
+      ];
+
+      // Find or create the unit "cells/μL"
+      let cellUnit = units.find(u => u.name.toLowerCase() === "cells/μl");
+      let cellUnitId = cellUnit?.id;
+      if (!cellUnitId) {
+        cellUnitId = await pathologyService.createUnit({
+          name: "cells/μL",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      let copiesUnit = units.find(u => u.name.toLowerCase() === "copies/ml");
+      let copiesUnitId = copiesUnit?.id;
+      if (!copiesUnitId) {
+        copiesUnitId = await pathologyService.createUnit({
+          name: "copies/mL",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+
+      await Promise.all(params.map(p => {
+        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
+        if (alreadyExists) return Promise.resolve();
+
+        return pathologyService.createParameter({
+          name: p.name,
+          categoryId: categoryId!,
+          referenceRange: p.referenceRange,
+          resultType: p.resultType,
+          options: (p as any).options,
+          unit: p.unit === "cells/μL" ? cellUnitId! : p.unit === "copies/mL" ? copiesUnitId! : "",
+          minValue: p.minValue,
+          maxValue: p.maxValue,
+          criticalLow: p.criticalLow,
+          criticalHigh: p.criticalHigh,
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }));
+
+      // Refresh
+      const [cats, params2, units2] = await Promise.all([
+        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
+        pathologyService.getParametersByClinic(clinicId!, branchId!),
+        pathologyService.getUnitsByClinic(clinicId!, branchId!),
+      ]);
+      setCategories(cats);
+      setParameters(params2);
+      setUnits(units2);
+
+      setSeeded(true);
+      addToast({ title: "HIV Screening seeded", description: "Category and 6 parameters created successfully.", color: "success" });
+    } catch (e) {
+      console.error(e);
+      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const seedSugarTest = async () => {
+    if (!clinicId || !branchId) return;
+    setSeeding(true);
+    try {
+      let categoryId = categories.find(c => c.name.toLowerCase() === "sugar & diabetes")?.id;
+
+      if (!categoryId) {
+        categoryId = await pathologyService.createCategory({
+          name: "Sugar & Diabetes",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      const params = [
+        {
+          name: "Glucose (Fasting)",
+          referenceRange: "70 - 100",
+          resultType: "numeric" as const,
+          unit: "mg/dL",
+          minValue: 70,
+          maxValue: 100,
+          criticalLow: 50,
+          criticalHigh: 400,
+        },
+        {
+          name: "Glucose (Post Prandial / PP)",
+          referenceRange: "70 - 140",
+          resultType: "numeric" as const,
+          unit: "mg/dL",
+          minValue: 70,
+          maxValue: 140,
+          criticalLow: 50,
+          criticalHigh: 400,
+        },
+        {
+          name: "Glucose (Random)",
+          referenceRange: "70 - 140",
+          resultType: "numeric" as const,
+          unit: "mg/dL",
+          minValue: 70,
+          maxValue: 140,
+          criticalLow: 50,
+          criticalHigh: 400,
+        },
+        {
+          name: "HbA1c (Glycated Hemoglobin)",
+          referenceRange: "4.0 - 5.6",
+          resultType: "numeric" as const,
+          unit: "%",
+          minValue: 4.0,
+          maxValue: 5.6,
+          criticalLow: undefined,
+          criticalHigh: 15,
+        },
+      ];
+
+      // Units
+      let mgDlUnit = units.find(u => u.name.toLowerCase() === "mg/dl");
+      let mgDlUnitId = mgDlUnit?.id;
+      if (!mgDlUnitId) {
+        mgDlUnitId = await pathologyService.createUnit({
+          name: "mg/dL",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      let percentUnit = units.find(u => u.name === "%");
+      let percentUnitId = percentUnit?.id;
+      if (!percentUnitId) {
+        percentUnitId = await pathologyService.createUnit({
+          name: "%",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+
+      await Promise.all(params.map(p => {
+        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
+        if (alreadyExists) return Promise.resolve();
+
+        return pathologyService.createParameter({
+          name: p.name,
+          categoryId: categoryId!,
+          referenceRange: p.referenceRange,
+          resultType: p.resultType,
+          unit: p.unit === "mg/dL" ? mgDlUnitId! : percentUnitId!,
+          minValue: p.minValue,
+          maxValue: p.maxValue,
+          criticalLow: p.criticalLow,
+          criticalHigh: p.criticalHigh,
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }));
+
+      const [cats, params2, units2] = await Promise.all([
+        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
+        pathologyService.getParametersByClinic(clinicId!, branchId!),
+        pathologyService.getUnitsByClinic(clinicId!, branchId!),
+      ]);
+      setCategories(cats);
+      setParameters(params2);
+      setUnits(units2);
+
+      addToast({ title: "Sugar Test seeded", description: "Category and 4 parameters created successfully.", color: "success" });
+    } catch (e) {
+      console.error(e);
+      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const seedLipidProfile = async () => {
+    if (!clinicId || !branchId) return;
+    setSeeding(true);
+    try {
+      let categoryId = categories.find(c => c.name.toLowerCase() === "lipid profile")?.id;
+
+      if (!categoryId) {
+        categoryId = await pathologyService.createCategory({
+          name: "Lipid Profile",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      const params = [
+        {
+          name: "Triglycerides",
+          referenceRange: "Normal: <150, Borderline high: 150-199, High: 200-499, Very high: >= 500",
+          resultType: "numeric" as const,
+          unit: "mg/dl",
+          minValue: 0,
+          maxValue: 150,
+          criticalLow: undefined,
+          criticalHigh: 500,
+        },
+        {
+          name: "Total Cholesterol",
+          referenceRange: "Desirable: <200, Borderline High: 200-239, High: >240",
+          resultType: "numeric" as const,
+          unit: "mg/dl",
+          minValue: 0,
+          maxValue: 200,
+          criticalLow: undefined,
+          criticalHigh: 240,
+        },
+        {
+          name: "HDL Cholesterol (Direct)",
+          referenceRange: "High: >60, Low: <40",
+          resultType: "numeric" as const,
+          unit: "mg/dl",
+          minValue: 40,
+          maxValue: 1000,
+          criticalLow: 40,
+          criticalHigh: undefined,
+        },
+        {
+          name: "LDL Cholesterol (Direct)",
+          referenceRange: "Optimal: <100, Near optimal: 100-129, Borderline high: 130-159, High: 160-189, Very high: >190",
+          resultType: "numeric" as const,
+          unit: "mg/dl",
+          minValue: 0,
+          maxValue: 100,
+          criticalLow: undefined,
+          criticalHigh: 190,
+        },
+      ];
+
+      // Units
+      let mgDlUnit = units.find(u => u.name.toLowerCase() === "mg/dl");
+      let mgDlUnitId = mgDlUnit?.id;
+      if (!mgDlUnitId) {
+        mgDlUnitId = await pathologyService.createUnit({
+          name: "mg/dl",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+
+      await Promise.all(params.map(p => {
+        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
+        if (alreadyExists) return Promise.resolve();
+
+        return pathologyService.createParameter({
+          name: p.name,
+          categoryId: categoryId!,
+          referenceRange: p.referenceRange,
+          resultType: p.resultType,
+          unit: mgDlUnitId!,
+          minValue: p.minValue,
+          maxValue: p.maxValue,
+          criticalLow: p.criticalLow,
+          criticalHigh: p.criticalHigh,
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }));
+
+      const [cats, params2, units2] = await Promise.all([
+        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
+        pathologyService.getParametersByClinic(clinicId!, branchId!),
+        pathologyService.getUnitsByClinic(clinicId!, branchId!),
+      ]);
+      setCategories(cats);
+      setParameters(params2);
+      setUnits(units2);
+
+      addToast({ title: "Lipid Profile seeded", description: "Category and 4 parameters created successfully.", color: "success" });
+    } catch (e) {
+      console.error(e);
+      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <>
       <div className="space-y-6">
@@ -1848,6 +2555,37 @@ export default function PathologyPage() {
             <p className="text-text-muted mt-2 text-[13.5px]">
               Manage pathology tests, categories, units, and parameters
             </p>
+          </div>
+          <div className="flex gap-2">
+            {!seeded && (
+              <Button
+                color="default"
+                isDisabled={seeding}
+                size="sm"
+                variant="flat"
+                onClick={seedHIVTest}
+              >
+                {seeding ? "Seeding…" : "🧪 Seed HIV Test"}
+              </Button>
+            )}
+            <Button
+              color="default"
+              isDisabled={seeding}
+              size="sm"
+              variant="flat"
+              onClick={seedSugarTest}
+            >
+              {seeding ? "Seeding…" : "🩸 Seed Sugar Test"}
+            </Button>
+            <Button
+              color="default"
+              isDisabled={seeding}
+              size="sm"
+              variant="flat"
+              onClick={seedLipidProfile}
+            >
+              {seeding ? "Seeding…" : "🧪 Seed Lipid Profile"}
+            </Button>
           </div>
         </div>
 
@@ -1892,7 +2630,9 @@ export default function PathologyPage() {
             {activeTab === "category" && (
               <PathologyCategoriesTab
                 filteredCategories={filteredCategories}
+                parameters={parameters}
                 searchQuery={categoriesSearchQuery}
+                units={units}
                 onAdd={() => {
                   resetCategoryForm();
                   categoryModalState.open();
@@ -1904,6 +2644,8 @@ export default function PathologyPage() {
                 }}
                 onDelete={(cat) => openDeleteModal("category", cat.id, cat.name)}
                 onEdit={editCategory}
+                onEditParameter={editParameter}
+                onDeleteParameter={(p) => openDeleteModal("parameter", p.id, p.name)}
                 onSearchChange={setCategoriesSearchQuery}
               />
             )}
@@ -1987,7 +2729,11 @@ export default function PathologyPage() {
               />
             )}
             {activeTab === "billing" && (
-              <PathologyBillingTab branchId={branchId!} clinicId={clinicId!} />
+              <PathologyBillingTab
+                branchId={branchId!}
+                clinicId={clinicId!}
+                onRecordResults={handleRecordResultsFromBilling}
+              />
             )}
           </div>
         </div>
@@ -2181,9 +2927,30 @@ export default function PathologyPage() {
                         label="Category Name"
                         placeholder="Search and select category"
                         value={testForm.categoryId}
-                        onChange={(id) =>
-                          setTestForm((prev) => ({ ...prev, categoryId: id }))
-                        }
+                        onChange={(id) => {
+                          const cat = categories.find((c) => c.id === id);
+                          const catParams = parameters.filter(
+                            (p) => p.categoryId === id,
+                          );
+
+                          setTestForm((prev) => ({
+                            ...prev,
+                            categoryId: id,
+                            categoryName: cat?.name || "",
+                            // Auto-load parameters when category is selected
+                            parameters: catParams.map((p) => ({
+                              parameterId: p.id,
+                              parameterName: p.name,
+                              categoryId: p.categoryId || "",
+                              patientResult: "",
+                              referenceRange: p.referenceRange,
+                              unit:
+                                units.find((u) => u.id === p.unit)?.name ||
+                                p.unit ||
+                                "",
+                            })),
+                          }));
+                        }}
                       />
 
                       <Input
@@ -2273,129 +3040,218 @@ export default function PathologyPage() {
                         }
                       />
                     </div>
-                  </div>
 
-                  {/* Parameters Section */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">
-                      Parameter Fields
-                    </h3>
-                    {testForm.parameters.map((param, index) => (
-                      <div
-                        key={index}
-                        className="grid grid-cols-12 gap-2 mb-4 items-end bg-surface-2/50 p-2 rounded border border-border-base/50"
-                      >
-                        <div className="col-span-2">
-                          <PathologySearchSelect
-                            items={categories.map((c) => ({
-                              id: c.id,
-                              primary: c.name,
-                            }))}
-                            label="Category"
-                            placeholder="Select category"
-                            value={param.categoryId}
-                            onChange={(id) => {
-                              updateTestParameter(index, "categoryId", id);
-                              updateTestParameter(index, "parameterId", ""); // Reset parameter when category changes
-                            }}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <PathologySearchSelect
-                            required
-                            items={parameters
-                              .filter(
-                                (p) =>
-                                  !param.categoryId ||
-                                  p.categoryId === param.categoryId,
-                              )
-                              .map((p) => ({
-                                id: p.id,
-                                primary: p.name,
-                                secondary: p.referenceRange
-                                  ? `Range: ${p.referenceRange} `
-                                  : undefined,
-                              }))}
-                            label="Parameter *"
-                            placeholder="Select sub-category"
-                            value={param.parameterId}
-                            onChange={(id) =>
-                              updateTestParameter(index, "parameterId", id)
-                            }
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <Input
-                            isRequired
-                            label="Patient Result *"
-                            placeholder="Result (e.g. 10.5 or Text)"
-                            value={param.patientResult}
-                            onValueChange={(v) =>
-                              updateTestParameter(index, "patientResult", v)
-                            }
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            label="Ref. Range"
-                            placeholder="Range"
-                            value={param.referenceRange}
-                            onValueChange={(v) =>
-                              updateTestParameter(index, "referenceRange", v)
-                            }
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            label="Unit"
-                            placeholder="Unit"
-                            value={param.unit}
-                            onValueChange={(v) =>
-                              updateTestParameter(index, "unit", v)
-                            }
-                          />
-                        </div>
-                        <div className="col-span-1 flex items-center justify-center h-[32px] gap-1">
-                          <Button
-                            isIconOnly
-                            color="default"
-                            disabled={index === 0}
-                            size="sm"
-                            variant="light"
-                            onClick={() => moveTestParameter(index, "up")}
-                          >
-                            <IoArrowUpOutline className="text-text-muted" />
-                          </Button>
-                          <Button
-                            isIconOnly
-                            color="danger"
-                            size="sm"
-                            variant="light"
-                            onClick={() => removeTestParameter(index)}
-                          >
-                            <IoTrashOutline />
-                          </Button>
-                        </div>
+                    {/* Parameters Section */}
+                    <div className="mt-8 border-t border-border-base/30 pt-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold text-text-main flex items-center gap-2">
+                          <div className="w-1.5 h-6 bg-primary rounded-full"></div>
+                          Parameter Fields
+                        </h3>
+                        <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-1 rounded uppercase tracking-wider">
+                          {testForm.parameters.length} Parameters
+                        </span>
                       </div>
-                    ))}
-                    <div className="flex justify-center mt-4">
-                      <Button
-                        color="default"
-                        startContent={<IoAddOutline />}
-                        variant="bordered"
-                        onClick={addTestParameter}
-                      >
-                        Add
-                      </Button>
+
+                      <div className="space-y-4">
+                        {testForm.parameters.map((param, index) => {
+                          // Show a heading if this is the first parameter of a category
+                          const prevParam = index > 0 ? testForm.parameters[index - 1] : null;
+                          const showHeading = index === 0 || prevParam?.categoryId !== param.categoryId;
+
+                          const category = categories.find(c => c.id === param.categoryId);
+                          const categoryName = category?.name || param.categoryId || "General Parameters";
+
+                          return (
+                            <div key={index} className="space-y-3">
+                              {showHeading && (
+                                <div className="bg-surface-2 px-3 py-2 rounded-lg border border-border-base/50 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-primary/40"></div>
+                                    <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider">
+                                      {categoryName}
+                                    </h4>
+                                  </div>
+                                  <span className="text-[10px] text-text-muted font-bold uppercase">
+                                    Test Group
+                                  </span>
+                                </div>
+                              )}
+                              <div className="grid grid-cols-12 gap-3 p-3 bg-surface border border-border-base rounded-xl transition-all hover:border-primary/30 group">
+                                <div className="col-span-2">
+                                  <PathologySearchSelect
+                                    items={categories.map((c) => ({
+                                      id: c.id,
+                                      primary: c.name,
+                                    }))}
+                                    label="Category"
+                                    placeholder="Select category"
+                                    value={param.categoryId}
+                                    onChange={(id) => {
+                                      updateTestParameter(index, "categoryId", id);
+                                      updateTestParameter(index, "parameterId", "");
+                                    }}
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <PathologySearchSelect
+                                    required
+                                    items={parameters
+                                      .filter((p) => !param.categoryId || p.categoryId === param.categoryId)
+                                      .map((p) => ({
+                                        id: p.id,
+                                        primary: p.name,
+                                        secondary: `${p.referenceRange} ${units.find((u) => u.id === p.unit)?.name || p.unit || ""}`,
+                                      }))}
+                                    label="Parameter *"
+                                    placeholder="Select parameter"
+                                    value={param.parameterId}
+                                    onChange={(id, primary) => {
+                                      const p = parameters.find((p) => p.id === id);
+                                      if (p) {
+                                        setTestForm((prev) => {
+                                          const updated = [...prev.parameters];
+                                          updated[index] = {
+                                            ...updated[index],
+                                            parameterId: id,
+                                            parameterName: primary,
+                                            referenceRange: p.referenceRange,
+                                            unit: units.find((u) => u.id === p.unit)?.name || p.unit || "",
+                                            resultType: p.resultType,
+                                            options: p.options,
+                                            minValue: p.minValue,
+                                            maxValue: p.maxValue,
+                                            criticalLow: p.criticalLow,
+                                            criticalHigh: p.criticalHigh,
+                                          };
+                                          return { ...prev, parameters: updated };
+                                        });
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  {param.resultType === "select" ? (
+                                    <div className="flex flex-col gap-1.5">
+                                      <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                                        Result *
+                                      </label>
+                                      <select
+                                        className="h-9 border border-border-base rounded px-2 text-[13.5px] bg-surface focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                        value={param.patientResult}
+                                        onChange={(e) => updateTestParameter(index, "patientResult", e.target.value)}
+                                      >
+                                        <option value="">Select</option>
+                                        {param.options?.map((opt) => (
+                                          <option key={opt.trim()} value={opt.trim()}>
+                                            {opt.trim()}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  ) : param.resultType === "boolean" ? (
+                                    <div className="flex flex-col gap-1.5">
+                                      <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                                        Result *
+                                      </label>
+                                      <select
+                                        className="h-9 border border-border-base rounded px-2 text-[13.5px] bg-surface focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                        value={param.patientResult}
+                                        onChange={(e) => updateTestParameter(index, "patientResult", e.target.value)}
+                                      >
+                                        <option value="">Select</option>
+                                        <option value="Positive">Positive</option>
+                                        <option value="Negative">Negative</option>
+                                        <option value="Reactive">Reactive</option>
+                                        <option value="Non-Reactive">Non-Reactive</option>
+                                      </select>
+                                    </div>
+                                  ) : (
+                                    <Input
+                                      isRequired
+                                      label="Result *"
+                                      placeholder="Value"
+                                      value={param.patientResult}
+                                      onValueChange={(v) => updateTestParameter(index, "patientResult", v)}
+                                    />
+                                  )}
+                                </div>
+                                <div className="col-span-2">
+                                  <Input
+                                    label="Ref. Range"
+                                    value={param.referenceRange}
+                                    onValueChange={(v) => updateTestParameter(index, "referenceRange", v)}
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <Input
+                                    label="Unit"
+                                    value={param.unit}
+                                    onValueChange={(v) => updateTestParameter(index, "unit", v)}
+                                  />
+                                </div>
+                                <div className="col-span-1 flex items-center justify-center">
+                                  {param.resultType === "numeric" && param.patientResult && (
+                                    (() => {
+                                      const flag = getResultFlag(param, param.patientResult);
+                                      if (!flag) return null;
+                                      return (
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${flag.color === 'danger' ? 'bg-danger-50 text-danger-700 border-danger-200' :
+                                          flag.color === 'warning' ? 'bg-warning-50 text-warning-700 border-warning-200' :
+                                            'bg-success-50 text-success-700 border-success-200'
+                                          }`}>
+                                          {flag.icon} {flag.label}
+                                        </span>
+                                      );
+                                    })()
+                                  )}
+                                </div>
+                                <div className="col-span-1 flex items-center justify-end">
+                                  <Button
+                                    isIconOnly
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                    color="danger"
+                                    size="sm"
+                                    variant="light"
+                                    onClick={() => removeTestParameter(index)}
+                                  >
+                                    <IoTrashOutline className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex justify-center mt-6">
+                        <Button
+                          className="bg-surface border-2 border-dashed border-border-base hover:border-primary/50 hover:bg-primary/5 h-12 px-10 rounded-xl transition-all"
+                          color="default"
+                          startContent={<IoAddOutline className="w-5 h-5" />}
+                          variant="flat"
+                          onClick={addTestParameter}
+                        >
+                          <span className="font-bold text-primary">Add Another Parameter</span>
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2 shrink-0">
-                  <Button variant="light" onClick={testModalState.close}>
+                <div className="px-5 py-4 border-t border-border-base/50 bg-surface-2 flex justify-end gap-3 shrink-0">
+                  <Button
+                    className="font-bold"
+                    variant="flat"
+                    onClick={testModalState.close}
+                  >
                     Cancel
                   </Button>
-                  <Button color="primary" onClick={handleSaveTest}>
-                    {isEditing ? "Update" : "Create"}
+                  <Button
+                    className="font-bold px-8"
+                    color="primary"
+                    onClick={handleSaveTest}
+                  >
+                    {isEditing ? "Update Report" : "Save Report"}
                   </Button>
                 </div>
               </div>
@@ -2404,52 +3260,251 @@ export default function PathologyPage() {
           )
         }
 
-        {/* Category Form Modal */}
         {
-          categoryModalState.isOpen && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          categoryModalState.isOpen && createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
               <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                className="absolute inset-0 bg-mountain-900/60 backdrop-blur-md"
                 onClick={categoryModalState.close}
               ></div>
-              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
-                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
-                  <h2 className="text-[14px] font-semibold text-text-main">
+              <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-6xl mx-4 max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2 flex items-center justify-between shrink-0">
+                  <h2 className="text-[14px] font-bold text-text-main">
                     {isEditing
                       ? "Edit Pathology Category"
                       : "New Pathology Category"}
                   </h2>
+                  <button
+                    className="text-text-muted hover:text-text-main"
+                    type="button"
+                    onClick={categoryModalState.close}
+                  >
+                    <IoCloseOutline className="w-5 h-5" />
+                  </button>
                 </div>
-                <div className="p-5">
-                  <Input
-                    isRequired
-                    label="Name *"
-                    placeholder="Category Name"
-                    value={categoryForm.name}
-                    onValueChange={(v) =>
-                      setCategoryForm((prev) => ({ ...prev, name: v }))
-                    }
-                  />
+                <div className="p-5 overflow-y-auto flex-1">
+                  <div className="space-y-6">
+                    <div className="bg-surface-2/30 p-4 rounded-lg border border-border-base/50">
+                      <Input
+                        isRequired
+                        label="Category Name *"
+                        placeholder="e.g. Complete Blood Count (CBC)"
+                        value={categoryForm.name}
+                        onValueChange={(v) =>
+                          setCategoryForm((prev) => ({ ...prev, name: v }))
+                        }
+                      />
+                    </div>
+
+                    {!isEditing && (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center px-1">
+                          <div>
+                            <h3 className="text-[13px] font-bold text-text-main uppercase tracking-wider">
+                              Category Parameters
+                            </h3>
+                            <p className="text-[11px] text-text-muted">
+                              Define the sub-tests included in this category
+                            </p>
+                          </div>
+                          <Button
+                            color="primary"
+                            size="sm"
+                            startContent={<IoAddOutline />}
+                            variant="flat"
+                            onClick={addCategoryParameter}
+                          >
+                            Add Parameter
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6">
+                          {categoryForm.parameters.map((param, index) => (
+                            <div
+                              key={index}
+                              className="bg-surface-2 border border-border-base rounded-lg p-4 shadow-sm relative group hover:border-primary/30 transition-all flex flex-col gap-4"
+                            >
+                              <div className="flex justify-between items-center pb-2 border-b border-border-base/50">
+                                <span className="text-[11px] font-extrabold text-primary uppercase tracking-widest">
+                                  PARAMETER #{index + 1}
+                                </span>
+                                <button
+                                  className="text-text-muted hover:text-danger p-1 rounded-full hover:bg-danger/10 transition-colors"
+                                  type="button"
+                                  onClick={() => removeCategoryParameter(index)}
+                                >
+                                  <IoTrashOutline className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                <div className="col-span-2">
+                                  <Input
+                                    isRequired
+                                    label="Parameter Name *"
+                                    placeholder="e.g. Hemoglobin"
+                                    size="sm"
+                                    value={param.name}
+                                    onValueChange={(v) => updateCategoryParameter(index, "name", v)}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-bold text-text-muted uppercase">Type</label>
+                                  <select
+                                    className="w-full h-8 border border-border-base rounded px-2 text-[12px] bg-surface focus:outline-none focus:border-primary"
+                                    value={param.resultType}
+                                    onChange={(e) => updateCategoryParameter(index, "resultType", e.target.value)}
+                                  >
+                                    <option value="numeric">Numeric</option>
+                                    <option value="boolean">Pos/Neg</option>
+                                    <option value="select">Dropdown</option>
+                                    <option value="text">Text</option>
+                                    <option value="richText">Rich Text</option>
+                                  </select>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div className="flex justify-between items-center">
+                                    <label className="text-[11px] font-bold text-text-muted uppercase">Unit</label>
+                                    <button
+                                      className="text-[10px] text-primary hover:underline font-bold"
+                                      type="button"
+                                      onClick={() => setShowQuickUnit(!showQuickUnit)}
+                                    >
+                                      + NEW
+                                    </button>
+                                  </div>
+
+                                  {showQuickUnit ? (
+                                    <div className="flex gap-1">
+                                      <input
+                                        autoFocus
+                                        className="flex-1 h-8 border border-border-base rounded px-2 text-[12px] bg-surface focus:outline-none focus:border-primary"
+                                        placeholder="Unit"
+                                        value={quickUnitName}
+                                        onChange={(e) => setQuickUnitName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleQuickUnitSave().then((id) => {
+                                              if (id) updateCategoryParameter(index, "unit", id);
+                                            });
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <select
+                                      className="w-full h-8 border border-border-base rounded px-2 text-[12px] bg-surface focus:outline-none focus:border-primary"
+                                      value={param.unit}
+                                      onChange={(e) => updateCategoryParameter(index, "unit", e.target.value)}
+                                    >
+                                      <option value="">No Unit</option>
+                                      {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                    </select>
+                                  )}
+                                </div>
+
+                                <div className="col-span-2">
+                                  <Input
+                                    isRequired
+                                    label="Reference Range String *"
+                                    placeholder="e.g. 13.5 - 17.5"
+                                    size="sm"
+                                    value={param.referenceRange}
+                                    onValueChange={(v) => updateCategoryParameter(index, "referenceRange", v)}
+                                  />
+                                </div>
+
+                                {param.resultType === 'numeric' && (
+                                  <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-surface p-3 rounded-md border border-border-base/50">
+                                    <Input
+                                      label="Lower Range (Min)"
+                                      placeholder="0.00"
+                                      size="sm"
+                                      type="number"
+                                      value={param.minValue}
+                                      onValueChange={(v) => updateCategoryParameter(index, "minValue", v)}
+                                    />
+                                    <Input
+                                      label="Upper Range (Max)"
+                                      placeholder="0.00"
+                                      size="sm"
+                                      type="number"
+                                      value={param.maxValue}
+                                      onValueChange={(v) => updateCategoryParameter(index, "maxValue", v)}
+                                    />
+                                    <Input
+                                      label="Critical Low"
+                                      placeholder="Panic"
+                                      size="sm"
+                                      type="number"
+                                      value={param.criticalLow}
+                                      onValueChange={(v) => updateCategoryParameter(index, "criticalLow", v)}
+                                    />
+                                    <Input
+                                      label="Critical High"
+                                      placeholder="Panic"
+                                      size="sm"
+                                      type="number"
+                                      value={param.criticalHigh}
+                                      onValueChange={(v) => updateCategoryParameter(index, "criticalHigh", v)}
+                                    />
+                                  </div>
+                                )}
+
+                                {param.resultType === 'select' && (
+                                  <div className="col-span-2">
+                                    <Input
+                                      label="Dropdown Options (comma separated)"
+                                      placeholder="Nil, Trace, 1+, 2+"
+                                      size="sm"
+                                      value={param.options}
+                                      onValueChange={(v) => updateCategoryParameter(index, "options", v)}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {categoryForm.parameters.length === 0 && (
+                          <div className="py-8 border-2 border-dashed border-border-base rounded-lg flex flex-col items-center justify-center text-text-muted">
+                            <p className="text-[13px]">No parameters added yet</p>
+                            <button
+                              className="text-[12px] text-primary font-bold mt-1 hover:underline"
+                              onClick={addCategoryParameter}
+                            >
+                              Click here to add the first parameter
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2 shrink-0">
                   <Button variant="light" onClick={categoryModalState.close}>
                     Cancel
                   </Button>
                   <Button color="primary" onClick={handleSaveCategory}>
-                    {isEditing ? "Update" : "Create"}
+                    {isEditing ? "Update Category" : "Save Category & Parameters"}
                   </Button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )
         }
 
         {/* Unit Form Modal */}
         {
-          unitModalState.isOpen && (
+          unitModalState.isOpen && createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center">
               <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                className="absolute inset-0 bg-mountain-900/60 backdrop-blur-md"
                 onClick={unitModalState.close}
               ></div>
               <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
@@ -2478,100 +3533,253 @@ export default function PathologyPage() {
                   </Button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )
         }
 
-        {/* Parameter Form Modal */}
         {
-          parameterModalState.isOpen && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          parameterModalState.isOpen && createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
               <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                className="absolute inset-0 bg-mountain-900/60 backdrop-blur-md"
                 onClick={parameterModalState.close}
               ></div>
-              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
-                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
-                  <h2 className="text-[14px] font-semibold text-text-main">
+              <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-xl shadow-2xl overflow-hidden flex flex-col">
+                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2 flex items-center justify-between shrink-0">
+                  <h2 className="text-[14px] font-bold text-text-main">
                     {isEditing
-                      ? "Edit Pathology Parameter"
-                      : "New Pathology Parameter"}
+                      ? "Edit Parameter Configuration"
+                      : "New Parameter Configuration"}
                   </h2>
+                  <button
+                    className="text-text-muted hover:text-text-main"
+                    type="button"
+                    onClick={parameterModalState.close}
+                  >
+                    <IoCloseOutline className="w-5 h-5" />
+                  </button>
                 </div>
-                <div className="p-5 space-y-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-text-muted">
-                      Category Name
-                    </label>
-                    <select
-                      className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                      value={parameterForm.categoryId}
-                      onChange={(e) =>
+                <div className="p-5 overflow-y-auto max-h-[80vh]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Category & Name */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                        Category
+                      </label>
+                      <select
+                        className="h-9 border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        value={parameterForm.categoryId}
+                        onChange={(e) =>
+                          setParameterForm((prev) => ({
+                            ...prev,
+                            categoryId: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">No Category Selected</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Input
+                      isRequired
+                      label="Parameter Name *"
+                      placeholder="e.g. Hemoglobin"
+                      value={parameterForm.name}
+                      onValueChange={(v) =>
+                        setParameterForm((prev) => ({ ...prev, name: v }))
+                      }
+                    />
+
+                    {/* Result Type & Default */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                        Result Type
+                      </label>
+                      <select
+                        className="h-9 border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        value={parameterForm.resultType}
+                        onChange={(e) =>
+                          setParameterForm((prev) => ({
+                            ...prev,
+                            resultType: e.target.value as any,
+                          }))
+                        }
+                      >
+                        <option value="numeric">Numeric (Range-based)</option>
+                        <option value="boolean">Binary (Pos/Neg)</option>
+                        <option value="select">Dropdown (Options)</option>
+                        <option value="text">Short Text</option>
+                        <option value="richText">Rich Text/Notes</option>
+                      </select>
+                    </div>
+                    <Input
+                      label="Default Value"
+                      placeholder="Optional"
+                      value={parameterForm.defaultValue}
+                      onValueChange={(v) =>
                         setParameterForm((prev) => ({
                           ...prev,
-                          categoryId: e.target.value,
+                          defaultValue: v,
                         }))
                       }
-                    >
-                      <option value="">No Category Selected</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Input
-                    isRequired
-                    label="Name *"
-                    placeholder="Parameter Name"
-                    value={parameterForm.name}
-                    onValueChange={(v) =>
-                      setParameterForm((prev) => ({ ...prev, name: v }))
-                    }
-                  />
-                  <Input
-                    isRequired
-                    label="Reference Range *"
-                    placeholder="Reference Range"
-                    value={parameterForm.referenceRange}
-                    onValueChange={(v) =>
-                      setParameterForm((prev) => ({ ...prev, referenceRange: v }))
-                    }
-                  />
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-text-muted">
-                      Unit
-                    </label>
-                    <select
-                      className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                      value={parameterForm.unit}
-                      onChange={(e) =>
-                        setParameterForm((prev) => ({
-                          ...prev,
-                          unit: e.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">Select Unit</option>
-                      {units.map((unit) => (
-                        <option key={unit.id} value={unit.id}>
-                          {unit.name}
-                        </option>
-                      ))}
-                    </select>
+                    />
+
+                    {/* Conditional: Select Options */}
+                    {parameterForm.resultType === "select" && (
+                      <div className="col-span-2">
+                        <Input
+                          isRequired
+                          label="Options (Comma separated) *"
+                          placeholder="Nil, Trace, 1+, 2+"
+                          value={parameterForm.options}
+                          onValueChange={(v) =>
+                            setParameterForm((prev) => ({ ...prev, options: v }))
+                          }
+                        />
+                      </div>
+                    )}
+
+                    {/* Common: Range & Unit */}
+                    <Input
+                      isRequired
+                      label="Reference Range String *"
+                      placeholder="e.g. 13.5 - 17.5"
+                      value={parameterForm.referenceRange}
+                      onValueChange={(v) => {
+                        const newForm = { ...parameterForm, referenceRange: v };
+                        const regex = /([\d.]+)\s*(?:-|to)\s*([\d.]+)/i;
+                        const match = v.match(regex);
+                        if (match) {
+                          newForm.minValue = match[1];
+                          newForm.maxValue = match[2];
+                        }
+                        setParameterForm(newForm);
+                      }}
+                    />
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                          Unit
+                        </label>
+                        <button
+                          type="button"
+                          className={`text-[10px] font-bold uppercase transition-colors ${showQuickUnit ? 'text-danger hover:text-danger-600' : 'text-primary hover:text-primary-600'}`}
+                          onClick={() => setShowQuickUnit(!showQuickUnit)}
+                        >
+                          {showQuickUnit ? 'Cancel' : '+ Quick Add'}
+                        </button>
+                      </div>
+
+                      {showQuickUnit ? (
+                        <div className="flex gap-2">
+                          <input
+                            autoFocus
+                            className="flex-1 h-9 border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                            placeholder="e.g. mg/dL"
+                            value={quickUnitName}
+                            onChange={(e) => setQuickUnitName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleQuickUnitSave();
+                              }
+                            }}
+                          />
+                          <Button
+                            isIconOnly
+                            color="primary"
+                            size="sm"
+                            onClick={handleQuickUnitSave}
+                          >
+                            <IoAddOutline className="text-lg" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <select
+                          className="h-9 border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                          value={parameterForm.unit}
+                          onChange={(e) =>
+                            setParameterForm((prev) => ({
+                              ...prev,
+                              unit: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Select Unit</option>
+                          {units.map((unit) => (
+                            <option key={unit.id} value={unit.id}>
+                              {unit.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Conditional: Numeric Ranges */}
+                    {parameterForm.resultType === "numeric" && (
+                      <>
+                        <Input
+                          label="Lower Range (Min)"
+                          placeholder="0.00"
+                          type="number"
+                          value={parameterForm.minValue}
+                          onValueChange={(v) =>
+                            setParameterForm((prev) => ({ ...prev, minValue: v }))
+                          }
+                        />
+                        <Input
+                          label="Upper Range (Max)"
+                          placeholder="0.00"
+                          type="number"
+                          value={parameterForm.maxValue}
+                          onValueChange={(v) =>
+                            setParameterForm((prev) => ({ ...prev, maxValue: v }))
+                          }
+                        />
+                        <Input
+                          label="Critical Low"
+                          placeholder="Panic value"
+                          type="number"
+                          value={parameterForm.criticalLow}
+                          onValueChange={(v) =>
+                            setParameterForm((prev) => ({
+                              ...prev,
+                              criticalLow: v,
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Critical High"
+                          placeholder="Panic value"
+                          type="number"
+                          value={parameterForm.criticalHigh}
+                          onValueChange={(v) =>
+                            setParameterForm((prev) => ({
+                              ...prev,
+                              criticalHigh: v,
+                            }))
+                          }
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
-                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
+                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2 shrink-0">
                   <Button variant="light" onClick={parameterModalState.close}>
                     Cancel
                   </Button>
                   <Button color="primary" onClick={handleSaveParameter}>
-                    {isEditing ? "Update" : "Create"}
+                    {isEditing ? "Update Configuration" : "Save Parameter"}
                   </Button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )
         }
 
@@ -2730,7 +3938,7 @@ export default function PathologyPage() {
                   <Button variant="light" onClick={deleteConfirmModalState.close}>
                     Cancel
                   </Button>
-                  <Button color="danger" onClick={handleDelete}>
+                  <Button className="bg-danger text-white hover:bg-danger/90" onClick={handleDelete}>
                     Delete
                   </Button>
                 </div>

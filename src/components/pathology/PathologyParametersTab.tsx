@@ -63,6 +63,9 @@ export default function PathologyParametersTab({
                   Category
                 </th>
                 <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
+                  Type
+                </th>
+                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Reference Range
                 </th>
                 <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
@@ -91,6 +94,16 @@ export default function PathologyParametersTab({
                       <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-surface-2 text-text-main border-border-base">
                         {categories.find((c) => c.id === parameter.categoryId)
                           ?.name || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        parameter.resultType === 'numeric' ? 'bg-blue-500/10 text-blue-500' :
+                        parameter.resultType === 'select' ? 'bg-purple-500/10 text-purple-500' :
+                        parameter.resultType === 'boolean' ? 'bg-orange-500/10 text-orange-500' :
+                        'bg-gray-500/10 text-gray-500'
+                      }`}>
+                        {parameter.resultType || 'text'}
                       </span>
                     </td>
                     <td className="px-4 py-2 text-[13px] text-text-main">

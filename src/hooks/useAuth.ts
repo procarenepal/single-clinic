@@ -5,6 +5,10 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  updateEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  verifyBeforeUpdateEmail,
   User as FirebaseUser,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -309,6 +313,65 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
     }
   };
 
+  /**
+   * Update user email address
+   * @param {string} newEmail - New email address
+   * @param {string} currentPassword - Current password for re-authentication
+   */
+  const updateEmailInfo = async (newEmail: string, currentPassword: string) => {
+    if (!currentUser || !currentUser.email) throw new Error("No user logged in");
+
+    try {
+      // 1. Re-authenticate first (required for security-sensitive operations)
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        currentPassword,
+      );
+
+      try {
+        await reauthenticateWithCredential(currentUser, credential);
+      } catch (reauthError: any) {
+        console.error("Re-authentication failed:", reauthError);
+        if (reauthError.code === "auth/wrong-password" || reauthError.code === "auth/invalid-credential") {
+          throw new Error("The current password you entered is incorrect.");
+        }
+        throw reauthError;
+      }
+
+      // 2. Update email in Firebase Auth
+      // Note: verifyBeforeUpdateEmail is preferred as it verifies the new email before changing it
+      // Some Firebase projects mandate this and throw auth/operation-not-allowed for updateEmail
+      try {
+        await verifyBeforeUpdateEmail(currentUser, newEmail);
+        
+        // Return success but with a pending flag
+        // We DON'T update Firestore yet because the email hasn't actually changed in Auth
+        // The user must click the link in their email first.
+        return { success: true, pendingVerification: true };
+      } catch (emailError: any) {
+        console.error("verifyBeforeUpdateEmail failed, trying updateEmail fallback:", emailError);
+        // Fallback for older configurations if verifyBeforeUpdateEmail isn't supported/allowed
+        await updateEmail(currentUser, newEmail);
+        
+        // 3. Update email in Firestore User Document (only for instant updates)
+        await userService.updateUser(currentUser.uid, { email: newEmail });
+
+        // 4. Update local state
+        const updatedUserData = { ...userData, email: newEmail } as User;
+        setUserData(updatedUserData);
+        
+        const updatedCurrentUser = { ...currentUser, email: newEmail } as ExtendedUser;
+        updatedCurrentUser.userData = updatedUserData;
+        setCurrentUser(updatedCurrentUser);
+
+        return { success: true, pendingVerification: false };
+      }
+    } catch (error) {
+      console.error("Error updating email info:", error);
+      throw error;
+    }
+  };
+
   // Listen for authentication state changes
   useEffect(() => {
     if (dataOnly) return;
@@ -506,6 +569,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
       getAccessiblePages,
       checkClinicSubscription,
       updateProfileInfo,
+      updateEmailInfo,
     }),
     [
       currentUser,
@@ -524,6 +588,8 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
       preloadPermissions,
       getAccessiblePages,
       checkClinicSubscription,
+      updateProfileInfo,
+      updateEmailInfo,
     ],
   );
 }
