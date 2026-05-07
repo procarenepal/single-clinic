@@ -58,9 +58,6 @@ export default function PathologyTestsTab({
                   Patient
                 </th>
                 <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
-                  Short Name
-                </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Test Type
                 </th>
                 <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
@@ -104,9 +101,6 @@ export default function PathologyTestsTab({
                         )}
                       </div>
                     </div>
-                  </td>
-                  <td className="px-4 py-2 text-[13px] text-text-main">
-                    {test.shortName || "—"}
                   </td>
                   <td className="px-4 py-2 text-[13px] text-text-main">
                     {test.testType || "—"}

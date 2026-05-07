@@ -832,9 +832,11 @@ export default function PathologyPage() {
         patientGender:
           (testForm.patientGender as "male" | "female" | "other") || "other",
         testName: testForm.testType || testForm.shortName || "Unknown Test",
-        categoryName:
-          categories.find((c) => c.id === testForm.categoryId)?.name ||
-          "Unknown Category",
+        categoryName: testForm.categoryId
+          ? testForm.categoryId.split(", ").map(id => 
+              categories.find(c => c.id === id.trim())?.name || id.trim()
+            ).join(", ")
+          : "Unknown Category",
         shortName: testForm.shortName,
         testType: testForm.testType,
         categoryId: testForm.categoryId,
