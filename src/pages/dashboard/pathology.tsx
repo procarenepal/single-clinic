@@ -1671,9 +1671,7 @@ export default function PathologyPage() {
       { label: "Patient Name", value: test.patientName },
       { label: "Age", value: test.patientAge ? `${test.patientAge}` : "" },
       { label: "Gender", value: test.patientGender ? test.patientGender.charAt(0).toUpperCase() + test.patientGender.slice(1) : "" },
-      { label: "Test Name", value: test.testName },
-      { label: "Category", value: test.categoryName },
-      { label: "Test Type", value: test.testType },
+      { label: "Investigation", value: test.testName },
       { label: "Sample Date", value: test.createdAt ? new Date(test.createdAt).toLocaleDateString() : "" },
       { label: "Report Date", value: new Date().toLocaleDateString() },
     ].filter((f) => isValid(f.value));
