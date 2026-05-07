@@ -1530,6 +1530,8 @@ export interface PathologyTest {
   patientEmail?: string; // Denormalized for display
   patientAge?: string | number; // Patient age
   patientGender?: "male" | "female" | "other"; // Patient gender
+  patientType?: string; // OPD, IPD, Emergency, etc.
+  sampleNumber?: string; // Lab sample ID
   testName: string;
   shortName?: string;
   testType?: string;

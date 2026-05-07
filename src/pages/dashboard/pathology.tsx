@@ -252,6 +252,8 @@ export default function PathologyPage() {
     patientName: "",
     patientAge: "",
     patientGender: "",
+    patientType: "OPD", // Default to OPD
+    sampleNumber: "",
     shortName: "",
     testType: "",
     categoryId: "",
@@ -529,6 +531,8 @@ export default function PathologyPage() {
       patientName: "",
       patientAge: "",
       patientGender: "",
+      patientType: "OPD",
+      sampleNumber: "",
       shortName: "",
       testType: "",
       categoryId: "",
@@ -831,6 +835,8 @@ export default function PathologyPage() {
           : undefined,
         patientGender:
           (testForm.patientGender as "male" | "female" | "other") || "other",
+        patientType: testForm.patientType,
+        sampleNumber: testForm.sampleNumber,
         testName: testForm.testType || testForm.shortName || "Unknown Test",
         categoryName: testForm.categoryId
           ? testForm.categoryId.split(", ").map(id => 
@@ -915,6 +921,8 @@ export default function PathologyPage() {
       patientName: test.patientName || "",
       patientAge: test.patientAge?.toString() || "",
       patientGender: test.patientGender || "",
+      patientType: test.patientType || "OPD",
+      sampleNumber: test.sampleNumber || "",
       shortName: test.shortName || "",
       testType: test.testType || "",
       categoryId: test.categoryId,
@@ -1669,9 +1677,11 @@ export default function PathologyPage() {
 
     const infofields = [
       { label: "Patient Name", value: test.patientName },
-      { label: "Age", value: test.patientAge ? `${test.patientAge}` : "" },
-      { label: "Gender", value: test.patientGender ? test.patientGender.charAt(0).toUpperCase() + test.patientGender.slice(1) : "" },
+      { label: "Patient ID", value: test.patientId || "WALK-IN" },
+      { label: "Age / Gender", value: `${test.patientAge ? test.patientAge : ""} / ${test.patientGender ? test.patientGender.charAt(0).toUpperCase() + test.patientGender.slice(1) : ""}` },
+      { label: "Patient Type", value: test.patientType || "OPD" },
       { label: "Investigation", value: test.testName },
+      { label: "Sample Number", value: test.sampleNumber },
       { label: "Sample Date", value: test.createdAt ? new Date(test.createdAt).toLocaleDateString() : "" },
       { label: "Report Date", value: new Date().toLocaleDateString() },
     ].filter((f) => isValid(f.value));
@@ -2887,6 +2897,44 @@ export default function PathologyPage() {
                           <option value="other">Other</option>
                         </select>
                       </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[13px] font-medium text-text-muted">
+                          Patient Type
+                        </label>
+                        <select
+                          className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                          value={testForm.patientType}
+                          onChange={(e) =>
+                            setTestForm((prev) => ({
+                              ...prev,
+                              patientType: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="OPD">OPD</option>
+                          <option value="IPD">IPD</option>
+                          <option value="Emergency">Emergency</option>
+                          <option value="Health Camp">Health Camp</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+
+                      <Input
+                        label="Sample Number"
+                        placeholder="e.g. S-101"
+                        value={testForm.sampleNumber}
+                        onValueChange={(v) =>
+                          setTestForm((prev) => ({ ...prev, sampleNumber: v }))
+                        }
+                      />
+
+                      <Input
+                        disabled
+                        label="Patient ID"
+                        placeholder="Auto-generated"
+                        value={testForm.patientId || "WALK-IN"}
+                      />
 
                       <Input
                         label="Short Name"
