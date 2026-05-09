@@ -76,7 +76,7 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
     .clinic-name {
       font-size: ${config.fontSize === "small" ? "18px" : config.fontSize === "large" ? "26px" : "22px"};
       margin: 0;
-      font-weight: 800;
+      font-weight: 500;
       color: ${primaryColor};
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -86,10 +86,10 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
 
     .tagline {
       font-size: 10px;
-      font-weight: 600;
+      font-weight: 400;
       color: ${textColor};
       text-transform: uppercase;
-      letter-spacing: 0.15em;
+      letter-spacing: 0.12em;
       margin: 4px 0 0 0;
       text-align: center;
     }
@@ -124,20 +124,20 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
 
     .contact-label {
       font-size: 10px;
-      font-weight: 700;
-      color: #94a3b8;
+      font-weight: 400;
+      color: #64748b;
       text-transform: uppercase;
     }
 
     .contact-value {
       font-size: 11px;
-      font-weight: 700;
-      color: ${textColor};
+      font-weight: 500;
+      color: #334155;
     }
 
     .website {
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 500;
       color: ${textColor};
       margin-top: 2px;
       text-align: center;
@@ -168,10 +168,10 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
 
     .footer-text {
       font-size: 9px;
-      font-weight: 700;
-      color: #94a3b8;
+      font-weight: 400;
+      color: #64748b;
       text-transform: uppercase;
-      letter-spacing: 0.2em;
+      letter-spacing: 0.15em;
     }
   `;
 };

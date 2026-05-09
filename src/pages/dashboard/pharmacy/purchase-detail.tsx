@@ -482,10 +482,15 @@ export default function PurchaseDetailPage() {
             purchaseData.branchId,
           );
 
-          if (settingsData) {
-            setPharmacySettings(settingsData as PharmacySettings);
+          let finalSettings = settingsData;
+          if (!finalSettings) {
+            finalSettings = pharmacyService.getDefaultPharmacySettings();
+          }
+
+          if (finalSettings) {
+            setPharmacySettings(finalSettings as PharmacySettings);
             const enabledMethods =
-              settingsData.enabledPaymentMethods?.filter(
+              finalSettings.enabledPaymentMethods?.filter(
                 (pm) => pm.isEnabled,
               ) || [];
 
@@ -493,7 +498,7 @@ export default function PurchaseDetailPage() {
               setPaymentForm((prev) => ({
                 ...prev,
                 paymentMethod:
-                  settingsData.defaultPaymentMethod || enabledMethods[0].key,
+                  finalSettings.defaultPaymentMethod || enabledMethods[0].key,
               }));
             }
           }

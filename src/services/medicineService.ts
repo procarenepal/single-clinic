@@ -244,10 +244,17 @@ export const medicineService = {
       const q = query(collection(db, MEDICINES_COLLECTION), ...constraints);
 
       const querySnapshot = await getDocs(q);
-      const medicines = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Medicine[];
+      const medicines = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate(),
+          expiryDate: data.expiryDate?.toDate(),
+        } as Medicine;
+      });
 
       console.log(`[Diagnostic] clinicId: "${clinicId}", Found: ${medicines.length} medicines`);
 

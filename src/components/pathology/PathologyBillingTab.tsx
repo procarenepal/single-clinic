@@ -883,8 +883,15 @@ export default function PathologyBillingTab({
                       allowsCustomValue
                       isRequired
                       className="col-span-1 md:col-span-1 lg:col-span-1"
+                      inputProps={{
+                        classNames: {
+                          label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                          input: "text-[14px] font-medium text-text-main",
+                          inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        },
+                      }}
                       defaultItems={patients}
-                      label="Patient Name * *"
+                      label="Patient Name * * *"
                       placeholder="Name"
                       inputValue={formData.patientName}
                       size="sm"
@@ -930,6 +937,11 @@ export default function PathologyBillingTab({
                       value={formData.patientPhone}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        input: "text-[14px] font-medium text-text-main",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({
                           ...prev,
@@ -944,6 +956,11 @@ export default function PathologyBillingTab({
                       value={formData.patientEmail}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        input: "text-[14px] font-medium text-text-main",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({
                           ...prev,
@@ -957,6 +974,11 @@ export default function PathologyBillingTab({
                       value={formData.patientAddress}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        input: "text-[14px] font-medium text-text-main",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({
                           ...prev,
@@ -971,6 +993,11 @@ export default function PathologyBillingTab({
                       value={formData.patientAge}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        input: "text-[14px] font-medium text-text-main",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, patientAge: value }))
                       }
@@ -980,6 +1007,11 @@ export default function PathologyBillingTab({
                       placeholder="Gender"
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        value: "text-[14px] font-medium text-text-main",
+                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       selectedKeys={
                         formData.patientGender ? [formData.patientGender] : []
                       }
@@ -1011,6 +1043,11 @@ export default function PathologyBillingTab({
                       value={formData.labReferenceNo}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        input: "text-[14px] font-medium text-text-main",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, labReferenceNo: value }))
                       }
@@ -1021,6 +1058,11 @@ export default function PathologyBillingTab({
                       value={formData.sampleCollectionDate}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        input: "text-[14px] font-medium text-text-main",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, sampleCollectionDate: value }))
                       }
@@ -1031,6 +1073,11 @@ export default function PathologyBillingTab({
                       value={formData.expectedReportDate}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        input: "text-[14px] font-medium text-text-main",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, expectedReportDate: value }))
                       }
@@ -1040,6 +1087,11 @@ export default function PathologyBillingTab({
                       selectedKeys={[formData.reportStatus]}
                       size="sm"
                       variant="flat"
+                      classNames={{
+                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
+                        value: "text-[14px] font-medium text-text-main",
+                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                      }}
                       onSelectionChange={(keys) => {
                         const selected = Array.from(keys)[0] as any;
                         setFormData((prev) => ({ ...prev, reportStatus: selected }));
@@ -1049,7 +1101,7 @@ export default function PathologyBillingTab({
                       <SelectItem key="collected">Sample Collected</SelectItem>
                       <SelectItem key="in_lab">In Laboratory</SelectItem>
                       <SelectItem key="partially_ready">Partially Ready</SelectItem>
-                      <SelectItem key="ready">Ready for Print</SelectItem>
+                      <SelectItem key="ready">Report Ready</SelectItem>
                       <SelectItem key="delivered">Delivered</SelectItem>
                     </Select>
                   </div>

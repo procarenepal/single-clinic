@@ -453,6 +453,22 @@ function StatusBadge({
   );
 }
 
+const toISODateString = (date: any): string => {
+  if (!date) return "";
+
+  // Handle Firestore Timestamp
+  if (typeof date.toDate === "function") {
+    date = date.toDate();
+  }
+
+  // Handle other types
+  const d = date instanceof Date ? date : new Date(date);
+
+  if (isNaN(d.getTime())) return "";
+
+  return d.toISOString().split("T")[0];
+};
+
 export default function PharmacyPage() {
   const navigate = useNavigate();
   const { clinicId, currentUser, userData } = useAuthContext();
@@ -1501,9 +1517,7 @@ export default function PharmacyPage() {
                 updatedItem.salePrice = defaultPrice; // Keep for backward compatibility
                 updatedItem.regularSalePrice = defaultPrice; // Default regular price
                 updatedItem.schemeSalePrice = defaultPrice; // Default scheme price (can be updated)
-                updatedItem.expiryDate = selectedMedicine.expiryDate
-                  ? selectedMedicine.expiryDate.toISOString().split("T")[0]
-                  : "";
+                updatedItem.expiryDate = toISODateString(selectedMedicine.expiryDate);
                 // Calculate amount after setting the price
                 updatedItem.amount =
                   updatedItem.quantity * updatedItem.salePrice;
@@ -1571,18 +1585,16 @@ export default function PharmacyPage() {
                                   currentStockType === "regular" &&
                                   latestRegularTransaction?.expiryDate
                                 ) {
-                                  expiryDate =
-                                    latestRegularTransaction.expiryDate
-                                      .toISOString()
-                                      .split("T")[0];
+                                  expiryDate = toISODateString(
+                                    latestRegularTransaction.expiryDate,
+                                  );
                                 } else if (
                                   currentStockType === "scheme" &&
                                   latestSchemeTransaction?.expiryDate
                                 ) {
-                                  expiryDate =
-                                    latestSchemeTransaction.expiryDate
-                                      .toISOString()
-                                      .split("T")[0];
+                                  expiryDate = toISODateString(
+                                    latestSchemeTransaction.expiryDate,
+                                  );
                                 } else if (!expiryDate) {
                                   // Fallback to whichever is available if current style has no expiry
                                   const anyExpiry =
@@ -1590,9 +1602,7 @@ export default function PharmacyPage() {
                                     latestSchemeTransaction?.expiryDate;
 
                                   if (anyExpiry) {
-                                    expiryDate = anyExpiry
-                                      .toISOString()
-                                      .split("T")[0];
+                                    expiryDate = toISODateString(anyExpiry);
                                   }
                                 }
 
@@ -2469,9 +2479,7 @@ export default function PharmacyPage() {
       setSupplierPaymentForm({
         supplierId: supplier.id,
         amount: payment.amount.toString(),
-        date: payment.date
-          ? new Date(payment.date).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
+        date: toISODateString(payment.date || new Date()),
         type: payment.type,
         referenceNumber: payment.referenceNumber || "",
         note: payment.notes || "",
@@ -4202,10 +4210,9 @@ export default function PharmacyPage() {
                                           setEditingLedgerEntry(entry);
                                           setEditLedgerEntryForm({
                                             billNumber: entry.billNumber || "",
-                                            transactionDate:
-                                              entry.transactionDate
-                                                .toISOString()
-                                                .split("T")[0],
+                                            transactionDate: toISODateString(
+                                              entry.transactionDate,
+                                            ),
                                             debitAmount:
                                               entry.debitAmount > 0
                                                 ? entry.debitAmount.toString()

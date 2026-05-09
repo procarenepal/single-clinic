@@ -309,6 +309,12 @@ export default function PathologyPage() {
     options: "",
     minValue: "",
     maxValue: "",
+    minValueMale: "",
+    maxValueMale: "",
+    minValueFemale: "",
+    maxValueFemale: "",
+    referenceRangeMale: "",
+    referenceRangeFemale: "",
     criticalLow: "",
     criticalHigh: "",
     defaultValue: "",
@@ -404,6 +410,56 @@ export default function PathologyPage() {
           test.labTechnicianName.toLowerCase().includes(query)),
     );
   }, [tests, testsSearchQuery]);
+
+  // Update parameter reference ranges when gender changes
+  useEffect(() => {
+    if (testForm.parameters.length > 0 && testForm.patientGender) {
+      setTestForm((prev) => {
+        const isMale = prev.patientGender === "male";
+        const isFemale = prev.patientGender === "female";
+
+        let hasChanges = false;
+        const newParameters = prev.parameters.map((p) => {
+          const op = parameters.find((param) => param.id === p.parameterId);
+          if (!op) return p;
+
+          const refRange = (isMale && op.referenceRangeMale)
+            ? op.referenceRangeMale
+            : (isFemale && op.referenceRangeFemale)
+              ? op.referenceRangeFemale
+              : op.referenceRange;
+
+          const minVal = (isMale && op.minValueMale !== undefined)
+            ? op.minValueMale
+            : (isFemale && op.minValueFemale !== undefined)
+              ? op.minValueFemale
+              : op.minValue;
+
+          const maxVal = (isMale && op.maxValueMale !== undefined)
+            ? op.maxValueMale
+            : (isFemale && op.maxValueFemale !== undefined)
+              ? op.maxValueFemale
+              : op.maxValue;
+
+          if (p.referenceRange !== refRange || p.minValue !== minVal || p.maxValue !== maxVal) {
+            hasChanges = true;
+            return {
+              ...p,
+              referenceRange: refRange,
+              minValue: minVal,
+              maxValue: maxVal,
+            };
+          }
+          return p;
+        });
+
+        if (hasChanges) {
+          return { ...prev, parameters: newParameters };
+        }
+        return prev;
+      });
+    }
+  }, [testForm.patientGender, parameters]);
 
   const filteredCategories = useMemo(() => {
     if (!categoriesSearchQuery.trim()) return categories;
@@ -608,12 +664,31 @@ export default function PathologyPage() {
         const selectedParam = parameters.find((p) => p.id === value);
 
         if (selectedParam) {
+          const isMale = testForm.patientGender === "male";
+          const isFemale = testForm.patientGender === "female";
+
           updated[index].parameterName = selectedParam.name;
-          updated[index].referenceRange = selectedParam.referenceRange;
+          updated[index].referenceRange = (isMale && selectedParam.referenceRangeMale)
+            ? selectedParam.referenceRangeMale
+            : (isFemale && selectedParam.referenceRangeFemale)
+              ? selectedParam.referenceRangeFemale
+              : selectedParam.referenceRange;
+
           updated[index].resultType = selectedParam.resultType;
           updated[index].options = selectedParam.options;
-          updated[index].minValue = selectedParam.minValue;
-          updated[index].maxValue = selectedParam.maxValue;
+
+          updated[index].minValue = (isMale && selectedParam.minValueMale !== undefined)
+            ? selectedParam.minValueMale
+            : (isFemale && selectedParam.minValueFemale !== undefined)
+              ? selectedParam.minValueFemale
+              : selectedParam.minValue;
+
+          updated[index].maxValue = (isMale && selectedParam.maxValueMale !== undefined)
+            ? selectedParam.maxValueMale
+            : (isFemale && selectedParam.maxValueFemale !== undefined)
+              ? selectedParam.maxValueFemale
+              : selectedParam.maxValue;
+
           updated[index].criticalLow = selectedParam.criticalLow;
           updated[index].criticalHigh = selectedParam.criticalHigh;
           // Find unit name
@@ -839,9 +914,9 @@ export default function PathologyPage() {
         sampleNumber: testForm.sampleNumber,
         testName: testForm.testType || testForm.shortName || "Unknown Test",
         categoryName: testForm.categoryId
-          ? testForm.categoryId.split(", ").map(id => 
-              categories.find(c => c.id === id.trim())?.name || id.trim()
-            ).join(", ")
+          ? testForm.categoryId.split(", ").map(id =>
+            categories.find(c => c.id === id.trim())?.name || id.trim()
+          ).join(", ")
           : "Unknown Category",
         shortName: testForm.shortName,
         testType: testForm.testType,
@@ -857,6 +932,7 @@ export default function PathologyPage() {
           ? parseFloat(testForm.standardCharge)
           : 0,
         labTechnicianId: testForm.labTechnicianId,
+        labTechnicianName: labTechnicians.find((lt) => lt.id === testForm.labTechnicianId)?.name || "",
         parameters: testForm.parameters
           .filter((p) => p.parameterId)
           .map((p) => ({
@@ -997,21 +1073,44 @@ export default function PathologyPage() {
           );
 
           allParameters.push(
-            ...catParams.map((p) => ({
-              parameterId: p.id,
-              parameterName: p.name,
-              categoryId: p.categoryId || "",
-              patientResult: p.defaultValue || "",
-              referenceRange: p.referenceRange,
-              unit: units.find((u) => u.id === p.unit)?.name || p.unit || "",
-              // Include meta for validation/UI
-              resultType: p.resultType,
-              options: p.options,
-              minValue: p.minValue,
-              maxValue: p.maxValue,
-              criticalLow: p.criticalLow,
-              criticalHigh: p.criticalHigh,
-            })),
+            ...catParams.map((p) => {
+              const isMale = billing.patientGender === "male";
+              const isFemale = billing.patientGender === "female";
+
+              const refRange = (isMale && p.referenceRangeMale)
+                ? p.referenceRangeMale
+                : (isFemale && p.referenceRangeFemale)
+                  ? p.referenceRangeFemale
+                  : p.referenceRange;
+
+              const minVal = (isMale && p.minValueMale !== undefined)
+                ? p.minValueMale
+                : (isFemale && p.minValueFemale !== undefined)
+                  ? p.minValueFemale
+                  : p.minValue;
+
+              const maxVal = (isMale && p.maxValueMale !== undefined)
+                ? p.maxValueMale
+                : (isFemale && p.maxValueFemale !== undefined)
+                  ? p.maxValueFemale
+                  : p.maxValue;
+
+              return {
+                parameterId: p.id,
+                parameterName: p.name,
+                categoryId: p.categoryId || "",
+                patientResult: p.defaultValue || "",
+                referenceRange: refRange,
+                unit: units.find((u) => u.id === p.unit)?.name || p.unit || "",
+                // Include meta for validation/UI
+                resultType: p.resultType,
+                options: p.options,
+                minValue: minVal,
+                maxValue: maxVal,
+                criticalLow: p.criticalLow,
+                criticalHigh: p.criticalHigh,
+              };
+            }),
           );
         }
       }
@@ -1328,6 +1427,12 @@ export default function PathologyPage() {
       options: "",
       minValue: "",
       maxValue: "",
+      minValueMale: "",
+      maxValueMale: "",
+      minValueFemale: "",
+      maxValueFemale: "",
+      referenceRangeMale: "",
+      referenceRangeFemale: "",
       criticalLow: "",
       criticalHigh: "",
       defaultValue: "",
@@ -1359,6 +1464,12 @@ export default function PathologyPage() {
         options: parameterForm.options ? parameterForm.options.split(",").map(o => o.trim()) : undefined,
         minValue: parameterForm.minValue ? parseFloat(parameterForm.minValue) : undefined,
         maxValue: parameterForm.maxValue ? parseFloat(parameterForm.maxValue) : undefined,
+        minValueMale: parameterForm.minValueMale ? parseFloat(parameterForm.minValueMale) : undefined,
+        maxValueMale: parameterForm.maxValueMale ? parseFloat(parameterForm.maxValueMale) : undefined,
+        minValueFemale: parameterForm.minValueFemale ? parseFloat(parameterForm.minValueFemale) : undefined,
+        maxValueFemale: parameterForm.maxValueFemale ? parseFloat(parameterForm.maxValueFemale) : undefined,
+        referenceRangeMale: parameterForm.referenceRangeMale?.trim() || undefined,
+        referenceRangeFemale: parameterForm.referenceRangeFemale?.trim() || undefined,
         criticalLow: parameterForm.criticalLow ? parseFloat(parameterForm.criticalLow) : undefined,
         criticalHigh: parameterForm.criticalHigh ? parseFloat(parameterForm.criticalHigh) : undefined,
         defaultValue: parameterForm.defaultValue || undefined,
@@ -1414,6 +1525,12 @@ export default function PathologyPage() {
       options: parameter.options?.join(", ") || "",
       minValue: parameter.minValue?.toString() || "",
       maxValue: parameter.maxValue?.toString() || "",
+      minValueMale: parameter.minValueMale?.toString() || "",
+      maxValueMale: parameter.maxValueMale?.toString() || "",
+      minValueFemale: parameter.minValueFemale?.toString() || "",
+      maxValueFemale: parameter.maxValueFemale?.toString() || "",
+      referenceRangeMale: parameter.referenceRangeMale || "",
+      referenceRangeFemale: parameter.referenceRangeFemale || "",
       criticalLow: parameter.criticalLow?.toString() || "",
       criticalHigh: parameter.criticalHigh?.toString() || "",
       defaultValue: parameter.defaultValue || "",
@@ -1647,7 +1764,7 @@ export default function PathologyPage() {
       ? typeof configuredTopMargin === "number" &&
         !Number.isNaN(configuredTopMargin)
         ? configuredTopMargin
-        : 20
+        : 10
       : 10;
 
     // Group parameters by category
@@ -1797,10 +1914,10 @@ export default function PathologyPage() {
                     </tr>
                     <tr class="column-header-row">
                       <th style="width: 25%;">Parameter</th>
-                      <th style="width: 18%;">Result</th>
-                      <th style="width: 17%; text-align: center;">Flag</th>
-                      <th style="width: 25%;">Reference Range</th>
-                      <th style="width: 15%;">Unit</th>
+                      <th style="width: 10%;">Result</th>
+                      <th style="width: 13%; text-align: center;">Flag</th>
+                      <th style="width: 40%;">Reference Range</th>
+                      <th style="width: 12%;">Unit</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1847,19 +1964,19 @@ export default function PathologyPage() {
         .footer-spacer { height: ${footerHtml ? 60 : 20}px; }
         .report-page { width: 100%; page-break-after: always; }
         .report-page:last-child { page-break-after: auto; }
-        .print-container { width: 100%; padding: 0 20mm; box-sizing: border-box; display: flex; flex-direction: column; }
+        .print-container { width: 100%; padding: 0 4mm; box-sizing: border-box; display: flex; flex-direction: column; }
         .content { padding: 0; width: 100%; }
         
-        .document-title { text-align: center; margin: 10px 0 15px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 6px 0; }
-        .document-title h2 { font-size: 16px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 0.15em; color: #1e293b; }
+        .document-title { text-align: center; margin: 4px 0 8px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 4px 0; }
+        .document-title h2 { font-size: 14px; font-weight: 500; margin: 0; text-transform: uppercase; letter-spacing: 0.12em; color: #1e293b; }
         
         .section { margin-bottom: 10px; }
-        .section-header { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .section-header { font-size: 10px; font-weight: 500; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
         
-        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 30px; margin-bottom: 15px; background: #f8fafc; padding: 10px 15px; border-radius: 4px; border: 1px solid #f1f5f9; }
-        .info-item { display: flex; justify-content: space-between; font-size: 11.5px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px; }
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 30px; margin-bottom: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 4px; border: 1px solid #f1f5f9; }
+        .info-item { display: flex; justify-content: space-between; font-size: 10.5px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px; }
         .info-label { font-weight: 400; color: #64748b; }
-        .info-value { font-weight: 600; color: #1e293b; text-align: right; }
+        .info-value { font-weight: 500; color: #1e293b; text-align: right; }
         
         .flag { 
           font-weight: 700; 
@@ -1917,7 +2034,7 @@ export default function PathologyPage() {
         .meta-text { font-size: 10px; color: #94a3b8; margin: 2px 0; }
         @media print {
           body { -webkit-print-color-adjust: exact; }
-          .print-container { padding: 0 20mm; width: 100%; }
+          .print-container { padding: 0 4mm; width: 100%; }
           .info-grid { background: #f8fafc !important; border: 1px solid #f1f5f9 !important; }
           .parameters-table th { background: #f8fafc !important; }
           .category-header-row th { background: #f1f5f9 !important; }
@@ -2442,6 +2559,226 @@ export default function PathologyPage() {
     }
   };
 
+  const seedCBC = async () => {
+    if (!clinicId || !branchId) return;
+    setSeeding(true);
+    try {
+      let categoryId = categories.find(c => c.name.toLowerCase().includes("cbc") || c.name.toLowerCase().includes("complete blood count"))?.id;
+
+      if (!categoryId) {
+        categoryId = await pathologyService.createCategory({
+          name: "Complete Blood Count (CBC)",
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      // Ensure units exist
+      const requiredUnits = ["g/dL", "million/cmm", "/cmm", "%", "fL", "pg"];
+      const unitMap: Record<string, string> = {};
+
+      for (const uName of requiredUnits) {
+        let u = units.find(unit => unit.name === uName);
+        if (u) {
+          unitMap[uName] = u.id;
+        } else {
+          const id = await pathologyService.createUnit({
+            name: uName,
+            clinicId: clinicId!,
+            branchId: branchId!,
+            isActive: true,
+            createdBy: currentUser?.uid || "",
+          });
+          unitMap[uName] = id;
+        }
+      }
+
+      const params = [
+        {
+          name: "Hemoglobin (Hb)",
+          referenceRange: "12.0 - 17.5",
+          referenceRangeMale: "13.5 - 17.5",
+          referenceRangeFemale: "12.0 - 15.5",
+          unit: unitMap["g/dL"],
+          resultType: "numeric" as const,
+          minValue: 12.0,
+          maxValue: 17.5,
+          minValueMale: 13.5,
+          maxValueMale: 17.5,
+          minValueFemale: 12.0,
+          maxValueFemale: 15.5,
+          criticalLow: 7.0,
+          criticalHigh: 20.0,
+        },
+        {
+          name: "Total Leucocyte Count (TLC/WBC)",
+          referenceRange: "4000 - 11000",
+          unit: unitMap["/cmm"],
+          resultType: "numeric" as const,
+          minValue: 4000,
+          maxValue: 11000,
+          criticalLow: 2000,
+          criticalHigh: 30000,
+        },
+        {
+          name: "Red Blood Cell (RBC) Count",
+          referenceRange: "3.8 - 5.5",
+          referenceRangeMale: "4.5 - 5.5",
+          referenceRangeFemale: "3.8 - 4.8",
+          unit: unitMap["million/cmm"],
+          resultType: "numeric" as const,
+          minValue: 3.8,
+          maxValue: 5.5,
+          minValueMale: 4.5,
+          maxValueMale: 5.5,
+          minValueFemale: 3.8,
+          maxValueFemale: 4.8,
+        },
+        {
+          name: "Platelet Count",
+          referenceRange: "150000 - 450000",
+          unit: unitMap["/cmm"],
+          resultType: "numeric" as const,
+          minValue: 150000,
+          maxValue: 450000,
+          criticalLow: 50000,
+          criticalHigh: 1000000,
+        },
+        {
+          name: "Packed Cell Volume (PCV/Hematocrit)",
+          referenceRange: "36 - 50",
+          referenceRangeMale: "40 - 50",
+          referenceRangeFemale: "36 - 46",
+          unit: unitMap["%"],
+          resultType: "numeric" as const,
+          minValue: 36,
+          maxValue: 50,
+          minValueMale: 40,
+          maxValueMale: 50,
+          minValueFemale: 36,
+          maxValueFemale: 46,
+        },
+        {
+          name: "MCV",
+          referenceRange: "80 - 100",
+          unit: unitMap["fL"],
+          resultType: "numeric" as const,
+          minValue: 80,
+          maxValue: 100,
+        },
+        {
+          name: "MCH",
+          referenceRange: "27 - 32",
+          unit: unitMap["pg"],
+          resultType: "numeric" as const,
+          minValue: 27,
+          maxValue: 32,
+        },
+        {
+          name: "MCHC",
+          referenceRange: "32 - 36",
+          unit: unitMap["g/dL"],
+          resultType: "numeric" as const,
+          minValue: 32,
+          maxValue: 36,
+        },
+        {
+          name: "Neutrophils",
+          referenceRange: "40 - 75",
+          unit: unitMap["%"],
+          resultType: "numeric" as const,
+          minValue: 40,
+          maxValue: 75,
+        },
+        {
+          name: "Lymphocytes",
+          referenceRange: "20 - 45",
+          unit: unitMap["%"],
+          resultType: "numeric" as const,
+          minValue: 20,
+          maxValue: 45,
+        },
+        {
+          name: "Monocytes",
+          referenceRange: "2 - 10",
+          unit: unitMap["%"],
+          resultType: "numeric" as const,
+          minValue: 2,
+          maxValue: 10,
+        },
+        {
+          name: "Eosinophils",
+          referenceRange: "1 - 6",
+          unit: unitMap["%"],
+          resultType: "numeric" as const,
+          minValue: 1,
+          maxValue: 6,
+        },
+        {
+          name: "Basophils",
+          referenceRange: "0 - 1",
+          unit: unitMap["%"],
+          resultType: "numeric" as const,
+          minValue: 0,
+          maxValue: 1,
+        },
+      ];
+
+      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+
+      await Promise.all(params.map(p => {
+        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
+        if (alreadyExists) return Promise.resolve();
+
+        return pathologyService.createParameter({
+          ...p,
+          categoryId: categoryId!,
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }));
+
+      // Create Test Price configuration for CBC
+      const existingTestTypes = await pathologyService.getTestTypesByClinic(clinicId!, branchId!);
+      const testTypeExists = existingTestTypes.some(tt => tt.name.toLowerCase().includes("cbc") || tt.name.toLowerCase().includes("complete blood count"));
+
+      if (!testTypeExists) {
+        await pathologyService.createTestType({
+          name: "Complete Blood Count (CBC)",
+          price: 500,
+          targetType: "category",
+          targetId: categoryId!,
+          clinicId: clinicId!,
+          branchId: branchId!,
+          isActive: true,
+          createdBy: currentUser?.uid || "",
+        });
+      }
+
+      const [cats, params2, units2, tt2] = await Promise.all([
+        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
+        pathologyService.getParametersByClinic(clinicId!, branchId!),
+        pathologyService.getUnitsByClinic(clinicId!, branchId!),
+        pathologyService.getTestTypesByClinic(clinicId!, branchId!),
+      ]);
+      setCategories(cats);
+      setParameters(params2);
+      setUnits(units2);
+      setTestTypes(tt2);
+
+      addToast({ title: "CBC Test seeded", description: "Category, parameters, units and price configuration created successfully.", color: "success" });
+    } catch (e) {
+      console.error(e);
+      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   const seedLipidProfile = async () => {
     if (!clinicId || !branchId) return;
     setSeeding(true);
@@ -2578,6 +2915,15 @@ export default function PathologyPage() {
                 {seeding ? "Seeding…" : "🧪 Seed HIV Test"}
               </Button>
             )}
+            <Button
+              color="default"
+              isDisabled={seeding}
+              size="sm"
+              variant="flat"
+              onClick={seedCBC}
+            >
+              {seeding ? "Seeding…" : "🩸 Seed CBC Test"}
+            </Button>
             <Button
               color="default"
               isDisabled={seeding}
@@ -2986,17 +3332,28 @@ export default function PathologyPage() {
                             categoryId: id,
                             categoryName: cat?.name || "",
                             // Auto-load parameters when category is selected
-                            parameters: catParams.map((p) => ({
-                              parameterId: p.id,
-                              parameterName: p.name,
-                              categoryId: p.categoryId || "",
-                              patientResult: "",
-                              referenceRange: p.referenceRange,
-                              unit:
-                                units.find((u) => u.id === p.unit)?.name ||
-                                p.unit ||
-                                "",
-                            })),
+                            parameters: catParams.map((p) => {
+                              const isMale = testForm.patientGender === "male";
+                              const isFemale = testForm.patientGender === "female";
+
+                              const refRange = (isMale && p.referenceRangeMale) ? p.referenceRangeMale : (isFemale && p.referenceRangeFemale) ? p.referenceRangeFemale : p.referenceRange;
+                              const minVal = (isMale && p.minValueMale !== undefined) ? p.minValueMale : (isFemale && p.minValueFemale !== undefined) ? p.minValueFemale : p.minValue;
+                              const maxVal = (isMale && p.maxValueMale !== undefined) ? p.maxValueMale : (isFemale && p.maxValueFemale !== undefined) ? p.maxValueFemale : p.maxValue;
+
+                              return {
+                                parameterId: p.id,
+                                parameterName: p.name,
+                                categoryId: p.categoryId || "",
+                                patientResult: "",
+                                referenceRange: refRange,
+                                minValue: minVal,
+                                maxValue: maxVal,
+                                unit:
+                                  units.find((u) => u.id === p.unit)?.name ||
+                                  p.unit ||
+                                  "",
+                              };
+                            }),
                           }));
                         }}
                       />
@@ -3110,6 +3467,11 @@ export default function PathologyPage() {
                           const category = categories.find(c => c.id === param.categoryId);
                           const categoryName = category?.name || param.categoryId || "General Parameters";
 
+                          const flag = getResultFlag(param, param.patientResult);
+                          const isAbnormal = flag && flag.label !== "NORMAL";
+                          const rowBg = flag?.color === 'danger' ? 'bg-danger-50/40' : flag?.color === 'warning' ? 'bg-warning-50/40' : 'bg-surface';
+                          const rowBorder = isAbnormal ? (flag?.color === 'danger' ? 'border-danger-200' : 'border-warning-200') : 'border-border-base/50';
+
                           return (
                             <div key={index} className="space-y-3">
                               {showHeading && (
@@ -3125,7 +3487,7 @@ export default function PathologyPage() {
                                   </span>
                                 </div>
                               )}
-                              <div className="grid grid-cols-12 gap-3 p-3 bg-surface border border-border-base rounded-xl transition-all hover:border-primary/30 group">
+                              <div className={`grid grid-cols-12 gap-3 p-3 ${rowBg} border ${rowBorder} rounded-xl transition-all hover:border-primary/30 group`}>
                                 <div className="col-span-2">
                                   <PathologySearchSelect
                                     items={categories.map((c) => ({
@@ -3157,18 +3519,25 @@ export default function PathologyPage() {
                                     onChange={(id, primary) => {
                                       const p = parameters.find((p) => p.id === id);
                                       if (p) {
+                                        const isMale = testForm.patientGender === "male";
+                                        const isFemale = testForm.patientGender === "female";
+
+                                        const refRange = (isMale && p.referenceRangeMale) ? p.referenceRangeMale : (isFemale && p.referenceRangeFemale) ? p.referenceRangeFemale : p.referenceRange;
+                                        const minVal = (isMale && p.minValueMale !== undefined) ? p.minValueMale : (isFemale && p.minValueFemale !== undefined) ? p.minValueFemale : p.minValue;
+                                        const maxVal = (isMale && p.maxValueMale !== undefined) ? p.maxValueMale : (isFemale && p.maxValueFemale !== undefined) ? p.maxValueFemale : p.maxValue;
+
                                         setTestForm((prev) => {
                                           const updated = [...prev.parameters];
                                           updated[index] = {
                                             ...updated[index],
                                             parameterId: id,
                                             parameterName: primary,
-                                            referenceRange: p.referenceRange,
+                                            referenceRange: refRange,
                                             unit: units.find((u) => u.id === p.unit)?.name || p.unit || "",
                                             resultType: p.resultType,
                                             options: p.options,
-                                            minValue: p.minValue,
-                                            maxValue: p.maxValue,
+                                            minValue: minVal,
+                                            maxValue: maxVal,
                                             criticalLow: p.criticalLow,
                                             criticalHigh: p.criticalHigh,
                                           };
@@ -3215,13 +3584,32 @@ export default function PathologyPage() {
                                       </select>
                                     </div>
                                   ) : (
-                                    <Input
-                                      isRequired
-                                      label="Result *"
-                                      placeholder="Value"
-                                      value={param.patientResult}
-                                      onValueChange={(v) => updateTestParameter(index, "patientResult", v)}
-                                    />
+                                    <div className="flex flex-col gap-1.5">
+                                      <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Result *</label>
+                                      <input
+                                        className="w-full h-9 border border-border-base rounded px-3 text-[14px] font-bold text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all text-center"
+                                        placeholder="Enter Result"
+                                        value={param.patientResult}
+                                        data-index={index}
+                                        onChange={(e) =>
+                                          updateTestParameter(
+                                            index,
+                                            "patientResult",
+                                            e.target.value,
+                                          )
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            const nextInput = document.querySelector(`input[data-index="${index + 1}"]`) as HTMLInputElement;
+                                            if (nextInput) {
+                                              nextInput.focus();
+                                              nextInput.select();
+                                            }
+                                          }
+                                        }}
+                                      />
+                                    </div>
                                   )}
                                 </div>
                                 <div className="col-span-2">
@@ -3789,8 +4177,9 @@ export default function PathologyPage() {
                             setParameterForm((prev) => ({ ...prev, maxValue: v }))
                           }
                         />
+
                         <Input
-                          label="Critical Low"
+                          label="Critical Low (Panic)"
                           placeholder="Panic value"
                           type="number"
                           value={parameterForm.criticalLow}
@@ -3802,7 +4191,7 @@ export default function PathologyPage() {
                           }
                         />
                         <Input
-                          label="Critical High"
+                          label="Critical High (Panic)"
                           placeholder="Panic value"
                           type="number"
                           value={parameterForm.criticalHigh}
@@ -3813,6 +4202,89 @@ export default function PathologyPage() {
                             }))
                           }
                         />
+
+                        {/* Gender Specific Sections - Toned down version */}
+                        <div className="col-span-full mt-6 border-t border-border-base/50 pt-6">
+                          <h3 className="text-[13px] font-bold text-text-main mb-6 flex items-center gap-2">
+                            <div className="w-1 h-4 bg-primary/40 rounded-full"></div>
+                            Gender Specific Standards
+                          </h3>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Male Specific */}
+                            <div className="space-y-4">
+                              <h4 className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                                Male Standards
+                              </h4>
+                              <Input
+                                label="Male Reference Range String"
+                                placeholder="e.g. 13.5 - 17.5"
+                                value={parameterForm.referenceRangeMale}
+                                onValueChange={(v) =>
+                                  setParameterForm((prev) => ({ ...prev, referenceRangeMale: v }))
+                                }
+                              />
+                              <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                  label="Male Min"
+                                  placeholder="0.00"
+                                  type="number"
+                                  value={parameterForm.minValueMale}
+                                  onValueChange={(v) =>
+                                    setParameterForm((prev) => ({ ...prev, minValueMale: v }))
+                                  }
+                                />
+                                <Input
+                                  label="Male Max"
+                                  placeholder="0.00"
+                                  type="number"
+                                  value={parameterForm.maxValueMale}
+                                  onValueChange={(v) =>
+                                    setParameterForm((prev) => ({ ...prev, maxValueMale: v }))
+                                  }
+                                />
+                              </div>
+                            </div>
+
+                            {/* Female Specific */}
+                            <div className="space-y-4">
+                              <h4 className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                                Female Standards
+                              </h4>
+                              <Input
+                                label="Female Reference Range String"
+                                placeholder="e.g. 12.0 - 15.5"
+                                value={parameterForm.referenceRangeFemale}
+                                onValueChange={(v) =>
+                                  setParameterForm((prev) => ({ ...prev, referenceRangeFemale: v }))
+                                }
+                              />
+                              <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                  label="Female Min"
+                                  placeholder="0.00"
+                                  type="number"
+                                  value={parameterForm.minValueFemale}
+                                  onValueChange={(v) =>
+                                    setParameterForm((prev) => ({ ...prev, minValueFemale: v }))
+                                  }
+                                />
+                                <Input
+                                  label="Female Max"
+                                  placeholder="0.00"
+                                  type="number"
+                                  value={parameterForm.maxValueFemale}
+                                  onValueChange={(v) =>
+                                    setParameterForm((prev) => ({ ...prev, maxValueFemale: v }))
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <p className="mt-6 text-[11px] text-text-muted italic border-l-2 border-border-base pl-3">
+                            Note: If these specific ranges are left blank, the system will default to the general reference range defined above.
+                          </p>
+                        </div>
                       </>
                     )}
                   </div>

@@ -1487,17 +1487,23 @@ export interface PathologyParameter {
   categoryId?: string; // Reference to PathologyCategory (Optional for legacy compatibility)
   name: string;
   referenceRange: string; // Display string (e.g., "135 - 145")
+  referenceRangeMale?: string;
+  referenceRangeFemale?: string;
   unit: string; // Unit ID reference or string
-  
+
   // Dynamic Configuration
   resultType: "numeric" | "boolean" | "select" | "text" | "richText";
   options?: string[]; // Predefined options for 'select' type (e.g., ["Nil", "Trace", "1+"])
   minValue?: number; // Numeric lower bound for validation
   maxValue?: number; // Numeric upper bound for validation
+  minValueMale?: number;
+  maxValueMale?: number;
+  minValueFemale?: number;
+  maxValueFemale?: number;
   criticalLow?: number; // Panic value lower bound
   criticalHigh?: number; // Panic value upper bound
   defaultValue?: string; // Default result value
-  
+
   clinicId: string;
   branchId: string;
   isActive: boolean;
@@ -1675,7 +1681,7 @@ export interface PathologyBilling {
 
   // Metadata
   notes?: string; // General notes about the invoice
-  
+
   // Robust Pathology Workflow Fields
   labReferenceNo?: string; // Internal Lab tracking ID
   sampleCollectionDate?: Date;
