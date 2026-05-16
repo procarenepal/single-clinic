@@ -11,14 +11,16 @@ import {
   IoMailOutline,
   IoCallOutline,
   IoCreateOutline,
+  IoDocumentsOutline,
 } from "react-icons/io5";
 
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { hrService } from "@/services/hrService";
 import { accountService } from "@/services/accountService";
-import { StaffMember, StaffAttendance, AccountBill } from "@/types/models";
-import { format, subDays, startOfDay, subMonths } from "date-fns";
+import { staffCommissionService } from "@/services/staffCommissionService";
+import { StaffMember, StaffAttendance, AccountBill, StaffCommission } from "@/types/models";
+import { format, subDays, startOfDay, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import {
   Modal,
   ModalContent,
@@ -58,6 +60,22 @@ export default function HRPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [staffCommissions, setStaffCommissions] = useState<StaffCommission[]>([]);
+  const [payingCommission, setPayingCommission] = useState(false);
+  const [isCommissionPayModalOpen, setIsCommissionPayModalOpen] = useState(false);
+  const [selectedCommission, setSelectedCommission] = useState<StaffCommission | null>(null);
+  const [commissionPayForm, setCommissionPayForm] = useState({
+    amount: 0,
+    paymentMethod: "Cash",
+    notes: "",
+    reference: "",
+  });
+
+  const [isPayrollReportModalOpen, setIsPayrollReportModalOpen] = useState(false);
+  const [reportDateRange, setReportDateRange] = useState({
+    start: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+    end: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+  });
 
   const availableMonths = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -82,6 +100,7 @@ export default function HRPage() {
     taskCompletionScore: "85",
     shiftStartTime: "09:00",
     shiftEndTime: "17:00",
+    defaultCommission: "0",
     // Login account fields
     createAccount: false,
     password: "",
@@ -106,6 +125,7 @@ export default function HRPage() {
         taskCompletionScore: "85",
         shiftStartTime: "09:00",
         shiftEndTime: "17:00",
+        defaultCommission: "0",
         createAccount: false,
         password: "",
         adminPassword: "",
@@ -130,6 +150,7 @@ export default function HRPage() {
       taskCompletionScore: (staff.taskCompletionScore || 85).toString(),
       shiftStartTime: staff.shiftStartTime || "09:00",
       shiftEndTime: staff.shiftEndTime || "17:00",
+      defaultCommission: (staff.defaultCommission || 0).toString(),
       createAccount: false,
       password: "",
       adminPassword: "",
@@ -142,6 +163,92 @@ export default function HRPage() {
       loadData();
     }
   }, [clinicId, branchId]);
+
+  useEffect(() => {
+    if (selectedStaff && clinicId && isDetailModalOpen) {
+      loadStaffCommissions(selectedStaff.id);
+    }
+  }, [selectedStaff, clinicId, isDetailModalOpen]);
+
+  const loadStaffCommissions = async (staffId: string) => {
+    try {
+      const data = await staffCommissionService.getCommissionsByStaff(staffId, clinicId!);
+      setStaffCommissions(data);
+    } catch (error) {
+      console.error("Error loading staff commissions:", error);
+    }
+  };
+
+  const staffPayrollSummary = useMemo(() => {
+    return staff.map(s => {
+      const staffBills = bills.filter(b => b.category === 'salary' && b.vendorName === s.name);
+      const totalPaid = staffBills.reduce((acc, b) => acc + b.paidAmount, 0);
+      return {
+        ...s,
+        totalPaid,
+        lastPayment: staffBills.length > 0 ? staffBills.sort((a, b) => b.billDate.getTime() - a.billDate.getTime())[0].billDate : null
+      };
+    });
+  }, [staff, bills]);
+
+  const handlePrintPayrollSummary = () => {
+    const printContent = document.getElementById('payroll-summary-report');
+    if (!printContent) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Payroll Summary Report - ${clinicId}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            body { font-family: 'Inter', sans-serif; padding: 40px; color: #1a1a1a; line-height: 1.5; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
+            .header p { margin: 5px 0; color: #666; font-size: 14px; }
+            .report-info { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 12px; font-weight: 600; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background: #f4f4f4; text-align: left; padding: 12px 10px; border: 1px solid #ddd; font-size: 11px; text-transform: uppercase; }
+            td { padding: 10px; border: 1px solid #ddd; font-size: 12px; }
+            .amount { text-align: right; font-family: monospace; font-weight: 600; }
+            .total-row { background: #f9f9f9; font-weight: bold; }
+            .footer { margin-top: 50px; font-size: 10px; color: #999; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+            .signature-space { margin-top: 60px; display: flex; justify-content: space-between; }
+            .sig-box { width: 200px; border-top: 1px solid #000; text-align: center; padding-top: 5px; font-size: 12px; }
+            @media print {
+              @page { margin: 2cm; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Staff Payroll Summary</h1>
+            <p>ProCareSoft Health Information System</p>
+          </div>
+          <div class="report-info">
+            <span>Report Date: ${format(new Date(), 'PPP')}</span>
+            <span>Clinic ID: ${clinicId}</span>
+          </div>
+          ${printContent.innerHTML}
+          <div class="signature-space">
+            <div class="sig-box">Accountant Signature</div>
+            <div class="sig-box">Manager/MD Signature</div>
+          </div>
+          <div class="footer">Generated via ProCareSoft HR Management Module</div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(() => { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -181,6 +288,7 @@ export default function HRPage() {
         performanceNotes: staffForm.performanceNotes,
         shiftStartTime: staffForm.shiftStartTime,
         shiftEndTime: staffForm.shiftEndTime,
+        defaultCommission: parseFloat(staffForm.defaultCommission) || 0,
         clinicId: clinicId!,
         branchId: branchId || "",
         createdBy: userData?.id || "",
@@ -191,13 +299,13 @@ export default function HRPage() {
         addToast({ title: "Success", description: "Staff record updated successfully", color: "success" });
       } else {
         const staffId = await hrService.createStaff(staffData);
-        
+
         // If createAccount is checked, also create a login user
         if (staffForm.createAccount) {
           if (!staffForm.password || !staffForm.adminPassword) {
             throw new Error("Password and Admin confirmation are required for account creation.");
           }
-          
+
           const { userService } = await import("@/services/userService");
           await userService.createUser(
             staffForm.email,
@@ -212,7 +320,7 @@ export default function HRPage() {
           );
           addToast({ title: "Account Created", description: "Login credentials have been set up.", color: "success" });
         }
-        
+
         addToast({ title: "Success", description: "Staff member registered successfully", color: "success" });
       }
 
@@ -234,6 +342,7 @@ export default function HRPage() {
         taskCompletionScore: "85",
         shiftStartTime: "09:00",
         shiftEndTime: "17:00",
+        defaultCommission: "0",
         createAccount: false,
         password: "",
         adminPassword: "",
@@ -274,10 +383,34 @@ export default function HRPage() {
     }
   };
 
+  const handlePayStaffCommission = async () => {
+    if (!selectedCommission || !selectedStaff) return;
+    setPayingCommission(true);
+    try {
+      await staffCommissionService.payCommission(
+        selectedCommission.id,
+        commissionPayForm.amount,
+        commissionPayForm.paymentMethod,
+        commissionPayForm.reference,
+        commissionPayForm.notes,
+        userData?.id || ""
+      );
+      addToast({ title: "Success", description: "Commission paid successfully", color: "success" });
+      setIsCommissionPayModalOpen(false);
+      loadStaffCommissions(selectedStaff.id);
+      loadData(); // Refresh staff list to update balances
+    } catch (error) {
+      console.error("Failed to pay commission:", error);
+      addToast({ title: "Error", description: error instanceof Error ? error.message : "Failed to pay commission", color: "danger" });
+    } finally {
+      setPayingCommission(false);
+    }
+  };
+
   const handleClockOut = async (member: StaffMember) => {
     try {
-      const activeAttendance = attendance.find(a => 
-        a.staffId === member.id && 
+      const activeAttendance = attendance.find(a =>
+        a.staffId === member.id &&
         (a.status === 'present' || a.status === 'on_break') &&
         format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
       );
@@ -303,7 +436,7 @@ export default function HRPage() {
       ]);
 
       if (!clinicData) throw new Error("Clinic data not found");
-      
+
       // Use default config if none exists
       const effectiveConfig = printConfig || {
         clinicId,
@@ -324,24 +457,24 @@ export default function HRPage() {
 
   const toggleBreak = async (member: StaffMember) => {
     try {
-      const todayAttendance = attendance.find(a => 
-        a.staffId === member.id && 
+      const todayAttendance = attendance.find(a =>
+        a.staffId === member.id &&
         format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
       );
-      
+
       if (!todayAttendance) return;
 
       const isCurrentlyOnBreak = todayAttendance.status === 'on_break';
       const newStatus = isCurrentlyOnBreak ? 'present' : 'on_break';
-      
+
       await hrService.updateAttendance(todayAttendance.id, {
         status: newStatus,
       });
       loadData();
-      addToast({ 
-        title: isCurrentlyOnBreak ? "Back to Duty" : "Break Started", 
-        description: `${member.name} is now ${isCurrentlyOnBreak ? 'back on duty' : 'on break'}`, 
-        color: isCurrentlyOnBreak ? "success" : "warning" 
+      addToast({
+        title: isCurrentlyOnBreak ? "Back to Duty" : "Break Started",
+        description: `${member.name} is now ${isCurrentlyOnBreak ? 'back on duty' : 'on break'}`,
+        color: isCurrentlyOnBreak ? "success" : "warning"
       });
     } catch (error) {
       console.error("Failed to toggle break:", error);
@@ -390,15 +523,15 @@ export default function HRPage() {
     }
   };
 
-  const filteredStaff = staff.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredStaff = staff.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const stats = {
     total: staff.length,
-    present: attendance.filter(a => 
-      (a.status === 'present' || a.status === 'on_break') && 
+    present: attendance.filter(a =>
+      (a.status === 'present' || a.status === 'on_break' || a.status === 'late') &&
       !a.checkOut &&
       format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
     ).length,
@@ -422,9 +555,9 @@ export default function HRPage() {
           <h1 className="text-[15.5px] font-semibold text-primary tracking-tight">HR Management</h1>
           <p className="text-[10.5px] text-[rgb(var(--color-text-muted))] font-medium">Manage records, attendance, and payroll.</p>
         </div>
-        <Button 
-          color="primary" 
-          startContent={<IoAddOutline />} 
+        <Button
+          color="primary"
+          startContent={<IoAddOutline />}
           onPress={() => setIsStaffModalOpen(true)}
           className="font-semibold h-7 px-3 text-[11px]"
           radius="sm"
@@ -467,8 +600,18 @@ export default function HRPage() {
             <div>
               <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Monthly Payroll</p>
               <h3 className="text-[16px] font-semibold text-[rgb(var(--color-text))] tracking-tight">Rs. {stats.payroll.toLocaleString()}</h3>
-              <div className="mt-1">
+              <div className="mt-1 flex items-center justify-between">
                 <span className="text-[8.5px] font-semibold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 tracking-wider">Liability</span>
+                <Button 
+                  size="sm" 
+                  variant="light" 
+                  isIconOnly 
+                  className="h-5 w-5 min-w-0"
+                  onPress={handlePrintPayrollSummary}
+                  title="Print Summary"
+                >
+                  <IoPrintOutline size={12} className="text-amber-500" />
+                </Button>
               </div>
             </div>
             <IoWalletOutline className="text-[28px] text-[rgb(var(--color-text-muted))] opacity-10" />
@@ -478,8 +621,8 @@ export default function HRPage() {
 
       {/* Tab Selection */}
       <div className="mb-6">
-        <Tabs 
-          selectedKey={activeTab} 
+        <Tabs
+          selectedKey={activeTab}
           onSelectionChange={(key) => setActiveTab(key as string)}
           variant="underlined"
           classNames={{
@@ -489,8 +632,8 @@ export default function HRPage() {
             tabContent: "group-data-[selected=true]:text-primary font-semibold text-[14px]"
           }}
         >
-          <Tab 
-            key="directory" 
+          <Tab
+            key="directory"
             title={
               <div className="flex items-center gap-2">
                 <IoPeopleOutline size={18} />
@@ -498,8 +641,8 @@ export default function HRPage() {
               </div>
             }
           />
-          <Tab 
-            key="attendance" 
+          <Tab
+            key="attendance"
             title={
               <div className="flex items-center gap-2">
                 <IoTimeOutline size={18} />
@@ -507,10 +650,19 @@ export default function HRPage() {
               </div>
             }
           />
+          <Tab
+            key="payroll_reports"
+            title={
+              <div className="flex items-center gap-2">
+                <IoDocumentsOutline size={18} />
+                <span>Payroll Reports</span>
+              </div>
+            }
+          />
         </Tabs>
       </div>
 
-      {activeTab === "directory" ? (
+      {activeTab === "directory" && (
         <>
           {/* Search and Filters */}
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[rgb(var(--color-surface-2))/0.3] p-4 rounded-xl border border-[rgb(var(--color-border))]">
@@ -539,7 +691,7 @@ export default function HRPage() {
               </div>
             ) : (
               <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
-                <Table 
+                <Table
                   aria-label="Staff registry"
                   shadow="none"
                   classNames={{
@@ -556,10 +708,10 @@ export default function HRPage() {
                     <TableColumn align="center">Actions</TableColumn>
                   </TableHeader>
                   <TableBody>
-                    {filteredStaff.map((member) => {
-                      const isPresent = attendance.some(a => a.staffId === member.id && a.status === 'present' && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'));
+                    {filteredStaff.map((member, index) => {
+                      const isPresent = attendance.some(a => a.staffId === member.id && (a.status === 'present' || a.status === 'late' || a.status === 'on_break') && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'));
                       return (
-                        <TableRow key={member.id} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
+                        <TableRow key={member.id || `staff-${index}`} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-xl bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center overflow-hidden shrink-0">
@@ -601,22 +753,22 @@ export default function HRPage() {
                           </TableCell>
                           <TableCell>
                             {(() => {
-                              const todayAttendance = attendance.find(a => 
-                                a.staffId === member.id && 
+                              const todayAttendance = attendance.find(a =>
+                                a.staffId === member.id &&
                                 format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
                               );
-                              
+
                               let statusLabel = "Off duty";
                               let statusColor = "bg-default-100 text-default-400 border-default-200";
-                              
+
                               if (todayAttendance) {
-                                if (todayAttendance.status === 'present') {
+                                if (todayAttendance.status === 'present' || todayAttendance.status === 'late') {
                                   if (todayAttendance.checkOut) {
                                     statusLabel = "Completed";
-                                    statusColor = "bg-primary/10 text-primary border-primary/20";
+                                    statusColor = "bg-default-100 text-default-400 border-default-200";
                                   } else {
-                                    statusLabel = "On duty";
-                                    statusColor = "bg-success/10 text-success border-success/20";
+                                    statusLabel = todayAttendance.status === 'late' ? "Late" : "On Duty";
+                                    statusColor = todayAttendance.status === 'late' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" : "bg-success/10 text-success border-success/20";
                                   }
                                 } else if (todayAttendance.status === 'on_break') {
                                   statusLabel = "On break";
@@ -643,8 +795,8 @@ export default function HRPage() {
                           <TableCell align="center">
                             <div className="flex items-center gap-1 justify-center">
                               {isPresent && !attendance.find(a => a.staffId === member.id && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))?.checkOut && (
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   color="warning"
                                   variant="flat"
                                   className="font-semibold text-[10px] h-7 px-2 min-w-0"
@@ -654,8 +806,8 @@ export default function HRPage() {
                                 </Button>
                               )}
                               {!attendance.find(a => a.staffId === member.id && format(a.date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))?.checkOut ? (
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   color={isPresent ? "danger" : "primary"}
                                   variant="flat"
                                   className="font-semibold text-[10px] h-7 px-3"
@@ -677,7 +829,9 @@ export default function HRPage() {
             )}
           </div>
         </>
-      ) : (
+      )}
+
+      {activeTab === "attendance" && (
         <div className="space-y-4">
           {/* Monthly Attendance Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -716,61 +870,170 @@ export default function HRPage() {
           </div>
 
           <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
-          <Table 
-            aria-label="Attendance logs"
-            classNames={{
-              th: "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] font-semibold text-[11px]",
-              td: "text-[13px] py-4 border-b border-[rgb(var(--color-border))]/50",
-            }}
-          >
-            <TableHeader>
-              <TableColumn>Staff Member</TableColumn>
-              <TableColumn>Date</TableColumn>
-              <TableColumn>Check In</TableColumn>
-              <TableColumn>Check Out</TableColumn>
-              <TableColumn>Status</TableColumn>
-              <TableColumn align="center">Duration</TableColumn>
-            </TableHeader>
-            <TableBody emptyContent={"No attendance records found."}>
-              {attendance.sort((a, b) => b.date.getTime() - a.date.getTime()).map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell>
-                    <div className="font-semibold">{record.staffName}</div>
-                  </TableCell>
-                  <TableCell>{format(record.date, 'MMM dd, yyyy')}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-success font-semibold">
-                      <IoTimeOutline size={14} />
-                      {record.checkIn ? format(record.checkIn, 'hh:mm a') : '---'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-rose-500 font-semibold">
-                      <IoTimeOutline size={14} />
-                      {record.checkOut ? format(record.checkOut, 'hh:mm a') : 'Still In'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${!record.checkOut ? (record.status === 'on_break' ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success') : 'bg-default-100 text-default-400'}`}>
-                      {!record.checkOut ? (record.status === 'on_break' ? 'On Break' : (record.status === 'late' ? 'Late' : 'On Duty')) : 'Completed'}
-                    </span>
-                  </TableCell>
-                  <TableCell align="center">
-                    <div className="font-semibold text-primary whitespace-nowrap">
-                      {formatDuration(record.checkIn, record.checkOut)}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      </div>
-    )}
+            <Table
+              aria-label="Attendance logs"
+              classNames={{
+                th: "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] font-semibold text-[11px]",
+                td: "text-[13px] py-4 border-b border-[rgb(var(--color-border))]/50",
+              }}
+            >
+              <TableHeader>
+                <TableColumn>Staff Member</TableColumn>
+                <TableColumn>Date</TableColumn>
+                <TableColumn>Check In</TableColumn>
+                <TableColumn>Check Out</TableColumn>
+                <TableColumn>Status</TableColumn>
+                <TableColumn align="center">Duration</TableColumn>
+              </TableHeader>
+              <TableBody emptyContent={"No attendance records found."}>
+                {attendance.sort((a, b) => b.date.getTime() - a.date.getTime()).map((record, index) => (
+                  <TableRow key={record.id || `attn-log-${index}`}>
+                    <TableCell>
+                      <div className="font-semibold">{record.staffName}</div>
+                    </TableCell>
+                    <TableCell>{format(record.date, 'MMM dd, yyyy')}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1 text-success font-semibold">
+                        <IoTimeOutline size={14} />
+                        {record.checkIn ? format(record.checkIn, 'hh:mm a') : '---'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1 text-rose-500 font-semibold">
+                        <IoTimeOutline size={14} />
+                        {record.checkOut ? format(record.checkOut, 'hh:mm a') : 'Still In'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${!record.checkOut ? (record.status === 'on_break' ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success') : 'bg-default-100 text-default-400'}`}>
+                        {!record.checkOut ? (record.status === 'on_break' ? 'On Break' : (record.status === 'late' ? 'Late' : 'On Duty')) : 'Completed'}
+                      </span>
+                    </TableCell>
+                    <TableCell align="center">
+                      <div className="font-semibold text-primary whitespace-nowrap">
+                        {formatDuration(record.checkIn, record.checkOut)}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "payroll_reports" && (
+        <div className="py-6 space-y-6">
+          <div className="flex justify-between items-end bg-[rgb(var(--color-surface-2))/0.3] p-4 rounded-xl border border-[rgb(var(--color-border))]">
+            <div>
+              <h3 className="text-[14px] font-bold text-primary tracking-tight">Financial Disbursement Summary</h3>
+              <p className="text-[11px] text-[rgb(var(--color-text-muted))]">Comprehensive overview of staff salaries and payments.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                color="primary" 
+                variant="flat" 
+                size="sm" 
+                className="font-bold text-[11px]" 
+                startContent={<IoPrintOutline size={16} />}
+                onPress={handlePrintPayrollSummary}
+              >
+                Print Full Report
+              </Button>
+            </div>
+          </div>
+
+          <div className="border border-[rgb(var(--color-border))] rounded-xl overflow-hidden bg-[rgb(var(--color-surface))]">
+            <Table aria-label="Payroll summary table" shadow="none">
+              <TableHeader>
+                <TableColumn>Staff Member</TableColumn>
+                <TableColumn>Role</TableColumn>
+                <TableColumn align="end">Base Salary</TableColumn>
+                <TableColumn align="end">Total Paid (To Date)</TableColumn>
+                <TableColumn>Last Payment</TableColumn>
+                <TableColumn align="center">Status</TableColumn>
+              </TableHeader>
+              <TableBody emptyContent="No payroll data available">
+                {[
+                  ...staffPayrollSummary.map((summary, index) => (
+                    <TableRow key={summary.id || `summary-${index}`}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-[13px]">{summary.name}</span>
+                          <span className="text-[10px] text-[rgb(var(--color-text-muted))]">{summary.email}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-[11px] px-2 py-0.5 bg-[rgb(var(--color-surface-2))] rounded font-medium">{summary.role}</span>
+                      </TableCell>
+                      <TableCell align="right">
+                        <span className="font-mono text-[12px]">Rs. {summary.salary.toLocaleString()}</span>
+                      </TableCell>
+                      <TableCell align="right">
+                        <span className="font-mono text-[13px] font-bold text-success">Rs. {summary.totalPaid.toLocaleString()}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-[11px]">{summary.lastPayment ? format(new Date(summary.lastPayment), 'MMM dd, yyyy') : 'Never'}</span>
+                      </TableCell>
+                      <TableCell align="center">
+                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${summary.status === 'active' ? 'bg-success/10 text-success' : 'bg-rose-500/10 text-rose-500'}`}>
+                          {summary.status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  )),
+                  <TableRow key="total-payroll" className="bg-primary/5 font-bold">
+                    <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
+                    <TableCell>{""}</TableCell>
+                    <TableCell align="right">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.salary, 0).toLocaleString()}</TableCell>
+                    <TableCell align="right" className="text-primary">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.totalPaid, 0).toLocaleString()}</TableCell>
+                    <TableCell>{""}</TableCell>
+                    <TableCell>{""}</TableCell>
+                  </TableRow>
+                ]}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Hidden component for printing */}
+          <div id="payroll-summary-report" className="hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>Staff Name</th>
+                  <th>Role</th>
+                  <th style={{ textAlign: 'right' }}>Base Salary</th>
+                  <th style={{ textAlign: 'right' }}>Total Paid</th>
+                  <th>Joining Date</th>
+                  <th>Last Payment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staffPayrollSummary.map((summary) => (
+                  <tr key={summary.id}>
+                    <td>{summary.name}</td>
+                    <td>{summary.role}</td>
+                    <td className="amount">Rs. {summary.salary.toLocaleString()}</td>
+                    <td className="amount">Rs. {summary.totalPaid.toLocaleString()}</td>
+                    <td>{format(new Date(summary.joiningDate), 'PPP')}</td>
+                    <td>{summary.lastPayment ? format(new Date(summary.lastPayment), 'PPP') : 'N/A'}</td>
+                  </tr>
+                ))}
+                <tr className="total-row">
+                  <td colSpan={2}>TOTAL DISBURSEMENTS</td>
+                  <td className="amount">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.salary, 0).toLocaleString()}</td>
+                  <td className="amount">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.totalPaid, 0).toLocaleString()}</td>
+                  <td colSpan={2}></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Add Staff Modal */}
-      <Modal 
-        isOpen={isStaffModalOpen} 
+      <Modal
+        isOpen={isStaffModalOpen}
         onOpenChange={setIsStaffModalOpen}
         size="2xl"
         scrollBehavior="outside"
@@ -856,7 +1119,7 @@ export default function HRPage() {
                     />
                   </div>
 
-                  <div className="col-span-6 md:col-span-3">
+                  <div className="col-span-6 md:col-span-2">
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Monthly Salary (Rs.)</label>
                     <Input
                       type="number"
@@ -867,7 +1130,18 @@ export default function HRPage() {
                       startContent={<span className="text-[12px] text-text-muted">Rs.</span>}
                     />
                   </div>
-                  <div className="col-span-6 md:col-span-3">
+                  <div className="col-span-6 md:col-span-2">
+                    <label className="text-[11px] font-bold text-primary uppercase tracking-wider mb-1.5 block">Default Commission (%)</label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={staffForm.defaultCommission}
+                      onChange={(e) => setStaffForm({ ...staffForm, defaultCommission: e.target.value })}
+                      size="sm"
+                      endContent={<span className="text-[12px] text-text-muted">%</span>}
+                    />
+                  </div>
+                  <div className="col-span-6 md:col-span-2">
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Joining Date</label>
                     <Input
                       type="date"
@@ -888,14 +1162,14 @@ export default function HRPage() {
                   </div>
                   <div className="col-span-6 md:col-span-3">
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Staff Photo</label>
-                    <FileUploadComponent 
+                    <FileUploadComponent
                       uploadType="image"
                       onUploadComplete={(result) => setStaffForm({ ...staffForm, photoUrl: result.fileUrl })}
-                      currentFile={staffForm.photoUrl ? { 
-                        id: "", 
-                        name: "Profile Photo", 
-                        url: staffForm.photoUrl, 
-                        type: "image/jpeg" 
+                      currentFile={staffForm.photoUrl ? {
+                        id: "",
+                        name: "Profile Photo",
+                        url: staffForm.photoUrl,
+                        type: "image/jpeg"
                       } : undefined}
                     />
                   </div>
@@ -943,8 +1217,8 @@ export default function HRPage() {
                   {!staffForm.id && (
                     <div className="col-span-6 mt-4 space-y-4 pt-4 border-t border-[rgb(var(--color-border))]">
                       <div className="flex items-center gap-2">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           id="createAccount"
                           checked={staffForm.createAccount}
                           onChange={(e) => setStaffForm({ ...staffForm, createAccount: e.target.checked })}
@@ -996,8 +1270,8 @@ export default function HRPage() {
         </ModalContent>
       </Modal>
       {/* Staff Detail Modal */}
-      <Modal 
-        isOpen={isDetailModalOpen} 
+      <Modal
+        isOpen={isDetailModalOpen}
         onOpenChange={setIsDetailModalOpen}
         size="5xl"
         scrollBehavior="inside"
@@ -1031,10 +1305,10 @@ export default function HRPage() {
                     </div>
                   </div>
                   <div className="mr-4">
-                    <Button 
-                      size="sm" 
-                      variant="flat" 
-                      color="primary" 
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="primary"
                       className="font-bold text-[10px] uppercase tracking-widest h-7"
                       startContent={<IoCreateOutline />}
                       onPress={() => {
@@ -1121,9 +1395,9 @@ export default function HRPage() {
                             const lateCount = staffAttendance.filter(a => a.status === 'late' || (a.lateByMinutes && a.lateByMinutes > 0)).length;
                             const totalSessions = staffAttendance.length || 1;
                             const punctualityScore = Math.max(0, Math.round(((totalSessions - lateCount) / totalSessions) * 100));
-                            
+
                             const taskScore = selectedStaff.taskCompletionScore || 85;
-                            
+
                             return (
                               <>
                                 <div className="p-4 rounded-xl border border-primary/10 bg-primary/5">
@@ -1153,10 +1427,10 @@ export default function HRPage() {
                                       </div>
                                       <p className="text-[10px] mt-1 font-bold text-primary text-right">
                                         {taskScore}% {
-                                          taskScore >= 90 ? 'Exceptional' : 
-                                          taskScore >= 75 ? 'Very Good' : 
-                                          taskScore >= 50 ? 'Average' : 
-                                          'Needs Improvement'
+                                          taskScore >= 90 ? 'Exceptional' :
+                                            taskScore >= 75 ? 'Very Good' :
+                                              taskScore >= 50 ? 'Average' :
+                                                'Needs Improvement'
                                         }
                                       </p>
                                     </CardBody>
@@ -1169,7 +1443,7 @@ export default function HRPage() {
                       </Tab>
                       <Tab key="attendance" title="Attendance History">
                         <div className="py-4">
-                          <Table shadow="none" classNames={{ th: "text-[10px] uppercase", td: "text-[12px]" }}>
+                          <Table aria-label="Attendance history" shadow="none" classNames={{ th: "text-[10px] uppercase", td: "text-[12px]" }}>
                             <TableHeader>
                               <TableColumn>Date</TableColumn>
                               <TableColumn>Check In</TableColumn>
@@ -1181,14 +1455,14 @@ export default function HRPage() {
                               {attendance
                                 .filter(a => a.staffId === selectedStaff.id)
                                 .sort((a, b) => b.date.getTime() - a.date.getTime())
-                                .map((record) => (
-                                  <TableRow key={record.id}>
+                                .map((record, index) => (
+                                  <TableRow key={record.id || `attn-${index}`}>
                                     <TableCell>{format(record.date, 'MMM dd, yyyy')}</TableCell>
                                     <TableCell>{record.checkIn ? format(record.checkIn, 'hh:mm a') : '---'}</TableCell>
                                     <TableCell>{record.checkOut ? format(record.checkOut, 'hh:mm a') : '---'}</TableCell>
                                     <TableCell>
-                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${record.status === 'present' ? (record.checkOut ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success') : 'bg-rose-500/10 text-rose-500'}`}>
-                                        {record.status === 'present' ? (record.checkOut ? 'Completed' : 'On Duty') : record.status}
+                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${(record.status === 'present' || record.status === 'late') ? (record.checkOut ? 'bg-primary/10 text-primary' : (record.status === 'late' ? 'bg-amber-500/10 text-amber-500' : 'bg-success/10 text-success')) : 'bg-rose-500/10 text-rose-500'}`}>
+                                        {(record.status === 'present' || record.status === 'late') ? (record.checkOut ? 'Completed' : (record.status === 'late' ? 'Late' : 'On Duty')) : record.status}
                                       </span>
                                     </TableCell>
                                     <TableCell align="center" className="font-bold text-primary">{formatDuration(record.checkIn, record.checkOut)}</TableCell>
@@ -1201,7 +1475,7 @@ export default function HRPage() {
                       </Tab>
                       <Tab key="payroll" title="Salary History">
                         <div className="py-4">
-                          <Table shadow="none" classNames={{ th: "text-[10px] uppercase", td: "text-[12px]" }}>
+                          <Table aria-label="Salary history" shadow="none" classNames={{ th: "text-[10px] uppercase", td: "text-[12px]" }}>
                             <TableHeader>
                               <TableColumn>Bill #</TableColumn>
                               <TableColumn>Payment Date</TableColumn>
@@ -1215,8 +1489,8 @@ export default function HRPage() {
                               {bills
                                 .filter(b => b.category === 'salary' && b.vendorName === selectedStaff.name)
                                 .sort((a, b) => b.billDate.getTime() - a.billDate.getTime())
-                                .map((bill) => (
-                                  <TableRow key={bill.id}>
+                                .map((bill, index) => (
+                                  <TableRow key={bill.id || `bill-${index}`}>
                                     <TableCell className="font-mono">{bill.billNumber}</TableCell>
                                     <TableCell>{format(bill.billDate, 'MMM dd, yyyy')}</TableCell>
                                     <TableCell className="text-[11.5px] text-[rgb(var(--color-text-muted))] max-w-[200px] truncate">{bill.description}</TableCell>
@@ -1228,10 +1502,10 @@ export default function HRPage() {
                                       </span>
                                     </TableCell>
                                     <TableCell align="center">
-                                      <Button 
-                                        isIconOnly 
-                                        size="sm" 
-                                        variant="light" 
+                                      <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="light"
                                         color="primary"
                                         onPress={() => handlePrintSalarySlip(bill)}
                                         className="h-7 w-7"
@@ -1246,18 +1520,108 @@ export default function HRPage() {
                           </Table>
                         </div>
                       </Tab>
+                      <Tab
+                        key="commissions"
+                        title={
+                          <div className="flex items-center gap-2">
+                            <span>Referral Commissions</span>
+                            {(selectedStaff.totalCommissionBalance || 0) > 0 && (
+                              <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                                Pending
+                              </span>
+                            )}
+                          </div>
+                        }
+                      >
+                        <div className="py-4 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <Card className="bg-primary/5 border border-primary/20" shadow="none">
+                              <CardBody className="p-4 flex flex-row items-center justify-between">
+                                <div>
+                                  <p className="text-[10px] font-bold text-primary uppercase tracking-widest opacity-70 mb-1">Total Commission Earned</p>
+                                  <h4 className="text-[20px] font-bold text-primary">Rs. {(selectedStaff.totalCommissionEarned || 0).toLocaleString()}</h4>
+                                </div>
+                              </CardBody>
+                            </Card>
+                            <Card className="bg-success/5 border border-success/20" shadow="none">
+                              <CardBody className="p-4 flex flex-row items-center justify-between">
+                                <div>
+                                  <p className="text-[10px] font-bold text-success uppercase tracking-widest opacity-70 mb-1">Current Pending Balance</p>
+                                  <h4 className="text-[20px] font-bold text-success">Rs. {(selectedStaff.totalCommissionBalance || 0).toLocaleString()}</h4>
+                                </div>
+                              </CardBody>
+                            </Card>
+                          </div>
+
+                          <Table aria-label="Referral commissions" shadow="none" classNames={{ th: "text-[10px] uppercase", td: "text-[12px]" }}>
+                            <TableHeader>
+                              <TableColumn>Date</TableColumn>
+                              <TableColumn>Patient</TableColumn>
+                              <TableColumn>Service</TableColumn>
+                              <TableColumn>Commission</TableColumn>
+                              <TableColumn>Amount</TableColumn>
+                              <TableColumn>Status</TableColumn>
+                              <TableColumn align="center">Action</TableColumn>
+                            </TableHeader>
+                            <TableBody emptyContent="No referral commissions documented">
+                              {staffCommissions.map((comm, index) => (
+                                <TableRow key={comm.id || `comm-${index}`}>
+                                  <TableCell>{format(new Date(comm.appointmentDate), 'MMM dd, yyyy')}</TableCell>
+                                  <TableCell>
+                                    <div className="font-semibold">{comm.patientName}</div>
+                                    <div className="text-[10px] text-text-muted">{comm.invoiceNumber}</div>
+                                  </TableCell>
+                                  <TableCell className="max-w-[150px] truncate">{comm.serviceNames.join(', ')}</TableCell>
+                                  <TableCell>
+                                    <div className="font-medium text-primary">{comm.commissionPercentage}%</div>
+                                    <div className="text-[10px] text-text-muted">of Rs. {comm.totalInvoiceAmount.toLocaleString()}</div>
+                                  </TableCell>
+                                  <TableCell className="font-bold">Rs. {comm.commissionAmount.toLocaleString()}</TableCell>
+                                  <TableCell>
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${comm.status === 'paid' ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-500'}`}>
+                                      {comm.status}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    {comm.status === 'pending' && (
+                                      <Button
+                                        size="sm"
+                                        color="primary"
+                                        variant="flat"
+                                        className="h-7 text-[10px] font-bold"
+                                        onPress={() => {
+                                          setSelectedCommission(comm);
+                                          setCommissionPayForm({
+                                            amount: comm.commissionAmount - (comm.paidAmount || 0),
+                                            paymentMethod: "Cash",
+                                            notes: `Commission for patient: ${comm.patientName}`,
+                                            reference: ""
+                                          });
+                                          setIsCommissionPayModalOpen(true);
+                                        }}
+                                      >
+                                        Pay
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </Tab>
                     </Tabs>
                   </div>
                 )}
               </ModalBody>
               <ModalFooter className="justify-between">
-                <Button 
-                  color="primary" 
+                <Button
+                  color="primary"
                   className="font-bold"
                   onPress={() => {
                     const currentMonth = format(new Date(), 'MMMM yyyy');
-                    setPayrollForm({ 
-                      ...payrollForm, 
+                    setPayrollForm({
+                      ...payrollForm,
                       amount: selectedStaff.salary,
                       selectedMonths: [currentMonth],
                       notes: ""
@@ -1277,8 +1641,8 @@ export default function HRPage() {
       </Modal>
 
       {/* Salary Payment Modal */}
-      <Modal 
-        isOpen={isPayModalOpen} 
+      <Modal
+        isOpen={isPayModalOpen}
         onOpenChange={setIsPayModalOpen}
         size="md"
         classNames={{
@@ -1299,14 +1663,15 @@ export default function HRPage() {
                   <div>
                     <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Salary Month(s)</label>
                     <Select
+                      aria-label="Salary Month(s)"
                       size="sm"
                       selectionMode="multiple"
                       placeholder="Select months"
                       selectedKeys={new Set(payrollForm.selectedMonths)}
                       onSelectionChange={(keys) => {
                         const selected = Array.from(keys) as string[];
-                        setPayrollForm({ 
-                          ...payrollForm, 
+                        setPayrollForm({
+                          ...payrollForm,
                           selectedMonths: selected,
                           amount: (selectedStaff?.salary || 0) * (selected.length || 1)
                         });
@@ -1331,6 +1696,7 @@ export default function HRPage() {
                   <div>
                     <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Payment Method</label>
                     <Select
+                      aria-label="Payment Method"
                       size="sm"
                       selectedKeys={[payrollForm.paymentMethod]}
                       onSelectionChange={(keys) => setPayrollForm({ ...payrollForm, paymentMethod: Array.from(keys)[0] as string })}
@@ -1358,6 +1724,83 @@ export default function HRPage() {
                 </Button>
                 <Button color="primary" size="sm" className="font-bold" onPress={handleDisburseSalary}>
                   Confirm & Pay
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* Commission Payout Modal */}
+      <Modal
+        isOpen={isCommissionPayModalOpen}
+        onOpenChange={setIsCommissionPayModalOpen}
+        size="md"
+        classNames={{
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>
+                <div className="flex flex-col">
+                  <h2 className="text-[16px] font-bold text-[rgb(var(--color-text))] tracking-tight">Pay Referral Commission</h2>
+                  <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-normal">Recording commission payment for {selectedStaff?.name}</p>
+                </div>
+              </ModalHeader>
+              <ModalBody className="py-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Amount to Pay (Rs.)</label>
+                    <Input
+                      type="number"
+                      value={commissionPayForm.amount.toString()}
+                      onChange={(e) => setCommissionPayForm({ ...commissionPayForm, amount: Number(e.target.value) })}
+                      size="sm"
+                      startContent={<span className="text-[12px] text-text-muted">Rs.</span>}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Payment Method</label>
+                    <Select
+                      aria-label="Payment Method"
+                      size="sm"
+                      selectedKeys={[commissionPayForm.paymentMethod]}
+                      onSelectionChange={(keys) => setCommissionPayForm({ ...commissionPayForm, paymentMethod: Array.from(keys)[0] as string })}
+                    >
+                      <SelectItem key="Cash">Cash</SelectItem>
+                      <SelectItem key="Bank Transfer">Bank Transfer</SelectItem>
+                      <SelectItem key="Cheque">Cheque</SelectItem>
+                      <SelectItem key="E-Sewa">E-Sewa / Khalti</SelectItem>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Reference (Optional)</label>
+                    <Input
+                      placeholder="Transaction ID / Cheque #"
+                      value={commissionPayForm.reference}
+                      onChange={(e) => setCommissionPayForm({ ...commissionPayForm, reference: e.target.value })}
+                      size="sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">Notes</label>
+                    <Textarea
+                      placeholder="Add any internal notes..."
+                      value={commissionPayForm.notes}
+                      onChange={(e) => setCommissionPayForm({ ...commissionPayForm, notes: e.target.value })}
+                      size="sm"
+                    />
+                  </div>
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" size="sm" className="font-bold" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button color="primary" size="sm" className="font-bold" isLoading={payingCommission} onPress={handlePayStaffCommission}>
+                  Confirm Payment
                 </Button>
               </ModalFooter>
             </>

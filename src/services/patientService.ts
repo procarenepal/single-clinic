@@ -36,11 +36,17 @@ export const patientService = {
   async getNextRegistrationNumber(clinicId?: string): Promise<string> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
+      const constraints: any[] = [];
 
-      // 1) Prefer numeric ordering when available to avoid lexicographic errors
+      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+        constraints.push(where("clinicId", "==", clinicId));
+      }
+
+      // 1) Prefer numeric ordering when available
       try {
         const qNumeric = query(
           patientsRef,
+          ...constraints,
           orderBy("regNumberNumeric", "desc"),
           limit(1),
         );
@@ -57,19 +63,20 @@ export const patientService = {
           return String(next);
         }
       } catch (e) {
-        // Field may not exist on older records; fall back below
+        // Fallback if index missing or field not present
       }
 
-      // 2) Fallback: fetch recent patients by createdAt and compute max numeric reg
+      // 2) Fallback: fetch recent patients for this clinic and compute max
       const qRecent = query(
         patientsRef,
+        ...constraints,
         orderBy("createdAt", "desc"),
-        limit(100),
+        limit(50),
       );
       const recentSnap = await getDocs(qRecent);
 
       if (recentSnap.empty) {
-        return "1";
+        return "1001"; // Default starting number for new clinics
       }
 
       let maxReg = 0;
@@ -87,10 +94,10 @@ export const patientService = {
           maxReg = data.regNumberNumeric;
       });
 
-      return String((maxReg || 0) + 1);
+      return String((maxReg || 1000) + 1);
     } catch (error) {
       console.error("Error generating next registration number:", error);
-      throw error;
+      return String(Math.floor(Math.random() * 9000) + 1000); // Absolute fallback
     }
   },
 

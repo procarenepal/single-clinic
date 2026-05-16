@@ -20,11 +20,13 @@ import {
   IoChatbubbleEllipsesOutline,
   IoSettingsOutline,
   IoTimeOutline,
+  IoReceiptOutline,
 } from "react-icons/io5";
 
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { prescriptionService } from "@/services/prescriptionService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { enquiryService } from "@/services/enquiryService";
 import { branchService } from "@/services/branchService";
@@ -326,8 +328,8 @@ function QuickActions() {
   const actions = [
     { label: "New Appointment", icon: <IoCalendarOutline />, href: "/dashboard/appointments/new", color: "text-blue-500", bg: "bg-blue-500/10" },
     { label: "Register Patient", icon: <IoPersonAddOutline />, href: "/dashboard/patients/new", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { label: "New Prescription", icon: <IoReceiptOutline />, href: "/dashboard/prescriptions/new", color: "text-purple-500", bg: "bg-purple-500/10" },
     { label: "Add Enquiry", icon: <IoChatbubbleEllipsesOutline />, href: "/dashboard/enquiries?action=new", color: "text-amber-500", bg: "bg-amber-500/10" },
-    { label: "Clinic Settings", icon: <IoSettingsOutline />, href: "/dashboard/settings", color: "text-purple-500", bg: "bg-purple-500/10" },
   ];
 
   return (
@@ -436,6 +438,7 @@ export default function DashboardIndexPage() {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recentPrescriptions, setRecentPrescriptions] = useState<any[]>([]);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -508,7 +511,7 @@ export default function DashboardIndexPage() {
     (async () => {
       try {
         const branchScopedId = undefined; // Branch filters removed for standalone mode
-        const [allPatients, allDoctors, allAppTypes, allAppts, allEnquiries] =
+        const [allPatients, allDoctors, allAppTypes, allAppts, allEnquiries, allPrescriptions] =
           await Promise.all([
             patientService.getPatientsByClinic(clinicId, branchScopedId),
             doctorService.getDoctorsByClinic(clinicId, branchScopedId),
@@ -523,6 +526,7 @@ export default function DashboardIndexPage() {
             enquiryService.getEnquiries(clinicId, branchScopedId, {
               dateField: "createdAt",
             }),
+            prescriptionService.getPrescriptionsByClinic(clinicId),
           ]);
 
         const now = new Date();
@@ -558,6 +562,16 @@ export default function DashboardIndexPage() {
                 new Date(a.createdAt).getTime(),
             )
             .slice(0, 10),
+        );
+        const allRx = allPrescriptions as any[];
+        setRecentPrescriptions(
+          allRx
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime(),
+            )
+            .slice(0, 5),
         );
         setStats({
           totalPatients: allPatients.length,
@@ -722,8 +736,20 @@ export default function DashboardIndexPage() {
       });
     });
 
+    // Prescriptions
+    recentPrescriptions.forEach(rx => {
+      const patient = patients.find(p => p.id === rx.patientId);
+      items.push({
+        type: 'prescription',
+        title: 'Prescription Issued',
+        desc: `For ${patient?.name || 'Patient'} (#${rx.prescriptionNo})`,
+        time: format(new Date(rx.createdAt), 'h:mm a'),
+        color: 'bg-purple-500'
+      });
+    });
+
     return items.sort((a, b) => b.time.localeCompare(a.time)).slice(0, 10);
-  }, [appointments, patients, enquiries]);
+  }, [appointments, patients, enquiries, recentPrescriptions]);
 
   const chartOpts = {
     responsive: true,
@@ -997,8 +1023,45 @@ export default function DashboardIndexPage() {
             </div>
           </div>
 
-          {/* Recent Activity Feed */}
-          <RecentActivityFeed activities={activityFeed} />
+          {/* Right column: Activity feed + Prescriptions */}
+          <div className="flex flex-col gap-1.5">
+            <RecentActivityFeed activities={activityFeed} />
+            
+            {/* Recent Prescriptions Widget */}
+            <div className="bg-surface border border-border-base rounded-[10px] flex flex-col shadow-sm">
+              <div className="px-4 py-3 border-b border-border-base flex items-center justify-between bg-purple-500/[0.02]">
+                <h3 className="text-[12.5px] font-semibold text-purple-600 flex items-center gap-2">
+                  <IoReceiptOutline className="w-4 h-4" />
+                  Recent Prescriptions
+                </h3>
+                <Link to="/dashboard/prescriptions" className="text-[10px] font-bold text-purple-600 uppercase tracking-wider hover:underline">
+                  View All
+                </Link>
+              </div>
+              <div className="p-3 space-y-2">
+                {recentPrescriptions.length === 0 ? (
+                  <p className="text-[11px] text-text-muted text-center py-4 italic">No prescriptions found</p>
+                ) : (
+                  recentPrescriptions.map((rx, idx) => {
+                    const patient = patients.find(p => p.id === rx.patientId);
+                    const doctor = doctors.find(d => d.id === rx.doctorId);
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-purple-500/5 border border-transparent hover:border-purple-500/20 transition-all cursor-pointer" onClick={() => navigate(`/dashboard/prescriptions/${rx.id}`)}>
+                        <div className="flex flex-col">
+                          <span className="text-[12px] font-bold text-text-main">{patient?.name || 'Unknown'}</span>
+                          <span className="text-[10px] text-text-muted">Dr. {doctor?.name || 'Unknown'}</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] font-mono text-purple-600 font-bold">#{rx.prescriptionNo}</span>
+                          <span className="text-[9px] text-text-muted">{format(new Date(rx.createdAt), 'MMM d, h:mm a')}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* ── Row 3: Status doughnut + Enquiries ─────────────────────────── */}

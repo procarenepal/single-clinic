@@ -31,6 +31,7 @@ export interface Prescription {
   doctorId: string; // Doctor who prescribed
   prescriptionDate: Date;
   status: "active" | "completed" | "cancelled";
+  diagnosis?: string;
   notes?: string;
   // Appointment context (for easy reference when linked)
   appointmentDate?: Date;
@@ -38,6 +39,7 @@ export interface Prescription {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  sendToPharmacy?: boolean;
 }
 
 export interface PrescriptionItem {
@@ -55,6 +57,7 @@ export interface PrescriptionItem {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  sendToPharmacy?: boolean;
 }
 
 export interface MedicalDocument {

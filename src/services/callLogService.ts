@@ -49,7 +49,6 @@ export const callLogService = {
       const q = query(
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        orderBy("receivedOn", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -67,7 +66,7 @@ export const callLogService = {
         } as CallLog);
       });
 
-      return callLogs;
+      return callLogs.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
     } catch (error) {
       console.error("Error fetching call logs:", error);
       throw new Error("Failed to fetch call logs");
@@ -148,7 +147,6 @@ export const callLogService = {
         where("clinicId", "==", clinicId),
         where("receivedOn", ">=", Timestamp.fromDate(startDate)),
         where("receivedOn", "<=", Timestamp.fromDate(endDate)),
-        orderBy("receivedOn", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -166,7 +164,7 @@ export const callLogService = {
         } as CallLog);
       });
 
-      return callLogs;
+      return callLogs.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
     } catch (error) {
       console.error("Error fetching call logs by date range:", error);
       throw new Error("Failed to fetch call logs by date range");
@@ -203,7 +201,6 @@ export const callLogService = {
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
         where("callType", "==", callType),
-        orderBy("receivedOn", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -221,7 +218,7 @@ export const callLogService = {
         } as CallLog);
       });
 
-      return callLogs;
+      return callLogs.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
     } catch (error) {
       console.error("Error fetching call logs by type:", error);
       throw new Error("Failed to fetch call logs by type");

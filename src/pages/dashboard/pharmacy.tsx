@@ -270,6 +270,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { medicineService } from "@/services/medicineService";
 import { pharmacyService } from "@/services/pharmacyService";
+import { prescriptionService } from "@/services/prescriptionService";
 import { itemService } from "@/services/itemService";
 import { patientService } from "@/services/patientService";
 import {
@@ -490,6 +491,9 @@ export default function PharmacyPage() {
 
   // Medicine data
   const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [medicineStocks, setMedicineStocks] = useState<Record<string, number>>(
+    {},
+  );
   const [purchases, setPurchases] = useState<MedicinePurchase[]>([]);
   const [usedMedicines, setUsedMedicines] = useState<MedicineUsage[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -574,6 +578,8 @@ export default function PharmacyPage() {
   // Patients data
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoadingPatients, setIsLoadingPatients] = useState(false);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [isLoadingPrescriptions, setIsLoadingPrescriptions] = useState(false);
   const [itemForm, setItemForm] = useState({
     name: "",
     description: "",
@@ -622,13 +628,18 @@ export default function PharmacyPage() {
     discountPercentage: 0,
     taxPercentage: 0,
     taxAmount: 0,
+    handlingAmount: 0,
+    taxableAmount: 0,
     netAmount: 0,
     paymentType: "cash" as string,
     paymentNote: "",
     patientName: "",
+    patientPhone: "",
+    patientAddress: "",
     medicationDurationDays: 0,
     customerType: "walk-in" as "walk-in" | "patient",
     patientId: "",
+    prescriptionId: "",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -662,10 +673,6 @@ export default function PharmacyPage() {
     referenceNumber: "",
     note: "",
   });
-  const [historySupplier, setHistorySupplier] = useState<Supplier | null>(null);
-  const [editingSupplierPayment, setEditingSupplierPayment] =
-    useState<SupplierPayment | null>(null);
-  const addPurchaseEntryModalState = useModalState(false);
   const [purchaseEntryForm, setPurchaseEntryForm] = useState({
     billNumber: "",
     purchaseDate: new Date().toISOString().split("T")[0],
@@ -673,6 +680,191 @@ export default function PharmacyPage() {
     notes: "",
   });
   const [isSavingPurchaseEntry, setIsSavingPurchaseEntry] = useState(false);
+
+  const handleSavePurchaseEntry = async () => {
+    if (!clinicId || !currentUser || !selectedSupplierForTransactions) {
+      addToast({
+        title: "Error",
+        description: "Missing clinic or supplier context.",
+        color: "danger",
+      });
+
+      return;
+    }
+
+    const debitAmountValue = parseFloat(purchaseEntryForm.debitAmount);
+
+    if (!debitAmountValue || debitAmountValue <= 0) {
+      addToast({
+        title: "Validation Error",
+        description: "Enter a valid debit amount greater than zero.",
+        color: "warning",
+      });
+
+      return;
+    }
+
+    if (!purchaseEntryForm.billNumber.trim()) {
+      addToast({
+        title: "Validation Error",
+        description: "Bill number is required.",
+        color: "warning",
+      });
+
+      return;
+    }
+
+    if (!purchaseEntryForm.purchaseDate) {
+      addToast({
+        title: "Validation Error",
+        description: "Select a purchase date.",
+        color: "warning",
+      });
+
+      return;
+    }
+
+    try {
+      setIsSavingPurchaseEntry(true);
+      await medicineService.createSupplierLedgerEntry({
+        supplierId: selectedSupplierForTransactions.id,
+        supplierName: selectedSupplierForTransactions.name,
+        billNumber: purchaseEntryForm.billNumber.trim(),
+        transactionDate: new Date(purchaseEntryForm.purchaseDate),
+        debitAmount: debitAmountValue,
+        creditAmount: 0,
+        type: "purchase",
+        notes: purchaseEntryForm.notes?.trim() || undefined,
+        clinicId,
+        branchId: effectiveBranchId || userData?.branchId || "",
+        createdBy: currentUser.uid,
+      });
+
+      await refreshSupplierPayments();
+      if (selectedSupplierForTransactions) {
+        await loadSupplierLedgerEntries(selectedSupplierForTransactions.id);
+      }
+      await loadSupplierLedgerBalances(effectiveBranchId);
+      setPurchaseEntryForm({
+        billNumber: "",
+        purchaseDate: new Date().toISOString().split("T")[0],
+        debitAmount: "",
+        notes: "",
+      });
+      addPurchaseEntryModalState.forceClose();
+
+      addToast({
+        title: "Ledger Updated",
+        description: "Purchase entry recorded in supplier ledger.",
+        color: "success",
+      });
+    } catch (error: any) {
+      console.error("Error saving purchase entry:", error);
+      addToast({
+        title: "Error",
+        description: error.message || "Failed to save purchase entry.",
+        color: "danger",
+      });
+    } finally {
+      setIsSavingPurchaseEntry(false);
+    }
+  };
+
+  const handleSaveSupplierPayment = async () => {
+    if (!clinicId || !currentUser || !selectedSupplierForLedger) {
+      addToast({
+        title: "Error",
+        description: "Missing clinic or supplier context.",
+        color: "danger",
+      });
+
+      return;
+    }
+
+    const amountValue = parseFloat(supplierPaymentForm.amount);
+
+    if (isNaN(amountValue) || amountValue <= 0) {
+      addToast({
+        title: "Validation Error",
+        description: "Enter a valid amount greater than zero.",
+        color: "warning",
+      });
+
+      return;
+    }
+
+    try {
+      setIsSavingSupplierPayment(true);
+      const effectiveBranchId =
+        userData?.role === "clinic-admin"
+          ? supplierPaymentForm.supplierId
+            ? suppliers.find((s) => s.id === supplierPaymentForm.supplierId)
+              ?.branchId || ""
+            : ""
+          : userData?.branchId || "";
+
+      if (editingSupplierPayment) {
+        await medicineService.updateSupplierPayment(
+          editingSupplierPayment.id,
+          {
+            amount: amountValue,
+            type: supplierPaymentForm.type,
+            date: new Date(supplierPaymentForm.date),
+            referenceNumber:
+              supplierPaymentForm.referenceNumber?.trim() || undefined,
+            notes: supplierPaymentForm.note?.trim() || undefined,
+          },
+        );
+      } else {
+        await medicineService.createSupplierPayment({
+          supplierId: selectedSupplierForLedger.id,
+          supplierName: selectedSupplierForLedger.name,
+          clinicId,
+          branchId: effectiveBranchId || userData?.branchId || "",
+          amount: amountValue,
+          type: supplierPaymentForm.type,
+          date: new Date(supplierPaymentForm.date),
+          referenceNumber:
+            supplierPaymentForm.referenceNumber?.trim() || undefined,
+          notes: supplierPaymentForm.note?.trim() || undefined,
+          recordedBy: currentUser.uid,
+        });
+      }
+
+      await refreshSupplierPayments();
+      // Reload ledger entries if viewing a supplier's ledger
+      if (selectedSupplierForTransactions) {
+        await loadSupplierLedgerEntries(selectedSupplierForTransactions.id);
+      }
+      await loadSupplierLedgerBalances(effectiveBranchId);
+      resetSupplierPaymentFormState();
+      addSupplierPaymentModalState.forceClose();
+
+      addToast({
+        title: editingSupplierPayment
+          ? "Ledger Entry Updated"
+          : "Ledger Updated",
+        description: editingSupplierPayment
+          ? "Entry updated successfully."
+          : `${supplierPaymentForm.type === "payment" ? "Payment" : "Refund"} recorded for ${selectedSupplierForLedger.name}.`,
+        color: "success",
+      });
+    } catch (error: any) {
+      console.error("Error saving supplier payment:", error);
+      addToast({
+        title: "Error",
+        description: error.message || "Failed to save supplier payment.",
+        color: "danger",
+      });
+    } finally {
+      setIsSavingSupplierPayment(false);
+    }
+  };
+
+  const [historySupplier, setHistorySupplier] = useState<Supplier | null>(null);
+  const [editingSupplierPayment, setEditingSupplierPayment] =
+    useState<SupplierPayment | null>(null);
+  const addPurchaseEntryModalState = useModalState(false);
 
   // Edit ledger entry state
   const [editingLedgerEntry, setEditingLedgerEntry] =
@@ -739,6 +931,7 @@ export default function PharmacyPage() {
           supplierPaymentsData,
           clinicData,
           layoutConfigData,
+          prescriptionsData,
         ] = await Promise.all([
           medicineService.getMedicinesByClinic(
             clinicId,
@@ -760,9 +953,25 @@ export default function PharmacyPage() {
           medicineService.getSupplierPayments(clinicId, effectiveBranchId),
           clinicService.getClinicById(clinicId),
           clinicService.getPrintLayoutConfig(clinicId),
+          prescriptionService.getPrescriptionsByClinic(clinicId),
         ]);
 
         setMedicines(medicinesData as Medicine[]);
+
+        // Fetch and map stock data for medicines
+        const mIds = (medicinesData as Medicine[]).map((m) => m.id);
+        const sData = await medicineService.getStockByMedicineIds(
+          clinicId,
+          mIds,
+          effectiveBranchId,
+        );
+        const sMap: Record<string, number> = {};
+
+        sData.forEach((s) => {
+          sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
+        });
+        setMedicineStocks(sMap);
+
         setItems(itemsData);
         setPurchases(purchasesData as MedicinePurchase[]);
         setUsedMedicines(usageData as MedicineUsage[]);
@@ -773,6 +982,9 @@ export default function PharmacyPage() {
         setSupplierPayments((supplierPaymentsData as SupplierPayment[]) || []);
         setClinic(clinicData);
         setLayoutConfig(layoutConfigData);
+        if (prescriptionsData) {
+          setPrescriptions((prescriptionsData as any[])?.filter(rx => rx.sendToPharmacy) || []);
+        }
         await loadSupplierLedgerBalances(effectiveBranchId);
 
         if (settingsData) {
@@ -816,9 +1028,14 @@ export default function PharmacyPage() {
   // Fetch patients when purchase modal opens and customerType is patient
   useEffect(() => {
     const fetchPatients = async () => {
-      if (!clinicId || !purchaseModalState.isOpen) return;
+      if (!clinicId) return;
 
-      if (purchaseForm.customerType === "patient" && patients.length === 0) {
+      // Fetch patients if purchase modal is open and customer type is patient,
+      // OR if the prescriptions tab is active (needed to show patient names)
+      const needsPatients = (purchaseModalState.isOpen && purchaseForm.customerType === "patient") ||
+        (activeTab === "prescriptions");
+
+      if (needsPatients && patients.length === 0) {
         setIsLoadingPatients(true);
         try {
           const patientsData = await patientService.getPatientsByClinic(
@@ -841,12 +1058,29 @@ export default function PharmacyPage() {
     };
 
     fetchPatients();
-  }, [clinicId, purchaseModalState.isOpen, purchaseForm.customerType]);
+  }, [clinicId, purchaseModalState.isOpen, purchaseForm.customerType, activeTab, patients.length]);
+
+  // Automatically load prescriptions when the tab is switched
+  useEffect(() => {
+    if (activeTab === "prescriptions" && clinicId) {
+      const loadRx = async () => {
+        setIsLoadingPrescriptions(true);
+        try {
+          const data = await prescriptionService.getPrescriptionsByClinic(clinicId);
+          setPrescriptions(data.filter(rx => rx.sendToPharmacy && rx.status !== "completed"));
+        } catch (error) {
+          console.error("Error loading prescriptions:", error);
+        } finally {
+          setIsLoadingPrescriptions(false);
+        }
+      };
+      loadRx();
+    }
+  }, [activeTab, clinicId]);
 
   // Calculate amounts when items change
   useEffect(() => {
     const total = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
-    const taxAmount = (total * purchaseForm.taxPercentage) / 100;
 
     // Calculate discount based on type
     let discountAmount = 0;
@@ -857,11 +1091,15 @@ export default function PharmacyPage() {
       discountAmount = (total * purchaseForm.discountPercentage) / 100;
     }
 
-    const netAmount = total + taxAmount - discountAmount;
+    const taxableAmount = Math.max(0, total - discountAmount);
+    const taxAmount = (taxableAmount * purchaseForm.taxPercentage) / 100;
+    const netAmount =
+      taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0);
 
     setPurchaseForm((prev) => ({
       ...prev,
       total,
+      taxableAmount,
       taxAmount,
       netAmount: Math.max(0, netAmount),
     }));
@@ -871,6 +1109,7 @@ export default function PharmacyPage() {
     purchaseForm.discountType,
     purchaseForm.discountPercentage,
     purchaseForm.taxPercentage,
+    purchaseForm.handlingAmount,
   ]);
 
   // Calculate daily sales from purchases
@@ -1986,6 +2225,12 @@ export default function PharmacyPage() {
       if (purchaseForm.patientName && purchaseForm.patientName.trim()) {
         purchaseData.patientName = purchaseForm.patientName.trim();
       }
+      if (purchaseForm.patientPhone && purchaseForm.patientPhone.trim()) {
+        purchaseData.patientPhone = purchaseForm.patientPhone.trim();
+      }
+      if (purchaseForm.patientAddress && purchaseForm.patientAddress.trim()) {
+        purchaseData.patientAddress = purchaseForm.patientAddress.trim();
+      }
       if (
         purchaseForm.medicationDurationDays &&
         purchaseForm.medicationDurationDays > 0
@@ -1997,6 +2242,23 @@ export default function PharmacyPage() {
       // Save purchase record
       const createdPurchaseId =
         await pharmacyService.createMedicinePurchase(purchaseData);
+
+      // If this was fulfilled from a prescription, mark it as completed
+      if (purchaseForm.prescriptionId) {
+        try {
+          await prescriptionService.updatePrescription(purchaseForm.prescriptionId, {
+            status: "completed",
+            notes: (purchaseForm.paymentNote ? purchaseForm.paymentNote + "\n" : "") + "Fulfilled by pharmacy on " + new Date().toLocaleDateString()
+          });
+
+          // Refresh prescriptions list to remove the completed one
+          const data = await prescriptionService.getPrescriptionsByClinic(clinicId!);
+          setPrescriptions(data.filter(rx => rx.sendToPharmacy && rx.status !== "completed"));
+        } catch (error) {
+          console.error("Error updating prescription status:", error);
+          // Don't fail the whole purchase if just status update fails
+        }
+      }
 
       addToast({
         title: "Success",
@@ -2028,13 +2290,18 @@ export default function PharmacyPage() {
         discountPercentage: 0,
         taxPercentage: pharmacySettings?.defaultTaxPercentage || 0,
         taxAmount: 0,
+        handlingAmount: 0,
+        taxableAmount: 0,
         netAmount: 0,
         paymentType: pharmacySettings?.defaultPaymentMethod || "cash",
         paymentNote: "",
         patientName: "",
+        patientPhone: "",
+        patientAddress: "",
         medicationDurationDays: 0,
         customerType: "walk-in",
         patientId: "",
+        prescriptionId: "",
       });
 
       // Add small delay to ensure any dropdown interactions are complete before closing
@@ -2507,201 +2774,6 @@ export default function PharmacyPage() {
   const handleCloseSupplierHistoryModal = () => {
     supplierHistoryModalState.forceClose();
     setHistorySupplier(null);
-  };
-
-  const handleSaveSupplierPayment = async () => {
-    if (!clinicId || !currentUser || !selectedSupplierForLedger) {
-      addToast({
-        title: "Error",
-        description: "Missing clinic or supplier context.",
-        color: "danger",
-      });
-
-      return;
-    }
-
-    const amountValue = parseFloat(supplierPaymentForm.amount);
-
-    if (!amountValue || amountValue <= 0) {
-      addToast({
-        title: "Validation Error",
-        description: "Enter a valid amount greater than zero.",
-        color: "warning",
-      });
-
-      return;
-    }
-
-    if (!supplierPaymentForm.date) {
-      addToast({
-        title: "Validation Error",
-        description: "Select a payment date.",
-        color: "warning",
-      });
-
-      return;
-    }
-
-    try {
-      setIsSavingSupplierPayment(true);
-      if (editingSupplierPayment) {
-        await medicineService.updateSupplierPayment(editingSupplierPayment.id, {
-          amount: amountValue,
-          type: supplierPaymentForm.type,
-          date: new Date(supplierPaymentForm.date),
-          referenceNumber:
-            supplierPaymentForm.referenceNumber?.trim() || undefined,
-          notes: supplierPaymentForm.note?.trim() || undefined,
-        });
-      } else {
-        // Create ledger entry for payment (no bill association)
-        await medicineService.createSupplierLedgerEntry({
-          supplierId: selectedSupplierForLedger.id,
-          supplierName: selectedSupplierForLedger.name,
-          billNumber: undefined, // Payments are not tied to specific bills
-          transactionDate: new Date(supplierPaymentForm.date),
-          debitAmount: 0,
-          creditAmount: amountValue,
-          type: supplierPaymentForm.type === "payment" ? "payment" : "payment", // Both payment and refund are 'payment' type in ledger
-          notes: supplierPaymentForm.note?.trim() || undefined,
-          referenceNumber:
-            supplierPaymentForm.referenceNumber?.trim() || undefined,
-          clinicId,
-          branchId: effectiveBranchId || userData?.branchId || "",
-          createdBy: currentUser.uid,
-        });
-
-        // Also create the legacy payment record for backward compatibility
-        await medicineService.createSupplierPayment({
-          supplierId: selectedSupplierForLedger.id,
-          supplierName: selectedSupplierForLedger.name,
-          clinicId,
-          branchId: effectiveBranchId || userData?.branchId || "",
-          amount: amountValue,
-          type: supplierPaymentForm.type,
-          date: new Date(supplierPaymentForm.date),
-          referenceNumber:
-            supplierPaymentForm.referenceNumber?.trim() || undefined,
-          notes: supplierPaymentForm.note?.trim() || undefined,
-          recordedBy: currentUser.uid,
-        });
-      }
-
-      await refreshSupplierPayments();
-      // Reload ledger entries if viewing a supplier's ledger
-      if (selectedSupplierForTransactions) {
-        await loadSupplierLedgerEntries(selectedSupplierForTransactions.id);
-      }
-      await loadSupplierLedgerBalances(effectiveBranchId);
-      resetSupplierPaymentFormState();
-      addSupplierPaymentModalState.forceClose();
-
-      addToast({
-        title: editingSupplierPayment
-          ? "Ledger Entry Updated"
-          : "Ledger Updated",
-        description: editingSupplierPayment
-          ? "Entry updated successfully."
-          : `${supplierPaymentForm.type === "payment" ? "Payment" : "Refund"} recorded for ${selectedSupplierForLedger.name}.`,
-        color: "success",
-      });
-    } catch (error: any) {
-      console.error("Error saving supplier payment:", error);
-      addToast({
-        title: "Error",
-        description: error.message || "Failed to save supplier payment.",
-        color: "danger",
-      });
-    } finally {
-      setIsSavingSupplierPayment(false);
-    }
-  };
-
-  const handleSavePurchaseEntry = async () => {
-    if (!clinicId || !currentUser || !selectedSupplierForTransactions) {
-      addToast({
-        title: "Error",
-        description: "Missing clinic or supplier context.",
-        color: "danger",
-      });
-
-      return;
-    }
-
-    const debitAmountValue = parseFloat(purchaseEntryForm.debitAmount);
-
-    if (!debitAmountValue || debitAmountValue <= 0) {
-      addToast({
-        title: "Validation Error",
-        description: "Enter a valid debit amount greater than zero.",
-        color: "warning",
-      });
-
-      return;
-    }
-
-    if (!purchaseEntryForm.billNumber.trim()) {
-      addToast({
-        title: "Validation Error",
-        description: "Bill number is required.",
-        color: "warning",
-      });
-
-      return;
-    }
-
-    if (!purchaseEntryForm.purchaseDate) {
-      addToast({
-        title: "Validation Error",
-        description: "Select a purchase date.",
-        color: "warning",
-      });
-
-      return;
-    }
-
-    try {
-      setIsSavingPurchaseEntry(true);
-      await medicineService.createSupplierLedgerEntry({
-        supplierId: selectedSupplierForTransactions.id,
-        supplierName: selectedSupplierForTransactions.name,
-        billNumber: purchaseEntryForm.billNumber.trim(),
-        transactionDate: new Date(purchaseEntryForm.purchaseDate),
-        debitAmount: debitAmountValue,
-        creditAmount: 0,
-        type: "purchase",
-        notes: purchaseEntryForm.notes?.trim() || undefined,
-        clinicId,
-        branchId: effectiveBranchId || userData?.branchId || "",
-        createdBy: currentUser.uid,
-      });
-
-      // Reload ledger entries
-      await loadSupplierLedgerEntries(selectedSupplierForTransactions.id);
-      await loadSupplierLedgerBalances(effectiveBranchId);
-      setPurchaseEntryForm({
-        billNumber: "",
-        purchaseDate: new Date().toISOString().split("T")[0],
-        debitAmount: "",
-        notes: "",
-      });
-      addPurchaseEntryModalState.forceClose();
-
-      addToast({
-        title: "Success",
-        description: "Purchase entry added successfully.",
-        color: "success",
-      });
-    } catch (error: any) {
-      console.error("Error saving purchase entry:", error);
-      addToast({
-        title: "Error",
-        description: error.message || "Failed to save purchase entry.",
-        color: "danger",
-      });
-    } finally {
-      setIsSavingPurchaseEntry(false);
-    }
   };
 
   const handleEditLedgerEntry = async () => {
@@ -3400,6 +3472,11 @@ export default function PharmacyPage() {
                 icon: <IoReceiptOutline className="w-4 h-4" />,
               },
               {
+                id: "prescriptions",
+                label: "Prescriptions",
+                icon: <IoReceiptOutline className="w-4 h-4" />,
+              },
+              {
                 id: "settings",
                 label: "Settings",
                 icon: <IoSettingsOutline className="w-4 h-4" />,
@@ -3676,18 +3753,6 @@ export default function PharmacyPage() {
                                       }
                                     >
                                       <IoCreateOutline />
-                                    </button>
-                                    <button
-                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
-                                      title="Print"
-                                      onClick={() =>
-                                        window.open(
-                                          `/dashboard/pharmacy/purchase/${purchase.id}?print=true`,
-                                          "_blank",
-                                        )
-                                      }
-                                    >
-                                      <IoPrintOutline />
                                     </button>
                                     <button
                                       className="p-1.5 text-text-muted hover:text-yellow-600 hover:bg-yellow-500/10 rounded disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text-muted"
@@ -4244,362 +4309,537 @@ export default function PharmacyPage() {
               </div>
             )}
 
-            {/* Settings Tab */}
-            {
-              activeTab === "settings" && (
-                <div className="py-6">
-                  <div className="max-w-4xl mx-auto space-y-8">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="text-stat-sm font-semibold text-primary">
-                          Pharmacy Settings
-                        </h3>
-                        <p className="text-default-500 mt-1">
-                          Configure tax percentage and payment methods
-                        </p>
-                      </div>
-                      <Button
-                        color="primary"
-                        isDisabled={isSettingsLoading}
-                        isLoading={isSettingsLoading}
-                        startContent={<IoSaveOutline />}
-                        onPress={handleSaveSettings}
-                      >
-                        {isSettingsLoading ? "Saving..." : "Save Settings"}
-                      </Button>
-                    </div>
+            {/* Prescriptions Tab */}
+            {activeTab === "prescriptions" && (
+              <div className="py-2">
+                <div className="flex justify-between items-center mb-6 bg-primary/[0.03] p-4 rounded-lg border border-primary/10">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-primary">Prescriptions from Doctors</h3>
+                    <p className="text-[12px] text-text-muted">Review and fulfill prescriptions sent directly from clinical consultations.</p>
+                  </div>
+                  <Button color="primary" variant="flat" size="sm" onClick={() => {
+                    const loadRx = async () => {
+                      setIsLoadingPrescriptions(true);
+                      try {
+                        const data = await prescriptionService.getPrescriptionsByClinic(clinicId!);
+                        setPrescriptions(data.filter(rx => rx.sendToPharmacy && rx.status !== "completed"));
+                      } finally { setIsLoadingPrescriptions(false); }
+                    };
+                    loadRx();
+                  }}>
+                    <IoReloadOutline className="mr-2" /> Refresh
+                  </Button>
+                </div>
 
-                    {/* Tax Configuration */}
-                    <Card>
-                      <CardHeader className="bg-default-50 border-b border-default-200">
-                        <h4 className="text-stat-sm font-semibold text-primary">
-                          Tax Configuration
-                        </h4>
-                      </CardHeader>
-                      <CardBody className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">Enable Tax</p>
-                            <p className="text-sm text-default-500">
-                              Apply tax to medicine purchases
-                            </p>
-                          </div>
-                          <Switch
-                            isSelected={settingsForm.enableTax}
-                            onValueChange={(value) =>
-                              setSettingsForm((prev) => ({
-                                ...prev,
-                                enableTax: value,
-                              }))
-                            }
-                          />
-                        </div>
-
-                        {settingsForm.enableTax && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input
-                              description="Default tax percentage for new purchases"
-                              endContent="%"
-                              label="Default Tax Percentage"
-                              placeholder="13"
-                              type="number"
-                              value={
-                                settingsForm.defaultTaxPercentage?.toString() ||
-                                "0"
-                              }
-                              onChange={(e) =>
-                                setSettingsForm((prev) => ({
-                                  ...prev,
-                                  defaultTaxPercentage:
-                                    parseFloat(e.target.value) || 0,
-                                }))
-                              }
-                            />
-                            <Input
-                              description="Display label for tax (e.g., VAT, GST, Tax)"
-                              label="Tax Label"
-                              placeholder="VAT"
-                              value={settingsForm.taxLabel || ""}
-                              onChange={(e) =>
-                                setSettingsForm((prev) => ({
-                                  ...prev,
-                                  taxLabel: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                        )}
-                      </CardBody>
-                    </Card>
-
-                    {/* Payment Methods Configuration */}
-                    <Card>
-                      <CardHeader className="bg-default-50 border-b border-default-200">
-                        <div className="flex justify-between items-center w-full">
-                          <div>
-                            <h4 className="text-stat-sm font-semibold text-primary">
-                              Payment Methods
-                            </h4>
-                            <p className="text-sm text-default-500">
-                              Manage available payment methods for purchases
-                            </p>
-                          </div>
-                          <Button
-                            color="primary"
-                            startContent={<IoAddOutline />}
-                            variant="flat"
-                            onPress={addPaymentMethodModalState.open}
-                          >
-                            Add Payment Method
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardBody className="space-y-4">
-                        {settingsForm.enabledPaymentMethods?.map((method) => (
-                          <Card
-                            key={method.id}
-                            className="border border-default-200"
-                          >
-                            <CardBody className="p-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="text-stat">{method.icon}</div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center space-x-2 mb-1">
-                                      <span className="font-medium text-default-900">
-                                        {method.name}
-                                      </span>
-                                      {method.isCustom && (
-                                        <Chip
-                                          color="primary"
-                                          size="sm"
-                                          variant="flat"
-                                        >
-                                          Custom
-                                        </Chip>
-                                      )}
-                                      {method.requiresReference && (
-                                        <Chip
-                                          color="warning"
-                                          size="sm"
-                                          variant="flat"
-                                        >
-                                          Requires Reference
-                                        </Chip>
-                                      )}
-                                    </div>
-                                    {method.description && (
-                                      <p className="text-sm text-default-500">
-                                        {method.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center space-x-4">
-                                  <div className="flex items-center space-x-2">
-                                    <Switch
-                                      isSelected={method.isEnabled}
-                                      onValueChange={(isEnabled) => {
-                                        const updatedMethods =
-                                          settingsForm.enabledPaymentMethods?.map(
-                                            (pm) =>
-                                              pm.id === method.id
-                                                ? { ...pm, isEnabled }
-                                                : pm,
-                                          ) || [];
-
-                                        setSettingsForm((prev) => ({
-                                          ...prev,
-                                          enabledPaymentMethods: updatedMethods,
-                                        }));
-                                      }}
-                                    />
-                                    <span className="text-sm text-default-700">
-                                      Enabled
-                                    </span>
-                                  </div>
-
-                                  <div className="flex items-center space-x-2">
-                                    <input
-                                      checked={
-                                        settingsForm.defaultPaymentMethod ===
-                                        method.key
-                                      }
-                                      className="h-4 w-4 text-primary focus:ring-primary border-default-300"
-                                      disabled={!method.isEnabled}
-                                      name="defaultPaymentMethod"
-                                      type="radio"
-                                      value={method.key}
-                                      onChange={(e) =>
-                                        setSettingsForm((prev) => ({
-                                          ...prev,
-                                          defaultPaymentMethod: e.target.value,
-                                        }))
-                                      }
-                                    />
-                                    <span className="text-sm text-default-700">
-                                      Default
-                                    </span>
-                                  </div>
-
-                                  <div className="flex space-x-1">
-                                    <Button
-                                      isIconOnly
-                                      color="default"
-                                      size="sm"
-                                      variant="light"
-                                      onPress={() => handleOpenEditModal(method)}
-                                    >
-                                      <IoCreateOutline size={16} />
-                                    </Button>
-
-                                    {method.isCustom && (
-                                      <Button
-                                        isIconOnly
-                                        color="danger"
-                                        size="sm"
-                                        variant="light"
-                                        onPress={() =>
-                                          handleDeletePaymentMethod(method.id)
-                                        }
-                                      >
-                                        <IoTrashOutline size={16} />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
+                <div className="border border-border-base rounded-xl overflow-hidden bg-surface">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-surface-2/80 border-b border-border-base">
+                        <th className="px-4 py-3 text-[11px] font-bold text-primary tracking-wider">Patient</th>
+                        <th className="px-4 py-3 text-[11px] font-bold text-primary tracking-wider">Prescription #</th>
+                        <th className="px-4 py-3 text-[11px] font-bold text-primary tracking-wider">Diagnosis</th>
+                        <th className="px-4 py-3 text-[11px] font-bold text-primary tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-[11px] font-bold text-primary tracking-wider text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-base">
+                      {isLoadingPrescriptions ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-12 text-center">
+                            <Spinner size="sm" label="Loading prescriptions..." />
+                          </td>
+                        </tr>
+                      ) : prescriptions.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-12 text-center text-text-muted italic text-[13px]">
+                            No pending prescriptions from doctors.
+                          </td>
+                        </tr>
+                      ) : (
+                        prescriptions.map((rx) => (
+                          <tr key={rx.id} className="hover:bg-primary/[0.02] transition-colors group">
+                            <td className="px-4 py-3.5">
+                              <div className="font-bold text-[13.5px] text-text-main group-hover:text-primary transition-colors">
+                                {patients.find(p => p.id === rx.patientId)?.name || "Patient " + (rx.patientId?.substring(0, 5) || "Unknown")}
                               </div>
-                            </CardBody>
-                          </Card>
-                        ))}
-
-                        {(!settingsForm.enabledPaymentMethods ||
-                          settingsForm.enabledPaymentMethods.length === 0) && (
-                            <div className="text-center py-8">
-                              <div className="text-default-400 mb-4">
-                                <svg
-                                  className="mx-auto opacity-50"
-                                  fill="none"
-                                  height="48"
-                                  stroke="currentColor"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  viewBox="0 0 24 24"
-                                  width="48"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                >
-                                  <rect
-                                    height="16"
-                                    rx="2"
-                                    ry="2"
-                                    width="22"
-                                    x="1"
-                                    y="4"
-                                  />
-                                  <line x1="1" x2="23" y1="10" y2="10" />
-                                </svg>
-                              </div>
-                              <h3 className="text-stat-sm font-medium text-default-700 mb-2">
-                                No payment methods configured
-                              </h3>
-                              <p className="text-default-500 mb-4">
-                                Add payment methods to enable different payment
-                                options for purchases.
-                              </p>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="font-mono text-[12px] text-primary font-bold">#{rx.prescriptionNo}</span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {rx.diagnosis ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-md text-[11.5px] font-medium bg-primary/10 text-primary border border-primary/20 max-w-[200px] truncate" title={rx.diagnosis}>
+                                  {rx.diagnosis}
+                                </span>
+                              ) : (
+                                <span className="text-[12px] text-text-muted italic opacity-60">None</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 text-[12px] text-text-muted">
+                              {rx.createdAt ? format(new Date(rx.createdAt), 'MMM d, yyyy h:mm a') : "N/A"}
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
                               <Button
                                 color="primary"
-                                startContent={<IoAddOutline />}
-                                onPress={addPaymentMethodModalState.open}
+                                size="sm"
+                                variant="solid"
+                                className="h-8 text-[11.5px] font-bold shadow-sm shadow-primary/20"
+                                onPress={async () => {
+                                  // Fetch items before fulfilling
+                                  setIsLoadingPrescriptions(true);
+                                  try {
+                                    const itemsData = await prescriptionService.getPrescriptionItems(rx.id);
+                                    if (!itemsData || itemsData.length === 0) {
+                                      addToast({
+                                        title: "No Items",
+                                        description: "This prescription has no items to fulfill.",
+                                        color: "warning"
+                                      });
+                                      return;
+                                    }
+
+                                    const patientObj = patients.find(p => p.id === rx.patientId);
+
+                                    const mappedItems: PurchaseItem[] = itemsData.map((item: any) => {
+                                      const med = medicines.find(m => m.id === item.medicineId);
+                                      return {
+                                        id: crypto.randomUUID(),
+                                        type: "medicine" as const,
+                                        productId: item.medicineId,
+                                        productName: item.medicineName,
+                                        expiryDate: item.expiryDate || (med ? toISODateString(med.expiryDate) : ""),
+                                        salePrice: med?.price || 0,
+                                        regularSalePrice: med?.price || 0,
+                                        schemeSalePrice: med?.price || 0,
+                                        quantity: item.quantity || 1,
+                                        amount: (item.quantity || 1) * (med?.price || 0),
+                                        stockType: "regular" as const
+                                      };
+                                    });
+
+                                    // Extract max duration from items for the overall course duration
+                                    const maxDurationDays = itemsData.reduce((max, item) => {
+                                      const durationStr = item.duration || "";
+                                      const match = durationStr.match(/(\d+)/);
+                                      if (!match) return max;
+
+                                      let days = parseInt(match[1], 10);
+                                      if (durationStr.toLowerCase().includes("week")) days *= 7;
+                                      else if (durationStr.toLowerCase().includes("month")) days *= 30;
+
+                                      return Math.max(max, days);
+                                    }, 0);
+
+                                    // Fetch stock for all mapped items to pass validation
+                                    const newStocks: Record<string, number | null> = {};
+                                    const newSchemeStocks: Record<string, number | null> = {};
+
+                                    if (clinicId) {
+                                      await Promise.all(
+                                        mappedItems.map(async (item) => {
+                                          if (item.productId) {
+                                            const stock = await medicineService.getMedicineStock(item.productId, clinicId);
+                                            newStocks[item.id] = stock?.currentStock ?? null;
+                                            newSchemeStocks[item.id] = stock?.schemeStock ?? null;
+                                          }
+                                        })
+                                      );
+                                    }
+
+                                    setPurchaseItemStocks(prev => ({ ...prev, ...newStocks }));
+                                    setPurchaseItemSchemeStocks(prev => ({ ...prev, ...newSchemeStocks }));
+
+                                    setPurchaseItems(mappedItems);
+                                    setPurchaseForm(prev => ({
+                                      ...prev,
+                                      patientId: rx.patientId,
+                                      customerType: "patient",
+                                      patientName: patientObj?.name || "",
+                                      prescriptionId: rx.id,
+                                      medicationDurationDays: maxDurationDays,
+                                      total: mappedItems.reduce((sum: number, i: any) => sum + i.amount, 0),
+                                      netAmount: mappedItems.reduce((sum: number, i: any) => sum + i.amount, 0),
+                                    }));
+                                    purchaseModalState.open();
+                                  } catch (error) {
+                                    console.error("Error fetching items:", error);
+                                    addToast({
+                                      title: "Error",
+                                      description: "Failed to load prescription items.",
+                                      color: "danger"
+                                    });
+                                  } finally {
+                                    setIsLoadingPrescriptions(false);
+                                  }
+                                }}
                               >
-                                Add Your First Payment Method
+                                <IoReceiptOutline className="mr-1.5" /> Fulfill Sale
                               </Button>
-                            </div>
-                          )}
-                      </CardBody>
-                    </Card>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
-                    {/* Other Settings */}
-                    <Card>
-                      <CardHeader className="bg-default-50 border-b border-default-200">
-                        <h4 className="text-stat-sm font-semibold text-primary">Other Settings</h4>
-                      </CardHeader>
-                      <CardBody className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">Enable Discount</p>
-                            <p className="text-sm text-default-500">
-                              Allow discounts on purchases
-                            </p>
-                          </div>
-                          <Switch
-                            isSelected={settingsForm.enableDiscount}
-                            onValueChange={(value) =>
-                              setSettingsForm((prev) => ({
-                                ...prev,
-                                enableDiscount: value,
-                              }))
-                            }
-                          />
+            {/* Settings Tab */}
+            {activeTab === "settings" && (
+              <div className="py-6">
+                <div className="w-full space-y-8">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-stat-sm font-semibold text-primary">
+                        Pharmacy Settings
+                      </h3>
+                      <p className="text-default-500 mt-1">
+                        Configure tax percentage and payment methods
+                      </p>
+                    </div>
+                    <Button
+                      color="primary"
+                      isDisabled={isSettingsLoading}
+                      isLoading={isSettingsLoading}
+                      startContent={<IoSaveOutline />}
+                      onPress={handleSaveSettings}
+                    >
+                      {isSettingsLoading ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </div>
+
+                  {/* Tax Configuration */}
+                  <Card>
+                    <CardHeader className="bg-default-50 border-b border-default-200">
+                      <h4 className="text-stat-sm font-semibold text-primary">
+                        Tax Configuration
+                      </h4>
+                    </CardHeader>
+                    <CardBody className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Enable Tax</p>
+                          <p className="text-sm text-default-500">
+                            Apply tax to medicine purchases
+                          </p>
                         </div>
+                        <Switch
+                          isSelected={settingsForm.enableTax}
+                          onValueChange={(value) =>
+                            setSettingsForm((prev) => ({
+                              ...prev,
+                              enableTax: value,
+                            }))
+                          }
+                        />
+                      </div>
 
-                        {settingsForm.enableDiscount && (
+                      {settingsForm.enableTax && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input
-                            description="Default discount percentage for new purchases"
+                            description="Default tax percentage for new purchases"
                             endContent="%"
-                            label="Default Discount Percentage"
-                            placeholder="0"
+                            label="Default Tax Percentage"
+                            placeholder="13"
                             type="number"
                             value={
-                              settingsForm.defaultDiscountPercentage?.toString() ||
+                              settingsForm.defaultTaxPercentage?.toString() ||
                               "0"
                             }
                             onChange={(e) =>
                               setSettingsForm((prev) => ({
                                 ...prev,
-                                defaultDiscountPercentage:
+                                defaultTaxPercentage:
                                   parseFloat(e.target.value) || 0,
                               }))
                             }
                           />
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input
-                            description="Prefix for purchase numbers"
-                            label="Invoice Prefix"
-                            placeholder="PUR"
-                            value={settingsForm.invoicePrefix || ""}
+                            description="Display label for tax (e.g., VAT, GST, Tax)"
+                            label="Tax Label"
+                            placeholder="VAT"
+                            value={settingsForm.taxLabel || ""}
                             onChange={(e) =>
                               setSettingsForm((prev) => ({
                                 ...prev,
-                                invoicePrefix: e.target.value,
-                              }))
-                            }
-                          />
-                          <Input
-                            description="Next invoice number in sequence"
-                            label="Next Invoice Number"
-                            placeholder="1001"
-                            type="number"
-                            value={
-                              settingsForm.nextInvoiceNumber?.toString() || "1001"
-                            }
-                            onChange={(e) =>
-                              setSettingsForm((prev) => ({
-                                ...prev,
-                                nextInvoiceNumber:
-                                  parseInt(e.target.value) || 1001,
+                                taxLabel: e.target.value,
                               }))
                             }
                           />
                         </div>
-                      </CardBody>
-                    </Card>
-                  </div>
+                      )}
+                    </CardBody>
+                  </Card>
+
+                  {/* Payment Methods Configuration */}
+                  <Card>
+                    <CardHeader className="bg-default-50 border-b border-default-200">
+                      <div className="flex justify-between items-center w-full">
+                        <div>
+                          <h4 className="text-stat-sm font-semibold text-primary">
+                            Payment Methods
+                          </h4>
+                          <p className="text-sm text-default-500">
+                            Manage available payment methods for purchases
+                          </p>
+                        </div>
+                        <Button
+                          color="primary"
+                          startContent={<IoAddOutline />}
+                          variant="flat"
+                          onPress={addPaymentMethodModalState.open}
+                        >
+                          Add Payment Method
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardBody className="space-y-4">
+                      {settingsForm.enabledPaymentMethods?.map((method) => (
+                        <Card
+                          key={method.id}
+                          className="border border-default-200"
+                        >
+                          <CardBody className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="text-stat">{method.icon}</div>
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <span className="font-medium text-default-900">
+                                      {method.name}
+                                    </span>
+                                    {method.isCustom && (
+                                      <Chip
+                                        color="primary"
+                                        size="sm"
+                                        variant="flat"
+                                      >
+                                        Custom
+                                      </Chip>
+                                    )}
+                                    {method.requiresReference && (
+                                      <Chip
+                                        color="warning"
+                                        size="sm"
+                                        variant="flat"
+                                      >
+                                        Requires Reference
+                                      </Chip>
+                                    )}
+                                  </div>
+                                  {method.description && (
+                                    <p className="text-sm text-default-500">
+                                      {method.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center space-x-4">
+                                <div className="flex items-center space-x-2">
+                                  <Switch
+                                    isSelected={method.isEnabled}
+                                    onValueChange={(isEnabled) => {
+                                      const updatedMethods =
+                                        settingsForm.enabledPaymentMethods?.map(
+                                          (pm) =>
+                                            pm.id === method.id
+                                              ? { ...pm, isEnabled }
+                                              : pm,
+                                        ) || [];
+
+                                      setSettingsForm((prev) => ({
+                                        ...prev,
+                                        enabledPaymentMethods: updatedMethods,
+                                      }));
+                                    }}
+                                  />
+                                  <span className="text-sm text-default-700">
+                                    Enabled
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    checked={
+                                      settingsForm.defaultPaymentMethod ===
+                                      method.key
+                                    }
+                                    className="h-4 w-4 text-primary focus:ring-primary border-default-300"
+                                    disabled={!method.isEnabled}
+                                    name="defaultPaymentMethod"
+                                    type="radio"
+                                    value={method.key}
+                                    onChange={(e) =>
+                                      setSettingsForm((prev) => ({
+                                        ...prev,
+                                        defaultPaymentMethod: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <span className="text-sm text-default-700">
+                                    Default
+                                  </span>
+                                </div>
+
+                                <div className="flex space-x-1">
+                                  <Button
+                                    isIconOnly
+                                    color="default"
+                                    size="sm"
+                                    variant="light"
+                                    onPress={() => handleOpenEditModal(method)}
+                                  >
+                                    <IoCreateOutline size={16} />
+                                  </Button>
+
+                                  {method.isCustom && (
+                                    <Button
+                                      isIconOnly
+                                      color="danger"
+                                      size="sm"
+                                      variant="light"
+                                      onPress={() =>
+                                        handleDeletePaymentMethod(method.id)
+                                      }
+                                    >
+                                      <IoTrashOutline size={16} />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardBody>
+                        </Card>
+                      ))}
+
+                      {(!settingsForm.enabledPaymentMethods ||
+                        settingsForm.enabledPaymentMethods.length === 0) && (
+                          <div className="text-center py-8">
+                            <div className="text-default-400 mb-4">
+                              <svg
+                                className="mx-auto opacity-50"
+                                fill="none"
+                                height="48"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                viewBox="0 0 24 24"
+                                width="48"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <rect
+                                  height="16"
+                                  rx="2"
+                                  ry="2"
+                                  width="22"
+                                  x="1"
+                                  y="4"
+                                />
+                                <line x1="1" x2="23" y1="10" y2="10" />
+                              </svg>
+                            </div>
+                            <h3 className="text-stat-sm font-medium text-default-700 mb-2">
+                              No payment methods configured
+                            </h3>
+                            <p className="text-default-500 mb-4">
+                              Add payment methods to enable different payment
+                              options for purchases.
+                            </p>
+                            <Button
+                              color="primary"
+                              startContent={<IoAddOutline />}
+                              onPress={addPaymentMethodModalState.open}
+                            >
+                              Add Your First Payment Method
+                            </Button>
+                          </div>
+                        )}
+                    </CardBody>
+                  </Card>
+
+                  {/* Other Settings */}
+                  <Card>
+                    <CardHeader className="bg-default-50 border-b border-default-200">
+                      <h4 className="text-stat-sm font-semibold text-primary">Other Settings</h4>
+                    </CardHeader>
+                    <CardBody className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Enable Discount</p>
+                          <p className="text-sm text-default-500">
+                            Allow discounts on purchases
+                          </p>
+                        </div>
+                        <Switch
+                          isSelected={settingsForm.enableDiscount}
+                          onValueChange={(value) =>
+                            setSettingsForm((prev) => ({
+                              ...prev,
+                              enableDiscount: value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      {settingsForm.enableDiscount && (
+                        <Input
+                          description="Default discount percentage for new purchases"
+                          endContent="%"
+                          label="Default Discount Percentage"
+                          placeholder="0"
+                          type="number"
+                          value={
+                            settingsForm.defaultDiscountPercentage?.toString() ||
+                            "0"
+                          }
+                          onChange={(e) =>
+                            setSettingsForm((prev) => ({
+                              ...prev,
+                              defaultDiscountPercentage:
+                                parseFloat(e.target.value) || 0,
+                            }))
+                          }
+                        />
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          description="Prefix for purchase numbers"
+                          label="Invoice Prefix"
+                          placeholder="PUR"
+                          value={settingsForm.invoicePrefix || ""}
+                          onChange={(e) =>
+                            setSettingsForm((prev) => ({
+                              ...prev,
+                              invoicePrefix: e.target.value,
+                            }))
+                          }
+                        />
+                        <Input
+                          description="Next invoice number in sequence"
+                          label="Next Invoice Number"
+                          placeholder="1001"
+                          type="number"
+                          value={
+                            settingsForm.nextInvoiceNumber?.toString() || "1001"
+                          }
+                          onChange={(e) =>
+                            setSettingsForm((prev) => ({
+                              ...prev,
+                              nextInvoiceNumber:
+                                parseInt(e.target.value) || 1001,
+                            }))
+                          }
+                        />
+                      </div>
+                    </CardBody>
+                  </Card>
                 </div>
-              )
+              </div>
+            )
             }
 
             {/* Stock Book Tab */}
@@ -4647,10 +4887,12 @@ export default function PharmacyPage() {
                           ) : (
                             <Table aria-label="Medicines list">
                               <TableHeader>
-                                <TableColumn>MEDICINE NAME</TableColumn>
-                                <TableColumn>GENERIC NAME</TableColumn>
-                                <TableColumn>PRICE</TableColumn>
-                                <TableColumn>ACTIONS</TableColumn>
+                                <TableRow>
+                                  <TableColumn>MEDICINE NAME</TableColumn>
+                                  <TableColumn>GENERIC NAME</TableColumn>
+                                  <TableColumn>PRICE</TableColumn>
+                                  <TableColumn>ACTIONS</TableColumn>
+                                </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {filteredMedicines.map((medicine) => (
@@ -4841,15 +5083,17 @@ export default function PharmacyPage() {
                           ) : (
                             <Table aria-label="Medicine transactions">
                               <TableHeader>
-                                <TableColumn>DATE</TableColumn>
-                                <TableColumn>TYPE</TableColumn>
-                                <TableColumn>PARTY</TableColumn>
-                                <TableColumn>QUANTITY</TableColumn>
-                                <TableColumn>BATCH</TableColumn>
-                                <TableColumn>MANUFACTURER</TableColumn>
-                                <TableColumn>EXPIRY</TableColumn>
-                                <TableColumn>REFERENCE</TableColumn>
-                                <TableColumn>AMOUNT</TableColumn>
+                                <TableRow>
+                                  <TableColumn>DATE</TableColumn>
+                                  <TableColumn>TYPE</TableColumn>
+                                  <TableColumn>PARTY</TableColumn>
+                                  <TableColumn>QUANTITY</TableColumn>
+                                  <TableColumn>BATCH</TableColumn>
+                                  <TableColumn>MANUFACTURER</TableColumn>
+                                  <TableColumn>EXPIRY</TableColumn>
+                                  <TableColumn>REFERENCE</TableColumn>
+                                  <TableColumn>AMOUNT</TableColumn>
+                                </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {medicineTransactions.map((transaction) => (
@@ -5226,16 +5470,18 @@ export default function PharmacyPage() {
                             <CardBody className="p-0">
                               <Table aria-label="Daily sales table">
                                 <TableHeader>
-                                  <TableColumn>PURCHASE NO</TableColumn>
-                                  <TableColumn>DATE</TableColumn>
-                                  <TableColumn>PATIENT NAME</TableColumn>
-                                  <TableColumn>ITEMS</TableColumn>
-                                  <TableColumn>TOTAL</TableColumn>
-                                  <TableColumn>DISCOUNT</TableColumn>
-                                  <TableColumn>TAX</TableColumn>
-                                  <TableColumn>NET AMOUNT</TableColumn>
-                                  <TableColumn>PAYMENT STATUS</TableColumn>
-                                  <TableColumn>PAYMENT TYPE</TableColumn>
+                                  <TableRow>
+                                    <TableColumn>PURCHASE NO</TableColumn>
+                                    <TableColumn>DATE</TableColumn>
+                                    <TableColumn>PATIENT NAME</TableColumn>
+                                    <TableColumn>ITEMS</TableColumn>
+                                    <TableColumn>TOTAL</TableColumn>
+                                    <TableColumn>DISCOUNT</TableColumn>
+                                    <TableColumn>TAX</TableColumn>
+                                    <TableColumn>NET AMOUNT</TableColumn>
+                                    <TableColumn>PAYMENT STATUS</TableColumn>
+                                    <TableColumn>PAYMENT TYPE</TableColumn>
+                                  </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {dailyPurchases.map((purchase) => {
@@ -5604,14 +5850,16 @@ export default function PharmacyPage() {
                             <CardBody className="p-0">
                               <Table aria-label="Daily purchases report table">
                                 <TableHeader>
-                                  <TableColumn>REF/INVOICE NO</TableColumn>
-                                  <TableColumn>DATE</TableColumn>
-                                  <TableColumn>TYPE</TableColumn>
-                                  <TableColumn>SUPPLIER</TableColumn>
-                                  <TableColumn>MEDICINE NAME</TableColumn>
-                                  <TableColumn>QUANTITY</TableColumn>
-                                  <TableColumn>COST PRICE</TableColumn>
-                                  <TableColumn>TOTAL COST</TableColumn>
+                                  <TableRow>
+                                    <TableColumn>REF/INVOICE NO</TableColumn>
+                                    <TableColumn>DATE</TableColumn>
+                                    <TableColumn>TYPE</TableColumn>
+                                    <TableColumn>SUPPLIER</TableColumn>
+                                    <TableColumn>MEDICINE NAME</TableColumn>
+                                    <TableColumn>QUANTITY</TableColumn>
+                                    <TableColumn>COST PRICE</TableColumn>
+                                    <TableColumn>TOTAL COST</TableColumn>
+                                  </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {refillTransactions.map((transaction) => {
@@ -5766,7 +6014,7 @@ export default function PharmacyPage() {
         isDismissable={!isSubmitting}
         isOpen={purchaseModalState.isOpen}
         scrollBehavior="inside"
-        size="5xl"
+        size="full"
         onClose={purchaseModalState.close}
       >
         <ModalContent>
@@ -5844,6 +6092,8 @@ export default function PharmacyPage() {
                             patientName: selectedPatient
                               ? `${selectedPatient.name}${selectedPatient.regNumber ? ` (${selectedPatient.regNumber})` : ""}`
                               : "",
+                            patientPhone: selectedPatient?.mobile || selectedPatient?.phone || "",
+                            patientAddress: selectedPatient?.address || "",
                           }));
                         }}
                       />
@@ -5851,17 +6101,43 @@ export default function PharmacyPage() {
                   )}
 
                   {purchaseForm.customerType === "walk-in" && (
-                    <CustomInput
-                      label="Customer Name (optional)"
-                      placeholder="Enter customer name"
-                      value={purchaseForm.patientName}
-                      onChange={(e: any) =>
-                        setPurchaseForm((prev) => ({
-                          ...prev,
-                          patientName: e.target.value,
-                        }))
-                      }
-                    />
+                    <>
+                      <CustomInput
+                        label="Customer Name (optional)"
+                        placeholder="Enter customer name"
+                        value={purchaseForm.patientName}
+                        onChange={(e: any) =>
+                          setPurchaseForm((prev) => ({
+                            ...prev,
+                            patientName: e.target.value,
+                          }))
+                        }
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <CustomInput
+                          label="Phone (optional)"
+                          placeholder="Enter phone number"
+                          value={purchaseForm.patientPhone}
+                          onChange={(e: any) =>
+                            setPurchaseForm((prev) => ({
+                              ...prev,
+                              patientPhone: e.target.value,
+                            }))
+                          }
+                        />
+                        <CustomInput
+                          label="Address (optional)"
+                          placeholder="Enter address"
+                          value={purchaseForm.patientAddress}
+                          onChange={(e: any) =>
+                            setPurchaseForm((prev) => ({
+                              ...prev,
+                              patientAddress: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </>
                   )}
 
                   <CustomInput
@@ -5947,10 +6223,12 @@ export default function PharmacyPage() {
                               required
                               items={
                                 item.type === "medicine"
-                                  ? medicines.map((m) => ({
-                                    id: m.id,
-                                    primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
-                                  }))
+                                  ? medicines
+                                    .filter((m) => (medicineStocks[m.id] || 0) > 0)
+                                    .map((m) => ({
+                                      id: m.id,
+                                      primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
+                                    }))
                                   : items.map((i) => ({
                                     id: i.id,
                                     primary: i.name,
@@ -6167,36 +6445,40 @@ export default function PharmacyPage() {
                 </div>
 
                 {/* Totals strip */}
-                <div className="flex items-stretch gap-0 rounded border border-border-base overflow-hidden mb-3">
+                <div className="flex items-stretch gap-0 rounded border border-border-base overflow-hidden mb-3 bg-surface-2/30">
                   {[
                     {
                       label: "Subtotal",
                       value: `NPR ${(purchaseForm.total || 0).toLocaleString()}`,
                     },
                     {
+                      label: "Taxable",
+                      value: `NPR ${(purchaseForm.taxableAmount || 0).toLocaleString()}`,
+                    },
+                    {
                       label: "Tax",
                       value: `NPR ${(purchaseForm.taxAmount || 0).toLocaleString()}`,
                     },
                     {
-                      label: "Discount",
-                      value: `NPR ${(purchaseForm.discountType === "flat" ? purchaseForm.discount : (purchaseForm.total * purchaseForm.discountPercentage) / 100 || 0).toLocaleString()}`,
+                      label: "Handling",
+                      value: `NPR ${(purchaseForm.handlingAmount || 0).toLocaleString()}`,
                     },
                   ].map((col, i) => (
                     <div
                       key={i}
-                      className={`flex-1 px-3 py-2 text-center ${i < 2 ? "border-r border-[rgb(var(--color-border))]" : ""}`}
+                      className={`flex-1 px-3 py-2 text-center ${i < 3 ? "border-r border-[rgb(var(--color-border))]" : ""}`}
                     >
                       <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] uppercase tracking-[0.06em]">
                         {col.label}
                       </p>
-                      <p className="text-[13px] font-semibold text-[rgb(var(--color-text))] mt-0.5">
+                      <p className="text-[12.5px] font-semibold text-[rgb(var(--color-text))] mt-0.5">
                         {col.value}
                       </p>
                     </div>
                   ))}
                   <div className="flex-1 px-3 py-2 text-center bg-[rgb(var(--color-primary)/0.1)] border-l border-[rgb(var(--color-primary)/0.2)]">
                     <p className="text-[10.5px] text-[rgb(var(--color-primary))] uppercase tracking-[0.06em] font-semibold">
-                      Net
+                      Total
                     </p>
                     <p className="text-[15px] font-bold text-[rgb(var(--color-primary))] mt-0.5">
                       NPR {(purchaseForm.netAmount || 0).toLocaleString()}
@@ -6277,6 +6559,24 @@ export default function PharmacyPage() {
                       setPurchaseForm((prev) => ({
                         ...prev,
                         taxPercentage: parseFloat(e.target.value) || 0,
+                      }))
+                    }
+                  />
+
+                  <CustomInput
+                    label="Handling Charge (NPR)"
+                    min="0"
+                    placeholder="0.00"
+                    startContent={
+                      <span className="text-[11px] text-text-muted/40">NPR</span>
+                    }
+                    step="any"
+                    type="number"
+                    value={(purchaseForm.handlingAmount || 0).toString()}
+                    onChange={(e: any) =>
+                      setPurchaseForm((prev) => ({
+                        ...prev,
+                        handlingAmount: parseFloat(e.target.value) || 0,
                       }))
                     }
                   />
@@ -6485,12 +6785,14 @@ export default function PharmacyPage() {
                   <div className="space-y-4">
                     <Table aria-label="Supplier ledger history">
                       <TableHeader>
-                        <TableColumn>BILL NUMBER</TableColumn>
-                        <TableColumn>DATE</TableColumn>
-                        <TableColumn>DEBIT</TableColumn>
-                        <TableColumn>CREDIT</TableColumn>
-                        <TableColumn>BALANCE</TableColumn>
-                        <TableColumn>TYPE</TableColumn>
+                        <TableRow>
+                          <TableColumn>BILL NUMBER</TableColumn>
+                          <TableColumn>DATE</TableColumn>
+                          <TableColumn>DEBIT</TableColumn>
+                          <TableColumn>CREDIT</TableColumn>
+                          <TableColumn>BALANCE</TableColumn>
+                          <TableColumn>TYPE</TableColumn>
+                        </TableRow>
                       </TableHeader>
                       <TableBody>
                         {entries.map((entry) => (

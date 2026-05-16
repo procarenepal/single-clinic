@@ -201,6 +201,10 @@ export default function MedicinesTab({
       newSupplierName: "", // Will be deprecated
       isAddingType: false,
       newTypeName: "",
+      isAddingBrand: false,
+      newBrandName: "",
+      isAddingCategory: false,
+      newCategoryName: "",
       isVatApplied: false,
       vatPercentage: 13,
     },
@@ -268,6 +272,7 @@ export default function MedicinesTab({
   });
 
   const useServerPagination =
+    !activeFilterType &&
     filterType !== "lowStock" &&
     filterType !== "expiring" &&
     !searchQuery.trim();
@@ -356,6 +361,7 @@ export default function MedicinesTab({
     fetchExpiryStats();
   }, [
     clinicId,
+    activeFilterType,
     filterType,
     searchQuery,
     useServerPagination,
@@ -718,6 +724,10 @@ export default function MedicinesTab({
         newSupplierName: "",
         isAddingType: false,
         newTypeName: "",
+        isAddingBrand: false,
+        newBrandName: "",
+        isAddingCategory: false,
+        newCategoryName: "",
         isVatApplied: false,
         vatPercentage: 13,
       },
@@ -816,6 +826,10 @@ export default function MedicinesTab({
         newSupplierName: "",
         isAddingType: false,
         newTypeName: "",
+        isAddingBrand: false,
+        newBrandName: "",
+        isAddingCategory: false,
+        newCategoryName: "",
         isVatApplied: medicine.isVatApplied || false,
         vatPercentage: medicine.vatPercentage || 13,
       },
@@ -847,8 +861,8 @@ export default function MedicinesTab({
         return;
       }
 
-      if (clinicSettings?.sellsMedicines && !row.price.trim()) {
-        addToast({ title: "Validation Error", description: `Sale price is required${rowNum}` });
+      if (!row.price.trim()) {
+        addToast({ title: "Validation Error", description: `MRP (Sale Price) is required${rowNum}`, color: "danger" });
         return;
       }
 
@@ -877,6 +891,32 @@ export default function MedicinesTab({
       }
 
       for (const row of formDataList) {
+        // Handle Quick Add Brand
+        let rowBrandId = row.brandId;
+        if (row.isAddingBrand && row.newBrandName.trim()) {
+          const brandData = {
+            name: row.newBrandName.trim(),
+            clinicId,
+            branchId: branchScopeId || "",
+            isActive: true,
+            createdBy: userData.id,
+          };
+          rowBrandId = await medicineService.createMedicineBrand(brandData);
+        }
+
+        // Handle Quick Add Category
+        let rowCategoryId = row.categoryId;
+        if (row.isAddingCategory && row.newCategoryName.trim()) {
+          const categoryData = {
+            name: row.newCategoryName.trim(),
+            clinicId,
+            branchId: branchScopeId || "",
+            isActive: true,
+            createdBy: userData.id,
+          };
+          rowCategoryId = await medicineService.createMedicineCategory(categoryData);
+        }
+
         const medicineData: any = {
           name: row.name.trim(),
           type: row.type,
@@ -890,8 +930,8 @@ export default function MedicinesTab({
         };
 
         if (row.genericName.trim()) medicineData.genericName = row.genericName.trim();
-        if (row.brandId) medicineData.brandId = row.brandId;
-        if (row.categoryId) medicineData.categoryId = row.categoryId;
+        if (rowBrandId) medicineData.brandId = rowBrandId;
+        if (rowCategoryId) medicineData.categoryId = rowCategoryId;
         if (row.strength.trim()) medicineData.strength = row.strength.trim();
         if (row.description.trim()) medicineData.description = row.description.trim();
         if (row.batchNumber.trim()) medicineData.batchNumber = row.batchNumber.trim();
@@ -899,6 +939,8 @@ export default function MedicinesTab({
         if (row.price) medicineData.price = parseFloat(row.price);
         if (row.costPrice) medicineData.costPrice = parseFloat(row.costPrice);
         if (row.barcode.trim()) medicineData.barcode = row.barcode.trim();
+        medicineData.isVatApplied = row.isVatApplied || false;
+        medicineData.vatPercentage = parseFloat(row.vatPercentage) || 0;
 
         if (currentMedicine) {
           await medicineService.updateMedicine(currentMedicine.id, medicineData);
@@ -1050,8 +1092,12 @@ export default function MedicinesTab({
         }
       }
 
-      console.log("All rows processed, fetching suppliers...");
-      await fetchSuppliers();
+      console.log("All rows processed, fetching suppliers, brands and categories...");
+      await Promise.all([
+        fetchSuppliers(),
+        fetchBrands(),
+        fetchCategories()
+      ]);
 
       addToast({
         title: "Success",
@@ -1377,38 +1423,60 @@ export default function MedicinesTab({
 
   // Helper functions for filtering
   const isLowStock = (medicine: Medicine) => {
-    const regularStock = medicineStocks[medicine.id] || 0;
-    const schemeStock = medicineSchemeStocks[medicine.id] || 0;
-    const totalStock = regularStock + schemeStock;
+    const hasStockData =
+      medicineStocks[medicine.id] !== undefined ||
+      medicineSchemeStocks[medicine.id] !== undefined;
+    if (!hasStockData) return false;
+    const totalStock =
+      (medicineStocks[medicine.id] || 0) +
+      (medicineSchemeStocks[medicine.id] || 0);
     const threshold = clinicSettings?.lowStockThreshold || 10;
 
-    return totalStock <= threshold;
+    return totalStock > 0 && totalStock <= threshold;
   };
 
   const isExpiring = (medicine: Medicine) => {
-    const expiryDate = medicineExpiryDates[medicine.id] || medicine.expiryDate;
+    const rawExp = medicineExpiryDates[medicine.id] || medicine.expiryDate;
+    if (!rawExp) return false;
+    const expiryDate =
+      rawExp instanceof Date
+        ? rawExp
+        : typeof (rawExp as any)?.toDate === "function"
+          ? (rawExp as any).toDate()
+          : new Date(rawExp);
+    const ninetyDays = new Date(
+      new Date().getTime() + 90 * 24 * 60 * 60 * 1000,
+    );
 
-    if (!expiryDate) return false;
-    const expiryDays = clinicSettings?.expiryAlertDays || 30;
-    const alertDate = new Date();
-
-    alertDate.setDate(alertDate.getDate() + expiryDays);
-
-    return expiryDate <= alertDate;
+    return expiryDate >= new Date() && expiryDate < ninetyDays;
   };
 
   const isExpired = (medicine: Medicine) => {
     const rawExp = medicineExpiryDates[medicine.id] || medicine.expiryDate;
     if (!rawExp) return false;
-    const expiryDate = rawExp instanceof Date ? rawExp : (typeof (rawExp as any)?.toDate === 'function' ? (rawExp as any).toDate() : new Date(rawExp));
+    const expiryDate =
+      rawExp instanceof Date
+        ? rawExp
+        : typeof (rawExp as any)?.toDate === "function"
+          ? (rawExp as any).toDate()
+          : new Date(rawExp);
+
     return expiryDate < new Date();
   };
 
   const isUrgentExpiry = (medicine: Medicine) => {
     const rawExp = medicineExpiryDates[medicine.id] || medicine.expiryDate;
     if (!rawExp) return false;
-    const expiryDate = rawExp instanceof Date ? rawExp : (typeof (rawExp as any)?.toDate === 'function' ? (rawExp as any).toDate() : new Date(rawExp));
-    const thirtyDays = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
+    const expiryDate =
+      rawExp instanceof Date
+        ? rawExp
+        : typeof (rawExp as any)?.toDate === "function"
+          ? (rawExp as any).toDate()
+          : new Date(rawExp);
+    const thirtyDays = new Date(
+      new Date().getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+
     return expiryDate >= new Date() && expiryDate < thirtyDays;
   };
 
@@ -2314,6 +2382,93 @@ export default function MedicinesTab({
                         />
                       </div>
                     </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Brand</label>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            {formDataList[0].isAddingBrand ? (
+                              <input
+                                className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
+                                placeholder="New brand name"
+                                value={formDataList[0].newBrandName}
+                                onChange={(e) => {
+                                  const newList = [...formDataList];
+                                  newList[0].newBrandName = e.target.value;
+                                  setFormDataList(newList);
+                                }}
+                              />
+                            ) : (
+                              <select
+                                className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                                value={formDataList[0].brandId}
+                                onChange={(e) => handleSelectChange(0, "brandId", e.target.value)}
+                              >
+                                <option value="">No Brand</option>
+                                {brands.map((brand) => (
+                                  <option key={brand.id} value={brand.id}>{brand.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="w-9 h-9 flex items-center justify-center rounded-md border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                            onClick={() => {
+                              const newList = [...formDataList];
+                              newList[0].isAddingBrand = !newList[0].isAddingBrand;
+                              if (!newList[0].isAddingBrand) newList[0].newBrandName = "";
+                              setFormDataList(newList);
+                            }}
+                          >
+                            {formDataList[0].isAddingBrand ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Category</label>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            {formDataList[0].isAddingCategory ? (
+                              <input
+                                className="clarity-input h-9 w-full text-[13px] px-3 rounded-md border-primary/30"
+                                placeholder="New category name"
+                                value={formDataList[0].newCategoryName}
+                                onChange={(e) => {
+                                  const newList = [...formDataList];
+                                  newList[0].newCategoryName = e.target.value;
+                                  setFormDataList(newList);
+                                }}
+                              />
+                            ) : (
+                              <select
+                                className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                                value={formDataList[0].categoryId}
+                                onChange={(e) => handleSelectChange(0, "categoryId", e.target.value)}
+                              >
+                                <option value="">No Category</option>
+                                {categories.map((cat) => (
+                                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="w-9 h-9 flex items-center justify-center rounded-md border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                            onClick={() => {
+                              const newList = [...formDataList];
+                              newList[0].isAddingCategory = !newList[0].isAddingCategory;
+                              if (!newList[0].isAddingCategory) newList[0].newCategoryName = "";
+                              setFormDataList(newList);
+                            }}
+                          >
+                            {formDataList[0].isAddingCategory ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
@@ -2413,19 +2568,17 @@ export default function MedicinesTab({
                   <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4 h-full">
                     <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-primary/20 pb-2 mb-4">Pricing & VAT</h4>
                     
-                    {clinicSettings?.sellsMedicines && (
-                      <div className="space-y-1.5">
-                        <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Sale Price (NPR) <span className="text-danger">*</span></label>
-                        <input
-                          type="number"
-                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md font-bold text-primary"
-                          value={formDataList[0].price}
-                          onChange={(e) => handleChange(0, e)}
-                          name="price"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    )}
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">MRP / Sale Price (NPR) <span className="text-danger">*</span></label>
+                      <input
+                        type="number"
+                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md font-bold text-primary"
+                        value={formDataList[0].price}
+                        onChange={(e) => handleChange(0, e)}
+                        name="price"
+                        placeholder="0.00"
+                      />
+                    </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Cost Price (NPR)</label>
@@ -2453,7 +2606,7 @@ export default function MedicinesTab({
                               setFormDataList(newList);
                             }}
                           />
-                          <div className="w-9 h-5 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
 
@@ -2500,11 +2653,11 @@ export default function MedicinesTab({
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">Init. Stock</th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Batch No.</th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[130px]">Expiry Date</th>
-                      {clinicSettings?.sellsMedicines && (
-                        <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Sale Price <span className="text-danger">*</span></th>
-                      )}
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">MRP / Sale Price <span className="text-danger">*</span></th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Cost Price</th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">VAT (%)</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Brand</th>
+                      <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">Category</th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider text-center">Action</th>
                     </tr>
                   </thead>
@@ -2670,18 +2823,16 @@ export default function MedicinesTab({
                           />
                         </td>
 
-                        {clinicSettings?.sellsMedicines && (
-                          <td className="px-2 py-2">
-                            <input
-                              className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                              name="price"
-                              placeholder="0.00"
-                              type="number"
-                              value={formData.price}
-                              onChange={(e) => handleChange(index, e)}
-                            />
-                          </td>
-                        )}
+                        <td className="px-2 py-2">
+                          <input
+                            className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                            name="price"
+                            placeholder="0.00"
+                            type="number"
+                            value={formData.price}
+                            onChange={(e) => handleChange(index, e)}
+                          />
+                        </td>
 
                         <td className="px-2 py-2">
                           <input
@@ -2712,7 +2863,7 @@ export default function MedicinesTab({
                                   setFormDataList(newList);
                                 }}
                               />
-                              <div className="w-8 h-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+                              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                             </label>
                             {formData.isVatApplied && (
                               <div className="relative w-16">
@@ -2730,6 +2881,90 @@ export default function MedicinesTab({
                           </div>
                         </td>
 
+                        <td className="px-2 py-2">
+                          <div className="flex gap-1 items-center">
+                            <div className="flex-1">
+                              {formData.isAddingBrand ? (
+                                <input
+                                  className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
+                                  placeholder="New brand"
+                                  value={formData.newBrandName}
+                                  onChange={(e) => {
+                                    const newList = [...formDataList];
+                                    newList[index].newBrandName = e.target.value;
+                                    setFormDataList(newList);
+                                  }}
+                                />
+                              ) : (
+                                <select
+                                  className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                                  value={formData.brandId}
+                                  onChange={(e) => handleSelectChange(index, "brandId", e.target.value)}
+                                >
+                                  <option value="">No Brand</option>
+                                  {brands.map((brand) => (
+                                    <option key={brand.id} value={brand.id}>{brand.name}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                              title={formData.isAddingBrand ? "Select Existing Brand" : "Add New Brand"}
+                              onClick={() => {
+                                const newList = [...formDataList];
+                                newList[index].isAddingBrand = !newList[index].isAddingBrand;
+                                if (!newList[index].isAddingBrand) newList[index].newBrandName = "";
+                                setFormDataList(newList);
+                              }}
+                            >
+                              {formData.isAddingBrand ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex gap-1 items-center">
+                            <div className="flex-1">
+                              {formData.isAddingCategory ? (
+                                <input
+                                  className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
+                                  placeholder="New category"
+                                  value={formData.newCategoryName}
+                                  onChange={(e) => {
+                                    const newList = [...formDataList];
+                                    newList[index].newCategoryName = e.target.value;
+                                    setFormDataList(newList);
+                                  }}
+                                />
+                              ) : (
+                                <select
+                                  className="clarity-input h-8 w-full text-[12px] px-2 rounded"
+                                  value={formData.categoryId}
+                                  onChange={(e) => handleSelectChange(index, "categoryId", e.target.value)}
+                                >
+                                  <option value="">No Category</option>
+                                  {categories.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
+                              title={formData.isAddingCategory ? "Select Existing Category" : "Add New Category"}
+                              onClick={() => {
+                                const newList = [...formDataList];
+                                newList[index].isAddingCategory = !newList[index].isAddingCategory;
+                                if (!newList[index].isAddingCategory) newList[index].newCategoryName = "";
+                                setFormDataList(newList);
+                              }}
+                            >
+                              {formData.isAddingCategory ? <IoListOutline className="w-4 h-4" /> : <IoAddOutline className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </td>
                         <td className="px-3 py-2 text-center">
                           {formDataList.length > 1 && (
                             <button

@@ -43,15 +43,18 @@ export interface SMSLog {
   branchId?: string;
   patientId?: string;
   doctorId?: string;
+  referralId?: string;
   patientName?: string;
   doctorName?: string;
+  referralName?: string;
   patientPhone?: string;
   doctorPhone?: string;
+  referralPhone?: string;
   message: string;
   status: "sent" | "failed" | "pending";
   type: "reminder" | "manual" | "template" | "appointment";
   templateId?: string;
-  recipientType?: "patient" | "doctor" | "general";
+  recipientType?: "patient" | "doctor" | "general" | "referral";
   errorMessage?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -63,7 +66,7 @@ export interface SMSTemplate {
   clinicId: string;
   name: string;
   message: string;
-  type: "patient" | "doctor" | "general" | "appointment" | "reminder";
+  type: "patient" | "doctor" | "general" | "appointment" | "reminder" | "referral";
   language?: "en" | "ne";
   isActive: boolean;
   usageCount?: number;
@@ -778,7 +781,7 @@ export const smsService = {
     clinicId: string,
     phoneNumber: string,
     message: string,
-    recipientType: "patient" | "doctor",
+    recipientType: "patient" | "doctor" | "referral",
     recipientId: string,
     recipientName: string,
     createdBy: string,
@@ -825,10 +828,14 @@ export const smsService = {
         logData.patientId = recipientId;
         logData.patientName = recipientName;
         logData.patientPhone = phoneNumber;
-      } else {
+      } else if (recipientType === "doctor") {
         logData.doctorId = recipientId;
         logData.doctorName = recipientName;
         logData.doctorPhone = phoneNumber;
+      } else if (recipientType === "referral") {
+        logData.referralId = recipientId;
+        logData.referralName = recipientName;
+        logData.referralPhone = phoneNumber;
       }
 
       // Use transaction for atomic updates

@@ -269,19 +269,25 @@ function Toggle({
   label: string;
 }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer">
+    <label className="flex items-center gap-2 cursor-pointer select-none">
       <div
-        className={`relative inline-flex items-center w-9 h-5 rounded-full transition-colors duration-200 ease-in-out border border-border-base ${checked ? "bg-primary" : "bg-surface-3"}`}
+        className={`relative inline-flex items-center w-10 h-[22px] rounded-full transition-colors duration-200 ease-in-out ${
+          checked
+            ? "bg-primary border border-primary"
+            : "bg-gray-200 border border-gray-300 dark:bg-gray-600 dark:border-gray-500"
+        }`}
+        onClick={() => onChange(!checked)}
       >
         <div
-          className={`absolute left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out shadow-sm ${checked ? "translate-x-4" : "translate-x-0"}`}
+          className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${
+            checked ? "translate-x-[18px]" : "translate-x-0"
+          }`}
         />
       </div>
       <span className="text-[12.5px] text-text-main">{label}</span>
-      {/* Hidden checkbox for accessibility/state */}
       <input
         checked={checked}
-        className="hidden"
+        className="sr-only"
         type="checkbox"
         onChange={(e) => onChange(e.target.checked)}
       />

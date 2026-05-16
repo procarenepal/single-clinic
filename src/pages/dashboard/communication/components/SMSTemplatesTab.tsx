@@ -46,7 +46,7 @@ const SMSTemplatesTab: React.FC = () => {
   const [templateMessage, setTemplateMessage] = useState("");
   const [templateLanguage, setTemplateLanguage] = useState<"en" | "ne">("en");
   const [templateType, setTemplateType] = useState<
-    "patient" | "doctor" | "general" | "appointment" | "reminder"
+    "patient" | "doctor" | "general" | "appointment" | "reminder" | "referral"
   >("patient");
 
   // Multi-language preset templates
@@ -209,6 +209,7 @@ const SMSTemplatesTab: React.FC = () => {
           <option value="patient">Patient</option>
           <option value="doctor">Doctor</option>
           <option value="general">General</option>
+          <option value="referral">Referral</option>
         </select>
 
         <select
@@ -292,6 +293,7 @@ const SMSTemplatesTab: React.FC = () => {
                   <option value="patient">Patient</option>
                   <option value="doctor">Doctor</option>
                   <option value="general">General</option>
+                  <option value="referral">Referral</option>
                 </select>
               </div>
             </div>

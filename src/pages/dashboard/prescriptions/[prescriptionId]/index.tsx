@@ -240,14 +240,12 @@ export default function PrescriptionDetailPage() {
       padding: 6px 0; 
     }
     .document-title h2 { 
-      font-size: 16px; 
-      font-weight: 500; 
+      font-size: 18px; 
+      font-weight: 600; 
       margin: 0; 
-      text-transform: uppercase; 
-      letter-spacing: 0.1em; 
       color: #1e293b; 
     }
-    .document-subtitle { font-size: 11px; color: #64748b; margin-top: 2px; font-weight: 400; text-transform: uppercase; }
+    .document-subtitle { font-size: 12px; color: #64748b; margin-top: 3px; font-weight: 400; }
     
     .prescription-header-row {
       display: flex;
@@ -257,8 +255,8 @@ export default function PrescriptionDetailPage() {
       border-bottom: 1px dashed #e2e8f0;
     }
     .meta-item { display: flex; flex-direction: column; }
-    .meta-label { font-size: 9px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 2px; }
-    .meta-value { font-size: 12px; font-weight: 500; color: #1e293b; }
+    .meta-label { font-size: 10px; font-weight: 600; color: #64748b; margin-bottom: 2px; }
+    .meta-value { font-size: 13px; font-weight: 600; color: #1e293b; }
 
     .patient-doctor-grid { 
       display: grid; 
@@ -271,40 +269,39 @@ export default function PrescriptionDetailPage() {
       border: 1px solid #f1f5f9;
     }
     .info-section h3 { 
-      margin: 0 0 8px 0; 
-      font-size: 10px; 
+      margin: 0 0 10px 0; 
+      font-size: 12px; 
       font-weight: 600; 
-      color: #64748b; 
-      text-transform: uppercase; 
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 3px;
+      color: #1e293b; 
+      border-bottom: 1.5px solid #f1f5f9;
+      padding-bottom: 4px;
     }
-    .info-item { display: flex; margin-bottom: 4px; font-size: 11px; align-items: baseline; }
-    .info-label { font-weight: 600; color: #64748b; width: 85px; shrink: 0; text-transform: uppercase; font-size: 9px; }
-    .info-value { color: #1e293b; font-weight: 500; }
+    .info-item { display: flex; margin-bottom: 5px; font-size: 12px; align-items: baseline; }
+    .info-label { font-weight: 500; color: #64748b; width: 90px; shrink: 0; font-size: 10px; }
+    .info-value { color: #1e293b; font-weight: 600; }
 
     .prescription-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
     .prescription-table th { 
       background: #f8fafc; 
-      color: #64748b; 
-      font-size: 9.5px; 
+      color: #475569; 
+      font-size: 10px; 
       font-weight: 600; 
-      text-transform: uppercase; 
-      padding: 8px 10px; 
+      padding: 10px 12px; 
       border: 1px solid #e2e8f0; 
       text-align: left; 
     }
-    .prescription-table td { padding: 8px 10px; border: 1px solid #e2e8f0; font-size: 11px; color: #334155; }
+    .prescription-table td { padding: 10px 12px; border: 1px solid #e2e8f0; font-size: 12px; color: #334155; }
     .text-center { text-align: center; }
 
-    .notes-section { margin-top: 15px; page-break-inside: avoid; }
-    .notes-section h3 { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 6px; }
-    .notes-content { padding: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 11px; line-height: 1.5; color: #1e293b; }
+    .notes-section { margin: 20px 0; page-break-inside: avoid; }
+    .notes-section h3 { font-size: 12px; font-weight: 600; color: #1e293b; margin-bottom: 8px; display: flex; align-items: center; }
+    .notes-section.diagnosis h3::before { content: ""; display: inline-block; width: 4px; height: 14px; background: #3b82f6; margin-right: 8px; border-radius: 2px; }
+    .notes-content { padding: 12px 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 12px; line-height: 1.6; color: #1e293b; }
 
     .signature-row { margin-top: 50px; display: flex; justify-content: space-between; page-break-inside: avoid; }
     .sig-box { width: 180px; text-align: center; }
     .sig-line { border-top: 1px solid #94a3b8; margin-bottom: 4px; }
-    .sig-label { font-size: 9px; font-weight: 500; color: #64748b; text-transform: uppercase; }
+    .sig-label { font-size: 10px; font-weight: 500; color: #64748b; }
 
     @media print { 
       body { padding: 0; margin: 0; } 
@@ -357,6 +354,12 @@ export default function PrescriptionDetailPage() {
           ` : ""}
         </div>
       </div>
+
+      ${prescription.diagnosis ? `
+        <div class="notes-section diagnosis">
+          <h3>Diagnosis / Complaints</h3>
+          <div class="notes-content">${prescription.diagnosis}</div>
+        </div>` : ""}
 
       <table class="prescription-table">
         <thead>
@@ -589,6 +592,22 @@ export default function PrescriptionDetailPage() {
               </div>
             </div>
           </div>
+          
+          {/* Diagnosis / Complaints (Dossier Section) */}
+          {prescription.diagnosis && (
+            <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
+              <div className="px-5 py-3 border-b border-border-base bg-surface-2/30">
+                <h3 className="text-[12.5px] font-semibold text-text-main">
+                  Diagnosis / Complaints
+                </h3>
+              </div>
+              <div className="p-5">
+                <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50">
+                  {prescription.diagnosis}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Prescribed Medicines (High-Density Table) */}
           <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">

@@ -448,25 +448,7 @@ class NavigationService {
           break;
       }
 
-      // Temporary filter based on user request
-      const allowedTitles = [
-        "Dashboard",
-        "Patients",
-        "Appointments",
-        "Prescriptions",
-        "Enquiry Management",
-        "Doctors",
-        "Experts",
-        "Medicine Management",
-        "Pharmacy",
-        "HR Management",
-        "Communication",
-        "Accounts",
-        "Settings",
-        "Inventory",
-        "Pathology",
-      ];
-      navItems = navItems.filter((item) => allowedTitles.includes(item.title));
+
     } catch (error) {
       console.error("Error building navigation:", error);
       navItems = [

@@ -49,7 +49,6 @@ export const visitorService = {
       const q = query(
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -67,7 +66,7 @@ export const visitorService = {
         } as Visitor);
       });
 
-      return visitors;
+      return visitors.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     } catch (error) {
       console.error("Error fetching visitors:", error);
       throw new Error("Failed to fetch visitors");
@@ -148,7 +147,6 @@ export const visitorService = {
         where("clinicId", "==", clinicId),
         where("date", ">=", Timestamp.fromDate(startDate)),
         where("date", "<=", Timestamp.fromDate(endDate)),
-        orderBy("date", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -166,7 +164,7 @@ export const visitorService = {
         } as Visitor);
       });
 
-      return visitors;
+      return visitors.sort((a, b) => b.date.getTime() - a.date.getTime());
     } catch (error) {
       console.error("Error fetching visitors by date range:", error);
       throw new Error("Failed to fetch visitors by date range");

@@ -154,6 +154,70 @@ class ExpertCommissionService {
       throw error;
     }
   }
+
+  /**
+   * Create a commission record for a referring expert during registration
+   * This is used when no full billing record (invoice) exists yet
+   */
+  async createRegistrationCommission(
+    expertId: string,
+    expertName: string,
+    clinicId: string,
+    branchId: string,
+    patientId: string,
+    patientName: string,
+    appointmentTypeName: string,
+    totalAmount: number,
+    commissionAmount: number,
+    commissionPercentage: number,
+    createdBy: string,
+  ): Promise<string | null> {
+    try {
+      if (commissionAmount <= 0) return null;
+
+      const commissionData: Omit<ExpertCommission, "id"> = {
+        expertId,
+        expertName,
+        clinicId,
+        branchId,
+        billingId: `reg_${Date.now()}`,
+        billingType: "appointment",
+        invoiceNumber: "REG-COMM",
+        date: new Date(),
+        patientId,
+        patientName,
+        serviceNames: [appointmentTypeName],
+        totalInvoiceAmount: totalAmount,
+        commissionPercentage,
+        commissionAmount,
+        status: "pending",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdBy,
+      };
+
+      const docRef = await addDoc(collection(db, this.collectionName), {
+        ...commissionData,
+        createdAt: Timestamp.fromDate(commissionData.createdAt),
+        updatedAt: Timestamp.fromDate(commissionData.updatedAt),
+        date: Timestamp.fromDate(commissionData.date),
+      });
+
+      // Update expert's balance and lifetime earnings
+      const expertRef = doc(db, "experts", expertId);
+
+      await updateDoc(expertRef, {
+        totalCommissionEarned: increment(commissionAmount),
+        totalCommissionBalance: increment(commissionAmount),
+        updatedAt: Timestamp.now(),
+      });
+
+      return docRef.id;
+    } catch (error) {
+      console.error("Error creating registration expert commission:", error);
+      throw error;
+    }
+  }
 }
 
 export const expertCommissionService = new ExpertCommissionService();

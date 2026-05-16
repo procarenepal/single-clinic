@@ -59,6 +59,7 @@ interface PrescriptionFormData {
   doctorName: string;
   appointmentId: string;
   items: PrescriptionItem[];
+  diagnosis: string;
   notes: string;
 }
 
@@ -367,6 +368,7 @@ export default function PatientPrescriptionsTab({
     doctorName: "",
     appointmentId: "",
     items: [],
+    diagnosis: "",
     notes: "",
   });
   const [medicineId, setMedicineId] = useState("");
@@ -374,6 +376,10 @@ export default function PatientPrescriptionsTab({
   const [duration, setDuration] = useState("");
   const [time, setTime] = useState("");
   const [intervalValue, setIntervalValue] = useState("");
+
+  // Presets
+  const frequencyPresets = ["OD", "BD", "TDS", "QID", "SOS"];
+  const timePresets = ["Before Meal", "After Meal", "Empty Stomach", "At Bedtime"];
 
   // ── Load data ───────────────────────────────────────────────────────────────
   const loadData = async () => {
@@ -404,7 +410,7 @@ export default function PatientPrescriptionsTab({
           try {
             itemsCount = (await prescriptionService.getPrescriptionItems(rx.id))
               .length;
-          } catch {}
+          } catch { }
 
           return {
             ...rx,
@@ -480,7 +486,7 @@ export default function PatientPrescriptionsTab({
 
       if (!isNaN(d.getTime()))
         return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
-    } catch {}
+    } catch { }
 
     return "Unknown Date";
   };
@@ -597,9 +603,12 @@ export default function PatientPrescriptionsTab({
             formData.notes ||
             `Take ${item.dosage} ${item.interval} ${item.time} for ${item.duration}`,
           quantity: 1,
+          sendToPharmacy: true,
         })),
+        diagnosis: formData.diagnosis,
         notes: formData.notes,
         prescribedBy: userData?.id || "unknown",
+        sendToPharmacy: true,
       });
       addToast({ title: "Prescription created", color: "success" });
       setFormData({
@@ -609,6 +618,7 @@ export default function PatientPrescriptionsTab({
         doctorName: "",
         appointmentId: "",
         items: [],
+        diagnosis: "",
         notes: "",
       });
       setShowModal(false);
@@ -811,6 +821,7 @@ export default function PatientPrescriptionsTab({
                       "Prescription No.",
                       "Doctor",
                       "Date",
+                      "Diagnosis",
                       "Medicines",
                       "Status",
                       "Actions",
@@ -840,6 +851,11 @@ export default function PatientPrescriptionsTab({
                       </td>
                       <td className="py-2.5 px-3 text-[12px] text-text-muted">
                         {fmtDate(rx.prescriptionDate)}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <p className="text-[12.5px] text-text-muted truncate max-w-[150px]" title={rx.diagnosis}>
+                          {rx.diagnosis || "—"}
+                        </p>
                       </td>
                       <td className="py-2.5 px-3">
                         <span className="text-[12.5px] font-medium text-text-muted">
@@ -951,6 +967,20 @@ export default function PatientPrescriptionsTab({
                 />
               </div>
 
+              {/* Diagnosis Section */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[12px] font-medium text-text-muted">
+                  Diagnosis / Complaints *
+                </label>
+                <textarea
+                  className="w-full px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main
+                    placeholder:text-text-muted/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 resize-none h-16"
+                  placeholder="Enter patient diagnosis, complaints, or findings…"
+                  value={formData.diagnosis}
+                  onChange={(e) => setFormData(p => ({ ...p, diagnosis: e.target.value }))}
+                />
+              </div>
+
               <div className="border-t border-border-base/50" />
 
               {/* Medicine row */}
@@ -963,10 +993,11 @@ export default function PatientPrescriptionsTab({
                     items={medicines.map((m) => ({
                       id: m.id,
                       primary: m.name,
+                      secondary: m.genericName ? `${m.genericName} (${m.manufacturer || 'Unknown'})` : m.manufacturer,
                     }))}
                     label="Medicine"
                     value={medicineId}
-                    onChange={setMedicineId}
+                    onChange={(id) => setMedicineId(id)}
                   />
                   <FlatInput
                     label="Dosage"
@@ -980,18 +1011,46 @@ export default function PatientPrescriptionsTab({
                     value={duration}
                     onChange={setDuration}
                   />
-                  <FlatInput
-                    label="Time"
-                    placeholder="e.g. morning"
-                    value={time}
-                    onChange={setTime}
-                  />
-                  <FlatInput
-                    label="Frequency"
-                    placeholder="e.g. twice daily"
-                    value={intervalValue}
-                    onChange={setIntervalValue}
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    <FlatInput
+                      label="Time"
+                      placeholder="e.g. After Meal"
+                      value={time}
+                      onChange={setTime}
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {timePresets.map(p => (
+                        <button
+                          key={p}
+                          className={`px-2 py-0.5 text-[10px] font-semibold border rounded transition-colors ${time === p ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
+                          type="button"
+                          onClick={() => setTime(p)}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <FlatInput
+                      label="Frequency"
+                      placeholder="e.g. 1-0-1"
+                      value={intervalValue}
+                      onChange={setIntervalValue}
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {frequencyPresets.map(p => (
+                        <button
+                          key={p}
+                          className={`px-2 py-0.5 text-[10px] font-semibold border rounded transition-colors ${intervalValue === p ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
+                          type="button"
+                          onClick={() => setIntervalValue(p)}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="flex items-end">
                     <Button
                       className="w-full"

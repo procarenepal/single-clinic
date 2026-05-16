@@ -12,6 +12,8 @@ import {
   orderBy,
   Timestamp,
   arrayUnion,
+  runTransaction,
+  serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -43,157 +45,158 @@ export const pharmacyService = {
     purchaseData: Omit<MedicinePurchase, "id" | "createdAt" | "updatedAt">,
   ): Promise<string> {
     try {
-      const purchasesRef = collection(db, MEDICINE_PURCHASES_COLLECTION);
+      const medicineItems = purchaseData.items.filter(
+        (item) => item.type === "medicine" || !item.type,
+      );
 
-      const now = Timestamp.now();
-      const data = {
-        ...purchaseData,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      const docRef = await addDoc(purchasesRef, data);
-
-      console.log("Medicine purchase created with ID:", docRef.id);
-
-      // Update stock for medicine items (not regular items)
-      // Do this after purchase is created so purchase doesn't fail if stock update fails
-      const stockUpdatePromises = purchaseData.items
-        .filter((item) => item.type === "medicine" || !item.type) // Only process medicine items
-        .map(async (item) => {
-          try {
-            // Get current stock
-            const currentStock = await medicineService.getMedicineStock(
-              item.medicineId,
-              purchaseData.clinicId,
-            );
-
-            if (currentStock) {
-              const requestedQty = item.quantity;
-              let remainingQty = requestedQty;
-              let newRegularStock = currentStock.currentStock;
-              let newSchemeStock = currentStock.schemeStock || 0;
-
-              // Get prices from item (preferred) or fallback to salePrice
-              const itemWithPrices = item as any;
-              const regularSalePrice =
-                itemWithPrices.regularSalePrice || item.salePrice;
-              const schemeSalePrice =
-                itemWithPrices.schemeSalePrice || item.salePrice;
-
-              // Respect stock type preference (if specified)
-              const stockType = (item as any).stockType || "regular"; // Default to 'regular'
-              let schemeQtyUsed = 0;
-              let regularQtyUsed = 0;
-
-              if (stockType === "regular") {
-                // Use regular stock first, fallback to scheme if insufficient
-                if (remainingQty > 0 && newRegularStock > 0) {
-                  regularQtyUsed = Math.min(remainingQty, newRegularStock);
-                  newRegularStock = Math.max(
-                    0,
-                    newRegularStock - regularQtyUsed,
-                  );
-                  remainingQty -= regularQtyUsed;
-                }
-                // Auto-fallback to scheme stock if regular is insufficient
-                if (remainingQty > 0 && newSchemeStock > 0) {
-                  schemeQtyUsed = Math.min(remainingQty, newSchemeStock);
-                  newSchemeStock = Math.max(0, newSchemeStock - schemeQtyUsed);
-                  remainingQty -= schemeQtyUsed;
-                }
-              } else if (stockType === "scheme") {
-                // Use scheme stock first, fallback to regular if insufficient
-                if (remainingQty > 0 && newSchemeStock > 0) {
-                  schemeQtyUsed = Math.min(remainingQty, newSchemeStock);
-                  newSchemeStock = Math.max(0, newSchemeStock - schemeQtyUsed);
-                  remainingQty -= schemeQtyUsed;
-                }
-                // Auto-fallback to regular stock if scheme is insufficient
-                if (remainingQty > 0 && newRegularStock > 0) {
-                  regularQtyUsed = Math.min(remainingQty, newRegularStock);
-                  newRegularStock = Math.max(
-                    0,
-                    newRegularStock - regularQtyUsed,
-                  );
-                  remainingQty -= regularQtyUsed;
-                }
-              }
-
-              // Update stock with both regular and scheme
-              await medicineService.updateMedicineStock(currentStock.id, {
-                currentStock: newRegularStock,
-                schemeStock: newSchemeStock,
-                updatedBy: purchaseData.createdBy,
-              });
-
-              // Determine which price to use based on selected stock type preference
-              // Use the selected stock type's price for all transactions, even if fallback occurs
-              const priceToUse =
-                stockType === "scheme" ? schemeSalePrice : regularSalePrice;
-
-              // Create stock transaction for scheme stock if used
-              if (schemeQtyUsed > 0) {
-                await medicineService.createStockTransaction({
-                  medicineId: item.medicineId,
-                  type: "sale",
-                  quantity: schemeQtyUsed,
-                  previousStock: currentStock.schemeStock || 0,
-                  newStock: newSchemeStock,
-                  isSchemeStock: true,
-                  salePrice: priceToUse,
-                  schemePrice:
-                    stockType === "scheme" ? schemeSalePrice : undefined,
-                  unitPrice: priceToUse,
-                  totalAmount: priceToUse * schemeQtyUsed,
-                  referenceId: purchaseData.purchaseNo,
-                  clinicId: purchaseData.clinicId,
-                  branchId: purchaseData.branchId,
-                  createdBy: purchaseData.createdBy,
-                });
-              }
-
-              // Create stock transaction for regular stock if used
-              if (regularQtyUsed > 0) {
-                await medicineService.createStockTransaction({
-                  medicineId: item.medicineId,
-                  type: "sale",
-                  quantity: regularQtyUsed,
-                  previousStock: currentStock.currentStock,
-                  newStock: newRegularStock,
-                  isSchemeStock: false,
-                  salePrice: priceToUse,
-                  unitPrice: priceToUse,
-                  totalAmount: priceToUse * regularQtyUsed,
-                  referenceId: purchaseData.purchaseNo,
-                  clinicId: purchaseData.clinicId,
-                  branchId: purchaseData.branchId,
-                  createdBy: purchaseData.createdBy,
-                });
-              }
-
-              console.log(
-                `Stock updated for medicine ${item.medicineId}: Regular ${currentStock.currentStock} -> ${newRegularStock}, Scheme ${currentStock.schemeStock || 0} -> ${newSchemeStock}`,
-              );
-            } else {
-              // Stock record doesn't exist - log warning but don't fail
-              console.warn(
-                `Stock record not found for medicine ${item.medicineId}. Purchase created but stock not updated.`,
-              );
-            }
-          } catch (stockError) {
-            // Log error but don't fail the purchase creation
-            console.error(
-              `Error updating stock for medicine ${item.medicineId}:`,
-              stockError,
-            );
+      // Pre-fetch stock document references
+      const stockRefs: Record<string, any> = {};
+      for (const item of medicineItems) {
+        if (!stockRefs[item.medicineId]) {
+          const q = query(
+            collection(db, "medicineStock"),
+            where("medicineId", "==", item.medicineId),
+            where("clinicId", "==", purchaseData.clinicId),
+          );
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            stockRefs[item.medicineId] = doc(db, "medicineStock", snap.docs[0].id);
           }
+        }
+      }
+
+      const purchaseId = await runTransaction(db, async (transaction) => {
+        // 1. Read all stock documents
+        const stockSnaps: Record<string, any> = {};
+        for (const medicineId in stockRefs) {
+          const snap = await transaction.get(stockRefs[medicineId]);
+          if (snap.exists()) {
+            stockSnaps[medicineId] = snap.data();
+          }
+        }
+
+        // 2. Prepare data for updates
+        const stockUpdates: Record<string, any> = {};
+        const transactionLogs: any[] = [];
+
+        for (const item of medicineItems) {
+          const currentStockData = stockSnaps[item.medicineId];
+          if (!currentStockData) continue;
+
+          let remainingQty = item.quantity;
+          let newRegularStock = currentStockData.currentStock || 0;
+          let newSchemeStock = currentStockData.schemeStock || 0;
+
+          const itemWithPrices = item as any;
+          const regularSalePrice =
+            itemWithPrices.regularSalePrice || item.salePrice;
+          const schemeSalePrice =
+            itemWithPrices.schemeSalePrice || item.salePrice;
+          const stockType = (item as any).stockType || "regular";
+          
+          let schemeQtyUsed = 0;
+          let regularQtyUsed = 0;
+
+          if (stockType === "regular") {
+            if (remainingQty > 0 && newRegularStock > 0) {
+              regularQtyUsed = Math.min(remainingQty, newRegularStock);
+              newRegularStock -= regularQtyUsed;
+              remainingQty -= regularQtyUsed;
+            }
+            if (remainingQty > 0 && newSchemeStock > 0) {
+              schemeQtyUsed = Math.min(remainingQty, newSchemeStock);
+              newSchemeStock -= schemeQtyUsed;
+              remainingQty -= schemeQtyUsed;
+            }
+          } else {
+            if (remainingQty > 0 && newSchemeStock > 0) {
+              schemeQtyUsed = Math.min(remainingQty, newSchemeStock);
+              newSchemeStock -= schemeQtyUsed;
+              remainingQty -= schemeQtyUsed;
+            }
+            if (remainingQty > 0 && newRegularStock > 0) {
+              regularQtyUsed = Math.min(remainingQty, newRegularStock);
+              newRegularStock -= regularQtyUsed;
+              remainingQty -= regularQtyUsed;
+            }
+          }
+
+          // Queue stock update
+          stockUpdates[item.medicineId] = {
+            currentStock: newRegularStock,
+            schemeStock: newSchemeStock,
+            updatedBy: purchaseData.createdBy,
+            updatedAt: serverTimestamp(),
+          };
+
+          const priceToUse =
+            stockType === "scheme" ? schemeSalePrice : regularSalePrice;
+
+          if (schemeQtyUsed > 0) {
+            transactionLogs.push({
+              medicineId: item.medicineId,
+              type: "sale",
+              quantity: schemeQtyUsed,
+              previousStock: currentStockData.schemeStock || 0,
+              newStock: newSchemeStock,
+              isSchemeStock: true,
+              salePrice: priceToUse,
+              unitPrice: priceToUse,
+              totalAmount: priceToUse * schemeQtyUsed,
+              referenceId: purchaseData.purchaseNo,
+              clinicId: purchaseData.clinicId,
+              branchId: purchaseData.branchId,
+              createdBy: purchaseData.createdBy,
+            });
+          }
+
+          if (regularQtyUsed > 0) {
+            transactionLogs.push({
+              medicineId: item.medicineId,
+              type: "sale",
+              quantity: regularQtyUsed,
+              previousStock: currentStockData.currentStock || 0,
+              newStock: newRegularStock,
+              isSchemeStock: false,
+              salePrice: priceToUse,
+              unitPrice: priceToUse,
+              totalAmount: priceToUse * regularQtyUsed,
+              referenceId: purchaseData.purchaseNo,
+              clinicId: purchaseData.clinicId,
+              branchId: purchaseData.branchId,
+              createdBy: purchaseData.createdBy,
+            });
+          }
+        }
+
+        // 3. Perform Writes
+        // Create Purchase
+        const purchaseRef = doc(collection(db, MEDICINE_PURCHASES_COLLECTION));
+        transaction.set(purchaseRef, {
+          ...purchaseData,
+          id: purchaseRef.id,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
 
-      // Wait for all stock updates (but don't fail if any fail)
-      await Promise.allSettled(stockUpdatePromises);
+        // Update Stocks
+        for (const medicineId in stockUpdates) {
+          transaction.update(stockRefs[medicineId], stockUpdates[medicineId]);
+        }
 
-      return docRef.id;
+        // Create Stock Transactions
+        for (const log of transactionLogs) {
+          const logRef = doc(collection(db, "stockTransactions"));
+          transaction.set(logRef, {
+            ...log,
+            createdAt: serverTimestamp(),
+          });
+        }
+
+        return purchaseRef.id;
+      });
+
+      return purchaseId;
     } catch (error) {
       console.error("Error creating medicine purchase:", error);
       throw error;
@@ -310,143 +313,128 @@ export const pharmacyService = {
     returnData: Omit<MedicinePurchaseReturn, "id" | "createdAt">,
   ): Promise<string> {
     try {
-      const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseId);
-      const snap = await getDoc(docRef);
-
-      if (!snap.exists()) {
-        throw new Error("Purchase not found");
+      const purchaseRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseId);
+      
+      const medicineItems = returnData.items;
+      const stockRefs: Record<string, any> = {};
+      
+      for (const item of medicineItems) {
+        const q = query(
+          collection(db, "medicineStock"),
+          where("medicineId", "==", item.medicineId),
+          where("clinicId", "==", returnData.clinicId)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          stockRefs[item.medicineId] = doc(db, "medicineStock", snap.docs[0].id);
+        }
       }
 
-      const current = snap.data() as any;
-      const now = Timestamp.now();
-      const generatedId = doc(collection(db, "temp")).id;
+      const returnId = await runTransaction(db, async (transaction) => {
+        // 1. Read Purchase Document
+        const purchaseSnap = await transaction.get(purchaseRef);
+        if (!purchaseSnap.exists()) {
+          throw new Error("Purchase not found");
+        }
+        const originalPurchase = purchaseSnap.data() as MedicinePurchase;
+        
+        // 2. Read all Stock Documents
+        const stockSnaps: Record<string, any> = {};
+        for (const medicineId in stockRefs) {
+          const snap = await transaction.get(stockRefs[medicineId]);
+          if (snap.exists()) {
+            stockSnaps[medicineId] = snap.data();
+          }
+        }
 
-      const returnRecord: MedicinePurchaseReturn = {
-        ...returnData,
-        id: generatedId,
-        createdAt: now.toDate(),
-      };
+        // 3. Prepare data
+        const now = Timestamp.now();
+        const generatedId = doc(collection(db, "temp")).id;
+        
+        const returnRecord: any = {
+          id: generatedId,
+          clinicId: returnData.clinicId,
+          branchId: returnData.branchId || "",
+          purchaseId: returnData.purchaseId,
+          totalAmount: returnData.totalAmount,
+          refundMethod: returnData.refundMethod,
+          items: returnData.items.map((item: any) => ({
+            id: item.id,
+            purchaseItemId: item.purchaseItemId,
+            medicineId: item.medicineId,
+            medicineName: item.medicineName,
+            quantity: item.quantity,
+            amount: item.amount,
+            ...(item.reason && { reason: item.reason }),
+          })),
+          createdBy: returnData.createdBy,
+          createdAt: now,
+          ...(returnData.notes && { notes: returnData.notes }),
+        };
 
-      const existingReturns: MedicinePurchaseReturn[] = Array.isArray(
-        current.returns,
-      )
-        ? current.returns.map((r: any) => ({
-          ...r,
-          createdAt: r.createdAt?.toDate ? r.createdAt.toDate() : r.createdAt,
-        }))
-        : [];
+        const existingReturns = originalPurchase.returns || [];
+        const allReturns = [...existingReturns, returnRecord];
+        const totalReturnedAmount = allReturns.reduce(
+          (sum, r) => sum + Math.abs(r.totalAmount || 0),
+          0,
+        );
 
-      const allReturns = [...existingReturns, returnRecord];
-      const totalReturnedAmount = allReturns.reduce(
-        (sum, r) => sum + Math.abs(r.totalAmount || 0),
-        0,
-      );
+        // Map for item types
+        const purchaseItemTypeMap = new Map<string, string>();
+        if (originalPurchase.items) {
+          originalPurchase.items.forEach((item: any) => {
+            purchaseItemTypeMap.set(item.id, item.type || "medicine");
+          });
+        }
 
-      // Clean the return record to remove undefined values (Firebase doesn't allow undefined)
-      const cleanReturnRecord: any = {
-        id: returnRecord.id,
-        clinicId: returnRecord.clinicId,
-        branchId: returnRecord.branchId || "",
-        purchaseId: returnRecord.purchaseId,
-        totalAmount: returnRecord.totalAmount,
-        refundMethod: returnRecord.refundMethod,
-        items: returnRecord.items.map((item: any) => ({
-          id: item.id,
-          purchaseItemId: item.purchaseItemId,
-          medicineId: item.medicineId,
-          medicineName: item.medicineName,
-          quantity: item.quantity,
-          amount: item.amount,
-          ...(item.reason && { reason: item.reason }),
-        })),
-        createdBy: returnRecord.createdBy,
-        createdAt: now,
-        ...(returnRecord.notes && { notes: returnRecord.notes }),
-      };
+        // 4. Perform Writes
+        // Update Purchase
+        transaction.update(purchaseRef, {
+          returns: allReturns,
+          totalReturnedAmount,
+          updatedAt: now,
+        });
 
-      await updateDoc(docRef, {
-        returns: arrayUnion(cleanReturnRecord),
-        totalReturnedAmount,
-        updatedAt: now,
+        // Update Stock and Create Transactions
+        for (const item of medicineItems) {
+          const itemType = purchaseItemTypeMap.get(item.purchaseItemId);
+          if (itemType !== "medicine" && itemType !== undefined) continue;
+
+          const currentStockData = stockSnaps[item.medicineId];
+          if (currentStockData) {
+            const newStock = (currentStockData.currentStock || 0) + item.quantity;
+            
+            // Update stock
+            transaction.update(stockRefs[item.medicineId], {
+              currentStock: newStock,
+              updatedBy: returnData.createdBy,
+              updatedAt: now,
+            });
+
+            // Create stock transaction
+            const logRef = doc(collection(db, "stockTransactions"));
+            transaction.set(logRef, {
+              medicineId: item.medicineId,
+              type: "returned",
+              quantity: item.quantity,
+              previousStock: currentStockData.currentStock || 0,
+              newStock: newStock,
+              unitPrice: Math.abs(item.amount / item.quantity),
+              totalAmount: Math.abs(item.amount),
+              referenceId: originalPurchase.purchaseNo || purchaseId,
+              reason: item.reason || "Return from pharmacy sale",
+              clinicId: returnData.clinicId,
+              branchId: returnData.branchId,
+              createdBy: returnData.createdBy,
+              createdAt: now,
+            });
+          }
+        }
+
+        return generatedId;
       });
 
-      // Update stock for returned medicine items
-      // Get the original purchase to check item types
-      const originalPurchase = current as MedicinePurchase;
-
-      // Create a map of purchase item IDs to their types
-      const purchaseItemTypeMap = new Map<string, "medicine" | "item">();
-
-      if (originalPurchase.items) {
-        originalPurchase.items.forEach((item: any) => {
-          purchaseItemTypeMap.set(item.id, item.type || "medicine");
-        });
-      }
-
-      // Update stock for returned medicine items
-      const stockUpdatePromises = returnRecord.items
-        .filter((item) => {
-          // Only process items that were originally medicines
-          const itemType = purchaseItemTypeMap.get(item.purchaseItemId);
-
-          return itemType === "medicine" || !itemType;
-        })
-        .map(async (item) => {
-          try {
-            // Get current stock
-            const currentStock = await medicineService.getMedicineStock(
-              item.medicineId,
-              returnData.clinicId,
-            );
-
-            if (currentStock) {
-              // Calculate new stock (increase by returned quantity)
-              const newStock = currentStock.currentStock + item.quantity;
-
-              // Update stock
-              await medicineService.updateMedicineStock(currentStock.id, {
-                currentStock: newStock,
-                updatedBy: returnData.createdBy,
-              });
-
-              // Create stock transaction record
-              await medicineService.createStockTransaction({
-                medicineId: item.medicineId,
-                type: "returned",
-                quantity: item.quantity,
-                previousStock: currentStock.currentStock,
-                newStock: newStock,
-                unitPrice: Math.abs(item.amount / item.quantity), // Calculate unit price from amount
-                totalAmount: Math.abs(item.amount),
-                referenceId: originalPurchase.purchaseNo || purchaseId,
-                reason: item.reason || "Return from pharmacy sale",
-                clinicId: returnData.clinicId,
-                branchId: returnData.branchId,
-                createdBy: returnData.createdBy,
-              });
-
-              console.log(
-                `Stock increased for medicine ${item.medicineId}: ${currentStock.currentStock} -> ${newStock}`,
-              );
-            } else {
-              // Stock record doesn't exist - log warning but don't fail
-              console.warn(
-                `Stock record not found for medicine ${item.medicineId}. Return created but stock not updated.`,
-              );
-            }
-          } catch (stockError) {
-            // Log error but don't fail the return creation
-            console.error(
-              `Error updating stock for returned medicine ${item.medicineId}:`,
-              stockError,
-            );
-          }
-        });
-
-      // Wait for all stock updates (but don't fail if any fail)
-      await Promise.allSettled(stockUpdatePromises);
-
-      return generatedId;
+      return returnId;
     } catch (error) {
       console.error("Error creating medicine purchase return:", error);
       throw error;

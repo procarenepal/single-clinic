@@ -16,6 +16,19 @@ import {
 import { db } from "@/config/firebase";
 import { Prescription, PrescriptionItem } from "@/types/medical-records";
 
+/**
+ * Safely convert a Firestore field to a JavaScript Date object.
+ * Handles Timestamps, Date objects, and strings.
+ */
+const safeToDate = (field: any): Date | undefined => {
+  if (!field) return undefined;
+  if (typeof field.toDate === "function") return field.toDate();
+  if (field instanceof Date) return field;
+  if (field.seconds !== undefined) return new Date(field.seconds * 1000);
+  const d = new Date(field);
+  return isNaN(d.getTime()) ? undefined : d;
+};
+
 export interface CreatePrescriptionData {
   patientId: string;
   clinicId: string;
@@ -31,13 +44,17 @@ export interface CreatePrescriptionData {
     time: string;
     instructions?: string;
     quantity?: number;
+    sendToPharmacy?: boolean;
   }>;
+  diagnosis?: string;
   notes?: string;
   prescribedBy: string;
+  sendToPharmacy?: boolean;
 }
 
 export interface UpdatePrescriptionData {
   status?: "active" | "completed" | "cancelled";
+  diagnosis?: string;
   notes?: string;
   items?: Array<{
     id?: string;
@@ -49,7 +66,9 @@ export interface UpdatePrescriptionData {
     time: string;
     instructions?: string;
     quantity?: number;
+    sendToPharmacy?: boolean;
   }>;
+  sendToPharmacy?: boolean;
 }
 
 export const prescriptionService = {
@@ -101,9 +120,11 @@ export const prescriptionService = {
         appointmentId: data.appointmentId || null,
         prescriptionDate: Timestamp.now(),
         status: "active" as const,
+        diagnosis: data.diagnosis || "",
         notes: data.notes || "",
         createdBy: data.prescribedBy,
         ...appointmentContext,
+        sendToPharmacy: data.sendToPharmacy || false,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
@@ -132,6 +153,7 @@ export const prescriptionService = {
           time: item.time,
           instructions: item.instructions || "",
           quantity: item.quantity || 1,
+          sendToPharmacy: item.sendToPharmacy || data.sendToPharmacy || false,
           isActive: true,
           createdBy: data.prescribedBy,
           createdAt: Timestamp.now(),
@@ -157,14 +179,17 @@ export const prescriptionService = {
       const q = query(prescriptionsCollection, orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-        prescriptionDate: docSnap.data().prescriptionDate?.toDate(),
-        appointmentDate: docSnap.data().appointmentDate?.toDate(),
-        createdAt: docSnap.data().createdAt?.toDate(),
-        updatedAt: docSnap.data().updatedAt?.toDate(),
-      })) as Prescription[];
+      return querySnapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          prescriptionDate: safeToDate(data.prescriptionDate),
+          appointmentDate: safeToDate(data.appointmentDate),
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as Prescription[];
     } catch (error) {
       console.error("Error fetching prescriptions:", error);
       throw error;
@@ -200,14 +225,17 @@ export const prescriptionService = {
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        prescriptionDate: doc.data().prescriptionDate?.toDate(),
-        appointmentDate: doc.data().appointmentDate?.toDate(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate(),
-      })) as Prescription[];
+      return querySnapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          prescriptionDate: safeToDate(data.prescriptionDate),
+          appointmentDate: safeToDate(data.appointmentDate),
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as Prescription[];
     } catch (error) {
       console.error("Error fetching prescriptions by appointment:", error);
       throw error;
@@ -227,14 +255,17 @@ export const prescriptionService = {
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        prescriptionDate: doc.data().prescriptionDate?.toDate(),
-        appointmentDate: doc.data().appointmentDate?.toDate(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate(),
-      })) as Prescription[];
+      return querySnapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          prescriptionDate: safeToDate(data.prescriptionDate),
+          appointmentDate: safeToDate(data.appointmentDate),
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as Prescription[];
     } catch (error) {
       console.error("Error fetching prescriptions by patient:", error);
       throw error;
@@ -261,10 +292,10 @@ export const prescriptionService = {
       return {
         id: prescriptionDoc.id,
         ...prescriptionData,
-        prescriptionDate: prescriptionData.prescriptionDate?.toDate(),
-        appointmentDate: prescriptionData.appointmentDate?.toDate(),
-        createdAt: prescriptionData.createdAt?.toDate(),
-        updatedAt: prescriptionData.updatedAt?.toDate(),
+        prescriptionDate: safeToDate(prescriptionData.prescriptionDate),
+        appointmentDate: safeToDate(prescriptionData.appointmentDate),
+        createdAt: safeToDate(prescriptionData.createdAt),
+        updatedAt: safeToDate(prescriptionData.updatedAt),
       } as unknown as Prescription;
     } catch (error) {
       console.error("Error fetching prescription:", error);
@@ -289,12 +320,15 @@ export const prescriptionService = {
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate(),
-      })) as PrescriptionItem[];
+      return querySnapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as PrescriptionItem[];
     } catch (error) {
       console.error("Error fetching prescription items:", error);
       throw error;
@@ -316,6 +350,9 @@ export const prescriptionService = {
 
       if (data.status !== undefined) {
         updateData.status = data.status;
+      }
+      if (data.diagnosis !== undefined) {
+        updateData.diagnosis = data.diagnosis;
       }
       if (data.notes !== undefined) {
         updateData.notes = data.notes;

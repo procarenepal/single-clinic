@@ -405,6 +405,7 @@ export default function PrescriptionsPage() {
         "Prescription No.": p.prescriptionNo,
         "Patient Name": p.patientName,
         Doctor: p.doctorName,
+        Diagnosis: p.diagnosis || "",
         "Prescription Date": formatDate(p.prescriptionDate),
         Status: p.status.charAt(0).toUpperCase() + p.status.slice(1),
         "Medicines Count": p.itemsCount,
@@ -451,6 +452,7 @@ export default function PrescriptionsPage() {
         "Prescription No.": p.prescriptionNo,
         "Patient Name": p.patientName,
         Doctor: p.doctorName,
+        Diagnosis: p.diagnosis || "",
         "Prescription Date": formatDate(p.prescriptionDate),
         Status: p.status.charAt(0).toUpperCase() + p.status.slice(1),
         "Medicines Count": p.itemsCount,
@@ -841,6 +843,9 @@ export default function PrescriptionsPage() {
                     Date
                   </th>
                   <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                    Diagnosis
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-4 text-[11px] font-bold text-text-muted uppercase tracking-wider text-right">
@@ -875,6 +880,11 @@ export default function PrescriptionsPage() {
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-text-muted">
                         {formatDate(prescription.prescriptionDate)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-text-muted truncate max-w-[150px]" title={prescription.diagnosis}>
+                        {prescription.diagnosis || "—"}
                       </div>
                     </td>
                     <td className="px-6 py-4">

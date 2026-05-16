@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   IoArrowBackOutline,
@@ -139,41 +140,65 @@ function ReferralSourceSelect({
     id: string;
     name: string;
     type: string;
-    rawType: "doctor" | "partner";
+    rawType: "doctor" | "partner" | "expert";
   }[];
   value: string;
-  onChange: (id: string, name: string, type: "doctor" | "partner" | "") => void;
+  onChange: (id: string, name: string, type: "doctor" | "partner" | "expert" | "") => void;
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const triggerRef = React.useRef<HTMLDivElement>(null);
   const filtered = q
     ? sources.filter((s) => s.name.toLowerCase().includes(q.toLowerCase()))
     : sources;
   const selected = sources.find((s) => s.id === value);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        triggerRef.current &&
-        !triggerRef.current.contains(event.target as Node)
-      ) {
-        setOpen(false);
-      }
-    };
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const gap = 4;
+    const listMaxHeight = 192;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const showAbove = spaceBelow < Math.min(listMaxHeight, 200);
+    const top = showAbove ? rect.top - listMaxHeight - gap : rect.bottom + gap;
 
-    document.addEventListener("mousedown", handleClickOutside);
-
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    setCoords({ top, left: rect.left, width: rect.width });
   }, []);
 
+  useLayoutEffect(() => {
+    if (open) {
+      updatePosition();
+    } else {
+      setCoords(null);
+    }
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleScrollOrResize = () => updatePosition();
+
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [open, updatePosition]);
+
   return (
-    <div ref={triggerRef} className="flex flex-col gap-1.5 w-full relative">
+    <div className="flex flex-col gap-1.5 w-full relative">
       <label className="text-[13px] font-medium text-foreground-700">
         Referred By
       </label>
       <div
+        ref={triggerRef}
         className="flex items-center border border-default-200 rounded h-[38px] bg-background focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 px-3 cursor-pointer"
         onClick={() => setOpen(!open)}
       >
@@ -204,35 +229,67 @@ function ReferralSourceSelect({
         )}
       </div>
 
-      {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-[50] bg-content1 border border-default-200 rounded shadow-lg max-h-48 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-[12.5px] text-foreground-400">
-              No sources found
-            </p>
-          ) : (
-            filtered.map((p) => (
-              <button
-                key={p.id}
-                className={`w-full text-left px-3 py-2 hover:bg-primary/10 flex flex-col items-start ${p.id === value ? "bg-primary/10" : ""}`}
-                type="button"
-                onClick={() => {
-                  onChange(p.id!, p.name, p.rawType);
-                  setQ("");
-                  setOpen(false);
-                }}
-              >
-                <span className="text-[13.5px] text-foreground font-medium">
-                  {p.name}
-                </span>
-                <span className="text-[11px] text-foreground-400 capitalize">
-                  {p.type}
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <>
+            <div
+              aria-hidden
+              className="fixed inset-0 z-[9998]"
+              onClick={() => setOpen(false)}
+            />
+            <div
+              className="z-[9999] bg-content1 border border-default-200 rounded shadow-lg max-h-48 overflow-y-auto min-w-[200px]"
+              style={{
+                position: "fixed",
+                top: coords ? coords.top : -9999,
+                left: coords ? coords.left : -9999,
+                width: coords ? coords.width : undefined,
+              }}
+            >
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-[12.5px] text-foreground-400">
+                  No sources found
+                </p>
+              ) : (
+                filtered.map((p) => (
+                  <button
+                    key={p.id}
+                    className={`w-full text-left px-3 py-2 hover:bg-primary/10 flex flex-col items-start ${p.id === value ? "bg-primary/10" : ""}`}
+                    type="button"
+                    onClick={() => {
+                      onChange(p.id!, p.name, p.rawType);
+                      setQ("");
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="flex justify-between items-start w-full">
+                      <div className="flex flex-col">
+                        <span className="text-[13.5px] text-foreground font-medium">
+                          {p.name}
+                        </span>
+                        <span className="text-[11px] text-foreground-400 capitalize">
+                          {p.type}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                          p.rawType === "doctor"
+                            ? "bg-blue-50 text-blue-600 border border-blue-100"
+                            : p.rawType === "expert"
+                              ? "bg-purple-50 text-purple-600 border border-purple-100"
+                              : "bg-orange-50 text-orange-600 border border-orange-100"
+                        }`}
+                      >
+                        {p.rawType}
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -270,7 +327,7 @@ export default function PatientEditPage() {
     age: "",
     referralPartnerId: "",
     referredBy: "",
-    referralType: "" as "doctor" | "partner" | "",
+    referralType: "" as "doctor" | "partner" | "expert" | "",
     phone: "",
     doctor: "",
     expert: "",
@@ -293,8 +350,16 @@ export default function PatientEditPage() {
           type: d.doctorType || "Doctor",
           rawType: "doctor" as const,
         })),
+      ...experts
+        .filter((e) => !e.isDeleted)
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          type: e.expertType || "Expert",
+          rawType: "expert" as const,
+        })),
     ];
-  }, [referralPartners, doctors]);
+  }, [referralPartners, doctors, experts]);
 
   // State for medical conditions input
   const [medicalConditionInput, setMedicalConditionInput] = useState("");
@@ -368,9 +433,11 @@ export default function PatientEditPage() {
         referredBy: patientData.referredBy || "",
         referralType: patientData.referralPartnerId
           ? "partner"
-          : patientData.referredBy
+          : (patientData.referredBy && doctors.some(d => d.name === patientData.referredBy))
             ? "doctor"
-            : "",
+            : (patientData.referredBy && experts.some(e => e.name === patientData.referredBy))
+              ? "expert"
+              : "",
         phone: patientData.phone || "",
         doctor: patientData.doctorId || "",
         expert: patientData.assignedExpertId || "",
@@ -427,6 +494,28 @@ export default function PatientEditPage() {
       setExpertsLoading(false);
     }
   };
+
+  // Resolve referral type once sources are loaded
+  useEffect(() => {
+    if (patient && doctors.length > 0 && experts.length > 0) {
+      setFormData(prev => {
+        if (prev.referralType) return prev; // Already resolved or changed by user
+        
+        let type: "doctor" | "partner" | "expert" | "" = "";
+        if (patient.referralPartnerId) {
+          type = "partner";
+        } else if (patient.referredBy) {
+          if (doctors.some(d => d.name === patient.referredBy)) {
+            type = "doctor";
+          } else if (experts.some(e => e.name === patient.referredBy)) {
+            type = "expert";
+          }
+        }
+        
+        return { ...prev, referralType: type };
+      });
+    }
+  }, [patient, doctors, experts]);
 
   const loadPartners = async () => {
     if (!clinicId) return;
@@ -635,10 +724,20 @@ export default function PatientEditPage() {
         medicalConditions: formData.medicalConditions,
       };
 
-      if (formData.referralPartnerId && formData.referralType === "partner") {
-        updatedPatientData.referralPartnerId = formData.referralPartnerId;
+      if (formData.referralPartnerId && (formData.referralType === "partner" || formData.referralType === "expert" || formData.referralType === "doctor")) {
+        // If it's a doctor or expert from our system, we might still store their ID in referralPartnerId
+        // but the current model seems to use referralPartnerId mostly for 'partner' type.
+        // Let's check how it's handled in create.
+        if (formData.referralType === "partner") {
+          updatedPatientData.referralPartnerId = formData.referralPartnerId;
+        } else {
+          // For doctors/experts, we might just store the name in referredBy (which is already set above)
+          // but if we want to track the ID, we might need a separate field or reuse referralPartnerId
+          // The current creation logic in new-patient.tsx only sets referralPartnerId for 'partner' type.
+          updatedPatientData.referralPartnerId = null;
+        }
       } else {
-        updatedPatientData.referralPartnerId = null; // Clear if it was changed to a doctor
+        updatedPatientData.referralPartnerId = null;
       }
 
       if (formData.gender) updatedPatientData.gender = formData.gender;

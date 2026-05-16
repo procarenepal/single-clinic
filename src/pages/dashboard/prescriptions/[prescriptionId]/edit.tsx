@@ -254,6 +254,7 @@ export default function EditPrescriptionPage() {
   const [intervalValue, setIntervalValue] = useState("");
 
   const [items, setItems] = useState<PrescriptionItemForm[]>([]);
+  const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
 
   const [isPatientAutoFilled, setIsPatientAutoFilled] = useState(false);
@@ -311,6 +312,7 @@ export default function EditPrescriptionPage() {
         setPatientId(prescriptionData.patientId);
         setDoctorId(prescriptionData.doctorId);
         setAppointmentId(prescriptionData.appointmentId || "");
+        setDiagnosis(prescriptionData.diagnosis || "");
         setNotes(prescriptionData.notes || "");
 
         const formItems: PrescriptionItemForm[] = prescriptionItems.map(
@@ -534,7 +536,7 @@ export default function EditPrescriptionPage() {
       }));
 
       console.log("[handleUpdate] Starting update for prescription:", prescriptionId);
-      await prescriptionService.updatePrescription(prescriptionId, { notes });
+      await prescriptionService.updatePrescription(prescriptionId, { diagnosis, notes });
       console.log("[handleUpdate] Prescription doc updated");
       await prescriptionService.updatePrescriptionItems(
         prescriptionId,
@@ -731,6 +733,23 @@ export default function EditPrescriptionPage() {
                 Add Medicine
               </Button>
             </div>
+          </div>
+        </div>
+
+        {/* Diagnosis Section */}
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
+              Diagnosis / Complaints
+            </h4>
+          </div>
+          <div className="p-6">
+            <CustomInput
+              placeholder="Enter patient diagnosis, complaints, or findings..."
+              type="textarea"
+              value={diagnosis}
+              onChange={(e: any) => setDiagnosis(e.target.value)}
+            />
           </div>
         </div>
 

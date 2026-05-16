@@ -7,9 +7,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { clinicService } from "@/services/clinicService";
+import { referralPartnerService } from "@/services/referralPartnerService";
 import { smsService, SMSTemplate } from "@/services/sendMessageService";
 import { smsTestService } from "@/services/smsTestService";
-import { Patient, Doctor } from "@/types/models";
+import { Patient, Doctor, ReferralPartner } from "@/types/models";
 
 function SearchSelect({
   label,
@@ -122,6 +123,7 @@ const SendSMSTab: React.FC = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [referrals, setReferrals] = useState<ReferralPartner[]>([]);
   const [functionStatus, setFunctionStatus] = useState<
     "checking" | "online" | "offline"
   >("checking");
@@ -132,7 +134,7 @@ const SendSMSTab: React.FC = () => {
   const [associatedDoctorId, setAssociatedDoctorId] = useState<string>("");
 
   const [selectedRecipientType, setSelectedRecipientType] = useState<
-    "patient" | "doctor"
+    "patient" | "doctor" | "referral"
   >("patient");
   const [selectedRecipient, setSelectedRecipient] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -171,15 +173,17 @@ const SendSMSTab: React.FC = () => {
     if (!clinicId) return;
     setLoadingData(true);
     try {
-      const [patientsData, doctorsData, templatesData, clinicDoc] = await Promise.all([
+      const [patientsData, doctorsData, referralsData, templatesData, clinicDoc] = await Promise.all([
         patientService.getPatientsByClinic(clinicId),
         doctorService.getDoctorsByClinic(clinicId),
+        referralPartnerService.getReferralPartnersByClinic(clinicId),
         smsService.getSMSTemplates(clinicId),
         clinicService.getClinicById(clinicId),
       ]);
 
       setPatients(patientsData);
       setDoctors(doctorsData);
+      setReferrals(referralsData);
       setTemplates(templatesData);
       setClinicData(clinicDoc);
     } catch (error) {
@@ -208,17 +212,19 @@ const SendSMSTab: React.FC = () => {
       if (patient) {
         setPhoneNumber(patient.mobile || patient.phone || "");
         setRecipientName(patient.name);
-        
+
         // If a template is already selected, re-process it with the new recipient
         if (selectedTemplateId) {
-          const template = templates.find(t => t.id === selectedTemplateId);
+          const template = templates.find((t) => t.id === selectedTemplateId);
           if (template) {
-            const doctor = doctors.find(d => d.id === associatedDoctorId);
-            setMessage(processTemplatePlaceholders(template.message, patient, doctor));
+            const doctor = doctors.find((d) => d.id === associatedDoctorId);
+            setMessage(
+              processTemplatePlaceholders(template.message, patient, doctor),
+            );
           }
         }
       }
-    } else {
+    } else if (selectedRecipientType === "doctor") {
       const doctor = doctors.find((d) => d.id === value);
 
       if (doctor) {
@@ -227,9 +233,24 @@ const SendSMSTab: React.FC = () => {
 
         // If a template is already selected, re-process it with the new recipient
         if (selectedTemplateId) {
-          const template = templates.find(t => t.id === selectedTemplateId);
+          const template = templates.find((t) => t.id === selectedTemplateId);
           if (template) {
             setMessage(processTemplatePlaceholders(template.message, doctor));
+          }
+        }
+      }
+    } else if (selectedRecipientType === "referral") {
+      const referral = referrals.find((r) => r.id === value);
+
+      if (referral) {
+        setPhoneNumber(referral.phone || "");
+        setRecipientName(referral.name);
+
+        // If a template is already selected, re-process it with the new recipient
+        if (selectedTemplateId) {
+          const template = templates.find((t) => t.id === selectedTemplateId);
+          if (template) {
+            setMessage(processTemplatePlaceholders(template.message, referral));
           }
         }
       }
@@ -250,7 +271,10 @@ const SendSMSTab: React.FC = () => {
     }
   };
 
-  const handleRecipientTypeChange = (value: string) => {
+  const handleRecipientTypeChange = (value: any) => {
+    setSelectedRecipientType(value);
+    setSelectedRecipient("");
+    setPhoneNumber("");
     setRecipientName("");
     setMessage("");
     setSelectedTemplateId("");
@@ -272,8 +296,10 @@ const SendSMSTab: React.FC = () => {
       if (selectedRecipientType === "patient") {
         recipient = patients.find((p) => p.id === selectedRecipient);
         associatedDoctor = doctors.find((d) => d.id === associatedDoctorId);
-      } else {
+      } else if (selectedRecipientType === "doctor") {
         recipient = doctors.find((d) => d.id === selectedRecipient);
+      } else if (selectedRecipientType === "referral") {
+        recipient = referrals.find((r) => r.id === selectedRecipient);
       }
 
       const processedMessage = processTemplatePlaceholders(template.message, recipient, associatedDoctor);
@@ -300,8 +326,10 @@ const SendSMSTab: React.FC = () => {
       if (selectedRecipientType === "patient") {
         processed = processed.replace(/{patientName}/g, recipient.name || "");
         processed = processed.replace(/{patientId}/g, recipient.id || "");
-      } else {
+      } else if (selectedRecipientType === "doctor") {
         processed = processed.replace(/{doctorName}/g, recipient.name || "");
+      } else if (selectedRecipientType === "referral") {
+        processed = processed.replace(/{partnerName}/g, recipient.name || "");
       }
     }
 
@@ -368,10 +396,16 @@ const SendSMSTab: React.FC = () => {
             patientName: recipientName,
             patientPhone: phoneNumber,
           }
-        : {
+        : selectedRecipientType === "doctor"
+        ? {
             doctorId: selectedRecipient,
             doctorName: recipientName,
             doctorPhone: phoneNumber,
+          }
+        : {
+            referralId: selectedRecipient,
+            referralName: recipientName,
+            referralPhone: phoneNumber,
           }),
     };
 
@@ -447,6 +481,8 @@ const SendSMSTab: React.FC = () => {
 
   const availablePatients = patients.filter((p) => p.mobile || p.phone);
   const availableDoctors = doctors.filter((d) => d.phone);
+  const availableReferrals = referrals.filter((r) => r.phone);
+  
   const recipientSearchItems =
     selectedRecipientType === "patient"
       ? availablePatients.map((p) => ({
@@ -454,12 +490,18 @@ const SendSMSTab: React.FC = () => {
           primary: p.name,
           secondary: p.mobile || p.phone || "No phone",
         }))
-      : availableDoctors.map((d) => ({
+      : selectedRecipientType === "doctor"
+      ? availableDoctors.map((d) => ({
           id: d.id,
           primary: d.name,
           secondary:
             `${d.phone || ""}${d.speciality ? ` • ${d.speciality}` : ""}`.trim() ||
             undefined,
+        }))
+      : availableReferrals.map((r) => ({
+          id: r.id,
+          primary: r.name,
+          secondary: r.phone || "No phone",
         }));
 
   return (
@@ -540,6 +582,9 @@ const SendSMSTab: React.FC = () => {
             <option value="doctor">
               Doctors ({availableDoctors.length} available)
             </option>
+            <option value="referral">
+              Referral Partners ({availableReferrals.length} available)
+            </option>
           </select>
         </div>
 
@@ -549,12 +594,16 @@ const SendSMSTab: React.FC = () => {
           label={
             selectedRecipientType === "patient"
               ? "Select Patient"
-              : "Select Doctor"
+              : selectedRecipientType === "doctor"
+              ? "Select Doctor"
+              : "Select Partner"
           }
           placeholder={
             selectedRecipientType === "patient"
               ? "Search patients…"
-              : "Search doctors…"
+              : selectedRecipientType === "doctor"
+              ? "Search doctors…"
+              : "Search partners…"
           }
           value={selectedRecipient}
           onChange={handleRecipientChange}

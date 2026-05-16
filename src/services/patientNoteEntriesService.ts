@@ -65,12 +65,11 @@ export class PatientNoteEntriesService {
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
         where("patientId", "==", patientId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const entries = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -78,6 +77,13 @@ export class PatientNoteEntriesService {
           ...data,
           createdAt: data.createdAt?.toDate() || new Date(),
         } as PatientNoteEntry;
+      });
+
+      // Sort by createdAt descending in memory to avoid index error
+      return entries.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+        return dateB - dateA;
       });
     } catch (error) {
       console.error("Error getting patient note entries:", error);
@@ -99,12 +105,11 @@ export class PatientNoteEntriesService {
         where("clinicId", "==", clinicId),
         where("patientId", "==", patientId),
         where("sectionKey", "==", sectionKey),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const entries = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -112,6 +117,13 @@ export class PatientNoteEntriesService {
           ...data,
           createdAt: data.createdAt?.toDate() || new Date(),
         } as PatientNoteEntry;
+      });
+
+      // Sort by createdAt descending in memory to avoid index error
+      return entries.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+        return dateB - dateA;
       });
     } catch (error) {
       console.error("Error getting section note entries:", error);
@@ -168,12 +180,11 @@ export class PatientNoteEntriesService {
       const q = query(
         collection(db, COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const entries = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -181,6 +192,13 @@ export class PatientNoteEntriesService {
           ...data,
           createdAt: data.createdAt?.toDate() || new Date(),
         } as PatientNoteEntry;
+      });
+
+      // Sort by createdAt descending in memory to avoid index error
+      return entries.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+        return dateB - dateA;
       });
     } catch (error) {
       console.error("Error getting clinic note entries:", error);

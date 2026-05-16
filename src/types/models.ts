@@ -768,6 +768,8 @@ export interface MedicinePurchase {
   paymentStatus: "paid" | "pending" | "partial" | "unpaid";
   paymentNote?: string;
   patientName?: string;
+  patientPhone?: string;
+  patientAddress?: string;
   /**
    * Number of days the prescribed medicines are expected to last.
    * Used for dashboard reminders when the course is about to end.
@@ -926,8 +928,42 @@ export interface StaffMember {
   taskCompletionScore?: number;
   shiftStartTime?: string; // Format: "HH:mm"
   shiftEndTime?: string;   // Format: "HH:mm"
+  totalCommissionBalance?: number; // Current pending balance to be paid
+  totalCommissionEarned?: number; // Lifetime total commission earned
+  defaultCommission: number; // Default commission percentage
   clinicId: string;
   branchId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+}
+
+/**
+ * StaffCommission model for tracking commissions earned by staff
+ */
+export interface StaffCommission {
+  id: string;
+  staffId: string;
+  staffName: string;
+  clinicId: string;
+  branchId: string;
+  billingId: string;
+  billingType: "appointment" | "pathology" | "pharmacy";
+  invoiceNumber: string;
+  appointmentDate: Date;
+  patientId: string;
+  patientName: string;
+  serviceNames: string[];
+  totalInvoiceAmount: number;
+  commissionPercentage: number;
+  commissionAmount: number;
+  status: "pending" | "paid" | "cancelled";
+  paidAmount?: number;
+  paymentMethod?: string;
+  paymentReference?: string;
+  paymentNotes?: string;
+  paidDate?: Date;
+  paidBy?: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -1065,6 +1101,7 @@ export interface Prescription {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  sendToPharmacy?: boolean;
 }
 
 // Prescription Item model for individual medicines in a prescription
@@ -1083,6 +1120,7 @@ export interface PrescriptionItem {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  sendToPharmacy?: boolean;
 }
 
 // Prescription Template model for saving commonly used prescriptions

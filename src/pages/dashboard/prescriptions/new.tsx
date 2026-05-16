@@ -248,7 +248,13 @@ export default function NewPrescriptionPage() {
   const [intervalValue, setIntervalValue] = useState("");
 
   const [items, setItems] = useState<PrescriptionItem[]>([]);
+  const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
+  const [sendToPharmacy, setSendToPharmacy] = useState(true);
+
+  // Quick Presets
+  const frequencyPresets = ["OD", "BD", "TDS", "QID", "SOS"];
+  const timePresets = ["Before Meal", "After Meal", "Empty Stomach", "At Bedtime"];
 
   // Resolve default branch (branch user, then main branch when multi-branch, else clinicId)
   useEffect(() => {
@@ -439,6 +445,7 @@ export default function NewPrescriptionPage() {
           notes ||
           `Take ${item.dosage} ${item.interval} ${item.time} for ${item.duration}`,
         quantity: 1,
+        sendToPharmacy,
       }));
 
       const prescriptionData = {
@@ -448,8 +455,10 @@ export default function NewPrescriptionPage() {
         appointmentId: appointmentId ? appointmentId : undefined,
         doctorId,
         items: prescriptionItems,
+        diagnosis,
         notes,
         prescribedBy: currentUser,
+        sendToPharmacy,
       };
 
       await prescriptionService.createPrescription(prescriptionData);
@@ -579,7 +588,7 @@ export default function NewPrescriptionPage() {
                 items={medicines.map((m) => ({
                   id: m.id,
                   primary: m.name,
-                  secondary: m.manufacturer,
+                  secondary: m.genericName ? `${m.genericName} (${m.manufacturer || 'Unknown'})` : m.manufacturer,
                 }))}
                 label="Medicine"
                 placeholder="Search medicine..."
@@ -598,18 +607,46 @@ export default function NewPrescriptionPage() {
                 value={duration}
                 onChange={(e: any) => setDuration(e.target.value)}
               />
-              <CustomInput
-                label="Time"
-                placeholder="e.g., morning, after meals"
-                value={time}
-                onChange={(e: any) => setTime(e.target.value)}
-              />
-              <CustomInput
-                label="Interval"
-                placeholder="e.g., once daily"
-                value={intervalValue}
-                onChange={(e: any) => setIntervalValue(e.target.value)}
-              />
+              <div className="flex flex-col gap-2">
+                <CustomInput
+                  label="Frequency"
+                  placeholder="e.g., once daily"
+                  value={intervalValue}
+                  onChange={(e: any) => setIntervalValue(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-1">
+                  {frequencyPresets.map((preset) => (
+                    <button
+                      key={preset}
+                      className={`px-2 py-0.5 text-[10px] font-semibold border rounded-[6px] transition-colors ${intervalValue === preset ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
+                      type="button"
+                      onClick={() => setIntervalValue(preset)}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <CustomInput
+                  label="Time"
+                  placeholder="e.g., morning, after meals"
+                  value={time}
+                  onChange={(e: any) => setTime(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-1">
+                  {timePresets.map((preset) => (
+                    <button
+                      key={preset}
+                      className={`px-2 py-0.5 text-[10px] font-semibold border rounded-[6px] transition-colors ${time === preset ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
+                      type="button"
+                      onClick={() => setTime(preset)}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Button
                 className="h-[38px] w-full"
                 color="primary"
@@ -697,6 +734,23 @@ export default function NewPrescriptionPage() {
           </div>
         )}
 
+        {/* Diagnosis Section */}
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
+            <h4 className="font-semibold text-[15px] text-text-main leading-none">
+              Diagnosis / Complaints
+            </h4>
+          </div>
+          <div className="p-6">
+            <CustomInput
+              placeholder="Enter patient diagnosis, complaints, or findings..."
+              type="textarea"
+              value={diagnosis}
+              onChange={(e: any) => setDiagnosis(e.target.value)}
+            />
+          </div>
+        </div>
+
         {/* Notes */}
         <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
           <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
@@ -704,13 +758,26 @@ export default function NewPrescriptionPage() {
               Additional Notes & Instructions
             </h4>
           </div>
-          <div className="p-6">
+          <div className="p-6 space-y-4">
             <CustomInput
               placeholder="Add any special instructions, warnings, or notes..."
               type="textarea"
               value={notes}
               onChange={(e: any) => setNotes(e.target.value)}
             />
+            <div className="flex items-center gap-3 bg-primary/5 p-4 rounded-[12px] border border-primary/20">
+              <input
+                checked={sendToPharmacy}
+                className="w-4 h-4 accent-primary cursor-pointer"
+                id="sendToPharmacy"
+                type="checkbox"
+                onChange={(e) => setSendToPharmacy(e.target.checked)}
+              />
+              <label className="flex flex-col cursor-pointer" htmlFor="sendToPharmacy">
+                <span className="text-[13.5px] font-semibold text-primary">Send to Pharmacy</span>
+                <span className="text-[11.5px] text-text-muted">The pharmacy will receive this prescription instantly for fulfillment.</span>
+              </label>
+            </div>
           </div>
         </div>
 

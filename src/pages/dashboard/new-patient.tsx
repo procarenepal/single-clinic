@@ -40,7 +40,10 @@ import {
 } from "@/services/sendMessageService";
 import { expertService } from "@/services/expertService";
 import { referralCommissionService } from "@/services/referralCommissionService";
+import { expertCommissionService } from "@/services/expertCommissionService";
 import { doctorCommissionService } from "@/services/doctorCommissionService";
+import { hrService } from "@/services/hrService";
+import { staffCommissionService } from "@/services/staffCommissionService";
 
 // Types
 import {
@@ -50,6 +53,7 @@ import {
   Patient,
   ReferralPartner,
   Expert,
+  StaffMember,
 } from "@/types/models";
 
 // Custom UI
@@ -493,10 +497,10 @@ function ReferralSourceSelect({
     id: string;
     name: string;
     type: string;
-    rawType: "doctor" | "partner";
+    rawType: "doctor" | "partner" | "expert" | "staff";
   }[];
   value: string;
-  onChange: (id: string, name: string, type: "doctor" | "partner" | "") => void;
+  onChange: (id: string, name: string, type: "doctor" | "partner" | "expert" | "staff" | "") => void;
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -579,42 +583,69 @@ function ReferralSourceSelect({
         )}
       </div>
 
-      {open && (
-        <>
-          <div
-            aria-hidden
-            className="fixed inset-0 z-[100]"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute left-0 right-0 top-full mt-1 z-[101] bg-surface border border-border-base rounded shadow-lg max-h-48 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-text-muted">
-                {q ? "No partners found" : "No referral partners registered"}
-              </p>
-            ) : (
-              filtered.map((p) => (
-                <button
-                  key={p.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-primary/10 transition-colors ${p.id === value ? "bg-primary/10" : ""}`}
-                  type="button"
-                  onClick={() => {
-                    onChange(p.id!, p.name, p.rawType);
-                    setQ("");
-                    setOpen(false);
-                  }}
-                >
-                  <p className="text-[12.5px] text-text-main font-medium">
-                    {p.name}
-                  </p>
-                  <p className="text-[11px] text-text-muted capitalize">
-                    {p.type}
-                  </p>
-                </button>
-              ))
-            )}
-          </div>
-        </>
-      )}
+      {open &&
+        createPortal(
+          <>
+            <div
+              aria-hidden
+              className="fixed inset-0 z-[9998]"
+              onClick={() => setOpen(false)}
+            />
+            <div
+              className="z-[9999] bg-surface border border-border-base rounded shadow-lg max-h-48 overflow-y-auto min-w-[200px]"
+              style={{
+                position: "fixed",
+                top: coords ? coords.top : -9999,
+                left: coords ? coords.left : -9999,
+                width: coords ? coords.width : undefined,
+              }}
+            >
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-[12px] text-text-muted">
+                  {q ? "No partners found" : "No referral partners registered"}
+                </p>
+              ) : (
+                filtered.map((p) => (
+                  <button
+                    key={p.id}
+                    className={`w-full text-left px-3 py-2 hover:bg-primary/10 transition-colors ${p.id === value ? "bg-primary/10" : ""}`}
+                    type="button"
+                    onClick={() => {
+                      onChange(p.id!, p.name, p.rawType);
+                      setQ("");
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="flex justify-between items-start w-full">
+                      <div className="flex flex-col">
+                        <p className="text-[12.5px] text-text-main font-medium">
+                          {p.name}
+                        </p>
+                        <p className="text-[11px] text-text-muted capitalize">
+                          {p.type}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                          p.rawType === "doctor"
+                            ? "bg-blue-50 text-blue-600 border border-blue-100"
+                            : p.rawType === "expert"
+                              ? "bg-purple-50 text-purple-600 border border-purple-100"
+                              : p.rawType === "staff"
+                                ? "bg-teal-50 text-teal-600 border border-teal-100"
+                                : "bg-orange-50 text-orange-600 border border-orange-100"
+                        }`}
+                      >
+                        {p.rawType}
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -697,11 +728,13 @@ interface ConversionProgress {
 const NewPatientPage: React.FC = () => {
   const navigate = useNavigate();
   const { clinicId, currentUser, userData, isLoading: authLoading } = useAuth();
+  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
 
   // ── Loading states
   const [loading, setLoading] = useState(false);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [expertsLoading, setExpertsLoading] = useState(true);
+  const [staffLoading, setStaffLoading] = useState(true);
   const [apptTypesLoading, setApptTypesLoading] = useState(true);
   const [generatingReg, setGeneratingReg] = useState(false);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
@@ -709,6 +742,7 @@ const NewPatientPage: React.FC = () => {
   // ── Reference data
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [experts, setExperts] = useState<Expert[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
     [],
@@ -722,7 +756,6 @@ const NewPatientPage: React.FC = () => {
 
   // ── Identity resolution
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
-  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
 
   // ── Date conversion state
   const [dateConv, setDateConv] = useState({
@@ -752,7 +785,7 @@ const NewPatientPage: React.FC = () => {
     age: "",
     referralPartnerId: "",
     referredBy: "",
-    referralType: "" as "doctor" | "partner" | "",
+    referralType: "" as "doctor" | "partner" | "expert" | "staff" | "",
     phone: "",
     occupation: "",
     careOf: "",
@@ -779,8 +812,23 @@ const NewPatientPage: React.FC = () => {
           type: d.doctorType || "Doctor",
           rawType: "doctor" as const,
         })),
+      ...experts
+        .filter((e) => !e.isDeleted)
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          type: e.expertType || "Expert",
+          rawType: "expert" as const,
+        })),
+      ...staff
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          type: s.role || "Staff",
+          rawType: "staff" as const,
+        })),
     ];
-  }, [referralPartners, doctors]);
+  }, [referralPartners, doctors, experts, staff]);
 
   // ── Appointment form
   const [appt, setAppt] = useState({
@@ -963,8 +1011,16 @@ const NewPatientPage: React.FC = () => {
     appointmentTypeService
       .getActiveAppointmentTypes()
       .then(setAppointmentTypes)
-      .catch(console.error)
-      .finally(() => setApptTypesLoading(false));
+      .catch(console.error);
+
+    // Load staff
+    hrService
+      .getStaffByClinic(clinicId)
+      .then(setStaff)
+      .finally(() => {
+        setStaffLoading(false);
+        setApptTypesLoading(false);
+      });
 
     // Load referral partners
     referralPartnerService
@@ -1086,7 +1142,7 @@ const NewPatientPage: React.FC = () => {
     if (!clinicId) return;
     setGeneratingReg(true);
     try {
-      const n = await patientService.getNextRegistrationNumber();
+      const n = await patientService.getNextRegistrationNumber(clinicId);
 
       setProfile((p) => ({ ...p, regNumber: n }));
       addToast({ title: `Reg# ${n} generated`, color: "success" });
@@ -1343,6 +1399,42 @@ const NewPatientPage: React.FC = () => {
                   price,
                   commissionAmount,
                   doctor.defaultCommission,
+                  currentUser?.uid || ""
+                );
+              }
+            } else if (profile.referralType === "expert") {
+              const expert = await expertService.getExpertById(profile.referralPartnerId);
+              if (expert && expert.defaultCommission > 0) {
+                const commissionAmount = (price * expert.defaultCommission) / 100;
+                await expertCommissionService.createRegistrationCommission(
+                  expert.id,
+                  expert.name,
+                  clinicId,
+                  defaultBranchId || clinicId,
+                  patientId,
+                  profile.name,
+                  selectedType.name,
+                  price,
+                  commissionAmount,
+                  expert.defaultCommission,
+                  currentUser?.uid || ""
+                );
+              }
+            } else if (profile.referralType === "staff") {
+              const staffMember = staff.find(s => s.id === profile.referralPartnerId);
+              if (staffMember && (staffMember.defaultCommission || 0) > 0) {
+                const commissionAmount = (price * staffMember.defaultCommission) / 100;
+                await staffCommissionService.createRegistrationCommission(
+                  staffMember.id,
+                  staffMember.name,
+                  clinicId,
+                  defaultBranchId || clinicId,
+                  patientId,
+                  profile.name,
+                  selectedType.name,
+                  price,
+                  commissionAmount,
+                  staffMember.defaultCommission,
                   currentUser?.uid || ""
                 );
               }
@@ -1778,39 +1870,7 @@ const NewPatientPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Additional Info Card */}
-            <div className="bg-surface border border-border-base rounded overflow-hidden">
-              <SectionHeader
-                icon={<IoPersonOutline className="w-4 h-4" />}
-                subtitle="Optional demographic details"
-                title="Additional Information"
-              />
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Field label="Occupation">
-                  <FlatInput
-                    placeholder="e.g. Teacher"
-                    value={profile.occupation}
-                    onChange={(v) =>
-                      setProfile((p) => ({ ...p, occupation: v }))
-                    }
-                  />
-                </Field>
-                <Field label="Care Of (C/O)">
-                  <FlatInput
-                    placeholder="Guardian/parent name"
-                    value={profile.careOf}
-                    onChange={(v) => setProfile((p) => ({ ...p, careOf: v }))}
-                  />
-                </Field>
-                <Field label="Relation">
-                  <FlatInput
-                    placeholder="e.g. Father, Spouse"
-                    value={profile.relation}
-                    onChange={(v) => setProfile((p) => ({ ...p, relation: v }))}
-                  />
-                </Field>
-              </div>
-            </div>
+
 
             {/* Medical Conditions Card */}
             <div className="bg-surface border border-border-base rounded overflow-hidden">

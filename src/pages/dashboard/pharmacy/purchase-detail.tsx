@@ -685,10 +685,14 @@ export default function PurchaseDetailPage() {
   const paymentProgress =
     totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
 
+  const isPaidInFull = paymentProgress >= 100;
+  const isPartiallyPaid = paymentProgress > 0;
+  const hasDue = dueAmount > 0;
+
   // Determine payment status
   const getPaymentStatus = () => {
     if (paidAmount === 0) return "unpaid";
-    if (paidAmount >= totalAmount) return "paid";
+    if (isPaidInFull) return "paid";
 
     return "partial";
   };
@@ -825,67 +829,47 @@ export default function PurchaseDetailPage() {
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     if (printWindow) {
-      // Build the items HTML (price = LIFO when available, else stored salePrice)
-      const itemsHtml = purchase.items
-        .map((item, index) => {
-          const price = itemLifoPrices[item.id] ?? item.salePrice;
-
-          return `<tr>
-          <td class="text-center" style="text-align: center;">${index + 1}</td>
-          <td class="text-center" style="text-align: center;">${item.medicineName}</td>
-          <td class="text-center" style="text-align: center;">${item.quantity}</td>
-          <td class="text-center" style="text-align: center;">NPR ${price.toLocaleString()}</td>
-          <td class="text-center" style="text-align: center;">NPR ${item.amount.toLocaleString()}</td>
+      // Build the table rows for Items
+      const itemsHtml = purchase.items.map((item, index) => {
+        const price = itemLifoPrices[item.id] ?? item.salePrice;
+        return `<tr>
+          <td style="text-align: center;">${index + 1}</td>
+          <td>${item.medicineName}</td>
+          <td style="text-align: center;">${item.quantity}</td>
+          <td style="text-align: right;">NPR ${price.toLocaleString()}</td>
+          <td style="text-align: right;">NPR ${item.amount.toLocaleString()}</td>
         </tr>`;
-        })
-        .join("");
+      }).join("");
 
-      // Build the payments HTML if any
-      const paymentsHtml =
-        payments.length > 0
-          ? `
-        <div class="payment-section">
-          <h3>Payment Summary</h3>
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Method</th>
-                <th>Amount</th>
-                <th>Reference</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${payments
-            .map(
-              (payment) =>
-                `<tr>
-                  <td class="text-left">${payment.paymentDate.toLocaleDateString()}</td>
-                  <td class="text-center">${payment.paymentMethod.toUpperCase()}</td>
-                  <td class="text-right">NPR ${payment.amount.toLocaleString()}</td>
-                  <td class="text-center">${payment.reference || "-"}</td>
-                </tr>`,
-            )
-            .join("")}
-            </tbody>
-          </table>
-          
-          <div class="summary-section">
-            <table class="summary-table">
-              <tbody>
-                <tr>
-                  <td>Total Paid</td>
-                  <td class="text-right">NPR ${paidAmount.toLocaleString()}</td>
-                </tr>
-                <tr class="font-bold">
-                  <td>Due Amount</td>
-                  <td class="text-right">NPR ${dueAmount.toLocaleString()}</td>
-                </tr>
-              </tbody>
-            </table>
-        </div>
-      `
-          : "";
+      // Build the summary rows (right side)
+      const summaryRowsHtml = `
+        <tr>
+          <td style="text-align: left; padding: 4px 0;">Subtotal</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${purchase.total.toLocaleString()}</td>
+        </tr>
+        ${purchase.discount > 0 ? `
+        <tr>
+          <td style="text-align: left; padding: 4px 0;">Discount</td>
+          <td style="text-align: right; padding: 4px 0;">- NPR ${purchase.discount.toLocaleString()}</td>
+        </tr>` : ""}
+        ${purchase.taxAmount > 0 ? `
+        <tr>
+          <td style="text-align: left; padding: 4px 0;">Tax (${purchase.taxPercentage}%)</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${purchase.taxAmount.toLocaleString()}</td>
+        </tr>` : ""}
+        <tr style="font-weight: bold; font-size: 14px;">
+          <td style="text-align: left; padding: 8px 0; border-top: 1px solid #e2e8f0;">Total</td>
+          <td style="text-align: right; padding: 8px 0; border-top: 1px solid #e2e8f0;">NPR ${purchase.netAmount.toLocaleString()}</td>
+        </tr>
+        <tr>
+          <td style="text-align: left; padding: 4px 0;">Paid (${purchase.paymentType.toUpperCase()})</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${paidAmount.toLocaleString()}</td>
+        </tr>
+        <tr style="font-weight: bold; font-size: 14px;">
+          <td style="text-align: left; padding: 4px 0;">Balance</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${dueAmount.toLocaleString()}</td>
+        </tr>
+      `;
 
       // Use Global Branding Utility
       const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig, isThermal) : "";
@@ -921,76 +905,106 @@ export default function PurchaseDetailPage() {
       background: white;
       display: flex;
       flex-direction: column;
-      min-height: auto;
       padding: ${isThermal ? "5mm" : "15mm"};
       box-sizing: border-box;
     }
     
     ${brandingCSS}
 
-    .content {
-      flex: 1;
-      padding: ${isThermal ? "0" : "15mm"};
-      min-height: 0;
-    }
     .document-title {
-      margin: ${isThermal ? "10px 0" : "10px 0 20px 0"};
+      text-align: center;
+      margin: 20px 0 10px 0;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 10px;
     }
     .document-title h2 {
-      font-size: ${isThermal ? "16px" : "18px"};
+      font-size: 18px;
       font-weight: 800;
       margin: 0;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #475569;
+      letter-spacing: 0.1em;
+      color: #1e293b;
     }
-    .receipt-info-section {
+    
+    .invoice-meta {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 25px;
-      padding: 15px;
+      margin-top: 15px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .bill-to-box {
       background-color: #f8fafc;
       border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
       border: 1px solid #f1f5f9;
     }
+    .bill-to-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .bill-to-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .bill-to-detail {
+      font-size: 12px;
+      color: #475569;
+      margin-top: 2px;
+    }
+
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 30px;
-    }
-    .items-table th,
-    .items-table td {
-      border: 1px solid #e2e8f0;
-      padding: ${isThermal ? "8px 4px" : "12px 10px"};
-      font-size: ${isThermal ? "10px" : "12px"};
-      color: #475569;
+      margin-top: 10px;
     }
     .items-table th {
       background-color: #f8fafc;
-      font-weight: 700;
+      border: 1px solid #e2e8f0;
+      padding: 10px;
       text-align: center;
+      font-size: 11px;
+      font-weight: 700;
       text-transform: uppercase;
-      font-size: 10px;
-      letter-spacing: 0.05em;
       color: #64748b;
     }
-    .summary-section {
+    .items-table td {
+      border: 1px solid #e2e8f0;
+      padding: 12px 10px;
+      font-size: 12px;
+      color: #334155;
+    }
+
+    .summary-container {
       display: flex;
       justify-content: flex-end;
       margin-top: 20px;
     }
     .summary-table {
-      width: ${isThermal ? "100%" : "280px"};
+      width: 250px;
       border-collapse: collapse;
     }
     .summary-table td {
-      border: 1px solid #e2e8f0;
-      padding: 10px;
-      font-size: 12px;
-      color: #475569;
+      font-size: 13px;
+      color: #334155;
     }
-    .font-bold {
-      font-weight: 700;
+    
+    .footer-note {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #94a3b8;
+      font-weight: 600;
     }
     
     ${brandingCSS}
@@ -1010,65 +1024,61 @@ export default function PurchaseDetailPage() {
       ${headerHTML}
     
     <div class="document-title">
-      <h2>Purchase Receipt</h2>
-      <p class="document-subtitle">Medicine & Items Purchase Record</p>
-      <div class="document-info">
-        <span>Purchase No: ${purchase.purchaseNo}</span>
-        <span>Date: ${purchase.purchaseDate.toLocaleDateString()}</span>
-        ${purchase.patientName ? `<span>Patient: ${purchase.patientName}</span>` : ""}
+      <h2>Invoice</h2>
+    </div>
+
+    <div class="invoice-meta">
+      <span># ${purchase.purchaseNo}</span>
+      <span>Date: ${purchase.purchaseDate.toLocaleDateString()}</span>
+    </div>
+
+    <div class="bill-to-box">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+          <div class="bill-to-title">Bill To:</div>
+          <div class="bill-to-name">${purchase.patientName || "Cash Customer"}</div>
+          ${purchase.patientPhone ? `<div class="bill-to-detail">Phone: ${purchase.patientPhone}</div>` : ""}
+          ${purchase.patientAddress ? `<div class="bill-to-detail">Address: ${purchase.patientAddress}</div>` : ""}
+        </div>
+        ${clinic?.panNumber ? `
+        <div style="text-align: right;">
+          <div class="bill-to-title">Clinic PAN:</div>
+          <div class="bill-to-name" style="font-size: 12px;">${clinic.panNumber}</div>
+        </div>
+        ` : ""}
       </div>
     </div>
-    
-    <div class="content">
-      <table class="items-table">
-        <thead>
-          <tr>
-            <th style="width: 30px; text-align: center;">S.N.</th>
-            <th class="text-center" style="text-align: center;">Medicine</th>
-            <th style="width: 40px; text-align: center;">Qty</th>
-            <th style="width: 80px; text-align: center;">Price</th>
-            <th style="width: 80px; text-align: center;">Amount</th>
-          </tr>
-        </thead>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 50px;">S.N.</th>
+          <th style="text-align: left;">Medicine</th>
+          <th style="width: 60px;">Qty</th>
+          <th style="width: 100px; text-align: right;">Price</th>
+          <th style="width: 110px; text-align: right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsHtml}
+      </tbody>
+    </table>
+
+    <div class="summary-container">
+      <table class="summary-table">
         <tbody>
-          ${itemsHtml}
+          ${summaryRowsHtml}
         </tbody>
       </table>
-      
-      <div class="summary-section">
-        <table class="summary-table">
-          <tbody>
-            <tr>
-              <td>Subtotal</td>
-              <td class="text-right">NPR ${purchase.total.toLocaleString()}</td>
-            </tr>
-            <tr>
-              <td>Discount</td>
-              <td class="text-right">NPR ${purchase.discount.toLocaleString()}</td>
-            </tr>
-            ${purchase.taxAmount > 0
-          ? `<tr>
-              <td>Tax (${purchase.taxPercentage}%)</td>
-              <td class="text-right">NPR ${purchase.taxAmount.toLocaleString()}</td>
-            </tr>`
-          : ""
-        }
-            <tr class="font-bold">
-              <td>Net Total</td>
-              <td class="text-right">NPR ${purchase.netAmount.toLocaleString()}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      
-      ${paymentsHtml}
-      
-      ${isThermal ? `<div style="text-align: center; margin-top: 20px; font-size: 10px; border-top: 1px dashed #ccc; padding-top: 10px;">
-        <p>Thank you for your visit!</p>
-        <p>${new Date().toLocaleString()}</p>
-      </div>` : ""}
     </div>
-    
+
+    <div style="margin-top: 30px; text-align: center;">
+      ${!layoutConfig?.showFooter ? '<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; font-weight: 600;">Thank you for choosing us.</div>' : ""}
+      <div style="font-size: 9px; margin-top: 10px; color: #cbd5e1; text-align: right;">
+        Print Date: ${new Date().toLocaleString()}
+      </div>
+    </div>
+
     ${footerHTML}
   </div>
   
@@ -1357,7 +1367,7 @@ export default function PurchaseDetailPage() {
             </div>
             <div className="w-full bg-mountain-100 h-2 rounded-full overflow-hidden">
               <div
-                className={`h-full ${paymentProgress >= 100 ? "bg-health-500" : paymentProgress > 0 ? "bg-saffron-500" : "bg-red-500"}`}
+                className={`h-full ${isPaidInFull ? "bg-health-500" : isPartiallyPaid ? "bg-saffron-500" : "bg-red-500"}`}
                 style={{ width: `${paymentProgress}%` }}
               />
             </div>
@@ -1705,6 +1715,17 @@ export default function PurchaseDetailPage() {
               color: #000 !important;
               -webkit-print-color-adjust: exact;
             }
+            .receipt-container p, .receipt-container h1, .receipt-container h2, .receipt-container h3 {
+              margin-block-start: 0;
+              margin-block-end: 1px;
+            }
+            .receipt-container table {
+              margin-bottom: 2px !important;
+              line-height: 1;
+            }
+            .receipt-container th, .receipt-container td {
+              padding: 1px 3px !important;
+            }
           }
         `,
         }}
@@ -1715,9 +1736,9 @@ export default function PurchaseDetailPage() {
         className="print-only"
         style={{
           fontFamily: layoutConfig?.fontFamily || "'Inter', sans-serif",
-          fontSize: layoutConfig?.contentFontSize || 12,
+          fontSize: layoutConfig?.contentFontSize || 11,
           color: layoutConfig?.textColor || "#000",
-          lineHeight: 1.3,
+          lineHeight: 1.1,
         }}
       >
         <div
@@ -1726,7 +1747,7 @@ export default function PurchaseDetailPage() {
             width: "100%",
             maxWidth: receiptFormat === "Thermal" ? "80mm" : "100%",
             margin: "0 auto",
-            padding: receiptFormat === "Thermal" ? "4mm" : "0",
+            padding: receiptFormat === "Thermal" ? "1mm" : "0",
             boxSizing: "border-box"
           }}
         >
@@ -1737,29 +1758,29 @@ export default function PurchaseDetailPage() {
             <div
               style={{
                 borderBottom: "1px solid #000",
-                paddingBottom: 10,
-                marginBottom: 10,
+                paddingBottom: 5,
+                marginBottom: 5,
               }}
             >
               <h1 style={{ fontSize: 16, fontWeight: "bold", margin: 0 }}>
                 {layoutConfig?.clinicName || clinic?.name || "Clinic Name"}
               </h1>
               {layoutConfig?.tagline && (
-                <p style={{ fontSize: 11, margin: "3px 0" }}>
+                <p style={{ fontSize: 11, margin: "2px 0" }}>
                   {layoutConfig.tagline}
                 </p>
               )}
-              <div style={{ fontSize: 10, marginTop: 5 }}>
-                <p style={{ margin: "2px 0" }}>
+              <div style={{ fontSize: 10, marginTop: 3 }}>
+                <p style={{ margin: "1px 0" }}>
                   {layoutConfig?.address || clinic?.address || ""}
                 </p>
-                <p style={{ margin: "2px 0" }}>
+                <p style={{ margin: "1px 0" }}>
                   {layoutConfig?.city || clinic?.city || ""}
                   {layoutConfig?.state ? `, ${layoutConfig.state}` : ""}{" "}
                   {layoutConfig?.zipCode || ""}
                 </p>
                 {(layoutConfig?.phone || clinic?.phone) && (
-                  <p style={{ margin: "2px 0" }}>
+                  <p style={{ margin: "1px 0" }}>
                     Phone: {layoutConfig?.phone || clinic?.phone}
                   </p>
                 )}
@@ -1767,11 +1788,11 @@ export default function PurchaseDetailPage() {
             </div>
           )}
 
-          {/* Title */}
-          <div style={{ textAlign: "center", margin: "15px 0" }}>
+          {/* Title Area */}
+          <div style={{ textAlign: "center", margin: "2px 0" }}>
             <h2
               style={{
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: "bold",
                 margin: 0,
                 textTransform: "uppercase",
@@ -1779,325 +1800,102 @@ export default function PurchaseDetailPage() {
             >
               Purchase Receipt
             </h2>
-            <p style={{ fontSize: 11, margin: "3px 0" }}>
+            <p style={{ fontSize: 9, margin: 0 }}>
               Medicine &amp; Items Purchase Record
             </p>
-            <div style={{ fontSize: 10, marginTop: 8 }}>
-              <span style={{ display: "block", margin: "2px 0" }}>
-                Purchase No: {purchase.purchaseNo}
-              </span>
-              <span style={{ display: "block", margin: "2px 0" }}>
-                Date: {purchase.purchaseDate.toLocaleDateString()}
-              </span>
-              {purchase.patientName && (
-                <span style={{ display: "block", margin: "2px 0" }}>
-                  Patient: {purchase.patientName}
-                </span>
-              )}
+            <div style={{ fontSize: 9, marginTop: 2 }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+                <span>No: {purchase.purchaseNo}</span>
+                <span>Date: {purchase.purchaseDate.toLocaleDateString()}</span>
+                {purchase.patientName && (
+                  <span style={{ fontWeight: "bold" }}>Patient: {purchase.patientName}</span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Items table */}
+          {/* Unified Receipt Table */}
           <table
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              marginBottom: 15,
+              marginBottom: 4,
               fontSize: 10,
             }}
           >
             <thead>
-              <tr>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Medicine
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Qty
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Price (LIFO)
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Amount
-                </th>
+              <tr style={{ backgroundColor: "#f9f9f9" }}>
+                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center", width: "30px" }}>S.N.</th>
+                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "left" }}>Medicine</th>
+                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center", width: "40px" }}>Qty</th>
+                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right", width: "70px" }}>Price</th>
+                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right", width: "80px" }}>Amount</th>
               </tr>
             </thead>
             <tbody>
               {purchase.items.map((item, idx) => {
                 const price = itemLifoPrices[item.id] ?? item.salePrice;
-
                 return (
                   <tr key={idx}>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: 4,
-                        textAlign: "left",
-                      }}
-                    >
-                      {item.medicineName}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: 4,
-                        textAlign: "center",
-                      }}
-                    >
-                      {item.quantity}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: 4,
-                        textAlign: "right",
-                      }}
-                    >
-                      NPR {price.toLocaleString()}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: 4,
-                        textAlign: "right",
-                      }}
-                    >
-                      NPR {item.amount.toLocaleString()}
-                    </td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{idx + 1}</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px" }}>{item.medicineName}</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{item.quantity}</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {price.toLocaleString()}</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {item.amount.toLocaleString()}</td>
                   </tr>
                 );
               })}
-            </tbody>
-          </table>
 
-          {/* Summary */}
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              marginBottom: 15,
-              fontSize: 10,
-            }}
-          >
-            <tbody>
+              {/* Summary Rows */}
               <tr>
-                <td style={{ border: "1px solid #000", padding: 4 }}>
-                  Subtotal
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    textAlign: "right",
-                  }}
-                >
-                  NPR {purchase.total.toLocaleString()}
-                </td>
+                <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Subtotal</td>
+                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {purchase.total.toLocaleString()}</td>
               </tr>
               <tr>
-                <td style={{ border: "1px solid #000", padding: 4 }}>
-                  Discount
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    textAlign: "right",
-                  }}
-                >
-                  NPR {purchase.discount.toLocaleString()}
-                </td>
+                <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Discount</td>
+                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>- NPR {purchase.discount.toLocaleString()}</td>
               </tr>
               {purchase.taxAmount > 0 && (
                 <tr>
-                  <td style={{ border: "1px solid #000", padding: 4 }}>
-                    Tax ({purchase.taxPercentage}%)
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: 4,
-                      textAlign: "right",
-                    }}
-                  >
-                    NPR {purchase.taxAmount.toLocaleString()}
-                  </td>
+                  <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Tax ({purchase.taxPercentage}%)</td>
+                  <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {purchase.taxAmount.toLocaleString()}</td>
                 </tr>
               )}
-              <tr>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    fontWeight: "bold",
-                  }}
-                >
-                  Net Total
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: 4,
-                    textAlign: "right",
-                    fontWeight: "bold",
-                  }}
-                >
-                  NPR {purchase.netAmount.toLocaleString()}
-                </td>
+              <tr style={{ fontWeight: "bold", backgroundColor: "#f9f9f9" }}>
+                <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Net Total</td>
+                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {purchase.netAmount.toLocaleString()}</td>
               </tr>
-            </tbody>
-          </table>
 
-          {/* Payment summary (if payments exist) */}
-          {payments.length > 0 && (
-            <div style={{ marginTop: 20 }}>
-              <h3
-                style={{ fontSize: 12, fontWeight: "bold", marginBottom: 10 }}
-              >
-                Payment Summary
-              </h3>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: 10,
-                  marginBottom: 10,
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th style={{ border: "1px solid #000", padding: 4 }}>
-                      Date
-                    </th>
-                    <th style={{ border: "1px solid #000", padding: 4 }}>
-                      Method
-                    </th>
-                    <th style={{ border: "1px solid #000", padding: 4 }}>
-                      Amount
-                    </th>
-                    <th style={{ border: "1px solid #000", padding: 4 }}>
-                      Reference
-                    </th>
+              {/* Payment Section (Inline Header) */}
+              {payments.length > 0 && (
+                <>
+                  <tr style={{ backgroundColor: "#eee", fontWeight: "bold" }}>
+                    <td colSpan={5} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center", fontSize: 9 }}>PAYMENT SUMMARY</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {payments.map((payment) => (
-                    <tr key={payment.id}>
-                      <td
-                        style={{
-                          border: "1px solid #000",
-                          padding: 4,
-                          textAlign: "left",
-                        }}
-                      >
-                        {payment.paymentDate.toLocaleDateString()}
-                      </td>
-                      <td
-                        style={{
-                          border: "1px solid #000",
-                          padding: 4,
-                          textAlign: "center",
-                        }}
-                      >
-                        {payment.paymentMethod.toUpperCase()}
-                      </td>
-                      <td
-                        style={{
-                          border: "1px solid #000",
-                          padding: 4,
-                          textAlign: "right",
-                        }}
-                      >
-                        NPR {payment.amount.toLocaleString()}
-                      </td>
-                      <td
-                        style={{
-                          border: "1px solid #000",
-                          padding: 4,
-                          textAlign: "center",
-                        }}
-                      >
-                        {payment.reference || "-"}
-                      </td>
+                  <tr style={{ fontSize: 9, backgroundColor: "#f9f9f9" }}>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }} colSpan={2}>Date</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>Method</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }} colSpan={2}>Amount/Ref</td>
+                  </tr>
+                  {payments.map((p) => (
+                    <tr key={p.id} style={{ fontSize: 9 }}>
+                      <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }} colSpan={2}>{p.paymentDate.toLocaleDateString()}</td>
+                      <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{p.paymentMethod.toUpperCase()}</td>
+                      <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }} colSpan={2}>NPR {p.amount.toLocaleString()} {p.reference ? `(${p.reference})` : ""}</td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: 10,
-                }}
-              >
-                <tbody>
-                  <tr>
-                    <td style={{ border: "1px solid #000", padding: 4 }}>
-                      Total Paid
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: 4,
-                        textAlign: "right",
-                      }}
-                    >
-                      NPR {paidAmount.toLocaleString()}
-                    </td>
+                  <tr style={{ fontWeight: "bold" }}>
+                    <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Total Paid</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {paidAmount.toLocaleString()}</td>
                   </tr>
-                  <tr>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: 4,
-                        fontWeight: "bold",
-                      }}
-                    >
-                      Due Amount
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000",
-                        padding: 4,
-                        textAlign: "right",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      NPR {dueAmount.toLocaleString()}
-                    </td>
+                  <tr style={{ fontWeight: "bold" }}>
+                    <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Due Amount</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {dueAmount.toLocaleString()}</td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
+                </>
+              )}
+            </tbody>
+          </table>
 
           {/* Footer Area: Using Assigned Branding for A4, Fallback for Thermal */}
           {receiptFormat === "A4" && layoutConfig ? (
@@ -2106,13 +1904,13 @@ export default function PurchaseDetailPage() {
             <div
               style={{
                 borderTop: "1px solid #000",
-                paddingTop: 8,
-                marginTop: 15,
+                paddingTop: 2,
+                marginTop: 4,
                 textAlign: "center",
-                fontSize: 10,
+                fontSize: 9,
               }}
             >
-              <p>Thank you for choosing us</p>
+              <p style={{ margin: 0 }}>Thank you for choosing us</p>
             </div>
           )}
         </div>
