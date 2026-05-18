@@ -114,6 +114,9 @@ export const appointmentService = {
       if (appointmentData.branchId) {
         firestoreData.branchId = appointmentData.branchId;
       }
+      if (appointmentData.assignedExpertId) {
+        firestoreData.assignedExpertId = appointmentData.assignedExpertId;
+      }
 
       const docRef = await addDoc(appointmentsCollection, firestoreData);
 

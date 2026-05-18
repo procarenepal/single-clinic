@@ -265,7 +265,7 @@ export interface DropdownItemProps {
 const ITEM_COLOR: Record<NonNullable<DropdownItemProps["color"]>, string> = {
   default: "text-text-main hover:bg-surface-3",
   primary: "text-primary hover:bg-primary/10",
-  danger: "text-error hover:bg-error/10",
+  danger: "text-danger hover:bg-danger/10",
   warning: "text-warning hover:bg-warning/10",
 };
 

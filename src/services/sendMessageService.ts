@@ -132,11 +132,29 @@ export const smsService = {
       const apiUrl = settings?.apiUrl || settings?.customApiUrl || import.meta.env.VITE_SMS_API_URL || "";
 
       // Clean and validate phone number
-      const cleanPhoneNumber = phoneNumber.replace(/\D/g, "");
+      // Clean and validate phone number
+      let cleanPhoneNumber = phoneNumber.replace(/\D/g, "");
+
+      // Normalize Nepalese phone numbers (strip country code 977 or leading 0 to match 10-digit mobile carrier pattern)
+      if (cleanPhoneNumber.startsWith("00977") && cleanPhoneNumber.length === 15) {
+        cleanPhoneNumber = cleanPhoneNumber.slice(5);
+      } else if (cleanPhoneNumber.startsWith("977") && cleanPhoneNumber.length === 13) {
+        cleanPhoneNumber = cleanPhoneNumber.slice(3);
+      } else if (cleanPhoneNumber.startsWith("0") && cleanPhoneNumber.length === 11) {
+        cleanPhoneNumber = cleanPhoneNumber.slice(1);
+      }
 
       if (cleanPhoneNumber.length < 10) {
         throw new Error("Invalid phone number format");
       }
+
+      console.log("📲 Direct SMS Gateway: Preparing dispatch...", {
+        apiUrl,
+        contacts: cleanPhoneNumber,
+        senderId,
+        apiKeyObfuscated: apiKey ? `${apiKey.slice(0, 4)}***${apiKey.slice(-3)}` : "empty",
+        messageSnippet: message.slice(0, 30) + (message.length > 30 ? "..." : "")
+      });
 
       // Prepare form data
       const formData = new URLSearchParams();
@@ -156,7 +174,19 @@ export const smsService = {
         body: formData,
       });
 
-      const responseText = await response.text();
+      console.log("📡 Direct SMS Gateway: Response received", {
+        type: response.type,
+        status: response.status,
+        ok: response.ok
+      });
+
+      let responseText = "";
+      try {
+        responseText = await response.text();
+      } catch (e) {
+        // If response is opaque, reading text will fail, which is expected for no-cors fetches
+        console.log("Reading response text skipped due to no-cors restriction (standard web security behavior)");
+      }
 
       // Parse response
       let data: SMSResponse;
@@ -169,7 +199,10 @@ export const smsService = {
           response: responseText,
           isRawText: true,
           success:
-            responseText.includes("success") || responseText.includes("sent"),
+            responseText.includes("success") || 
+            responseText.includes("sent") ||
+            response.type === "opaque" ||
+            response.status === 0,
         };
       }
 

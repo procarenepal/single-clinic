@@ -22,7 +22,7 @@ const COLOR: Record<NonNullable<AvatarProps["color"]>, string> = {
   primary: "bg-primary/10   text-primary",
   secondary: "bg-success/10 text-success",
   default: "bg-surface-2 text-text-muted",
-  danger: "bg-error/10    text-error",
+  danger: "bg-danger/10    text-danger",
   warning: "bg-warning/10 text-warning",
 };
 

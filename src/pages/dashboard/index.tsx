@@ -21,6 +21,7 @@ import {
   IoSettingsOutline,
   IoTimeOutline,
   IoReceiptOutline,
+  IoDownloadOutline,
 } from "react-icons/io5";
 
 import { appointmentService } from "@/services/appointmentService";
@@ -30,6 +31,8 @@ import { prescriptionService } from "@/services/prescriptionService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { enquiryService } from "@/services/enquiryService";
 import { branchService } from "@/services/branchService";
+import { dailyReportService, DailyReportData } from "@/services/dailyReportService";
+import { exportDailyReportToExcel, exportDailyReportToPDF } from "@/utils/reportExports";
 
 // Context
 import { useTheme } from "@/context/ThemeContext";
@@ -439,6 +442,7 @@ export default function DashboardIndexPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recentPrescriptions, setRecentPrescriptions] = useState<any[]>([]);
+  const [dailyReport, setDailyReport] = useState<DailyReportData | null>(null);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -511,7 +515,7 @@ export default function DashboardIndexPage() {
     (async () => {
       try {
         const branchScopedId = undefined; // Branch filters removed for standalone mode
-        const [allPatients, allDoctors, allAppTypes, allAppts, allEnquiries, allPrescriptions] =
+        const [allPatients, allDoctors, allAppTypes, allAppts, allEnquiries, allPrescriptions, dailyData] =
           await Promise.all([
             patientService.getPatientsByClinic(clinicId, branchScopedId),
             doctorService.getDoctorsByClinic(clinicId, branchScopedId),
@@ -527,6 +531,7 @@ export default function DashboardIndexPage() {
               dateField: "createdAt",
             }),
             prescriptionService.getPrescriptionsByClinic(clinicId),
+            dailyReportService.getDailyReportData(clinicId, new Date(), effectiveBranchId),
           ]);
 
         const now = new Date();
@@ -554,6 +559,7 @@ export default function DashboardIndexPage() {
         setAppointmentTypes(allAppTypes);
         setAppointments(allAppts);
         setEnquiries(allEnquiries.slice(0, 20));
+        setDailyReport(dailyData);
         setRecentAppointments(
           allAppts
             .sort(
@@ -800,6 +806,42 @@ export default function DashboardIndexPage() {
     return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
   };
 
+  const handleExportExcel = () => {
+    if (!dailyReport) return;
+    try {
+      const branchName = userData?.branchId ? branches.find(b => b.id === userData.branchId)?.name : undefined;
+      exportDailyReportToExcel(
+        dailyReport,
+        new Date(),
+        undefined,
+        branchName,
+        patients,
+        doctors,
+        appointmentTypes
+      );
+    } catch (e) {
+      console.error("Failed to export daily report to Excel", e);
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (!dailyReport) return;
+    try {
+      const branchName = userData?.branchId ? branches.find(b => b.id === userData.branchId)?.name : undefined;
+      exportDailyReportToPDF(
+        dailyReport,
+        new Date(),
+        undefined,
+        branchName,
+        patients,
+        doctors,
+        appointmentTypes
+      );
+    } catch (e) {
+      console.error("Failed to export daily report to PDF", e);
+    }
+  };
+
   const apptTypeName = (id: string) =>
     appointmentTypes.find((t) => t.id === id)?.name ?? "General";
 
@@ -838,6 +880,128 @@ export default function DashboardIndexPage() {
         name={currentUser?.displayName || currentUser?.email?.split("@")[0] || "Expert"}
         stats={stats}
       />
+
+      {/* ── Daily Operations & Financial Report Summary ── */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5">
+          {/* Card 1: Daily Reports Exporter (Action Center) */}
+          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm p-4 justify-between" style={{ height: "210px" }}>
+            <div>
+              <h3 className="text-[13px] font-bold text-text-main">Daily Reports</h3>
+              <p className="text-[11px] text-text-muted mt-1 leading-relaxed">
+                Download today's reports for patient registrations, appointments, and billing. Export directly to Excel or PDF format.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  color="success"
+                  size="sm"
+                  variant="flat"
+                  className="font-bold text-[11px] h-8"
+                  startContent={<IoDownloadOutline className="w-3.5 h-3.5" />}
+                  onClick={handleExportExcel}
+                >
+                  Excel
+                </Button>
+                <Button
+                  color="primary"
+                  size="sm"
+                  variant="flat"
+                  className="font-bold text-[11px] h-8"
+                  startContent={<IoDocumentTextOutline className="w-3.5 h-3.5" />}
+                  onClick={handleExportPDF}
+                >
+                  PDF
+                </Button>
+              </div>
+              <Button
+                color="primary"
+                size="sm"
+                className="font-bold text-[11px] h-8 w-full"
+                startContent={<IoChevronForwardOutline className="w-3.5 h-3.5" />}
+                onClick={() => navigate("/dashboard/daily-report")}
+              >
+                Go to Daily Reports
+              </Button>
+            </div>
+          </div>
+
+          {/* Card 2: Daily Intake */}
+          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
+            <div className="px-4 py-3 border-b border-border-base flex items-center justify-between bg-primary/[0.02]">
+              <h3 className="text-[12.5px] font-semibold text-primary flex items-center gap-2">
+                <IoPersonOutline className="w-4 h-4" />
+                Daily Patient Intake
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
+                {dailyReport?.patients.length ?? 0} New
+              </span>
+            </div>
+            <div className="p-3 flex-1 overflow-y-auto custom-scrollbar" style={{ height: "160px" }}>
+              {(!dailyReport || dailyReport.patients.length === 0) ? (
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+                  <IoPersonOutline className="w-8 h-8 mb-2" />
+                  <p className="text-[11px] font-semibold">No new patients today</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {dailyReport.patients.map((p, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-primary/5 transition-all">
+                      <div className="flex flex-col">
+                        <span className="text-[12px] font-bold text-text-main leading-none">{p.name}</span>
+                        <span className="text-[9.5px] text-text-muted mt-1 leading-none">{p.mobile || 'No Mobile'}</span>
+                      </div>
+                      <span className="text-[9.5px] font-mono bg-primary/5 text-primary px-1.5 py-0.5 rounded">
+                        {p.regNumber || 'Pending'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Daily Cashflow */}
+          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
+            <div className="px-4 py-3 border-b border-border-base flex items-center justify-between bg-emerald-500/[0.02]">
+              <h3 className="text-[12.5px] font-semibold text-emerald-600 flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Daily Financial Billings
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
+                NPR {dailyReport?.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0).toLocaleString() ?? "0"}
+              </span>
+            </div>
+            <div className="p-3 flex-1 overflow-y-auto custom-scrollbar" style={{ height: "160px" }}>
+              {(!dailyReport || dailyReport.billing.length === 0) ? (
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+                  <IoReceiptOutline className="w-8 h-8 mb-2 text-emerald-500" />
+                  <p className="text-[11px] font-semibold">No invoices generated today</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {dailyReport.billing.map((b, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-emerald-500/5 transition-all">
+                      <div className="flex flex-col">
+                        <span className="text-[12px] font-bold text-text-main leading-none">{b.invoiceNumber}</span>
+                        <span className="text-[9.5px] text-text-muted mt-1 leading-none">{b.patientName || 'Unknown Patient'}</span>
+                      </div>
+                      <span className="text-[11.5px] font-bold text-emerald-600">
+                        NPR {b.totalAmount?.toLocaleString() || '0'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
 
       <QuickActions />
 
@@ -890,140 +1054,211 @@ export default function DashboardIndexPage() {
         animate="visible"
         className="flex flex-col gap-1.5"
       >
-        {/* ── Row 2: Patient visits chart + Appointments list + Activity Feed ────────────── */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5">
-          {/* Patient registrations (line chart) */}
-          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden shadow-sm shadow-black/5">
-            <div className="px-3 py-2 border-b border-border-base">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-primary">
-                Patient Registrations
-              </p>
-              <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
-                Last 6 months
-              </p>
-            </div>
-            <div className="p-3 h-[220px]">
-              <Suspense
-                fallback={
-                  <div className="h-full w-full p-2">
-                    <Skeleton className="h-full w-full rounded-lg" />
-                  </div>
-                }
-              >
-                <PatientVisitsChart
-                  data={chartData.patientVisits}
-                  options={chartOpts}
-                />
-              </Suspense>
-            </div>
-          </div>
 
-          {/* Appointments tabbed list (Live Schedule) */}
-          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
-            <SectionHeader href="/dashboard/appointments" title="Live Schedule" />
 
-            {/* Next Up Highlight */}
-            {todayAppts.length > 0 && (
-              <div className="px-3 pt-3">
-                <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex items-center justify-between group hover:bg-primary/10 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
-                      <IoCalendarOutline className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Next Appointment</p>
-                      <h4 className="text-[14px] font-bold text-text-main leading-tight">
-                        {patients.find(p => p.id === todayAppts[0].patientId)?.name || "Patient"}
-                      </h4>
-                      <p className="text-[11px] text-text-muted">
-                        {formatTime12(todayAppts[0].startTime ?? "")} · Dr. {doctors.find(d => d.id === todayAppts[0].doctorId)?.name || "Expert"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="primary"
-                    className="h-8 text-[11px] font-bold"
-                    onClick={() => navigate(`/dashboard/appointments/${todayAppts[0].id}`)}
+        {/* ── Unified Dashboard Flow ──────────────────────────────────────────────────────── */}
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5 items-start pb-8">
+          {/* Left Column: Main operations (2/3 width) */}
+          <div className="lg:col-span-2 flex flex-col gap-1.5">
+            {/* Top row inside left column: Registrations Chart + Live Schedule */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              {/* Patient registrations (line chart) */}
+              <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden shadow-sm shadow-black/5">
+                <div className="px-3 py-2 border-b border-border-base">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-primary">
+                    Patient Registrations
+                  </p>
+                  <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
+                    Last 6 months
+                  </p>
+                </div>
+                <div className="p-3 h-[220px]">
+                  <Suspense
+                    fallback={
+                      <div className="h-full w-full p-2">
+                        <Skeleton className="h-full w-full rounded-lg" />
+                      </div>
+                    }
                   >
-                    Check In
-                  </Button>
+                    <PatientVisitsChart
+                      data={chartData.patientVisits}
+                      options={chartOpts}
+                    />
+                  </Suspense>
                 </div>
               </div>
-            )}
 
-            <div className="px-3 pt-4">
-              <TabStrip
-                selected={apptTab}
-                tabs={[
-                  { key: "today", label: "Today", count: todayAppts.length },
-                  {
-                    key: "upcoming",
-                    label: "Upcoming",
-                    count: upcomingAppts.length,
-                  },
-                  { key: "past", label: "Past", count: pastAppts.length },
-                ]}
-                onChange={setApptTab}
-              />
-            </div>
+              {/* Appointments tabbed list (Live Schedule) */}
+              <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
+                <SectionHeader href="/dashboard/appointments" title="Live Schedule" />
 
-            <div
-              className="flex-1 overflow-y-auto px-1 pb-2"
-              style={{ maxHeight: "280px" }}
-            >
-              {filteredAppts.length === 0 ? (
-                <div className="py-12 text-center">
-                  <div className="w-12 h-12 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <IoCalendarOutline className="w-6 h-6 text-text-muted/40" />
-                  </div>
-                  <p className="text-[13px] font-medium text-text-muted">No appointments found</p>
-                  <p className="text-[11px] text-text-muted opacity-60">Try changing the tab filter</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {filteredAppts.slice(0, 6).map((appt) => {
-                    const doctor = doctors.find((d) => d.id === appt.doctorId);
-                    const patient = patients.find((p) => p.id === appt.patientId);
-
-                    return (
-                      <div
-                        key={appt.id}
-                        className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2/50 rounded-xl transition-colors group"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center shrink-0 text-text-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                          <span className="text-[11px] font-bold">
-                            {formatTime12(appt.startTime ?? "").split(" ")[0]}
-                          </span>
+                {/* Next Up Highlight */}
+                {todayAppts.length > 0 && (
+                  <div className="px-3 pt-3">
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex items-center justify-between group hover:bg-primary/10 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
+                          <IoCalendarOutline className="w-5 h-5" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <Link
-                              className="text-[13px] font-bold text-text-main hover:text-primary truncate block no-underline"
-                              to={`/dashboard/patients/${patient?.id}`}
-                            >
-                              {patient?.name ?? "Unknown Patient"}
-                            </Link>
-                            <span
-                              className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge(appt.status)}`}
-                            >
-                              {appt.status}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-text-muted truncate mt-0.5">
-                            Expert: <span className="text-text-main/70 font-medium">{doctor?.name ?? "N/A"}</span> · {apptTypeName(appt.appointmentTypeId)}
+                        <div>
+                          <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Next Appointment</p>
+                          <h4 className="text-[14px] font-bold text-text-main leading-tight">
+                            {patients.find(p => p.id === todayAppts[0].patientId)?.name || "Patient"}
+                          </h4>
+                          <p className="text-[11px] text-text-muted">
+                            {formatTime12(todayAppts[0].startTime ?? "")} · Dr. {doctors.find(d => d.id === todayAppts[0].doctorId)?.name || "Expert"}
                           </p>
                         </div>
                       </div>
-                    );
-                  })}
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="primary"
+                        className="h-8 text-[11px] font-bold"
+                        onClick={() => navigate(`/dashboard/appointments/${todayAppts[0].id}`)}
+                      >
+                        Check In
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="px-3 pt-4">
+                  <TabStrip
+                    selected={apptTab}
+                    tabs={[
+                      { key: "today", label: "Today", count: todayAppts.length },
+                      {
+                        key: "upcoming",
+                        label: "Upcoming",
+                        count: upcomingAppts.length,
+                      },
+                      { key: "past", label: "Past", count: pastAppts.length },
+                    ]}
+                    onChange={setApptTab}
+                  />
                 </div>
-              )}
+
+                <div
+                  className="flex-1 overflow-y-auto px-1 pb-2"
+                  style={{ maxHeight: "280px" }}
+                >
+                  {filteredAppts.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <div className="w-12 h-12 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <IoCalendarOutline className="w-6 h-6 text-text-muted/40" />
+                      </div>
+                      <p className="text-[13px] font-medium text-text-muted">No appointments found</p>
+                      <p className="text-[11px] text-text-muted opacity-60">Try changing the tab filter</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {filteredAppts.slice(0, 6).map((appt) => {
+                        const doctor = doctors.find((d) => d.id === appt.doctorId);
+                        const patient = patients.find((p) => p.id === appt.patientId);
+
+                        return (
+                          <div
+                            key={appt.id}
+                            className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2/50 rounded-xl transition-colors group"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center shrink-0 text-text-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                              <span className="text-[11px] font-bold">
+                                {formatTime12(appt.startTime ?? "").split(" ")[0]}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <Link
+                                  className="text-[13px] font-bold text-text-main hover:text-primary truncate block no-underline"
+                                  to={`/dashboard/patients/${patient?.id}`}
+                                >
+                                  {patient?.name ?? "Unknown Patient"}
+                                </Link>
+                                <span
+                                  className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge(appt.status)}`}
+                                >
+                                  {appt.status}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-text-muted truncate mt-0.5">
+                                Expert: <span className="text-text-main/70 font-medium">{doctor?.name ?? "N/A"}</span> · {apptTypeName(appt.appointmentTypeId)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom row inside left column: Status breakdown doughnut chart */}
+            <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden shadow-sm">
+              <div className="px-3 py-2 border-b border-border-base flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-primary">
+                    Status Breakdown
+                  </p>
+                  <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
+                    Appointment distribution
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-text-muted uppercase">Total</p>
+                  <p className="text-[16px] font-black text-primary leading-none">{appointments.length}</p>
+                </div>
+              </div>
+              <div className="p-5 flex flex-col md:flex-row items-center gap-8">
+                {/* Chart Container - Fixed Square for Perfect Centering */}
+                <div className="w-full md:w-2/5 flex justify-center">
+                  <div className="w-[160px] h-[160px] relative">
+                    <Suspense
+                      fallback={
+                        <div className="h-full w-full flex items-center justify-center">
+                          <Skeleton variant="circle" className="w-32 h-32" />
+                        </div>
+                      }
+                    >
+                      <AppointmentStatusChart
+                        data={chartData.appointmentStatus}
+                        options={doughnutOpts}
+                      />
+                      {/* Center Text */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <p className="text-[24px] font-black text-text-main leading-none mt-1">
+                          {appointments.length > 0 ? Math.round((appointments.filter(a => a.status === 'completed').length / appointments.length) * 100) : 0}%
+                        </p>
+                        <p className="text-[9px] font-bold text-text-muted uppercase tracking-wider mt-0.5">Efficiency</p>
+                      </div>
+                    </Suspense>
+                  </div>
+                </div>
+
+                {/* Legend Container */}
+                <div className="w-full md:w-3/5 grid grid-cols-2 gap-x-3 gap-y-2.5">
+                  {[
+                    { label: "Confirmed", count: appointments.filter(a => a.status === 'confirmed').length, color: "bg-teal-500" },
+                    { label: "Scheduled", count: appointments.filter(a => a.status === 'scheduled').length, color: "bg-primary" },
+                    { label: "In Progress", count: appointments.filter(a => a.status === 'in-progress').length, color: "bg-amber-500" },
+                    { label: "Completed", count: appointments.filter(a => a.status === 'completed').length, color: "bg-purple-500" },
+                    { label: "Cancelled", count: appointments.filter(a => a.status === 'cancelled').length, color: "bg-red-500" },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-2 border border-border-base/40 hover:border-border-base transition-colors">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-2 h-2 rounded-full ${item.color} shadow-sm`} />
+                        <span className="text-[11.5px] font-semibold text-text-muted">{item.label}</span>
+                      </div>
+                      <span className="text-[13px] font-black text-text-main">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Right column: Activity feed + Prescriptions */}
+          {/* Right Column: Sidebar feeds & lead queries (1/3 width) */}
           <div className="flex flex-col gap-1.5">
             <RecentActivityFeed activities={activityFeed} />
             
@@ -1061,137 +1296,71 @@ export default function DashboardIndexPage() {
                 )}
               </div>
             </div>
-          </div>
-        </motion.div>
 
-        {/* ── Row 3: Status doughnut + Enquiries ─────────────────────────── */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5 pb-8">
-          {/* Appointment status breakdown (doughnut) — 2/3 width */}
-          <div className="lg:col-span-2 bg-surface border border-border-base rounded-[10px] overflow-hidden shadow-sm">
-            <div className="px-3 py-2 border-b border-border-base flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-primary">
-                  Status Breakdown
-                </p>
-                <p className="text-[12.5px] font-semibold text-text-main mt-0.5">
-                  Appointment distribution
-                </p>
+            {/* Lead Enquiries */}
+            <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
+              <SectionHeader href="/dashboard/enquiries" title="Lead Enquiries" />
+
+              <div className="px-3 pt-2">
+                <TabStrip
+                  selected={enquiryTab}
+                  tabs={[
+                    { key: "new", label: "New", count: enquiryCount("new") },
+                    {
+                      key: "contacted",
+                      label: "Pending",
+                      count: enquiryCount("contacted"),
+                    },
+                    { key: "all", label: "All", count: enquiryCount("all") },
+                  ]}
+                  onChange={(v) => setEnquiryTab(v as EnquiryStatus | "all")}
+                />
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-bold text-text-muted uppercase">Total</p>
-                <p className="text-[16px] font-black text-primary leading-none">{appointments.length}</p>
-              </div>
-            </div>
-            <div className="p-5 flex flex-col md:flex-row items-center gap-8">
-              {/* Chart Container - Fixed Square for Perfect Centering */}
-              <div className="w-full md:w-2/5 flex justify-center">
-                <div className="w-[160px] h-[160px] relative">
-                  <Suspense
-                    fallback={
-                      <div className="h-full w-full flex items-center justify-center">
-                        <Skeleton variant="circle" className="w-32 h-32" />
-                      </div>
-                    }
-                  >
-                    <AppointmentStatusChart
-                      data={chartData.appointmentStatus}
-                      options={doughnutOpts}
-                    />
-                    {/* Center Text */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <p className="text-[24px] font-black text-text-main leading-none mt-1">
-                        {appointments.length > 0 ? Math.round((appointments.filter(a => a.status === 'completed').length / appointments.length) * 100) : 0}%
-                      </p>
-                      <p className="text-[9px] font-bold text-text-muted uppercase tracking-wider mt-0.5">Efficiency</p>
+
+              <div
+                className="flex-1 overflow-y-auto px-1 pb-2"
+                style={{ maxHeight: "280px" }}
+              >
+                {filteredEnquiries.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <div className="w-12 h-12 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <IoStarOutline className="w-6 h-6 text-text-muted/40" />
                     </div>
-                  </Suspense>
-                </div>
-              </div>
-
-              {/* Legend Container */}
-              <div className="w-full md:w-3/5 grid grid-cols-2 gap-x-3 gap-y-2.5">
-                {[
-                  { label: "Confirmed", count: appointments.filter(a => a.status === 'confirmed').length, color: "bg-teal-500" },
-                  { label: "Scheduled", count: appointments.filter(a => a.status === 'scheduled').length, color: "bg-primary" },
-                  { label: "In Progress", count: appointments.filter(a => a.status === 'in-progress').length, color: "bg-amber-500" },
-                  { label: "Completed", count: appointments.filter(a => a.status === 'completed').length, color: "bg-purple-500" },
-                  { label: "Cancelled", count: appointments.filter(a => a.status === 'cancelled').length, color: "bg-red-500" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-2 border border-border-base/40 hover:border-border-base transition-colors">
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-2 h-2 rounded-full ${item.color} shadow-sm`} />
-                      <span className="text-[11.5px] font-semibold text-text-muted">{item.label}</span>
-                    </div>
-                    <span className="text-[13px] font-black text-text-main">{item.count}</span>
+                    <p className="text-[13px] font-medium text-text-muted">No new leads</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Enquiries — 1/3 width */}
-          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
-            <SectionHeader href="/dashboard/enquiries" title="Lead Enquiries" />
-
-            <div className="px-3 pt-2">
-              <TabStrip
-                selected={enquiryTab}
-                tabs={[
-                  { key: "new", label: "New", count: enquiryCount("new") },
-                  {
-                    key: "contacted",
-                    label: "Pending",
-                    count: enquiryCount("contacted"),
-                  },
-                  { key: "all", label: "All", count: enquiryCount("all") },
-                ]}
-                onChange={(v) => setEnquiryTab(v as EnquiryStatus | "all")}
-              />
-            </div>
-
-            <div
-              className="flex-1 overflow-y-auto px-1 pb-2"
-              style={{ maxHeight: "280px" }}
-            >
-              {filteredEnquiries.length === 0 ? (
-                <div className="py-12 text-center">
-                  <div className="w-12 h-12 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <IoStarOutline className="w-6 h-6 text-text-muted/40" />
-                  </div>
-                  <p className="text-[13px] font-medium text-text-muted">No new leads</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {filteredEnquiries.map((enq) => (
-                    <div
-                      key={enq.id}
-                      className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2/50 rounded-xl transition-colors group"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[13px] font-bold text-text-main truncate">
-                            {enq.fullName}
+                ) : (
+                  <div className="space-y-1">
+                    {filteredEnquiries.map((enq) => (
+                      <div
+                        key={enq.id}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2/50 rounded-xl transition-colors group"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[13px] font-bold text-text-main truncate">
+                              {enq.fullName}
+                            </p>
+                            <span
+                              className={`shrink-0 text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded ${enquiryBadge(enq.status)}`}
+                            >
+                              {enq.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-text-muted truncate mt-0.5">
+                            {enq.phone}
+                            {enq.source ? ` · ${enq.source}` : ""} ·{" "}
+                            <span className="font-medium text-primary/70">
+                              {enq.createdAt
+                                ? format(new Date(enq.createdAt), "MMM dd")
+                                : ""}
+                            </span>
                           </p>
-                          <span
-                            className={`shrink-0 text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded ${enquiryBadge(enq.status)}`}
-                          >
-                            {enq.status}
-                          </span>
                         </div>
-                        <p className="text-[11px] text-text-muted truncate mt-0.5">
-                          {enq.phone}
-                          {enq.source ? ` · ${enq.source}` : ""} ·{" "}
-                          <span className="font-medium text-primary/70">
-                            {enq.createdAt
-                              ? format(new Date(enq.createdAt), "MMM dd")
-                              : ""}
-                          </span>
-                        </p>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </motion.div>

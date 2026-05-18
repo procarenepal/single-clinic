@@ -81,12 +81,11 @@ class ExpertCommissionService {
         collection(db, this.collectionName),
         where("expertId", "==", expertId),
         where("clinicId", "==", clinicId),
-        orderBy("createdAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => {
+      const commissions = querySnapshot.docs.map((doc) => {
         const data = doc.data();
 
         return {
@@ -98,6 +97,13 @@ class ExpertCommissionService {
           paidDate: data.paidDate?.toDate(),
         };
       }) as ExpertCommission[];
+
+      // Sort in-memory to bypass Firestore composite index requirement
+      return commissions.sort((a, b) => {
+        const timeA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+        const timeB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+        return timeB - timeA;
+      });
     } catch (error) {
       console.error("Error getting commissions by expert:", error);
 

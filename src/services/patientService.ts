@@ -112,8 +112,17 @@ export const patientService = {
       const regNumberNumeric = patientData.regNumber
         ? parseInt(String(patientData.regNumber), 10)
         : undefined;
+
+      // Filter out any undefined values to prevent Firestore unsupported field value: undefined errors
+      const cleanData = { ...patientData };
+      Object.keys(cleanData).forEach((key) => {
+        if (cleanData[key as keyof typeof cleanData] === undefined) {
+          delete cleanData[key as keyof typeof cleanData];
+        }
+      });
+
       const docRef = await addDoc(patientsRef, {
-        ...patientData,
+        ...cleanData,
         ...(regNumberNumeric && !isNaN(regNumberNumeric)
           ? { regNumberNumeric }
           : {}),

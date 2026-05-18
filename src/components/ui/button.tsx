@@ -56,7 +56,7 @@ const SOLID: Record<BtnColor, string> = {
     "bg-success text-white hover:opacity-90 border border-success",
   warning:
     "bg-warning text-white hover:opacity-90 border border-warning",
-  danger: "bg-error text-white hover:opacity-90 border border-error",
+  danger: "bg-danger text-white hover:opacity-90 border border-danger",
 };
 
 // Flat: tinted background, no border
@@ -71,7 +71,7 @@ const FLAT: Record<BtnColor, string> = {
     "bg-success/10 text-success hover:bg-success/20 border border-transparent",
   warning:
     "bg-warning/10 text-warning hover:bg-warning/20 border border-transparent",
-  danger: "bg-error/10 text-error hover:bg-error/20 border border-transparent",
+  danger: "bg-danger/10 text-danger hover:bg-danger/20 border border-transparent",
 };
 
 // Bordered: transparent bg, colored border
@@ -86,7 +86,7 @@ const BORDERED: Record<BtnColor, string> = {
     "bg-transparent border border-success text-success hover:bg-success/10",
   warning:
     "bg-transparent border border-warning text-warning hover:bg-warning/10",
-  danger: "bg-transparent border border-error text-error hover:bg-error/10",
+  danger: "bg-transparent border border-danger text-danger hover:bg-danger/10",
 };
 
 // Light: text-only with hover bg
@@ -102,7 +102,7 @@ const LIGHT: Record<BtnColor, string> = {
   warning:
     "bg-transparent text-warning hover:bg-warning/10 border border-transparent",
   danger:
-    "bg-transparent text-error hover:bg-error/10 border border-transparent",
+    "bg-transparent text-danger hover:bg-danger/10 border border-transparent",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────

@@ -10,6 +10,11 @@ import {
   IoSaveOutline,
   IoSearchOutline,
   IoCloseOutline,
+  IoDocumentTextOutline,
+  IoPulseOutline,
+  IoFlaskOutline,
+  IoMedicalOutline,
+  IoClipboardOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
@@ -24,6 +29,7 @@ import { appointmentService } from "@/services/appointmentService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { prescriptionService } from "@/services/prescriptionService";
 import { branchService } from "@/services/branchService";
+import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 import { Patient, Doctor, Appointment } from "@/types/models";
@@ -255,10 +261,213 @@ export default function EditPrescriptionPage() {
 
   const [items, setItems] = useState<PrescriptionItemForm[]>([]);
   const [diagnosis, setDiagnosis] = useState("");
+  const [history, setHistory] = useState("");
+  const [examination, setExamination] = useState("");
+  const [investigation, setInvestigation] = useState("");
+  const [treatmentPlan, setTreatmentPlan] = useState("");
   const [notes, setNotes] = useState("");
 
   const [isPatientAutoFilled, setIsPatientAutoFilled] = useState(false);
   const [isDoctorAutoFilled, setIsDoctorAutoFilled] = useState(false);
+
+  // Quick Presets
+  const frequencyPresets = ["OD", "BD", "TDS", "QID", "SOS"];
+  const timePresets = ["Before Meal", "After Meal", "Empty Stomach", "At Bedtime"];
+
+  const handleFrequencyChange = (val: string) => {
+    setIntervalValue(val);
+    const lower = val.toLowerCase().trim();
+    
+    // 1. Standard Latin Abbreviations
+    if (lower === "qd" || lower === "q.d.") {
+      setIntervalValue("once daily");
+    } else if (lower === "bid" || lower === "b.i.d." || lower === "bd") {
+      setIntervalValue("twice daily");
+    } else if (lower === "tid" || lower === "t.i.d." || lower === "tds") {
+      setIntervalValue("three times daily");
+    } else if (lower === "qid" || lower === "q.i.d.") {
+      setIntervalValue("four times daily");
+    } else if (lower === "prn" || lower === "sos") {
+      setIntervalValue("as needed (PRN)");
+      setTime("when required");
+    }
+    
+    // 2. Numeric dose shortcodes (e.g. 1-0-1, 1-1-1)
+    else if (lower === "1-0-0") {
+      setIntervalValue("once daily");
+      setTime("morning, after meals");
+    } else if (lower === "0-1-0") {
+      setIntervalValue("once daily");
+      setTime("afternoon, after meals");
+    } else if (lower === "0-0-1") {
+      setIntervalValue("once daily");
+      setTime("night, after meals");
+    } else if (lower === "1-0-1") {
+      setIntervalValue("twice daily");
+      setTime("morning & night, after meals");
+    } else if (lower === "1-1-1") {
+      setIntervalValue("three times daily");
+      setTime("morning, afternoon & night, after meals");
+    } else if (lower === "2-0-2") {
+      setIntervalValue("twice daily (2 tabs each)");
+      setTime("morning & night, after meals");
+    }
+  };
+
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [templateName, setTemplateName] = useState("");
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  useEffect(() => {
+    const loadTemplates = async () => {
+      if (!clinicId || !doctorId) {
+        setTemplates([]);
+        return;
+      }
+      try {
+        const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+        setTemplates(list || []);
+      } catch (err) {
+        console.error("Failed to load templates:", err);
+      }
+    };
+    loadTemplates();
+  }, [clinicId, doctorId]);
+
+  const [patientNotes, setPatientNotes] = useState<any[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+
+  useEffect(() => {
+    const fetchPatientNotes = async () => {
+      if (!clinicId || !patientId) {
+        setPatientNotes([]);
+        return;
+      }
+      setLoadingNotes(true);
+      try {
+        const notesList = await PatientNoteEntriesService.getPatientNoteEntries(clinicId, patientId);
+        setPatientNotes(notesList || []);
+      } catch (err) {
+        console.error("Failed to fetch patient note entries:", err);
+      } finally {
+        setLoadingNotes(false);
+      }
+    };
+    fetchPatientNotes();
+  }, [clinicId, patientId]);
+
+  const handleSaveTemplate = async () => {
+    if (!clinicId || !doctorId) {
+      addToast({
+        title: "Error",
+        description: "Please select both doctor and patient to save templates.",
+        color: "warning",
+      });
+      return;
+    }
+    if (!templateName.trim()) {
+      addToast({
+        title: "Error",
+        description: "Please enter a template name.",
+        color: "warning",
+      });
+      return;
+    }
+    if (items.length === 0) {
+      addToast({
+        title: "Error",
+        description: "Please add at least one medicine to save as a template.",
+        color: "warning",
+      });
+      return;
+    }
+
+    setIsSavingTemplate(true);
+    try {
+      const templateData = {
+        name: templateName.trim(),
+        clinicId,
+        doctorId,
+        diagnosis,
+        treatmentPlan,
+        items: items.map((it) => ({
+          medicineId: it.medicineId,
+          medicineName: it.medicineName,
+          dosage: it.dosage,
+          frequency: it.interval,
+          duration: it.duration,
+          time: it.time,
+        })),
+      };
+
+      await prescriptionService.createTemplate(templateData);
+      
+      addToast({
+        title: "Success",
+        description: `Template "${templateName}" saved successfully.`,
+        color: "success",
+      });
+      
+      setTemplateName("");
+      const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+      setTemplates(list || []);
+    } catch (err) {
+      addToast({
+        title: "Error",
+        description: "Failed to save prescription template.",
+        color: "danger",
+      });
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const handleApplyTemplate = (templateId: string) => {
+    const selectedTpl = templates.find((t) => t.id === templateId);
+    if (!selectedTpl) return;
+
+    const mappedItems = selectedTpl.items.map((it: any) => ({
+      id: crypto.randomUUID(),
+      medicineId: it.medicineId,
+      medicineName: it.medicineName,
+      dosage: it.dosage,
+      duration: it.duration,
+      time: it.time,
+      interval: it.frequency,
+    }));
+
+    setItems(mappedItems);
+
+    if (selectedTpl.diagnosis) setDiagnosis(selectedTpl.diagnosis);
+    if (selectedTpl.treatmentPlan) setTreatmentPlan(selectedTpl.treatmentPlan);
+
+    addToast({
+      title: "Success",
+      description: `Template "${selectedTpl.name}" applied!`,
+      color: "success",
+    });
+  };
+
+  const handleDeleteTemplate = async (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this template?")) return;
+    try {
+      await prescriptionService.deleteTemplate(templateId);
+      addToast({
+        title: "Success",
+        description: "Template deleted successfully.",
+        color: "success",
+      });
+      const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+      setTemplates(list || []);
+    } catch (err) {
+      addToast({
+        title: "Error",
+        description: "Failed to delete template.",
+        color: "danger",
+      });
+    }
+  };
 
   // Detect multi-branch for this clinic
   useEffect(() => {
@@ -314,6 +523,10 @@ export default function EditPrescriptionPage() {
         setAppointmentId(prescriptionData.appointmentId || "");
         setDiagnosis(prescriptionData.diagnosis || "");
         setNotes(prescriptionData.notes || "");
+        setHistory(prescriptionData.history || "");
+        setExamination(prescriptionData.examination || "");
+        setInvestigation(prescriptionData.investigation || "");
+        setTreatmentPlan(prescriptionData.treatmentPlan || "");
 
         const formItems: PrescriptionItemForm[] = prescriptionItems.map(
           (item) => ({
@@ -536,7 +749,14 @@ export default function EditPrescriptionPage() {
       }));
 
       console.log("[handleUpdate] Starting update for prescription:", prescriptionId);
-      await prescriptionService.updatePrescription(prescriptionId, { diagnosis, notes });
+      await prescriptionService.updatePrescription(prescriptionId, {
+        diagnosis,
+        notes,
+        history,
+        examination,
+        investigation,
+        treatmentPlan,
+      });
       console.log("[handleUpdate] Prescription doc updated");
       await prescriptionService.updatePrescriptionItems(
         prescriptionId,
@@ -672,6 +892,33 @@ export default function EditPrescriptionPage() {
                 onChange={setDoctorId}
               />
             </div>
+
+            {/* Template Quick Selection */}
+            {doctorId && templates.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-border-base/40 flex flex-col gap-1.5 max-w-md relative z-[55]">
+                <label className="text-[13px] font-semibold text-text-main flex items-center gap-1.5">
+                  ⚡ Apply Saved Rx Template
+                </label>
+                <div className="flex items-center border border-border-base rounded-[10px] min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20">
+                  <select
+                    className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main cursor-pointer"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleApplyTemplate(e.target.value);
+                        e.target.value = ""; // Reset
+                      }
+                    }}
+                  >
+                    <option value="">-- Click to choose a saved clinical set --</option>
+                    {templates.map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name} ({tpl.items.length} meds)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -710,20 +957,48 @@ export default function EditPrescriptionPage() {
                 value={duration}
                 onChange={(e: any) => setDuration(e.target.value)}
               />
-              <CustomInput
-                required
-                label="Time"
-                placeholder="e.g., morning, evening"
-                value={time}
-                onChange={(e: any) => setTime(e.target.value)}
-              />
-              <CustomInput
-                required
-                label="Interval"
-                placeholder="e.g., once daily"
-                value={intervalValue}
-                onChange={(e: any) => setIntervalValue(e.target.value)}
-              />
+              <div className="flex flex-col gap-2">
+                <CustomInput
+                  required
+                  label="Interval"
+                  placeholder="e.g., 1-0-1, BD, once daily"
+                  value={intervalValue}
+                  onChange={(e: any) => handleFrequencyChange(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-1">
+                  {frequencyPresets.map((preset) => (
+                    <button
+                      key={preset}
+                      className={`px-2 py-0.5 text-[10px] font-semibold border rounded-[6px] transition-colors ${intervalValue === preset ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
+                      type="button"
+                      onClick={() => handleFrequencyChange(preset)}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <CustomInput
+                  required
+                  label="Time"
+                  placeholder="e.g., morning, evening"
+                  value={time}
+                  onChange={(e: any) => setTime(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-1">
+                  {timePresets.map((preset) => (
+                    <button
+                      key={preset}
+                      className={`px-2 py-0.5 text-[10px] font-semibold border rounded-[6px] transition-colors ${time === preset ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
+                      type="button"
+                      onClick={() => setTime(preset)}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Button
                 className="h-[38px] w-full"
                 color="primary"
@@ -736,20 +1011,150 @@ export default function EditPrescriptionPage() {
           </div>
         </div>
 
-        {/* Diagnosis Section */}
-        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
-          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
-            <h4 className="font-semibold text-[15px] text-text-main leading-none">
-              Diagnosis / Complaints
+        {/* Latest Patient Notes & Triage Records */}
+        {patientId && patientNotes.length > 0 && (
+          <div className="bg-surface border border-border-base rounded-[10px] shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border-base/50 bg-gradient-to-r from-teal-500/10 to-teal-500/5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <IoPulseOutline className="w-5 h-5 text-teal-600 animate-pulse" />
+                <h4 className="font-bold text-[15px] text-text-main">
+                  🏥 Latest Patient Progress Notes & Triage Vitals
+                </h4>
+              </div>
+              <span className="text-[10.5px] font-bold bg-teal-100 text-teal-800 px-2.5 py-0.5 rounded-full border border-teal-200">
+                {patientNotes.length} recorded entry/ies
+              </span>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-[12.5px] text-text-muted mb-4 leading-relaxed">
+                Nurses or junior clinical staff have documented the following observations for this patient. Click **"Import"** to instantly populate the matching assessment field below without retyping.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-2">
+                {patientNotes.slice(0, 6).map((note) => (
+                  <div key={note.id} className="p-4 bg-surface rounded-[12px] border border-border-base/60 hover:border-teal-500/30 transition-all flex flex-col justify-between shadow-sm">
+                    <div>
+                      <div className="flex justify-between items-center gap-2 pb-2 border-b border-border-base/40 mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100">
+                          {note.sectionLabel || "Note"}
+                        </span>
+                        <span className="text-[11px] text-text-muted">
+                          {note.createdAt instanceof Date ? note.createdAt.toLocaleDateString() : "Just now"}
+                        </span>
+                      </div>
+                      <p className="text-[13px] text-text-main line-clamp-4 italic">
+                        "{note.content}"
+                      </p>
+                    </div>
+                    
+                    <div className="mt-4 pt-3 border-t border-border-base/40">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9.5px] font-bold text-text-muted mr-1">IMPORT INTO:</span>
+                        <button
+                          type="button"
+                          className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          onClick={() => {
+                            setHistory((prev) => prev ? `${prev}\n${note.content}` : note.content);
+                            addToast({ title: "Imported into History", color: "success" });
+                          }}
+                        >
+                          History
+                        </button>
+                        <button
+                          type="button"
+                          className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          onClick={() => {
+                            setExamination((prev) => prev ? `${prev}\n${note.content}` : note.content);
+                            addToast({ title: "Imported into Examination", color: "success" });
+                          }}
+                        >
+                          Examination
+                        </button>
+                        <button
+                          type="button"
+                          className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          onClick={() => {
+                            setDiagnosis((prev) => prev ? `${prev}\n${note.content}` : note.content);
+                            addToast({ title: "Imported into Diagnosis", color: "success" });
+                          }}
+                        >
+                          Diagnosis
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Clinical Assessment Dossier (SOAP) */}
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-gradient-to-r from-primary/10 to-primary/5 flex items-center gap-2">
+            <IoDocumentTextOutline className="w-5 h-5 text-primary" />
+            <h4 className="font-bold text-[15.5px] text-text-main">
+              Clinical Assessment & Case Record
             </h4>
           </div>
-          <div className="p-6">
-            <CustomInput
-              placeholder="Enter patient diagnosis, complaints, or findings..."
-              type="textarea"
-              value={diagnosis}
-              onChange={(e: any) => setDiagnosis(e.target.value)}
-            />
+          
+          <div className="p-6 space-y-6">
+            {/* 1. History */}
+            <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
+                <IoDocumentTextOutline className="text-primary w-4.5 h-4.5" />
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">HISTORY</span>
+              </div>
+              <textarea
+                className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
+                placeholder="Enter patient chief complaints, history of present illness, and past medical history..."
+                value={history}
+                onChange={(e) => setHistory(e.target.value)}
+              />
+            </div>
+
+            {/* 2. Examination */}
+            <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
+                <IoPulseOutline className="text-primary w-4.5 h-4.5" />
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">EXAMINATION</span>
+              </div>
+              <textarea
+                className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
+                placeholder="Enter general physical examination, systemic examination findings, and vitals..."
+                value={examination}
+                onChange={(e) => setExamination(e.target.value)}
+              />
+            </div>
+
+            {/* 3. Investigation */}
+            <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
+                <IoFlaskOutline className="text-primary w-4.5 h-4.5" />
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">INVESTIGATION</span>
+              </div>
+              <textarea
+                className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
+                placeholder="Enter laboratory investigations, diagnostic imaging, or tests ordered..."
+                value={investigation}
+                onChange={(e) => setInvestigation(e.target.value)}
+              />
+            </div>
+
+            {/* 4. Diagnosis */}
+            <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
+                <IoMedicalOutline className="text-primary w-4.5 h-4.5" />
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">DIAGNOSIS</span>
+              </div>
+              <textarea
+                className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
+                placeholder="Enter clinical assessment, differential or final diagnosis..."
+                value={diagnosis}
+                onChange={(e) => setDiagnosis(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
@@ -828,18 +1233,60 @@ export default function EditPrescriptionPage() {
               </table>
             </div>
           )}
+
+          {/* Save as Rx Template Section */}
+          {items.length > 0 && (
+            <div className="px-5 py-4 border-t border-border-base/50 bg-surface-2/30 flex flex-col sm:flex-row gap-3 items-end justify-between">
+              <div className="flex flex-col gap-1.5 w-full max-w-sm">
+                <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Save these medicines as a template</span>
+                <input
+                  className="w-full text-[13px] px-3.5 py-1.5 bg-surface border border-border-base rounded-[10px] outline-none text-text-main placeholder:text-text-muted/60 focus:border-primary text-[13px]"
+                  placeholder="e.g. Acute Tonsillitis Pack, Hypertension Plan"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                />
+              </div>
+              <Button
+                color="secondary"
+                disabled={!templateName.trim() || isSavingTemplate}
+                isLoading={isSavingTemplate}
+                size="sm"
+                onClick={handleSaveTemplate}
+              >
+                Save as Rx Template
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* Notes */}
-        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm">
-          <div className="px-5 py-4 border-b border-border-base/50 bg-surface-2/50">
-            <h4 className="font-semibold text-[15px] text-text-main leading-none">
-              Additional Notes
+        {/* Treatment Plan Section */}
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-gradient-to-r from-primary/10 to-primary/5 flex items-center gap-2">
+            <IoClipboardOutline className="w-5 h-5 text-primary" />
+            <h4 className="font-bold text-[15.5px] text-text-main">
+              Care & Treatment Plan
             </h4>
           </div>
-          <div className="p-6">
+          
+          <div className="p-6 space-y-6">
+            {/* Treatment Plan */}
+            <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
+                <IoClipboardOutline className="text-primary w-4.5 h-4.5" />
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">TREATMENT PLAN</span>
+              </div>
+              <textarea
+                className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
+                placeholder="Enter non-drug treatments, general advice, dietary advice, follow-up parameters..."
+                value={treatmentPlan}
+                onChange={(e) => setTreatmentPlan(e.target.value)}
+              />
+            </div>
+
+            {/* Extra Notes */}
             <CustomInput
-              placeholder="Add any special instructions or notes..."
+              label="Additional Notes and  Instructions"
+              placeholder="Add any extra notes or pharmacy-specific instructions..."
               type="textarea"
               value={notes}
               onChange={(e: any) => setNotes(e.target.value)}

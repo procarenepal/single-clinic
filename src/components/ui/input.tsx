@@ -100,7 +100,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             )}
           >
             {label}
-            {isRequired && <span className="text-error ml-0.5">*</span>}
+            {isRequired && <span className="text-danger ml-0.5">*</span>}
           </label>
         )}
 
@@ -109,7 +109,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className={clsx(
             "flex items-center gap-2 rounded-md border bg-surface text-text-main border-border-base focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200 min-h-[40px] w-full",
             (isInvalid || errorMessage) &&
-            "!border-error focus-within:!ring-error/20",
+            "!border-danger focus-within:!ring-danger/20",
             isDisabled && "opacity-50 cursor-not-allowed",
             SIZE_WRAPPER[size],
             fullWidth && "w-full",
@@ -163,7 +163,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <p className="text-[11px] text-text-muted">{description}</p>
         )}
         {errorMessage && (
-          <p className="text-[11px] text-error">{errorMessage}</p>
+          <p className="text-[11px] text-danger">{errorMessage}</p>
         )}
       </div>
     );
@@ -202,7 +202,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       {label && (
         <label className="text-xs font-medium text-text-main">
           {label}
-          {isRequired && <span className="text-error ml-0.5">*</span>}
+          {isRequired && <span className="text-danger ml-0.5">*</span>}
         </label>
       )}
       <textarea
@@ -212,7 +212,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           "text-xs text-text-main placeholder:text-text-muted/60",
           "focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20",
           "transition-colors duration-200 resize-y",
-          (isInvalid || errorMessage) && "!border-error",
+          (isInvalid || errorMessage) && "!border-danger",
           isDisabled && "opacity-50 cursor-not-allowed",
           className,
         )}
@@ -223,7 +223,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         <p className="text-[11px] text-text-muted">{description}</p>
       )}
       {errorMessage && (
-        <p className="text-[11px] text-error">{errorMessage}</p>
+        <p className="text-[11px] text-danger">{errorMessage}</p>
       )}
     </div>
   ),

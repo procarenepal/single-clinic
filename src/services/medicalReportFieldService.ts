@@ -54,12 +54,102 @@ export const medicalReportFieldService = {
 
       const querySnapshot = await getDocs(q);
 
-      const fields = querySnapshot.docs.map((doc) => ({
+      let fields = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
       })) as MedicalReportField[];
+
+      // Self-healing auto-seeder if no fields exist yet
+      if (fields.length === 0) {
+        console.log("No medical report fields found, running self-healing auto-seeder...");
+        const defaultFields: Omit<MedicalReportField, "id" | "createdAt" | "updatedAt">[] = [
+          {
+            clinicId,
+            branchId: "",
+            createdBy: "system",
+            fieldKey: "chief-complaint",
+            fieldLabel: "Chief Complaint",
+            fieldType: "textarea",
+            isRequired: true,
+            placeholder: "Describe the primary reason for the patient visit...",
+            displayOrder: 1,
+            isActive: true
+          },
+          {
+            clinicId,
+            branchId: "",
+            createdBy: "system",
+            fieldKey: "past-medical-history",
+            fieldLabel: "Past Medical History",
+            fieldType: "textarea",
+            isRequired: false,
+            placeholder: "List any relevant medical conditions, past surgeries, etc.",
+            displayOrder: 2,
+            isActive: true
+          },
+          {
+            clinicId,
+            branchId: "",
+            createdBy: "system",
+            fieldKey: "blood-group",
+            fieldLabel: "Blood Group",
+            fieldType: "select",
+            options: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+            isRequired: false,
+            placeholder: "Select blood type",
+            displayOrder: 3,
+            isActive: true
+          },
+          {
+            clinicId,
+            branchId: "",
+            createdBy: "system",
+            fieldKey: "known-allergies",
+            fieldLabel: "Known Allergies",
+            fieldType: "text",
+            isRequired: false,
+            placeholder: "List allergies (e.g. Penicillin, Pollen) or 'None'",
+            displayOrder: 4,
+            isActive: true
+          },
+          {
+            clinicId,
+            branchId: "",
+            createdBy: "system",
+            fieldKey: "smoker-lifestyle",
+            fieldLabel: "Tobacco/Smoking Status",
+            fieldType: "yes-no",
+            isRequired: false,
+            displayOrder: 5,
+            isActive: true
+          },
+          {
+            clinicId,
+            branchId: "",
+            createdBy: "system",
+            fieldKey: "family-medical-history",
+            fieldLabel: "Family Medical History",
+            fieldType: "textarea",
+            isRequired: false,
+            placeholder: "Describe hereditary illnesses (e.g. hypertension, diabetes)...",
+            displayOrder: 6,
+            isActive: true
+          }
+        ];
+
+        const promises = defaultFields.map(field => this.createField(field));
+        await Promise.all(promises);
+
+        const reSnapshot = await getDocs(q);
+        fields = reSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        })) as MedicalReportField[];
+      }
 
       // Sort in memory to avoid index errors
       return fields.sort((a, b) => {
@@ -80,23 +170,7 @@ export const medicalReportFieldService = {
     clinicId: string,
   ): Promise<MedicalReportField[]> {
     try {
-      // Simplify query to avoid composite index requirement
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
-      );
-
-      const querySnapshot = await getDocs(q);
-
-      const fields = querySnapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as MedicalReportField[];
-
-      // Filter and sort in memory
+      const fields = await this.getFieldsByClinic(clinicId);
       return fields
         .filter((f) => f.isActive)
         .sort((a, b) => {

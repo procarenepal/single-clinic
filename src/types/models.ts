@@ -205,6 +205,14 @@ export interface Patient {
   criticalReason?: string; // Optional reason for critical status
   criticalDate?: Date; // Date when marked as critical
   referralPartnerId?: string; // Linked referral partner
+  referrals?: Array<{
+    type: "referral-partner" | "doctor" | "expert" | "staff";
+    id: string;
+    name: string;
+    commissionPercentage: number;
+    referredById?: string; // Optional specific doctor/expert associated with this partner
+    referredByName?: string; // Name of specific doctor/expert
+  }>;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the patient record
@@ -245,6 +253,7 @@ export interface Appointment {
   clinicId: string;
   branchId: string; // Associated branch
   doctorId: string;
+  assignedExpertId?: string;
   appointmentDate: Date;
   appointmentBS?: Date; // B.S Date
   startTime?: string;
@@ -1306,6 +1315,15 @@ export interface AppointmentBilling {
   doctorType: "regular" | "visitor"; // Default: regular
   referralPartnerId?: string; // Optional link to referral partner
   referralCommissionAmount?: number; // Calculated commission for the referrer
+  referrals?: Array<{
+    type: "referral-partner" | "doctor" | "expert" | "staff";
+    id: string;
+    name: string;
+    commissionPercentage: number;
+    commissionAmount: number;
+    referredById?: string; // Optional specific doctor/expert associated with this partner
+    referredByName?: string; // Name of specific doctor/expert
+  }>;
 
   // Invoice Details
   invoiceDate: Date; // Default: today's date

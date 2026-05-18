@@ -154,9 +154,9 @@ const COLOR_STYLES: Record<
     iconCls: "text-success",
   },
   danger: {
-    bar: "bg-error",
+    bar: "bg-danger",
     icon: IoAlertCircleOutline,
-    iconCls: "text-error",
+    iconCls: "text-danger",
   },
   warning: {
     bar: "bg-warning",

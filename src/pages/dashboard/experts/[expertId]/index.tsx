@@ -270,6 +270,7 @@ export default function ExpertProfilePage() {
                       <tr>
                         <th className="p-3">Invoice</th>
                         <th className="p-3">Patient</th>
+                        <th className="p-3">Service / Source</th>
                         <th className="p-3">Amount</th>
                         <th className="p-3">Status</th>
                         <th className="p-3 text-right">Action</th>
@@ -279,7 +280,8 @@ export default function ExpertProfilePage() {
                       {commissions.map((c) => (
                         <tr key={c.id}>
                           <td className="p-3">#{c.invoiceNumber}</td>
-                          <td className="p-3">{c.patientName}</td>
+                          <td className="p-3 font-medium text-text-main">{c.patientName}</td>
+                          <td className="p-3 text-text-muted">{(c.serviceNames || []).join(", ") || "Expert Consultation"}</td>
                           <td className="p-3 font-semibold">
                             NPR {c.commissionAmount}
                           </td>

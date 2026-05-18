@@ -638,7 +638,8 @@ export default function EditAppointmentPage() {
                     endContent={convertingDate ? <Spinner size="sm" /> : null}
                     label="Appointment Date (B.S.)"
                     name="appointmentBS"
-                    type="date"
+                    placeholder="YYYY/MM/DD"
+                    type="text"
                     value={formData.appointmentBS}
                     onChange={(e: any) => {
                       const val = e.target.value;

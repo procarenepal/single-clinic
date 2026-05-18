@@ -142,29 +142,16 @@ export const callLogService = {
     endDate: Date,
   ): Promise<CallLog[]> {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
-        where("receivedOn", ">=", Timestamp.fromDate(startDate)),
-        where("receivedOn", "<=", Timestamp.fromDate(endDate)),
-      );
+      const callLogs = await this.getCallLogsByClinic(clinicId);
+      const startMs = startDate.getTime();
+      const endMs = endDate.getTime();
 
-      const querySnapshot = await getDocs(q);
-      const callLogs: CallLog[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-
-        callLogs.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-          receivedOn: data.receivedOn?.toDate() || new Date(),
-        } as CallLog);
+      const filtered = callLogs.filter((c) => {
+        const t = c.receivedOn instanceof Date ? c.receivedOn.getTime() : new Date(c.receivedOn).getTime();
+        return t >= startMs && t <= endMs;
       });
 
-      return callLogs.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
+      return filtered.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
     } catch (error) {
       console.error("Error fetching call logs by date range:", error);
       throw new Error("Failed to fetch call logs by date range");

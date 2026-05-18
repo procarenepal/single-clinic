@@ -911,7 +911,7 @@ export default function PrescriptionsPage() {
                           size="sm"
                           variant="light"
                           onClick={() =>
-                            navigate(`/dashboard/prescriptions/edit/${prescription.id}`)
+                            navigate(`/dashboard/prescriptions/${prescription.id}/edit`)
                           }
                         >
                           <IoCreateOutline className="w-4 h-4" />

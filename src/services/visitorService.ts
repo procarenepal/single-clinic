@@ -142,29 +142,16 @@ export const visitorService = {
     endDate: Date,
   ): Promise<Visitor[]> {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
-        where("date", ">=", Timestamp.fromDate(startDate)),
-        where("date", "<=", Timestamp.fromDate(endDate)),
-      );
+      const visitors = await this.getVisitorsByClinic(clinicId);
+      const startMs = startDate.getTime();
+      const endMs = endDate.getTime();
 
-      const querySnapshot = await getDocs(q);
-      const visitors: Visitor[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-
-        visitors.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-          date: data.date?.toDate() || new Date(),
-        } as Visitor);
+      const filtered = visitors.filter((v) => {
+        const t = v.date instanceof Date ? v.date.getTime() : new Date(v.date).getTime();
+        return t >= startMs && t <= endMs;
       });
 
-      return visitors.sort((a, b) => b.date.getTime() - a.date.getTime());
+      return filtered.sort((a, b) => b.date.getTime() - a.date.getTime());
     } catch (error) {
       console.error("Error fetching visitors by date range:", error);
       throw new Error("Failed to fetch visitors by date range");

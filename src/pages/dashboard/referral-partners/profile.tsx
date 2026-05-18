@@ -710,7 +710,7 @@ export default function ReferralPartnerProfilePage() {
                           </span>
                         </div>
                         <p className="text-[13.5px] font-medium text-mountain-700">
-                          {c.patientName}
+                          {c.patientName} - <span className="text-[12.5px] text-mountain-500 font-normal">{(c.serviceNames || []).join(", ") || "Referral Service / Registration"}</span>
                         </p>
                         <p className="text-[12px] text-mountain-500 mt-1">
                           Rate: {c.commissionPercentage}% • Total:{" "}

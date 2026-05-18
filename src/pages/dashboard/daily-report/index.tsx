@@ -335,13 +335,13 @@ export default function DailyReportPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             {isMultiBranch &&
               isClinicAdmin &&
               !userBranchId &&
               branches.length > 0 && (
                 <select
-                  className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200 min-w-[140px]"
+                  className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200 min-w-[140px] mb-[1px]"
                   value={selectedBranchId ?? ""}
                   onChange={(e) => setSelectedBranchId(e.target.value || null)}
                 >
@@ -356,18 +356,20 @@ export default function DailyReportPage() {
                     ))}
                 </select>
               )}
-            <Input
-              className="w-44"
-              label="Select Date"
-              size="md"
-              startContent={
-                <IoCalendarOutline className="text-mountain-400" size={18} />
-              }
-              type="date"
-              value={selectedDate}
-              onValueChange={setSelectedDate}
-            />
+            <div className="w-44 shrink-0">
+              <Input
+                label="Select Date"
+                size="md"
+                startContent={
+                  <IoCalendarOutline className="text-mountain-400" size={18} />
+                }
+                type="date"
+                value={selectedDate}
+                onValueChange={setSelectedDate}
+              />
+            </div>
             <Button
+              className="w-[140px]"
               color="success"
               disabled={loading || isExporting}
               isLoading={isExporting}
@@ -379,7 +381,8 @@ export default function DailyReportPage() {
               Export Excel
             </Button>
             <Button
-              color="danger"
+              className="w-[140px]"
+              color="primary"
               disabled={loading || isExporting}
               isLoading={isExporting}
               size="md"

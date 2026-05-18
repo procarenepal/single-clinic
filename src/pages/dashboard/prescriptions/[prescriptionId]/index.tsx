@@ -296,16 +296,54 @@ export default function PrescriptionDetailPage() {
     .notes-section { margin: 20px 0; page-break-inside: avoid; }
     .notes-section h3 { font-size: 12px; font-weight: 600; color: #1e293b; margin-bottom: 8px; display: flex; align-items: center; }
     .notes-section.diagnosis h3::before { content: ""; display: inline-block; width: 4px; height: 14px; background: #3b82f6; margin-right: 8px; border-radius: 2px; }
-    .notes-content { padding: 12px 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 12px; line-height: 1.6; color: #1e293b; }
+    .notes-content { padding: 12px 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 12px; line-height: 1.6; color: #1e293b; white-space: pre-wrap; }
 
     .signature-row { margin-top: 50px; display: flex; justify-content: space-between; page-break-inside: avoid; }
     .sig-box { width: 180px; text-align: center; }
     .sig-line { border-top: 1px solid #94a3b8; margin-bottom: 4px; }
     .sig-label { font-size: 10px; font-weight: 500; color: #64748b; }
 
+    .dossier-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+    }
+    .dossier-box {
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fafafb;
+      min-height: 50px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      page-break-inside: avoid;
+    }
+    .dossier-box.full-width {
+      width: 100%;
+    }
+    .dossier-title {
+      font-size: 9.5px;
+      font-weight: 800;
+      color: ${layoutConfig?.primaryColor || '#0ea5e9'};
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border-bottom: 1.5px dashed #cbd5e1;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+    .dossier-content {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: #334155;
+      white-space: pre-wrap;
+    }
+
     @media print { 
       body { padding: 0; margin: 0; } 
-      .patient-doctor-grid, .prescription-table, .notes-section { page-break-inside: avoid; } 
+      .patient-doctor-grid, .prescription-table, .notes-section, .dossier-grid, .dossier-box { page-break-inside: avoid; } 
     }
   </style>
 </head>
@@ -355,11 +393,43 @@ export default function PrescriptionDetailPage() {
         </div>
       </div>
 
-      ${prescription.diagnosis ? `
-        <div class="notes-section diagnosis">
-          <h3>Diagnosis / Complaints</h3>
-          <div class="notes-content">${prescription.diagnosis}</div>
-        </div>` : ""}
+      ${(() => {
+        let dossierHtml = "";
+        const hasDossier = prescription.history || prescription.examination || prescription.investigation || prescription.diagnosis;
+        if (hasDossier) {
+          dossierHtml += `<div class="dossier-grid">`;
+          if (prescription.history) {
+            dossierHtml += `
+              <div class="dossier-box">
+                <div class="dossier-title">HISTORY :-</div>
+                <div class="dossier-content">${prescription.history}</div>
+              </div>`;
+          }
+          if (prescription.examination) {
+            dossierHtml += `
+              <div class="dossier-box">
+                <div class="dossier-title">EXAMINATION</div>
+                <div class="dossier-content">${prescription.examination}</div>
+              </div>`;
+          }
+          if (prescription.investigation) {
+            dossierHtml += `
+              <div class="dossier-box">
+                <div class="dossier-title">INVESTIGATION:</div>
+                <div class="dossier-content">${prescription.investigation}</div>
+              </div>`;
+          }
+          if (prescription.diagnosis) {
+            dossierHtml += `
+              <div class="dossier-box">
+                <div class="dossier-title">DIAGNOSIS:</div>
+                <div class="dossier-content">${prescription.diagnosis}</div>
+              </div>`;
+          }
+          dossierHtml += `</div>`;
+        }
+        return dossierHtml;
+      })()}
 
       <table class="prescription-table">
         <thead>
@@ -374,9 +444,15 @@ export default function PrescriptionDetailPage() {
         <tbody>${itemsHtml}</tbody>
       </table>
 
+      ${prescription.treatmentPlan ? `
+        <div class="dossier-box full-width" style="margin-bottom: 20px; width: 100%;">
+          <div class="dossier-title">TREATMENT PLAN</div>
+          <div class="dossier-content">${prescription.treatmentPlan}</div>
+        </div>` : ""}
+
       ${prescription.notes ? `
         <div class="notes-section">
-          <h3>Clinical Notes & Instructions</h3>
+          <h3>Extra Administrative Notes & Instructions</h3>
           <div class="notes-content">${prescription.notes}</div>
         </div>` : ""}
 
@@ -593,19 +669,76 @@ export default function PrescriptionDetailPage() {
             </div>
           </div>
           
-          {/* Diagnosis / Complaints (Dossier Section) */}
-          {prescription.diagnosis && (
-            <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-5 py-3 border-b border-border-base bg-surface-2/30">
-                <h3 className="text-[12.5px] font-semibold text-text-main">
-                  Diagnosis / Complaints
-                </h3>
-              </div>
-              <div className="p-5">
-                <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50">
-                  {prescription.diagnosis}
-                </p>
-              </div>
+          {/* Clinical Assessment Case Folder (History, Examination, Investigation, Diagnosis) */}
+          {(prescription.history || prescription.examination || prescription.investigation || prescription.diagnosis) && (
+            <div className="space-y-4">
+              {/* History Card */}
+              {prescription.history && (
+                <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <div className="px-5 py-3 border-b border-border-base bg-surface-2/30 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <h3 className="text-[12.5px] font-bold text-text-main uppercase tracking-wider">
+                      Patient Clinical History
+                    </h3>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
+                      {prescription.history}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Examination Card */}
+              {prescription.examination && (
+                <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <div className="px-5 py-3 border-b border-border-base bg-surface-2/30 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <h3 className="text-[12.5px] font-bold text-text-main uppercase tracking-wider">
+                      Clinical Examination Findings
+                    </h3>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
+                      {prescription.examination}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Investigation Card */}
+              {prescription.investigation && (
+                <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <div className="px-5 py-3 border-b border-border-base bg-surface-2/30 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <h3 className="text-[12.5px] font-bold text-text-main uppercase tracking-wider">
+                      Investigations Ordered
+                    </h3>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
+                      {prescription.investigation}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Diagnosis Card */}
+              {prescription.diagnosis && (
+                <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <div className="px-5 py-3 border-b border-border-base bg-surface-2/30 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <h3 className="text-[12.5px] font-bold text-text-main uppercase tracking-wider">
+                      Diagnosis / Clinical Impression
+                    </h3>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
+                      {prescription.diagnosis}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -671,16 +804,34 @@ export default function PrescriptionDetailPage() {
             </div>
           </div>
 
-          {/* Notes & Instructions */}
-          {prescription.notes && (
-            <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-border-base bg-surface-2/30">
-                <h3 className="text-[12.5px] font-semibold text-text-main">
-                  Clinical Notes & Instructions
+          {/* Treatment Plan Card */}
+          {prescription.treatmentPlan && (
+            <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+              <div className="px-5 py-3 border-b border-border-base bg-surface-2/30 flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+                <h3 className="text-[12.5px] font-bold text-text-main uppercase tracking-wider">
+                  Care & Treatment Plan
                 </h3>
               </div>
               <div className="p-5">
-                <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50">
+                <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
+                  {prescription.treatmentPlan}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Notes & Instructions */}
+          {prescription.notes && (
+            <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              <div className="px-5 py-3 border-b border-border-base bg-surface-2/30 flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+                <h3 className="text-[12.5px] font-bold text-text-main uppercase tracking-wider">
+                  Extra Clinical Notes & Instructions
+                </h3>
+              </div>
+              <div className="p-5">
+                <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
                   {prescription.notes}
                 </p>
               </div>

@@ -17,7 +17,7 @@
         "initialize-admin": "node scripts/initialize-admin.js",
         "migrate:auto-assign": "tsx src/scripts/migrate-auto-assign.ts",
         "seed:pages": "tsx src/scripts/seed-pages.ts",
-        "deploy:sms-function": "node scripts/deploy-sms-function.js",
+        "deploy:sms-function": "node scripts/deploy-sms-function.cjs",
         "configure:firebase-reset": "node scripts/configure-firebase-password-reset.js",
         "test:impersonation-sync": "node scripts/test-impersonation-sync.js",
         "rules:dev": "node scripts/switch-firestore-rules.js dev",

@@ -33,6 +33,10 @@ export interface Prescription {
   status: "active" | "completed" | "cancelled";
   diagnosis?: string;
   notes?: string;
+  history?: string;      // Patient clinical history / Chief complaints
+  examination?: string;  // Physical & clinical examination findings
+  investigation?: string;// Medical investigations ordered or suggested
+  treatmentPlan?: string;// Structured treatment plan notes / non-drug instructions
   // Appointment context (for easy reference when linked)
   appointmentDate?: Date;
   appointmentType?: string;

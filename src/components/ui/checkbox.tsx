@@ -67,7 +67,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         : color === "warning"
           ? "bg-warning border-warning text-white"
           : color === "danger"
-            ? "bg-error border-error text-white"
+            ? "bg-danger border-danger text-white"
             : "bg-text-main border-text-main text-white";
 
   return (

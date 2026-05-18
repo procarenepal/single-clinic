@@ -24,7 +24,7 @@ const solidMap: Record<BadgeColor, string> = {
   secondary: "bg-success text-white",
   success: "bg-success text-white",
   warning: "bg-warning text-white",
-  danger: "bg-error text-white",
+  danger: "bg-danger text-white",
 };
 
 const flatMap: Record<BadgeColor, string> = {
@@ -33,7 +33,7 @@ const flatMap: Record<BadgeColor, string> = {
   secondary: "bg-success/10 text-success",
   success: "bg-success/10 text-success",
   warning: "bg-warning/10 text-warning",
-  danger: "bg-error/10 text-error",
+  danger: "bg-danger/10 text-danger",
 };
 
 const borderedMap: Record<BadgeColor, string> = {
@@ -42,7 +42,7 @@ const borderedMap: Record<BadgeColor, string> = {
   secondary: "border border-success text-success",
   success: "border border-success text-success",
   warning: "border border-warning text-warning",
-  danger: "border border-error text-error",
+  danger: "border border-danger text-danger",
 };
 
 export const Badge: React.FC<BadgeProps> = ({

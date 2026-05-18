@@ -956,7 +956,7 @@ export default function HRPage() {
               <TableBody emptyContent="No payroll data available">
                 {[
                   ...staffPayrollSummary.map((summary, index) => (
-                    <TableRow key={summary.id || `summary-${index}`}>
+                    <TableRow key={summary.id ? `summary-member-${summary.id}` : `summary-index-${index}`} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-bold text-[13px]">{summary.name}</span>
@@ -982,14 +982,16 @@ export default function HRPage() {
                       </TableCell>
                     </TableRow>
                   )),
-                  <TableRow key="total-payroll" className="bg-primary/5 font-bold">
-                    <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
-                    <TableCell>{""}</TableCell>
-                    <TableCell align="right">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.salary, 0).toLocaleString()}</TableCell>
-                    <TableCell align="right" className="text-primary">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.totalPaid, 0).toLocaleString()}</TableCell>
-                    <TableCell>{""}</TableCell>
-                    <TableCell>{""}</TableCell>
-                  </TableRow>
+                  ...(staffPayrollSummary.length > 0 ? [
+                    <TableRow key="total-payroll-summary-row" className="bg-primary/5 font-bold">
+                      <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell align="right">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.salary, 0).toLocaleString()}</TableCell>
+                      <TableCell align="right" className="text-primary">Rs. {staffPayrollSummary.reduce((acc, s) => acc + s.totalPaid, 0).toLocaleString()}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                    </TableRow>
+                  ] : [])
                 ]}
               </TableBody>
             </Table>

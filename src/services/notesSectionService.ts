@@ -75,7 +75,7 @@ export const notesSectionService = {
     }
   },
 
-  // Get active sections for a clinic
+  // Get active sections for a clinic (with self-healing default seeding)
   async getActiveSectionsByClinic(clinicId: string): Promise<NotesSection[]> {
     try {
       // Simplify query to avoid composite index requirement
@@ -86,12 +86,66 @@ export const notesSectionService = {
 
       const querySnapshot = await getDocs(q);
 
-      const sections = querySnapshot.docs.map((doc) => ({
+      let sections = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
       })) as NotesSection[];
+
+      // Self-healing: If no notes sections are configured for this clinic, auto-seed standard default sections
+      if (sections.length === 0) {
+        console.log(`[notesSectionService] Seeding default notes sections for clinic: ${clinicId}`);
+        const defaultSections = [
+          {
+            clinicId,
+            branchId: "",
+            sectionKey: "triage-vitals",
+            sectionLabel: "Triage Vitals",
+            description: "BP, Heart Rate, Temperature, Respiratory Rate, Oxygen Saturation (SpO2), Weight & Height.",
+            isActive: true,
+            displayOrder: 1,
+            createdBy: "system",
+          },
+          {
+            clinicId,
+            branchId: "",
+            sectionKey: "nursing-observations",
+            sectionLabel: "Nursing Observations",
+            description: "Recorded physical status, pain levels, active complaints, and triage priority.",
+            isActive: true,
+            displayOrder: 2,
+            createdBy: "system",
+          },
+          {
+            clinicId,
+            branchId: "",
+            sectionKey: "progress-notes",
+            sectionLabel: "Progress Notes",
+            description: "General nurse ward updates, chief complaints timeline, and hourly ward notes.",
+            isActive: true,
+            displayOrder: 3,
+            createdBy: "system",
+          },
+        ];
+
+        const seededList: NotesSection[] = [];
+        for (const defaultSect of defaultSections) {
+          const docData = {
+            ...defaultSect,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          };
+          const docRef = await addDoc(collection(db, COLLECTION_NAME), docData);
+          seededList.push({
+            id: docRef.id,
+            ...defaultSect,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        return seededList;
+      }
 
       // Filter and sort in memory
       return sections

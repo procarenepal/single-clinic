@@ -48,6 +48,10 @@ export interface CreatePrescriptionData {
   }>;
   diagnosis?: string;
   notes?: string;
+  history?: string;
+  examination?: string;
+  investigation?: string;
+  treatmentPlan?: string;
   prescribedBy: string;
   sendToPharmacy?: boolean;
 }
@@ -56,6 +60,10 @@ export interface UpdatePrescriptionData {
   status?: "active" | "completed" | "cancelled";
   diagnosis?: string;
   notes?: string;
+  history?: string;
+  examination?: string;
+  investigation?: string;
+  treatmentPlan?: string;
   items?: Array<{
     id?: string;
     medicineId: string;
@@ -69,6 +77,24 @@ export interface UpdatePrescriptionData {
     sendToPharmacy?: boolean;
   }>;
   sendToPharmacy?: boolean;
+}
+
+export interface PrescriptionTemplate {
+  id?: string;
+  name: string;
+  clinicId: string;
+  doctorId: string;
+  items: Array<{
+    medicineId: string;
+    medicineName: string;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    time: string;
+  }>;
+  diagnosis?: string;
+  treatmentPlan?: string;
+  createdAt?: Date;
 }
 
 export const prescriptionService = {
@@ -122,6 +148,10 @@ export const prescriptionService = {
         status: "active" as const,
         diagnosis: data.diagnosis || "",
         notes: data.notes || "",
+        history: data.history || "",
+        examination: data.examination || "",
+        investigation: data.investigation || "",
+        treatmentPlan: data.treatmentPlan || "",
         createdBy: data.prescribedBy,
         ...appointmentContext,
         sendToPharmacy: data.sendToPharmacy || false,
@@ -200,14 +230,42 @@ export const prescriptionService = {
    * Alias for backward compatibility
    */
   async getPrescriptionsByClinic(
-    _clinicId?: string,
+    clinicId?: string,
     branchId?: string,
   ): Promise<Prescription[]> {
-    const prescriptions = await this.getPrescriptions();
-    if (branchId) {
-      return prescriptions.filter((p) => p.branchId === branchId);
+    try {
+      if (!clinicId) return [];
+      const prescriptionsCollection = collection(db, "prescriptions");
+      const q = query(prescriptionsCollection, where("clinicId", "==", clinicId));
+      const querySnapshot = await getDocs(q);
+
+      const list = querySnapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          prescriptionDate: safeToDate(data.prescriptionDate),
+          appointmentDate: safeToDate(data.appointmentDate),
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as Prescription[];
+
+      // Sort in-memory (descending by createdAt) to avoid manual composite index configuration in Firestore
+      list.sort((a, b) => {
+        const timeA = a.createdAt ? a.createdAt.getTime() : 0;
+        const timeB = b.createdAt ? b.createdAt.getTime() : 0;
+        return timeB - timeA;
+      });
+
+      if (branchId) {
+        return list.filter((p) => p.branchId === branchId);
+      }
+      return list;
+    } catch (error) {
+      console.error("Error fetching prescriptions by clinic:", error);
+      throw error;
     }
-    return prescriptions;
   },
 
   /**
@@ -357,6 +415,18 @@ export const prescriptionService = {
       if (data.notes !== undefined) {
         updateData.notes = data.notes;
       }
+      if (data.history !== undefined) {
+        updateData.history = data.history;
+      }
+      if (data.examination !== undefined) {
+        updateData.examination = data.examination;
+      }
+      if (data.investigation !== undefined) {
+        updateData.investigation = data.investigation;
+      }
+      if (data.treatmentPlan !== undefined) {
+        updateData.treatmentPlan = data.treatmentPlan;
+      }
 
       await updateDoc(prescriptionRef, updateData);
     } catch (error) {
@@ -484,6 +554,66 @@ export const prescriptionService = {
       await Promise.all(deletePromises);
     } catch (error) {
       console.error("Error deleting prescription:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Save a commonly used prescription as a template
+   */
+  async createTemplate(template: Omit<PrescriptionTemplate, "id" | "createdAt">): Promise<string> {
+    try {
+      const templatesCollection = collection(db, "prescription_templates");
+      const docRef = await addDoc(templatesCollection, {
+        ...template,
+        createdAt: Timestamp.now(),
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Error creating prescription template:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get all templates created by or visible to a specific doctor
+   */
+  async getTemplatesByDoctor(clinicId: string, doctorId: string): Promise<PrescriptionTemplate[]> {
+    try {
+      const templatesCollection = collection(db, "prescription_templates");
+      const q = query(
+        templatesCollection,
+        where("clinicId", "==", clinicId),
+        where("doctorId", "==", doctorId)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((docVal) => {
+        const data = docVal.data();
+        return {
+          id: docVal.id,
+          name: data.name,
+          clinicId: data.clinicId,
+          doctorId: data.doctorId,
+          items: data.items || [],
+          diagnosis: data.diagnosis || "",
+          treatmentPlan: data.treatmentPlan || "",
+          createdAt: safeToDate(data.createdAt),
+        };
+      });
+    } catch (error) {
+      console.error("Error fetching templates by doctor:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Delete a prescription template
+   */
+  async deleteTemplate(templateId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, "prescription_templates", templateId));
+    } catch (error) {
+      console.error("Error deleting prescription template:", error);
       throw error;
     }
   },

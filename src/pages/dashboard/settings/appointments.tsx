@@ -6,6 +6,7 @@ import {
   IoTrashOutline,
   IoArrowBackOutline,
   IoPencilOutline,
+  IoSparklesOutline,
 } from "react-icons/io5";
 
 import { title, subtitle } from "@/components/primitives";
@@ -227,6 +228,92 @@ export default function AppointmentSettingsPage() {
     }
   };
 
+  const handleSeedSkincareTypes = async () => {
+    if (!clinicId || !currentUser) return;
+    if (
+      !confirm(
+        "Are you sure you want to seed 10 skincare hospital appointment types? This will replace your current appointment types."
+      )
+    )
+      return;
+
+    setIsLoadingData(true);
+    try {
+      console.log("Seeding skincare appointment types for clinic:", clinicId);
+
+      const {
+        collection,
+        getDocs,
+        deleteDoc,
+        doc,
+        addDoc,
+        query,
+        where,
+        serverTimestamp,
+      } = await import("firebase/firestore");
+      const { db } = await import("@/config/firebase");
+
+      const appointmentTypesRef = collection(db, "appointment_types");
+
+      // 1. Delete existing types
+      const q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const deletePromises = snapshot.docs.map((docSnap) =>
+          deleteDoc(doc(db, "appointment_types", docSnap.id))
+        );
+        await Promise.all(deletePromises);
+      }
+
+      // 2. Add the 10 skincare types
+      const skincareTypes = [
+        { name: "Acne Consultation & Care", price: 1200, color: "cyan" },
+        { name: "Botox & Anti-Aging Consultation", price: 3000, color: "purple" },
+        { name: "Advanced Chemical Peel", price: 2500, color: "orange" },
+        { name: "Laser Hair Reduction Consultation", price: 1500, color: "blue" },
+        { name: "Platelet-Rich Plasma (PRP) Therapy", price: 4500, color: "pink" },
+        { name: "Microdermabrasion & Facial Rejuvenation", price: 3500, color: "emerald" },
+        { name: "Mole & Skin Tag Removal (Electrocautery)", price: 2000, color: "red" },
+        { name: "Hyperpigmentation & Melasma Treatment", price: 1800, color: "amber" },
+        { name: "Eczema, Psoriasis & Allergy Management", price: 1000, color: "default" },
+        { name: "Customized Skincare Routine & Product Audit", price: 800, color: "teal" }
+      ];
+
+      const addPromises = skincareTypes.map((type) => {
+        const newType: any = {
+          ...type,
+          clinicId,
+          isActive: true,
+          createdBy: currentUser.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        if (branchId) {
+          newType.branchId = branchId;
+        }
+        return addDoc(appointmentTypesRef, newType);
+      });
+
+      await Promise.all(addPromises);
+
+      // Invalidate cache
+      const { cacheService } = await import("@/services/cacheService");
+      cacheService.invalidateClinicAppointmentTypes(clinicId);
+
+      // Reload
+      await loadAppointmentTypes();
+      alert("Successfully seeded 10 professional skincare hospital appointment types!");
+    } catch (error) {
+      console.error("Error seeding skincare types:", error);
+      alert(
+        "Failed to seed appointment types: " +
+          (error instanceof Error ? error.message : String(error))
+      );
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   const handleBatchDelete = async () => {
     if (selectedTypes.size === 0) return;
 
@@ -363,6 +450,15 @@ export default function AppointmentSettingsPage() {
                 Back to Settings
               </Button>
             </Link>
+            <Button
+              color="warning"
+              variant="flat"
+              startContent={<IoSparklesOutline className="text-warning-500" />}
+              onClick={handleSeedSkincareTypes}
+              className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 font-medium"
+            >
+              Seed Skincare Types
+            </Button>
             <Button
               color="primary"
               startContent={<IoAddOutline />}

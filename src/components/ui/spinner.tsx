@@ -17,7 +17,7 @@ const TRACK_SIZE: Record<NonNullable<SpinnerProps["size"]>, string> = {
 const TRACK_COLOR: Record<NonNullable<SpinnerProps["color"]>, string> = {
   primary: "border-primary/20 border-t-primary",
   default: "border-border-base border-t-text-muted",
-  danger: "border-error/20    border-t-error",
+  danger: "border-danger/20    border-t-danger",
   success: "border-success/20 border-t-success",
   warning: "border-warning/20 border-t-warning",
 };

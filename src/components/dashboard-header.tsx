@@ -293,19 +293,17 @@ export const DashboardHeader = ({
           className="flex items-center gap-2.5 text-text-main no-underline font-bold transition-all hover:opacity-90"
           to="/"
         >
-          <div className="w-10 h-10 rounded-md bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shrink-0 overflow-hidden shadow-sm shadow-primary/20 ring-1 ring-white/20 dark:ring-white/10">
-            {clinicData?.logo ? (
-              <img
-                alt="logo"
-                className="w-full h-full object-cover"
-                src={getLogoUrl(clinicData.logo) || ""}
-                onError={(e) => (e.currentTarget.style.display = "none")}
-              />
-            ) : (
-              <span className="text-white text-[18px] font-bold">
-                {clinicData?.name?.charAt(0) || "H"}
-              </span>
-            )}
+          <div className="w-10 h-10 rounded-md bg-white dark:bg-zinc-900 flex items-center justify-center shrink-0 overflow-hidden shadow-sm shadow-primary/20 ring-1 ring-border-base p-1">
+            <img
+              alt="Clinic Logo"
+              className="w-full h-full object-contain"
+              src={clinicData?.logo ? getLogoUrl(clinicData.logo) || "/logo.png" : "/logo.png"}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.onerror = null;
+                target.src = "/logo.png";
+              }}
+            />
           </div>
         </Link>
 

@@ -4402,6 +4402,36 @@ export default function PharmacyPage() {
 
                                     const mappedItems: PurchaseItem[] = itemsData.map((item: any) => {
                                       const med = medicines.find(m => m.id === item.medicineId);
+                                      
+                                      // Smart default suggested quantity calculation
+                                      const freqVal = item.frequency || "";
+                                      const durationVal = item.duration || "";
+                                      
+                                      const multiplier = ((): number => {
+                                        const f = freqVal.toLowerCase().trim();
+                                        if (f.includes("once daily") || f === "od" || f === "qd" || f === "q.d." || f === "1-0-0" || f === "0-1-0" || f === "0-0-1") return 1;
+                                        if (f.includes("twice daily") || f === "bd" || f === "bid" || f === "b.i.d." || f === "1-0-1" || f === "2-0-2") return 2;
+                                        if (f.includes("three times daily") || f === "tds" || f === "tid" || f === "t.i.d." || f === "1-1-1") return 3;
+                                        if (f.includes("four times daily") || f === "qid" || f === "q.i.d.") return 4;
+                                        if (f.includes("as needed") || f === "sos" || f === "prn") return 1;
+                                        
+                                        const numMatch = f.match(/(\d+)\s*(times|tabs|caps|doses|day)/);
+                                        if (numMatch) return parseInt(numMatch[1], 10);
+                                        return 1;
+                                      })();
+                                      
+                                      const days = ((): number => {
+                                        const d = durationVal.toLowerCase().trim();
+                                        const match = d.match(/(\d+)/);
+                                        if (!match) return 1;
+                                        let val = parseInt(match[1], 10);
+                                        if (d.includes("week")) val *= 7;
+                                        else if (d.includes("month")) val *= 30;
+                                        return val;
+                                      })();
+                                      
+                                      const calculatedQty = days * multiplier;
+                                      
                                       return {
                                         id: crypto.randomUUID(),
                                         type: "medicine" as const,
@@ -4411,8 +4441,8 @@ export default function PharmacyPage() {
                                         salePrice: med?.price || 0,
                                         regularSalePrice: med?.price || 0,
                                         schemeSalePrice: med?.price || 0,
-                                        quantity: item.quantity || 1,
-                                        amount: (item.quantity || 1) * (med?.price || 0),
+                                        quantity: calculatedQty,
+                                        amount: calculatedQty * (med?.price || 0),
                                         stockType: "regular" as const
                                       };
                                     });
