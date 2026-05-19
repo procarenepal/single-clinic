@@ -841,7 +841,7 @@ export default function NewPrescriptionPage() {
         sendToPharmacy,
       };
 
-      await prescriptionService.createPrescription(prescriptionData);
+      const newPrescriptionId = await prescriptionService.createPrescription(prescriptionData);
 
       // =================== PHASE 4: AUTOMATED SMART BILLING & COMMISSION LOGGING ===================
       if (appointmentId) {
@@ -1088,11 +1088,7 @@ export default function NewPrescriptionPage() {
           : "Prescription saved successfully.",
         color: "success",
       });
-      if (appointmentId) {
-        navigate("/dashboard/appointments-billing");
-      } else {
-        navigate("/dashboard/prescriptions");
-      }
+      navigate(`/dashboard/prescriptions/${newPrescriptionId}`);
     } catch (error) {
       console.error("Error saving prescription:", error);
       addToast({

@@ -449,6 +449,7 @@ export default function DashboardIndexPage() {
 
   const [apptTab, setApptTab] = useState("today");
   const [enquiryTab, setEnquiryTab] = useState<EnquiryStatus | "all">("new");
+  const [dailyTab, setDailyTab] = useState<"patients" | "appointments" | "billing">("patients");
 
   const [showAnnouncement, setShowAnnouncement] = useState(false);
 
@@ -716,6 +717,7 @@ export default function DashboardIndexPage() {
         title: 'New Appointment',
         desc: `${patient?.name || 'Patient'} with ${doctor?.name || 'Specialist'}`,
         time: format(new Date(a.createdAt), 'h:mm a'),
+        rawTime: new Date(a.createdAt),
         color: 'bg-blue-500'
       });
     });
@@ -727,6 +729,7 @@ export default function DashboardIndexPage() {
         title: 'Patient Registered',
         desc: `${p.name} joined the clinic`,
         time: format(new Date(p.createdAt), 'h:mm a'),
+        rawTime: new Date(p.createdAt),
         color: 'bg-emerald-500'
       });
     });
@@ -738,6 +741,7 @@ export default function DashboardIndexPage() {
         title: 'New Enquiry',
         desc: `Lead from ${e.fullName}`,
         time: format(new Date(e.createdAt), 'h:mm a'),
+        rawTime: new Date(e.createdAt),
         color: 'bg-amber-500'
       });
     });
@@ -750,11 +754,12 @@ export default function DashboardIndexPage() {
         title: 'Prescription Issued',
         desc: `For ${patient?.name || 'Patient'} (#${rx.prescriptionNo})`,
         time: format(new Date(rx.createdAt), 'h:mm a'),
+        rawTime: new Date(rx.createdAt),
         color: 'bg-purple-500'
       });
     });
 
-    return items.sort((a, b) => b.time.localeCompare(a.time)).slice(0, 10);
+    return items.sort((a, b) => b.rawTime.getTime() - a.rawTime.getTime()).slice(0, 10);
   }, [appointments, patients, enquiries, recentPrescriptions]);
 
   const chartOpts = {
@@ -887,7 +892,7 @@ export default function DashboardIndexPage() {
         initial="hidden"
         animate="visible"
       >
-        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5">
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-1.5 items-start">
           {/* Card 1: Daily Reports Exporter (Action Center) */}
           <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm p-4 justify-between" style={{ height: "210px" }}>
             <div>
@@ -931,72 +936,135 @@ export default function DashboardIndexPage() {
             </div>
           </div>
 
-          {/* Card 2: Daily Intake */}
-          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
-            <div className="px-4 py-3 border-b border-border-base flex items-center justify-between bg-primary/[0.02]">
-              <h3 className="text-[12.5px] font-semibold text-primary flex items-center gap-2">
-                <IoPersonOutline className="w-4 h-4" />
-                Daily Patient Intake
-              </h3>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
-                {dailyReport?.patients.length ?? 0} New
-              </span>
-            </div>
-            <div className="p-3 flex-1 overflow-y-auto custom-scrollbar" style={{ height: "160px" }}>
-              {(!dailyReport || dailyReport.patients.length === 0) ? (
-                <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
-                  <IoPersonOutline className="w-8 h-8 mb-2" />
-                  <p className="text-[11px] font-semibold">No new patients today</p>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {dailyReport.patients.map((p, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-primary/5 transition-all">
-                      <div className="flex flex-col">
-                        <span className="text-[12px] font-bold text-text-main leading-none">{p.name}</span>
-                        <span className="text-[9.5px] text-text-muted mt-1 leading-none">{p.mobile || 'No Mobile'}</span>
-                      </div>
-                      <span className="text-[9.5px] font-mono bg-primary/5 text-primary px-1.5 py-0.5 rounded">
-                        {p.regNumber || 'Pending'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+          {/* Card 2: Daily Activities (Tabbed) */}
+          <div className="lg:col-span-2 bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm" style={{ height: "210px" }}>
+            <div className="px-4 py-2 border-b border-border-base flex items-center justify-between bg-primary/[0.01]">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDailyTab("patients")}
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                    dailyTab === "patients"
+                      ? "bg-primary/10 text-primary"
+                      : "text-text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  <IoPersonOutline className="w-3.5 h-3.5" />
+                  Intake Patients ({dailyReport?.patients.length ?? 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDailyTab("appointments")}
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                    dailyTab === "appointments"
+                      ? "bg-primary/10 text-primary"
+                      : "text-text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  <IoCalendarOutline className="w-3.5 h-3.5" />
+                  Appointments ({dailyReport?.appointments.length ?? 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDailyTab("billing")}
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center gap-1.5 ${
+                    dailyTab === "billing"
+                      ? "bg-emerald-500/10 text-emerald-600"
+                      : "text-text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  <IoReceiptOutline className="w-3.5 h-3.5" />
+                  Billings ({dailyReport?.billing.length ?? 0})
+                </button>
+              </div>
+              {dailyTab === "billing" && (
+                <span className="text-[10.5px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  NPR {dailyReport?.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0).toLocaleString() ?? "0"}
+                </span>
               )}
             </div>
-          </div>
-
-          {/* Card 3: Daily Cashflow */}
-          <div className="bg-surface border border-border-base rounded-[10px] overflow-hidden flex flex-col shadow-sm">
-            <div className="px-4 py-3 border-b border-border-base flex items-center justify-between bg-emerald-500/[0.02]">
-              <h3 className="text-[12.5px] font-semibold text-emerald-600 flex items-center gap-2">
-                <IoReceiptOutline className="w-4 h-4" />
-                Daily Financial Billings
-              </h3>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
-                NPR {dailyReport?.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0).toLocaleString() ?? "0"}
-              </span>
-            </div>
-            <div className="p-3 flex-1 overflow-y-auto custom-scrollbar" style={{ height: "160px" }}>
-              {(!dailyReport || dailyReport.billing.length === 0) ? (
-                <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
-                  <IoReceiptOutline className="w-8 h-8 mb-2 text-emerald-500" />
-                  <p className="text-[11px] font-semibold">No invoices generated today</p>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {dailyReport.billing.map((b, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-emerald-500/5 transition-all">
-                      <div className="flex flex-col">
-                        <span className="text-[12px] font-bold text-text-main leading-none">{b.invoiceNumber}</span>
-                        <span className="text-[9.5px] text-text-muted mt-1 leading-none">{b.patientName || 'Unknown Patient'}</span>
+            
+            <div className="p-3 flex-1 overflow-y-auto custom-scrollbar">
+              {dailyTab === "patients" && (
+                (!dailyReport || dailyReport.patients.length === 0) ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-6">
+                    <IoPersonOutline className="w-6 h-6 mb-1" />
+                    <p className="text-[10px] font-semibold">No new patients today</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {dailyReport.patients.map((p, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-primary/5 transition-all">
+                        <div className="flex flex-col">
+                          <span className="text-[11.5px] font-bold text-text-main leading-none">{p.name}</span>
+                          <span className="text-[9px] text-text-muted mt-1 leading-none">{p.mobile || 'No Mobile'}</span>
+                        </div>
+                        <span className="text-[9px] font-mono bg-primary/5 text-primary px-1.5 py-0.5 rounded">
+                          {p.regNumber || 'Pending'}
+                        </span>
                       </div>
-                      <span className="text-[11.5px] font-bold text-emerald-600">
-                        NPR {b.totalAmount?.toLocaleString() || '0'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {dailyTab === "appointments" && (
+                (!dailyReport || dailyReport.appointments.length === 0) ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-6">
+                    <IoCalendarOutline className="w-6 h-6 mb-1 text-primary" />
+                    <p className="text-[10px] font-semibold">No appointments today</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {dailyReport.appointments.map((a, idx) => {
+                      const patientName = patients.find(p => p.id === a.patientId)?.name || 'Unknown Patient';
+                      const doctorName = doctors.find(d => d.id === a.doctorId)?.name || 'Expert';
+                      const formatTimeStr = (tStr) => {
+                        if (!tStr) return 'N/A';
+                        const parts = tStr.split(':');
+                        if (parts.length < 2) return tStr;
+                        const hr = parseInt(parts[0], 10);
+                        const ampm = hr >= 12 ? 'PM' : 'AM';
+                        const displayHr = hr % 12 || 12;
+                        return `${displayHr}:${parts[1]} ${ampm}`;
+                      };
+                      return (
+                        <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-primary/5 transition-all">
+                          <div className="flex flex-col">
+                            <span className="text-[11.5px] font-bold text-text-main leading-none">{patientName}</span>
+                            <span className="text-[9px] text-text-muted mt-1 leading-none">Doctor: {doctorName}</span>
+                          </div>
+                          <span className="text-[9.5px] font-bold text-primary px-2 py-0.5 rounded bg-primary/5">
+                            {a.startTime ? formatTimeStr(a.startTime) : 'Scheduled'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {dailyTab === "billing" && (
+                (!dailyReport || dailyReport.billing.length === 0) ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-6">
+                    <IoReceiptOutline className="w-6 h-6 mb-1 text-emerald-500" />
+                    <p className="text-[10px] font-semibold">No invoices generated today</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {dailyReport.billing.map((b, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-surface-2/40 hover:bg-emerald-500/5 transition-all">
+                        <div className="flex flex-col">
+                          <span className="text-[11.5px] font-bold text-text-main leading-none">{b.invoiceNumber}</span>
+                          <span className="text-[9px] text-text-muted mt-1 leading-none">{b.patientName || 'Unknown Patient'}</span>
+                        </div>
+                        <span className="text-[11px] font-bold text-emerald-600">
+                          NPR {b.totalAmount?.toLocaleString() || '0'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           </div>

@@ -396,7 +396,7 @@ export default function PurchaseReturnPage() {
           </Button>
           <h1 className={`${title({ size: "lg" })} text-primary`}>Record Return</h1>
         </div>
-        <Card>
+        <Card shadow="none" className="border border-neutral-200 dark:border-neutral-800">
           <CardBody className="flex items-center justify-center py-12">
             <Spinner label="Loading purchase details..." size="lg" />
           </CardBody>
@@ -418,7 +418,7 @@ export default function PurchaseReturnPage() {
           </Button>
           <h1 className={`${title({ size: "lg" })} text-primary`}>Record Return</h1>
         </div>
-        <Card>
+        <Card shadow="none" className="border border-neutral-200 dark:border-neutral-800">
           <CardBody className="py-10 text-center">
             <p className="text-default-500">Purchase not found.</p>
             <Button
@@ -500,7 +500,7 @@ export default function PurchaseReturnPage() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
+          <Card shadow="none" className="border border-neutral-200 dark:border-neutral-800">
             <CardBody className="py-4">
               <p className="text-sm text-default-500">Original Net Amount</p>
               <p className="text-stat font-semibold">
@@ -508,7 +508,7 @@ export default function PurchaseReturnPage() {
               </p>
             </CardBody>
           </Card>
-          <Card>
+          <Card shadow="none" className="border border-neutral-200 dark:border-neutral-800">
             <CardBody className="py-4">
               <p className="text-sm text-default-500">Total Returned So Far</p>
               <p className="text-stat font-semibold text-warning-600">
@@ -516,7 +516,7 @@ export default function PurchaseReturnPage() {
               </p>
             </CardBody>
           </Card>
-          <Card>
+          <Card shadow="none" className="border border-neutral-200 dark:border-neutral-800">
             <CardBody className="py-4">
               <p className="text-sm text-default-500">Net After Returns</p>
               <p className="text-stat font-semibold text-success">
@@ -527,7 +527,7 @@ export default function PurchaseReturnPage() {
         </div>
 
         {/* Return form */}
-        <Card>
+        <Card shadow="none" className="border border-neutral-200 dark:border-neutral-800">
           <CardHeader className="flex flex-col gap-1 border-b border-default-200 bg-default-50">
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2">

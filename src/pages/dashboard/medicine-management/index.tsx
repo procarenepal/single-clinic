@@ -146,18 +146,28 @@ export default function MedicineManagementPage() {
           effectiveBranchId || undefined,
         );
         const medicineStocks: Record<string, number> = {};
+        const aggregatedStocks: Record<string, { currentStock: number; schemeStock: number; reorderLevel: number }> = {};
 
         stockData.forEach((stock) => {
-          medicineStocks[stock.medicineId] = stock.currentStock;
+          medicineStocks[stock.medicineId] = (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
+          if (!aggregatedStocks[stock.medicineId]) {
+            aggregatedStocks[stock.medicineId] = {
+              currentStock: 0,
+              schemeStock: 0,
+              reorderLevel: stock.reorderLevel || 10,
+            };
+          }
+          aggregatedStocks[stock.medicineId].currentStock += stock.currentStock;
+          aggregatedStocks[stock.medicineId].schemeStock += stock.schemeStock || 0;
         });
 
         const settings = settingsOverride ?? clinicSettings;
         const lowStockThreshold = settings?.lowStockThreshold || 10;
         const expiryAlertDays = settings?.expiryAlertDays || 30;
 
-        const lowStockItems = stockData.filter((stock) => {
-          const totalStock = stock.currentStock + (stock.schemeStock || 0);
-          return totalStock <= stock.reorderLevel;
+        const lowStockItems = Object.values(aggregatedStocks).filter((s) => {
+          const totalStock = s.currentStock + s.schemeStock;
+          return totalStock <= s.reorderLevel;
         });
 
         const alertDate = new Date();
@@ -238,16 +248,26 @@ export default function MedicineManagementPage() {
         );
 
         const medicineStocks: Record<string, number> = {};
+        const aggregatedStocks: Record<string, { currentStock: number; schemeStock: number; reorderLevel: number }> = {};
 
         stockData.forEach((stock) => {
-          medicineStocks[stock.medicineId] = stock.currentStock;
+          medicineStocks[stock.medicineId] = (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
+          if (!aggregatedStocks[stock.medicineId]) {
+            aggregatedStocks[stock.medicineId] = {
+              currentStock: 0,
+              schemeStock: 0,
+              reorderLevel: stock.reorderLevel || 10,
+            };
+          }
+          aggregatedStocks[stock.medicineId].currentStock += stock.currentStock;
+          aggregatedStocks[stock.medicineId].schemeStock += stock.schemeStock || 0;
         });
 
         const lowStockThreshold = settings?.lowStockThreshold || 10;
         const expiryAlertDays = settings?.expiryAlertDays || 30;
-        const lowStockItems = stockData.filter((stock) => {
-          const totalStock = stock.currentStock + (stock.schemeStock || 0);
-          return totalStock <= stock.reorderLevel;
+        const lowStockItems = Object.values(aggregatedStocks).filter((s) => {
+          const totalStock = s.currentStock + s.schemeStock;
+          return totalStock <= s.reorderLevel;
         });
         const alertDate = new Date();
 
@@ -486,28 +506,29 @@ export default function MedicineManagementPage() {
             )}
 
             <div
-              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-3 block"
+              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors px-3 py-2 flex flex-col justify-center h-[76px] block"
               role="button"
               onClick={() => handleStatCardClick("medicines")}
             >
               <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <div className="p-1.5 bg-primary/10 rounded-lg">
-                    <IoMedkitOutline className="text-primary text-stat-sm" />
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <div className="p-1 bg-primary/10 rounded">
+                    <IoMedkitOutline className="text-primary" size={14} />
                   </div>
+                  <span className="text-[11.5px] font-semibold text-text-muted">Total Medicines</span>
                 </div>
-                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
+                <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.totalMedicines}
                 </p>
-                <p className="text-[11.5px] text-text-muted">Total Medicines</p>
               </div>
             </div>
 
             <div
-              className={`clarity-card transition-colors p-3 ${dashboardStats.lowStockItems > 0
-                ? "cursor-pointer hover:border-saffron-300"
-                : ""
-                }`}
+              className={`clarity-card transition-colors px-3 py-2 flex flex-col justify-center h-[76px] ${
+                dashboardStats.lowStockItems > 0
+                  ? "cursor-pointer hover:border-saffron-300"
+                  : ""
+              }`}
               role="button"
               onClick={() =>
                 dashboardStats.lowStockItems > 0 &&
@@ -515,24 +536,17 @@ export default function MedicineManagementPage() {
               }
             >
               <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <div className="p-1.5 bg-warning/10 rounded-lg">
-                    <IoWarningOutline className="text-warning text-stat-sm" />
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <div className="p-1 bg-warning/10 rounded">
+                    <IoWarningOutline className="text-warning" size={14} />
                   </div>
+                  <span className="text-[11.5px] font-semibold text-text-muted">Low Stock</span>
                 </div>
-                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
+                <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.lowStockItems}
                 </p>
-                <p className="text-[11.5px] text-text-muted">
-                  Low Stock
-                  {dashboardStats.lowStockItems > 0 && (
-                    <span className="block text-[10.5px] text-warning font-medium mt-1">
-                      Click to view
-                    </span>
-                  )}
-                </p>
                 {clinicSettings && (
-                  <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] mt-1">
+                  <p className="text-[10px] text-warning font-semibold mt-1 leading-none">
                     Threshold: ≤{clinicSettings.lowStockThreshold || 10}
                   </p>
                 )}
@@ -540,10 +554,11 @@ export default function MedicineManagementPage() {
             </div>
 
             <div
-              className={`clarity-card transition-colors p-3 ${dashboardStats.expiringItems > 0
-                ? "cursor-pointer hover:border-rose-300"
-                : ""
-                }`}
+              className={`clarity-card transition-colors px-3 py-2 flex flex-col justify-center h-[76px] ${
+                dashboardStats.expiringItems > 0
+                  ? "cursor-pointer hover:border-rose-300"
+                  : ""
+              }`}
               role="button"
               onClick={() =>
                 dashboardStats.expiringItems > 0 &&
@@ -551,19 +566,17 @@ export default function MedicineManagementPage() {
               }
             >
               <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <div className="p-1.5 bg-danger/10 rounded-lg">
-                    <IoAlertCircleOutline className="text-danger text-stat-sm" />
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <div className="p-1 bg-danger/10 rounded">
+                    <IoAlertCircleOutline className="text-danger" size={14} />
                   </div>
+                  <span className="text-[11.5px] font-semibold text-text-muted">Expiring Soon</span>
                 </div>
-                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
+                <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.expiringItems}
                 </p>
-                <p className="text-[11.5px] text-text-muted">
-                  Expiring Soon
-                </p>
                 {clinicSettings && (
-                  <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] mt-1">
+                  <p className="text-[10px] text-danger/80 font-medium mt-1 leading-none">
                     Within {clinicSettings.expiryAlertDays || 30} days
                   </p>
                 )}
@@ -571,38 +584,38 @@ export default function MedicineManagementPage() {
             </div>
 
             <div
-              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-3"
+              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors px-3 py-2 flex flex-col justify-center h-[76px]"
               role="button"
               onClick={() => handleStatCardClick("brands")}
             >
               <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <div className="p-1.5 bg-primary/10 rounded-lg">
-                    <IoBusinessOutline className="text-primary text-stat-sm" />
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <div className="p-1 bg-primary/10 rounded">
+                    <IoBusinessOutline className="text-primary" size={14} />
                   </div>
+                  <span className="text-[11.5px] font-semibold text-text-muted">Brands</span>
                 </div>
-                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
+                <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.totalBrands}
                 </p>
-                <p className="text-[11.5px] text-text-muted">Brands</p>
               </div>
             </div>
 
             <div
-              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors p-3"
+              className="clarity-card cursor-pointer hover:border-teal-300 transition-colors px-3 py-2 flex flex-col justify-center h-[76px]"
               role="button"
               onClick={() => handleStatCardClick("categories")}
             >
               <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <div className="p-1.5 bg-primary/10 rounded-lg">
-                    <IoFlaskOutline className="text-primary text-stat-sm" />
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <div className="p-1 bg-primary/10 rounded">
+                    <IoFlaskOutline className="text-primary" size={14} />
                   </div>
+                  <span className="text-[11.5px] font-semibold text-text-muted">Categories</span>
                 </div>
-                <p className="text-[17px] font-bold text-[rgb(var(--color-text))]">
+                <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.totalCategories}
                 </p>
-                <p className="text-[11.5px] text-text-muted">Categories</p>
               </div>
             </div>
           </div>

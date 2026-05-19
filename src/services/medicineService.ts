@@ -461,7 +461,7 @@ export const medicineService = {
     try {
       const stockRef = collection(db, MEDICINE_STOCK_COLLECTION);
       const docRef = await addDoc(stockRef, {
-        ...stockData,
+        ...this.stripUndefined(stockData),
         schemeStock: stockData.schemeStock ?? 0, // Default to 0 if not provided
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -482,14 +482,12 @@ export const medicineService = {
       let q;
 
       if (clinicId) {
-        // Query with both medicineId and clinicId for better permission handling
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
           where("clinicId", "==", clinicId),
         );
       } else {
-        // Fallback to medicineId only (for backward compatibility)
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
@@ -497,23 +495,107 @@ export const medicineService = {
       }
       const querySnapshot = await getDocs(q);
 
-      if (!querySnapshot.empty) {
-        const doc = querySnapshot.docs[0];
-        const data = doc.data() as any;
+      if (querySnapshot.empty) return null;
 
+      // Aggregate all active stock entries for this medicine
+      const stocks: MedicineStock[] = querySnapshot.docs.map((d) => {
+        const data = d.data() as any;
         return {
-          id: doc.id,
+          id: d.id,
           ...data,
-          schemeStock: data.schemeStock ?? 0, // Default to 0 for backward compatibility
-          createdAt: data.createdAt?.toDate(),
-          updatedAt: data.updatedAt?.toDate(),
-          lastRestocked: data.lastRestocked?.toDate(),
+          currentStock: data.currentStock ?? 0,
+          schemeStock: data.schemeStock ?? 0,
+          expiryDate: data.expiryDate?.toDate ? data.expiryDate.toDate() : (data.expiryDate ? new Date(data.expiryDate) : undefined),
+          manufactureDate: data.manufactureDate?.toDate ? data.manufactureDate.toDate() : (data.manufactureDate ? new Date(data.manufactureDate) : undefined),
+          lastRestocked: data.lastRestocked?.toDate ? data.lastRestocked.toDate() : (data.lastRestocked ? new Date(data.lastRestocked) : undefined),
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : undefined),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
         } as MedicineStock;
-      }
+      });
 
-      return null;
+      // Sum up regular and scheme stocks
+      const totalCurrentStock = stocks.reduce((acc, curr) => acc + curr.currentStock, 0);
+      const totalSchemeStock = stocks.reduce((acc, curr) => acc + curr.schemeStock, 0);
+
+      // Find the first stock document to preserve main details (min stock, reorder levels, etc.)
+      const baseStock = stocks[0];
+
+      return {
+        ...baseStock,
+        currentStock: totalCurrentStock,
+        schemeStock: totalSchemeStock,
+      };
     } catch (error) {
       console.error("Error fetching medicine stock:", error);
+      throw error;
+    }
+  },
+
+  async getMedicineStocks(
+    medicineId: string,
+    clinicId?: string,
+  ): Promise<MedicineStock[]> {
+    try {
+      let q;
+      if (clinicId) {
+        q = query(
+          collection(db, MEDICINE_STOCK_COLLECTION),
+          where("medicineId", "==", medicineId),
+          where("clinicId", "==", clinicId),
+        );
+      } else {
+        q = query(
+          collection(db, MEDICINE_STOCK_COLLECTION),
+          where("medicineId", "==", medicineId),
+        );
+      }
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((d) => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          ...data,
+          expiryDate: data.expiryDate?.toDate ? data.expiryDate.toDate() : (data.expiryDate ? new Date(data.expiryDate) : undefined),
+          manufactureDate: data.manufactureDate?.toDate ? data.manufactureDate.toDate() : (data.manufactureDate ? new Date(data.manufactureDate) : undefined),
+          lastRestocked: data.lastRestocked?.toDate ? data.lastRestocked.toDate() : (data.lastRestocked ? new Date(data.lastRestocked) : undefined),
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : undefined),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
+        } as MedicineStock;
+      });
+    } catch (error) {
+      console.error("Error fetching medicine stocks:", error);
+      throw error;
+    }
+  },
+
+  async getMedicineStockByBatch(
+    medicineId: string,
+    batchNumber: string,
+    clinicId: string,
+  ): Promise<MedicineStock | null> {
+    try {
+      const q = query(
+        collection(db, MEDICINE_STOCK_COLLECTION),
+        where("medicineId", "==", medicineId),
+        where("batchNumber", "==", batchNumber),
+        where("clinicId", "==", clinicId),
+      );
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) return null;
+
+      const docVal = querySnapshot.docs[0];
+      const data = docVal.data();
+      return {
+        id: docVal.id,
+        ...data,
+        expiryDate: data.expiryDate?.toDate(),
+        manufactureDate: data.manufactureDate?.toDate(),
+        lastRestocked: data.lastRestocked?.toDate(),
+        createdAt: data.createdAt?.toDate(),
+        updatedAt: data.updatedAt?.toDate(),
+      } as MedicineStock;
+    } catch (error) {
+      console.error("Error getting medicine stock by batch:", error);
       throw error;
     }
   },
@@ -594,12 +676,17 @@ export const medicineService = {
 
         snapshot.docs.forEach((d) => {
           const data = d.data();
-
-          results.push({
-            medicineId: data.medicineId,
-            currentStock: data.currentStock ?? 0,
-            schemeStock: data.schemeStock ?? 0,
-          });
+          const existing = results.find(r => r.medicineId === data.medicineId);
+          if (existing) {
+            existing.currentStock += (data.currentStock ?? 0);
+            existing.schemeStock += (data.schemeStock ?? 0);
+          } else {
+            results.push({
+              medicineId: data.medicineId,
+              currentStock: data.currentStock ?? 0,
+              schemeStock: data.schemeStock ?? 0,
+            });
+          }
         });
       }
 
@@ -1763,12 +1850,19 @@ export const medicineService = {
     userId: string,
   ): Promise<void> {
     try {
-      // 1. Create a few categories
+      // 1. Create categories
       const categories = [
         { name: "Analgesic", description: "Pain relief" },
         { name: "Antibiotic", description: "Infection treatment" },
         { name: "Antihistamine", description: "Allergy relief" },
         { name: "Supplements", description: "Vitamins and minerals" },
+        { name: "Cardiovascular", description: "Heart and lipid medications" },
+        { name: "Gastrointestinal", description: "Stomach and bowel medications" },
+        { name: "Antidiabetic", description: "Blood sugar control" },
+        { name: "Antihypertensive", description: "Blood pressure control" },
+        { name: "Respiratory", description: "Asthma and allergy inhalers" },
+        { name: "Dermatological", description: "Skin ointments and gels" },
+        { name: "Pediatric", description: "Children suspensions and drops" },
       ];
 
       const catMap: Record<string, string> = {};
@@ -1785,8 +1879,37 @@ export const medicineService = {
         catMap[cat.name] = id;
       }
 
-      // 2. Create medicines
+      // 1.5. Create brands
+      const brandsList = [
+        { name: "GSK", description: "GlaxoSmithKline plc" },
+        { name: "Pfizer", description: "Pfizer Inc." },
+        { name: "Novartis", description: "Novartis International AG" },
+        { name: "Cipla", description: "Cipla Limited" },
+        { name: "Sun Pharma", description: "Sun Pharmaceutical Industries" },
+        { name: "Abbott", description: "Abbott Laboratories" },
+        { name: "Torrent", description: "Torrent Pharmaceuticals" },
+        { name: "Alkem", description: "Alkem Laboratories" },
+        { name: "Lupin", description: "Lupin Limited" },
+        { name: "NPL", description: "Nepal Pharmaceuticals Laboratory" },
+      ];
+
+      const brandMap: Record<string, string> = {};
+
+      for (const b of brandsList) {
+        const id = await this.createMedicineBrand({
+          ...b,
+          clinicId,
+          branchId: branchId || "",
+          isActive: true,
+          createdBy: userId,
+        });
+
+        brandMap[b.name] = id;
+      }
+
+      // 2. Create medicines (exactly 50 items)
       const meds = [
+        // Analgesics (5)
         {
           name: "Paracetamol 500mg",
           genericName: "Paracetamol",
@@ -1800,6 +1923,55 @@ export const medicineService = {
           isActive: true,
         },
         {
+          name: "Ibuprofen 400mg",
+          genericName: "Ibuprofen",
+          categoryId: catMap["Analgesic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "400mg",
+          prescriptionRequired: false,
+          price: 8,
+          costPrice: 4,
+          isActive: true,
+        },
+        {
+          name: "Diclofenac Sodium 50mg",
+          genericName: "Diclofenac",
+          categoryId: catMap["Analgesic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "50mg",
+          prescriptionRequired: true,
+          price: 10,
+          costPrice: 5,
+          isActive: true,
+        },
+        {
+          name: "Tramadol Hydrochloride 50mg",
+          genericName: "Tramadol",
+          categoryId: catMap["Analgesic"],
+          type: "capsule" as const,
+          unit: "capsule" as const,
+          strength: "50mg",
+          prescriptionRequired: true,
+          price: 25,
+          costPrice: 10,
+          isActive: true,
+        },
+        {
+          name: "Morphine Sulfate 10mg",
+          genericName: "Morphine",
+          categoryId: catMap["Analgesic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: true,
+          price: 80,
+          costPrice: 40,
+          isActive: true,
+        },
+        // Antibiotics (5)
+        {
           name: "Amoxicillin 250mg",
           genericName: "Amoxicillin",
           categoryId: catMap["Antibiotic"],
@@ -1811,6 +1983,55 @@ export const medicineService = {
           costPrice: 8,
           isActive: true,
         },
+        {
+          name: "Amoxicillin 500mg",
+          genericName: "Amoxicillin",
+          categoryId: catMap["Antibiotic"],
+          type: "capsule" as const,
+          unit: "capsule" as const,
+          strength: "500mg",
+          prescriptionRequired: true,
+          price: 25,
+          costPrice: 12,
+          isActive: true,
+        },
+        {
+          name: "Azithromycin 500mg",
+          genericName: "Azithromycin",
+          categoryId: catMap["Antibiotic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "500mg",
+          prescriptionRequired: true,
+          price: 50,
+          costPrice: 22,
+          isActive: true,
+        },
+        {
+          name: "Ciprofloxacin 500mg",
+          genericName: "Ciprofloxacin",
+          categoryId: catMap["Antibiotic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "500mg",
+          prescriptionRequired: true,
+          price: 30,
+          costPrice: 15,
+          isActive: true,
+        },
+        {
+          name: "Doxycycline 100mg",
+          genericName: "Doxycycline",
+          categoryId: catMap["Antibiotic"],
+          type: "capsule" as const,
+          unit: "capsule" as const,
+          strength: "100mg",
+          prescriptionRequired: true,
+          price: 20,
+          costPrice: 9,
+          isActive: true,
+        },
+        // Antihistamines (4)
         {
           name: "Cetirizine 10mg",
           genericName: "Cetirizine",
@@ -1824,6 +2045,43 @@ export const medicineService = {
           isActive: true,
         },
         {
+          name: "Loratadine 10mg",
+          genericName: "Loratadine",
+          categoryId: catMap["Antihistamine"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: false,
+          price: 12,
+          costPrice: 5,
+          isActive: true,
+        },
+        {
+          name: "Fexofenadine 120mg",
+          genericName: "Fexofenadine",
+          categoryId: catMap["Antihistamine"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "120mg",
+          prescriptionRequired: false,
+          price: 22,
+          costPrice: 10,
+          isActive: true,
+        },
+        {
+          name: "Levocetirizine 5mg",
+          genericName: "Levocetirizine",
+          categoryId: catMap["Antihistamine"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "5mg",
+          prescriptionRequired: false,
+          price: 10,
+          costPrice: 4,
+          isActive: true,
+        },
+        // Supplements (5)
+        {
           name: "Vitamin D3",
           genericName: "Cholecalciferol",
           categoryId: catMap["Supplements"],
@@ -1835,15 +2093,507 @@ export const medicineService = {
           costPrice: 12,
           isActive: true,
         },
+        {
+          name: "Vitamin C 500mg",
+          genericName: "Ascorbic Acid",
+          categoryId: catMap["Supplements"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "500mg",
+          prescriptionRequired: false,
+          price: 6,
+          costPrice: 2,
+          isActive: true,
+        },
+        {
+          name: "B-Complex with Zinc",
+          genericName: "Multivitamin",
+          categoryId: catMap["Supplements"],
+          type: "capsule" as const,
+          unit: "capsule" as const,
+          strength: "Standard",
+          prescriptionRequired: false,
+          price: 10,
+          costPrice: 4,
+          isActive: true,
+        },
+        {
+          name: "Calcium Carbonate 500mg",
+          genericName: "Calcium",
+          categoryId: catMap["Supplements"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "500mg",
+          prescriptionRequired: false,
+          price: 12,
+          costPrice: 5,
+          isActive: true,
+        },
+        {
+          name: "Iron Polymaltose 100mg",
+          genericName: "Iron",
+          categoryId: catMap["Supplements"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "100mg",
+          prescriptionRequired: false,
+          price: 18,
+          costPrice: 8,
+          isActive: true,
+        },
+        // Antidiabetic (5)
+        {
+          name: "Metformin 500mg",
+          genericName: "Metformin",
+          categoryId: catMap["Antidiabetic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "500mg",
+          prescriptionRequired: true,
+          price: 6,
+          costPrice: 2,
+          isActive: true,
+        },
+        {
+          name: "Metformin 850mg",
+          genericName: "Metformin",
+          categoryId: catMap["Antidiabetic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "850mg",
+          prescriptionRequired: true,
+          price: 9,
+          costPrice: 4,
+          isActive: true,
+        },
+        {
+          name: "Glimepiride 1mg",
+          genericName: "Glimepiride",
+          categoryId: catMap["Antidiabetic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "1mg",
+          prescriptionRequired: true,
+          price: 12,
+          costPrice: 5,
+          isActive: true,
+        },
+        {
+          name: "Glimepiride 2mg",
+          genericName: "Glimepiride",
+          categoryId: catMap["Antidiabetic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "2mg",
+          prescriptionRequired: true,
+          price: 18,
+          costPrice: 8,
+          isActive: true,
+        },
+        {
+          name: "Sitagliptin 50mg",
+          genericName: "Sitagliptin",
+          categoryId: catMap["Antidiabetic"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "50mg",
+          prescriptionRequired: true,
+          price: 35,
+          costPrice: 15,
+          isActive: true,
+        },
+        // Antihypertensive (5)
+        {
+          name: "Amlodipine 5mg",
+          genericName: "Amlodipine",
+          categoryId: catMap["Antihypertensive"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "5mg",
+          prescriptionRequired: true,
+          price: 5,
+          costPrice: 2,
+          isActive: true,
+        },
+        {
+          name: "Amlodipine 10mg",
+          genericName: "Amlodipine",
+          categoryId: catMap["Antihypertensive"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: true,
+          price: 8,
+          costPrice: 3,
+          isActive: true,
+        },
+        {
+          name: "Losartan 50mg",
+          genericName: "Losartan",
+          categoryId: catMap["Antihypertensive"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "50mg",
+          prescriptionRequired: true,
+          price: 12,
+          costPrice: 5,
+          isActive: true,
+        },
+        {
+          name: "Losartan 100mg",
+          genericName: "Losartan",
+          categoryId: catMap["Antihypertensive"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "100mg",
+          prescriptionRequired: true,
+          price: 20,
+          costPrice: 9,
+          isActive: true,
+        },
+        {
+          name: "Telmisartan 40mg",
+          genericName: "Telmisartan",
+          categoryId: catMap["Antihypertensive"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "40mg",
+          prescriptionRequired: true,
+          price: 15,
+          costPrice: 6,
+          isActive: true,
+        },
+        // Cardiovascular (4)
+        {
+          name: "Atorvastatin 10mg",
+          genericName: "Atorvastatin",
+          categoryId: catMap["Cardiovascular"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: true,
+          price: 18,
+          costPrice: 8,
+          isActive: true,
+        },
+        {
+          name: "Atorvastatin 20mg",
+          genericName: "Atorvastatin",
+          categoryId: catMap["Cardiovascular"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "20mg",
+          prescriptionRequired: true,
+          price: 28,
+          costPrice: 12,
+          isActive: true,
+        },
+        {
+          name: "Rosuvastatin 10mg",
+          genericName: "Rosuvastatin",
+          categoryId: catMap["Cardiovascular"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: true,
+          price: 25,
+          costPrice: 10,
+          isActive: true,
+        },
+        {
+          name: "Clopidogrel 75mg",
+          genericName: "Clopidogrel",
+          categoryId: catMap["Cardiovascular"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "75mg",
+          prescriptionRequired: true,
+          price: 16,
+          costPrice: 7,
+          isActive: true,
+        },
+        // Gastrointestinal (5)
+        {
+          name: "Pantoprazole 40mg",
+          genericName: "Pantoprazole",
+          categoryId: catMap["Gastrointestinal"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "40mg",
+          prescriptionRequired: false,
+          price: 12,
+          costPrice: 5,
+          isActive: true,
+        },
+        {
+          name: "Omeprazole 20mg",
+          genericName: "Omeprazole",
+          categoryId: catMap["Gastrointestinal"],
+          type: "capsule" as const,
+          unit: "capsule" as const,
+          strength: "20mg",
+          prescriptionRequired: false,
+          price: 8,
+          costPrice: 3,
+          isActive: true,
+        },
+        {
+          name: "Ranitidine 150mg",
+          genericName: "Ranitidine",
+          categoryId: catMap["Gastrointestinal"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "150mg",
+          prescriptionRequired: false,
+          price: 5,
+          costPrice: 2,
+          isActive: true,
+        },
+        {
+          name: "Domperidone 10mg",
+          genericName: "Domperidone",
+          categoryId: catMap["Gastrointestinal"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: false,
+          price: 7,
+          costPrice: 3,
+          isActive: true,
+        },
+        {
+          name: "Oral Rehydration Salts (ORS)",
+          genericName: "Sachet",
+          categoryId: catMap["Gastrointestinal"],
+          type: "sachet" as const,
+          unit: "sachet" as const,
+          strength: "20.5g",
+          prescriptionRequired: false,
+          price: 15,
+          costPrice: 5,
+          isActive: true,
+        },
+        // Respiratory (3)
+        {
+          name: "Montelukast 10mg",
+          genericName: "Montelukast",
+          categoryId: catMap["Respiratory"],
+          type: "tablet" as const,
+          unit: "tablet" as const,
+          strength: "10mg",
+          prescriptionRequired: true,
+          price: 20,
+          costPrice: 8,
+          isActive: true,
+        },
+        {
+          name: "Salbutamol Inhaler 100mcg",
+          genericName: "Salbutamol",
+          categoryId: catMap["Respiratory"],
+          type: "inhaler" as const,
+          unit: "device" as const,
+          strength: "100mcg",
+          prescriptionRequired: true,
+          price: 280,
+          costPrice: 150,
+          isActive: true,
+        },
+        {
+          name: "Levosalbutamol 1.25mg",
+          genericName: "Levosalbutamol",
+          categoryId: catMap["Respiratory"],
+          type: "respules" as const,
+          unit: "vial" as const,
+          strength: "1.25mg",
+          prescriptionRequired: true,
+          price: 15,
+          costPrice: 6,
+          isActive: true,
+        },
+        // Dermatological (5)
+        {
+          name: "Hydrocortisone Cream 1%",
+          genericName: "Hydrocortisone",
+          categoryId: catMap["Dermatological"],
+          type: "cream" as const,
+          unit: "tube" as const,
+          strength: "1%",
+          prescriptionRequired: false,
+          price: 60,
+          costPrice: 25,
+          isActive: true,
+        },
+        {
+          name: "Ketoconazole Cream 2%",
+          genericName: "Ketoconazole",
+          categoryId: catMap["Dermatological"],
+          type: "cream" as const,
+          unit: "tube" as const,
+          strength: "2%",
+          prescriptionRequired: false,
+          price: 110,
+          costPrice: 50,
+          isActive: true,
+        },
+        {
+          name: "Mupirocin Ointment 2%",
+          genericName: "Mupirocin",
+          categoryId: catMap["Dermatological"],
+          type: "ointment" as const,
+          unit: "tube" as const,
+          strength: "2%",
+          prescriptionRequired: true,
+          price: 180,
+          costPrice: 80,
+          isActive: true,
+        },
+        {
+          name: "Salicylic Acid Gel 2%",
+          genericName: "Salicylic Acid",
+          categoryId: catMap["Dermatological"],
+          type: "gel" as const,
+          unit: "tube" as const,
+          strength: "2%",
+          prescriptionRequired: false,
+          price: 140,
+          costPrice: 60,
+          isActive: true,
+        },
+        {
+          name: "Clindamycin Gel 1%",
+          genericName: "Clindamycin",
+          categoryId: catMap["Dermatological"],
+          type: "gel" as const,
+          unit: "tube" as const,
+          strength: "1%",
+          prescriptionRequired: true,
+          price: 160,
+          costPrice: 70,
+          isActive: true,
+        },
+        // Pediatric (4)
+        {
+          name: "Paracetamol Syrup 125mg/5ml",
+          genericName: "Paracetamol",
+          categoryId: catMap["Pediatric"],
+          type: "syrup" as const,
+          unit: "bottle" as const,
+          strength: "125mg/5ml",
+          prescriptionRequired: false,
+          price: 45,
+          costPrice: 20,
+          isActive: true,
+        },
+        {
+          name: "Ibuprofen Suspension 100mg/5ml",
+          genericName: "Ibuprofen",
+          categoryId: catMap["Pediatric"],
+          type: "suspension" as const,
+          unit: "bottle" as const,
+          strength: "100mg/5ml",
+          prescriptionRequired: false,
+          price: 55,
+          costPrice: 25,
+          isActive: true,
+        },
+        {
+          name: "Multivitamin Drops",
+          genericName: "Vitamin Drops",
+          categoryId: catMap["Pediatric"],
+          type: "drops" as const,
+          unit: "bottle" as const,
+          strength: "Standard",
+          prescriptionRequired: false,
+          price: 90,
+          costPrice: 40,
+          isActive: true,
+        },
+        {
+          name: "Zinc Sulfate Syrup 20mg/5ml",
+          genericName: "Zinc Sulfate",
+          categoryId: catMap["Pediatric"],
+          type: "syrup" as const,
+          unit: "bottle" as const,
+          strength: "20mg/5ml",
+          prescriptionRequired: false,
+          price: 65,
+          costPrice: 30,
+          isActive: true,
+        },
       ];
 
+      let index = 0;
+      const brandKeys = Object.keys(brandMap);
+
       for (const med of meds) {
-        await this.createMedicine({
+        // Clinically assign a brand or fallback to random
+        let brandName = "GSK";
+        if (med.categoryId === catMap["Analgesic"]) brandName = index % 2 === 0 ? "GSK" : "Novartis";
+        else if (med.categoryId === catMap["Antibiotic"]) brandName = index % 2 === 0 ? "GSK" : "Pfizer";
+        else if (med.categoryId === catMap["Antihistamine"]) brandName = index % 2 === 0 ? "GSK" : "Pfizer";
+        else if (med.categoryId === catMap["Supplements"]) brandName = index % 2 === 0 ? "Abbott" : "Pfizer";
+        else if (med.categoryId === catMap["Antidiabetic"]) brandName = index % 2 === 0 ? "Sun Pharma" : "Novartis";
+        else if (med.categoryId === catMap["Antihypertensive"]) brandName = index % 2 === 0 ? "Sun Pharma" : "Torrent";
+        else if (med.categoryId === catMap["Cardiovascular"]) brandName = index % 2 === 0 ? "Lupin" : "Sun Pharma";
+        else if (med.categoryId === catMap["Gastrointestinal"]) brandName = index % 2 === 0 ? "Alkem" : "NPL";
+        else if (med.categoryId === catMap["Respiratory"]) brandName = "Cipla";
+        else if (med.categoryId === catMap["Dermatological"]) brandName = index % 2 === 0 ? "Pfizer" : "Alkem";
+        else if (med.categoryId === catMap["Pediatric"]) brandName = "NPL";
+        
+        const brandId = brandMap[brandName] || brandKeys[index % brandKeys.length];
+
+        const medicineId = await this.createMedicine({
           ...med,
+          brandId,
+          manufacturer: brandName,
           clinicId,
           branchId: branchId || "",
           createdBy: userId,
         });
+
+        // Determine a realistic stock count (make 5 items low stock, others high stock)
+        const isLowStockItem = index < 5;
+        const currentStock = isLowStockItem ? Math.floor(3 + Math.random() * 6) : Math.floor(100 + Math.random() * 150);
+        
+        // Generate a future expiry date (e.g. 1 to 2 years from now)
+        const futureExpiry = new Date();
+        futureExpiry.setMonth(futureExpiry.getMonth() + Math.floor(12 + Math.random() * 12));
+
+        const seededBatchNumber = "B" + Math.floor(100000 + Math.random() * 900000);
+
+        // Create Stock Record
+        await this.createMedicineStock({
+          medicineId,
+          currentStock,
+          schemeStock: 0,
+          minimumStock: 10,
+          reorderLevel: 20,
+          clinicId,
+          branchId: branchId || "",
+          updatedBy: userId,
+          batchNumber: seededBatchNumber,
+          expiryDate: futureExpiry,
+          costPrice: med.costPrice,
+          salePrice: med.price,
+        });
+
+        // Create Stock Transaction for Audit Trail
+        await this.createStockTransaction({
+          medicineId,
+          type: "purchase" as const,
+          quantity: currentStock,
+          previousStock: 0,
+          newStock: currentStock,
+          batchNumber: seededBatchNumber,
+          expiryDate: futureExpiry,
+          costPrice: med.costPrice,
+          salePrice: med.price,
+          clinicId,
+          branchId: branchId || "",
+          createdBy: userId,
+        });
+
+        index++;
       }
     } catch (error) {
       console.error("Error seeding medicines:", error);

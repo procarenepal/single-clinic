@@ -84,6 +84,8 @@ export default function StockTab({
     maximumStock: "",
     reorderLevel: "",
     location: "",
+    batchNumber: "",
+    expiryDate: "",
   });
 
   const [transactionFormData, setTransactionFormData] = useState({
@@ -179,6 +181,18 @@ export default function StockTab({
   ) => {
     if (stockItem) {
       setCurrentStockItem(stockItem);
+
+      let expStr = "";
+      if (stockItem.expiryDate) {
+        const dateVal = stockItem.expiryDate as any;
+        const d = dateVal && typeof dateVal.toDate === "function"
+          ? dateVal.toDate()
+          : (dateVal instanceof Date ? dateVal : new Date(dateVal));
+        if (!isNaN(d.getTime())) {
+          expStr = d.toISOString().split("T")[0];
+        }
+      }
+
       setStockFormData({
         medicineId: stockItem.medicineId,
         currentStock: stockItem.currentStock.toString(),
@@ -186,6 +200,8 @@ export default function StockTab({
         maximumStock: stockItem.maximumStock?.toString() || "",
         reorderLevel: stockItem.reorderLevel.toString(),
         location: stockItem.location || "",
+        batchNumber: stockItem.batchNumber || "",
+        expiryDate: expStr,
       });
     } else {
       setCurrentStockItem(null);
@@ -196,6 +212,8 @@ export default function StockTab({
         maximumStock: "",
         reorderLevel: "",
         location: "",
+        batchNumber: "",
+        expiryDate: "",
       });
     }
     setIsStockModalOpen(true);
@@ -233,7 +251,7 @@ export default function StockTab({
 
     setIsLoading(true);
     try {
-      const stockData = {
+      const stockData: any = {
         medicineId: stockFormData.medicineId,
         branchId: branchScopeId || "",
         schemeStock: 0,
@@ -246,6 +264,8 @@ export default function StockTab({
         location: stockFormData.location || undefined,
         clinicId,
         updatedBy: userData.id,
+        batchNumber: stockFormData.batchNumber || "DEFAULT",
+        expiryDate: stockFormData.expiryDate ? new Date(stockFormData.expiryDate) : null,
       };
 
       if (currentStockItem) {
@@ -535,10 +555,24 @@ export default function StockTab({
                                     {item.medicine.name}
                                   </p>
                                   {item.medicine.genericName && (
-                                    <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.7)]">
+                                    <p className="text-[11.5px] text-[rgb(var(--color-text-muted)/0.7)]">
                                       {item.medicine.genericName}
                                     </p>
                                   )}
+                                  <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.8)] mt-0.5">
+                                    <span className="font-semibold text-primary/80">Batch:</span> {item.batchNumber || "DEFAULT"}
+                                    <span className="mx-1 text-[rgb(var(--color-text-muted)/0.4)]">|</span>
+                                    <span className="font-semibold text-rose-500/80">Expires:</span> {(() => {
+                                      const dateVal = item.expiryDate as any;
+                                      if (!dateVal) return "N/A";
+                                      const d = dateVal && typeof dateVal.toDate === "function"
+                                        ? dateVal.toDate()
+                                        : (dateVal instanceof Date ? dateVal : new Date(dateVal));
+                                      return isNaN(d.getTime())
+                                        ? "N/A"
+                                        : d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+                                    })()}
+                                  </p>
                                 </div>
                               </td>
                               <td className="px-5 py-3">
@@ -906,6 +940,32 @@ export default function StockTab({
                     placeholder="Enter reorder level"
                     type="number"
                     value={stockFormData.reorderLevel}
+                    variant="bordered"
+                    onChange={handleStockChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                    Batch Number
+                  </label>
+                  <Input
+                    name="batchNumber"
+                    placeholder="Enter batch number"
+                    value={stockFormData.batchNumber}
+                    variant="bordered"
+                    onChange={handleStockChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-default-700 mb-1.5 block">
+                    Expiry Date
+                  </label>
+                  <Input
+                    name="expiryDate"
+                    type="date"
+                    value={stockFormData.expiryDate}
                     variant="bordered"
                     onChange={handleStockChange}
                   />

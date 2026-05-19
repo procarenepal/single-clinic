@@ -170,7 +170,7 @@ export const exportDailyReportToExcel = (
           billing.doctorName || "N/A",
           formatCurrency(billing.totalAmount || 0),
           billing.paymentStatus,
-          formatDate(billing.invoiceDate),
+          formatDate(billing.date),
         ]);
       });
     }
@@ -389,7 +389,7 @@ export const exportDailyReportToPDF = (
         billing.doctorName || "N/A",
         formatCurrency(billing.totalAmount || 0),
         billing.paymentStatus,
-        formatDate(billing.invoiceDate),
+        formatDate(billing.date),
       ]);
 
       autoTable(doc, {

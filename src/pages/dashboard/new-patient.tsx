@@ -786,6 +786,7 @@ const NewPatientPage: React.FC = () => {
     referralPartnerId: "",
     referredBy: "",
     referralType: "" as "doctor" | "partner" | "expert" | "staff" | "",
+    referrals: [] as any[],
     phone: "",
     occupation: "",
     careOf: "",
@@ -1153,6 +1154,93 @@ const NewPatientPage: React.FC = () => {
     }
   };
 
+  // ── Referrers Row Manipulators ──────────────────────────────────────────
+  const addReferrerRow = () => {
+    setProfile((prev) => {
+      const firstRp = referralPartners[0];
+      const newRef = {
+        type: "referral-partner" as const,
+        id: firstRp?.id || "",
+        name: firstRp?.name || "",
+        commissionPercentage: firstRp?.defaultCommission || 0,
+        referredById: "",
+        referredByName: "",
+      };
+      return {
+        ...prev,
+        referrals: [...(prev.referrals || []), newRef],
+      };
+    });
+  };
+
+  const updateReferrerRow = (index: number, key: string, value: any) => {
+    setProfile((prev) => {
+      const updated = [...(prev.referrals || [])];
+      const current = { ...updated[index] };
+
+      if (key === "type") {
+        current.type = value;
+        if (value === "referral-partner") {
+          const first = referralPartners[0];
+          current.id = first?.id || "";
+          current.name = first?.name || "";
+          current.commissionPercentage = first?.defaultCommission || 0;
+        } else if (value === "doctor") {
+          const first = doctors[0];
+          current.id = first?.id || "";
+          current.name = first?.name || "";
+          current.commissionPercentage = first?.defaultCommission || 0;
+        } else if (value === "expert") {
+          const first = experts[0];
+          current.id = first?.id || "";
+          current.name = first?.name || "";
+          current.commissionPercentage = first?.defaultCommission || 0;
+        } else if (value === "staff") {
+          const first = staff[0];
+          current.id = first?.id || "";
+          current.name = first?.name || "";
+          current.commissionPercentage = first?.defaultCommission || 0;
+        }
+      } else if (key === "id") {
+        current.id = value;
+        if (current.type === "referral-partner") {
+          const match = referralPartners.find(rp => rp.id === value);
+          current.name = match?.name || "";
+          current.commissionPercentage = match?.defaultCommission || 0;
+        } else if (current.type === "doctor") {
+          const match = doctors.find(d => d.id === value);
+          current.name = match?.name || "";
+          current.commissionPercentage = match?.defaultCommission || 0;
+        } else if (current.type === "expert") {
+          const match = experts.find(e => e.id === value);
+          current.name = match?.name || "";
+          current.commissionPercentage = match?.defaultCommission || 0;
+        } else if (current.type === "staff") {
+          const match = staff.find(s => s.id === value);
+          current.name = match?.name || "";
+          current.commissionPercentage = match?.defaultCommission || 0;
+        }
+      } else if (key === "commissionPercentage") {
+        current.commissionPercentage = Number(value) || 0;
+      } else if (key === "referredById") {
+        current.referredById = value;
+        const matchDoc = doctors.find(d => d.id === value);
+        const matchExp = experts.find(e => e.id === value);
+        current.referredByName = matchDoc ? `Dr. ${matchDoc.name}` : (matchExp?.name || "");
+      }
+
+      updated[index] = current;
+      return { ...prev, referrals: updated };
+    });
+  };
+
+  const removeReferrerRow = (index: number) => {
+    setProfile((prev) => ({
+      ...prev,
+      referrals: (prev.referrals || []).filter((_, i) => i !== index),
+    }));
+  };
+
   // ── Profile change handlers ───────────────────────────────────────────────
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -1252,11 +1340,27 @@ const NewPatientPage: React.FC = () => {
       createdBy: currentUser?.uid || "",
     };
 
-    if (profile.referralPartnerId && profile.referralType === "partner") {
-      patientData.referralPartnerId = profile.referralPartnerId;
-    } else if (profile.referralPartnerId && profile.referralType === "doctor") {
-      // If needed, we can store referringDoctorId, but we'll adapt models
-      patientData.referredBy = profile.referredBy;
+    patientData.referrals = profile.referrals || [];
+    if (profile.referrals && profile.referrals.length > 0) {
+      const firstPartner = profile.referrals.find(r => r.type === "referral-partner");
+      if (firstPartner) {
+        patientData.referralPartnerId = firstPartner.id;
+        patientData.referralType = "partner";
+        patientData.referredBy = firstPartner.name;
+      } else {
+        const first = profile.referrals[0];
+        patientData.referralPartnerId = first.id;
+        patientData.referralType = first.type;
+        patientData.referredBy = first.name;
+      }
+    } else {
+      if (profile.referralPartnerId && profile.referralType === "partner") {
+        patientData.referralPartnerId = profile.referralPartnerId;
+        patientData.referralType = "partner";
+      } else if (profile.referralPartnerId && profile.referralType === "doctor") {
+        patientData.referredBy = profile.referredBy;
+        patientData.referralType = "doctor";
+      }
     }
 
     if (profile.occupation) patientData.occupation = profile.occupation;
@@ -1362,86 +1466,113 @@ const NewPatientPage: React.FC = () => {
 
       const patientId = await patientService.createPatient(buildPatientData());
 
-      // Handle Referral Commission
-      if (profile.referralPartnerId && appt.appointmentType) {
+      // Handle Referral Commissions (Polymorphic Multiple Referrals)
+      if (appt.appointmentType) {
         try {
           const selectedType = appointmentTypes.find(t => t.id === appt.appointmentType);
           if (selectedType) {
             const price = selectedType.price || 0;
-            if (profile.referralType === "partner") {
-              const partner = await referralPartnerService.getReferralPartnerById(profile.referralPartnerId);
-              if (partner && partner.defaultCommission > 0) {
-                const commissionAmount = (price * partner.defaultCommission) / 100;
-                await referralCommissionService.createRegistrationCommission(
-                  partner,
-                  clinicId,
-                  defaultBranchId || clinicId,
-                  patientId,
-                  profile.name,
-                  selectedType.name,
-                  price,
-                  commissionAmount,
-                  currentUser?.uid || ""
-                );
-              }
-            } else if (profile.referralType === "doctor") {
-              const doctor = await doctorService.getDoctorById(profile.referralPartnerId);
-              if (doctor && doctor.defaultCommission > 0) {
-                const commissionAmount = (price * doctor.defaultCommission) / 100;
-                await doctorCommissionService.createRegistrationCommission(
-                  doctor.id,
-                  doctor.name,
-                  clinicId,
-                  defaultBranchId || clinicId,
-                  patientId,
-                  profile.name,
-                  selectedType.name,
-                  price,
-                  commissionAmount,
-                  doctor.defaultCommission,
-                  currentUser?.uid || ""
-                );
-              }
-            } else if (profile.referralType === "expert") {
-              const expert = await expertService.getExpertById(profile.referralPartnerId);
-              if (expert && expert.defaultCommission > 0) {
-                const commissionAmount = (price * expert.defaultCommission) / 100;
-                await expertCommissionService.createRegistrationCommission(
-                  expert.id,
-                  expert.name,
-                  clinicId,
-                  defaultBranchId || clinicId,
-                  patientId,
-                  profile.name,
-                  selectedType.name,
-                  price,
-                  commissionAmount,
-                  expert.defaultCommission,
-                  currentUser?.uid || ""
-                );
-              }
-            } else if (profile.referralType === "staff") {
-              const staffMember = staff.find(s => s.id === profile.referralPartnerId);
-              if (staffMember && (staffMember.defaultCommission || 0) > 0) {
-                const commissionAmount = (price * staffMember.defaultCommission) / 100;
-                await staffCommissionService.createRegistrationCommission(
-                  staffMember.id,
-                  staffMember.name,
-                  clinicId,
-                  defaultBranchId || clinicId,
-                  patientId,
-                  profile.name,
-                  selectedType.name,
-                  price,
-                  commissionAmount,
-                  staffMember.defaultCommission,
-                  currentUser?.uid || ""
-                );
+            const referralsToUse = (profile.referrals && profile.referrals.length > 0)
+              ? profile.referrals
+              : (profile.referralPartnerId ? [{
+                  type: profile.referralType || "referral-partner",
+                  id: profile.referralPartnerId,
+                  name: profile.referredBy,
+                  commissionPercentage: 0,
+                }] : []);
+
+            for (const ref of referralsToUse) {
+              const commissionPercent = ref.commissionPercentage > 0
+                ? ref.commissionPercentage
+                : 0;
+
+              if (ref.type === "referral-partner") {
+                const partner = await referralPartnerService.getReferralPartnerById(ref.id);
+                if (partner) {
+                  const finalPercentage = commissionPercent || partner.defaultCommission || 0;
+                  if (finalPercentage > 0) {
+                    const commissionAmount = (price * finalPercentage) / 100;
+                    await referralCommissionService.createRegistrationCommission(
+                      { ...partner, defaultCommission: finalPercentage },
+                      clinicId,
+                      defaultBranchId || clinicId,
+                      patientId,
+                      profile.name,
+                      selectedType.name,
+                      price,
+                      commissionAmount,
+                      currentUser?.uid || ""
+                    );
+                  }
+                }
+              } else if (ref.type === "doctor") {
+                const doctor = await doctorService.getDoctorById(ref.id);
+                if (doctor) {
+                  const finalPercentage = commissionPercent || doctor.defaultCommission || 0;
+                  if (finalPercentage > 0) {
+                    const commissionAmount = (price * finalPercentage) / 100;
+                    await doctorCommissionService.createRegistrationCommission(
+                      doctor.id,
+                      doctor.name,
+                      clinicId,
+                      defaultBranchId || clinicId,
+                      patientId,
+                      profile.name,
+                      selectedType.name,
+                      price,
+                      commissionAmount,
+                      finalPercentage,
+                      currentUser?.uid || ""
+                    );
+                  }
+                }
+              } else if (ref.type === "expert") {
+                const expert = await expertService.getExpertById(ref.id);
+                if (expert) {
+                  const finalPercentage = commissionPercent || expert.defaultCommission || 0;
+                  if (finalPercentage > 0) {
+                    const commissionAmount = (price * finalPercentage) / 100;
+                    await expertCommissionService.createRegistrationCommission(
+                      expert.id,
+                      expert.name,
+                      clinicId,
+                      defaultBranchId || clinicId,
+                      patientId,
+                      profile.name,
+                      selectedType.name,
+                      price,
+                      commissionAmount,
+                      finalPercentage,
+                      currentUser?.uid || ""
+                    );
+                  }
+                }
+              } else if (ref.type === "staff") {
+                const staffMember = staff.find(s => s.id === ref.id);
+                if (staffMember) {
+                  const finalPercentage = commissionPercent || staffMember.defaultCommission || 0;
+                  if (finalPercentage > 0) {
+                    const commissionAmount = (price * finalPercentage) / 100;
+                    await staffCommissionService.createRegistrationCommission(
+                      staffMember.id,
+                      staffMember.name,
+                      clinicId,
+                      defaultBranchId || clinicId,
+                      patientId,
+                      profile.name,
+                      selectedType.name,
+                      price,
+                      commissionAmount,
+                      finalPercentage,
+                      currentUser?.uid || ""
+                    );
+                  }
+                }
               }
             }
           }
         } catch (commError) {
-          console.error("Error creating referral commission:", commError);
+          console.error("Error creating referral commissions:", commError);
           // Don't block patient creation for commission errors
         }
       }
@@ -1778,21 +1909,7 @@ const NewPatientPage: React.FC = () => {
                   />
                 </Field>
 
-                {/* Referred By */}
-                <Field label="Referred By">
-                  <ReferralSourceSelect
-                    sources={referralSources}
-                    value={profile.referralPartnerId}
-                    onChange={(id, name, type) => {
-                      setProfile((p) => ({
-                        ...p,
-                        referralPartnerId: id,
-                        referredBy: name,
-                        referralType: type,
-                      }));
-                    }}
-                  />
-                </Field>
+
 
                 {/* Phone */}
                 <Field label="Secondary Phone">
@@ -1870,7 +1987,176 @@ const NewPatientPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Referral Sources & Commissions Card */}
+            <div className="bg-surface border border-border-base rounded overflow-hidden mt-4">
+              <SectionHeader
+                icon={<IoRefreshOutline className="w-4 h-4" />}
+                subtitle="Associate this patient registration with one or more referrers for commission calculations."
+                title="Referral Sources & Commission Splits"
+              />
+              <div className="p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-border-base pb-2 mb-2">
+                  <div>
+                    <label className="text-[12px] font-bold text-text-main">
+                      Referral Sources & Commission Splits
+                    </label>
+                    <p className="text-[11px] text-text-muted">
+                      Assign split percentages to referral partners, doctors, experts, or staff.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addReferrerRow}
+                    className="px-2.5 py-1 text-[11px] font-bold text-primary border border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded transition-colors"
+                  >
+                    ➕ Add Referrer
+                  </button>
+                </div>
 
+                {(!profile.referrals || profile.referrals.length === 0) ? (
+                  <div className="py-6 text-center text-[12px] text-text-muted bg-surface-2/30 border border-dashed border-border-base rounded">
+                    No active referrals added (Patient is a Direct Walk-in).
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                    {(profile.referrals || []).map((ref, idx) => (
+                      <div key={idx} className="flex flex-col gap-3 bg-surface p-3 border border-border-base rounded shadow-none relative">
+                        <div className="flex items-center gap-3">
+                          <div className="grid grid-cols-12 gap-3 flex-1">
+                            {/* Referrer Type Dropdown */}
+                            <div className="col-span-12 sm:col-span-4">
+                              <label className="block text-[10px] font-semibold text-text-muted mb-1">
+                                Referrer Type
+                              </label>
+                              <select
+                                className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                value={ref.type}
+                                onChange={(e) => updateReferrerRow(idx, "type", e.target.value)}
+                              >
+                                <option value="referral-partner">External Partner</option>
+                                <option value="doctor">Internal Doctor</option>
+                                <option value="expert">External Expert</option>
+                                <option value="staff">Internal Staff</option>
+                              </select>
+                            </div>
+
+                            {/* Referrer Name Dropdown */}
+                            <div className="col-span-12 sm:col-span-5">
+                              <label className="block text-[10px] font-semibold text-text-muted mb-1">
+                                Referrer Name
+                              </label>
+                              <select
+                                className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                value={ref.id}
+                                onChange={(e) => updateReferrerRow(idx, "id", e.target.value)}
+                              >
+                                {ref.type === "referral-partner" && (
+                                  <>
+                                    <option value="">-- Choose Partner --</option>
+                                    {referralPartners.map((rp) => (
+                                      <option key={rp.id} value={rp.id}>
+                                        {rp.name}
+                                      </option>
+                                    ))}
+                                  </>
+                                )}
+                                {ref.type === "doctor" && (
+                                  <>
+                                    <option value="">-- Choose Doctor --</option>
+                                    {doctors.map((d) => (
+                                      <option key={d.id} value={d.id}>
+                                        Dr. {d.name}
+                                      </option>
+                                    ))}
+                                  </>
+                                )}
+                                {ref.type === "expert" && (
+                                  <>
+                                    <option value="">-- Choose Expert --</option>
+                                    {experts.map((exp) => (
+                                      <option key={exp.id} value={exp.id}>
+                                        {exp.name}
+                                      </option>
+                                    ))}
+                                  </>
+                                )}
+                                {ref.type === "staff" && (
+                                  <>
+                                    <option value="">-- Choose Staff --</option>
+                                    {staff.map((s) => (
+                                      <option key={s.id} value={s.id}>
+                                        {s.name}
+                                      </option>
+                                    ))}
+                                  </>
+                                )}
+                              </select>
+                            </div>
+
+                            {/* Commission split percentage */}
+                            <div className="col-span-12 sm:col-span-3">
+                              <label className="block text-[10px] font-semibold text-text-muted mb-1">
+                                Split %
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                className="w-full h-9 px-2 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors text-right"
+                                value={ref.commissionPercentage}
+                                onChange={(e) => updateReferrerRow(idx, "commissionPercentage", e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Action delete button */}
+                          <button
+                            type="button"
+                            onClick={() => removeReferrerRow(idx)}
+                            className="h-9 w-9 rounded border border-border-base text-red-500 hover:bg-red-500/5 flex items-center justify-center transition-colors shrink-0 mt-5"
+                            title="Remove referrer"
+                          >
+                            &times;
+                          </button>
+                        </div>
+
+                        {/* Partner sub-row: Specific referred by doctor/expert */}
+                        {ref.type === "referral-partner" && (
+                          <div className="border-t border-border-base/50 pt-3 mt-1 grid grid-cols-12 gap-3 items-center">
+                            <div className="col-span-12 sm:col-span-4">
+                              <span className="text-[11px] font-bold text-text-muted">Referred By (Doc/Expert):</span>
+                            </div>
+                            <div className="col-span-12 sm:col-span-8">
+                              <select
+                                className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                value={ref.referredById || ""}
+                                onChange={(e) => updateReferrerRow(idx, "referredById", e.target.value)}
+                              >
+                                <option value="">-- Optional Referring Person --</option>
+                                <optgroup label="Internal Doctors">
+                                  {doctors.map((d) => (
+                                    <option key={d.id} value={d.id}>
+                                      Dr. {d.name} ({d.speciality || "GP"})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="External Experts">
+                                  {experts.map((exp) => (
+                                    <option key={exp.id} value={exp.id}>
+                                      {exp.name} ({exp.expertType || "Expert"})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Medical Conditions Card */}
             <div className="bg-surface border border-border-base rounded overflow-hidden">

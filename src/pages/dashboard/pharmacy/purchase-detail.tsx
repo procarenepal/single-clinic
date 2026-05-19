@@ -31,6 +31,105 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui";
 import { title } from "@/components/primitives";
 
+interface DisplayItem {
+  id: string;
+  medicineName: string;
+  batchNumber: string;
+  quantity: number;
+  salePrice: number;
+  amount: number;
+  expiryDate?: string;
+  originalItem: any;
+}
+
+const getDisplayItems = (items: any[]): DisplayItem[] => {
+  const displayItems: DisplayItem[] = [];
+  items.forEach((item) => {
+    const batchStr = item.batchNumber || "";
+    if (batchStr.includes("@ NPR") || (batchStr.includes("(") && batchStr.includes("x"))) {
+      const batches = batchStr.split(", ");
+      let parsedSuccessfully = true;
+      const parsedBatches: { batchNumber: string; qty: number; price: number; expiryDate?: string }[] = [];
+      
+      batches.forEach((bStr: string) => {
+        const match = bStr.match(/^([^\(]+)\s*\(x(\d+)\s*@\s*NPR\s*([\d\.]+)\)$/i);
+        if (match) {
+          const rawBatch = match[1].trim();
+          let batchNumber = rawBatch;
+          let expiryDate = item.expiryDate;
+          if (rawBatch.includes("|Exp:")) {
+            const parts = rawBatch.split("|Exp:");
+            batchNumber = parts[0].trim();
+            expiryDate = parts[1].trim();
+          }
+          parsedBatches.push({
+            batchNumber,
+            qty: parseInt(match[2]) || 0,
+            price: parseFloat(match[3]) || 0,
+            expiryDate,
+          });
+        } else {
+          const simpleMatch = bStr.match(/^([^\(]+)\s*\(x(\d+)\)$/i);
+          if (simpleMatch) {
+            const rawBatch = simpleMatch[1].trim();
+            let batchNumber = rawBatch;
+            let expiryDate = item.expiryDate;
+            if (rawBatch.includes("|Exp:")) {
+              const parts = rawBatch.split("|Exp:");
+              batchNumber = parts[0].trim();
+              expiryDate = parts[1].trim();
+            }
+            parsedBatches.push({
+              batchNumber,
+              qty: parseInt(simpleMatch[2]) || 0,
+              price: item.salePrice,
+              expiryDate,
+            });
+          } else {
+            parsedSuccessfully = false;
+          }
+        }
+      });
+      
+      if (parsedSuccessfully && parsedBatches.length > 0) {
+        parsedBatches.forEach((batch, idx) => {
+          displayItems.push({
+            id: `${item.id}_batch_${idx}`,
+            medicineName: item.medicineName,
+            batchNumber: batch.batchNumber,
+            quantity: batch.qty,
+            salePrice: batch.price,
+            amount: batch.qty * batch.price,
+            expiryDate: batch.expiryDate,
+            originalItem: item,
+          });
+        });
+        return;
+      }
+    }
+    
+    let fallbackBatchNumber = batchStr;
+    let fallbackExpiryDate = item.expiryDate;
+    if (batchStr.includes("|Exp:")) {
+      const parts = batchStr.split("|Exp:");
+      fallbackBatchNumber = parts[0].trim();
+      fallbackExpiryDate = parts[1].trim();
+    }
+
+    displayItems.push({
+      id: item.id,
+      medicineName: item.medicineName,
+      batchNumber: fallbackBatchNumber || "DEFAULT",
+      quantity: item.quantity,
+      salePrice: item.salePrice,
+      amount: item.amount,
+      expiryDate: fallbackExpiryDate,
+      originalItem: item,
+    });
+  });
+  return displayItems;
+};
+
 // --- Components ---
 function ModalShell({
   title,
@@ -291,7 +390,7 @@ function StatusBadge({
   type?: "status" | "payment";
 }) {
   const S_COLORS: Record<string, string> = {
-    paid: "bg-health-100 text-health-700 border-health-200",
+    paid: "bg-purple-100 text-purple-700 border-purple-200",
     finalized: "bg-teal-100 text-teal-700 border-teal-200",
     partial: "bg-saffron-100 text-saffron-700 border-saffron-200",
     unpaid: "bg-red-100 text-red-700 border-red-200",
@@ -402,6 +501,17 @@ export default function PurchaseDetailPage() {
   });
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  const handleOpenPaymentModal = () => {
+    setPaymentForm((prev) => ({
+      ...prev,
+      amount: dueAmount,
+      reference: "",
+      notes: "",
+    }));
+    setIsPaymentModalOpen(true);
+  };
+
   const [receiptFormat, setReceiptFormat] = useState<string>("Thermal");
   const medicationCourseInfo = getMedicationCourseInfo(purchase);
 
@@ -671,16 +781,17 @@ export default function PurchaseDetailPage() {
   }, [purchase?.id, purchase?.purchaseDate, purchase?.items]);
 
   // Calculate payment amounts
-  const totalAmount = purchase?.netAmount || 0;
-  const totalReturnedAmount =
+  const totalAmount = Math.round(purchase?.netAmount || 0);
+  const totalReturnedAmount = Math.round(
     purchase?.totalReturnedAmount && purchase.totalReturnedAmount > 0
       ? purchase.totalReturnedAmount
       : (purchase?.returns ?? []).reduce(
         (sum, r) => sum + Math.abs(r.totalAmount || 0),
         0,
-      );
+      )
+  );
   const netAfterReturns = Math.max(0, totalAmount - totalReturnedAmount);
-  const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const paidAmount = Math.round(payments.reduce((sum, payment) => sum + payment.amount, 0));
   const dueAmount = Math.max(0, netAfterReturns - paidAmount);
   const paymentProgress =
     totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
@@ -830,13 +941,22 @@ export default function PurchaseDetailPage() {
 
     if (printWindow) {
       // Build the table rows for Items
-      const itemsHtml = purchase.items.map((item, index) => {
-        const price = itemLifoPrices[item.id] ?? item.salePrice;
+      const displayItems = getDisplayItems(purchase.items);
+      const itemsHtml = displayItems.map((item, index) => {
+        const price = item.salePrice;
+        const formattedPrice = price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
         return `<tr>
           <td style="text-align: center;">${index + 1}</td>
-          <td>${item.medicineName}</td>
+          <td>
+            <div style="font-weight: bold;">${item.medicineName}</div>
+            ${item.batchNumber || item.expiryDate ? `
+              <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">
+                ${item.expiryDate ? `<strong>Exp:</strong> ${item.expiryDate}` : ""}
+                ${item.batchNumber ? `${item.expiryDate ? " | " : ""}<strong>Batch:</strong> ${item.batchNumber}` : ""}
+              </div>` : ""}
+          </td>
           <td style="text-align: center;">${item.quantity}</td>
-          <td style="text-align: right;">NPR ${price.toLocaleString()}</td>
+          <td style="text-align: right;">NPR ${formattedPrice}</td>
           <td style="text-align: right;">NPR ${item.amount.toLocaleString()}</td>
         </tr>`;
       }).join("");
@@ -845,29 +965,29 @@ export default function PurchaseDetailPage() {
       const summaryRowsHtml = `
         <tr>
           <td style="text-align: left; padding: 4px 0;">Subtotal</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${purchase.total.toLocaleString()}</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(purchase.total).toLocaleString()}</td>
         </tr>
         ${purchase.discount > 0 ? `
         <tr>
           <td style="text-align: left; padding: 4px 0;">Discount</td>
-          <td style="text-align: right; padding: 4px 0;">- NPR ${purchase.discount.toLocaleString()}</td>
+          <td style="text-align: right; padding: 4px 0;">- NPR ${Math.round(purchase.discount).toLocaleString()}</td>
         </tr>` : ""}
         ${purchase.taxAmount > 0 ? `
         <tr>
           <td style="text-align: left; padding: 4px 0;">Tax (${purchase.taxPercentage}%)</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${purchase.taxAmount.toLocaleString()}</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(purchase.taxAmount).toLocaleString()}</td>
         </tr>` : ""}
         <tr style="font-weight: bold; font-size: 14px;">
           <td style="text-align: left; padding: 8px 0; border-top: 1px solid #e2e8f0;">Total</td>
-          <td style="text-align: right; padding: 8px 0; border-top: 1px solid #e2e8f0;">NPR ${purchase.netAmount.toLocaleString()}</td>
+          <td style="text-align: right; padding: 8px 0; border-top: 1px solid #e2e8f0;">NPR ${Math.round(purchase.netAmount).toLocaleString()}</td>
         </tr>
         <tr>
           <td style="text-align: left; padding: 4px 0;">Paid (${purchase.paymentType.toUpperCase()})</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${paidAmount.toLocaleString()}</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(paidAmount).toLocaleString()}</td>
         </tr>
         <tr style="font-weight: bold; font-size: 14px;">
           <td style="text-align: left; padding: 4px 0;">Balance</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${dueAmount.toLocaleString()}</td>
+          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(dueAmount).toLocaleString()}</td>
         </tr>
       `;
 
@@ -913,52 +1033,78 @@ export default function PurchaseDetailPage() {
 
     .document-title {
       text-align: center;
-      margin: 20px 0 10px 0;
-      border-bottom: 1px solid #f1f5f9;
-      padding-bottom: 10px;
+      margin: 8px 0 2px 0;
+      border-bottom: 2px solid #7c3aed;
+      padding-bottom: 4px;
     }
     .document-title h2 {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 800;
       margin: 0;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #1e293b;
+      letter-spacing: 0.15em;
+      color: #7c3aed;
     }
     
-    .invoice-meta {
+    .invoice-info-section {
       display: flex;
       justify-content: space-between;
-      margin-top: 15px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #334155;
+      align-items: stretch;
+      margin: 8px 0;
+      gap: 12px;
     }
 
-    .bill-to-box {
+    .bill-to-block {
+      flex: 1;
       background-color: #f8fafc;
-      border-radius: 8px;
-      padding: 15px;
-      margin: 20px 0;
-      border: 1px solid #f1f5f9;
+      border-radius: 6px;
+      padding: 8px 12px;
+      border: 1px dashed #cbd5e1;
     }
     .bill-to-title {
-      font-size: 11px;
+      font-size: 9px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #94a3b8;
+      color: #64748b;
       font-weight: 700;
-      margin-bottom: 5px;
+      margin-bottom: 2px;
     }
     .bill-to-name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
-      color: #1e293b;
+      color: #0f172a;
     }
     .bill-to-detail {
-      font-size: 12px;
+      font-size: 11px;
       color: #475569;
-      margin-top: 2px;
+      margin-top: 1px;
+    }
+
+    .invoice-details-block {
+      width: 240px;
+      background-color: #f8fafc;
+      border-radius: 6px;
+      padding: 8px 12px;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 3px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+    .detail-label {
+      color: #64748b;
+      font-weight: 600;
+    }
+    .detail-val {
+      color: #0f172a;
+      font-weight: 700;
+      text-align: right;
     }
 
     .items-table {
@@ -1027,23 +1173,27 @@ export default function PurchaseDetailPage() {
       <h2>Invoice</h2>
     </div>
 
-    <div class="invoice-meta">
-      <span># ${purchase.purchaseNo}</span>
-      <span>Date: ${purchase.purchaseDate.toLocaleDateString()}</span>
-    </div>
-
-    <div class="bill-to-box">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-          <div class="bill-to-title">Bill To:</div>
-          <div class="bill-to-name">${purchase.patientName || "Cash Customer"}</div>
-          ${purchase.patientPhone ? `<div class="bill-to-detail">Phone: ${purchase.patientPhone}</div>` : ""}
-          ${purchase.patientAddress ? `<div class="bill-to-detail">Address: ${purchase.patientAddress}</div>` : ""}
+    <div class="invoice-info-section">
+      <div class="bill-to-block">
+        <div class="bill-to-title">Bill To</div>
+        <div class="bill-to-name">${purchase.patientName || "Cash Customer"}</div>
+        ${purchase.patientPhone ? `<div class="bill-to-detail">Phone: ${purchase.patientPhone}</div>` : ""}
+        ${purchase.patientAddress ? `<div class="bill-to-detail">Address: ${purchase.patientAddress}</div>` : ""}
+      </div>
+      
+      <div class="invoice-details-block">
+        <div class="detail-row">
+          <span class="detail-label">Invoice No:</span>
+          <span class="detail-val">#${purchase.purchaseNo}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date:</span>
+          <span class="detail-val">${purchase.purchaseDate.toLocaleDateString()}</span>
         </div>
         ${clinic?.panNumber ? `
-        <div style="text-align: right;">
-          <div class="bill-to-title">Clinic PAN:</div>
-          <div class="bill-to-name" style="font-size: 12px;">${clinic.panNumber}</div>
+        <div class="detail-row">
+          <span class="detail-label">Clinic PAN:</span>
+          <span class="detail-val">${clinic.panNumber}</span>
         </div>
         ` : ""}
       </div>
@@ -1074,7 +1224,7 @@ export default function PurchaseDetailPage() {
 
     <div style="margin-top: 30px; text-align: center;">
       ${!layoutConfig?.showFooter ? '<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; font-weight: 600;">Thank you for choosing us.</div>' : ""}
-      <div style="font-size: 9px; margin-top: 10px; color: #cbd5e1; text-align: right;">
+      <div style="font-size: 9.5px; margin-top: 10px; color: #64748b; text-align: right; font-weight: 500;">
         Print Date: ${new Date().toLocaleString()}
       </div>
     </div>
@@ -1295,7 +1445,7 @@ export default function PurchaseDetailPage() {
               <Button
                 color="primary"
                 startContent={<IoAddOutline />}
-                onClick={() => setIsPaymentModalOpen(true)}
+                onClick={handleOpenPaymentModal}
               >
                 Add Payment
               </Button>
@@ -1326,7 +1476,7 @@ export default function PurchaseDetailPage() {
               <p className="text-[12.5px] text-mountain-500 mb-1">
                 Paid Amount
               </p>
-              <p className="text-stat-sm font-bold text-health-600">
+              <p className="text-stat-sm font-bold text-purple-600">
                 NPR {paidAmount.toLocaleString()}
               </p>
             </div>
@@ -1335,12 +1485,12 @@ export default function PurchaseDetailPage() {
             <div className="text-center lg:text-left">
               <p className="text-[12.5px] text-mountain-500 mb-1">Due Amount</p>
               <p
-                className={`text-stat-sm font-bold ${dueAmount > 0 ? "text-red-500" : "text-health-600"}`}
+                className={`text-stat-sm font-bold ${dueAmount > 0 ? "text-red-500" : "text-purple-600"}`}
               >
                 NPR {dueAmount.toLocaleString()}
               </p>
               {totalReturnedAmount > 0 && (
-                <p className="text-[11px] text-health-600 mt-1">
+                <p className="text-[11px] text-purple-600 mt-1">
                   Net after returns: NPR {netAfterReturns.toLocaleString()}
                 </p>
               )}
@@ -1367,7 +1517,7 @@ export default function PurchaseDetailPage() {
             </div>
             <div className="w-full bg-mountain-100 h-2 rounded-full overflow-hidden">
               <div
-                className={`h-full ${isPaidInFull ? "bg-health-500" : isPartiallyPaid ? "bg-saffron-500" : "bg-red-500"}`}
+                className={`h-full ${isPaidInFull ? "bg-purple-500" : isPartiallyPaid ? "bg-saffron-500" : "bg-red-500"}`}
                 style={{ width: `${paymentProgress}%` }}
               />
             </div>
@@ -1375,10 +1525,10 @@ export default function PurchaseDetailPage() {
         </div>
 
         {/* Purchase Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Purchase Items */}
           {/* Purchase Items */}
-          <div className="clarity-card bg-white border border-mountain-200 rounded overflow-hidden">
+          <div className="clarity-card bg-white border border-mountain-200 rounded overflow-hidden lg:col-span-2">
             <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-100 flex items-center gap-2">
               <IoReceiptOutline className="w-4 h-4 text-teal-700" />
               <h3 className="text-[13.5px] font-semibold text-mountain-900">
@@ -1402,7 +1552,7 @@ export default function PurchaseDetailPage() {
                       Qty Net
                     </th>
                     <th className="px-3 py-2 text-[11px] font-semibold text-mountain-500 uppercase tracking-wider text-right">
-                      Price (LIFO)
+                      Unit Price
                     </th>
                     <th className="px-3 py-2 text-[11px] font-semibold text-mountain-500 uppercase tracking-wider text-right">
                       Amount
@@ -1410,7 +1560,7 @@ export default function PurchaseDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-mountain-100 bg-white">
-                  {purchase.items.map((item, index) => (
+                  {getDisplayItems(purchase.items).map((item, index) => (
                     <tr
                       key={index}
                       className="hover:bg-mountain-25 transition-colors"
@@ -1420,8 +1570,8 @@ export default function PurchaseDetailPage() {
                           <p className="text-[12.5px] font-medium text-mountain-800">
                             {item.medicineName}
                           </p>
-                          <p className="text-[11px] text-mountain-400">
-                            Exp: {item.expiryDate}
+                          <p className="text-[11.5px] text-mountain-500 font-medium">
+                            Exp: {item.expiryDate} {item.batchNumber && `| Batch: ${item.batchNumber}`}
                           </p>
                         </div>
                       </td>
@@ -1436,7 +1586,7 @@ export default function PurchaseDetailPage() {
                             (sum, r) =>
                               sum +
                               r.items.reduce((inner, it) => {
-                                if (it.purchaseItemId === item.id) {
+                                if (it.purchaseItemId === item.originalItem.id) {
                                   return inner + it.quantity;
                                 }
 
@@ -1456,7 +1606,7 @@ export default function PurchaseDetailPage() {
                             (sum, r) =>
                               sum +
                               r.items.reduce((inner, it) => {
-                                if (it.purchaseItemId === item.id) {
+                                if (it.purchaseItemId === item.originalItem.id) {
                                   return inner + it.quantity;
                                 }
 
@@ -1473,9 +1623,10 @@ export default function PurchaseDetailPage() {
                       </td>
                       <td className="px-3 py-2 text-[12.5px] text-mountain-800 text-right">
                         NPR{" "}
-                        {(
-                          itemLifoPrices[item.id] ?? item.salePrice
-                        ).toLocaleString()}
+                        {item.salePrice.toLocaleString(undefined, {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        })}
                       </td>
                       <td className="px-3 py-2 text-[12.5px] text-mountain-800 text-right">
                         NPR {item.amount.toLocaleString()}
@@ -1516,25 +1667,25 @@ export default function PurchaseDetailPage() {
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span className="text-mountain-900">
-                    NPR {purchase.total.toLocaleString()}
+                    NPR {Math.round(purchase.total).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between flex-row">
                   <span>Discount:</span>
                   <span className="text-red-500">
-                    - NPR {purchase.discount.toLocaleString()}
+                    - NPR {Math.round(purchase.discount).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Tax ({purchase.taxPercentage}%):</span>
                   <span className="text-mountain-900">
-                    NPR {purchase.taxAmount.toLocaleString()}
+                    NPR {Math.round(purchase.taxAmount).toLocaleString()}
                   </span>
                 </div>
                 <div className="border-t border-mountain-200 my-2" />
                 <div className="flex justify-between font-bold text-mountain-900 text-[14px]">
                   <span>Net Total:</span>
-                  <span>NPR {purchase.netAmount.toLocaleString()}</span>
+                  <span>NPR {Math.round(purchase.netAmount).toLocaleString()}</span>
                 </div>
                 {totalReturnedAmount > 0 && (
                   <div className="flex justify-between mt-1">
@@ -1546,8 +1697,8 @@ export default function PurchaseDetailPage() {
                 )}
                 {totalReturnedAmount > 0 && (
                   <div className="flex justify-between mt-1">
-                    <span className="text-health-600">Net After Returns:</span>
-                    <span className="text-health-600">
+                    <span className="text-purple-600">Net After Returns:</span>
+                    <span className="text-purple-600">
                       NPR {netAfterReturns.toLocaleString()}
                     </span>
                   </div>
@@ -1558,7 +1709,7 @@ export default function PurchaseDetailPage() {
 
           {/* Payment History */}
           {/* Payment History */}
-          <div className="clarity-card bg-white border border-mountain-200 rounded overflow-hidden">
+          <div className="clarity-card bg-white border border-mountain-200 rounded overflow-hidden lg:col-span-1">
             <div className="px-4 py-3 bg-mountain-50 border-b border-mountain-100 flex items-center gap-2">
               <IoCashOutline className="w-4 h-4 text-teal-700" />
               <h3 className="text-[13.5px] font-semibold text-mountain-900">
@@ -1579,7 +1730,7 @@ export default function PurchaseDetailPage() {
                       className="mt-4"
                       color="primary"
                       variant="flat"
-                      onClick={() => setIsPaymentModalOpen(true)}
+                      onClick={handleOpenPaymentModal}
                     >
                       Record First Payment
                     </Button>
@@ -1613,7 +1764,7 @@ export default function PurchaseDetailPage() {
                           <td className="px-3 py-2.5 text-[12.5px] text-mountain-800">
                             {payment.paymentDate.toLocaleDateString()}
                           </td>
-                          <td className="px-3 py-2.5 text-[12.5px] text-health-600 font-medium text-right">
+                          <td className="px-3 py-2.5 text-[12.5px] text-purple-600 font-medium text-right">
                             NPR {payment.amount.toLocaleString()}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px] text-mountain-800 capitalize">
@@ -1833,14 +1984,23 @@ export default function PurchaseDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {purchase.items.map((item, idx) => {
-                const price = itemLifoPrices[item.id] ?? item.salePrice;
+              {getDisplayItems(purchase.items).map((item, idx) => {
+                const price = item.salePrice;
+                const formattedPrice = price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
                 return (
                   <tr key={idx}>
                     <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{idx + 1}</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px" }}>{item.medicineName}</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px" }}>
+                      <strong>{item.medicineName}</strong>
+                      {(item.batchNumber || item.expiryDate) && (
+                        <div style={{ fontSize: "8.5px", color: "#666", marginTop: "1px" }}>
+                          {item.expiryDate && <span>Exp: {item.expiryDate}</span>}
+                          {item.batchNumber && <span>{item.expiryDate ? " | " : ""}Batch: {item.batchNumber}</span>}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{item.quantity}</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {price.toLocaleString()}</td>
+                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {formattedPrice}</td>
                     <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {item.amount.toLocaleString()}</td>
                   </tr>
                 );
@@ -1849,21 +2009,21 @@ export default function PurchaseDetailPage() {
               {/* Summary Rows */}
               <tr>
                 <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Subtotal</td>
-                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {purchase.total.toLocaleString()}</td>
+                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {Math.round(purchase.total).toLocaleString()}</td>
               </tr>
               <tr>
                 <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Discount</td>
-                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>- NPR {purchase.discount.toLocaleString()}</td>
+                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>- NPR {Math.round(purchase.discount).toLocaleString()}</td>
               </tr>
               {purchase.taxAmount > 0 && (
                 <tr>
                   <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Tax ({purchase.taxPercentage}%)</td>
-                  <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {purchase.taxAmount.toLocaleString()}</td>
+                  <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {Math.round(purchase.taxAmount).toLocaleString()}</td>
                 </tr>
               )}
               <tr style={{ fontWeight: "bold", backgroundColor: "#f9f9f9" }}>
                 <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Net Total</td>
-                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {purchase.netAmount.toLocaleString()}</td>
+                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {Math.round(purchase.netAmount).toLocaleString()}</td>
               </tr>
 
               {/* Payment Section (Inline Header) */}

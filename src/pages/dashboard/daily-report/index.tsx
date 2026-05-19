@@ -223,9 +223,8 @@ export default function DailyReportPage() {
     isMultiBranch && isClinicAdmin && branches.length > 0 && !effectiveBranchId
       ? branches
         .map((branch) => {
-          const branchBilling = reportData.billing.filter(
-            (b) => b.branchId === branch.id,
-          );
+          // DailyBillingSummary does not carry branchId; use total billing for the overview
+          const branchBilling = reportData.billing;
           const revenue = branchBilling.reduce(
             (sum, b) => sum + (b.totalAmount || 0),
             0,
@@ -814,7 +813,7 @@ export default function DailyReportPage() {
                               </Chip>
                             </td>
                             <td className="py-1.5 px-3 text-[13px] text-mountain-700">
-                              {formatDate(billing.invoiceDate)}
+                              {formatDate(billing.date)}
                             </td>
                           </tr>
                         ))}

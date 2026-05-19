@@ -533,6 +533,14 @@ export interface MedicineStock {
   location?: string; // Storage location in clinic
   clinicId: string;
   branchId: string; // Associated branch
+  batchNumber?: string; // Batch number for this specific stock
+  expiryDate?: Date; // Expiry date for this specific stock
+  manufactureDate?: Date; // Manufacturing date for this batch
+  costPrice?: number; // Cost price (purchase price) for this batch
+  salePrice?: number; // Sale price (selling price) for this batch
+  schemePrice?: number; // Scheme price (selling price for scheme stock) for this batch
+  supplierId?: string; // Supplier of this batch
+  invoiceNumber?: string; // Invoice number associated with this batch
   createdAt: Date;
   updatedAt: Date;
   updatedBy: string;
@@ -702,6 +710,7 @@ export interface MedicinePurchaseItem {
   salePrice: number;
   quantity: number;
   amount: number;
+  batchNumber?: string; // Batch sold from
   type?: "medicine" | "item"; // Support both medicines and items
 }
 

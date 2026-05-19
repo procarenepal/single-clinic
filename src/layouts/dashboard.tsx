@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "@/config/firebase";
 import {
   IoMenuOutline,
   IoCloseOutline,
@@ -31,11 +33,37 @@ export interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { currentUser, userData } = useAuthContext();
+  const { currentUser, userData, clinicId } = useAuthContext();
   const { isDark } = useTheme();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [pendingPrescriptionCount, setPendingPrescriptionCount] = useState(0);
 
   const { navItems, loading, error, refreshNavigation } = useNavigation();
+
+  // Listen to pending prescriptions for notification badge
+  useEffect(() => {
+    if (!clinicId) return;
+
+    const prescriptionsRef = collection(db, "prescriptions");
+    const q = query(
+      prescriptionsRef,
+      where("clinicId", "==", clinicId),
+      where("sendToPharmacy", "==", true),
+      where("status", "==", "active")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setPendingPrescriptionCount(snapshot.size);
+      },
+      (error) => {
+        console.error("Error listening to prescriptions:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [clinicId]);
 
   // Prefetch likely next routes after first render
   useEffect(() => {
@@ -170,6 +198,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {item.icon}
               </span>
               <span className="relative z-10 truncate">{item.title}</span>
+              {item.title === "Pharmacy" && pendingPrescriptionCount > 0 && (
+                <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
+                  {pendingPrescriptionCount}
+                </span>
+              )}
             </Link>
 
             {/* Subtree toggle */}
@@ -206,6 +239,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               {item.icon}
             </span>
             <span className="relative z-10 truncate">{item.title}</span>
+            {item.title === "Pharmacy" && pendingPrescriptionCount > 0 && (
+              <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
+                {pendingPrescriptionCount}
+              </span>
+            )}
           </Link>
         )}
 

@@ -323,8 +323,8 @@ export default function MedicinesTab({
         const schemeStockMap: Record<string, number> = {};
 
         stockList.forEach((s) => {
-          stockMap[s.medicineId] = s.currentStock;
-          schemeStockMap[s.medicineId] = s.schemeStock;
+          stockMap[s.medicineId] = (stockMap[s.medicineId] || 0) + s.currentStock;
+          schemeStockMap[s.medicineId] = (schemeStockMap[s.medicineId] || 0) + s.schemeStock;
         });
         setMedicineStocks(stockMap);
         setMedicineSchemeStocks(schemeStockMap);
@@ -463,8 +463,8 @@ export default function MedicinesTab({
 
         // Map medicine IDs to stock quantities (both regular and scheme)
         stockData.forEach((stock) => {
-          stockMap[stock.medicineId] = stock.currentStock;
-          schemeStockMap[stock.medicineId] = stock.schemeStock || 0;
+          stockMap[stock.medicineId] = (stockMap[stock.medicineId] || 0) + stock.currentStock;
+          schemeStockMap[stock.medicineId] = (schemeStockMap[stock.medicineId] || 0) + (stock.schemeStock || 0);
         });
       } catch (stockError) {
         console.warn("Could not fetch stock data:", stockError);
@@ -943,52 +943,13 @@ export default function MedicinesTab({
         medicineData.vatPercentage = parseFloat(row.vatPercentage) || 0;
 
         if (currentMedicine) {
+          // Do not overwrite batch-specific pricing and inventory metadata on the medicine master document
+          delete medicineData.price;
+          delete medicineData.costPrice;
+          delete medicineData.batchNumber;
+          delete medicineData.expiryDate;
+          
           await medicineService.updateMedicine(currentMedicine.id, medicineData);
-          if (row.currentStock) {
-            const newAbsoluteStock = parseFloat(row.currentStock);
-            const existingStock = await medicineService.getMedicineStock(currentMedicine.id, clinicId);
-            const previousStock = existingStock?.currentStock || 0;
-            const delta = newAbsoluteStock - previousStock;
-
-            if (existingStock) {
-              await medicineService.updateMedicineStock(existingStock.id, {
-                currentStock: newAbsoluteStock,
-                updatedBy: userData.id,
-              });
-            } else {
-              await medicineService.createMedicineStock({
-                medicineId: currentMedicine.id,
-                currentStock: newAbsoluteStock,
-                schemeStock: 0,
-                minimumStock: 10,
-                reorderLevel: 20,
-                clinicId,
-                branchId: branchScopeId || "",
-                updatedBy: userData.id,
-              });
-            }
-
-            // Create stock transaction for audit (as an adjustment during edit)
-            if (delta !== 0) {
-              await medicineService.createStockTransaction({
-                medicineId: currentMedicine.id,
-                type: "adjustment",
-                quantity: delta,
-                previousStock: previousStock,
-                newStock: newAbsoluteStock,
-                batchNumber: row.batchNumber,
-                expiryDate: row.expiryDate ? new Date(row.expiryDate) : null,
-                supplierId: finalSupplierId,
-                invoiceNumber: globalPurchaseDetails.billNumber,
-                salePrice: row.price ? parseFloat(row.price) : null,
-                costPrice: row.costPrice ? parseFloat(row.costPrice) : null,
-                clinicId,
-                branchId: branchScopeId || "",
-                createdBy: userData.id,
-                reason: "Stock correction during medicine edit"
-              });
-            }
-          }
         } else {
           // Check if medicine with this name already exists using master list
           const existingMedicine = masterMedicines.find(m => m.name.toLowerCase() === row.name.trim().toLowerCase());
@@ -1021,6 +982,12 @@ export default function MedicinesTab({
                 clinicId,
                 branchId: branchScopeId || "",
                 updatedBy: userData.id,
+                batchNumber: row.batchNumber || "",
+                expiryDate: row.expiryDate ? new Date(row.expiryDate) : undefined,
+                costPrice: row.costPrice ? parseFloat(row.costPrice) : undefined,
+                salePrice: row.price ? parseFloat(row.price) : undefined,
+                supplierId: finalSupplierId || undefined,
+                invoiceNumber: globalPurchaseDetails.billNumber || undefined,
               });
             }
 
@@ -1204,9 +1171,11 @@ export default function MedicinesTab({
 
     setIsLoading(true);
     try {
-      // Get current stock (both regular and scheme)
-      const existingStock = await medicineService.getMedicineStock(
+      // Get current stock for this specific batch
+      const batchNum = refillFormData.batchNumber || "DEFAULT";
+      const existingStock = await medicineService.getMedicineStockByBatch(
         medicineForRefill.id,
+        batchNum,
         clinicId,
       );
       const currentRegularStock = existingStock?.currentStock || 0;
@@ -1325,6 +1294,11 @@ export default function MedicinesTab({
           schemeStock: newSchemeStock,
           lastRestocked: new Date(),
           updatedBy: userData.id,
+          // Sync batch prices and expiry on existing batch refill
+          expiryDate: refillFormData.expiryDate ? new Date(refillFormData.expiryDate) : existingStock.expiryDate,
+          costPrice: refillFormData.regularCostPrice ? parseFloat(refillFormData.regularCostPrice) : existingStock.costPrice,
+          salePrice: refillFormData.regularSalePrice ? parseFloat(refillFormData.regularSalePrice) : existingStock.salePrice,
+          supplierId: refillFormData.supplierId || existingStock.supplierId || "",
         });
       } else {
         await medicineService.createMedicineStock({
@@ -1336,7 +1310,37 @@ export default function MedicinesTab({
           clinicId,
           branchId: branchScopeId || "",
           updatedBy: userData.id,
+          batchNumber: batchNum,
+          expiryDate: refillFormData.expiryDate ? new Date(refillFormData.expiryDate) : undefined,
+          costPrice: refillFormData.regularCostPrice ? parseFloat(refillFormData.regularCostPrice) : undefined,
+          salePrice: refillFormData.regularSalePrice ? parseFloat(refillFormData.regularSalePrice) : undefined,
+          supplierId: refillFormData.supplierId || undefined,
         });
+      }
+
+      // Update core medicine details with latest batch info if it's a purchase/addition
+      if (isAdd) {
+        const medicineUpdateData: Partial<Medicine> = {};
+
+        if (refillFormData.regularSalePrice) {
+          medicineUpdateData.price = parseFloat(refillFormData.regularSalePrice);
+        }
+        if (refillFormData.regularCostPrice) {
+          medicineUpdateData.costPrice = parseFloat(refillFormData.regularCostPrice);
+        }
+        if (refillFormData.batchNumber) {
+          medicineUpdateData.batchNumber = refillFormData.batchNumber;
+        }
+        if (refillFormData.expiryDate) {
+          medicineUpdateData.expiryDate = new Date(refillFormData.expiryDate);
+        }
+        if (refillFormData.supplierId) {
+          medicineUpdateData.supplierId = refillFormData.supplierId;
+        }
+
+        if (Object.keys(medicineUpdateData).length > 0) {
+          await medicineService.updateMedicine(medicineForRefill.id, medicineUpdateData);
+        }
       }
 
       // Create Supplier Purchase Record for refill if it's a purchase
@@ -1595,93 +1599,101 @@ export default function MedicinesTab({
         <button 
           type="button"
           onClick={() => setActiveFilterType(activeFilterType === "expired" ? null : "expired")}
-          className={`p-4 rounded-xl border transition-all text-left group ${
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
             activeFilterType === "expired" 
-              ? "bg-rose-500/10 border-rose-500/50 shadow-lg shadow-rose-500/5" 
+              ? "bg-rose-500/10 border-rose-500/50 shadow-md shadow-rose-500/5" 
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-rose-500/30"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
-              <IoCloseCircleOutline className="w-5 h-5" />
+          <div className="flex justify-between items-center w-full mb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 rounded bg-rose-500/10 text-rose-500">
+                <IoCloseCircleOutline size={14} />
+              </div>
+              <span className="text-[11.5px] font-semibold text-[rgb(var(--color-text))]">Expired</span>
             </div>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+            <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
               expiryStats.expired > 0 ? "bg-rose-500 text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
             }`}>
               {expiryStats.expired} Items
             </span>
           </div>
-          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Expired</h3>
-          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Immediate action required</p>
+          <p className="text-[10px] text-[rgb(var(--color-text-muted)/0.6)] ml-6 leading-none">Immediate action required</p>
         </button>
 
         <button 
           type="button"
           onClick={() => setActiveFilterType(activeFilterType === "urgent" ? null : "urgent")}
-          className={`p-4 rounded-xl border transition-all text-left group ${
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
             activeFilterType === "urgent"
-              ? "bg-amber-500/10 border-amber-500/50 shadow-lg shadow-amber-500/5" 
+              ? "bg-amber-500/10 border-amber-500/50 shadow-md shadow-amber-500/5" 
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-amber-500/30"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
-              <IoAlertCircleOutline className="w-5 h-5" />
+          <div className="flex justify-between items-center w-full mb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 rounded bg-amber-500/10 text-amber-500">
+                <IoAlertCircleOutline size={14} />
+              </div>
+              <span className="text-[11.5px] font-semibold text-[rgb(var(--color-text))]">Urgent Expiry</span>
             </div>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+            <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
               expiryStats.urgent > 0 ? "bg-amber-500 text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
             }`}>
               {expiryStats.urgent} Items
             </span>
           </div>
-          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Urgent Expiry</h3>
-          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Expiring within 30 days</p>
+          <p className="text-[10px] text-[rgb(var(--color-text-muted)/0.6)] ml-6 leading-none">Expiring within 30 days</p>
         </button>
 
         <button 
           type="button"
           onClick={() => setActiveFilterType(activeFilterType === "warning" ? null : "warning")}
-          className={`p-4 rounded-xl border transition-all text-left group ${
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
             activeFilterType === "warning"
-              ? "bg-primary/10 border-primary/50 shadow-lg shadow-primary/5" 
+              ? "bg-primary/10 border-primary/50 shadow-md shadow-primary/5" 
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-primary/30"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-              <IoCalendarOutline className="w-5 h-5" />
+          <div className="flex justify-between items-center w-full mb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 rounded bg-primary/10 text-primary">
+                <IoCalendarOutline size={14} />
+              </div>
+              <span className="text-[11.5px] font-semibold text-[rgb(var(--color-text))]">Upcoming Expiry</span>
             </div>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+            <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
               activeFilterType === "warning" ? "bg-primary text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
             }`}>
               {expiryStats.warning} Items
             </span>
           </div>
-          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Upcoming Expiry</h3>
-          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Expiring within 90 days</p>
+          <p className="text-[10px] text-[rgb(var(--color-text-muted)/0.6)] ml-6 leading-none">Expiring within 90 days</p>
         </button>
 
         <button 
           type="button"
           onClick={() => setActiveFilterType(activeFilterType === "lowStock" ? null : "lowStock")}
-          className={`p-4 rounded-xl border transition-all text-left group ${
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
             activeFilterType === "lowStock" 
-              ? "bg-teal-500/10 border-teal-500/50 shadow-lg shadow-teal-500/5" 
+              ? "bg-teal-500/10 border-teal-500/50 shadow-md shadow-teal-500/5" 
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-teal-500/30"
           }`}
         >
-          <div className="flex justify-between items-start mb-2">
-            <div className="p-2 rounded-lg bg-teal-500/10 text-teal-500">
-              <IoLayersOutline className="w-5 h-5" />
+          <div className="flex justify-between items-center w-full mb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 rounded bg-teal-500/10 text-teal-500">
+                <IoLayersOutline size={14} />
+              </div>
+              <span className="text-[11.5px] font-semibold text-[rgb(var(--color-text))]">Low Stock</span>
             </div>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+            <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
               activeFilterType === "lowStock" ? "bg-teal-500 text-white" : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
             }`}>
               {expiryStats.lowStock} Items
             </span>
           </div>
-          <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))]">Low Stock</h3>
-          <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.6)] mt-1">Below reorder levels</p>
+          <p className="text-[10px] text-[rgb(var(--color-text-muted)/0.6)] ml-6 leading-none">Below reorder levels</p>
         </button>
       </div>
 
@@ -2078,6 +2090,37 @@ export default function MedicinesTab({
                                     resolvedExpiryDate = date
                                       .toISOString()
                                       .split("T")[0];
+                                  }
+                                }
+
+                                // Fallback: if no transactions were found or no batch number resolved, query active stock documents (batches)
+                                if (!resolvedBatchNumber) {
+                                  try {
+                                    const stocks = await medicineService.getMedicineStocks(
+                                      medicine.id,
+                                      clinicId || undefined,
+                                    );
+                                    if (stocks && stocks.length > 0) {
+                                      // Sort by updatedAt or createdAt descending to get the most recent batch
+                                      stocks.sort((a, b) => {
+                                        const timeA = a.updatedAt?.getTime() || a.createdAt?.getTime() || 0;
+                                        const timeB = b.updatedAt?.getTime() || b.createdAt?.getTime() || 0;
+                                        return timeB - timeA;
+                                      });
+                                      const latestStock = stocks[0];
+                                      resolvedBatchNumber = latestStock.batchNumber || "";
+                                      if (!resolvedSupplierId) {
+                                        resolvedSupplierId = latestStock.supplierId || "";
+                                      }
+                                      if (!resolvedExpiryDate && latestStock.expiryDate) {
+                                        const date = latestStock.expiryDate instanceof Date
+                                          ? latestStock.expiryDate
+                                          : new Date(latestStock.expiryDate);
+                                        resolvedExpiryDate = date.toISOString().split("T")[0];
+                                      }
+                                    }
+                                  } catch (err) {
+                                    console.warn("Could not fetch active stock documents for refill fallback", err);
                                   }
                                 }
 
@@ -2526,37 +2569,45 @@ export default function MedicinesTab({
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.1] space-y-4">
+                   <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.1] space-y-4">
                     <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2 mb-4">Inventory Details</h4>
+                    {currentMedicine && (
+                      <div className="p-3 rounded-lg bg-amber-50/70 border border-amber-200/60 text-amber-800 text-[11.5px] leading-relaxed font-medium">
+                        ℹ️ <strong>Multi-Batch Mode Enabled:</strong> Batch-wise quantities and expiry dates are managed separately under the <strong>Stock</strong> tab.
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Current Stock</label>
                         <input
                           type="number"
-                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md bg-white"
+                          className={`clarity-input h-9 w-full text-[13px] px-3 rounded-md bg-white ${currentMedicine ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
                           value={formDataList[0].currentStock}
                           onChange={(e) => handleChange(0, e)}
                           name="currentStock"
+                          disabled={!!currentMedicine}
                         />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Batch No.</label>
                         <input
-                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          className={`clarity-input h-9 w-full text-[13px] px-3 rounded-md ${currentMedicine ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
                           value={formDataList[0].batchNumber}
                           onChange={(e) => handleChange(0, e)}
                           name="batchNumber"
                           placeholder="Batch no."
+                          disabled={!!currentMedicine}
                         />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Expiry Date</label>
                         <input
                           type="date"
-                          className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                          className={`clarity-input h-9 w-full text-[13px] px-3 rounded-md ${currentMedicine ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
                           value={formDataList[0].expiryDate}
                           onChange={(e) => handleChange(0, e)}
                           name="expiryDate"
+                          disabled={!!currentMedicine}
                         />
                       </div>
                     </div>
@@ -2567,16 +2618,21 @@ export default function MedicinesTab({
                 <div className="space-y-4">
                   <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4 h-full">
                     <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-primary/20 pb-2 mb-4">Pricing & VAT</h4>
-                    
+                    {currentMedicine && (
+                      <div className="p-3 rounded-lg bg-indigo-50/70 border border-indigo-200/60 text-indigo-800 text-[11.5px] leading-relaxed font-medium">
+                        ℹ️ Purchase and selling prices are batch-specific. You can edit them by clicking <strong>Edit</strong> on a batch inside the <strong>Stock</strong> tab.
+                      </div>
+                    )}
                     <div className="space-y-1.5">
                       <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">MRP / Sale Price (NPR) <span className="text-danger">*</span></label>
                       <input
                         type="number"
-                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md font-bold text-primary"
+                        className={`clarity-input h-9 w-full text-[13px] px-3 rounded-md font-bold text-primary ${currentMedicine ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
                         value={formDataList[0].price}
                         onChange={(e) => handleChange(0, e)}
                         name="price"
                         placeholder="0.00"
+                        disabled={!!currentMedicine}
                       />
                     </div>
 
@@ -2584,11 +2640,12 @@ export default function MedicinesTab({
                       <label className="text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Cost Price (NPR)</label>
                       <input
                         type="number"
-                        className="clarity-input h-9 w-full text-[13px] px-3 rounded-md"
+                        className={`clarity-input h-9 w-full text-[13px] px-3 rounded-md ${currentMedicine ? "opacity-60 cursor-not-allowed bg-mountain-50" : ""}`}
                         value={formDataList[0].costPrice}
                         onChange={(e) => handleChange(0, e)}
                         name="costPrice"
                         placeholder="0.00"
+                        disabled={!!currentMedicine}
                       />
                     </div>
 
@@ -3378,6 +3435,7 @@ export default function MedicinesTab({
                 className="clarity-input h-8 w-full text-[13px] px-2"
                 name="batchNumber"
                 placeholder="Enter batch number"
+                autoComplete="off"
                 value={refillFormData.batchNumber}
                 onChange={(e) =>
                   setRefillFormData((prev) => ({

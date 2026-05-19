@@ -1,13 +1,25 @@
 import { patientService } from "./patientService";
 import { appointmentService } from "./appointmentService";
 import { appointmentBillingService } from "./appointmentBillingService";
+import { pharmacyService } from "./pharmacyService";
 
-import { Patient, Appointment, AppointmentBilling } from "@/types/models";
+import { Patient, Appointment } from "@/types/models";
+
+export interface DailyBillingSummary {
+  id: string;
+  type: 'appointment' | 'pharmacy';
+  invoiceNumber: string;
+  patientName: string;
+  totalAmount: number;
+  date: Date;
+  paymentStatus: string;
+  doctorName?: string;
+}
 
 export interface DailyReportData {
   patients: Patient[];
   appointments: Appointment[];
-  billing: AppointmentBilling[];
+  billing: DailyBillingSummary[];
 }
 
 /**
@@ -87,24 +99,18 @@ export const dailyReportService = {
   },
 
   /**
-   * Get appointment billing/invoices for a specific date
+   * Get unified appointment and pharmacy billing/invoices for a specific date
    * @param {string} clinicId - ID of the clinic
    * @param {Date} date - Date to get billing for
    * @param {string} [branchId] - Optional branch ID to filter billing by
-   * @returns {Promise<AppointmentBilling[]>} - Array of billing records for the date
+   * @returns {Promise<DailyBillingSummary[]>} - Array of billing records for the date
    */
   async getDailyBilling(
     clinicId: string,
     date: Date,
     branchId?: string,
-  ): Promise<AppointmentBilling[]> {
+  ): Promise<DailyBillingSummary[]> {
     try {
-      const allBilling = await appointmentBillingService.getBillingByClinic(
-        clinicId,
-        branchId,
-      );
-
-      // Filter billing by invoice date
       const startOfDay = new Date(
         date.getFullYear(),
         date.getMonth(),
@@ -119,15 +125,46 @@ export const dailyReportService = {
         59,
       );
 
-      return allBilling.filter((billing) => {
-        const invoiceDate = billing.invoiceDate;
+      const [allBilling, allPurchases] = await Promise.all([
+        appointmentBillingService.getBillingByClinic(clinicId, branchId),
+        pharmacyService.getMedicinePurchasesByClinic(clinicId, branchId)
+      ]);
 
-        if (!invoiceDate) return false;
+      const summaries: DailyBillingSummary[] = [];
 
-        const billingDate = new Date(invoiceDate);
-
-        return billingDate >= startOfDay && billingDate <= endOfDay;
+      allBilling.forEach(billing => {
+        const invoiceDate = billing.invoiceDate ? new Date(billing.invoiceDate) : null;
+        if (invoiceDate && invoiceDate >= startOfDay && invoiceDate <= endOfDay) {
+          summaries.push({
+            id: billing.id,
+            type: 'appointment',
+            invoiceNumber: billing.invoiceNumber,
+            patientName: billing.patientName || 'Unknown Patient',
+            totalAmount: billing.totalAmount || 0,
+            date: invoiceDate,
+            paymentStatus: billing.paymentStatus || 'unpaid',
+            doctorName: billing.doctorName,
+          });
+        }
       });
+
+      allPurchases.forEach(purchase => {
+        const purchaseDate = purchase.purchaseDate ? new Date(purchase.purchaseDate) : null;
+        if (purchaseDate && purchaseDate >= startOfDay && purchaseDate <= endOfDay) {
+          summaries.push({
+            id: purchase.id,
+            type: 'pharmacy',
+            invoiceNumber: purchase.purchaseNo,
+            patientName: purchase.patientName || 'Walk-in Customer',
+            totalAmount: purchase.netAmount || 0,
+            date: purchaseDate,
+            paymentStatus: purchase.paymentStatus || 'unpaid',
+            doctorName: 'Pharmacy Counter',
+          });
+        }
+      });
+
+      return summaries.sort((a, b) => b.date.getTime() - a.date.getTime());
     } catch (error) {
       console.error("Error fetching daily billing:", error);
       throw error;

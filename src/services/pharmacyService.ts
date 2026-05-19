@@ -49,139 +49,274 @@ export const pharmacyService = {
         (item) => item.type === "medicine" || !item.type,
       );
 
-      // Pre-fetch stock document references
-      const stockRefs: Record<string, any> = {};
-      for (const item of medicineItems) {
-        if (!stockRefs[item.medicineId]) {
-          const q = query(
-            collection(db, "medicineStock"),
-            where("medicineId", "==", item.medicineId),
-            where("clinicId", "==", purchaseData.clinicId),
-          );
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            stockRefs[item.medicineId] = doc(db, "medicineStock", snap.docs[0].id);
-          }
-        }
+      // Pre-fetch all active stock batch document references for the medicine IDs
+      const medicineIds = Array.from(new Set(medicineItems.map((item) => item.medicineId)));
+      const allStockRefs: Record<string, { docRef: any; id: string }[]> = {};
+
+      for (const medicineId of medicineIds) {
+        const q = query(
+          collection(db, "medicineStock"),
+          where("medicineId", "==", medicineId),
+          where("clinicId", "==", purchaseData.clinicId),
+        );
+        const snap = await getDocs(q);
+        allStockRefs[medicineId] = snap.docs.map((docVal) => ({
+          docRef: docVal.ref,
+          id: docVal.id,
+        }));
       }
 
       const purchaseId = await runTransaction(db, async (transaction) => {
-        // 1. Read all stock documents
-        const stockSnaps: Record<string, any> = {};
-        for (const medicineId in stockRefs) {
-          const snap = await transaction.get(stockRefs[medicineId]);
-          if (snap.exists()) {
-            stockSnaps[medicineId] = snap.data();
+        // 1. Read all active stock documents for transaction consistency
+        const activeBatchesByMedicine: Record<string, { id: string; docRef: any; data: any }[]> = {};
+
+        for (const medicineId of medicineIds) {
+          const refs = allStockRefs[medicineId] || [];
+          const loadedBatches = [];
+
+          for (const ref of refs) {
+            const snap = await transaction.get(ref.docRef);
+            if (snap.exists()) {
+              loadedBatches.push({
+                id: ref.id,
+                docRef: ref.docRef,
+                data: snap.data(),
+              });
+            }
           }
+          activeBatchesByMedicine[medicineId] = loadedBatches;
         }
 
         // 2. Prepare data for updates
-        const stockUpdates: Record<string, any> = {};
+        const stockUpdates: { docRef: any; data: any }[] = [];
         const transactionLogs: any[] = [];
+        const updatedPurchaseItems: any[] = [];
+        let newGrossTotal = 0;
 
-        for (const item of medicineItems) {
-          const currentStockData = stockSnaps[item.medicineId];
-          if (!currentStockData) continue;
+        for (const item of purchaseData.items) {
+          if (item.type !== "medicine" && item.type !== undefined) {
+            // Pass-through non-medicine items
+            updatedPurchaseItems.push(item);
+            newGrossTotal += item.amount || 0;
+            continue;
+          }
 
-          let remainingQty = item.quantity;
-          let newRegularStock = currentStockData.currentStock || 0;
-          let newSchemeStock = currentStockData.schemeStock || 0;
+          const batches = activeBatchesByMedicine[item.medicineId] || [];
+          const now = new Date();
 
-          const itemWithPrices = item as any;
-          const regularSalePrice =
-            itemWithPrices.regularSalePrice || item.salePrice;
-          const schemeSalePrice =
-            itemWithPrices.schemeSalePrice || item.salePrice;
+          // A. Filter out expired batches (expiryDate < now)
+          const activeNonExpiredBatches = batches.filter((b) => {
+            if (!b.data.expiryDate) return true; // Treat no expiry as non-expired
+            const exp = b.data.expiryDate.toDate ? b.data.expiryDate.toDate() : new Date(b.data.expiryDate);
+            return exp >= now;
+          });
+
+          // B. Sort active batches by expiryDate ascending (FEFO).
+          // If no expiryDate, place it at the end. Fallback to sorting by createdAt ascending (FIFO).
+          activeNonExpiredBatches.sort((a, b) => {
+            const expA = a.data.expiryDate
+              ? a.data.expiryDate.toDate
+                ? a.data.expiryDate.toDate().getTime()
+                : new Date(a.data.expiryDate).getTime()
+              : Infinity;
+            const expB = b.data.expiryDate
+              ? b.data.expiryDate.toDate
+                ? b.data.expiryDate.toDate().getTime()
+                : new Date(b.data.expiryDate).getTime()
+              : Infinity;
+
+            if (expA !== expB) return expA - expB;
+
+            const createdA = a.data.createdAt
+              ? a.data.createdAt.toDate
+                ? a.data.createdAt.toDate().getTime()
+                : new Date(a.data.createdAt).getTime()
+              : 0;
+            const createdB = b.data.createdAt
+              ? b.data.createdAt.toDate
+                ? b.data.createdAt.toDate().getTime()
+                : new Date(b.data.createdAt).getTime()
+              : 0;
+            return createdA - createdB;
+          });
+
           const stockType = (item as any).stockType || "regular";
+          let remainingQty = item.quantity;
+          const batchesUsed: { batchNumber: string; qty: number; price: number; expiryDate?: any }[] = [];
+          let itemTotalAmount = 0;
+
+          // C. Iterate over sorted batches and deduct stock
+          for (const batch of activeNonExpiredBatches) {
+            if (remainingQty <= 0) break;
+
+            const batchStockData = batch.data;
+            const batchStockAvailable =
+              stockType === "scheme"
+                ? batchStockData.schemeStock ?? 0
+                : batchStockData.currentStock ?? 0;
+
+            if (batchStockAvailable <= 0) continue;
+
+            const qtyToDeduct = Math.min(remainingQty, batchStockAvailable);
+
+            const newRegularStock =
+              stockType === "regular"
+                ? (batchStockData.currentStock ?? 0) - qtyToDeduct
+                : batchStockData.currentStock ?? 0;
+
+            const newSchemeStock =
+              stockType === "scheme"
+                ? (batchStockData.schemeStock ?? 0) - qtyToDeduct
+                : batchStockData.schemeStock ?? 0;
+
+            // Generate detailed stock transaction logs per batch with dynamic pricing
+            const itemWithPrices = item as any;
+            const regularSalePrice = itemWithPrices.regularSalePrice || item.salePrice;
+            const schemeSalePrice = itemWithPrices.schemeSalePrice || item.salePrice;
+            const priceToUse = stockType === "scheme" ? schemeSalePrice : regularSalePrice;
+
+            // Fetch dynamic selling price for this specific batch, fallback to cart unit price if not configured
+            const batchPrice = stockType === "scheme"
+              ? (batchStockData.schemePrice ?? batchStockData.salePrice ?? priceToUse)
+              : (batchStockData.salePrice ?? priceToUse);
+
+            itemTotalAmount += batchPrice * qtyToDeduct;
+
+            batchesUsed.push({
+              batchNumber: batchStockData.batchNumber || "DEFAULT",
+              qty: qtyToDeduct,
+              price: batchPrice,
+              expiryDate: batchStockData.expiryDate || null,
+            });
+
+            // Queue batch-wise stock document updates
+            stockUpdates.push({
+              docRef: batch.docRef,
+              data: {
+                currentStock: newRegularStock,
+                schemeStock: newSchemeStock,
+                lastRestocked: batchStockData.lastRestocked || null,
+                updatedBy: purchaseData.createdBy,
+                updatedAt: serverTimestamp(),
+              },
+            });
+
+            transactionLogs.push({
+              medicineId: item.medicineId,
+              type: "sale",
+              quantity: qtyToDeduct,
+              previousStock:
+                stockType === "scheme"
+                  ? batchStockData.schemeStock ?? 0
+                  : batchStockData.currentStock ?? 0,
+              newStock: stockType === "scheme" ? newSchemeStock : newRegularStock,
+              isSchemeStock: stockType === "scheme",
+              salePrice: batchPrice,
+              unitPrice: batchPrice,
+              totalAmount: batchPrice * qtyToDeduct,
+              batchNumber: batchStockData.batchNumber || "DEFAULT",
+              expiryDate: batchStockData.expiryDate || null,
+              referenceId: purchaseData.purchaseNo,
+              clinicId: purchaseData.clinicId,
+              branchId: purchaseData.branchId,
+              createdBy: purchaseData.createdBy,
+            });
+
+            // Update our locally-held values to support repeated items in purchase list
+            if (stockType === "scheme") {
+              batch.data.schemeStock = newSchemeStock;
+            } else {
+              batch.data.currentStock = newRegularStock;
+            }
+
+            remainingQty -= qtyToDeduct;
+          }
+
+          // D. Prevent sale and throw explicit error if requested quantity exceeds non-expired batch stocks
+          if (remainingQty > 0) {
+            const totalActiveStock = activeNonExpiredBatches.reduce((sum, b) => {
+              return (
+                sum +
+                (stockType === "scheme" ? b.data.schemeStock ?? 0 : b.data.currentStock ?? 0)
+              );
+            }, 0);
+            throw new Error(
+              `Insufficient non-expired stock for "${item.medicineName}". ` +
+                `Requested: ${item.quantity}, Available: ${totalActiveStock + (item.quantity - remainingQty)}.`,
+            );
+          }
+
+          newGrossTotal += itemTotalAmount;
+
+          // E. Record exact batch numbers and prices sold in purchase item metadata
+          const batchString = batchesUsed
+            .map((b) => {
+              let expStr = "";
+              if (b.expiryDate) {
+                try {
+                  const d = typeof b.expiryDate.toDate === "function" ? b.expiryDate.toDate() : new Date(b.expiryDate);
+                  if (d && !isNaN(d.getTime())) {
+                    expStr = d.toISOString().split("T")[0];
+                  }
+                } catch (e) {
+                  console.error("Error formatting expiry date:", e);
+                }
+              }
+              const expPart = expStr ? `|Exp: ${expStr}` : "";
+              return `${b.batchNumber}${expPart} (x${b.qty} @ NPR ${b.price})`;
+            })
+            .join(", ");
           
-          let schemeQtyUsed = 0;
-          let regularQtyUsed = 0;
+          const weightedSalePrice = item.quantity > 0 ? (itemTotalAmount / item.quantity) : item.salePrice;
 
-          if (stockType === "regular") {
-            if (remainingQty > 0 && newRegularStock > 0) {
-              regularQtyUsed = Math.min(remainingQty, newRegularStock);
-              newRegularStock -= regularQtyUsed;
-              remainingQty -= regularQtyUsed;
-            }
-            if (remainingQty > 0 && newSchemeStock > 0) {
-              schemeQtyUsed = Math.min(remainingQty, newSchemeStock);
-              newSchemeStock -= schemeQtyUsed;
-              remainingQty -= schemeQtyUsed;
-            }
-          } else {
-            if (remainingQty > 0 && newSchemeStock > 0) {
-              schemeQtyUsed = Math.min(remainingQty, newSchemeStock);
-              newSchemeStock -= schemeQtyUsed;
-              remainingQty -= schemeQtyUsed;
-            }
-            if (remainingQty > 0 && newRegularStock > 0) {
-              regularQtyUsed = Math.min(remainingQty, newRegularStock);
-              newRegularStock -= regularQtyUsed;
-              remainingQty -= regularQtyUsed;
+          let finalExpiryDate = item.expiryDate;
+          if (batchesUsed.length === 1 && batchesUsed[0].expiryDate) {
+            try {
+              const d = typeof batchesUsed[0].expiryDate.toDate === "function"
+                ? batchesUsed[0].expiryDate.toDate()
+                : new Date(batchesUsed[0].expiryDate);
+              if (d && !isNaN(d.getTime())) {
+                finalExpiryDate = d.toISOString().split("T")[0];
+              }
+            } catch (e) {
+              console.error("Error parsing single batch expiry date:", e);
             }
           }
 
-          // Queue stock update
-          stockUpdates[item.medicineId] = {
-            currentStock: newRegularStock,
-            schemeStock: newSchemeStock,
-            updatedBy: purchaseData.createdBy,
-            updatedAt: serverTimestamp(),
-          };
-
-          const priceToUse =
-            stockType === "scheme" ? schemeSalePrice : regularSalePrice;
-
-          if (schemeQtyUsed > 0) {
-            transactionLogs.push({
-              medicineId: item.medicineId,
-              type: "sale",
-              quantity: schemeQtyUsed,
-              previousStock: currentStockData.schemeStock || 0,
-              newStock: newSchemeStock,
-              isSchemeStock: true,
-              salePrice: priceToUse,
-              unitPrice: priceToUse,
-              totalAmount: priceToUse * schemeQtyUsed,
-              referenceId: purchaseData.purchaseNo,
-              clinicId: purchaseData.clinicId,
-              branchId: purchaseData.branchId,
-              createdBy: purchaseData.createdBy,
-            });
-          }
-
-          if (regularQtyUsed > 0) {
-            transactionLogs.push({
-              medicineId: item.medicineId,
-              type: "sale",
-              quantity: regularQtyUsed,
-              previousStock: currentStockData.currentStock || 0,
-              newStock: newRegularStock,
-              isSchemeStock: false,
-              salePrice: priceToUse,
-              unitPrice: priceToUse,
-              totalAmount: priceToUse * regularQtyUsed,
-              referenceId: purchaseData.purchaseNo,
-              clinicId: purchaseData.clinicId,
-              branchId: purchaseData.branchId,
-              createdBy: purchaseData.createdBy,
-            });
-          }
+          updatedPurchaseItems.push({
+            ...item,
+            salePrice: weightedSalePrice,
+            amount: itemTotalAmount,
+            batchNumber: batchString || "DEFAULT",
+            expiryDate: finalExpiryDate,
+          });
         }
 
+        // F. Calculate final consistent parent totals based on dynamic batch items
+        const finalDiscount = Math.min(purchaseData.discount || 0, newGrossTotal);
+          
+        const taxableAmount = Math.max(0, newGrossTotal - finalDiscount);
+        const finalTaxAmount = Math.round(taxableAmount * ((purchaseData.taxPercentage || 0) / 100));
+        const finalNetAmount = Math.round(taxableAmount + finalTaxAmount);
+
         // 3. Perform Writes
-        // Create Purchase
+        // Create Purchase/Invoice with batch-filled items and dynamically computed totals
         const purchaseRef = doc(collection(db, MEDICINE_PURCHASES_COLLECTION));
         transaction.set(purchaseRef, {
           ...purchaseData,
+          items: updatedPurchaseItems,
+          total: newGrossTotal,
+          discount: finalDiscount,
+          taxAmount: finalTaxAmount,
+          netAmount: finalNetAmount,
           id: purchaseRef.id,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
 
-        // Update Stocks
-        for (const medicineId in stockUpdates) {
-          transaction.update(stockRefs[medicineId], stockUpdates[medicineId]);
+        // Update Stock Batch Documents
+        for (const update of stockUpdates) {
+          transaction.update(update.docRef, update.data);
         }
 
         // Create Stock Transactions

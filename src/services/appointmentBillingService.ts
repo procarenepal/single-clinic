@@ -712,6 +712,40 @@ export const appointmentBillingService = {
       }
 
       await this.updateBilling(id, updateData);
+
+      // Also find and update the associated appointment in the appointments collection
+      try {
+        const appointmentsRef = collection(db, "appointments");
+        // 1. Try finding by billingId
+        let q = query(appointmentsRef, where("billingId", "==", id));
+        let querySnapshot = await getDocs(q);
+        
+        // 2. Fallback: if not found by billingId (legacy/external creation), try patientId & status = completed
+        if (querySnapshot.empty) {
+          q = query(
+            appointmentsRef, 
+            where("patientId", "==", billing.patientId),
+            where("status", "==", "completed")
+          );
+          querySnapshot = await getDocs(q);
+        }
+
+        if (!querySnapshot.empty) {
+          const updatePromises = querySnapshot.docs.map(docSnap => {
+            const apptDocRef = doc(db, "appointments", docSnap.id);
+            return updateDoc(apptDocRef, {
+              status: "completed",
+              billingStatus: paymentStatus,
+              paymentStatus: paymentStatus, // update both fields for safety
+              updatedAt: Timestamp.now(),
+            });
+          });
+          await Promise.all(updatePromises);
+          console.log(`Updated associated appointments for billing ID ${id} to billingStatus: ${paymentStatus}`);
+        }
+      } catch (apptError) {
+        console.error("Error updating associated appointment status:", apptError);
+      }
     } catch (error) {
       console.error("Error recording payment:", error);
       throw error;

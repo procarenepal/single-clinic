@@ -188,8 +188,8 @@ export default function PurchaseEditPage() {
   // Calculate amounts when items change
   useEffect(() => {
     const total = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
-    const taxAmount = (total * purchaseForm.taxPercentage) / 100;
-    const netAmount = total + taxAmount - purchaseForm.discount;
+    const taxAmount = Math.round((total * purchaseForm.taxPercentage) / 100);
+    const netAmount = Math.round(total + taxAmount - purchaseForm.discount);
 
     setPurchaseForm((prev) => ({
       ...prev,

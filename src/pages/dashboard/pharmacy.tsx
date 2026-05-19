@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
 import {
   differenceInCalendarDays,
@@ -30,6 +31,7 @@ import {
   IoBookOutline,
   IoDocumentTextOutline,
   IoCloseOutline,
+  IoWarningOutline,
 } from "react-icons/io5";
 
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -292,9 +294,77 @@ import {
   Clinic,
   Medicine,
   Item,
+  MedicineStock,
 } from "@/types/models";
 
 import type { Branch } from "@/types/models";
+
+const calculateFEFOAmount = (item: any, batches: MedicineStock[]): number => {
+  const stockType = item.stockType || "regular";
+  const defaultPrice = (stockType === "scheme" ? item.schemeSalePrice : item.regularSalePrice) || item.salePrice || 0;
+
+  if (item.isPriceOverridden) {
+    return (item.quantity || 0) * defaultPrice;
+  }
+
+  if (!batches || batches.length === 0) {
+    return (item.quantity || 0) * defaultPrice;
+  }
+
+  const now = new Date();
+  
+  // Filter out expired batches (expiryDate < now)
+  const activeNonExpired = batches.filter((s) => {
+    if (!s.expiryDate) return true;
+    return new Date(s.expiryDate) >= now;
+  });
+
+  // Sort by expiry date, then createdAt
+  activeNonExpired.sort((a, b) => {
+    const expA = a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity;
+    const expB = b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity;
+    if (expA !== expB) return expA - expB;
+    const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return createdA - createdB;
+  });
+
+  let remaining = item.quantity || 0;
+  let totalAmount = 0;
+
+  for (const batch of activeNonExpired) {
+    if (remaining <= 0) break;
+    const available = stockType === "scheme" ? batch.schemeStock ?? 0 : batch.currentStock ?? 0;
+    if (available <= 0) continue;
+    
+    const qtyToUse = Math.min(remaining, available);
+    const batchPrice = stockType === "scheme"
+      ? (batch.schemePrice ?? batch.salePrice ?? defaultPrice)
+      : (batch.salePrice ?? defaultPrice);
+
+    totalAmount += qtyToUse * batchPrice;
+    remaining -= qtyToUse;
+  }
+
+  // If there's still remaining quantity (not enough stock in active batches),
+  // value the remaining quantity at the default price
+  if (remaining > 0) {
+    totalAmount += remaining * defaultPrice;
+  }
+
+  // Dynamically update the regularSalePrice/schemeSalePrice on the item to reflect the batch-specific price (or average)
+  if (item.quantity > 0) {
+    const avgPrice = Number((totalAmount / item.quantity).toFixed(2));
+    if (stockType === "scheme") {
+      item.schemeSalePrice = avgPrice;
+    } else {
+      item.regularSalePrice = avgPrice;
+    }
+    item.salePrice = avgPrice;
+  }
+
+  return totalAmount;
+};
 
 interface MedicinePurchaseItem {
   id: string;
@@ -328,6 +398,7 @@ interface PurchaseItem {
   quantity: number;
   amount: number;
   stockType?: "regular" | "scheme"; // Stock type preference for medicine items
+  isPriceOverridden?: boolean;
 }
 
 interface MedicinePurchaseReturnItem {
@@ -620,6 +691,9 @@ export default function PharmacyPage() {
   const [purchaseItemSchemeStocks, setPurchaseItemSchemeStocks] = useState<
     Record<string, number | null>
   >({});
+  const [purchaseItemBatches, setPurchaseItemBatches] = useState<
+    Record<string, MedicineStock[]>
+  >({});
 
   const [purchaseForm, setPurchaseForm] = useState({
     total: 0,
@@ -641,6 +715,20 @@ export default function PharmacyPage() {
     patientId: "",
     prescriptionId: "",
   });
+
+  const [rawStocks, setRawStocks] = useState<any[]>([]);
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [inventoryStockFilter, setInventoryStockFilter] = useState<"all" | "out" | "low" | "good">("all");
+  const [inventoryExpiryFilter, setInventoryExpiryFilter] = useState<"all" | "expired" | "soon" | "valid">("all");
+
+  const [adjustStockModalOpen, setAdjustStockModalOpen] = useState(false);
+  const [selectedMedicineForAdjust, setSelectedMedicineForAdjust] = useState<Medicine | null>(null);
+  const [adjustForm, setAdjustForm] = useState({
+    regularStock: 0,
+    schemeStock: 0,
+    reason: "",
+  });
+  const [isAdjustingStock, setIsAdjustingStock] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -880,6 +968,114 @@ export default function PharmacyPage() {
   const [isSavingLedgerEntry, setIsSavingLedgerEntry] = useState(false);
   const editLedgerEntryModalState = useModalState(false);
 
+  const handleSaveStockAdjustment = async () => {
+    if (!selectedMedicineForAdjust || !clinicId) return;
+    setIsAdjustingStock(true);
+    try {
+      const stockDoc = rawStocks.find(s => s.medicineId === selectedMedicineForAdjust.id);
+      if (stockDoc && stockDoc.id) {
+        await medicineService.updateMedicineStock(stockDoc.id, {
+          currentStock: adjustForm.regularStock,
+          schemeStock: adjustForm.schemeStock,
+        });
+
+        const oldTotal = (stockDoc.currentStock || 0) + (stockDoc.schemeStock || 0);
+        const newTotal = adjustForm.regularStock + adjustForm.schemeStock;
+        const diff = newTotal - oldTotal;
+
+        if (diff !== 0) {
+          await medicineService.createStockTransaction({
+            medicineId: selectedMedicineForAdjust.id,
+            type: "adjustment",
+            quantity: Math.abs(diff),
+            previousStock: oldTotal,
+            newStock: newTotal,
+            unitPrice: selectedMedicineForAdjust.price || 0,
+            totalAmount: Math.abs(diff) * (selectedMedicineForAdjust.price || 0),
+            referenceId: "MANUAL-ADJUST",
+            reason: adjustForm.reason || "Manual Inventory Reconciliation",
+            clinicId,
+            branchId: effectiveBranchId || "",
+            createdBy: currentUser?.uid || "",
+          });
+        }
+
+        addToast({
+          title: "Stock Adjusted",
+          description: `Successfully adjusted ${selectedMedicineForAdjust.name} stock level.`,
+          color: "success",
+        });
+
+        setAdjustStockModalOpen(false);
+        const sData = await medicineService.getStockByMedicineIds(
+          clinicId,
+          medicines.map(m => m.id),
+          effectiveBranchId || undefined,
+        );
+        const sMap: Record<string, number> = {};
+        sData.forEach((s) => {
+          sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
+        });
+        setMedicineStocks(sMap);
+        setRawStocks(sData);
+      } else {
+        const stockId = await medicineService.createMedicineStock({
+          medicineId: selectedMedicineForAdjust.id,
+          currentStock: adjustForm.regularStock,
+          schemeStock: adjustForm.schemeStock,
+          minimumStock: 10,
+          reorderLevel: 20,
+          clinicId,
+          branchId: effectiveBranchId || "",
+          updatedBy: currentUser?.uid || "",
+        });
+
+        await medicineService.createStockTransaction({
+          medicineId: selectedMedicineForAdjust.id,
+          type: "adjustment",
+          quantity: adjustForm.regularStock + adjustForm.schemeStock,
+          previousStock: 0,
+          newStock: adjustForm.regularStock + adjustForm.schemeStock,
+          unitPrice: selectedMedicineForAdjust.price || 0,
+          totalAmount: (adjustForm.regularStock + adjustForm.schemeStock) * (selectedMedicineForAdjust.price || 0),
+          referenceId: "MANUAL-ADJUST",
+          reason: adjustForm.reason || "Initial Inventory Reconciliation",
+          clinicId,
+          branchId: effectiveBranchId || "",
+          createdBy: currentUser?.uid || "",
+        });
+
+        addToast({
+          title: "Stock Initialized",
+          description: `Successfully created stock level for ${selectedMedicineForAdjust.name}.`,
+          color: "success",
+        });
+
+        setAdjustStockModalOpen(false);
+        const sData = await medicineService.getStockByMedicineIds(
+          clinicId,
+          medicines.map(m => m.id),
+          effectiveBranchId || undefined,
+        );
+        const sMap: Record<string, number> = {};
+        sData.forEach((s) => {
+          sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
+        });
+        setMedicineStocks(sMap);
+        setRawStocks(sData);
+      }
+    } catch (err) {
+      console.error(err);
+      addToast({
+        title: "Adjustment Failed",
+        description: "Failed to record manual stock adjustment.",
+        color: "danger",
+      });
+    } finally {
+      setIsAdjustingStock(false);
+    }
+  };
+
   // Load branches for clinic-wide admins (no fixed branchId)
   useEffect(() => {
     if (!clinicId || !isClinicAdmin || branchId) return;
@@ -971,6 +1167,7 @@ export default function PharmacyPage() {
           sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
         });
         setMedicineStocks(sMap);
+        setRawStocks(sData);
 
         setItems(itemsData);
         setPurchases(purchasesData as MedicinePurchase[]);
@@ -1091,10 +1288,11 @@ export default function PharmacyPage() {
       discountAmount = (total * purchaseForm.discountPercentage) / 100;
     }
 
-    const taxableAmount = Math.max(0, total - discountAmount);
-    const taxAmount = (taxableAmount * purchaseForm.taxPercentage) / 100;
-    const netAmount =
-      taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0);
+    const taxableAmount = Math.round(Math.max(0, total - discountAmount));
+    const taxAmount = Math.round((taxableAmount * purchaseForm.taxPercentage) / 100);
+    const netAmount = Math.round(
+      taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0)
+    );
 
     setPurchaseForm((prev) => ({
       ...prev,
@@ -1757,15 +1955,26 @@ export default function PharmacyPage() {
                 updatedItem.regularSalePrice = defaultPrice; // Default regular price
                 updatedItem.schemeSalePrice = defaultPrice; // Default scheme price (can be updated)
                 updatedItem.expiryDate = toISODateString(selectedMedicine.expiryDate);
+                updatedItem.isPriceOverridden = false; // Reset override on selection
                 // Calculate amount after setting the price
                 updatedItem.amount =
                   updatedItem.quantity * updatedItem.salePrice;
 
-                // Fetch stock for the selected medicine (both regular and scheme)
+                // Fetch stock for the selected medicine (both regular and scheme) in parallel
                 if (clinicId && value) {
-                  medicineService
-                    .getMedicineStock(value, clinicId)
-                    .then((stock) => {
+                  Promise.all([
+                    medicineService.getMedicineStocks(value, clinicId),
+                    medicineService.getMedicineStock(value, clinicId),
+                    medicineService.getStockTransactions(value, 50)
+                  ])
+                    .then(([stocks, stock, transactions]) => {
+                      // Save batches in state
+                      setPurchaseItemBatches((prev) => ({
+                        ...prev,
+                        [id]: stocks,
+                      }));
+
+                      // Save stocks in state
                       setPurchaseItemStocks((prev) => ({
                         ...prev,
                         [id]: stock?.currentStock ?? null,
@@ -1775,124 +1984,62 @@ export default function PharmacyPage() {
                         [id]: stock?.schemeStock ?? null,
                       }));
 
-                      // Fetch stock transactions to get latest prices
-                      medicineService
-                        .getStockTransactions(value, 50)
-                        .then((transactions) => {
-                          // Get latest regular stock transaction (purchase type, not scheme)
-                          const latestRegularTransaction = transactions
-                            .filter(
-                              (t) => t.type === "purchase" && !t.isSchemeStock,
-                            )
-                            .sort((a, b) => {
-                              const dateA = a.createdAt?.getTime() || 0;
-                              const dateB = b.createdAt?.getTime() || 0;
+                      // Get latest regular stock transaction (purchase type, not scheme)
+                      const latestRegularTransaction = transactions
+                        .filter((t) => t.type === "purchase" && !t.isSchemeStock)
+                        .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))[0];
 
-                              return dateB - dateA;
-                            })[0];
+                      // Get latest scheme stock transaction (purchase type, is scheme)
+                      const latestSchemeTransaction = transactions
+                        .filter((t) => t.type === "purchase" && t.isSchemeStock)
+                        .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))[0];
 
-                          // Get latest scheme stock transaction (purchase type, is scheme)
-                          const latestSchemeTransaction = transactions
-                            .filter(
-                              (t) => t.type === "purchase" && t.isSchemeStock,
-                            )
-                            .sort((a, b) => {
-                              const dateA = a.createdAt?.getTime() || 0;
-                              const dateB = b.createdAt?.getTime() || 0;
+                      setPurchaseItems((prevItems) =>
+                        prevItems.map((item) => {
+                          if (item.id === id) {
+                            const regularPrice = latestRegularTransaction?.salePrice || defaultPrice;
+                            const schemePrice = latestSchemeTransaction?.schemePrice || latestSchemeTransaction?.salePrice || defaultPrice;
 
-                              return dateB - dateA;
-                            })[0];
+                            // Get expiry date based on stock type
+                            let expiryDate = item.expiryDate;
+                            const currentStockType = item.stockType || "regular";
 
-                          // Update prices and expiry date based on transactions
-                          setPurchaseItems((prev) =>
-                            prev.map((item) => {
-                              if (item.id === id) {
-                                const regularPrice =
-                                  latestRegularTransaction?.salePrice ||
-                                  defaultPrice;
-                                const schemePrice =
-                                  latestSchemeTransaction?.schemePrice ||
-                                  latestSchemeTransaction?.salePrice ||
-                                  defaultPrice;
-
-                                // Get expiry date based on stock type
-                                let expiryDate = item.expiryDate;
-                                const currentStockType =
-                                  item.stockType || "regular";
-
-                                if (
-                                  currentStockType === "regular" &&
-                                  latestRegularTransaction?.expiryDate
-                                ) {
-                                  expiryDate = toISODateString(
-                                    latestRegularTransaction.expiryDate,
-                                  );
-                                } else if (
-                                  currentStockType === "scheme" &&
-                                  latestSchemeTransaction?.expiryDate
-                                ) {
-                                  expiryDate = toISODateString(
-                                    latestSchemeTransaction.expiryDate,
-                                  );
-                                } else if (!expiryDate) {
-                                  // Fallback to whichever is available if current style has no expiry
-                                  const anyExpiry =
-                                    latestRegularTransaction?.expiryDate ||
-                                    latestSchemeTransaction?.expiryDate;
-
-                                  if (anyExpiry) {
-                                    expiryDate = toISODateString(anyExpiry);
-                                  }
-                                }
-
-                                // Recalculate amount based on stock type and new prices
-                                let newAmount = item.amount;
-
-                                if (
-                                  item.type === "medicine" &&
-                                  item.stockType &&
-                                  item.quantity
-                                ) {
-                                  const qty = item.quantity || 0;
-
-                                  if (item.stockType === "regular") {
-                                    newAmount = qty * regularPrice;
-                                  } else if (item.stockType === "scheme") {
-                                    newAmount = qty * schemePrice;
-                                  }
-                                } else if (item.quantity) {
-                                  newAmount = item.quantity * defaultPrice;
-                                }
-
-                                return {
-                                  ...item,
-                                  regularSalePrice: regularPrice,
-                                  schemeSalePrice: schemePrice,
-                                  salePrice: defaultPrice, // Keep for backward compatibility
-                                  expiryDate: expiryDate,
-                                  amount: newAmount,
-                                };
+                            if (currentStockType === "regular" && latestRegularTransaction?.expiryDate) {
+                              expiryDate = toISODateString(latestRegularTransaction.expiryDate);
+                            } else if (currentStockType === "scheme" && latestSchemeTransaction?.expiryDate) {
+                              expiryDate = toISODateString(latestSchemeTransaction.expiryDate);
+                            } else if (!expiryDate) {
+                              const anyExpiry = latestRegularTransaction?.expiryDate || latestSchemeTransaction?.expiryDate;
+                              if (anyExpiry) {
+                                expiryDate = toISODateString(anyExpiry);
                               }
+                            }
 
-                              return item;
-                            }),
-                          );
+                            // Build a temporary item with updated prices to run through FEFO calculation
+                            const tempItem = {
+                              ...item,
+                              regularSalePrice: regularPrice,
+                              schemeSalePrice: schemePrice,
+                              salePrice: currentStockType === "scheme" ? schemePrice : regularPrice,
+                            };
+
+                            const newAmount = calculateFEFOAmount(tempItem, stocks);
+
+                            return {
+                              ...item,
+                              regularSalePrice: regularPrice,
+                              schemeSalePrice: schemePrice,
+                              salePrice: currentStockType === "scheme" ? schemePrice : regularPrice,
+                              expiryDate: expiryDate,
+                              amount: newAmount,
+                            };
+                          }
+                          return item;
                         })
-                        .catch((error) => {
-                          console.warn(
-                            "Could not fetch stock transactions for medicine:",
-                            value,
-                            error,
-                          );
-                          // Continue with default prices if transaction fetching fails
-                        });
+                      );
                     })
                     .catch((error) => {
-                      console.warn(
-                        "Could not fetch stock for medicine:",
-                        value,
-                        error,
-                      );
+                      console.warn("Could not fetch stock or transactions for medicine:", value, error);
                       setPurchaseItemStocks((prev) => ({
                         ...prev,
                         [id]: null,
@@ -1928,6 +2075,7 @@ export default function PharmacyPage() {
             updatedItem.expiryDate = "";
             updatedItem.amount = 0;
             updatedItem.stockType = undefined; // Reset stock type when type changes
+            updatedItem.isPriceOverridden = false;
             // Clear stock when type changes
             setPurchaseItemStocks((prev) => ({
               ...prev,
@@ -1937,6 +2085,11 @@ export default function PharmacyPage() {
               ...prev,
               [id]: null,
             }));
+          }
+
+          // Mark price as manually overridden if price fields are edited
+          if (field === "regularSalePrice" || field === "schemeSalePrice" || field === "salePrice") {
+            updatedItem.isPriceOverridden = true;
           }
 
           // Auto-calculate amount when quantity or price changes
@@ -1953,34 +2106,8 @@ export default function PharmacyPage() {
               updatedItem.stockType &&
               updatedItem.productId
             ) {
-              const regularStock = purchaseItemStocks[id] ?? 0;
-              const schemeStock = purchaseItemSchemeStocks[id] ?? 0;
-              const qty = updatedItem.quantity || 0;
-              const regularPrice =
-                updatedItem.regularSalePrice || updatedItem.salePrice || 0;
-              const schemePrice =
-                updatedItem.schemeSalePrice || updatedItem.salePrice || 0;
-
-              // Only calculate if we have stock info, otherwise use simple calculation
-              if (regularStock !== null || schemeStock !== null) {
-                if (updatedItem.stockType === "regular") {
-                  // Use regular price for entire quantity (even if fallback to scheme stock is needed)
-                  updatedItem.amount = qty * regularPrice;
-                } else if (updatedItem.stockType === "scheme") {
-                  // Use scheme price for entire quantity (even if fallback to regular stock is needed)
-                  updatedItem.amount = qty * schemePrice;
-                }
-              } else {
-                // Stock info not available yet, use the selected stock type's price
-                if (updatedItem.stockType === "regular") {
-                  updatedItem.amount = qty * regularPrice;
-                } else if (updatedItem.stockType === "scheme") {
-                  updatedItem.amount = qty * schemePrice;
-                } else {
-                  // Fallback to salePrice if stock type not set
-                  updatedItem.amount = qty * updatedItem.salePrice;
-                }
-              }
+              const itemBatches = purchaseItemBatches[id] || [];
+              updatedItem.amount = calculateFEFOAmount(updatedItem, itemBatches);
             } else {
               // For items or when stock type not set, use salePrice
               updatedItem.amount = updatedItem.quantity * updatedItem.salePrice;
@@ -2712,6 +2839,38 @@ export default function PharmacyPage() {
       );
     });
   }, [supplierLedgerSummaries, supplierSearchQuery]);
+
+  const getExpiryStatus = (expiryDate: Date | undefined) => {
+    if (!expiryDate) return { label: "N/A", color: "text-default-400 bg-default-100/50", status: "valid" };
+    const diffDays = differenceInCalendarDays(expiryDate, new Date());
+    if (diffDays < 0) {
+      return { label: "Expired", color: "text-red-600 bg-red-50 border border-red-200", status: "expired" };
+    } else if (diffDays <= 90) {
+      return { label: `Expiring Soon (${diffDays}d)`, color: "text-amber-600 bg-amber-50 border border-amber-200", status: "soon" };
+    } else {
+      return { label: `Valid (${expiryDate.toLocaleDateString()})`, color: "text-green-600 bg-green-50 border border-green-200", status: "valid" };
+    }
+  };
+
+  const filteredInventoryMedicines = useMemo(() => {
+    return medicines.filter((m) => {
+      const nameMatch = m.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+        (m.genericName || "").toLowerCase().includes(inventorySearch.toLowerCase());
+      if (!nameMatch) return false;
+
+      const stock = medicineStocks[m.id] || 0;
+      if (inventoryStockFilter === "out" && stock > 0) return false;
+      if (inventoryStockFilter === "low" && (stock === 0 || stock > 10)) return false;
+      if (inventoryStockFilter === "good" && stock <= 10) return false;
+
+      if (inventoryExpiryFilter !== "all") {
+        const statusObj = getExpiryStatus(m.expiryDate);
+        if (inventoryExpiryFilter !== statusObj.status) return false;
+      }
+
+      return true;
+    });
+  }, [medicines, medicineStocks, inventorySearch, inventoryStockFilter, inventoryExpiryFilter]);
 
   const getSupplierPaymentsForSupplier = (supplierId: string) =>
     supplierPayments
@@ -4402,11 +4561,11 @@ export default function PharmacyPage() {
 
                                     const mappedItems: PurchaseItem[] = itemsData.map((item: any) => {
                                       const med = medicines.find(m => m.id === item.medicineId);
-                                      
+
                                       // Smart default suggested quantity calculation
                                       const freqVal = item.frequency || "";
                                       const durationVal = item.duration || "";
-                                      
+
                                       const multiplier = ((): number => {
                                         const f = freqVal.toLowerCase().trim();
                                         if (f.includes("once daily") || f === "od" || f === "qd" || f === "q.d." || f === "1-0-0" || f === "0-1-0" || f === "0-0-1") return 1;
@@ -4414,12 +4573,12 @@ export default function PharmacyPage() {
                                         if (f.includes("three times daily") || f === "tds" || f === "tid" || f === "t.i.d." || f === "1-1-1") return 3;
                                         if (f.includes("four times daily") || f === "qid" || f === "q.i.d.") return 4;
                                         if (f.includes("as needed") || f === "sos" || f === "prn") return 1;
-                                        
+
                                         const numMatch = f.match(/(\d+)\s*(times|tabs|caps|doses|day)/);
                                         if (numMatch) return parseInt(numMatch[1], 10);
                                         return 1;
                                       })();
-                                      
+
                                       const days = ((): number => {
                                         const d = durationVal.toLowerCase().trim();
                                         const match = d.match(/(\d+)/);
@@ -4429,9 +4588,9 @@ export default function PharmacyPage() {
                                         else if (d.includes("month")) val *= 30;
                                         return val;
                                       })();
-                                      
+
                                       const calculatedQty = days * multiplier;
-                                      
+
                                       return {
                                         id: crypto.randomUUID(),
                                         type: "medicine" as const,
@@ -4463,6 +4622,7 @@ export default function PharmacyPage() {
                                     // Fetch stock for all mapped items to pass validation
                                     const newStocks: Record<string, number | null> = {};
                                     const newSchemeStocks: Record<string, number | null> = {};
+                                    const newBatches: Record<string, MedicineStock[]> = {};
 
                                     if (clinicId) {
                                       await Promise.all(
@@ -4471,6 +4631,9 @@ export default function PharmacyPage() {
                                             const stock = await medicineService.getMedicineStock(item.productId, clinicId);
                                             newStocks[item.id] = stock?.currentStock ?? null;
                                             newSchemeStocks[item.id] = stock?.schemeStock ?? null;
+                                            const stocks = await medicineService.getMedicineStocks(item.productId, clinicId);
+                                            newBatches[item.id] = stocks;
+                                            item.amount = calculateFEFOAmount(item, stocks);
                                           }
                                         })
                                       );
@@ -4478,6 +4641,7 @@ export default function PharmacyPage() {
 
                                     setPurchaseItemStocks(prev => ({ ...prev, ...newStocks }));
                                     setPurchaseItemSchemeStocks(prev => ({ ...prev, ...newSchemeStocks }));
+                                    setPurchaseItemBatches(prev => ({ ...prev, ...newBatches }));
 
                                     setPurchaseItems(mappedItems);
                                     setPurchaseForm(prev => ({
@@ -4512,6 +4676,244 @@ export default function PharmacyPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Inventory Tab */}
+            {activeTab === "inventory" && (
+              <div className="py-6 space-y-6">
+                {/* Stats Row */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card className="border border-default-200">
+                    <CardBody className="p-4 flex flex-row items-center gap-4">
+                      <div className="p-3 rounded-xl bg-primary/10 text-primary">
+                        <IoMedicalOutline size={24} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-default-400 font-medium uppercase tracking-wider">Total SKU Medicines</p>
+                        <h4 className="text-xl font-bold mt-0.5">{medicines.length}</h4>
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="border border-default-200">
+                    <CardBody className="p-4 flex flex-row items-center gap-4 border-l-4 border-l-amber-500">
+                      <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500">
+                        <IoWarningOutline size={24} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-default-400 font-medium uppercase tracking-wider">Low Stock Medicines</p>
+                        <h4 className="text-xl font-bold mt-0.5 text-amber-500">
+                          {medicines.filter(m => {
+                            const stock = medicineStocks[m.id] || 0;
+                            return stock > 0 && stock <= 10;
+                          }).length}
+                        </h4>
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="border border-default-200">
+                    <CardBody className="p-4 flex flex-row items-center gap-4 border-l-4 border-l-red-500">
+                      <div className="p-3 rounded-xl bg-red-500/10 text-red-500">
+                        <IoCloseCircleOutline size={24} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-default-400 font-medium uppercase tracking-wider">Out of Stock</p>
+                        <h4 className="text-xl font-bold mt-0.5 text-red-500">
+                          {medicines.filter(m => (medicineStocks[m.id] || 0) === 0).length}
+                        </h4>
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="border border-default-200">
+                    <CardBody className="p-4 flex flex-row items-center gap-4 border-l-4 border-l-rose-600">
+                      <div className="p-3 rounded-xl bg-rose-500/10 text-rose-600">
+                        <IoTimeOutline size={24} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-default-400 font-medium uppercase tracking-wider">Expired / Near Expiry</p>
+                        <h4 className="text-xl font-bold mt-0.5 text-rose-600">
+                          {medicines.filter(m => {
+                            if (!m.expiryDate) return false;
+                            const d = differenceInCalendarDays(m.expiryDate, new Date());
+                            return d <= 90;
+                          }).length}
+                        </h4>
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+
+                {/* Filters & Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-default-50/50 p-4 border border-default-200 rounded-xl">
+                  <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+                    <Input
+                      className="w-full sm:max-w-xs"
+                      placeholder="Search name or generic..."
+                      startContent={<IoSearchOutline className="text-default-400" />}
+                      value={inventorySearch}
+                      onChange={(e) => setInventorySearch(e.target.value)}
+                    />
+
+                    <select
+                      className="h-10 px-3 border border-default-200 rounded-xl text-xs bg-surface text-default-700 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      value={inventoryStockFilter}
+                      onChange={(e: any) => setInventoryStockFilter(e.target.value)}
+                    >
+                      <option value="all">All Stocks Status</option>
+                      <option value="out">Out of Stock</option>
+                      <option value="low">Low Stock (≤10)</option>
+                      <option value="good">Good Stock (&gt;10)</option>
+                    </select>
+
+                    <select
+                      className="h-10 px-3 border border-default-200 rounded-xl text-xs bg-surface text-default-700 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      value={inventoryExpiryFilter}
+                      onChange={(e: any) => setInventoryExpiryFilter(e.target.value)}
+                    >
+                      <option value="all">All Expiries</option>
+                      <option value="expired">Expired Only</option>
+                      <option value="soon">Expiring Soon (≤90d)</option>
+                      <option value="valid">Valid Stocks</option>
+                    </select>
+                  </div>
+
+                  <p className="text-xs text-default-400 font-medium">
+                    Found {filteredInventoryMedicines.length} medicines
+                  </p>
+                </div>
+
+                {/* Grid Table */}
+                <Card className="border border-default-200 shadow-none">
+                  <CardBody className="p-0">
+                    <div className="overflow-x-auto w-full">
+                      <table className="w-full border-collapse text-left text-xs text-default-700">
+                        <thead className="bg-default-50 border-b border-default-200">
+                          <tr>
+                            <th className="px-5 py-4 font-semibold text-default-600">Medicine Name & Compound</th>
+                            <th className="px-5 py-4 font-semibold text-default-600">Category</th>
+                            <th className="px-5 py-4 font-semibold text-default-600 text-center">Regular Pool</th>
+                            <th className="px-5 py-4 font-semibold text-default-600 text-center">Scheme Pool</th>
+                            <th className="px-5 py-4 font-semibold text-default-600 text-center">Total Stock</th>
+                            <th className="px-5 py-4 font-semibold text-default-600">Expiry Status</th>
+                            <th className="px-5 py-4 font-semibold text-default-600">Unit Price</th>
+                            <th className="px-5 py-4 font-semibold text-default-600 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-default-200">
+                          {filteredInventoryMedicines.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="text-center py-12 px-4">
+                                <IoMedicalOutline className="mx-auto text-default-300 mb-4" size={48} />
+                                <h3 className="text-stat-sm font-medium text-default-700 mb-1">No matches found</h3>
+                                <p className="text-default-500">Try adjusting your filters or search query.</p>
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredInventoryMedicines.map((m) => {
+                              const stockObj = rawStocks.find(s => s.medicineId === m.id);
+                              const regular = stockObj?.currentStock ?? 0;
+                              const scheme = stockObj?.schemeStock ?? 0;
+                              const total = medicineStocks[m.id] || 0;
+                              const exp = getExpiryStatus(m.expiryDate);
+
+                              return (
+                                <tr key={m.id} className="hover:bg-default-50/50 transition-colors">
+                                  <td className="px-5 py-4">
+                                    <div>
+                                      <p className="font-semibold text-sm text-default-800">{m.name}</p>
+                                      {m.genericName && (
+                                        <p className="text-xs text-default-400 font-medium mt-0.5 italic">{m.genericName}</p>
+                                      )}
+                                      {m.manufacturer && (
+                                        <span className="text-[10px] bg-default-100 text-default-600 font-semibold px-1.5 py-0.5 rounded mt-1 inline-block">
+                                          {m.manufacturer}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-1 rounded-xl capitalize">
+                                      {m.type || "General"}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-4 text-center font-semibold">
+                                    <span className={`${regular === 0 ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]" :
+                                      regular <= 10 ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]" :
+                                        "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                      }`}>
+                                      {regular}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-4 text-center font-semibold">
+                                    <span className={`${scheme === 0 ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]" :
+                                      scheme <= 10 ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]" :
+                                        "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                      }`}>
+                                      {scheme}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-4 text-center font-bold">
+                                    <span className={`${total === 0 ? "text-red-600 text-sm" :
+                                      total <= 10 ? "text-amber-600 text-sm" :
+                                        "text-default-800 text-sm"
+                                      }`}>
+                                      {total}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    <span className={`text-[10px] font-semibold px-2 py-1 rounded-xl border ${exp.color}`}>
+                                      {exp.label}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-4 font-semibold text-default-800">
+                                    NPR {m.price?.toFixed(2) || "0.00"}
+                                  </td>
+                                  <td className="px-5 py-4 text-right">
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="flat"
+                                        color="warning"
+                                        className="h-7 min-w-[70px] rounded-xl text-[10.5px] font-semibold"
+                                        onPress={() => {
+                                          const stockObj = rawStocks.find(s => s.medicineId === m.id);
+                                          setAdjustForm({
+                                            regularStock: stockObj?.currentStock ?? 0,
+                                            schemeStock: stockObj?.schemeStock ?? 0,
+                                            reason: "",
+                                          });
+                                          setSelectedMedicineForAdjust(m);
+                                          setAdjustStockModalOpen(true);
+                                        }}
+                                      >
+                                        <IoCreateOutline className="mr-1" /> Adjust
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="flat"
+                                        color="primary"
+                                        className="h-7 min-w-[70px] rounded-xl text-[10.5px] font-semibold"
+                                        onPress={() => {
+                                          setSelectedMedicineForStockBook(m);
+                                          setActiveTab("stock_book");
+                                        }}
+                                      >
+                                        <IoBookOutline className="mr-1" /> History
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardBody>
+                </Card>
               </div>
             )}
 
@@ -6057,593 +6459,710 @@ export default function PharmacyPage() {
             </span>
           </ModalHeader>
 
-          <ModalBody>
-            <div className="flex flex-col gap-3">
-              {/* ── Section: Customer ─────────────────────────────── */}
-              <section>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[rgb(var(--color-text-muted)/0.7)]">
-                    Customer
-                  </span>
-                  <div className="flex-1 h-px bg-[rgb(var(--color-border))]" />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <CustomSelect
-                    required
-                    label="Customer Type"
-                    options={[
-                      { value: "walk-in", label: "Walk-in" },
-                      { value: "patient", label: "Patient" },
-                    ]}
-                    value={purchaseForm.customerType}
-                    onChange={(e: any) => {
-                      const selectedType = e.target.value as
-                        | "walk-in"
-                        | "patient";
+          <ModalBody className="p-0 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-12 h-full w-full">
+              {/* Left Column: Customer Details & Cart Items (Takes 7/12 cols) */}
+              <div className="lg:col-span-7 p-4 overflow-y-auto flex flex-col gap-4 border-r border-[rgb(var(--color-border))]">
+                {/* ── Section: Customer ─────────────────────────────── */}
+                <section>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[rgb(var(--color-text-muted)/0.7)]">
+                      Customer
+                    </span>
+                    <div className="flex-1 h-px bg-[rgb(var(--color-border))]" />
+                  </div>
+                  <div className={clsx(
+                    "grid gap-3",
+                    purchaseForm.customerType === "patient"
+                      ? "grid-cols-1 md:grid-cols-3"
+                      : "grid-cols-1 md:grid-cols-2"
+                  )}>
+                    <CustomSelect
+                      required
+                      label="Customer Type"
+                      options={[
+                        { value: "walk-in", label: "Walk-in" },
+                        { value: "patient", label: "Patient" },
+                      ]}
+                      value={purchaseForm.customerType}
+                      onChange={(e: any) => {
+                        const selectedType = e.target.value as
+                          | "walk-in"
+                          | "patient";
 
-                      setPurchaseForm((prev) => ({
-                        ...prev,
-                        customerType: selectedType,
-                        patientId:
-                          selectedType === "walk-in" ? "" : prev.patientId,
-                        patientName:
-                          selectedType === "walk-in" ? "" : prev.patientName,
-                      }));
-                    }}
-                  />
+                        setPurchaseForm((prev) => ({
+                          ...prev,
+                          customerType: selectedType,
+                          patientId:
+                            selectedType === "walk-in" ? "" : prev.patientId,
+                          patientName:
+                            selectedType === "walk-in" ? "" : prev.patientName,
+                        }));
+                      }}
+                    />
 
-                  {purchaseForm.customerType === "patient" && (
-                    <div className="relative">
-                      {isLoadingPatients && (
-                        <div className="absolute right-2 top-8 z-10">
-                          <Spinner size="sm" />
+                    {purchaseForm.customerType === "patient" && (
+                      <div className="relative">
+                        {isLoadingPatients && (
+                          <div className="absolute right-2 top-8 z-10">
+                            <Spinner size="sm" />
+                          </div>
+                        )}
+                        <SearchSelect
+                          required
+                          items={patients.map((p) => ({
+                            id: p.id,
+                            primary: `${p.name} ${p.regNumber || ""}`.trim(),
+                            secondary: p.regNumber
+                              ? `Reg: ${p.regNumber}`
+                              : undefined,
+                          }))}
+                          label="Select Patient"
+                          placeholder="Search by name or reg. number…"
+                          value={purchaseForm.patientId || ""}
+                          onChange={(key) => {
+                            const selectedPatient = patients.find(
+                              (p) => p.id === key,
+                            );
+
+                            setPurchaseForm((prev) => ({
+                              ...prev,
+                              patientId: key || "",
+                              patientName: selectedPatient
+                                ? `${selectedPatient.name}${selectedPatient.regNumber ? ` (${selectedPatient.regNumber})` : ""}`
+                                : "",
+                              patientPhone: selectedPatient?.mobile || selectedPatient?.phone || "",
+                              patientAddress: selectedPatient?.address || "",
+                            }));
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {purchaseForm.customerType === "walk-in" && (
+                      <>
+                        <CustomInput
+                          label="Customer Name (optional)"
+                          placeholder="Enter customer name"
+                          value={purchaseForm.patientName}
+                          onChange={(e: any) =>
+                            setPurchaseForm((prev) => ({
+                              ...prev,
+                              patientName: e.target.value,
+                            }))
+                          }
+                        />
+                        <div className="grid grid-cols-2 gap-3">
+                          <CustomInput
+                            label="Phone (optional)"
+                            placeholder="Enter phone number"
+                            value={purchaseForm.patientPhone}
+                            onChange={(e: any) =>
+                              setPurchaseForm((prev) => ({
+                                ...prev,
+                                patientPhone: e.target.value,
+                              }))
+                            }
+                          />
+                          <CustomInput
+                            label="Address (optional)"
+                            placeholder="Enter address"
+                            value={purchaseForm.patientAddress}
+                            onChange={(e: any) =>
+                              setPurchaseForm((prev) => ({
+                                ...prev,
+                                patientAddress: e.target.value,
+                              }))
+                            }
+                          />
                         </div>
-                      )}
-                      <SearchSelect
-                        required
-                        items={patients.map((p) => ({
-                          id: p.id,
-                          primary: `${p.name} ${p.regNumber || ""}`.trim(),
-                          secondary: p.regNumber
-                            ? `Reg: ${p.regNumber}`
-                            : undefined,
-                        }))}
-                        label="Select Patient"
-                        placeholder="Search by name or reg. number…"
-                        value={purchaseForm.patientId || ""}
-                        onChange={(key) => {
-                          const selectedPatient = patients.find(
-                            (p) => p.id === key,
-                          );
+                      </>
+                    )}
 
-                          setPurchaseForm((prev) => ({
-                            ...prev,
-                            patientId: key || "",
-                            patientName: selectedPatient
-                              ? `${selectedPatient.name}${selectedPatient.regNumber ? ` (${selectedPatient.regNumber})` : ""}`
-                              : "",
-                            patientPhone: selectedPatient?.mobile || selectedPatient?.phone || "",
-                            patientAddress: selectedPatient?.address || "",
-                          }));
-                        }}
-                      />
+                    <CustomInput
+                      label="Medication Duration (days)"
+                      min="0"
+                      placeholder="e.g. 30 (leave blank if N/A)"
+                      type="number"
+                      value={
+                        purchaseForm.medicationDurationDays
+                          ? purchaseForm.medicationDurationDays.toString()
+                          : ""
+                      }
+                      onChange={(e: any) =>
+                        setPurchaseForm((prev) => ({
+                          ...prev,
+                          medicationDurationDays: Math.max(
+                            0,
+                            parseInt(e.target.value, 10) || 0,
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                </section>
+
+                {/* ── Section: Items ────────────────────────────────── */}
+                <section>
+                  <div className="flex items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[rgb(var(--color-text-muted)/0.7)]">
+                        Purchase Items
+                      </span>
+                      <div className="h-px w-24 bg-[rgb(var(--color-border))]" />
                     </div>
-                  )}
+                  </div>
 
-                  {purchaseForm.customerType === "walk-in" && (
-                    <>
+                  <div className="flex flex-col gap-2">
+                    {purchaseItems.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className="border border-border-base rounded bg-surface-2"
+                      >
+                        {/* item header row */}
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-surface-2 border-b border-[rgb(var(--color-border))]">
+                          <span className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.05em]">
+                            Item #{index + 1}
+                          </span>
+                          {purchaseItems.length > 1 && (
+                            <button
+                              className="text-rose-400 hover:text-rose-600 transition-colors"
+                              title="Remove item"
+                              type="button"
+                              onClick={() => removePurchaseItem(item.id)}
+                            >
+                              <IoTrashOutline className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* item body */}
+                        <div className="p-3 flex flex-col gap-3">
+                          {/* Row 1: Type + Product + Stock Type + Expiry */}
+                          <div className="grid grid-cols-12 gap-3 items-start">
+                            <div className="col-span-12 sm:col-span-2">
+                              <CustomSelect
+                                required
+                                label="Type"
+                                options={[
+                                  { value: "medicine", label: "Medicine" },
+                                  { value: "item", label: "Item" },
+                                ]}
+                                value={item.type}
+                                onChange={(e: any) => {
+                                  const selectedType = e.target.value as
+                                    | "medicine"
+                                    | "item";
+
+                                  updatePurchaseItem(item.id, "type", selectedType);
+                                }}
+                              />
+                            </div>
+
+                            <div className={clsx(
+                              "col-span-12",
+                              item.type === "medicine"
+                                ? item.productId
+                                  ? "sm:col-span-4"
+                                  : "sm:col-span-7"
+                                : "sm:col-span-10"
+                            )}>
+                              <SearchSelect
+                                required
+                                items={
+                                  item.type === "medicine"
+                                    ? medicines
+                                      .filter((m) => (medicineStocks[m.id] || 0) > 0)
+                                      .map((m) => ({
+                                        id: m.id,
+                                        primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
+                                      }))
+                                    : items.map((i) => ({
+                                      id: i.id,
+                                      primary: i.name,
+                                    }))
+                                }
+                                label={`${item.type === "medicine" ? "Medicine" : "Item"}`}
+                                placeholder={`Search ${item.type}…`}
+                                value={item.productId || ""}
+                                onChange={(key) =>
+                                  updatePurchaseItem(item.id, "productId", key)
+                                }
+                              />
+                            </div>
+
+                            {item.type === "medicine" && item.productId && (
+                              <div className="col-span-12 sm:col-span-3">
+                                <CustomSelect
+                                  required
+                                  description={`Reg: ${purchaseItemStocks[item.id] ?? 0} | Sch: ${purchaseItemSchemeStocks[item.id] ?? 0}`}
+                                  label="Stock Type"
+                                  options={[
+                                    { value: "regular", label: "Regular" },
+                                    { value: "scheme", label: "Scheme" },
+                                  ]}
+                                  value={item.stockType || "regular"}
+                                  onChange={(e: any) => {
+                                    const selectedStockType = e.target.value as
+                                      | "regular"
+                                      | "scheme";
+
+                                    updatePurchaseItem(
+                                      item.id,
+                                      "stockType",
+                                      selectedStockType,
+                                    );
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            {item.type === "medicine" && (
+                              <div className={clsx(
+                                "col-span-12",
+                                item.productId ? "sm:col-span-3" : "sm:col-span-3"
+                              )}>
+                                <CustomInput
+                                  required
+                                  label="Expiry Date"
+                                  type="date"
+                                  value={item.expiryDate || ""}
+                                  onChange={(e: any) =>
+                                    updatePurchaseItem(
+                                      item.id,
+                                      "expiryDate",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Stock info pill */}
+                          {item.type === "medicine" &&
+                            item.productId &&
+                            purchaseItemStocks[item.id] !== undefined && (
+                              <div className="flex items-center gap-1.5 self-start px-2.5 py-1 bg-teal-50 border border-teal-100 rounded text-[11px] text-teal-700">
+                                <span className="font-medium">Stock:</span>
+                                <span>
+                                  {(() => {
+                                    const r = purchaseItemStocks[item.id] ?? 0;
+                                    const s =
+                                      purchaseItemSchemeStocks[item.id] ?? 0;
+
+                                    if (r === null && s === null) return "N/A";
+                                    if (s > 0)
+                                      return `Regular: ${r ?? 0} | Scheme: ${s}`;
+
+                                    return r ?? "N/A";
+                                  })()}
+                                </span>
+                              </div>
+                            )}
+
+                          {/* Row 2: Price + Qty + Amount */}
+                          <div className="grid grid-cols-12 gap-3 items-start">
+                            <div className="col-span-12 sm:col-span-4">
+                              {item.type === "medicine" && item.productId ? (
+                                (() => {
+                                  const stockType = item.stockType || "regular";
+
+                                  if (stockType === "regular") {
+                                    return (
+                                      <CustomInput
+                                        required
+                                        label="Regular Sale Price (NPR)"
+                                        startContent={
+                                          <span className="text-[11px] text-text-muted/40">
+                                            NPR
+                                          </span>
+                                        }
+                                        step="any"
+                                        type="number"
+                                        value={(
+                                          item.regularSalePrice ||
+                                          item.salePrice ||
+                                          0
+                                        ).toString()}
+                                        onChange={(e: any) =>
+                                          updatePurchaseItem(
+                                            item.id,
+                                            "regularSalePrice",
+                                            parseFloat(e.target.value) || 0,
+                                          )
+                                        }
+                                      />
+                                    );
+                                  } else {
+                                    return (
+                                      <CustomInput
+                                        required
+                                        label="Scheme Sale Price (NPR)"
+                                        startContent={
+                                          <span className="text-[11px] text-text-muted/40">
+                                            NPR
+                                          </span>
+                                        }
+                                        step="any"
+                                        type="number"
+                                        value={(
+                                          item.schemeSalePrice ||
+                                          item.salePrice ||
+                                          0
+                                        ).toString()}
+                                        onChange={(e: any) =>
+                                          updatePurchaseItem(
+                                            item.id,
+                                            "schemeSalePrice",
+                                            parseFloat(e.target.value) || 0,
+                                          )
+                                        }
+                                      />
+                                    );
+                                  }
+                                })()
+                              ) : (
+                                <CustomInput
+                                  required
+                                  label="Sale Price"
+                                  startContent={
+                                    <span className="text-[11px] text-text-muted/40">
+                                      NPR
+                                    </span>
+                                  }
+                                  step="any"
+                                  type="number"
+                                  value={(item.salePrice || 0).toString()}
+                                  onChange={(e: any) =>
+                                    updatePurchaseItem(
+                                      item.id,
+                                      "salePrice",
+                                      parseFloat(e.target.value) || 0,
+                                    )
+                                  }
+                                />
+                              )}
+                            </div>
+
+                            <div className="col-span-12 sm:col-span-4">
+                              <CustomInput
+                                required
+                                label="Qty"
+                                type="number"
+                                value={(item.quantity || 0).toString()}
+                                onChange={(e: any) =>
+                                  updatePurchaseItem(
+                                    item.id,
+                                    "quantity",
+                                    parseInt(e.target.value) || 0,
+                                  )
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-12 sm:col-span-4">
+                              <CustomInput
+                                readOnly
+                                classNames={{
+                                  input: "font-semibold text-teal-700",
+                                }}
+                                label="Amount"
+                                startContent={
+                                  <span className="text-[11px] text-text-muted/40">
+                                    NPR
+                                  </span>
+                                }
+                                type="number"
+                                value={(item.amount || 0).toString()}
+                              />
+                            </div>
+
+                            {/* Batch utilization preview */}
+                            {item.type === "medicine" && item.productId && item.quantity > 0 && purchaseItemBatches[item.id] && (
+                              <div className="col-span-12 mt-1 p-2 rounded-lg border border-primary/20 bg-primary/5 flex flex-col gap-1.5 animate-fadeIn">
+                                <div className="text-[10px] font-semibold text-primary uppercase tracking-wider">
+                                  Batch Allocation (FEFO)
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {(() => {
+                                    const stocks = purchaseItemBatches[item.id] || [];
+                                    const stockType = item.stockType || "regular";
+                                    const now = new Date();
+
+                                    // Filter out expired batches (expiryDate < now)
+                                    const activeNonExpired = stocks.filter((s) => {
+                                      if (!s.expiryDate) return true;
+                                      return new Date(s.expiryDate) >= now;
+                                    });
+
+                                    // Sort by expiry date, then createdAt
+                                    activeNonExpired.sort((a, b) => {
+                                      const expA = a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity;
+                                      const expB = b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity;
+                                      if (expA !== expB) return expA - expB;
+                                      const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                                      const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                                      return createdA - createdB;
+                                    });
+
+                                    let remaining = item.quantity;
+                                    const allocated: { batchNumber: string; qty: number; price: number; expiryDate?: Date }[] = [];
+
+                                    for (const batch of activeNonExpired) {
+                                      if (remaining <= 0) break;
+                                      const available = stockType === "scheme" ? batch.schemeStock ?? 0 : batch.currentStock ?? 0;
+                                      if (available <= 0) continue;
+
+                                      const qtyToUse = Math.min(remaining, available);
+                                       const defaultPrice = (stockType === "scheme" ? item.schemeSalePrice : item.regularSalePrice) || item.salePrice || 0;
+                                       const batchPrice = stockType === "scheme"
+                                         ? (batch.schemePrice ?? batch.salePrice ?? defaultPrice)
+                                         : (batch.salePrice ?? defaultPrice);
+
+                                       allocated.push({
+                                         batchNumber: batch.batchNumber || "DEFAULT",
+                                         qty: qtyToUse,
+                                         price: batchPrice,
+                                         expiryDate: batch.expiryDate,
+                                       });
+                                      remaining -= qtyToUse;
+                                    }
+
+                                    if (allocated.length === 0) {
+                                      return <span className="text-[11px] text-rose-500 font-medium">No stock available</span>;
+                                    }
+
+                                    return (
+                                      <>
+                                        {allocated.map((alloc, idx) => (
+                                          <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
+                                            <span className="text-primary font-bold">{alloc.batchNumber}</span>
+                                            <span className="text-neutral-400">|</span>
+                                            <span>Qty: <strong className="text-neutral-955 dark:text-white">{alloc.qty}</strong></span>
+                                             <span className="text-neutral-400">|</span>
+                                             <span>Price: <strong className="text-emerald-600 dark:text-emerald-400">NPR {alloc.price}</strong></span>
+                                             {alloc.expiryDate && (
+                                              <>
+                                                <span className="text-neutral-400">|</span>
+                                                <span className="text-neutral-500 text-[10.5px]">Exp: {new Date(alloc.expiryDate).toLocaleDateString()}</span>
+                                              </>
+                                            )}
+                                          </div>
+                                        ))}
+                                        {remaining > 0 && (
+                                          <div className="w-full text-[11px] text-rose-500 font-semibold mt-1">
+                                            ⚠️ Insufficient stock! {remaining} quantity unallocated.
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      color="primary"
+                      size="sm"
+                      startContent={<IoAddOutline />}
+                      variant="flat"
+                      onPress={addPurchaseItem}
+                    >
+                      New item
+                    </Button>
+                  </div>
+                </section>
+              </div>
+
+              {/* Right Column: Pinned Summary & Payment options (Takes 5/12 cols) */}
+              <div className="lg:col-span-5 p-4 bg-[rgb(var(--color-surface-2))/0.3] overflow-y-auto flex flex-col gap-4">
+                {/* ── Section: Summary ──────────────────────────────── */}
+                <section>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-text-main/80">
+                      Summary & Payment
+                    </span>
+                    <div className="flex-1 h-px bg-[rgb(var(--color-border))]" />
+                  </div>
+
+                  {/* Totals strip */}
+                  <div className="flex items-stretch gap-0 rounded border border-border-base overflow-hidden mb-3 bg-surface-2/30">
+                    {[
+                      {
+                        label: "Subtotal",
+                        value: `NPR ${(purchaseForm.total || 0).toLocaleString()}`,
+                      },
+                      {
+                        label: "Taxable",
+                        value: `NPR ${(purchaseForm.taxableAmount || 0).toLocaleString()}`,
+                      },
+                      {
+                        label: "Tax",
+                        value: `NPR ${(purchaseForm.taxAmount || 0).toLocaleString()}`,
+                      },
+                      {
+                        label: "Handling",
+                        value: `NPR ${(purchaseForm.handlingAmount || 0).toLocaleString()}`,
+                      },
+                    ].map((col, i) => (
+                      <div
+                        key={i}
+                        className={`flex-1 px-3 py-2 text-center ${i < 3 ? "border-r border-[rgb(var(--color-border))]" : ""}`}
+                      >
+                        <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] uppercase tracking-[0.06em]">
+                          {col.label}
+                        </p>
+                        <p className="text-[12.5px] font-semibold text-[rgb(var(--color-text))] mt-0.5">
+                          {col.value}
+                        </p>
+                      </div>
+                    ))}
+                    <div className="flex-1 px-3 py-2 text-center bg-[rgb(var(--color-primary)/0.1)] border-l border-[rgb(var(--color-primary)/0.2)]">
+                      <p className="text-[10.5px] text-[rgb(var(--color-primary))] uppercase tracking-[0.06em] font-semibold">
+                        Total
+                      </p>
+                      <p className="text-[15px] font-bold text-[rgb(var(--color-primary))] mt-0.5">
+                        NPR {(purchaseForm.netAmount || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <CustomSelect
+                      label="Discount Type"
+                      options={[
+                        { value: "flat", label: "Flat Amount (NPR)" },
+                        { value: "percent", label: "Percentage (%)" },
+                      ]}
+                      value={purchaseForm.discountType}
+                      onChange={(e: any) => {
+                        const selectedType = e.target.value as "flat" | "percent";
+
+                        setPurchaseForm((prev) => ({
+                          ...prev,
+                          discountType: selectedType,
+                          discount: selectedType === "flat" ? prev.discount : 0,
+                          discountPercentage:
+                            selectedType === "percent"
+                              ? prev.discountPercentage
+                              : 0,
+                        }));
+                      }}
+                    />
+
+                    {purchaseForm.discountType === "flat" ? (
                       <CustomInput
-                        label="Customer Name (optional)"
-                        placeholder="Enter customer name"
-                        value={purchaseForm.patientName}
+                        label="Discount (NPR)"
+                        min="0"
+                        startContent={
+                          <span className="text-[11px] text-text-muted/40">
+                            NPR
+                          </span>
+                        }
+                        step="any"
+                        type="number"
+                        value={(purchaseForm.discount || 0).toString()}
                         onChange={(e: any) =>
                           setPurchaseForm((prev) => ({
                             ...prev,
-                            patientName: e.target.value,
+                            discount: parseFloat(e.target.value) || 0,
                           }))
                         }
                       />
-                      <div className="grid grid-cols-2 gap-3">
-                        <CustomInput
-                          label="Phone (optional)"
-                          placeholder="Enter phone number"
-                          value={purchaseForm.patientPhone}
-                          onChange={(e: any) =>
-                            setPurchaseForm((prev) => ({
-                              ...prev,
-                              patientPhone: e.target.value,
-                            }))
-                          }
-                        />
-                        <CustomInput
-                          label="Address (optional)"
-                          placeholder="Enter address"
-                          value={purchaseForm.patientAddress}
-                          onChange={(e: any) =>
-                            setPurchaseForm((prev) => ({
-                              ...prev,
-                              patientAddress: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
+                    ) : (
+                      <CustomInput
+                        label="Discount (%)"
+                        max="100"
+                        min="0"
+                        startContent={
+                          <span className="text-[11px] text-text-muted/40">%</span>
+                        }
+                        step="any"
+                        type="number"
+                        value={(purchaseForm.discountPercentage || 0).toString()}
+                        onChange={(e: any) =>
+                          setPurchaseForm((prev) => ({
+                            ...prev,
+                            discountPercentage: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    )}
 
-                  <CustomInput
-                    label="Medication Duration (days)"
-                    min="0"
-                    placeholder="e.g. 30 (leave blank if N/A)"
-                    type="number"
-                    value={
-                      purchaseForm.medicationDurationDays
-                        ? purchaseForm.medicationDurationDays.toString()
-                        : ""
-                    }
-                    onChange={(e: any) =>
-                      setPurchaseForm((prev) => ({
-                        ...prev,
-                        medicationDurationDays: Math.max(
-                          0,
-                          parseInt(e.target.value, 10) || 0,
-                        ),
-                      }))
-                    }
-                  />
-                </div>
-              </section>
-
-              {/* ── Section: Items ────────────────────────────────── */}
-              <section>
-                <div className="flex items-center mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[rgb(var(--color-text-muted)/0.7)]">
-                      Purchase Items
-                    </span>
-                    <div className="h-px w-24 bg-[rgb(var(--color-border))]" />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  {purchaseItems.map((item, index) => (
-                    <div
-                      key={item.id}
-                      className="border border-border-base rounded bg-surface-2"
-                    >
-                      {/* item header row */}
-                      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-2 border-b border-[rgb(var(--color-border))]">
-                        <span className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.05em]">
-                          Item #{index + 1}
-                        </span>
-                        {purchaseItems.length > 1 && (
-                          <button
-                            className="text-rose-400 hover:text-rose-600 transition-colors"
-                            title="Remove item"
-                            type="button"
-                            onClick={() => removePurchaseItem(item.id)}
-                          >
-                            <IoTrashOutline className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* item body */}
-                      <div className="p-3 flex flex-col gap-3">
-                        {/* Row 1: Type + Product + Stock Type + Expiry */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <CustomSelect
-                            required
-                            label="Type"
-                            options={[
-                              { value: "medicine", label: "Medicine" },
-                              { value: "item", label: "Item" },
-                            ]}
-                            value={item.type}
-                            onChange={(e: any) => {
-                              const selectedType = e.target.value as
-                                | "medicine"
-                                | "item";
-
-                              updatePurchaseItem(item.id, "type", selectedType);
-                            }}
-                          />
-
-                          <div className="lg:col-span-2 min-w-[260px]">
-                            <SearchSelect
-                              required
-                              items={
-                                item.type === "medicine"
-                                  ? medicines
-                                    .filter((m) => (medicineStocks[m.id] || 0) > 0)
-                                    .map((m) => ({
-                                      id: m.id,
-                                      primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
-                                    }))
-                                  : items.map((i) => ({
-                                    id: i.id,
-                                    primary: i.name,
-                                  }))
-                              }
-                              label={`${item.type === "medicine" ? "Medicine" : "Item"}`}
-                              placeholder={`Search ${item.type}…`}
-                              value={item.productId || ""}
-                              onChange={(key) =>
-                                updatePurchaseItem(item.id, "productId", key)
-                              }
-                            />
-                          </div>
-
-                          {item.type === "medicine" && item.productId && (
-                            <CustomSelect
-                              required
-                              description={`Reg: ${purchaseItemStocks[item.id] ?? 0} | Sch: ${purchaseItemSchemeStocks[item.id] ?? 0}`}
-                              label="Stock Type"
-                              options={[
-                                { value: "regular", label: "Regular" },
-                                { value: "scheme", label: "Scheme" },
-                              ]}
-                              value={item.stockType || "regular"}
-                              onChange={(e: any) => {
-                                const selectedStockType = e.target.value as
-                                  | "regular"
-                                  | "scheme";
-
-                                updatePurchaseItem(
-                                  item.id,
-                                  "stockType",
-                                  selectedStockType,
-                                );
-                              }}
-                            />
-                          )}
-
-                          {item.type === "medicine" && (
-                            <CustomInput
-                              required
-                              label="Expiry Date"
-                              type="date"
-                              value={item.expiryDate || ""}
-                              onChange={(e: any) =>
-                                updatePurchaseItem(
-                                  item.id,
-                                  "expiryDate",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          )}
-                        </div>
-
-                        {/* Stock info pill */}
-                        {item.type === "medicine" &&
-                          item.productId &&
-                          purchaseItemStocks[item.id] !== undefined && (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-100 rounded text-[11.5px] text-teal-700">
-                              <span className="font-medium">Stock:</span>
-                              <span>
-                                {(() => {
-                                  const r = purchaseItemStocks[item.id] ?? 0;
-                                  const s =
-                                    purchaseItemSchemeStocks[item.id] ?? 0;
-
-                                  if (r === null && s === null) return "N/A";
-                                  if (s > 0)
-                                    return `Regular: ${r ?? 0} | Scheme: ${s}`;
-
-                                  return r ?? "N/A";
-                                })()}
-                              </span>
-                            </div>
-                          )}
-
-                        {/* Row 2: Price + Qty + Amount */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          {item.type === "medicine" && item.productId ? (
-                            (() => {
-                              const stockType = item.stockType || "regular";
-
-                              if (stockType === "regular") {
-                                return (
-                                  <CustomInput
-                                    required
-                                    label="Regular Sale Price (NPR)"
-                                    startContent={
-                                      <span className="text-[11px] text-text-muted/40">
-                                        NPR
-                                      </span>
-                                    }
-                                    step="any"
-                                    type="number"
-                                    value={(
-                                      item.regularSalePrice ||
-                                      item.salePrice ||
-                                      0
-                                    ).toString()}
-                                    onChange={(e: any) =>
-                                      updatePurchaseItem(
-                                        item.id,
-                                        "regularSalePrice",
-                                        parseFloat(e.target.value) || 0,
-                                      )
-                                    }
-                                  />
-                                );
-                              } else {
-                                return (
-                                  <CustomInput
-                                    required
-                                    label="Scheme Sale Price (NPR)"
-                                    startContent={
-                                      <span className="text-[11px] text-text-muted/40">
-                                        NPR
-                                      </span>
-                                    }
-                                    step="any"
-                                    type="number"
-                                    value={(
-                                      item.schemeSalePrice ||
-                                      item.salePrice ||
-                                      0
-                                    ).toString()}
-                                    onChange={(e: any) =>
-                                      updatePurchaseItem(
-                                        item.id,
-                                        "schemeSalePrice",
-                                        parseFloat(e.target.value) || 0,
-                                      )
-                                    }
-                                  />
-                                );
-                              }
-                            })()
-                          ) : (
-                            <CustomInput
-                              required
-                              label="Sale Price"
-                              startContent={
-                                <span className="text-[11px] text-text-muted/40">
-                                  NPR
-                                </span>
-                              }
-                              step="any"
-                              type="number"
-                              value={(item.salePrice || 0).toString()}
-                              onChange={(e: any) =>
-                                updatePurchaseItem(
-                                  item.id,
-                                  "salePrice",
-                                  parseFloat(e.target.value) || 0,
-                                )
-                              }
-                            />
-                          )}
-
-                          <CustomInput
-                            required
-                            label="Qty"
-                            type="number"
-                            value={(item.quantity || 0).toString()}
-                            onChange={(e: any) =>
-                              updatePurchaseItem(
-                                item.id,
-                                "quantity",
-                                parseInt(e.target.value) || 0,
-                              )
-                            }
-                          />
-
-                          <CustomInput
-                            readOnly
-                            classNames={{
-                              input: "font-semibold text-teal-700",
-                            }}
-                            label="Amount"
-                            startContent={
-                              <span className="text-[11px] text-text-muted/40">
-                                NPR
-                              </span>
-                            }
-                            type="number"
-                            value={(item.amount || 0).toString()}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-2 flex justify-end">
-                  <Button
-                    color="primary"
-                    size="sm"
-                    startContent={<IoAddOutline />}
-                    variant="flat"
-                    onPress={addPurchaseItem}
-                  >
-                    New item
-                  </Button>
-                </div>
-              </section>
-
-              {/* ── Section: Summary ──────────────────────────────── */}
-              <section>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-text-main/80">
-                    Summary & Payment
-                  </span>
-                  <div className="flex-1 h-px bg-[rgb(var(--color-border))]" />
-                </div>
-
-                {/* Totals strip */}
-                <div className="flex items-stretch gap-0 rounded border border-border-base overflow-hidden mb-3 bg-surface-2/30">
-                  {[
-                    {
-                      label: "Subtotal",
-                      value: `NPR ${(purchaseForm.total || 0).toLocaleString()}`,
-                    },
-                    {
-                      label: "Taxable",
-                      value: `NPR ${(purchaseForm.taxableAmount || 0).toLocaleString()}`,
-                    },
-                    {
-                      label: "Tax",
-                      value: `NPR ${(purchaseForm.taxAmount || 0).toLocaleString()}`,
-                    },
-                    {
-                      label: "Handling",
-                      value: `NPR ${(purchaseForm.handlingAmount || 0).toLocaleString()}`,
-                    },
-                  ].map((col, i) => (
-                    <div
-                      key={i}
-                      className={`flex-1 px-3 py-2 text-center ${i < 3 ? "border-r border-[rgb(var(--color-border))]" : ""}`}
-                    >
-                      <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] uppercase tracking-[0.06em]">
-                        {col.label}
-                      </p>
-                      <p className="text-[12.5px] font-semibold text-[rgb(var(--color-text))] mt-0.5">
-                        {col.value}
-                      </p>
-                    </div>
-                  ))}
-                  <div className="flex-1 px-3 py-2 text-center bg-[rgb(var(--color-primary)/0.1)] border-l border-[rgb(var(--color-primary)/0.2)]">
-                    <p className="text-[10.5px] text-[rgb(var(--color-primary))] uppercase tracking-[0.06em] font-semibold">
-                      Total
-                    </p>
-                    <p className="text-[15px] font-bold text-[rgb(var(--color-primary))] mt-0.5">
-                      NPR {(purchaseForm.netAmount || 0).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <CustomSelect
-                    label="Discount Type"
-                    options={[
-                      { value: "flat", label: "Flat Amount (NPR)" },
-                      { value: "percent", label: "Percentage (%)" },
-                    ]}
-                    value={purchaseForm.discountType}
-                    onChange={(e: any) => {
-                      const selectedType = e.target.value as "flat" | "percent";
-
-                      setPurchaseForm((prev) => ({
-                        ...prev,
-                        discountType: selectedType,
-                        discount: selectedType === "flat" ? prev.discount : 0,
-                        discountPercentage:
-                          selectedType === "percent"
-                            ? prev.discountPercentage
-                            : 0,
-                      }));
-                    }}
-                  />
-
-                  {purchaseForm.discountType === "flat" ? (
                     <CustomInput
-                      label="Discount (NPR)"
-                      min="0"
-                      startContent={
-                        <span className="text-[11px] text-text-muted/40">
-                          NPR
-                        </span>
-                      }
-                      step="any"
-                      type="number"
-                      value={(purchaseForm.discount || 0).toString()}
-                      onChange={(e: any) =>
-                        setPurchaseForm((prev) => ({
-                          ...prev,
-                          discount: parseFloat(e.target.value) || 0,
-                        }))
-                      }
-                    />
-                  ) : (
-                    <CustomInput
-                      label="Discount (%)"
-                      max="100"
-                      min="0"
+                      label={`${settingsForm.taxLabel || "Tax"} % (default: ${settingsForm.defaultTaxPercentage || 0})`}
                       startContent={
                         <span className="text-[11px] text-text-muted/40">%</span>
                       }
+                      type="number"
+                      value={(purchaseForm.taxPercentage || 0).toString()}
+                      onChange={(e: any) =>
+                        setPurchaseForm((prev) => ({
+                          ...prev,
+                          taxPercentage: parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                    />
+
+                    <CustomInput
+                      label="Handling Charge (NPR)"
+                      min="0"
+                      placeholder="0.00"
+                      startContent={
+                        <span className="text-[11px] text-text-muted/40">NPR</span>
+                      }
                       step="any"
                       type="number"
-                      value={(purchaseForm.discountPercentage || 0).toString()}
+                      value={(purchaseForm.handlingAmount || 0).toString()}
                       onChange={(e: any) =>
                         setPurchaseForm((prev) => ({
                           ...prev,
-                          discountPercentage: parseFloat(e.target.value) || 0,
+                          handlingAmount: parseFloat(e.target.value) || 0,
                         }))
                       }
                     />
-                  )}
 
-                  <CustomInput
-                    label={`${settingsForm.taxLabel || "Tax"} % (default: ${settingsForm.defaultTaxPercentage || 0})`}
-                    startContent={
-                      <span className="text-[11px] text-text-muted/40">%</span>
-                    }
-                    type="number"
-                    value={(purchaseForm.taxPercentage || 0).toString()}
-                    onChange={(e: any) =>
-                      setPurchaseForm((prev) => ({
-                        ...prev,
-                        taxPercentage: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                  />
+                    <CustomSelect
+                      required
+                      label="Payment Method"
+                      options={getAvailablePaymentMethods().map((m) => ({
+                        value: m.key,
+                        label: m.name,
+                      }))}
+                      value={purchaseForm.paymentType}
+                      onChange={(e: any) => {
+                        const selectedKey = e.target.value;
 
-                  <CustomInput
-                    label="Handling Charge (NPR)"
-                    min="0"
-                    placeholder="0.00"
-                    startContent={
-                      <span className="text-[11px] text-text-muted/40">NPR</span>
-                    }
-                    step="any"
-                    type="number"
-                    value={(purchaseForm.handlingAmount || 0).toString()}
-                    onChange={(e: any) =>
-                      setPurchaseForm((prev) => ({
-                        ...prev,
-                        handlingAmount: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                  />
-
-                  <CustomSelect
-                    required
-                    label="Payment Method"
-                    options={getAvailablePaymentMethods().map((m) => ({
-                      value: m.key,
-                      label: m.name,
-                    }))}
-                    value={purchaseForm.paymentType}
-                    onChange={(e: any) => {
-                      const selectedKey = e.target.value;
-
-                      setPurchaseForm((prev) => ({
-                        ...prev,
-                        paymentType: selectedKey,
-                      }));
-                    }}
-                  />
-
-                  <div className="sm:col-span-2">
-                    <CustomInput
-                      label="Payment Note (optional)"
-                      placeholder="Add any notes…"
-                      value={purchaseForm.paymentNote}
-                      onChange={(e: any) =>
                         setPurchaseForm((prev) => ({
                           ...prev,
-                          paymentNote: e.target.value,
-                        }))
-                      }
+                          paymentType: selectedKey,
+                        }));
+                      }}
                     />
+
+                    <div className="sm:col-span-2">
+                      <CustomInput
+                        label="Payment Note (optional)"
+                        placeholder="Add any notes…"
+                        value={purchaseForm.paymentNote}
+                        onChange={(e: any) =>
+                          setPurchaseForm((prev) => ({
+                            ...prev,
+                            paymentNote: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
                   </div>
-                </div>
-              </section>
+                </section>
+              </div>
             </div>
           </ModalBody>
 
@@ -7535,6 +8054,74 @@ export default function PharmacyPage() {
           </ModalFooter>
         </ModalContent>
       </Modal >
+
+      {/* Manual Stock Adjustment Modal */}
+      <Modal
+        isOpen={adjustStockModalOpen}
+        onClose={() => setAdjustStockModalOpen(false)}
+        size="lg"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            Manual Stock Adjustment: {selectedMedicineForAdjust?.name}
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              {selectedMedicineForAdjust?.genericName && (
+                <p className="text-xs text-default-400 -mt-2 italic">
+                  {selectedMedicineForAdjust.genericName}
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Regular Stock Pool *"
+                  type="number"
+                  variant="bordered"
+                  value={adjustForm.regularStock.toString()}
+                  onChange={(e) => setAdjustForm(prev => ({ ...prev, regularStock: parseInt(e.target.value) || 0 }))}
+                />
+                <Input
+                  label="Scheme Stock Pool *"
+                  type="number"
+                  variant="bordered"
+                  value={adjustForm.schemeStock.toString()}
+                  onChange={(e) => setAdjustForm(prev => ({ ...prev, schemeStock: parseInt(e.target.value) || 0 }))}
+                />
+              </div>
+
+              <Input
+                label="Adjustment Reason *"
+                placeholder="e.g. Audit reconciliation, damage write-off, initial count"
+                variant="bordered"
+                value={adjustForm.reason}
+                onChange={(e) => setAdjustForm(prev => ({ ...prev, reason: e.target.value }))}
+              />
+
+              <p className="text-[11px] text-default-400">
+                Adjusting stock levels manually creates an audit trail entry in the medicine's transaction history (Stock Book) and updates the active dispensing levels.
+              </p>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              color="danger"
+              variant="light"
+              onPress={() => setAdjustStockModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="primary"
+              isLoading={isAdjustingStock}
+              isDisabled={!adjustForm.reason.trim()}
+              onPress={handleSaveStockAdjustment}
+            >
+              Save Changes
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </>
   );
 }

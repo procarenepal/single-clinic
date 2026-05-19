@@ -146,6 +146,39 @@ export default function EditExpertPage() {
             })
           }
         />
+        <Select
+          isRequired
+          label="Expert Type"
+          name="expertType"
+          value={expertProfile.expertType}
+          variant="bordered"
+          onChange={(e: any) =>
+            setExpertProfile({ ...expertProfile, expertType: e.target.value })
+          }
+        >
+          <SelectItem key="regular" value="regular">
+            Regular
+          </SelectItem>
+          <SelectItem key="visiting" value="visiting">
+            Visiting
+          </SelectItem>
+        </Select>
+        <Input
+          label="Default Commission (%)"
+          name="defaultCommission"
+          type="number"
+          step="0.01"
+          min="0"
+          max="100"
+          value={expertProfile.defaultCommission !== undefined ? expertProfile.defaultCommission.toString() : ""}
+          variant="bordered"
+          onChange={(e: any) =>
+            setExpertProfile({
+              ...expertProfile,
+              defaultCommission: parseFloat(e.target.value) || 0,
+            })
+          }
+        />
         <div className="col-span-2 flex justify-end gap-3">
           <Button variant="bordered" onClick={() => navigate(-1)}>
             Cancel
