@@ -308,9 +308,20 @@ export default function NewPrescriptionPage() {
     }
   };
 
+  // Resolve logged-in doctor's own ID by matching email (null = admin/non-doctor sees all)
+  const loggedInDoctorId = React.useMemo(() => {
+    const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
+    if (isAdmin) return null;
+    const matched = doctors.find((d: any) => d.email?.toLowerCase() === userData?.email?.toLowerCase());
+    return matched?.id ?? null;
+  }, [doctors, userData]);
+
   const activeQueue = appointments.filter((apt) => {
     if (!getIsToday(apt.appointmentDate)) return false;
     if (apt.status !== "in-progress" && apt.status !== "confirmed") return false;
+
+    // If logged-in user is a doctor, only show their assigned patients
+    if (loggedInDoctorId && apt.doctorId !== loggedInDoctorId) return false;
 
     const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
     if (hasDoctor) {

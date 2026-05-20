@@ -147,27 +147,30 @@ export const DashboardHeader = ({
 
         // Sort descending by createdAt in memory
         const sorted = list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        
-        // Check if unread count increased to trigger sound/toast
+
+        // Check if unread count increased — do side effects OUTSIDE the setter
         setNotifications((prev) => {
           const prevUnread = prev.filter((n) => !n.read).length;
           const currentUnread = sorted.filter((n) => !n.read).length;
           if (currentUnread > prevUnread) {
-            try {
-              const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-120.wav");
-              audio.volume = 0.5;
-              audio.play();
-            } catch (e) {
-              console.log("Audio play blocked by browser:", e);
-            }
-            const latest = sorted[0];
-            if (latest) {
-              addToast({
-                title: latest.title,
-                description: latest.message,
-                color: "primary",
-              });
-            }
+            // Schedule side effects after state update completes
+            setTimeout(() => {
+              try {
+                const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-120.wav");
+                audio.volume = 0.5;
+                audio.play();
+              } catch (e) {
+                console.log("Audio play blocked by browser:", e);
+              }
+              const latest = sorted[0];
+              if (latest) {
+                addToast({
+                  title: latest.title,
+                  description: latest.message,
+                  color: "primary",
+                });
+              }
+            }, 0);
           }
           return sorted;
         });
@@ -590,6 +593,8 @@ export const DashboardHeader = ({
                         NotificationService.markAllAsRead(clinicId, {
                           userId: currentUser?.uid,
                           role: userData?.role,
+                          doctorId: currentDoctorId ?? undefined,
+                          expertId: currentExpertId ?? undefined,
                         });
                       }
                     }}

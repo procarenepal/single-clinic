@@ -1558,6 +1558,35 @@ export const rbacService = {
           isBranchSpecific: true,
           linkedToDoctor: false,
         },
+        {
+          name: "Doctor",
+          description:
+            "Access to view assigned appointments, patient medical records, pathology results, and write prescriptions.",
+          permissions: getPageIds([
+            "/dashboard",
+            "/dashboard/patients",
+            "/dashboard/appointments",
+            "/dashboard/prescriptions",
+            "/dashboard/pathology",
+            "/dashboard/front-office",
+          ]),
+          isBranchSpecific: false,
+          linkedToDoctor: true,
+        },
+        {
+          name: "Expert",
+          description:
+            "Access to view assigned appointments, patient medical records, and write session notes.",
+          permissions: getPageIds([
+            "/dashboard",
+            "/dashboard/patients",
+            "/dashboard/appointments",
+            "/dashboard/prescriptions",
+            "/dashboard/front-office",
+          ]),
+          isBranchSpecific: false,
+          linkedToDoctor: true,
+        },
       ];
 
       // Create all default roles

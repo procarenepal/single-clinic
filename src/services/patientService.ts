@@ -491,6 +491,7 @@ export const patientService = {
 
     const baseConstraints: any[] = [];
 
+    if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
     if (gender) baseConstraints.push(where("gender", "==", gender));
@@ -607,8 +608,14 @@ export const patientService = {
 
     const baseConstraints: any[] = [];
 
+    if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
+    if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
     if (gender) baseConstraints.push(where("gender", "==", gender));
+    if (isCritical === true)
+      baseConstraints.push(where("isCritical", "==", true));
+    if (isCritical === false)
+      baseConstraints.push(where("isCritical", "==", false));
 
     let q: any;
 

@@ -94,6 +94,25 @@ export default function PatientDetailPage() {
       setLoading(true);
       const patientData = await patientService.getPatientById(patientId);
 
+      // Authorization Check: Doctors should only view patients assigned to them
+      const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
+      if (!isAdmin && userData?.email) {
+        try {
+          const docInfo = await doctorService.getDoctorByEmail(userData.email);
+          if (docInfo && patientData && patientData.doctorId !== docInfo.id) {
+            addToast({
+              title: "Access Denied",
+              description: "You are only authorized to view patients assigned to you.",
+              color: "danger",
+            });
+            navigate("/dashboard/patients");
+            return;
+          }
+        } catch (e) {
+          console.error("Linkage check failed:", e);
+        }
+      }
+
       setPatient(patientData);
     } catch (error) {
       console.error("Error loading patient:", error);

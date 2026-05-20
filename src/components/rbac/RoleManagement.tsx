@@ -444,12 +444,37 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
         }
 
         try {
+          const permissionNames = formData.permissions.map(
+            (id) => availablePages.find((p) => p.id === id)?.name || id
+          );
+          
+          console.log("Updating role with permissions:", permissionNames);
+
           await rbacService.updateRole(selectedRole!.id, {
             name: formData.name,
             description: formData.description,
             permissions: formData.permissions,
             linkedToDoctor: formData.linkedToDoctor,
           });
+
+          // Invalidate cache for all users holding this role so their UI updates immediately
+          try {
+            const usersWithRole = await rbacService.getUsersWithRole(
+              selectedRole!.id,
+              clinicId,
+            );
+            
+            if (usersWithRole.length > 0) {
+              await Promise.allSettled(
+                usersWithRole.map(user => 
+                  rbacService.clearUserPermissionsCache(user.id, clinicId)
+                )
+              );
+            }
+          } catch (cacheError) {
+            console.error("Failed to clear cache for users holding updated role:", cacheError);
+          }
+
           addToast({
             title: "Role updated",
             description: "Role updated successfully",
@@ -461,12 +486,16 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               ? updateError.message
               : "Failed to update role";
 
+          const permissionNames = formData.permissions.map(
+            (id) => availablePages.find((p) => p.id === id)?.name || id
+          );
+
           console.error("Error updating role:", updateError, {
             roleId: selectedRole!.id,
             updateData: {
               name: formData.name,
               description: formData.description,
-              permissions: formData.permissions,
+              permissions: permissionNames,
               linkedToDoctor: formData.linkedToDoctor,
             },
           });
@@ -642,7 +671,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="shadow-none border border-divider">
         <CardHeader className="flex justify-between items-center">
           <div>
             <h3 className="text-xl font-semibold">Role Management</h3>
@@ -681,8 +710,8 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                         </Chip>
                       )}
                       {role.linkedToDoctor && (
-                        <Chip color="secondary" size="sm" variant="flat">
-                          Doctor Linked
+                        <Chip color="success" size="sm" variant="flat" className="bg-green-100 text-green-700 font-medium">
+                          {role.name.toLowerCase().includes("expert") ? "Expert Linked" : "Doctor Linked"}
                         </Chip>
                       )}
                     </div>

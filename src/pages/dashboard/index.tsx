@@ -882,9 +882,11 @@ export default function DashboardIndexPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full flex flex-col gap-2">
+      {/* Developer Tools
       <DatabaseCleaner />
       <MedicineSeeder />
       <StaffSeeder />
+      */}
       {/* Header removed as requested */}
 
       <WelcomeHero

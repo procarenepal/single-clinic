@@ -234,8 +234,9 @@ class NavigationService {
   private async buildRegularUserNavigation(
     userId: string,
     clinicId: string,
+    role?: string,
   ): Promise<NavItem[]> {
-    const items: NavItem[] = [
+    let items: NavItem[] = [
       {
         title: "Dashboard",
         href: "/dashboard",
@@ -246,6 +247,12 @@ class NavigationService {
         title: "Front Office",
         href: "/dashboard/front-office",
         icon: <Icons.IoCalendarOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
+        title: "Prescriptions",
+        href: "/dashboard/prescriptions",
+        icon: <Icons.IoDocumentTextOutline className="w-5 h-5" />,
         children: [],
       },
       {
@@ -273,6 +280,18 @@ class NavigationService {
       userId,
       clinicId,
     );
+
+    // Filter out core modules that the user doesn't have access to
+    items = items.filter((item) => {
+      return userAccessiblePages.some((page) => {
+        if (item.href === "/dashboard") {
+          // The Dashboard nav item should only show if they explicitly have access to /dashboard.
+          // Otherwise, since every page starts with /dashboard/, it would never be hidden.
+          return page.path === "/dashboard";
+        }
+        return page.path === item.href || page.path.startsWith(item.href + "/");
+      });
+    });
 
     // Also get all clinic type pages for comparison
     const allClinicTypePages =

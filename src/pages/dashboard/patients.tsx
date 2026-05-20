@@ -261,6 +261,7 @@ export default function PatientsPage() {
 
   // ── Doctor view
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  const [isDoctorResolved, setIsDoctorResolved] = useState(false);
 
   // Branch context
   const branchId = userData?.branchId ?? null;
@@ -273,8 +274,9 @@ export default function PatientsPage() {
       ? undefined
       : (branchFilter ?? undefined));
 
+  // Bypass server-side pagination (and Firebase composite index errors) if a doctor is logged in
   const useServerPagination =
-    !search.trim() && !ageMin && !ageMax && !regStart && !regEnd;
+    !search.trim() && !ageMin && !ageMax && !regStart && !regEnd && !currentDoctorId;
 
   const fetchPatientsPaginated = useCallback(
     async (
@@ -312,7 +314,7 @@ export default function PatientsPage() {
               : undefined;
         const effectiveDoctorId = doctorIdOverride ?? currentDoctorId;
         const { patients: pagePatients, lastDoc: nextLastDoc } =
-          await patientService.getPatientsByClinicPaginated(undefined, {
+          await patientService.getPatientsByClinicPaginated(clinicId, {
             pageSize: PER_PAGE,
             lastDoc: targetPage === 1 ? undefined : (cursor ?? undefined),
             doctorId: effectiveDoctorId ?? undefined,
@@ -324,7 +326,7 @@ export default function PatientsPage() {
         let totalCount: number | undefined;
 
         if (targetPage === 1) {
-          totalCount = await patientService.getPatientsCountByClinic(undefined, {
+          totalCount = await patientService.getPatientsCountByClinic(clinicId, {
             doctorId: effectiveDoctorId ?? undefined,
             searchPrefix,
             gender: genderFilter === "all" ? undefined : genderFilter,
@@ -399,6 +401,12 @@ export default function PatientsPage() {
   // Resolve the logged-in user's doctorId once
   useEffect(() => {
     if (!clinicId || !userData?.email) return;
+    const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
+    if (isAdmin) {
+      setIsDoctorResolved(true);
+      return;
+    }
+
     (async () => {
       try {
         const doc = await doctorService.getDoctorByEmail(
@@ -408,12 +416,15 @@ export default function PatientsPage() {
         if (doc) setCurrentDoctorId(doc.id);
       } catch {
         /* non-critical */
+      } finally {
+        setIsDoctorResolved(true);
       }
     })();
-  }, [clinicId, userData?.email]);
+  }, [clinicId, userData?.email, userData?.role]);
 
   // Client-side path: fetch ALL patients once, let `filtered` handle search/filters in render
   useEffect(() => {
+    if (!isDoctorResolved) return;
     if (useServerPagination) return;
     let cancelled = false;
 
@@ -458,6 +469,7 @@ export default function PatientsPage() {
 
   // Server-side paginated path: re-fetch on filter/search changes
   useEffect(() => {
+    if (!isDoctorResolved) return;
     if (!useServerPagination) return;
     let cancelled = false;
 

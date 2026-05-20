@@ -96,6 +96,22 @@ export default function DailyReportPage() {
     ? branches.find((b) => b.id === effectiveBranchId)?.name
     : undefined;
 
+  // Resolve current doctor ID if the user is a doctor
+  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!clinicId || !userData?.email) return;
+    if (isClinicAdmin) return;
+
+    (async () => {
+      try {
+        const doc = await doctorService.getDoctorByEmail(userData.email!);
+        if (doc) setCurrentDoctorId(doc.id);
+      } catch {
+        // non-critical
+      }
+    })();
+  }, [clinicId, userData?.email, isClinicAdmin]);
+
   // Load supporting data (patients, doctors, appointment types) for display; scope by branch when set
   useEffect(() => {
     const loadSupportingData = async () => {
@@ -161,6 +177,17 @@ export default function DailyReportPage() {
           effectiveBranchId,
         );
 
+        // Filter data if the user is a doctor
+        if (!isClinicAdmin && currentDoctorId) {
+          data.appointments = data.appointments.filter(a => a.doctorId === currentDoctorId);
+          data.patients = data.patients.filter(p => p.doctorId === currentDoctorId);
+          // Only show appointment billing for this doctor
+          data.billing = data.billing.filter(b => 
+            b.type === 'appointment' && 
+            doctors.find(d => d.name === b.doctorName)?.id === currentDoctorId
+          );
+        }
+
         setReportData(data);
       } catch (error) {
         console.error("Error loading daily report data:", error);
@@ -175,7 +202,7 @@ export default function DailyReportPage() {
     };
 
     loadReportData();
-  }, [clinicId, selectedDate, effectiveBranchId]);
+  }, [clinicId, selectedDate, effectiveBranchId, isClinicAdmin, currentDoctorId, doctors]);
 
   // Helper functions to get names
   const getPatientNameById = (patientId: string): string => {

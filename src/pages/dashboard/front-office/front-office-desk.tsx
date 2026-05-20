@@ -67,13 +67,32 @@ export default function FrontOfficeDesk() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"lobby" | "triage" | "doctor" | "expert" | "billing" | "pharmacy" | "all">("lobby");
 
-  // Auto-switch active tab based on resolved doctor/expert role
+  // Resolved IDs for the currently logged-in doctor or expert
+  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  const [currentExpertId, setCurrentExpertId] = useState<string | null>(null);
+
+  // Auto-switch active tab based on resolved doctor/expert role, and resolve their IDs
   useEffect(() => {
-    const isDoc = doctors.some((d) => d.email?.toLowerCase() === currentUser?.email?.toLowerCase());
-    const isExp = experts.some((e) => e.email?.toLowerCase() === currentUser?.email?.toLowerCase());
-    if (isDoc) {
+    const matchedDoc = doctors.find((d) => d.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+    const matchedExp = experts.find((e) => e.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+    
+    if (matchedDoc) {
+      setCurrentDoctorId(matchedDoc.id);
+    } else {
+      setCurrentDoctorId(null);
+    }
+    
+    if (matchedExp) {
+      setCurrentExpertId(matchedExp.id);
+    } else {
+      setCurrentExpertId(null);
+    }
+
+    if (matchedDoc && matchedExp) {
+      setActiveTab("all"); // If both, maybe show all workflow
+    } else if (matchedDoc) {
       setActiveTab("doctor");
-    } else if (isExp) {
+    } else if (matchedExp) {
       setActiveTab("expert");
     }
   }, [doctors, experts, currentUser?.email]);
@@ -1203,6 +1222,20 @@ export default function FrontOfficeDesk() {
   const filteredAppointments = appointments.filter((appt) => {
     const stage = getPatientStage(appt);
     const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
+
+    // If logged-in user has clinician profiles, only show their own patients
+    if (currentDoctorId || currentExpertId) {
+      const isMyDoctorPatient = currentDoctorId && appt.doctorId === currentDoctorId;
+      const isMyExpertPatient = currentExpertId && appt.assignedExpertId === currentExpertId;
+      
+      if (currentDoctorId && currentExpertId) {
+        if (!isMyDoctorPatient && !isMyExpertPatient) return false;
+      } else if (currentDoctorId) {
+        if (!isMyDoctorPatient) return false;
+      } else if (currentExpertId) {
+        if (!isMyExpertPatient) return false;
+      }
+    }
 
     if (activeTab === "lobby") return stage === "scheduled" || stage === "lobby";
     if (activeTab === "triage") return stage === "lobby";
@@ -3068,51 +3101,70 @@ export default function FrontOfficeDesk() {
         </div>
       </div>
 
-      {/* Stats Counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5">
-        <StatCard
-          colorClass="bg-surface-3 text-text-muted"
-          icon={<IoCalendarOutline className="w-5 h-5" />}
-          label={selectedDate.toDateString() === new Date().toDateString() ? "Today's Appointments" : `${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} Appointments`}
-          value={appointments.length}
-        />
-        <StatCard
-          colorClass="bg-teal-500/10 text-teal-600"
-          icon={<IoPeopleOutline className="w-5 h-5" />}
-          label="Waiting in Lobby"
-          value={appointments.filter((a) => getPatientStage(a) === "lobby").length}
-        />
-        <StatCard
-          colorClass="bg-indigo-500/10 text-indigo-600"
-          icon={<IoHeartOutline className="w-5 h-5" />}
-          label="Triage Completed"
-          value={appointments.filter((a) => getPatientStage(a) === "triage-done").length}
-        />
-        <StatCard
-          colorClass="bg-amber-500/10 text-amber-600"
-          icon={<IoTimeOutline className="w-5 h-5" />}
-          label="In Doctor Cabin"
-          value={appointments.filter((a) => getPatientStage(a) === "doctor").length}
-        />
-        <StatCard
-          colorClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-          icon={<IoPeopleOutline className="w-5 h-5" />}
-          label="In Expert Cabin"
-          value={appointments.filter((a) => getPatientStage(a) === "expert").length}
-        />
-        <StatCard
-          colorClass="bg-saffron-500/10 text-saffron-600"
-          icon={<IoCardOutline className="w-5 h-5" />}
-          label="Invoice Pending"
-          value={appointments.filter((a) => getPatientStage(a) === "billing").length}
-        />
-        <StatCard
-          colorClass="bg-purple-500/10 text-purple-600"
-          icon={<IoReceiptOutline className="w-5 h-5" />}
-          label="Pharmacy Pending"
-          value={appointments.filter((a) => getPatientStage(a) === "pharmacy").length}
-        />
-      </div>
+      {(() => {
+        const getQueueFilter = (a: Appointment) => {
+          if (currentDoctorId || currentExpertId) {
+            const isMyDoctorPatient = currentDoctorId && a.doctorId === currentDoctorId;
+            const isMyExpertPatient = currentExpertId && a.assignedExpertId === currentExpertId;
+            
+            if (currentDoctorId && currentExpertId) {
+              if (!isMyDoctorPatient && !isMyExpertPatient) return false;
+            } else if (currentDoctorId) {
+              if (!isMyDoctorPatient) return false;
+            } else if (currentExpertId) {
+              if (!isMyExpertPatient) return false;
+            }
+          }
+          return true;
+        };
+
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5">
+            <StatCard
+              colorClass="bg-surface-3 text-text-muted"
+              icon={<IoCalendarOutline className="w-5 h-5" />}
+              label={selectedDate.toDateString() === new Date().toDateString() ? "Today's Appointments" : `${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} Appointments`}
+              value={appointments.filter(getQueueFilter).length}
+            />
+            <StatCard
+              colorClass="bg-teal-500/10 text-teal-600"
+              icon={<IoPeopleOutline className="w-5 h-5" />}
+              label="Waiting in Lobby"
+              value={appointments.filter(getQueueFilter).filter((a) => getPatientStage(a) === "lobby").length}
+            />
+            <StatCard
+              colorClass="bg-indigo-500/10 text-indigo-600"
+              icon={<IoHeartOutline className="w-5 h-5" />}
+              label="Triage Completed"
+              value={appointments.filter(getQueueFilter).filter((a) => getPatientStage(a) === "triage-done").length}
+            />
+            <StatCard
+              colorClass="bg-amber-500/10 text-amber-600"
+              icon={<IoTimeOutline className="w-5 h-5" />}
+              label="In Doctor Cabin"
+              value={appointments.filter(a => !currentDoctorId || a.doctorId === currentDoctorId).filter((a) => getPatientStage(a) === "doctor").length}
+            />
+            <StatCard
+              colorClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+              icon={<IoPeopleOutline className="w-5 h-5" />}
+              label="In Expert Cabin"
+              value={appointments.filter(a => !currentExpertId || a.assignedExpertId === currentExpertId).filter((a) => getPatientStage(a) === "expert").length}
+            />
+            <StatCard
+              colorClass="bg-saffron-500/10 text-saffron-600"
+              icon={<IoCardOutline className="w-5 h-5" />}
+              label="Invoice Pending"
+              value={appointments.filter(getQueueFilter).filter((a) => getPatientStage(a) === "billing").length}
+            />
+            <StatCard
+              colorClass="bg-purple-500/10 text-purple-600"
+              icon={<IoReceiptOutline className="w-5 h-5" />}
+              label="Pharmacy Pending"
+              value={appointments.filter(getQueueFilter).filter((a) => getPatientStage(a) === "pharmacy").length}
+            />
+          </div>
+        );
+      })()}
 
       {/* Date Navigator Bar */}
       {(() => {
@@ -3192,41 +3244,51 @@ export default function FrontOfficeDesk() {
       <div className="bg-surface border border-border-base rounded overflow-hidden shadow-none">
         {/* Navigation Tabs */}
         <div className="flex border-b border-border-base bg-surface-2 p-1 gap-1 flex-wrap">
-          {[
-            { id: "lobby", name: " LOBBY QUEUE / WAITLIST", count: appointments.filter(a => ["scheduled", "lobby"].includes(getPatientStage(a))).length },
-            { id: "triage", name: "🩺 TRIAGE WAITING", count: appointments.filter(a => getPatientStage(a) === "lobby").length },
-            { id: "doctor", name: "👨‍⚕️ DOCTOR CABINS", count: appointments.filter(a => { const s = getPatientStage(a); const hasDoc = a.doctorId && a.doctorId !== "unassigned"; return s === "doctor" || (s === "triage-done" && hasDoc); }).length },
-            { id: "expert", name: "👥 EXPERT CABINS", count: appointments.filter(a => { const s = getPatientStage(a); const hasDoc = a.doctorId && a.doctorId !== "unassigned"; return s === "expert" || (s === "triage-done" && !hasDoc); }).length },
-            { id: "billing", name: "💳 BILLING COUNTER", count: appointments.filter(a => getPatientStage(a) === "billing").length },
-            { id: "pharmacy", name: "💊 PHARMACY QUEUE", count: appointments.filter(a => getPatientStage(a) === "pharmacy").length },
-            { id: "all", name: "📋 ALL WORKFLOW", count: appointments.length },
-          ].filter(tab => {
-            const isDoc = doctors.some((d) => d.email?.toLowerCase() === currentUser?.email?.toLowerCase());
-            const isExp = experts.some((e) => e.email?.toLowerCase() === currentUser?.email?.toLowerCase());
-            if (isDoc) {
-              return ["doctor", "all"].includes(tab.id);
-            }
-            if (isExp) {
-              return ["expert", "all"].includes(tab.id);
-            }
-            return true;
-          }).map((tab) => (
-            <button
-              key={tab.id}
-              className={`px-4 py-2 text-[12px] font-semibold rounded transition flex items-center gap-2 border border-transparent ${activeTab === tab.id
-                ? "bg-surface text-primary shadow-sm border-border-base/50"
-                : "text-text-muted hover:text-text-main hover:bg-surface-3/50"
-                }`}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-            >
-              {tab.name}
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? "bg-primary/10 text-primary" : "bg-surface-3 text-text-muted"
-                }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
+          {(() => {
+            const getQueueFilter = (a: Appointment) => {
+              if (currentDoctorId || currentExpertId) {
+                const isMyDoctorPatient = currentDoctorId && a.doctorId === currentDoctorId;
+                const isMyExpertPatient = currentExpertId && a.assignedExpertId === currentExpertId;
+                if (currentDoctorId && currentExpertId) {
+                  return isMyDoctorPatient || isMyExpertPatient;
+                }
+                if (currentDoctorId) return isMyDoctorPatient;
+                if (currentExpertId) return isMyExpertPatient;
+              }
+              return true;
+            };
+
+            return [
+              { id: "lobby", name: " LOBBY QUEUE / WAITLIST", count: appointments.filter(getQueueFilter).filter(a => ["scheduled", "lobby"].includes(getPatientStage(a))).length },
+              { id: "triage", name: "🩺 TRIAGE WAITING", count: appointments.filter(getQueueFilter).filter(a => getPatientStage(a) === "lobby").length },
+              { id: "doctor", name: "👨‍⚕️ DOCTOR CABINS", count: appointments.filter(a => !currentDoctorId || a.doctorId === currentDoctorId).filter(a => { const s = getPatientStage(a); const hasDoc = a.doctorId && a.doctorId !== "unassigned"; return s === "doctor" || (s === "triage-done" && hasDoc); }).length },
+              { id: "expert", name: "👥 EXPERT CABINS", count: appointments.filter(a => !currentExpertId || a.assignedExpertId === currentExpertId).filter(a => { const s = getPatientStage(a); const hasDoc = a.doctorId && a.doctorId !== "unassigned"; return s === "expert" || (s === "triage-done" && !hasDoc); }).length },
+              { id: "billing", name: "💳 BILLING COUNTER", count: appointments.filter(getQueueFilter).filter(a => getPatientStage(a) === "billing").length },
+              { id: "pharmacy", name: "💊 PHARMACY QUEUE", count: appointments.filter(getQueueFilter).filter(a => getPatientStage(a) === "pharmacy").length },
+              { id: "all", name: "📋 ALL WORKFLOW", count: appointments.filter(getQueueFilter).length },
+            ].filter(tab => {
+              if (currentDoctorId && currentExpertId) return ["doctor", "expert", "all"].includes(tab.id);
+              if (currentDoctorId) return ["doctor", "all"].includes(tab.id);
+              if (currentExpertId) return ["expert", "all"].includes(tab.id);
+              return true;
+            }).map((tab) => (
+              <button
+                key={tab.id}
+                className={`px-4 py-2 text-[12px] font-semibold rounded transition flex items-center gap-2 border border-transparent ${activeTab === tab.id
+                  ? "bg-surface text-primary shadow-sm border-border-base/50"
+                  : "text-text-muted hover:text-text-main hover:bg-surface-3/50"
+                  }`}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+              >
+                {tab.name}
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? "bg-primary/10 text-primary" : "bg-surface-3 text-text-muted"
+                  }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ));
+          })()}
         </div>
 
         {/* Live List rendering */}

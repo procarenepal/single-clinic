@@ -298,7 +298,7 @@ function ReferralSourceSelect({
 export default function PatientEditPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser } = useAuthContext();
+  const { clinicId, currentUser, userData } = useAuthContext();
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -386,7 +386,6 @@ export default function PatientEditPage() {
     try {
       setLoading(true);
       const patientData = await patientService.getPatientById(patientId);
-
       if (!patientData || patientData.clinicId !== clinicId) {
         addToast({
           title: "Error",
@@ -397,6 +396,26 @@ export default function PatientEditPage() {
 
         return;
       }
+
+      // Authorization Check: Doctors should only edit patients assigned to them
+      const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
+      if (!isAdmin && userData?.email) {
+        try {
+          const docInfo = await doctorService.getDoctorByEmail(userData.email);
+          if (docInfo && patientData.doctorId !== docInfo.id) {
+            addToast({
+              title: "Access Denied",
+              description: "You are only authorized to edit patients assigned to you.",
+              color: "danger",
+            });
+            navigate("/dashboard/patients");
+            return;
+          }
+        } catch (e) {
+          console.error("Linkage check failed:", e);
+        }
+      }
+
       setPatient(patientData);
 
       const dobStr = (patientData.dob instanceof Date && !isNaN(patientData.dob.getTime()))

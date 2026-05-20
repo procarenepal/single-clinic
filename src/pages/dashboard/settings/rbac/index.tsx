@@ -52,7 +52,7 @@ export default function RBACManagementPage() {
         </div>
       </div>
 
-      <Card>
+      <Card className="shadow-sm border border-divider">
         <CardBody>
           <Tabs
             classNames={{

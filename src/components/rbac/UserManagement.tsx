@@ -35,10 +35,11 @@ import { addToast } from "@/components/ui/toast";
 
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@/components/ui/modal";
 
-import { Role, UserRole, Doctor } from "../../types/models";
+import { Role, UserRole, Doctor, Expert } from "../../types/models";
 import { rbacService } from "../../services/rbacService";
 import { userService } from "../../services/userService";
 import { doctorService } from "../../services/doctorService";
+import { expertService } from "../../services/expertService";
 import { useAuth } from "../../hooks/useAuth";
 
 interface UserManagementProps {
@@ -50,6 +51,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,15 +86,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       const userFilterOptions: any = {};
       const roleFilterOptions: any = {};
 
-      const [usersData, rolesData, doctorsData] = await Promise.all([
+      const [usersData, rolesData, doctorsData, expertsData] = await Promise.all([
         rbacService.getClinicUsersWithRoles(clinicId, userFilterOptions),
         rbacService.getClinicRoles(clinicId, roleFilterOptions),
         doctorService.getDoctorsByClinic(clinicId),
+        expertService.getExpertsByClinic(clinicId),
       ]);
 
       setUsers(usersData);
       setRoles(rolesData);
       setDoctors(doctorsData.filter((doc) => doc.isActive));
+      setExperts(expertsData.filter((exp) => exp.isActive));
     } catch (error) {
       console.error("Error loading data:", error);
       addToast({
@@ -156,12 +160,34 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
     }
   };
 
-  // Check if any of the selected roles are linked to doctors
+  const handleExpertSelection = (expertId: string) => {
+    const selectedExpert = experts.find((exp) => exp.id === expertId);
+
+    if (selectedExpert) {
+      setFormData((prev) => ({
+        ...prev,
+        selectedDoctor: expertId, // reuse selectedDoctor field for expert ID
+        email: selectedExpert.email ? selectedExpert.email : prev.email,
+        displayName: selectedExpert.name,
+      }));
+    }
+  };
+
+  // Check if any of the selected roles are linked to doctors/experts
   const isRoleLinkedToDoctor = () => {
     return formData.selectedRoles.some((roleId) => {
       const role = roles.find((r) => r.id === roleId);
 
       return role?.linkedToDoctor || false;
+    });
+  };
+
+  // Check if the linked role is specifically an Expert role (vs Doctor)
+  const isLinkedRoleExpert = () => {
+    return formData.selectedRoles.some((roleId) => {
+      const role = roles.find((r) => r.id === roleId);
+
+      return role?.linkedToDoctor && role.name.toLowerCase().includes("expert");
     });
   };
 
@@ -416,6 +442,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
           return;
         }
 
+        // Sync doctor/expert profile email if linked
+        if (formData.selectedDoctor && isRoleLinkedToDoctor()) {
+          try {
+            if (isLinkedRoleExpert()) {
+              await expertService.updateExpert(formData.selectedDoctor, { email: formData.email });
+            } else {
+              await doctorService.updateDoctor(formData.selectedDoctor, { email: formData.email });
+            }
+          } catch (syncError) {
+            console.error("Error syncing profile email:", syncError);
+          }
+        }
+
         addToast({
           title: "User created",
           description: "User created successfully with the provided password.",
@@ -528,6 +567,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
           return;
         }
 
+        // Sync doctor/expert profile email if linked
+        if (formData.selectedDoctor && isRoleLinkedToDoctor()) {
+          try {
+            if (isLinkedRoleExpert()) {
+              await expertService.updateExpert(formData.selectedDoctor, { email: selectedUser!.email });
+            } else {
+              await doctorService.updateDoctor(formData.selectedDoctor, { email: selectedUser!.email });
+            }
+          } catch (syncError) {
+            console.error("Error syncing profile email:", syncError);
+          }
+        }
+
         addToast({
           title: "User updated",
           description: "User updated successfully",
@@ -632,7 +684,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
   return (
     <div className="space-y-6">
 
-      <Card>
+      <Card className="shadow-none border border-divider">
         <CardHeader className="flex justify-between items-center">
           <div>
             <h3 className="text-xl font-semibold">User Management</h3>
@@ -782,7 +834,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                         <span className="font-medium">{role.name}</span>
                         {role.linkedToDoctor && (
                           <Chip color="secondary" size="sm" variant="flat">
-                            Doctor Linked
+                            {role.name.toLowerCase().includes("expert") ? "Expert Linked" : "Doctor Linked"}
                           </Chip>
                         )}
                       </div>
@@ -795,29 +847,52 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
               </CheckboxGroup>
             </div>
 
-            {/* Doctor Selection for roles linked to doctors */}
+            {/* Doctor/Expert Selection for roles linked to doctors/experts */}
             {modalMode === "create" && isRoleLinkedToDoctor() && (
               <div>
-                <Select
-                  description="Selecting a doctor will automatically fill email and display name"
-                  label="Select Doctor (Auto-fill Details)"
-                  placeholder="Choose a doctor to auto-fill user details"
-                  selectedKeys={
-                    formData.selectedDoctor ? [formData.selectedDoctor] : []
-                  }
-                  onSelectionChange={(keys) => {
-                    const doctorId = Array.from(keys)[0] as string;
+                {isLinkedRoleExpert() ? (
+                  <Select
+                    description="Selecting an expert will automatically fill email and display name"
+                    label="Select Expert (Auto-fill Details)"
+                    placeholder="Choose an expert to auto-fill user details"
+                    selectedKeys={
+                      formData.selectedDoctor ? [formData.selectedDoctor] : []
+                    }
+                    onSelectionChange={(keys) => {
+                      const expertId = Array.from(keys)[0] as string;
 
-                    handleDoctorSelection(doctorId);
-                  }}
-                >
-                  {doctors
-                    .map((doctor) => (
-                      <SelectItem key={doctor.id}>
-                        {doctor.name} ({doctor.speciality})
-                      </SelectItem>
-                    ))}
-                </Select>
+                      handleExpertSelection(expertId);
+                    }}
+                  >
+                    {experts
+                      .map((expert) => (
+                        <SelectItem key={expert.id}>
+                          {expert.name} ({expert.speciality})
+                        </SelectItem>
+                      ))}
+                  </Select>
+                ) : (
+                  <Select
+                    description="Selecting a doctor will automatically fill email and display name"
+                    label="Select Doctor (Auto-fill Details)"
+                    placeholder="Choose a doctor to auto-fill user details"
+                    selectedKeys={
+                      formData.selectedDoctor ? [formData.selectedDoctor] : []
+                    }
+                    onSelectionChange={(keys) => {
+                      const doctorId = Array.from(keys)[0] as string;
+
+                      handleDoctorSelection(doctorId);
+                    }}
+                  >
+                    {doctors
+                      .map((doctor) => (
+                        <SelectItem key={doctor.id}>
+                          {doctor.name} ({doctor.speciality})
+                        </SelectItem>
+                      ))}
+                  </Select>
+                )}
               </div>
             )}
 
@@ -935,7 +1010,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                         <span className="font-medium">{role.name}</span>
                         {role.linkedToDoctor && (
                           <Chip color="secondary" size="sm" variant="flat">
-                            Doctor Linked
+                            {role.name.toLowerCase().includes("expert") ? "Expert Linked" : "Doctor Linked"}
                           </Chip>
                         )}
                       </div>

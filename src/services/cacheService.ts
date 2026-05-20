@@ -72,6 +72,13 @@ class CacheService {
     }
   }
 
+  private storageDelete(key: string) {
+    if (!this.isStorageAvailable()) return;
+    try {
+      window.localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
+    } catch {}
+  }
+
   /**
    * Generate ETag from data
    */
@@ -199,6 +206,7 @@ class CacheService {
     const key = this.generateNavigationCacheKey(userId, clinicId, role);
 
     this.cache.delete(key);
+    this.storageDelete(key);
   }
 
   /**
@@ -213,7 +221,10 @@ class CacheService {
       }
     });
 
-    keysToDelete.forEach((key) => this.cache.delete(key));
+    keysToDelete.forEach((key) => {
+      this.cache.delete(key);
+      this.storageDelete(key);
+    });
   }
 
   /**
@@ -413,8 +424,29 @@ class CacheService {
    */
   clearUserPermissions(userId: string, clinicId: string): void {
     const key = this.generatePermissionsCacheKey(userId, clinicId);
-
     this.cache.delete(key);
+
+    // Also invalidate any navigation caches for this user
+    const navPrefix = `nav:${userId}:${clinicId}:`;
+    const keysToDelete: string[] = [key]; // include the permissions key for storage deletion
+    
+    this.cache.forEach((_, cacheKey) => {
+      if (cacheKey.startsWith(navPrefix)) {
+        keysToDelete.push(cacheKey);
+        this.cache.delete(cacheKey);
+      }
+    });
+
+    // Remove from localStorage if available
+    if (this.isStorageAvailable()) {
+      try {
+        keysToDelete.forEach(k => {
+          window.localStorage.removeItem(`${this.STORAGE_PREFIX}${k}`);
+        });
+      } catch {
+        // Ignore storage errors
+      }
+    }
   }
 
   /**

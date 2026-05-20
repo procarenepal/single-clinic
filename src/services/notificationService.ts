@@ -54,9 +54,9 @@ export class NotificationService {
     }
   }
 
-  static async markAllAsRead(clinicId: string, userIdOrRole: { userId?: string; role?: string }): Promise<void> {
+  static async markAllAsRead(clinicId: string, userIdOrRole: { userId?: string; role?: string; doctorId?: string; expertId?: string }): Promise<void> {
     try {
-      let q = query(
+      const q = query(
         collection(db, this.COLLECTION_NAME),
         where("clinicId", "==", clinicId),
         where("read", "==", false)
@@ -67,6 +67,8 @@ export class NotificationService {
         .filter((docSnap) => {
           const data = docSnap.data();
           if (userIdOrRole.userId && data.targetUserId === userIdOrRole.userId) return true;
+          if (userIdOrRole.doctorId && data.targetUserId === userIdOrRole.doctorId) return true;
+          if (userIdOrRole.expertId && data.targetUserId === userIdOrRole.expertId) return true;
           if (userIdOrRole.role && data.targetRole === userIdOrRole.role) return true;
           return !data.targetUserId && !data.targetRole; // general notification
         })
