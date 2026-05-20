@@ -83,6 +83,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = React.memo(
             return;
           }
 
+          // FORCE ALLOW front-office desk for all authenticated clinic staff/doctors/experts
+          if (
+            clinicId &&
+            (pagePath === "/dashboard/front-office" ||
+              pagePath?.includes("/front-office"))
+          ) {
+            if (isMounted) {
+              setHasAccess(true);
+              setChecking(false);
+            }
+
+            return;
+          }
+
           // Check for super admin requirement
           if (requireSuperAdmin) {
             if (isMounted) {

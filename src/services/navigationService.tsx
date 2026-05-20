@@ -115,6 +115,12 @@ class NavigationService {
         children: [],
       },
       {
+        title: "Front Office",
+        href: "/dashboard/front-office",
+        icon: <Icons.IoCalendarOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
         title: "Accounts",
         href: "/dashboard/accounts",
         icon: <Icons.IoCardOutline className="w-5 h-5" />,
@@ -234,6 +240,12 @@ class NavigationService {
         title: "Dashboard",
         href: "/dashboard",
         icon: <Icons.IoAppsOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
+        title: "Front Office",
+        href: "/dashboard/front-office",
+        icon: <Icons.IoCalendarOutline className="w-5 h-5" />,
         children: [],
       },
       {

@@ -634,7 +634,7 @@ export default function PrescriptionDetailPage() {
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] font-semibold text-text-muted">Speciality</span>
-                      <span className="text-[13px] font-medium text-text-main">{prescription.doctorSpeciality || "General Practitioner"}</span>
+                      <span className="text-[13px] font-medium text-text-main">{prescription.doctorSpeciality || "Dermatologist"}</span>
                     </div>
                   </div>
                 </div>

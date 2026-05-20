@@ -80,11 +80,10 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
   // Check if the user has admin permissions for a clinic
   const isClinicAdmin = useCallback((): boolean => {
     return (
-      (userData?.role === "clinic-admin" ||
-        userData?.role === "system-owner") &&
-      Boolean(userData?.clinicId)
+      userData?.role === "clinic-admin" ||
+      userData?.role === "system-owner"
     );
-  }, [userData?.role, userData?.clinicId]);
+  }, [userData?.role]);
 
   // Check if the user is a system owner
   const isSystemOwner = useCallback((): boolean => {

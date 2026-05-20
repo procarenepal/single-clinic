@@ -4,12 +4,6 @@ import {
   CardBody,
   CardHeader,
   Button,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
   Table,
   TableHeader,
   TableColumn,
@@ -29,7 +23,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@heroui/react";
+} from "@/components/ui";
 import {
   PlusIcon,
   EditIcon,
@@ -37,7 +31,9 @@ import {
   ShieldIcon,
   MoreVerticalIcon,
 } from "lucide-react";
-import { addToast } from "@heroui/toast";
+import { addToast } from "@/components/ui/toast";
+
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@/components/ui/modal";
 
 import { Role, UserRole, Doctor } from "../../types/models";
 import { rbacService } from "../../services/rbacService";
@@ -655,11 +651,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
         <CardBody>
           <Table aria-label="Users table">
             <TableHeader>
-              <TableColumn>USER</TableColumn>
-              <TableColumn>EMAIL</TableColumn>
-              <TableColumn>ROLES</TableColumn>
-              <TableColumn>STATUS</TableColumn>
-              <TableColumn width={80}>ACTIONS</TableColumn>
+              <TableRow>
+                <TableColumn>USER</TableColumn>
+                <TableColumn>EMAIL</TableColumn>
+                <TableColumn>ROLES</TableColumn>
+                <TableColumn>STATUS</TableColumn>
+                <TableColumn style={{ width: 80 }}>ACTIONS</TableColumn>
+              </TableRow>
             </TableHeader>
             <TableBody emptyContent="No users found">
               {users.map((user) => (
@@ -742,7 +740,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       <Modal
         isOpen={isOpen}
         scrollBehavior="inside"
-        size="2xl"
+        size="lg"
         onClose={onClose}
       >
         <ModalContent>
@@ -763,13 +761,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
               </div>
 
               <CheckboxGroup
-                isRequired
                 className="space-y-2"
                 value={formData.selectedRoles}
-                onChange={(values) => {
+                onValueChange={(values) => {
                   setFormData((prev) => ({
                     ...prev,
-                    selectedRoles: values as string[],
+                    selectedRoles: values,
                     selectedDoctor: "", // Reset doctor selection when roles change
                   }));
                 }}
@@ -816,13 +813,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                 >
                   {doctors
                     .map((doctor) => (
-                      <SelectItem key={doctor.id} textValue={doctor.name}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{doctor.name}</span>
-                          <span className="text-xs text-gray-500">
-                            {doctor.speciality} • {doctor.email || "No email"}
-                          </span>
-                        </div>
+                      <SelectItem key={doctor.id}>
+                        {doctor.name} ({doctor.speciality})
                       </SelectItem>
                     ))}
                 </Select>
@@ -925,10 +917,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
               <CheckboxGroup
                 className="space-y-2"
                 value={formData.selectedRoles}
-                onChange={(values) =>
+                onValueChange={(values) =>
                   setFormData((prev) => ({
                     ...prev,
-                    selectedRoles: values as string[],
+                    selectedRoles: values,
                   }))
                 }
               >

@@ -720,7 +720,13 @@ export const appointmentBillingService = {
         let q = query(appointmentsRef, where("billingId", "==", id));
         let querySnapshot = await getDocs(q);
         
-        // 2. Fallback: if not found by billingId (legacy/external creation), try patientId & status = completed
+        // 1.5. Try finding by consultationBillingId
+        if (querySnapshot.empty) {
+          q = query(appointmentsRef, where("consultationBillingId", "==", id));
+          querySnapshot = await getDocs(q);
+        }
+        
+        // 2. Fallback: if not found by billingId or consultationBillingId (legacy/external creation), try patientId & status = completed
         if (querySnapshot.empty) {
           q = query(
             appointmentsRef, 
@@ -731,14 +737,24 @@ export const appointmentBillingService = {
         }
 
         if (!querySnapshot.empty) {
+          const isConsultationOnly = billing.items && billing.items.some(
+            (item: any) =>
+              item.appointmentTypeId === "consultation-fee" ||
+              (item.appointmentTypeName && item.appointmentTypeName.includes("Consultation Fee"))
+          );
+
           const updatePromises = querySnapshot.docs.map(docSnap => {
             const apptDocRef = doc(db, "appointments", docSnap.id);
-            return updateDoc(apptDocRef, {
-              status: "completed",
+            const apptUpdates: any = {
               billingStatus: paymentStatus,
-              paymentStatus: paymentStatus, // update both fields for safety
+              paymentStatus: paymentStatus,
+              consultationBillingStatus: paymentStatus,
               updatedAt: Timestamp.now(),
-            });
+            };
+            if (!isConsultationOnly) {
+              apptUpdates.status = "completed";
+            }
+            return updateDoc(apptDocRef, apptUpdates);
           });
           await Promise.all(updatePromises);
           console.log(`Updated associated appointments for billing ID ${id} to billingStatus: ${paymentStatus}`);

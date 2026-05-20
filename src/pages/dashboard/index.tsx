@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
+import DatabaseCleaner from "@/components/DatabaseCleaner";
+import MedicineSeeder from "@/components/MedicineSeeder";
+import StaffSeeder from "@/components/StaffSeeder";
 import { Link, useNavigate } from "react-router-dom";
 import { isToday, isFuture, isPast, startOfDay, format } from "date-fns";
 
@@ -879,6 +882,9 @@ export default function DashboardIndexPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full flex flex-col gap-2">
+      <DatabaseCleaner />
+      <MedicineSeeder />
+      <StaffSeeder />
       {/* Header removed as requested */}
 
       <WelcomeHero

@@ -48,8 +48,13 @@ export const auditLogService = {
     try {
       const logsRef = collection(db, AUDIT_LOGS_COLLECTION);
 
+      // Clean up undefined values from logData to prevent Firestore errors
+      const sanitizedLogData = Object.fromEntries(
+        Object.entries(logData).filter(([_, value]) => value !== undefined)
+      );
+
       const logEntry = {
-        ...logData,
+        ...sanitizedLogData,
         timestamp: Timestamp.now(),
         createdAt: Timestamp.now(),
       };

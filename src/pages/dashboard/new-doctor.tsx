@@ -131,6 +131,7 @@ export default function NewDoctorPage() {
     phone: "",
     email: "",
     nmcNumber: "",
+    consultationCharge: "",
   });
 
   useEffect(() => {
@@ -294,6 +295,7 @@ export default function NewDoctorPage() {
         phone: doctorProfile.phone,
         email: doctorProfile.email || "",
         nmcNumber: doctorProfile.nmcNumber,
+        consultationCharge: parseFloat(doctorProfile.consultationCharge) || 0,
         clinicId,
         branchId: defaultBranchId ?? clinicId ?? "",
         createdBy: currentUser?.uid || "",
@@ -376,6 +378,15 @@ export default function NewDoctorPage() {
                 step="0.01"
                 type="number"
                 value={doctorProfile.defaultCommission}
+                onChange={handleDoctorProfileChange}
+              />
+              <CustomInput
+                label="Doctor Consultation Charge (NPR)"
+                min="0"
+                name="consultationCharge"
+                placeholder="Enter charge amount (e.g. 500)"
+                type="number"
+                value={doctorProfile.consultationCharge}
                 onChange={handleDoctorProfileChange}
               />
               <div className="flex flex-col gap-1.5 w-full">

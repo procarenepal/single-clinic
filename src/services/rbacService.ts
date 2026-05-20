@@ -371,10 +371,10 @@ export const rbacService = {
   ): Promise<Role[]> {
     try {
       const rolesRef = collection(db, ROLES_COLLECTION);
+      // Remove orderBy("name") to avoid needing a Firestore composite index
       let q = query(
         rolesRef,
-        where("clinicId", "==", clinicId),
-        orderBy("name"),
+        where("clinicId", "==", clinicId)
       );
       const querySnapshot = await getDocs(q);
 
@@ -387,6 +387,9 @@ export const rbacService = {
             updatedAt: doc.data().updatedAt?.toDate(),
           }) as Role,
       );
+
+      // Sort roles in memory instead
+      roles.sort((a, b) => a.name.localeCompare(b.name));
 
       if (options?.excludeNames?.length) {
         roles = roles.filter(

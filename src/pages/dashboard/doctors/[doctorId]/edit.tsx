@@ -132,6 +132,7 @@ export default function EditDoctorPage() {
     phone: "",
     email: "",
     nmcNumber: "",
+    consultationCharge: "",
   });
 
   useEffect(() => {
@@ -209,6 +210,10 @@ export default function EditDoctorPage() {
         phone: doctor.phone || "",
         email: doctorEmail,
         nmcNumber: doctor.nmcNumber || "",
+        consultationCharge:
+          doctor.consultationCharge !== undefined
+            ? String(doctor.consultationCharge)
+            : "",
       });
     } catch (error) {
       addToast({
@@ -280,6 +285,7 @@ export default function EditDoctorPage() {
         phone: doctorProfile.phone,
         email: doctorProfile.email || "",
         nmcNumber: doctorProfile.nmcNumber,
+        consultationCharge: parseFloat(doctorProfile.consultationCharge) || 0,
         clinicId,
         updatedBy: currentUser?.uid || "",
       };
@@ -370,6 +376,15 @@ export default function EditDoctorPage() {
                 step="0.01"
                 type="number"
                 value={doctorProfile.defaultCommission}
+                onChange={handleDoctorProfileChange}
+              />
+              <CustomInput
+                label="Doctor Consultation Charge (NPR)"
+                min="0"
+                name="consultationCharge"
+                placeholder="Enter charge amount (e.g. 500)"
+                type="number"
+                value={doctorProfile.consultationCharge}
                 onChange={handleDoctorProfileChange}
               />
               <CustomSelect

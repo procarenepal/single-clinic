@@ -24,8 +24,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { addToast } from "@/components/ui/toast";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { appointmentService } from "@/services/appointmentService";
 import { clinicService } from "@/services/clinicService";
 import { patientService } from "@/services/patientService";
+import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { AppointmentBilling, Patient } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -212,6 +215,7 @@ export default function InvoiceDetailPage() {
   );
   const [clinic, setClinic] = useState<any>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [doctor, setDoctor] = useState<any>(null);
   const [printFormat, setPrintFormat] = useState<PrintFormat>("A4");
 
   // Payment form state
@@ -294,10 +298,37 @@ export default function InvoiceDetailPage() {
           const patientData = await patientService.getPatientById(
             invoiceData.patientId,
           );
-
           if (patientData) setPatient(patientData);
         } catch (error) {
           console.error("Error loading patient data:", error);
+        }
+
+        try {
+          let docIdToFetch = invoiceData.doctorId;
+          
+          if ((!docIdToFetch || docIdToFetch === "unassigned") && invoiceData.patientId) {
+            const patientAppts = await appointmentService.getAppointmentsByPatient(invoiceData.patientId);
+            const matchingAppt = patientAppts.find(
+              (a) => a.billingId === invoiceId || a.consultationBillingId === invoiceId
+            );
+            if (matchingAppt && matchingAppt.assignedExpertId && matchingAppt.assignedExpertId !== "unassigned") {
+              docIdToFetch = matchingAppt.assignedExpertId;
+            } else if (matchingAppt && matchingAppt.doctorId && matchingAppt.doctorId !== "unassigned") {
+              docIdToFetch = matchingAppt.doctorId;
+            }
+          }
+
+          if (docIdToFetch && docIdToFetch !== "unassigned") {
+            const docData = await doctorService.getDoctorById(docIdToFetch);
+            if (docData) {
+              setDoctor(docData);
+            } else {
+              const expData = await expertService.getExpertById(docIdToFetch);
+              if (expData) setDoctor(expData);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading doctor data:", error);
         }
       } catch (error) {
         console.error("Error loading invoice details:", error);
@@ -318,12 +349,12 @@ export default function InvoiceDetailPage() {
   useEffect(() => {
     if (!loading && invoice && searchParams.get("print") === "true") {
       // Overwrite current window with the generated invoice HTML
-      const html = generateAppointmentInvoiceHTML(invoice, clinic, layoutConfig, patient, printFormat);
+      const html = generateAppointmentInvoiceHTML(invoice, clinic, layoutConfig, patient, printFormat, doctor);
       document.open();
       document.write(html);
       document.close();
     }
-  }, [loading, invoice, searchParams, clinic, layoutConfig, patient]);
+  }, [loading, invoice, searchParams, clinic, layoutConfig, patient, doctor]);
 
   const formatCurrency = (amount: number) => {
     return `NPR ${amount.toLocaleString()}`;
@@ -814,7 +845,7 @@ export default function InvoiceDetailPage() {
                 <div className="space-y-0.5 text-[rgb(var(--color-text))]">
                   <p>
                     <span className="font-medium">Name:</span>{" "}
-                    {invoice.patientName}
+                    {patient?.name || invoice.patientName}
                   </p>
                   {getPatientAge(patient) !== null && (
                     <p>
@@ -877,13 +908,37 @@ export default function InvoiceDetailPage() {
 
                     const docs = Array.from(uniqueDocs.values());
 
-                    return docs.map((doc, idx) => (
-                      <div
-                        key={idx}
-                        className="space-y-0.5 text-[rgb(var(--color-text))] border-l-2 border-primary/30 pl-2"
-                      >
-                        <p className="flex items-center gap-2">
-                          <span className="font-medium">Name:</span> {doc.name}
+                    return docs.map((doc, idx) => {
+                      const resolvedName = (() => {
+                        // 1. If we have a resolved doctor/expert state matching doc.id, use its name
+                        if (doctor && (doc.id === doctor.id || (doc.id === "unassigned" && doctor.id !== "unassigned"))) {
+                          if (doctor.name && doctor.name !== "Unknown Doctor" && doctor.name !== "Expert Cabin") {
+                            return doctor.name;
+                          }
+                        }
+                        
+                        // 2. If the stored doc.name is valid (not "Unknown Doctor" and not "Expert Cabin"), use it
+                        if (doc.name && doc.name !== "Unknown Doctor" && doc.name !== "Expert Cabin") {
+                          return doc.name;
+                        }
+                        
+                        // 3. Fallback to doctor state if available
+                        if (doctor?.name && doctor.name !== "Unknown Doctor" && doctor.name !== "Expert Cabin") {
+                          return doctor.name;
+                        }
+                        
+                        // 4. Default fallbacks
+                        if (doc.id === "unassigned") return "Expert Cabin";
+                        return doc.name || "Unknown Doctor";
+                      })();
+
+                      return (
+                        <div
+                          key={idx}
+                          className="space-y-0.5 text-[rgb(var(--color-text))] border-l-2 border-primary/30 pl-2"
+                        >
+                          <p className="flex items-center gap-2">
+                            <span className="font-medium">Name:</span> {resolvedName}
                           {doc.isPrimary && docs.length > 1 && (
                             <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 border border-primary/20 rounded">
                               Primary
@@ -898,8 +953,9 @@ export default function InvoiceDetailPage() {
                             {invoice.doctorType}
                           </p>
                         )}
-                      </div>
-                    ));
+                        </div>
+                      );
+                    });
                   })()}
                 </div>
               </div>

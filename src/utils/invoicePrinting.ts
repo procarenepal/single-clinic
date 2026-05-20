@@ -260,6 +260,7 @@ export const generateAppointmentInvoiceHTML = (
   layoutConfig: PrintLayoutConfig | null,
   patient: any,
   format: PrintFormat = "A4",
+  doctor?: any,
 ): string => {
   const isThermal = format === "THERMAL_80MM" || format === "THERMAL_58MM" || format === "THERMAL_4INCH";
 
@@ -300,10 +301,29 @@ export const generateAppointmentInvoiceHTML = (
 
   // Get involved clinicians
   const cliniciansMap = new Map();
-  if (invoice.doctorId) cliniciansMap.set(invoice.doctorId, { name: invoice.doctorName, isPrimary: true });
+  const primaryDocId = invoice.doctorId && invoice.doctorId !== "unassigned" ? invoice.doctorId : (doctor?.id || "unassigned");
+  
+  // Safe resolution of primary doctor name
+  const primaryDocName = (() => {
+    if (doctor?.name && doctor.name !== "Unknown Doctor" && doctor.name !== "Expert Cabin") {
+      return doctor.name;
+    }
+    if (invoice.doctorName && invoice.doctorName !== "Unknown Doctor" && invoice.doctorName !== "Expert Cabin") {
+      return invoice.doctorName;
+    }
+    return primaryDocId !== "unassigned" ? "Unknown Doctor" : "Expert Cabin";
+  })();
+    
+  if (primaryDocName && primaryDocName !== "Unknown Doctor") {
+    cliniciansMap.set(primaryDocId, { name: primaryDocName, isPrimary: true });
+  }
+  
   invoice.items.forEach((item) => {
-    if (item.doctorId && !cliniciansMap.has(item.doctorId)) {
-      cliniciansMap.set(item.doctorId, { name: item.doctorName, isPrimary: false });
+    if (item.doctorId && item.doctorId !== "unassigned" && !cliniciansMap.has(item.doctorId)) {
+      const name = item.doctorName && item.doctorName !== "Unknown Doctor" && item.doctorName !== "Expert Cabin"
+        ? item.doctorName
+        : "Expert Cabin";
+      cliniciansMap.set(item.doctorId, { name, isPrimary: false });
     }
   });
   const cliniciansList = Array.from(cliniciansMap.values());
@@ -484,7 +504,7 @@ export const generateAppointmentInvoiceHTML = (
       <div class="bill-to-section">
         <div>
           <h3>Bill To:</h3>
-          <p><strong>${invoice.patientName}</strong></p>
+          <p><strong>${patient?.name || (invoice.patientName && invoice.patientName !== "Unknown Patient" ? invoice.patientName : "Unknown Patient")}</strong></p>
           ${patient?.mobile ? `<p>Phone: ${patient.mobile}</p>` : ""}
           ${patient?.address ? `<p>Address: ${patient.address}</p>` : ""}
         </div>

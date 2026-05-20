@@ -44,7 +44,7 @@ export type { ToastOptions, ToastColor } from "./toast";
 export { Badge } from "./badge";
 export { Chip } from "./chip";
 export { Switch } from "./switch";
-export { Checkbox } from "./checkbox";
+export { Checkbox, CheckboxGroup } from "./checkbox";
 export { Link } from "./link";
 export { Tabs, Tab } from "./tabs";
 export { Select, SelectItem } from "./select";

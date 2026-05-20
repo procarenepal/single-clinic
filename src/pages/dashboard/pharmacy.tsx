@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import clsx from "clsx";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   differenceInCalendarDays,
   isToday,
@@ -543,6 +543,7 @@ const toISODateString = (date: any): string => {
 
 export default function PharmacyPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { clinicId, currentUser, userData } = useAuthContext();
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin =
@@ -557,8 +558,15 @@ export default function PharmacyPage() {
       ? undefined
       : (selectedBranchId ?? undefined));
 
-  const [activeTab, setActiveTab] = useState("purchased");
+  const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") || "purchased");
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Medicine data
   const [medicines, setMedicines] = useState<Medicine[]>([]);

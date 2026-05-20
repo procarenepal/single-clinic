@@ -19,6 +19,8 @@ import { useAuthContext } from "@/context/AuthContext";
 import { hrService } from "@/services/hrService";
 import { accountService } from "@/services/accountService";
 import { staffCommissionService } from "@/services/staffCommissionService";
+import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { StaffMember, StaffAttendance, AccountBill, StaffCommission } from "@/types/models";
 import { format, subDays, startOfDay, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import {
@@ -296,9 +298,63 @@ export default function HRPage() {
 
       if (staffForm.id) {
         await hrService.updateStaff(staffForm.id, staffData);
+
+        // Sync updates to doctor/expert if applicable
+        if (staffForm.role === "Doctor") {
+          const docMatch = await doctorService.getDoctorByEmail(staffForm.email, clinicId!);
+          if (docMatch) {
+            await doctorService.updateDoctor(docMatch.id, {
+              name: staffForm.name,
+              defaultCommission: parseFloat(staffForm.defaultCommission) || 0,
+              phone: staffForm.phone,
+            });
+          }
+        } else if (staffForm.role === "Expert") {
+          const expertsList = await expertService.getExpertsByClinic(clinicId!);
+          const expMatch = expertsList.find(e => e.email?.toLowerCase() === staffForm.email.toLowerCase());
+          if (expMatch) {
+            await expertService.updateExpert(expMatch.id, {
+              name: staffForm.name,
+              defaultCommission: parseFloat(staffForm.defaultCommission) || 0,
+              phone: staffForm.phone,
+            });
+          }
+        }
+
         addToast({ title: "Success", description: "Staff record updated successfully", color: "success" });
       } else {
         const staffId = await hrService.createStaff(staffData);
+
+        // Sync creation to doctor/expert collections
+        if (staffForm.role === "Doctor") {
+          await doctorService.createDoctor({
+            name: staffForm.name,
+            doctorType: "regular",
+            defaultCommission: parseFloat(staffForm.defaultCommission) || 0,
+            speciality: "Dermatology",
+            phone: staffForm.phone,
+            email: staffForm.email.toLowerCase(),
+            nmcNumber: "NMC-Pending",
+            clinicId: clinicId!,
+            branchId: branchId || clinicId!,
+            isActive: true,
+            createdBy: userData?.id || "",
+          });
+        } else if (staffForm.role === "Expert") {
+          await expertService.createExpert({
+            name: staffForm.name,
+            expertType: "regular",
+            defaultCommission: parseFloat(staffForm.defaultCommission) || 0,
+            speciality: "Skin & Laser Therapy Specialist",
+            phone: staffForm.phone,
+            email: staffForm.email.toLowerCase(),
+            licenseNumber: "LIC-Pending",
+            clinicId: clinicId!,
+            branchId: branchId || clinicId!,
+            isActive: true,
+            createdBy: userData?.id || "",
+          });
+        }
 
         // If createAccount is checked, also create a login user
         if (staffForm.createAccount) {

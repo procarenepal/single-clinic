@@ -37,6 +37,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { isDark } = useTheme();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
   const [pendingPrescriptionCount, setPendingPrescriptionCount] = useState(0);
+  const [pendingPathologyCount, setPendingPathologyCount] = useState(0);
 
   const { navItems, loading, error, refreshNavigation } = useNavigation();
 
@@ -59,6 +60,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       },
       (error) => {
         console.error("Error listening to prescriptions:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [clinicId]);
+
+  // Listen to pending pathology bills for notification badge
+  useEffect(() => {
+    if (!clinicId) return;
+
+    const pathologyRef = collection(db, "pathologyBilling");
+    const q = query(
+      pathologyRef,
+      where("clinicId", "==", clinicId),
+      where("status", "==", "draft")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setPendingPathologyCount(snapshot.size);
+      },
+      (error) => {
+        console.error("Error listening to pathology bills:", error);
       }
     );
 
@@ -203,6 +228,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   {pendingPrescriptionCount}
                 </span>
               )}
+              {item.title === "Pathology" && pendingPathologyCount > 0 && (
+                <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
+                  {pendingPathologyCount}
+                </span>
+              )}
             </Link>
 
             {/* Subtree toggle */}
@@ -242,6 +272,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {item.title === "Pharmacy" && pendingPrescriptionCount > 0 && (
               <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
                 {pendingPrescriptionCount}
+              </span>
+            )}
+            {item.title === "Pathology" && pendingPathologyCount > 0 && (
+              <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
+                {pendingPathologyCount}
               </span>
             )}
           </Link>

@@ -101,9 +101,76 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && currentUser) {
-      navigate("/dashboard");
-    }
+    const handleRedirect = async () => {
+      if (!isLoading && currentUser) {
+        try {
+          const { collection, query, where, getDocs, doc, setDoc } = await import("firebase/firestore");
+          const { db } = await import("@/config/firebase");
+          
+          const email = currentUser.email?.toLowerCase();
+          if (email) {
+            // 1. Check if email matches any doctor
+            const docSnap = await getDocs(query(collection(db, "doctors"), where("email", "==", email)));
+            if (!docSnap.empty) {
+              navigate("/dashboard/front-office");
+              return;
+            }
+            // 2. Check if email matches any expert
+            const expSnap = await getDocs(query(collection(db, "experts"), where("email", "==", email)));
+            if (!expSnap.empty) {
+              navigate("/dashboard/front-office");
+              return;
+            }
+
+            // 3. Self-healing fallback: If they are registered in the staff collection as Doctor/Expert, sync them
+            const staffSnap = await getDocs(query(collection(db, "staff"), where("email", "==", email)));
+            if (!staffSnap.empty) {
+              const staffDoc = staffSnap.docs[0];
+              const staffData = staffDoc.data();
+              if (staffData.role === "Doctor") {
+                await setDoc(doc(db, "doctors", staffDoc.id), {
+                  name: staffData.name,
+                  doctorType: "regular",
+                  defaultCommission: Number(staffData.defaultCommission) || 0,
+                  speciality: "Dermatology",
+                  phone: staffData.phone || "",
+                  email: email,
+                  nmcNumber: "NMC-Pending",
+                  clinicId: staffData.clinicId,
+                  branchId: staffData.branchId || staffData.clinicId,
+                  isActive: true,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                });
+                navigate("/dashboard/front-office");
+                return;
+              } else if (staffData.role === "Expert") {
+                await setDoc(doc(db, "experts", staffDoc.id), {
+                  name: staffData.name,
+                  expertType: "regular",
+                  defaultCommission: Number(staffData.defaultCommission) || 0,
+                  speciality: "Skin & Laser Therapy Specialist",
+                  phone: staffData.phone || "",
+                  email: email,
+                  licenseNumber: "LIC-Pending",
+                  clinicId: staffData.clinicId,
+                  branchId: staffData.branchId || staffData.clinicId,
+                  isActive: true,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                });
+                navigate("/dashboard/front-office");
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error in login redirect check:", e);
+        }
+        navigate("/dashboard");
+      }
+    };
+    handleRedirect();
   }, [currentUser, isLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {

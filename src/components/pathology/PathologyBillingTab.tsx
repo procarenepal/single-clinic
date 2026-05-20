@@ -878,20 +878,20 @@ export default function PathologyBillingTab({
                   <h4 className="text-[12px] font-bold text-text-muted uppercase tracking-wider mb-2">
                     Patient Information
                   </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Autocomplete
                       allowsCustomValue
                       isRequired
-                      className="col-span-1 md:col-span-1 lg:col-span-1"
+                      className="col-span-1 sm:col-span-2 lg:col-span-2"
                       inputProps={{
                         classNames: {
                           label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                          input: "text-[14px] font-medium text-text-main",
-                          inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                          input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                          inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                         },
                       }}
                       defaultItems={patients}
-                      label="Patient Name * * *"
+                      label="Patient Name"
                       placeholder="Name"
                       inputValue={formData.patientName}
                       size="sm"
@@ -934,13 +934,14 @@ export default function PathologyBillingTab({
                     <Input
                       label="Phone"
                       placeholder="Phone"
+                      className="col-span-1"
                       value={formData.patientPhone}
                       size="sm"
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[14px] font-medium text-text-main",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({
@@ -953,13 +954,14 @@ export default function PathologyBillingTab({
                       label="Email"
                       placeholder="Email"
                       type="email"
+                      className="col-span-1"
                       value={formData.patientEmail}
                       size="sm"
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[14px] font-medium text-text-main",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({
@@ -971,13 +973,14 @@ export default function PathologyBillingTab({
                     <Input
                       label="Address"
                       placeholder="Address"
+                      className="col-span-1 sm:col-span-2 lg:col-span-2"
                       value={formData.patientAddress}
                       size="sm"
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[14px] font-medium text-text-main",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({
@@ -990,13 +993,14 @@ export default function PathologyBillingTab({
                       label="Age"
                       placeholder="Age"
                       type="number"
+                      className="col-span-1"
                       value={formData.patientAge}
                       size="sm"
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[14px] font-medium text-text-main",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, patientAge: value }))
@@ -1005,12 +1009,13 @@ export default function PathologyBillingTab({
                     <Select
                       label="Gender"
                       placeholder="Gender"
+                      className="col-span-1"
                       size="sm"
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        value: "text-[14px] font-medium text-text-main",
-                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        value: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       selectedKeys={
                         formData.patientGender ? [formData.patientGender] : []
@@ -1045,8 +1050,8 @@ export default function PathologyBillingTab({
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[14px] font-medium text-text-main",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, labReferenceNo: value }))
@@ -1060,8 +1065,8 @@ export default function PathologyBillingTab({
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[14px] font-medium text-text-main",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, sampleCollectionDate: value }))
@@ -1075,8 +1080,8 @@ export default function PathologyBillingTab({
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[14px] font-medium text-text-main",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ ...prev, expectedReportDate: value }))
@@ -1089,8 +1094,8 @@ export default function PathologyBillingTab({
                       variant="flat"
                       classNames={{
                         label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        value: "text-[14px] font-medium text-text-main",
-                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all",
+                        value: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
+                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
                       }}
                       onSelectionChange={(keys) => {
                         const selected = Array.from(keys)[0] as any;

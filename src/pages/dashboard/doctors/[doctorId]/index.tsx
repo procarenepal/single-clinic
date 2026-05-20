@@ -651,6 +651,12 @@ export default function DoctorProfilePage() {
                     {doctor.nmcNumber}
                   </span>
                 </div>
+                <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
+                  <span className="text-text-muted">Consultation Charge</span>
+                  <span className="font-semibold text-text-main">
+                    {doctor.consultationCharge !== undefined ? `NPR ${doctor.consultationCharge.toLocaleString()}` : "N NPR"}
+                  </span>
+                </div>
                 <div className="flex justify-between text-[14px] pb-2">
                   <span className="text-text-muted">Default Commission</span>
                   <span className="font-semibold text-text-main">

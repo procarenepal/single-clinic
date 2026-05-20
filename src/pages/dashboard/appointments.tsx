@@ -43,6 +43,7 @@ import { addToast } from "@/components/ui/toast";
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
 import {
@@ -271,16 +272,19 @@ export default function AppointmentsPage() {
 
         if (!isAdmin && userData.email) {
           try {
-            const matchingDoctor = await doctorService.getDoctorByEmail(
-              userData.email,
-            );
+            const [matchingDoctor, matchingExpert] = await Promise.all([
+              doctorService.getDoctorByEmail(userData.email),
+              expertService.getExpertByEmail(userData.email)
+            ]);
 
-            if (matchingDoctor) {
-              doctorId = matchingDoctor.id;
+            const matchingProvider = matchingDoctor || matchingExpert;
+
+            if (matchingProvider) {
+              doctorId = matchingProvider.id;
               setCurrentDoctorId(doctorId);
             }
           } catch (error) {
-            console.error("Error checking doctor linkage:", error);
+            console.error("Error checking provider linkage:", error);
           }
         } else {
           setCurrentDoctorId(null);
@@ -291,11 +295,12 @@ export default function AppointmentsPage() {
             doctorId
               ? patientService.getPatientsByDoctor(
                 doctorId,
-                effectiveBranchId,
+                clinicId,
               )
-              : patientService.getPatients(effectiveBranchId),
-            doctorService.getDoctors(effectiveBranchId),
-            appointmentTypeService.getAppointmentTypes(
+              : patientService.getPatients(clinicId),
+            doctorService.getDoctors(clinicId),
+            appointmentTypeService.getAppointmentTypesByClinic(
+              clinicId,
               effectiveBranchId,
             ),
           ]);
@@ -762,7 +767,7 @@ export default function AppointmentsPage() {
           </h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             {currentDoctorId
-              ? "Manage your assigned patient appointments"
+              ? "Manage your assigned appointments"
               : "Manage patient appointments"}
           </p>
         </div>

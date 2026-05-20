@@ -24,6 +24,7 @@ import {
   IoRefreshOutline,
   IoSearchOutline,
   IoCloseOutline,
+  IoPrintOutline,
 } from "react-icons/io5";
 import { Check as CheckIcon } from "lucide-react";
 
@@ -768,8 +769,23 @@ const NewPatientPage: React.FC = () => {
 
   // ── Step
   const [step, setStep] = useState(1);
+  const [isQuickMode, setIsQuickMode] = useState(false);
+  const [mobileStatus, setMobileStatus] = useState<"idle" | "checking" | "duplicate" | "clear">("idle");
   const TOTAL_STEPS = 2;
   const formattedToday = new Date().toISOString().split("T")[0];
+
+  // ── OPD Ticket
+  const [opdTicket, setOpdTicket] = useState<{
+    patientId: string;
+    name: string;
+    regNumber: string;
+    mobile: string;
+    gender: string;
+    age: string;
+    doctorName: string;
+    appointmentDate: string;
+    appointmentType: string;
+  } | null>(null);
 
   // ── Patient profile form
   const [profile, setProfile] = useState({
@@ -845,6 +861,24 @@ const NewPatientPage: React.FC = () => {
 
   // ── Medical conditions input
   const [conditionInput, setConditionInput] = useState("");
+
+  // ── Debounced duplicate check ──────────────────────────────────────────────
+  const checkDuplicateMobile = useCallback(
+    debounce(async (mobileNumber: string) => {
+      if (!mobileNumber || mobileNumber.length < 10 || !clinicId) {
+        setMobileStatus("idle");
+        return;
+      }
+      setMobileStatus("checking");
+      try {
+        const exists = await patientService.checkMobileExists(mobileNumber, clinicId);
+        setMobileStatus(exists ? "duplicate" : "clear");
+      } catch {
+        setMobileStatus("idle");
+      }
+    }, 500),
+    [clinicId]
+  );
 
   // ── Debounced date conversion ─────────────────────────────────────────────
   const debouncedConvert = useCallback(
@@ -1256,6 +1290,9 @@ const NewPatientPage: React.FC = () => {
       v = "+977" + v;
 
     setProfile((p) => ({ ...p, [name]: v }));
+    if (name === "mobile" && v) {
+      checkDuplicateMobile(v);
+    }
     if (name === "dob" && v) debouncedConvert(v, "dob", "ad-to-bs");
     else if (name === "bsDate" && v) debouncedConvert(v, "bsDate", "bs-to-ad");
   };
@@ -1294,12 +1331,12 @@ const NewPatientPage: React.FC = () => {
       if (
         !profile.regNumber ||
         !profile.name ||
-        !profile.address ||
+        (!isQuickMode && !profile.address) ||
         !profile.mobile
       ) {
         addToast({
           title: "Required fields missing",
-          description: "Fill in: Reg#, Name, Address, Mobile",
+          description: isQuickMode ? "Fill in: Reg#, Name, Mobile" : "Fill in: Reg#, Name, Address, Mobile",
           color: "warning",
         });
 
@@ -1413,12 +1450,24 @@ const NewPatientPage: React.FC = () => {
 
       const patientId = await patientService.createPatient(buildPatientData());
 
+      const doctorName = doctors.find(d => d.id === profile.doctor)?.name || "";
+      setOpdTicket({
+        patientId,
+        name: profile.name,
+        regNumber: profile.regNumber,
+        mobile: profile.mobile,
+        gender: profile.gender,
+        age: profile.age,
+        doctorName,
+        appointmentDate: "",
+        appointmentType: "",
+      });
+
       addToast({
         title: `Patient ${profile.name} registered`,
         description: `Reg# ${profile.regNumber}`,
         color: "success",
       });
-      navigate(`/dashboard/patients/${patientId}`);
     } catch {
       addToast({ title: "Failed to create patient", color: "danger" });
     } finally {
@@ -1615,6 +1664,22 @@ const NewPatientPage: React.FC = () => {
             title: "Patient registered with appointment",
             color: "success",
           });
+
+          const doctorName = doctors.find(d => d.id === appt.doctor)?.name || "";
+          const apptTypeName = appointmentTypes.find(t => t.id === appt.appointmentType)?.name || "";
+          setOpdTicket({
+            patientId,
+            name: profile.name,
+            regNumber: profile.regNumber,
+            mobile: profile.mobile,
+            gender: profile.gender,
+            age: profile.age,
+            doctorName,
+            appointmentDate: appt.appointmentDate
+              ? new Date(appt.appointmentDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+              : "",
+            appointmentType: apptTypeName,
+          });
         } catch {
           addToast({
             title: "Patient saved, appointment failed",
@@ -1628,14 +1693,79 @@ const NewPatientPage: React.FC = () => {
           description: `Reg# ${profile.regNumber}`,
           color: "success",
         });
-      }
 
-      navigate(`/dashboard/patients/${patientId}`);
+        const doctorName = doctors.find(d => d.id === profile.doctor)?.name || "";
+        setOpdTicket({
+          patientId,
+          name: profile.name,
+          regNumber: profile.regNumber,
+          mobile: profile.mobile,
+          gender: profile.gender,
+          age: profile.age,
+          doctorName,
+          appointmentDate: "",
+          appointmentType: "",
+        });
+      }
     } catch {
       addToast({ title: "Failed to create patient", color: "danger" });
     } finally {
       setLoading(false);
     }
+  };
+
+  // ── Print OPD Ticket ───────────────────────────────────────────────────────
+  const printOpdTicket = () => {
+    const printWindow = window.open("", "_blank", "width=400,height=600");
+    if (!printWindow || !opdTicket) return;
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OPD Ticket - ${opdTicket.regNumber}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Courier New', monospace; font-size: 12px; padding: 16px; width: 350px; color: #111; }
+    .header { text-align: center; border-bottom: 2px dashed #333; padding-bottom: 10px; margin-bottom: 10px; }
+    .clinic-name { font-size: 16px; font-weight: bold; }
+    .ticket-title { font-size: 11px; color: #555; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+    .reg { font-size: 22px; font-weight: bold; text-align: center; margin: 10px 0; letter-spacing: 2px; border: 2px solid #333; padding: 6px; }
+    .row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed #ddd; }
+    .label { color: #555; font-size: 10px; text-transform: uppercase; }
+    .value { font-weight: bold; font-size: 11px; text-align: right; max-width: 55%; word-break: break-word; }
+    .footer { text-align: center; margin-top: 12px; font-size: 10px; color: #888; }
+    .appt-box { margin-top: 10px; background: #f5f5f5; border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
+    .appt-title { font-size: 10px; text-transform: uppercase; color: #555; font-weight: bold; margin-bottom: 4px; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="clinic-name">Clinic OPD</div>
+    <div class="ticket-title">Out-Patient Department Ticket</div>
+  </div>
+  <div class="reg"># ${opdTicket.regNumber}</div>
+  <div class="row"><span class="label">Patient Name</span><span class="value">${opdTicket.name}</span></div>
+  <div class="row"><span class="label">Mobile</span><span class="value">${opdTicket.mobile}</span></div>
+  ${opdTicket.gender ? `<div class="row"><span class="label">Gender</span><span class="value">${opdTicket.gender.charAt(0).toUpperCase() + opdTicket.gender.slice(1)}</span></div>` : ""}
+  ${opdTicket.age ? `<div class="row"><span class="label">Age</span><span class="value">${opdTicket.age}</span></div>` : ""}
+  ${opdTicket.doctorName ? `<div class="row"><span class="label">Assigned Doctor</span><span class="value">Dr. ${opdTicket.doctorName}</span></div>` : ""}
+  ${(opdTicket.appointmentDate || opdTicket.appointmentType) ? `
+  <div class="appt-box">
+    <div class="appt-title">📅 Appointment</div>
+    ${opdTicket.appointmentType ? `<div class="row"><span class="label">Type</span><span class="value">${opdTicket.appointmentType}</span></div>` : ""}
+    ${opdTicket.appointmentDate ? `<div class="row"><span class="label">Date</span><span class="value">${opdTicket.appointmentDate}</span></div>` : ""}
+  </div>` : ""}
+  <div class="footer">
+    Issued: ${new Date().toLocaleString()}<br/>
+    Please show this slip at reception.
+  </div>
+</body>
+</html>`;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 300);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1723,11 +1853,24 @@ const NewPatientPage: React.FC = () => {
           <>
             {/* Patient Info Card */}
             <div className="bg-surface border border-border-base rounded overflow-hidden">
-              <SectionHeader
-                icon={<IoPersonOutline className="w-4 h-4" />}
-                subtitle="Basic demographics and contact info"
-                title="Patient Profile"
-              />
+              <div className="flex items-center justify-between px-4 py-2.5 bg-surface-2 border-b border-border-base/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-primary"><IoPersonOutline className="w-4 h-4" /></span>
+                  <div>
+                    <h3 className="text-[13px] font-semibold text-text-main">Patient Profile</h3>
+                    <p className="text-[11px] text-text-muted hidden sm:block">Basic demographics and contact info</p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer bg-warning/10 border border-warning/20 px-2.5 py-1 rounded select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={isQuickMode} 
+                    onChange={(e) => setIsQuickMode(e.target.checked)}
+                    className="accent-warning"
+                  />
+                  <span className="text-[11px] font-bold text-warning-600">⚡ Quick Add</span>
+                </label>
+              </div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Reg Number */}
                 <Field
@@ -1773,25 +1916,38 @@ const NewPatientPage: React.FC = () => {
                 </Field>
 
                 {/* Address */}
-                <Field required label="Address">
-                  <FlatInput
-                    placeholder="Home address"
-                    value={profile.address}
-                    onChange={(v) => setProfile((p) => ({ ...p, address: v }))}
-                  />
-                </Field>
+                {!isQuickMode && (
+                  <Field required={!isQuickMode} label="Address">
+                    <FlatInput
+                      placeholder="Home address"
+                      value={profile.address}
+                      onChange={(v) => setProfile((p) => ({ ...p, address: v }))}
+                    />
+                  </Field>
+                )}
 
                 {/* Mobile */}
                 <Field required hint="Format: +977XXXXXXXXXX" label="Mobile">
                   <FlatInput
                     placeholder="+977 98XXXXXXXX"
                     value={profile.mobile}
+                    endContent={mobileStatus === "checking" ? <Spinner size="xs" /> : undefined}
                     onChange={(v) =>
                       handleProfileChange({
                         target: { name: "mobile", value: v },
                       } as any)
                     }
                   />
+                  {mobileStatus === "duplicate" && (
+                    <span className="text-[10px] text-error font-medium mt-1">
+                      ⚠️ A patient with this mobile number already exists.
+                    </span>
+                  )}
+                  {mobileStatus === "clear" && (
+                    <span className="text-[10px] text-health-600 font-medium mt-1">
+                      ✓ Number is available.
+                    </span>
+                  )}
                 </Field>
 
                 {/* Gender */}
@@ -1808,93 +1964,101 @@ const NewPatientPage: React.FC = () => {
                 </Field>
 
                 {/* Email - Moved here for better flow */}
-                <Field label="Email">
-                  <FlatInput
-                    placeholder="email@example.com"
-                    type="email"
-                    value={profile.email}
-                    onChange={(v) => setProfile((p) => ({ ...p, email: v }))}
-                  />
-                </Field>
+                {!isQuickMode && (
+                  <Field label="Email">
+                    <FlatInput
+                      placeholder="email@example.com"
+                      type="email"
+                      value={profile.email}
+                      onChange={(v) => setProfile((p) => ({ ...p, email: v }))}
+                    />
+                  </Field>
+                )}
 
                 {/* DOB (AD) */}
-                <Field hint="Auto-converts to BS" label="Date of Birth (AD)">
-                  <FlatInput
-                    disabled={dateConv.isConverting && dateConv.field === "dob"}
-                    endContent={
-                      dateConv.isConverting && dateConv.field === "dob" ? (
-                        <Spinner size="xs" />
-                      ) : undefined
-                    }
-                    type="date"
-                    value={profile.dob}
-                    onChange={(v) =>
-                      handleProfileChange({
-                        target: { name: "dob", value: v },
-                      } as any)
-                    }
-                  />
-                  <ConversionIndicator
-                    converting={
-                      dateConv.isConverting && dateConv.field === "dob"
-                    }
-                    message={dateConv.message}
-                    progress={dateConv.progress}
-                  />
-                </Field>
+                {!isQuickMode && (
+                  <Field hint="Auto-converts to BS" label="Date of Birth (AD)">
+                    <FlatInput
+                      disabled={dateConv.isConverting && dateConv.field === "dob"}
+                      endContent={
+                        dateConv.isConverting && dateConv.field === "dob" ? (
+                          <Spinner size="xs" />
+                        ) : undefined
+                      }
+                      type="date"
+                      value={profile.dob}
+                      onChange={(v) =>
+                        handleProfileChange({
+                          target: { name: "dob", value: v },
+                        } as any)
+                      }
+                    />
+                    <ConversionIndicator
+                      converting={
+                        dateConv.isConverting && dateConv.field === "dob"
+                      }
+                      message={dateConv.message}
+                      progress={dateConv.progress}
+                    />
+                  </Field>
+                )}
 
                 {/* BS Date */}
-                <Field
-                  hint="YYYY/MM/DD — auto-converts to AD"
-                  label="Date of Birth (BS)"
-                >
-                  <FlatInput
-                    disabled={
-                      dateConv.isConverting && dateConv.field === "bsDate"
-                    }
-                    endContent={
-                      dateConv.isConverting && dateConv.field === "bsDate" ? (
-                        <Spinner size="xs" />
-                      ) : profile.bsDate &&
-                        dateConv.lastConversion.timestamp > 0 ? (
-                        <CheckIcon className="w-3.5 h-3.5 text-health-600" />
-                      ) : undefined
-                    }
-                    placeholder="2080/06/15"
-                    value={profile.bsDate}
-                    onChange={(v) =>
-                      handleProfileChange({
-                        target: { name: "bsDate", value: v },
-                      } as any)
-                    }
-                  />
-                  <ConversionIndicator
-                    converting={
-                      dateConv.isConverting && dateConv.field === "bsDate"
-                    }
-                    message={dateConv.message}
-                    progress={dateConv.progress}
-                  />
-                </Field>
+                {!isQuickMode && (
+                  <Field
+                    hint="YYYY/MM/DD — auto-converts to AD"
+                    label="Date of Birth (BS)"
+                  >
+                    <FlatInput
+                      disabled={
+                        dateConv.isConverting && dateConv.field === "bsDate"
+                      }
+                      endContent={
+                        dateConv.isConverting && dateConv.field === "bsDate" ? (
+                          <Spinner size="xs" />
+                        ) : profile.bsDate &&
+                          dateConv.lastConversion.timestamp > 0 ? (
+                          <CheckIcon className="w-3.5 h-3.5 text-health-600" />
+                        ) : undefined
+                      }
+                      placeholder="2080/06/15"
+                      value={profile.bsDate}
+                      onChange={(v) =>
+                        handleProfileChange({
+                          target: { name: "bsDate", value: v },
+                        } as any)
+                      }
+                    />
+                    <ConversionIndicator
+                      converting={
+                        dateConv.isConverting && dateConv.field === "bsDate"
+                      }
+                      message={dateConv.message}
+                      progress={dateConv.progress}
+                    />
+                  </Field>
+                )}
 
                 {/* Blood Group */}
-                <Field label="Blood Group">
-                  <FlatSelect
-                    value={profile.bloodGroup}
-                    onChange={(v) =>
-                      setProfile((p) => ({ ...p, bloodGroup: v }))
-                    }
-                  >
-                    <option value="">Select (optional)</option>
-                    {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(
-                      (bg) => (
-                        <option key={bg} value={bg}>
-                          {bg}
-                        </option>
-                      ),
-                    )}
-                  </FlatSelect>
-                </Field>
+                {!isQuickMode && (
+                  <Field label="Blood Group">
+                    <FlatSelect
+                      value={profile.bloodGroup}
+                      onChange={(v) =>
+                        setProfile((p) => ({ ...p, bloodGroup: v }))
+                      }
+                    >
+                      <option value="">Select (optional)</option>
+                      {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(
+                        (bg) => (
+                          <option key={bg} value={bg}>
+                            {bg}
+                          </option>
+                        ),
+                      )}
+                    </FlatSelect>
+                  </Field>
+                )}
 
                 {/* Age */}
                 <Field
@@ -1912,39 +2076,43 @@ const NewPatientPage: React.FC = () => {
 
 
                 {/* Phone */}
-                <Field label="Secondary Phone">
-                  <FlatInput
-                    placeholder="Landline or alt number"
-                    value={profile.phone}
-                    onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
-                  />
-                </Field>
+                {!isQuickMode && (
+                  <Field label="Secondary Phone">
+                    <FlatInput
+                      placeholder="Landline or alt number"
+                      value={profile.phone}
+                      onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
+                    />
+                  </Field>
+                )}
 
                 {/* Picture upload */}
-                <Field label="Patient Picture">
-                  <label className="relative flex items-center h-9 border border-border-base rounded bg-surface cursor-pointer hover:border-primary transition-colors px-2.5 gap-2">
-                    <input
-                      accept="image/*"
-                      className="sr-only"
-                      type="file"
-                      onChange={(e) =>
-                        setProfile((p) => ({
-                          ...p,
-                          picture: e.target.files?.[0] || null,
-                        }))
-                      }
-                    />
-                    <IoPersonOutline className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                    <span className="text-[12px] text-text-muted flex-1 truncate">
-                      {profile.picture
-                        ? profile.picture.name
-                        : "Choose image file"}
-                    </span>
-                    <span className="text-[10px] bg-surface-2 text-text-main px-1.5 py-0.5 rounded shrink-0">
-                      Browse
-                    </span>
-                  </label>
-                </Field>
+                {!isQuickMode && (
+                  <Field label="Patient Picture">
+                    <label className="relative flex items-center h-9 border border-border-base rounded bg-surface cursor-pointer hover:border-primary transition-colors px-2.5 gap-2">
+                      <input
+                        accept="image/*"
+                        className="sr-only"
+                        type="file"
+                        onChange={(e) =>
+                          setProfile((p) => ({
+                            ...p,
+                            picture: e.target.files?.[0] || null,
+                          }))
+                        }
+                      />
+                      <IoPersonOutline className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                      <span className="text-[12px] text-text-muted flex-1 truncate">
+                        {profile.picture
+                          ? profile.picture.name
+                          : "Choose image file"}
+                      </span>
+                      <span className="text-[10px] bg-surface-2 text-text-main px-1.5 py-0.5 rounded shrink-0">
+                        Browse
+                      </span>
+                    </label>
+                  </Field>
+                )}
 
                 {/* Doctor */}
                 <Field
@@ -1969,245 +2137,251 @@ const NewPatientPage: React.FC = () => {
                 </Field>
 
                 {/* Assigned Expert */}
-                <Field
-                  hint="Expert responsible for this patient"
-                  label="Assigned Expert"
-                >
-                  <DoctorSelect
-                    doctors={experts as any}
-                    loading={expertsLoading}
-                    placeholder="Search expert..."
-                    title="Experts"
-                    value={profile.expert}
-                    onChange={(v) => {
-                      setProfile((p) => ({ ...p, expert: v }));
-                    }}
-                  />
-                </Field>
+                {!isQuickMode && (
+                  <Field
+                    hint="Expert responsible for this patient"
+                    label="Assigned Expert"
+                  >
+                    <DoctorSelect
+                      doctors={experts as any}
+                      loading={expertsLoading}
+                      placeholder="Search expert..."
+                      title="Experts"
+                      value={profile.expert}
+                      onChange={(v) => {
+                        setProfile((p) => ({ ...p, expert: v }));
+                      }}
+                    />
+                  </Field>
+                )}
               </div>
             </div>
 
             {/* Referral Sources & Commissions Card */}
-            <div className="bg-surface border border-border-base rounded overflow-hidden mt-4">
-              <SectionHeader
-                icon={<IoRefreshOutline className="w-4 h-4" />}
-                subtitle="Associate this patient registration with one or more referrers for commission calculations."
-                title="Referral Sources & Commission Splits"
-              />
-              <div className="p-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-border-base pb-2 mb-2">
-                  <div>
-                    <label className="text-[12px] font-bold text-text-main">
-                      Referral Sources & Commission Splits
-                    </label>
-                    <p className="text-[11px] text-text-muted">
-                      Assign split percentages to referral partners, doctors, experts, or staff.
-                    </p>
+            {!isQuickMode && (
+              <div className="bg-surface border border-border-base rounded overflow-hidden mt-4">
+                <SectionHeader
+                  icon={<IoRefreshOutline className="w-4 h-4" />}
+                  subtitle="Associate this patient registration with one or more referrers for commission calculations."
+                  title="Referral Sources & Commission Splits"
+                />
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-border-base pb-2 mb-2">
+                    <div>
+                      <label className="text-[12px] font-bold text-text-main">
+                        Referral Sources & Commission Splits
+                      </label>
+                      <p className="text-[11px] text-text-muted">
+                        Assign split percentages to referral partners, doctors, experts, or staff.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addReferrerRow}
+                      className="px-2.5 py-1 text-[11px] font-bold text-primary border border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded transition-colors"
+                    >
+                      ➕ Add Referrer
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={addReferrerRow}
-                    className="px-2.5 py-1 text-[11px] font-bold text-primary border border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded transition-colors"
-                  >
-                    ➕ Add Referrer
-                  </button>
-                </div>
 
-                {(!profile.referrals || profile.referrals.length === 0) ? (
-                  <div className="py-6 text-center text-[12px] text-text-muted bg-surface-2/30 border border-dashed border-border-base rounded">
-                    No active referrals added (Patient is a Direct Walk-in).
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                    {(profile.referrals || []).map((ref, idx) => (
-                      <div key={idx} className="flex flex-col gap-3 bg-surface p-3 border border-border-base rounded shadow-none relative">
-                        <div className="flex items-center gap-3">
-                          <div className="grid grid-cols-12 gap-3 flex-1">
-                            {/* Referrer Type Dropdown */}
-                            <div className="col-span-12 sm:col-span-4">
-                              <label className="block text-[10px] font-semibold text-text-muted mb-1">
-                                Referrer Type
-                              </label>
-                              <select
-                                className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                                value={ref.type}
-                                onChange={(e) => updateReferrerRow(idx, "type", e.target.value)}
-                              >
-                                <option value="referral-partner">External Partner</option>
-                                <option value="doctor">Internal Doctor</option>
-                                <option value="expert">External Expert</option>
-                                <option value="staff">Internal Staff</option>
-                              </select>
+                  {(!profile.referrals || profile.referrals.length === 0) ? (
+                    <div className="py-6 text-center text-[12px] text-text-muted bg-surface-2/30 border border-dashed border-border-base rounded">
+                      No active referrals added (Patient is a Direct Walk-in).
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                      {(profile.referrals || []).map((ref, idx) => (
+                        <div key={idx} className="flex flex-col gap-3 bg-surface p-3 border border-border-base rounded shadow-none relative">
+                          <div className="flex items-center gap-3">
+                            <div className="grid grid-cols-12 gap-3 flex-1">
+                              {/* Referrer Type Dropdown */}
+                              <div className="col-span-12 sm:col-span-4">
+                                <label className="block text-[10px] font-semibold text-text-muted mb-1">
+                                  Referrer Type
+                                </label>
+                                <select
+                                  className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                  value={ref.type}
+                                  onChange={(e) => updateReferrerRow(idx, "type", e.target.value)}
+                                >
+                                  <option value="referral-partner">External Partner</option>
+                                  <option value="doctor">Internal Doctor</option>
+                                  <option value="expert">External Expert</option>
+                                  <option value="staff">Internal Staff</option>
+                                </select>
+                              </div>
+
+                              {/* Referrer Name Dropdown */}
+                              <div className="col-span-12 sm:col-span-5">
+                                <label className="block text-[10px] font-semibold text-text-muted mb-1">
+                                  Referrer Name
+                                </label>
+                                <select
+                                  className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                  value={ref.id}
+                                  onChange={(e) => updateReferrerRow(idx, "id", e.target.value)}
+                                >
+                                  {ref.type === "referral-partner" && (
+                                    <>
+                                      <option value="">-- Choose Partner --</option>
+                                      {referralPartners.map((rp) => (
+                                        <option key={rp.id} value={rp.id}>
+                                          {rp.name}
+                                        </option>
+                                      ))}
+                                    </>
+                                  )}
+                                  {ref.type === "doctor" && (
+                                    <>
+                                      <option value="">-- Choose Doctor --</option>
+                                      {doctors.map((d) => (
+                                        <option key={d.id} value={d.id}>
+                                          Dr. {d.name}
+                                        </option>
+                                      ))}
+                                    </>
+                                  )}
+                                  {ref.type === "expert" && (
+                                    <>
+                                      <option value="">-- Choose Expert --</option>
+                                      {experts.map((exp) => (
+                                        <option key={exp.id} value={exp.id}>
+                                          {exp.name}
+                                        </option>
+                                      ))}
+                                    </>
+                                  )}
+                                  {ref.type === "staff" && (
+                                    <>
+                                      <option value="">-- Choose Staff --</option>
+                                      {staff.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                          {s.name}
+                                        </option>
+                                      ))}
+                                    </>
+                                  )}
+                                </select>
+                              </div>
+
+                              {/* Commission split percentage */}
+                              <div className="col-span-12 sm:col-span-3">
+                                <label className="block text-[10px] font-semibold text-text-muted mb-1">
+                                  Split %
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  className="w-full h-9 px-2 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors text-right"
+                                  value={ref.commissionPercentage}
+                                  onChange={(e) => updateReferrerRow(idx, "commissionPercentage", e.target.value)}
+                                />
+                              </div>
                             </div>
 
-                            {/* Referrer Name Dropdown */}
-                            <div className="col-span-12 sm:col-span-5">
-                              <label className="block text-[10px] font-semibold text-text-muted mb-1">
-                                Referrer Name
-                              </label>
-                              <select
-                                className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                                value={ref.id}
-                                onChange={(e) => updateReferrerRow(idx, "id", e.target.value)}
-                              >
-                                {ref.type === "referral-partner" && (
-                                  <>
-                                    <option value="">-- Choose Partner --</option>
-                                    {referralPartners.map((rp) => (
-                                      <option key={rp.id} value={rp.id}>
-                                        {rp.name}
-                                      </option>
-                                    ))}
-                                  </>
-                                )}
-                                {ref.type === "doctor" && (
-                                  <>
-                                    <option value="">-- Choose Doctor --</option>
+                            {/* Action delete button */}
+                            <button
+                              type="button"
+                              onClick={() => removeReferrerRow(idx)}
+                              className="h-9 w-9 rounded border border-border-base text-red-500 hover:bg-red-500/5 flex items-center justify-center transition-colors shrink-0 mt-5"
+                              title="Remove referrer"
+                            >
+                              &times;
+                            </button>
+                          </div>
+
+                          {/* Partner sub-row: Specific referred by doctor/expert */}
+                          {ref.type === "referral-partner" && (
+                            <div className="border-t border-border-base/50 pt-3 mt-1 grid grid-cols-12 gap-3 items-center">
+                              <div className="col-span-12 sm:col-span-4">
+                                <span className="text-[11px] font-bold text-text-muted">Referred By (Doc/Expert):</span>
+                              </div>
+                              <div className="col-span-12 sm:col-span-8">
+                                <select
+                                  className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                  value={ref.referredById || ""}
+                                  onChange={(e) => updateReferrerRow(idx, "referredById", e.target.value)}
+                                >
+                                  <option value="">-- Optional Referring Person --</option>
+                                  <optgroup label="Internal Doctors">
                                     {doctors.map((d) => (
                                       <option key={d.id} value={d.id}>
-                                        Dr. {d.name}
+                                        Dr. {d.name} ({d.speciality || "GP"})
                                       </option>
                                     ))}
-                                  </>
-                                )}
-                                {ref.type === "expert" && (
-                                  <>
-                                    <option value="">-- Choose Expert --</option>
+                                  </optgroup>
+                                  <optgroup label="External Experts">
                                     {experts.map((exp) => (
                                       <option key={exp.id} value={exp.id}>
-                                        {exp.name}
+                                        {exp.name} ({exp.expertType || "Expert"})
                                       </option>
                                     ))}
-                                  </>
-                                )}
-                                {ref.type === "staff" && (
-                                  <>
-                                    <option value="">-- Choose Staff --</option>
-                                    {staff.map((s) => (
-                                      <option key={s.id} value={s.id}>
-                                        {s.name}
-                                      </option>
-                                    ))}
-                                  </>
-                                )}
-                              </select>
+                                  </optgroup>
+                                </select>
+                              </div>
                             </div>
-
-                            {/* Commission split percentage */}
-                            <div className="col-span-12 sm:col-span-3">
-                              <label className="block text-[10px] font-semibold text-text-muted mb-1">
-                                Split %
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                className="w-full h-9 px-2 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors text-right"
-                                value={ref.commissionPercentage}
-                                onChange={(e) => updateReferrerRow(idx, "commissionPercentage", e.target.value)}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Action delete button */}
-                          <button
-                            type="button"
-                            onClick={() => removeReferrerRow(idx)}
-                            className="h-9 w-9 rounded border border-border-base text-red-500 hover:bg-red-500/5 flex items-center justify-center transition-colors shrink-0 mt-5"
-                            title="Remove referrer"
-                          >
-                            &times;
-                          </button>
+                          )}
                         </div>
-
-                        {/* Partner sub-row: Specific referred by doctor/expert */}
-                        {ref.type === "referral-partner" && (
-                          <div className="border-t border-border-base/50 pt-3 mt-1 grid grid-cols-12 gap-3 items-center">
-                            <div className="col-span-12 sm:col-span-4">
-                              <span className="text-[11px] font-bold text-text-muted">Referred By (Doc/Expert):</span>
-                            </div>
-                            <div className="col-span-12 sm:col-span-8">
-                              <select
-                                className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                                value={ref.referredById || ""}
-                                onChange={(e) => updateReferrerRow(idx, "referredById", e.target.value)}
-                              >
-                                <option value="">-- Optional Referring Person --</option>
-                                <optgroup label="Internal Doctors">
-                                  {doctors.map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                      Dr. {d.name} ({d.speciality || "GP"})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                                <optgroup label="External Experts">
-                                  {experts.map((exp) => (
-                                    <option key={exp.id} value={exp.id}>
-                                      {exp.name} ({exp.expertType || "Expert"})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              </select>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Medical Conditions Card */}
-            <div className="bg-surface border border-border-base rounded overflow-hidden">
-              <SectionHeader
-                icon={<IoPersonOutline className="w-4 h-4" />}
-                subtitle="Pre-existing conditions and allergies"
-                title="Medical Conditions"
-              />
-              <div className="p-4 space-y-3">
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary placeholder:text-text-muted/60"
-                    placeholder="Type condition and press Enter or Add…"
-                    type="text"
-                    value={conditionInput}
-                    onChange={(e) => setConditionInput(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && (e.preventDefault(), addCondition())
-                    }
-                  />
-                  <Button
-                    color="primary"
-                    disabled={!conditionInput.trim()}
-                    size="sm"
-                    type="button"
-                    onClick={addCondition}
-                  >
-                    Add
-                  </Button>
-                </div>
-                {profile.medicalConditions.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {profile.medicalConditions.map((c) => (
-                      <span
-                        key={c}
-                        className="inline-flex items-center gap-1 text-[11px] bg-surface-2 text-text-main border border-border-base px-2 py-0.5 rounded"
-                      >
-                        {c}
-                        <button
-                          className="hover:text-red-500 ml-0.5"
-                          type="button"
-                          onClick={() => removeCondition(c)}
-                        >
-                          <IoCloseOutline className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
+            {!isQuickMode && (
+              <div className="bg-surface border border-border-base rounded overflow-hidden mt-4">
+                <SectionHeader
+                  icon={<IoPersonOutline className="w-4 h-4" />}
+                  subtitle="Pre-existing conditions and allergies"
+                  title="Medical Conditions"
+                />
+                <div className="p-4 space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary placeholder:text-text-muted/60"
+                      placeholder="Type condition and press Enter or Add…"
+                      type="text"
+                      value={conditionInput}
+                      onChange={(e) => setConditionInput(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && (e.preventDefault(), addCondition())
+                      }
+                    />
+                    <Button
+                      color="primary"
+                      disabled={!conditionInput.trim()}
+                      size="sm"
+                      type="button"
+                      onClick={addCondition}
+                    >
+                      Add
+                    </Button>
                   </div>
-                )}
+                  {profile.medicalConditions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {profile.medicalConditions.map((c) => (
+                        <span
+                          key={c}
+                          className="inline-flex items-center gap-1 text-[11px] bg-surface-2 text-text-main border border-border-base px-2 py-0.5 rounded"
+                        >
+                          {c}
+                          <button
+                            className="hover:text-red-500 ml-0.5"
+                            type="button"
+                            onClick={() => removeCondition(c)}
+                          >
+                            <IoCloseOutline className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
 
@@ -2525,8 +2699,109 @@ const NewPatientPage: React.FC = () => {
           </div>
         </div>
       </form>
+
+      {/* ── OPD Ticket Modal ──────────────────────────────────────────────── */}
+      {opdTicket && createPortal(
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-[9990] bg-black/50 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-[9991] flex items-center justify-center p-4">
+            <div className="bg-surface border border-border-base rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+              {/* Header */}
+              <div className="bg-primary px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-white">
+                  <IoPrintOutline className="w-5 h-5" />
+                  <h2 className="text-[15px] font-bold">Patient Registered!</h2>
+                </div>
+                <button
+                  className="text-white/70 hover:text-white transition-colors"
+                  onClick={() => { setOpdTicket(null); navigate(`/dashboard/patients/${opdTicket.patientId}`); }}
+                >
+                  <IoCloseOutline className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Ticket Preview */}
+              <div className="p-5 space-y-3">
+                <div className="text-center border-2 border-dashed border-border-base rounded-lg p-3 bg-surface-2/40">
+                  <p className="text-[10px] text-text-muted uppercase tracking-widest">OPD Registration Number</p>
+                  <p className="text-3xl font-black text-primary tracking-widest mt-1">{opdTicket.regNumber}</p>
+                </div>
+
+                <div className="space-y-1.5 text-[12.5px]">
+                  <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                    <span className="text-text-muted">Patient Name</span>
+                    <span className="font-semibold text-text-main">{opdTicket.name}</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                    <span className="text-text-muted">Mobile</span>
+                    <span className="font-semibold text-text-main">{opdTicket.mobile}</span>
+                  </div>
+                  {opdTicket.gender && (
+                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                      <span className="text-text-muted">Gender</span>
+                      <span className="font-semibold text-text-main capitalize">{opdTicket.gender}</span>
+                    </div>
+                  )}
+                  {opdTicket.age && (
+                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                      <span className="text-text-muted">Age</span>
+                      <span className="font-semibold text-text-main">{opdTicket.age}</span>
+                    </div>
+                  )}
+                  {opdTicket.doctorName && (
+                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                      <span className="text-text-muted">Doctor</span>
+                      <span className="font-semibold text-text-main">Dr. {opdTicket.doctorName}</span>
+                    </div>
+                  )}
+                  {opdTicket.appointmentType && (
+                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                      <span className="text-text-muted">Appt. Type</span>
+                      <span className="font-semibold text-text-main">{opdTicket.appointmentType}</span>
+                    </div>
+                  )}
+                  {opdTicket.appointmentDate && (
+                    <div className="flex justify-between py-1.5">
+                      <span className="text-text-muted">Appt. Date</span>
+                      <span className="font-semibold text-text-main">{opdTicket.appointmentDate}</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[10.5px] text-text-muted text-center">
+                  Please show this slip at reception.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="px-5 pb-5 flex flex-col gap-2">
+                <Button
+                  className="w-full"
+                  color="primary"
+                  size="sm"
+                  startContent={<IoPrintOutline className="w-4 h-4" />}
+                  onClick={printOpdTicket}
+                >
+                  Print OPD Ticket
+                </Button>
+                <button
+                  className="w-full text-[12px] text-text-muted hover:text-text-main py-1.5 transition-colors"
+                  onClick={() => { setOpdTicket(null); navigate(`/dashboard/patients/${opdTicket.patientId}`); }}
+                >
+                  Skip & Go to Patient Profile →
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 };
 
 export default NewPatientPage;
+

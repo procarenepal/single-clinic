@@ -143,6 +143,25 @@ export const expertService = {
   },
 
   /**
+   * Get expert by email
+   * @param {string} email - Expert email
+   * @returns {Promise<Expert | null>} - Matching expert or null
+   */
+  async getExpertByEmail(email: string): Promise<Expert | null> {
+    try {
+      const experts = await this.getExperts();
+      const term = email.toLowerCase();
+      const match = experts.find(
+        (expert) => expert.email && expert.email.toLowerCase() === term
+      );
+      return match || null;
+    } catch (error) {
+      console.error("Error getting expert by email:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Search experts by name, speciality, or license number
    * @param {string} searchTerm - Search term
    * @param {string} clinicId - Clinic ID to filter by

@@ -4,12 +4,6 @@ import {
   CardBody,
   CardHeader,
   Button,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
   Table,
   TableHeader,
   TableColumn,
@@ -19,17 +13,17 @@ import {
   Input,
   Textarea,
   Chip,
-  Checkbox,
-  CheckboxGroup,
   Divider,
   Spinner,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@heroui/react";
+} from "@/components/ui";
 import { PlusIcon, EditIcon, TrashIcon, MoreVerticalIcon } from "lucide-react";
-import { addToast } from "@heroui/toast";
+import { addToast } from "@/components/ui/toast";
+
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@/components/ui/modal";
 
 import { Role, Page } from "../../types/models";
 import { rbacService } from "../../services/rbacService";
@@ -667,11 +661,13 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
         <CardBody>
           <Table aria-label="Roles table">
             <TableHeader>
-              <TableColumn>NAME</TableColumn>
-              <TableColumn>DESCRIPTION</TableColumn>
-              <TableColumn>PERMISSIONS</TableColumn>
-              <TableColumn>TYPE</TableColumn>
-              <TableColumn width={80}>ACTIONS</TableColumn>
+              <TableRow>
+                <TableColumn>NAME</TableColumn>
+                <TableColumn>DESCRIPTION</TableColumn>
+                <TableColumn>PERMISSIONS</TableColumn>
+                <TableColumn>TYPE</TableColumn>
+                <TableColumn style={{ width: 80 }}>ACTIONS</TableColumn>
+              </TableRow>
             </TableHeader>
             <TableBody emptyContent="No roles found">
               {roles.map((role) => (
@@ -766,7 +762,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
       <Modal
         isOpen={isOpen}
         scrollBehavior="inside"
-        size="2xl"
+        size="5xl"
         onClose={onClose}
       >
         <ModalContent>
@@ -787,7 +783,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
             <Textarea
               label="Description"
               placeholder="Enter role description"
-              rows={3}
+              rows={2}
               value={formData.description}
               onChange={(e) =>
                 setFormData((prev) => ({
@@ -797,20 +793,31 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               }
             />
 
-            <Checkbox
-              isSelected={formData.linkedToDoctor}
-              onValueChange={(checked) =>
-                setFormData((prev) => ({ ...prev, linkedToDoctor: checked }))
-              }
-            >
+            <label className="flex items-center justify-between gap-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors select-none">
               <div className="flex flex-col">
-                <span className="font-medium">Link to Doctors</span>
-                <span className="text-xs text-gray-500">
-                  When creating users with this role, show doctor selection to
-                  auto-fill user details
+                <span className="text-[13.5px] font-semibold text-gray-800 dark:text-gray-200">Link to Doctors / Experts</span>
+                <span className="text-xs text-gray-500 mt-0.5">
+                  When creating users with this role, show doctor/expert selection to auto-fill user details
                 </span>
               </div>
-            </Checkbox>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={formData.linkedToDoctor}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                  formData.linkedToDoctor ? "bg-purple-600" : "bg-gray-300 dark:bg-gray-600"
+                }`}
+                onClick={() =>
+                  setFormData((prev) => ({ ...prev, linkedToDoctor: !prev.linkedToDoctor }))
+                }
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    formData.linkedToDoctor ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </label>
 
             <Divider />
 
@@ -820,33 +827,54 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                 Select which pages this role can access
               </p>
 
-              <CheckboxGroup
-                className="space-y-2"
-                value={formData.permissions}
-                onChange={(values) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    permissions: values as string[],
-                  }))
-                }
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {availablePages.map((page) => (
-                    <Checkbox
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {availablePages.map((page) => {
+                  const isChecked = formData.permissions.includes(page.id);
+                  return (
+                    <label
                       key={page.id}
-                      className="max-w-none"
-                      value={page.id}
+                      className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all select-none ${
+                        isChecked
+                          ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
+                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/40"
+                      }`}
                     >
-                      <div className="flex flex-col">
-                        <span className="font-medium">{page.name}</span>
-                        <span className="text-xs text-gray-500">
-                          {page.path}
-                        </span>
+                      <input
+                        checked={isChecked}
+                        className="sr-only"
+                        type="checkbox"
+                        onChange={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            permissions: isChecked
+                              ? prev.permissions.filter((id) => id !== page.id)
+                              : [...prev.permissions, page.id],
+                          }));
+                        }}
+                      />
+                      <div
+                        className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all ${
+                          isChecked
+                            ? "border-purple-600 bg-purple-600"
+                            : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                        }`}
+                      >
+                        {isChecked && (
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 12 12">
+                            <path d="M2 6l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
                       </div>
-                    </Checkbox>
-                  ))}
-                </div>
-              </CheckboxGroup>
+                      <div className="flex flex-col min-w-0">
+                        <span className={`text-[12.5px] font-semibold leading-tight truncate ${
+                          isChecked ? "text-purple-700 dark:text-purple-300" : "text-gray-800 dark:text-gray-200"
+                        }`}>{page.name}</span>
+                        <span className="text-[10.5px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{page.path}</span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </ModalBody>
           <ModalFooter>

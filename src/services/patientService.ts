@@ -26,6 +26,20 @@ import { sendWelcomeSMS } from "@/services/sendMessageService";
 const PATIENTS_COLLECTION = "patients";
 
 /**
+ * Strips country code (+977 / 977) and non-digit chars so that
+ * "9706127862", "+9779706127862", and "9779706127862" all compare equal.
+ */
+function normalizeMobile(mobile: string): string {
+  // Remove everything except digits
+  let digits = mobile.replace(/\D/g, "");
+  // Nepal country code: strip leading "977" if 13 digits total
+  if (digits.startsWith("977") && digits.length === 13) {
+    digits = digits.slice(3);
+  }
+  return digits;
+}
+
+/**
  * Service for managing patient data in Firestore
  */
 export const patientService = {
@@ -638,7 +652,9 @@ export const patientService = {
     return count;
   },
   /**
-   * Check if a mobile number already exists in a specific clinic
+   * Check if a mobile number already exists in a specific clinic.
+   * Normalizes the number by stripping +977/977 prefix so that
+   * "9706127862" and "+9779706127862" are treated as the same number.
    * @param {string} mobile - Mobile number to check
    * @param {string} clinicId - ID of the clinic to check within
    * @param {string} [excludeId] - Optional patient ID to exclude from check (for updates)
@@ -647,17 +663,26 @@ export const patientService = {
   async checkMobileExists(mobile: string, clinicId: string, excludeId?: string): Promise<boolean> {
     if (!mobile || !clinicId) return false;
     try {
-      const q = query(
-        collection(db, PATIENTS_COLLECTION),
-        where("clinicId", "==", clinicId),
-        where("mobile", "==", mobile.trim())
-      );
-      const snap = await getDocs(q);
-      if (snap.empty) return false;
-      if (excludeId) {
-        return snap.docs.some(doc => doc.id !== excludeId);
+      const normalized = normalizeMobile(mobile);
+      // Build variants to check: both the raw digits and the +977 version
+      const variants = Array.from(new Set([normalized, "+977" + normalized, "977" + normalized, mobile.trim()]));
+
+      for (const variant of variants) {
+        const q = query(
+          collection(db, PATIENTS_COLLECTION),
+          where("clinicId", "==", clinicId),
+          where("mobile", "==", variant)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          if (excludeId) {
+            if (snap.docs.some(d => d.id !== excludeId)) return true;
+          } else {
+            return true;
+          }
+        }
       }
-      return true;
+      return false;
     } catch (error) {
       console.error("Error checking mobile existence:", error);
       return false;

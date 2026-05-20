@@ -18,7 +18,11 @@ import {
   IoChevronDownOutline,
   IoCloseOutline,
   IoChatbubbleEllipsesOutline,
+  IoNotificationsOutline,
 } from "react-icons/io5";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "@/config/firebase";
+import { NotificationService } from "@/services/notificationService";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { ThemeSwitch } from "@/components/theme-switch";
@@ -26,6 +30,7 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { enquiryService } from "@/services/enquiryService";
 import { clinicService } from "@/services/clinicService";
+import { expertService } from "@/services/expertService";
 import { Clinic } from "@/types/models";
 import { storage, APPWRITE_BUCKET_ID } from "@/config/appwrite";
 // Custom UI — zero HeroUI
@@ -71,6 +76,127 @@ export const DashboardHeader = ({
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [clinicData, setClinicData] = useState<Clinic | null>(null);
+
+  // ── Notifications state ────────────────────────────────────────────────────
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifContainerRef = useRef<HTMLDivElement>(null);
+  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  const [currentExpertId, setCurrentExpertId] = useState<string | null>(null);
+
+  // Fetch current user's matching doctor/expert ID if applicable
+  useEffect(() => {
+    if (!clinicId || !currentUser?.email) return;
+    
+    // Resolve doctor ID
+    doctorService.getDoctorsByClinic(clinicId).then((docs) => {
+      const docMatch = docs.find(d => d.email?.toLowerCase() === currentUser.email?.toLowerCase());
+      if (docMatch) {
+        setCurrentDoctorId(docMatch.id);
+      }
+    });
+
+    // Resolve expert ID
+    expertService.getExpertsByClinic(clinicId).then((exps) => {
+      const expMatch = exps.find(e => e.email?.toLowerCase() === currentUser.email?.toLowerCase());
+      if (expMatch) {
+        setCurrentExpertId(expMatch.id);
+      }
+    });
+  }, [clinicId, currentUser?.email]);
+
+  useEffect(() => {
+    if (!clinicId) return;
+
+    const notificationsCollection = collection(db, "notifications");
+    const q = query(
+      notificationsCollection,
+      where("clinicId", "==", clinicId)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list: any[] = [];
+        let unread = 0;
+        
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const notif: any = {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+          };
+
+          // Filter by role / user
+          const isTargeted =
+            (!data.targetRole && !data.targetUserId) ||
+            (userData?.role && data.targetRole === userData.role) ||
+            (currentUser?.uid && data.targetUserId === currentUser.uid) ||
+            (currentDoctorId && data.targetUserId === currentDoctorId) ||
+            (currentExpertId && data.targetUserId === currentExpertId);
+
+          if (isTargeted) {
+            list.push(notif);
+            if (!notif.read) {
+              unread++;
+            }
+          }
+        });
+
+        // Sort descending by createdAt in memory
+        const sorted = list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        
+        // Check if unread count increased to trigger sound/toast
+        setNotifications((prev) => {
+          const prevUnread = prev.filter((n) => !n.read).length;
+          const currentUnread = sorted.filter((n) => !n.read).length;
+          if (currentUnread > prevUnread) {
+            try {
+              const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-120.wav");
+              audio.volume = 0.5;
+              audio.play();
+            } catch (e) {
+              console.log("Audio play blocked by browser:", e);
+            }
+            const latest = sorted[0];
+            if (latest) {
+              addToast({
+                title: latest.title,
+                description: latest.message,
+                color: "primary",
+              });
+            }
+          }
+          return sorted;
+        });
+
+        setUnreadCount(unread);
+      },
+      (err) => {
+        console.error("Notifications subscription error:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [clinicId, userData?.role, currentUser?.uid, currentDoctorId, currentExpertId]);
+
+  // Click outside to close notifications dropdown
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        notifContainerRef.current &&
+        !notifContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsNotifOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handler);
+
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -435,6 +561,78 @@ export const DashboardHeader = ({
 
       {/* ── Right: actions + user ───────────────────────────────────────── */}
       <div className="ml-auto flex items-center gap-2.5 shrink-0">
+        {/* Real-time Notifications Bell */}
+        <div ref={notifContainerRef} className="relative">
+          <button
+            aria-label="Notifications"
+            className="relative p-2 rounded-full border border-border-base/40 bg-surface-2/30 hover:bg-surface-2 hover:border-border-base transition-all duration-200"
+            onClick={() => setIsNotifOpen(!isNotifOpen)}
+          >
+            <IoNotificationsOutline className="w-[18px] h-[18px] text-text-muted hover:text-primary transition-colors" />
+            {unreadCount > 0 && (
+              <span className="absolute top-0 right-0 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {isNotifOpen && (
+            <div className="absolute right-0 mt-2 w-80 bg-surface border border-border-base shadow-xl rounded-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="px-4 py-3 border-b border-border-base bg-surface-2 flex justify-between items-center">
+                <span className="text-[12.5px] font-bold text-text-main">
+                  Notifications ({unreadCount} unread)
+                </span>
+                {unreadCount > 0 && (
+                  <button
+                    className="text-[11px] text-primary hover:underline font-medium"
+                    onClick={() => {
+                      if (clinicId) {
+                        NotificationService.markAllAsRead(clinicId, {
+                          userId: currentUser?.uid,
+                          role: userData?.role,
+                        });
+                      }
+                    }}
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-[300px] overflow-y-auto divide-y divide-border-base">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-text-muted">
+                    <p className="text-[12px]">No notifications yet</p>
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className={`p-3 text-[12px] space-y-1 hover:bg-surface-2 transition-colors cursor-pointer relative ${!notif.read ? "bg-primary/5 border-l-2 border-primary" : ""}`}
+                      onClick={() => {
+                        if (notif.id) {
+                          NotificationService.markAsRead(notif.id);
+                        }
+                        setIsNotifOpen(false);
+                      }}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <span className={`font-semibold text-text-main ${!notif.read ? "text-primary" : ""}`}>
+                          {notif.title}
+                        </span>
+                        <span className="text-[9px] text-text-muted whitespace-nowrap">
+                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-text-muted leading-snug">{notif.message}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Theme switch */}
         <ThemeSwitch />
 

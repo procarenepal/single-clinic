@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { doctorCommissionService } from "@/services/doctorCommissionService";
 import { branchService } from "@/services/branchService";
@@ -395,6 +396,7 @@ export default function AppointmentBillingPage() {
   // Data
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [experts, setExperts] = useState<any[]>([]);
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
     [],
   );
@@ -528,9 +530,10 @@ export default function AppointmentBillingPage() {
       if (!settings?.enabledByAdmin || !settings?.isActive) return;
       setBillingSettings(settings);
 
-      const [pData, dData, aData, bData, tcData] = await Promise.all([
+      const [pData, dData, expData, aData, bData, tcData] = await Promise.all([
         patientService.getPatientsByClinic(clinicId, effectiveBranchId),
         doctorService.getDoctorsByClinic(clinicId, effectiveBranchId),
+        expertService.getExpertsByClinic(clinicId, effectiveBranchId),
         appointmentTypeService.getAppointmentTypesByClinic(
           clinicId,
           effectiveBranchId,
@@ -547,6 +550,7 @@ export default function AppointmentBillingPage() {
 
       setPatients(pData);
       setDoctors(dData);
+      setExperts(expData || []);
       setAppointmentTypes(aData);
       setTreatmentCategories(tcData);
       let filtered = bData || [];
@@ -859,11 +863,15 @@ export default function AppointmentBillingPage() {
     });
 
   const filteredBillings = searchQuery.trim()
-    ? billings.filter(
-      (b) =>
-        b.patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
+    ? billings.filter((b) => {
+        const patientName = b.patientName === "Unknown Patient" || !b.patientName
+          ? (patients.find((p) => p.id === b.patientId)?.name || b.patientName || "Unknown Patient")
+          : b.patientName;
+        return (
+          patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      })
     : billings;
 
   const totalPages = Math.ceil(filteredBillings.length / itemsPerPage) || 1;
@@ -1530,10 +1538,38 @@ export default function AppointmentBillingPage() {
                             {b.invoiceNumber}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px] text-text-main">
-                            {b.patientName}
+                            {b.patientName === "Unknown Patient" || !b.patientName
+                              ? (patients.find((p) => p.id === b.patientId)?.name || b.patientName || "Unknown Patient")
+                              : b.patientName}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px]">
-                            <p className="text-text-main">{b.doctorName}</p>
+                            <p className="text-text-main">
+                              {(() => {
+                                // 1. Try to find a valid doctor/expert name using doctorId
+                                const docId = (b.doctorId && b.doctorId !== "unassigned")
+                                  ? b.doctorId
+                                  : (b.items?.find((i) => i.doctorId && i.doctorId !== "unassigned")?.doctorId);
+                                  
+                                if (docId) {
+                                  const foundDoc = doctors.find((d) => d.id === docId);
+                                  if (foundDoc && foundDoc.name !== "Unknown Doctor" && foundDoc.name !== "Expert Cabin") return foundDoc.name;
+                                  const foundExp = experts.find((e) => e.id === docId);
+                                  if (foundExp && foundExp.name !== "Unknown Doctor" && foundExp.name !== "Expert Cabin") return foundExp.name;
+                                }
+                                
+                                // 2. If the stored b.doctorName is valid (not "Unknown Doctor" and not "Expert Cabin"), use it
+                                if (b.doctorName && b.doctorName !== "Unknown Doctor" && b.doctorName !== "Expert Cabin") {
+                                  return b.doctorName;
+                                }
+                                
+                                // 3. Try to find in items
+                                const itemName = b.items?.find((i) => i.doctorName && i.doctorName !== "Unknown Doctor" && i.doctorName !== "Expert Cabin")?.doctorName;
+                                if (itemName) return itemName;
+                                
+                                // 4. Default fallback
+                                return b.doctorName === "Unknown Doctor" || !b.doctorName ? "Expert Cabin" : b.doctorName;
+                              })()}
+                            </p>
                             {(() => {
                               const otherDoctors = Array.from(
                                 new Set(

@@ -280,6 +280,13 @@ export interface Appointment {
   reason?: string; // Reason for the appointment visit
   notes?: string;
   registrationDate: Date;
+  billingId?: string | null;
+  billingStatus?: "unpaid" | "partial" | "paid" | null;
+  paymentStatus?: "unpaid" | "partial" | "paid" | null;
+  consultationBillingId?: string | null;
+  consultationBillingStatus?: "unpaid" | "partial" | "paid" | null;
+  checkoutCompleted?: boolean;
+  doctorConsultationCompleted?: boolean;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -301,6 +308,7 @@ export interface Doctor {
   isDeleted?: boolean; // Soft delete flag - deleted doctors won't show in list
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
+  consultationCharge?: number; // Custom charge per doctor consultation
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;

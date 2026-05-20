@@ -42,6 +42,8 @@ import { referralCommissionService } from "@/services/referralCommissionService"
 import { expertCommissionService } from "@/services/expertCommissionService";
 import { staffCommissionService } from "@/services/staffCommissionService";
 import { expertService } from "@/services/expertService";
+import { pathologyService } from "@/services/pathologyService";
+import { pathologyBillingService } from "@/services/pathologyBillingService";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface PrescriptionItem {
@@ -52,6 +54,13 @@ interface PrescriptionItem {
   duration: string;
   time: string;
   interval: string;
+}
+
+interface PathologyTestSelection {
+  id: string;
+  testId: string;
+  testName: string;
+  price: number;
 }
 
 // ── Custom UI Components ─────────────────────────────────────────────────
@@ -249,6 +258,7 @@ export default function NewPrescriptionPage() {
   const [patients, setPatients] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
+  const [availablePathologyTests, setAvailablePathologyTests] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -267,6 +277,11 @@ export default function NewPrescriptionPage() {
   const [intervalValue, setIntervalValue] = useState("");
 
   const [items, setItems] = useState<PrescriptionItem[]>([]);
+
+  // Pathology Tests
+  const [selectedPathologyTests, setSelectedPathologyTests] = useState<PathologyTestSelection[]>([]);
+  const [pathologyTestId, setPathologyTestId] = useState("");
+
   const [diagnosis, setDiagnosis] = useState("");
   const [history, setHistory] = useState("");
   const [examination, setExamination] = useState("");
@@ -274,6 +289,7 @@ export default function NewPrescriptionPage() {
   const [treatmentPlan, setTreatmentPlan] = useState("");
   const [notes, setNotes] = useState("");
   const [sendToPharmacy, setSendToPharmacy] = useState(true);
+  const [sendToPathology, setSendToPathology] = useState(true);
 
   // Live Consultation Queue & Triage Auto-Import
   const todayStr = new Date().toDateString();
@@ -292,9 +308,23 @@ export default function NewPrescriptionPage() {
     }
   };
 
-  const activeQueue = appointments.filter(
-    (apt) => getIsToday(apt.appointmentDate) && (apt.status === "in-progress" || apt.status === "confirmed")
-  );
+  const activeQueue = appointments.filter((apt) => {
+    if (!getIsToday(apt.appointmentDate)) return false;
+    if (apt.status !== "in-progress" && apt.status !== "confirmed") return false;
+
+    const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
+    if (hasDoctor) {
+      const hasConsBill = apt.billingId || apt.consultationBillingStatus;
+      if (hasConsBill) {
+        const isPaid =
+          apt.consultationBillingStatus === "paid" ||
+          apt.billingStatus === "paid" ||
+          apt.paymentStatus === "paid";
+        if (!isPaid) return false;
+      }
+    }
+    return true;
+  });
 
   const handleStartConsultation = async (appt: any) => {
     setAppointmentId(appt.id);
@@ -660,12 +690,24 @@ export default function NewPrescriptionPage() {
       patientService.getPatientsByClinic(clinicId, branchIdForData),
       doctorService.getDoctorsByClinic(clinicId, branchIdForData),
       medicineService.getMedicinesByClinic(clinicId),
+      pathologyService.getCategoriesByClinic(clinicId, branchIdForData),
+      pathologyService.getTestTypesByClinic(clinicId, branchIdForData),
       appointmentService.getAppointmentsByClinic(clinicId, branchIdForData),
     ])
-      .then(([patientsData, doctorsData, medicinesData, appointmentsData]) => {
+      .then(([patientsData, doctorsData, medicinesData, pathologyData, testTypesData, appointmentsData]) => {
         setPatients(patientsData);
         setDoctors(doctorsData);
         setMedicines(medicinesData);
+        
+        // Map prices to pathology tests
+        const testsWithPrices = pathologyData.map((cat: any) => {
+          const matchingPrice = testTypesData.find((tt: any) => tt.targetId === cat.id);
+          return {
+            ...cat,
+            price: matchingPrice ? matchingPrice.price : 0
+          };
+        });
+        setAvailablePathologyTests(testsWithPrices);
         const relevantAppointments = (appointmentsData as any[]).filter(
           (apt: any) =>
             apt.status === "completed" ||
@@ -787,6 +829,295 @@ export default function NewPrescriptionPage() {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const addPathologyTest = () => {
+    if (!pathologyTestId) {
+      addToast({ title: "Error", description: "Please select a pathology test.", color: "warning" });
+      return;
+    }
+    if (selectedPathologyTests.some((t) => t.testId === pathologyTestId)) {
+      addToast({ title: "Error", description: "Test already added.", color: "warning" });
+      return;
+    }
+    const test = availablePathologyTests.find((t) => t.id === pathologyTestId);
+    if (!test) return;
+
+    setSelectedPathologyTests((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        testId: test.id,
+        testName: test.name,
+        price: test.price || 0,
+      }
+    ]);
+    setPathologyTestId("");
+    addToast({ title: "Success", description: "Pathology test added.", color: "success" });
+  };
+
+  const removePathologyTest = (id: string) => {
+    setSelectedPathologyTests((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const handleCompleteNoPrescription = async () => {
+    if (!appointmentId) return;
+    setSaving(true);
+    try {
+      const currentUser = userData?.id || "unknown-user";
+      let billingId: string | undefined = undefined;
+      let isDualRoute = false;
+
+      try {
+        const apt = appointments.find((a) => a.id === appointmentId);
+        if (apt) {
+          const pat = patients.find((p) => p.id === patientId);
+          const docInfo = doctors.find((d) => d.id === doctorId);
+          const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
+          const hasExpert = apt.assignedExpertId && apt.assignedExpertId !== "unassigned";
+          if (hasDoctor && hasExpert && !apt.doctorConsultationCompleted) {
+            isDualRoute = true;
+          }
+
+          let price = 500; // sensible GP fallback price in NPR
+          let appointmentTypeName = "General Consultation";
+
+          if (apt.appointmentTypeId) {
+            const apptType = await appointmentTypeService.getAppointmentTypeById(apt.appointmentTypeId);
+            if (apptType) {
+              price = Number(apptType.price) || 500;
+              appointmentTypeName = apptType.name || "General Consultation";
+            }
+          }
+
+          // Resolve all referrers (polymorphic and multiple)
+          const processedReferrals: Array<{
+            type: "referral-partner" | "doctor" | "expert" | "staff";
+            id: string;
+            name: string;
+            commissionPercentage: number;
+            commissionAmount: number;
+          }> = [];
+
+          if (pat?.referrals && Array.isArray(pat.referrals) && pat.referrals.length > 0) {
+            for (const ref of pat.referrals) {
+              const pct = ref.commissionPercentage || 0;
+              const amt = (price * pct) / 100;
+              processedReferrals.push({
+                type: ref.type,
+                id: ref.id,
+                name: ref.name,
+                commissionPercentage: pct,
+                commissionAmount: amt,
+              });
+            }
+          } else if (pat?.referralPartnerId) {
+            // Backward compatibility fallback: single referral partner ID
+            try {
+              const partner = await referralPartnerService.getReferralPartnerById(pat.referralPartnerId);
+              if (partner) {
+                const pct = partner.defaultCommission || 0;
+                const amt = (price * pct) / 100;
+                processedReferrals.push({
+                  type: "referral-partner",
+                  id: partner.id,
+                  name: partner.name,
+                  commissionPercentage: pct,
+                  commissionAmount: amt,
+                });
+              }
+            } catch (err) {
+              console.error("Error fetching fallback referral partner for automated billing:", err);
+            }
+          }
+
+          // Keep primary partner values for legacy schema columns
+          const primaryPartner = processedReferrals.find(r => r.type === "referral-partner");
+          const refPartnerId = primaryPartner ? primaryPartner.id : (pat?.referralPartnerId || undefined);
+          const refCommissionAmt = primaryPartner ? primaryPartner.commissionAmount : undefined;
+
+          const invoiceNo = await appointmentBillingService.generateInvoiceNumber(clinicId!);
+
+          const billingItem = {
+            id: crypto.randomUUID(),
+            appointmentTypeId: apt.appointmentTypeId || "manual-gp-fee",
+            appointmentTypeName: appointmentTypeName,
+            price: price,
+            quantity: 1,
+            commission: docInfo?.defaultCommission || 0,
+            doctorId: doctorId,
+            doctorName: docInfo?.name || "Unknown Doctor",
+            amount: price,
+          };
+
+          const billingData = {
+            invoiceNumber: invoiceNo,
+            clinicId: clinicId!,
+            branchId: effectiveBranchId ?? clinicId!,
+            patientId: patientId,
+            patientName: pat?.name || "Unknown Patient",
+            doctorId: doctorId,
+            doctorName: docInfo?.name || "Unknown Doctor",
+            doctorType: (docInfo?.doctorType || "regular") as "regular" | "visitor",
+            referralPartnerId: refPartnerId,
+            referralCommissionAmount: refCommissionAmt && refCommissionAmt > 0 ? refCommissionAmt : undefined,
+            referrals: processedReferrals,
+            invoiceDate: new Date(),
+            items: [billingItem],
+            subtotal: price,
+            itemDiscountAmount: 0,
+            mainDiscountAmount: 0,
+            discountType: "percent" as const,
+            discountValue: 0,
+            discountAmount: 0,
+            taxPercentage: 0,
+            taxAmount: 0,
+            totalAmount: price,
+            status: "draft" as const,
+            paymentStatus: "unpaid" as const,
+            paidAmount: 0,
+            balanceAmount: price,
+            createdBy: currentUser,
+          };
+
+          billingId = await appointmentBillingService.createBilling(billingData);
+
+          // 1) Log Consulting Doctor Commission
+          if (docInfo?.defaultCommission && docInfo.defaultCommission > 0) {
+            try {
+              await doctorCommissionService.createCommission(
+                {
+                  id: billingId,
+                  ...billingData,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                } as any,
+                docInfo.defaultCommission,
+                currentUser
+              );
+            } catch (docCommErr) {
+              console.error("Error creating consulting doctor commission:", docCommErr);
+            }
+          }
+
+          // 1.5) Log Assigned Expert Commission
+          const expertId = apt.assignedExpertId || pat?.assignedExpertId;
+          if (expertId) {
+            try {
+              const expertInfo = await expertService.getExpertById(expertId);
+              if (expertInfo && expertInfo.defaultCommission && expertInfo.defaultCommission > 0) {
+                await expertCommissionService.createCommission(
+                  expertInfo.id,
+                  expertInfo.name,
+                  {
+                    id: billingId,
+                    ...billingData,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    } as any,
+                    expertInfo.defaultCommission,
+                    currentUser
+                );
+              }
+            } catch (expCommErr) {
+              console.error("Error creating assigned expert commission:", expCommErr);
+            }
+          }
+
+          // 2) Log Polymorphic Referrer Commissions
+          for (const r of processedReferrals) {
+            if (r.commissionAmount <= 0) continue;
+
+            const billingRecord = {
+              id: billingId,
+              ...billingData,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            } as any;
+
+            try {
+              if (r.type === "referral-partner") {
+                await referralCommissionService.createReferralCommission(
+                  billingRecord,
+                  {
+                    id: r.id,
+                    name: r.name,
+                    defaultCommission: r.commissionPercentage,
+                  } as any,
+                  r.commissionAmount,
+                  currentUser
+                );
+              } else if (r.type === "doctor") {
+                const refBillingRecord = {
+                  ...billingRecord,
+                  doctorId: r.id,
+                  doctorName: r.name,
+                };
+                await doctorCommissionService.createCommission(
+                  refBillingRecord,
+                  r.commissionPercentage,
+                  currentUser
+                );
+              } else if (r.type === "expert") {
+                await expertCommissionService.createCommission(
+                  r.id,
+                  r.name,
+                  billingRecord,
+                  r.commissionPercentage,
+                  currentUser
+                );
+              } else if (r.type === "staff") {
+                await staffCommissionService.createRegistrationCommission(
+                  r.id,
+                  r.name,
+                  billingRecord.clinicId,
+                  billingRecord.branchId,
+                  billingRecord.patientId,
+                  billingRecord.patientName,
+                  appointmentTypeName,
+                  price,
+                  r.commissionAmount,
+                  r.commissionPercentage,
+                  currentUser
+                );
+              }
+            } catch (commErr) {
+              console.error(`Error logging polymorphic commission for ${r.name} (${r.type}):`, commErr);
+            }
+          }
+        }
+      } catch (billingErr) {
+        console.error("Error auto-generating billing draft for appointment type:", billingErr);
+      }
+
+      // Mark appointment as completed (or route to expert)
+      await appointmentService.updateAppointment(appointmentId, {
+        status: isDualRoute ? "in-progress" : "completed",
+        ...(isDualRoute ? { doctorConsultationCompleted: true } : {}),
+        billingId: billingId || null,
+        billingStatus: billingId ? "unpaid" : "paid",
+        paymentStatus: billingId ? "unpaid" : "paid",
+        updatedAt: new Date(),
+      } as any);
+
+      addToast({
+        title: isDualRoute ? "Consultation Handed Over" : "Consultation Completed",
+        description: isDualRoute 
+          ? "Doctor consultation completed. Patient routed to Expert Cabin."
+          : "Patient consultation completed. Appointment type fee invoice created successfully.",
+        color: "success",
+      });
+      navigate("/dashboard/prescriptions");
+    } catch (err) {
+      console.error("Error completing consultation:", err);
+      addToast({
+        title: "Error",
+        description: "Failed to complete consultation.",
+        color: "danger",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!patientId || !doctorId) {
       addToast({
@@ -797,10 +1128,10 @@ export default function NewPrescriptionPage() {
 
       return;
     }
-    if (items.length === 0) {
+    if (items.length === 0 && selectedPathologyTests.length === 0) {
       addToast({
         title: "Error",
-        description: "Please add at least one medicine.",
+        description: "Please add at least one medicine or pathology test.",
         color: "warning",
       });
 
@@ -810,6 +1141,7 @@ export default function NewPrescriptionPage() {
     setSaving(true);
     try {
       const currentUser = userData?.id || "unknown-user";
+      let isDualRoute = false;
       const prescriptionItems = items.map((item) => ({
         medicineId: item.medicineId,
         medicineName: item.medicineName,
@@ -831,6 +1163,7 @@ export default function NewPrescriptionPage() {
         appointmentId: appointmentId ? appointmentId : undefined,
         doctorId,
         items: prescriptionItems,
+        pathologyTests: selectedPathologyTests,
         diagnosis,
         notes,
         history,
@@ -839,11 +1172,82 @@ export default function NewPrescriptionPage() {
         treatmentPlan,
         prescribedBy: currentUser,
         sendToPharmacy,
+        sendToPathology,
       };
 
       const newPrescriptionId = await prescriptionService.createPrescription(prescriptionData);
 
+      // =================== PATHOLOGY AUTO-BILLING DRAFT ===================
+      if (sendToPathology && selectedPathologyTests.length > 0) {
+        try {
+          const pat = patients.find((p) => p.id === patientId);
+          const docInfo = doctors.find((d) => d.id === doctorId);
+
+          const pathologyInvoiceNo = await pathologyBillingService.generateInvoiceNumber(clinicId!);
+
+          const subtotal = selectedPathologyTests.reduce((sum, t) => sum + t.price, 0);
+
+          const draftPathologyBilling = {
+            invoiceNumber: pathologyInvoiceNo,
+            clinicId: clinicId!,
+            branchId: effectiveBranchId ?? clinicId!,
+            patientId,
+            patientName: pat?.name || "Unknown Patient",
+            patientPhone: pat?.mobile || "",
+            patientGender: pat?.gender || "",
+            doctorId,
+            doctorName: docInfo?.name || "Unknown Doctor",
+            doctorType: (docInfo?.doctorType || "regular") as "regular" | "visitor",
+            invoiceDate: new Date(),
+            items: selectedPathologyTests.map((t) => ({
+              id: crypto.randomUUID(),
+              testId: t.testId,
+              testName: t.testName,
+              price: t.price,
+              quantity: 1,
+              amount: t.price,
+            })),
+            subtotal,
+            itemDiscountAmount: 0,
+            mainDiscountAmount: 0,
+            discountType: "percent" as const,
+            discountValue: 0,
+            discountAmount: 0,
+            taxPercentage: 0,
+            taxAmount: 0,
+            totalAmount: subtotal,
+            status: "draft" as const,
+            paymentStatus: "unpaid" as const,
+            paidAmount: 0,
+            balanceAmount: subtotal,
+            createdBy: currentUser,
+            notes: "Prescribed via Clinical Consultation",
+          };
+
+          await pathologyBillingService.createBilling(draftPathologyBilling as any);
+        } catch (pathErr) {
+          console.error("Error auto-generating pathology billing draft:", pathErr);
+        }
+      }
+
       // =================== PHASE 4: AUTOMATED SMART BILLING & COMMISSION LOGGING ===================
+      if (appointmentId) {
+        try {
+          const apt = appointments.find((a) => a.id === appointmentId);
+          const hasDoctor = apt?.doctorId && apt.doctorId !== "unassigned";
+          const hasExpert = apt?.assignedExpertId && apt.assignedExpertId !== "unassigned";
+          if (hasDoctor && hasExpert && !apt?.doctorConsultationCompleted) {
+            isDualRoute = true;
+          }
+          await appointmentService.updateAppointment(appointmentId, {
+            status: isDualRoute ? "in-progress" : "completed",
+            ...(isDualRoute ? { doctorConsultationCompleted: true } : {}),
+            updatedAt: new Date(),
+          } as any);
+        } catch (apptErr) {
+          console.error("Error updating appointment status on prescription save:", apptErr);
+        }
+      }
       if (appointmentId) {
         try {
           const apt = appointments.find((a) => a.id === appointmentId);
@@ -1067,9 +1471,10 @@ export default function NewPrescriptionPage() {
               }
             }
 
-            // Move appointment status to completed so patient is waiting for payment checkout in billing queue
+            // Move appointment status to completed (or route to expert) so patient is waiting for payment checkout in billing queue
             await appointmentService.updateAppointment(appointmentId, {
-              status: "completed",
+              status: isDualRoute ? "in-progress" : "completed",
+              ...(isDualRoute ? { doctorConsultationCompleted: true } : {}),
               billingId: billingId,
               updatedAt: new Date(),
             } as any);
@@ -1084,7 +1489,7 @@ export default function NewPrescriptionPage() {
       addToast({
         title: "Success",
         description: appointmentId
-          ? "Prescription saved, billing queued, and appointment completed successfully."
+          ? (isDualRoute ? "Prescription saved. Patient routed to Expert Cabin." : "Prescription saved and appointment completed successfully.")
           : "Prescription saved successfully.",
         color: "success",
       });
@@ -1540,18 +1945,110 @@ export default function NewPrescriptionPage() {
               />
             </div>
 
-            {/* 3. Investigation */}
-            <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
-              <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
-                <IoFlaskOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">INVESTIGATION</span>
+            {/* 3. Investigation & Pathology */}
+            <div className="flex flex-col gap-5 p-5 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors relative z-[45]">
+              <div className="flex items-center justify-between pb-2 border-b border-border-base/50">
+                <div className="flex items-center gap-2">
+                  <IoFlaskOutline className="text-primary w-4.5 h-4.5" />
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">INVESTIGATION & PATHOLOGY</span>
+                </div>
               </div>
-              <textarea
-                className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
-                placeholder="Enter laboratory investigations, diagnostic imaging, or tests ordered..."
-                value={investigation}
-                onChange={(e) => setInvestigation(e.target.value)}
-              />
+
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                  <div className="flex-1 w-full relative z-[50]">
+                    <SearchSelect
+                      label="Search and Assign Pathology Test"
+                      items={availablePathologyTests.map((t) => ({
+                        id: t.id,
+                        primary: t.name,
+                        secondary: `NPR ${t.price || 0}`,
+                      }))}
+                      placeholder="e.g. Complete Blood Count (CBC)..."
+                      value={pathologyTestId}
+                      onChange={setPathologyTestId}
+                    />
+                  </div>
+                  <Button
+                    className="w-full sm:w-[130px] h-[42px] px-6 bg-primary hover:bg-primary-hover text-white shadow-sm font-medium rounded-[8px]"
+                    startContent={<IoAddOutline className="w-4 h-4" />}
+                    onClick={addPathologyTest}
+                  >
+                    Add Test
+                  </Button>
+                </div>
+
+                {selectedPathologyTests.length > 0 ? (
+                  <div className="border border-border-base rounded-[10px] overflow-hidden bg-surface mt-2 shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-[13px]">
+                        <thead className="bg-surface-2/60 border-b border-border-base">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold text-text-muted">Test Name</th>
+                            <th className="px-4 py-3 font-semibold text-text-muted text-right">Standard Charge</th>
+                            <th className="px-4 py-3 w-[60px]"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-base/50">
+                          {selectedPathologyTests.map((test) => (
+                            <tr key={test.id} className="hover:bg-primary/5 transition-colors group">
+                              <td className="px-4 py-3.5 font-medium text-text-main">{test.testName}</td>
+                              <td className="px-4 py-3.5 text-text-muted text-right">NPR {test.price}</td>
+                              <td className="px-4 py-3.5 text-right">
+                                <button
+                                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                  title="Remove test"
+                                  type="button"
+                                  onClick={() => removePathologyTest(test.id)}
+                                >
+                                  <IoTrashOutline className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    <div className="p-3.5 bg-primary/5 border-t border-border-base flex justify-between items-center">
+                      <span className="text-[12px] text-primary font-medium px-2">
+                        Total Tests: {selectedPathologyTests.length}
+                      </span>
+                      <label className="flex items-center gap-2 cursor-pointer bg-surface px-3 py-1.5 rounded-[6px] border border-primary/20 hover:border-primary/50 transition-colors shadow-sm">
+                        <input
+                          checked={sendToPathology}
+                          className="w-3.5 h-3.5 rounded border-primary/30 text-primary focus:ring-primary/20 cursor-pointer"
+                          type="checkbox"
+                          onChange={(e) => setSendToPathology(e.target.checked)}
+                        />
+                        <span className="text-[12px] font-semibold text-primary">
+                          Auto-Send to Pathology (Draft Bill)
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 mt-2 border border-dashed border-border-base rounded-[10px] bg-surface-2/30 text-center">
+                    <IoFlaskOutline className="w-8 h-8 text-text-muted/40 mb-2" />
+                    <p className="text-[13px] text-text-muted font-medium">
+                      No pathology tests assigned.
+                    </p>
+                    <p className="text-[11px] text-text-muted/70 mt-1">
+                      Search and add tests to generate a lab request.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-2">
+                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider mb-2 block">Clinical Notes</span>
+                <textarea
+                  className="w-full text-[13.5px] px-3 py-2 bg-transparent border border-border-base rounded-[8px] outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y focus:border-primary/50 transition-colors shadow-sm"
+                  placeholder="Enter additional laboratory investigations, diagnostic imaging, or free-text notes..."
+                  value={investigation}
+                  onChange={(e) => setInvestigation(e.target.value)}
+                />
+              </div>
             </div>
 
             {/* 4. Diagnosis */}
@@ -1783,6 +2280,16 @@ export default function NewPrescriptionPage() {
           >
             Cancel
           </Button>
+          {appointmentId && (
+            <Button
+              color="success"
+              variant="flat"
+              disabled={saving}
+              onClick={handleCompleteNoPrescription}
+            >
+              Complete Consultation (No Rx)
+            </Button>
+          )}
           <Button
             color="primary"
             disabled={items.length === 0 || !patientId || !doctorId || saving}
