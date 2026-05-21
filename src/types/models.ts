@@ -10,7 +10,7 @@ export interface Clinic {
   email: string;
   address?: string; // Added address
   zipCode?: string; // Added zipCode
-  state?: string;   // Added state
+  state?: string; // Added state
   country?: string; // Added country
   logo?: string;
   panNumber?: string;
@@ -73,10 +73,7 @@ export interface User {
 }
 
 // Possible user roles in the system
-export type UserRole =
-  | "system-owner"
-  | "clinic-admin"
-  | "staff";
+export type UserRole = "system-owner" | "clinic-admin" | "staff";
 
 // Clinic Type model for categorizing clinics
 export interface ClinicType {
@@ -127,6 +124,7 @@ export interface Role {
   isDefault: boolean; // Is this a default role for the clinic
   isBranchSpecific: boolean; // Whether this role is specific to a branch
   linkedToDoctor: boolean; // Whether this role is linked to doctors for user creation
+  linkedToExpert?: boolean; // Whether this role is linked to experts for user creation
   createdAt: Date;
   updatedAt: Date;
 }
@@ -260,23 +258,23 @@ export interface Appointment {
   endTime?: string;
   appointmentTypeId: string; // Reference to AppointmentType
   appointmentType:
-  | "initial"
-  | "followup"
-  | "emergency"
-  | "routine"
-  | "screening"
-  | "vaccination"
-  | "lab-review"
-  | "pre-op"
-  | "post-op"
-  | "therapy"; // Keep for backward compatibility
+    | "initial"
+    | "followup"
+    | "emergency"
+    | "routine"
+    | "screening"
+    | "vaccination"
+    | "lab-review"
+    | "pre-op"
+    | "post-op"
+    | "therapy"; // Keep for backward compatibility
   status:
-  | "scheduled"
-  | "confirmed"
-  | "in-progress"
-  | "completed"
-  | "cancelled"
-  | "no-show";
+    | "scheduled"
+    | "confirmed"
+    | "in-progress"
+    | "completed"
+    | "cancelled"
+    | "no-show";
   reason?: string; // Reason for the appointment visit
   notes?: string;
   registrationDate: Date;
@@ -287,6 +285,7 @@ export interface Appointment {
   consultationBillingStatus?: "unpaid" | "partial" | "paid" | null;
   checkoutCompleted?: boolean;
   doctorConsultationCompleted?: boolean;
+  cabinName?: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -375,14 +374,14 @@ export interface MedicalReportField {
   fieldLabel: string; // Field name/label
   fieldKey: string; // Unique key for the field
   fieldType:
-  | "text"
-  | "textarea"
-  | "select"
-  | "checkbox"
-  | "radio"
-  | "number"
-  | "date"
-  | "yes-no";
+    | "text"
+    | "textarea"
+    | "select"
+    | "checkbox"
+    | "radio"
+    | "number"
+    | "date"
+    | "yes-no";
   options?: string[]; // For select, radio, checkbox types
   placeholder?: string;
   description?: string;
@@ -894,7 +893,14 @@ export type EnquiryStatus =
  */
 export interface AccountBill {
   id: string;
-  category: "medicine" | "equipment" | "utility" | "salary" | "rent" | "office_supply" | "other";
+  category:
+    | "medicine"
+    | "equipment"
+    | "utility"
+    | "salary"
+    | "rent"
+    | "office_supply"
+    | "other";
   itemName?: string; // Generic name for equipment, inventory, or assets
   vendorName: string;
   vendorId?: string; // Optional link to a Vendor or Supplier record
@@ -953,7 +959,7 @@ export interface StaffMember {
   performanceNotes?: string;
   taskCompletionScore?: number;
   shiftStartTime?: string; // Format: "HH:mm"
-  shiftEndTime?: string;   // Format: "HH:mm"
+  shiftEndTime?: string; // Format: "HH:mm"
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
   defaultCommission: number; // Default commission percentage
@@ -1485,17 +1491,17 @@ export interface ExpertCommission {
 export interface AuditLog {
   id: string;
   eventType:
-  | "role_created"
-  | "role_updated"
-  | "role_deleted"
-  | "user_created"
-  | "user_updated"
-  | "user_deactivated"
-  | "user_activated"
-  | "roles_assigned"
-  | "roles_removed"
-  | "validation_failed"
-  | "operation_failed";
+    | "role_created"
+    | "role_updated"
+    | "role_deleted"
+    | "user_created"
+    | "user_updated"
+    | "user_deactivated"
+    | "user_activated"
+    | "roles_assigned"
+    | "roles_removed"
+    | "validation_failed"
+    | "operation_failed";
   performedBy: string; // User ID who performed the action
   performedByEmail?: string; // User email for display
   performedByName?: string; // User name for display
@@ -1692,10 +1698,12 @@ export interface PathologyBillingItem {
   testType?: string; // Test type name (optional)
   price: number; // Price per test (from test's standardCharge or test type)
   quantity: number; // Number of tests (default 1)
-  amount: number; // price * quantity
+  discountType?: "flat" | "percent"; // Per-item discount type
+  discountValue?: number; // Per-item discount value
+  discountAmount?: number; // Calculated per-item discount amount
+  amount: number; // (price * quantity) - discountAmount
   sampleType?: string; // e.g., "Blood", "Urine"
   isUrgent?: boolean; // Fast-track status
-  itemDiscount?: number; // Specific discount for this test
 }
 
 // Payment Event model for tracking multiple payment installments
@@ -1759,7 +1767,13 @@ export interface PathologyBilling {
   labReferenceNo?: string; // Internal Lab tracking ID
   sampleCollectionDate?: Date;
   expectedReportDate?: Date;
-  reportStatus: "pending_collection" | "collected" | "in_lab" | "partially_ready" | "ready" | "delivered";
+  reportStatus:
+    | "pending_collection"
+    | "collected"
+    | "in_lab"
+    | "partially_ready"
+    | "ready"
+    | "delivered";
   paymentHistory?: PaymentEvent[]; // List of all payments made
 
   createdAt: Date;

@@ -31,8 +31,11 @@ import {
   IoCheckmark,
   IoTime,
   IoClose,
+  IoCloseOutline,
   IoSearchOutline,
   IoPrintOutline,
+  IoPencilOutline,
+  IoReceiptOutline,
 } from "react-icons/io5";
 import { IoBusinessOutline, IoMedkitOutline } from "react-icons/io5";
 
@@ -60,6 +63,59 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { patientService } from "@/services/patientService";
 import { Patient } from "@/types/models";
 
+// ── Flat inline patient search (mirrors SearchSelect in appointments-billing) ─
+function PatientSearchBox({
+  value,
+  patients,
+  onSelect,
+  onChange,
+}: {
+  value: string;
+  patients: Patient[];
+  onSelect: (p: Patient) => void;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const filtered = (q ? patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : patients).slice(0, 80);
+
+  return (
+    <div className="relative">
+      <div className="flex items-center h-9 border border-border-base rounded focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 bg-surface">
+        <IoSearchOutline className="ml-2.5 w-3.5 h-3.5 text-text-muted/50 shrink-0" />
+        <input
+          className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full"
+          placeholder="Search patient…"
+          value={open ? q : value}
+          onChange={(e) => { setQ(e.target.value); onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+        />
+        {value && !open && (
+          <button className="mr-2 text-text-muted hover:text-text-main" type="button" onClick={() => { onChange(""); setQ(""); }}>
+            <IoCloseOutline className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setQ(""); }} />
+          <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-lg">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-[12px] text-text-muted/70">No results</p>
+            ) : filtered.map((p) => (
+              <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-surface-2" type="button"
+                onClick={() => { onSelect(p); setOpen(false); setQ(""); }}>
+                <p className="text-[12.5px] text-text-main">{p.name}</p>
+                <p className="text-[11px] text-text-muted/60">{p.mobile || p.phone || ""} {p.regNumber ? `• ${p.regNumber}` : ""}</p>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 interface PathologyBillingTabProps {
   clinicId: string;
   branchId: string;
@@ -84,7 +140,13 @@ interface InvoiceFormData {
   labReferenceNo?: string;
   sampleCollectionDate: string;
   expectedReportDate: string;
-  reportStatus: "pending_collection" | "collected" | "in_lab" | "partially_ready" | "ready" | "delivered";
+  reportStatus:
+    | "pending_collection"
+    | "collected"
+    | "in_lab"
+    | "partially_ready"
+    | "ready"
+    | "delivered";
 }
 
 export default function PathologyBillingTab({
@@ -118,6 +180,9 @@ export default function PathologyBillingTab({
   const [submitting, setSubmitting] = useState(false);
   const [selectedBilling, setSelectedBilling] =
     useState<PathologyBilling | null>(null);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(
+    null,
+  );
 
   // Payment states
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -153,7 +218,9 @@ export default function PathologyBillingTab({
     notes: "",
     labReferenceNo: "",
     sampleCollectionDate: new Date().toISOString().split("T")[0],
-    expectedReportDate: new Date(Date.now() + 86400000).toISOString().split("T")[0], // Tomorrow
+    expectedReportDate: new Date(Date.now() + 86400000)
+      .toISOString()
+      .split("T")[0], // Tomorrow
     reportStatus: "pending_collection",
   });
 
@@ -163,7 +230,9 @@ export default function PathologyBillingTab({
   // Calculations
   const [calculations, setCalculations] = useState({
     subtotal: 0,
-    discountAmount: 0,
+    itemDiscountAmount: 0,
+    mainDiscountAmount: 0,
+    totalDiscount: 0,
     taxAmount: 0,
     totalAmount: 0,
   });
@@ -261,7 +330,9 @@ export default function PathologyBillingTab({
       setClinic(clinicData);
       setLayoutConfig(layoutConfigData);
       if (layoutConfigData?.defaultPrintFormat) {
-        setSelectedPrintFormat(layoutConfigData.defaultPrintFormat as PrintFormat);
+        setSelectedPrintFormat(
+          layoutConfigData.defaultPrintFormat as PrintFormat,
+        );
       }
       setDoctors(doctorsList);
       setPartners(partnersList);
@@ -312,7 +383,9 @@ export default function PathologyBillingTab({
     if (!formData.items.length || !billingSettings) {
       setCalculations({
         subtotal: 0,
-        discountAmount: 0,
+        itemDiscountAmount: 0,
+        mainDiscountAmount: 0,
+        totalDiscount: 0,
         taxAmount: 0,
         totalAmount: 0,
       });
@@ -320,27 +393,42 @@ export default function PathologyBillingTab({
       return;
     }
 
-    // Calculate subtotal by summing all item amounts
+    // Subtotal = sum of (price * quantity) BEFORE any discounts
     const subtotal = formData.items.reduce(
-      (sum, item) => sum + (item.amount || 0),
+      (sum, item) => sum + item.price * item.quantity,
       0,
     );
 
-    // Calculate tax
+    // Item-level discounts
+    const itemDiscountAmount = formData.items.reduce(
+      (sum, item) => sum + (item.discountAmount || 0),
+      0,
+    );
+
+    // Invoice-level discount applied on amount after item discounts
+    const afterItemDiscount = subtotal - itemDiscountAmount;
+    let mainDiscountAmount = 0;
+    if (formData.discountType === "percent") {
+      mainDiscountAmount = (afterItemDiscount * (formData.discountValue || 0)) / 100;
+    } else {
+      mainDiscountAmount = Math.min(formData.discountValue || 0, afterItemDiscount);
+    }
+
+    const totalDiscount = itemDiscountAmount + mainDiscountAmount;
+    const afterDiscount = subtotal - totalDiscount;
+
     const taxPercentage = billingSettings.enableTax
       ? billingSettings.defaultTaxPercentage
       : 0;
-    const taxAmount = (subtotal * taxPercentage) / 100;
+    const taxAmount = (afterDiscount * taxPercentage) / 100;
+    const totalAmount = afterDiscount + taxAmount;
 
-    // Calculate total
-    const totalAmount = subtotal + taxAmount;
-
-    // Recalculate doctor commissions based on new subtotal
+    // Recalculate doctor commissions based on after-discount subtotal
     const updatedReferringDoctors = formData.referringDoctors.map((doc) => {
       let calculatedAmount = 0;
 
       if (doc.commissionType === "percent") {
-        calculatedAmount = (subtotal * doc.commissionValue) / 100;
+        calculatedAmount = (afterDiscount * doc.commissionValue) / 100;
       } else {
         calculatedAmount = doc.commissionValue;
       }
@@ -350,7 +438,9 @@ export default function PathologyBillingTab({
 
     setCalculations({
       subtotal,
-      discountAmount: 0,
+      itemDiscountAmount,
+      mainDiscountAmount,
+      totalDiscount,
       taxAmount,
       totalAmount,
     });
@@ -369,8 +459,11 @@ export default function PathologyBillingTab({
       testType: "",
       price: 0,
       quantity: 1,
+      discountType: "percent",
+      discountValue: 0,
+      discountAmount: 0,
       amount: 0,
-      sampleType: "Blood", // Default
+      sampleType: "Blood",
       isUrgent: false,
     };
 
@@ -389,17 +482,21 @@ export default function PathologyBillingTab({
 
     if (field === "testName") {
       // Try to find a matching test type (price) for this name
-      const matchingType = testTypes.find(tt => tt.name.toLowerCase() === value.toLowerCase());
-      
+      const matchingType = testTypes.find(
+        (tt) => tt.name.toLowerCase() === value.toLowerCase(),
+      );
+
       updatedItems[index] = {
         ...updatedItems[index],
         testName: value,
         testId: "", // Reset ID for free text
-        ...(matchingType ? {
-          testType: matchingType.name,
-          price: matchingType.price,
-          amount: matchingType.price * updatedItems[index].quantity
-        } : {})
+        ...(matchingType
+          ? {
+              testType: matchingType.name,
+              price: matchingType.price,
+              amount: matchingType.price * updatedItems[index].quantity,
+            }
+          : {}),
       };
     } else if (field === "testType") {
       const selectedTestType = testTypes.find((tt) => tt.name === value);
@@ -416,41 +513,44 @@ export default function PathologyBillingTab({
             : updatedItems[index].price) * updatedItems[index].quantity,
       };
     } else if (field === "quantity") {
-      const qty = parseFloat(value) || 1;
+      const qty = parseInt(value) || 1;
+      const item = updatedItems[index];
+      const base = item.price * qty;
+      const dType = item.discountType || "percent";
+      const dVal = item.discountValue || 0;
+      const discAmt = dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
 
-      updatedItems[index] = {
-        ...updatedItems[index],
-        quantity: qty,
-        amount: updatedItems[index].price * qty,
-      };
+      updatedItems[index] = { ...item, quantity: qty, discountAmount: discAmt, amount: base - discAmt };
     } else if (field === "price") {
       const price = parseFloat(value) || 0;
+      const item = updatedItems[index];
+      const base = price * item.quantity;
+      const dType = item.discountType || "percent";
+      const dVal = item.discountValue || 0;
+      const discAmt = dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
 
-      updatedItems[index] = {
-        ...updatedItems[index],
-        price: price,
-        amount: price * updatedItems[index].quantity,
-      };
-    } else if (field === "amount") {
-      updatedItems[index] = {
-        ...updatedItems[index],
-        amount: parseFloat(value) || 0,
-      };
+      updatedItems[index] = { ...item, price, discountAmount: discAmt, amount: base - discAmt };
+    } else if (field === "discountType") {
+      const item = updatedItems[index];
+      const base = item.price * item.quantity;
+      const dVal = item.discountValue || 0;
+      const discAmt = value === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
+
+      updatedItems[index] = { ...item, discountType: value, discountAmount: discAmt, amount: base - discAmt };
+    } else if (field === "discountValue") {
+      const item = updatedItems[index];
+      const base = item.price * item.quantity;
+      const dVal = parseFloat(value) || 0;
+      const dType = item.discountType || "percent";
+      const discAmt = dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
+
+      updatedItems[index] = { ...item, discountValue: dVal, discountAmount: discAmt, amount: base - discAmt };
     } else if (field === "isUrgent") {
-      updatedItems[index] = {
-        ...updatedItems[index],
-        isUrgent: value,
-      };
+      updatedItems[index] = { ...updatedItems[index], isUrgent: value };
     } else if (field === "sampleType") {
-      updatedItems[index] = {
-        ...updatedItems[index],
-        sampleType: value,
-      };
+      updatedItems[index] = { ...updatedItems[index], sampleType: value };
     } else {
-      updatedItems[index] = {
-        ...updatedItems[index],
-        [field]: value,
-      };
+      updatedItems[index] = { ...updatedItems[index], [field]: value };
     }
 
     setFormData((prev) => ({
@@ -575,16 +675,8 @@ export default function PathologyBillingTab({
     try {
       setSubmitting(true);
 
-      // Generate invoice number
-      const invoiceNumber =
-        await pathologyBillingService.generateInvoiceNumber(clinicId);
-
-      // Create billing record
-      const billingData: Omit<
-        PathologyBilling,
-        "id" | "createdAt" | "updatedAt"
-      > = {
-        invoiceNumber,
+      // Base billing data for both create and update
+      let billingData: any = {
         clinicId,
         branchId,
         patientId: formData.patientId || null,
@@ -592,41 +684,75 @@ export default function PathologyBillingTab({
         patientEmail: formData.patientEmail.trim() || null,
         patientPhone: formData.patientPhone.trim() || null,
         patientAddress: formData.patientAddress.trim() || null,
-        patientAge: formData.patientAge
-          ? parseInt(formData.patientAge)
-          : null,
+        patientAge: formData.patientAge ? parseInt(formData.patientAge) : null,
         patientGender: formData.patientGender.trim() || null,
         invoiceDate: new Date(formData.invoiceDate),
         items: formData.items,
         subtotal: calculations.subtotal,
         discountType: formData.discountType,
         discountValue: formData.discountValue,
-        discountAmount: calculations.discountAmount,
+        discountAmount: calculations.totalDiscount,
+        itemDiscountAmount: calculations.itemDiscountAmount,
+        mainDiscountAmount: calculations.mainDiscountAmount,
         taxPercentage: billingSettings.enableTax
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
         totalAmount: calculations.totalAmount,
-        status: "draft",
-        paymentStatus: "unpaid",
-        paidAmount: 0,
-        balanceAmount: calculations.totalAmount,
         referringDoctors: formData.referringDoctors,
         notes: formData.notes?.trim() || null,
         labReferenceNo: formData.labReferenceNo?.trim() || null,
         sampleCollectionDate: new Date(formData.sampleCollectionDate),
         expectedReportDate: new Date(formData.expectedReportDate),
         reportStatus: formData.reportStatus,
-        createdBy: currentUser.uid,
       };
 
-      await pathologyBillingService.createBilling(billingData);
+      if (editingInvoiceId) {
+        // Find existing to get paid amount
+        const existing = billings.find((b) => b.id === editingInvoiceId);
+        const paidAmount = existing ? existing.paidAmount : 0;
+        const balanceAmount = calculations.totalAmount - paidAmount;
+        let paymentStatus = "unpaid";
+        
+        if (paidAmount >= calculations.totalAmount) {
+          paymentStatus = "paid";
+        } else if (paidAmount > 0) {
+          paymentStatus = "partial";
+        }
 
-      addToast({
-        title: "Success",
-        description: "Pathology invoice created successfully",
-        color: "success",
-      });
+        billingData = {
+          ...billingData,
+          balanceAmount,
+          paymentStatus,
+        };
+
+        await pathologyBillingService.updateBilling(editingInvoiceId, billingData);
+        addToast({
+          title: "Success",
+          description: "Pathology invoice updated successfully",
+          color: "success",
+        });
+      } else {
+        const invoiceNumber =
+          await pathologyBillingService.generateInvoiceNumber(clinicId);
+
+        billingData = {
+          ...billingData,
+          invoiceNumber,
+          status: "draft",
+          paymentStatus: "unpaid",
+          paidAmount: 0,
+          balanceAmount: calculations.totalAmount,
+          createdBy: currentUser.uid,
+        };
+
+        await pathologyBillingService.createBilling(billingData);
+        addToast({
+          title: "Success",
+          description: "Pathology invoice created successfully",
+          color: "success",
+        });
+      }
 
       // Reset form
       setFormData({
@@ -644,13 +770,17 @@ export default function PathologyBillingTab({
         notes: "",
         labReferenceNo: "",
         sampleCollectionDate: new Date().toISOString().split("T")[0],
-        expectedReportDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+        expectedReportDate: new Date(Date.now() + 86400000)
+          .toISOString()
+          .split("T")[0],
         reportStatus: "pending_collection",
       });
 
       // Reload billings
       await loadData();
 
+      setEditingInvoiceId(null);
+      
       // Switch to manage tab
       setActiveTab("manage");
       invoiceModal.forceClose();
@@ -664,6 +794,64 @@ export default function PathologyBillingTab({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditInvoice = (billing: PathologyBilling) => {
+    setEditingInvoiceId(billing.id);
+    
+    // Format dates to YYYY-MM-DD for inputs
+    const formatDateForInput = (dateValue: any) => {
+      if (!dateValue) return new Date().toISOString().split("T")[0];
+      const d = dateValue instanceof Date ? dateValue : dateValue.toDate ? dateValue.toDate() : new Date(dateValue);
+      return d.toISOString().split("T")[0];
+    };
+
+    setFormData({
+      patientId: billing.patientId || undefined,
+      patientName: billing.patientName,
+      patientEmail: billing.patientEmail || "",
+      patientPhone: billing.patientPhone || "",
+      patientAddress: billing.patientAddress || "",
+      patientAge: billing.patientAge ? billing.patientAge.toString() : "",
+      patientGender: billing.patientGender || "",
+      invoiceDate: formatDateForInput(billing.invoiceDate),
+      items: [...billing.items],
+      discountType: billing.discountType || "percent",
+      discountValue: billing.discountValue || 0,
+      referringDoctors: [...(billing.referringDoctors || [])],
+      notes: billing.notes || "",
+      labReferenceNo: billing.labReferenceNo || "",
+      sampleCollectionDate: formatDateForInput(billing.sampleCollectionDate),
+      expectedReportDate: formatDateForInput(billing.expectedReportDate),
+      reportStatus: billing.reportStatus || "pending_collection",
+    });
+    
+    setActiveTab("create");
+  };
+
+  const cancelEdit = () => {
+    setEditingInvoiceId(null);
+    setFormData({
+      patientName: "",
+      patientEmail: "",
+      patientPhone: "",
+      patientAddress: "",
+      patientAge: "",
+      patientGender: "",
+      invoiceDate: new Date().toISOString().split("T")[0],
+      items: [],
+      discountType: billingSettings?.defaultDiscountType || "percent",
+      discountValue: billingSettings?.defaultDiscountValue || 0,
+      referringDoctors: [],
+      notes: "",
+      labReferenceNo: "",
+      sampleCollectionDate: new Date().toISOString().split("T")[0],
+      expectedReportDate: new Date(Date.now() + 86400000)
+        .toISOString()
+        .split("T")[0],
+      reportStatus: "pending_collection",
+    });
+    setActiveTab("manage");
   };
 
   const handlePaymentOpen = (billing: PathologyBilling) => {
@@ -860,307 +1048,161 @@ export default function PathologyBillingTab({
 
   return (
     <div className="space-y-6">
-      <Tabs
-        className="w-full"
-        selectedKey={activeTab}
-        onSelectionChange={(key) => setActiveTab(key as string)}
-      >
-        {/* Create Invoice Tab */}
-        <Tab key="create" title="Create Invoice">
-          <div className="space-y-4 py-4">
-            <Card className="border border-border-base" shadow="none">
-              <CardHeader className="py-2 px-4 border-b border-border-base bg-surface-2/30">
-                <h3 className="text-[15px] font-bold text-primary">New Pathology Invoice</h3>
-              </CardHeader>
-              <CardBody className="py-4 px-4 space-y-4">
+      <div className="bg-surface border border-border-base rounded overflow-hidden">
+        {/* Tab Strip */}
+        <div className="flex border-b border-border-base bg-surface-2/50">
+        {[
+          { id: "create", label: editingInvoiceId ? "Edit Invoice" : "Create Invoice", icon: <IoAddOutline className="w-4 h-4" /> },
+          { id: "manage", label: "Manage Invoices", icon: <IoReceiptOutline className="w-4 h-4" /> },
+        ].map((t) => (
+          <button
+            key={t.id}
+            className={`flex items-center gap-2 px-5 py-3.5 text-[13px] font-medium border-b-2 transition-colors
+              ${activeTab === t.id ? "border-primary text-primary bg-surface" : "border-transparent text-text-muted hover:text-primary hover:bg-surface-2"}`}
+            type="button"
+            onClick={() => setActiveTab(t.id)}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Create Invoice Tab */}
+      {activeTab === "create" && (
+        <div className="p-5 flex flex-col gap-6">
                 {/* Patient Information */}
                 <div>
-                  <h4 className="text-[12px] font-bold text-text-muted uppercase tracking-wider mb-2">
-                    Patient Information
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Autocomplete
-                      allowsCustomValue
-                      isRequired
-                      className="col-span-1 sm:col-span-2 lg:col-span-2"
-                      inputProps={{
-                        classNames: {
-                          label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                          input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                          inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                        },
-                      }}
-                      defaultItems={patients}
-                      label="Patient Name"
-                      placeholder="Name"
-                      inputValue={formData.patientName}
-                      size="sm"
-                      variant="flat"
-                      onInputChange={(value) =>
-                        setFormData((prev) => ({ 
-                          ...prev, 
-                          patientName: value,
-                          patientId: undefined 
-                        }))
-                      }
-                      onSelectionChange={(key) => {
-                        const patient = patients.find((p) => p.id === key);
-
-                        if (patient) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            patientId: patient.id,
-                            patientName: patient.name,
-                            patientPhone: patient.mobile || patient.phone || "",
-                            patientEmail: patient.email || "",
-                            patientAddress: patient.address || "",
-                            patientAge: patient.age?.toString() || "",
-                            patientGender: patient.gender || "",
-                          }));
-                        }
-                      }}
-                    >
-                      {(p) => (
-                        <AutocompleteItem key={p.id} textValue={p.name}>
-                          <div className="flex flex-col">
-                            <span className="text-[13px] font-medium">{p.name}</span>
-                            <span className="text-[11px] text-text-muted">
-                              {p.mobile || p.phone || "No phone"} • {p.regNumber}
-                            </span>
-                          </div>
-                        </AutocompleteItem>
-                      )}
-                    </Autocomplete>
-                    <Input
-                      label="Phone"
-                      placeholder="Phone"
-                      className="col-span-1"
-                      value={formData.patientPhone}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          patientPhone: value,
-                        }))
-                      }
-                    />
-                    <Input
-                      label="Email"
-                      placeholder="Email"
-                      type="email"
-                      className="col-span-1"
-                      value={formData.patientEmail}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          patientEmail: value,
-                        }))
-                      }
-                    />
-                    <Input
-                      label="Address"
-                      placeholder="Address"
-                      className="col-span-1 sm:col-span-2 lg:col-span-2"
-                      value={formData.patientAddress}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          patientAddress: value,
-                        }))
-                      }
-                    />
-                    <Input
-                      label="Age"
-                      placeholder="Age"
-                      type="number"
-                      className="col-span-1"
-                      value={formData.patientAge}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, patientAge: value }))
-                      }
-                    />
-                    <Select
-                      label="Gender"
-                      placeholder="Gender"
-                      className="col-span-1"
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        value: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      selectedKeys={
-                        formData.patientGender ? [formData.patientGender] : []
-                      }
-                      onSelectionChange={(keys) => {
-                        const selected = Array.from(keys)[0] as string;
-
-                        setFormData((prev) => ({
-                          ...prev,
-                          patientGender: selected || "",
-                        }));
-                      }}
-                    >
-                      <SelectItem key="male">Male</SelectItem>
-                      <SelectItem key="female">Female</SelectItem>
-                      <SelectItem key="other">Other</SelectItem>
-                    </Select>
+                  <h3 className="text-[14px] font-semibold text-primary mb-3">Patient Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="lg:col-span-2 flex flex-col gap-1 relative">
+                      <label className="text-[12px] font-medium text-text-muted">Patient Name <span className="text-red-500">*</span></label>
+                      <PatientSearchBox
+                        value={formData.patientName}
+                        patients={patients}
+                        onSelect={(p) => setFormData((prev) => ({ ...prev, patientId: p.id, patientName: p.name, patientPhone: p.mobile || p.phone || "", patientEmail: p.email || "", patientAddress: p.address || "", patientAge: p.age?.toString() || "", patientGender: p.gender || "" }))}
+                        onChange={(v) => setFormData((prev) => ({ ...prev, patientName: v, patientId: undefined }))}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Phone</label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Phone" value={formData.patientPhone} onChange={(e) => setFormData((p) => ({ ...p, patientPhone: e.target.value }))} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Email</label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Email" type="email" value={formData.patientEmail} onChange={(e) => setFormData((p) => ({ ...p, patientEmail: e.target.value }))} />
+                    </div>
+                    <div className="lg:col-span-2 flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Address</label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Address" value={formData.patientAddress} onChange={(e) => setFormData((p) => ({ ...p, patientAddress: e.target.value }))} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Age</label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Age" type="number" value={formData.patientAge} onChange={(e) => setFormData((p) => ({ ...p, patientAge: e.target.value }))} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Gender</label>
+                      <select className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" value={formData.patientGender} onChange={(e) => setFormData((p) => ({ ...p, patientGender: e.target.value }))}>
+                        <option value="">Select</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
+                <div className="border-t border-border-base" />
+
+
 
                 {/* Lab Tracking & Reporting */}
-                <div className="bg-surface-2/20 p-3 rounded-lg border border-border-base/50">
-                  <h4 className="text-[12px] font-bold text-text-muted uppercase tracking-wider mb-2">
-                    Lab Tracking & Reporting
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <Input
-                      label="Lab Ref No"
-                      placeholder="e.g. LAB-1001"
-                      value={formData.labReferenceNo}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, labReferenceNo: value }))
-                      }
-                    />
-                    <Input
-                      label="Collection Date"
-                      type="date"
-                      value={formData.sampleCollectionDate}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, sampleCollectionDate: value }))
-                      }
-                    />
-                    <Input
-                      label="Expected Delivery"
-                      type="date"
-                      value={formData.expectedReportDate}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        input: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        inputWrapper: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, expectedReportDate: value }))
-                      }
-                    />
-                    <Select
-                      label="Report Status"
-                      selectedKeys={[formData.reportStatus]}
-                      size="sm"
-                      variant="flat"
-                      classNames={{
-                        label: "text-text-muted font-semibold text-[10px] uppercase tracking-wider",
-                        value: "text-[13.5px] font-medium text-text-main placeholder:text-[12.5px] placeholder:font-normal placeholder:text-text-muted/70",
-                        trigger: "bg-surface-2 border border-border-base/50 group-data-[focus=true]:border-primary transition-all h-[48px]",
-                      }}
-                      onSelectionChange={(keys) => {
-                        const selected = Array.from(keys)[0] as any;
-                        setFormData((prev) => ({ ...prev, reportStatus: selected }));
-                      }}
-                    >
-                      <SelectItem key="pending_collection">Pending Collection</SelectItem>
-                      <SelectItem key="collected">Sample Collected</SelectItem>
-                      <SelectItem key="in_lab">In Laboratory</SelectItem>
-                      <SelectItem key="partially_ready">Partially Ready</SelectItem>
-                      <SelectItem key="ready">Report Ready</SelectItem>
-                      <SelectItem key="delivered">Delivered</SelectItem>
-                    </Select>
+                <div>
+                  <h3 className="text-[14px] font-semibold text-primary mb-3">Lab Tracking &amp; Reporting</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Lab Ref No</label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="e.g. LAB-1001" value={formData.labReferenceNo || ""} onChange={(e) => setFormData((p) => ({ ...p, labReferenceNo: e.target.value }))} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Invoice Date <span className="text-red-500">*</span></label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" type="date" value={formData.invoiceDate} onChange={(e) => setFormData((p) => ({ ...p, invoiceDate: e.target.value }))} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Collection Date</label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" type="date" value={formData.sampleCollectionDate} onChange={(e) => setFormData((p) => ({ ...p, sampleCollectionDate: e.target.value }))} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Expected Delivery</label>
+                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" type="date" value={formData.expectedReportDate} onChange={(e) => setFormData((p) => ({ ...p, expectedReportDate: e.target.value }))} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Report Status</label>
+                      <select className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" value={formData.reportStatus} onChange={(e) => setFormData((p) => ({ ...p, reportStatus: e.target.value as any }))}>
+                        <option value="pending_collection">Pending Collection</option>
+                        <option value="collected">Sample Collected</option>
+                        <option value="in_lab">In Laboratory</option>
+                        <option value="partially_ready">Partially Ready</option>
+                        <option value="ready">Report Ready</option>
+                        <option value="delivered">Delivered</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
+                <div className="border-t border-border-base" />
 
-                {/* Invoice Items */}
+
+                {/* Test Items */}
                 <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="text-[12px] font-bold text-text-muted uppercase tracking-wider">Test Items</h4>
-                    <Button
-                      color="primary"
-                      size="sm"
-                      startContent={<IoAddOutline />}
-                      onPress={addInvoiceItem}
-                    >
-                      Add Test
-                    </Button>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-[14px] font-semibold text-primary">Test Items</h3>
+                    <Button color="primary" size="sm" startContent={<IoAddOutline />} onPress={addInvoiceItem}>Add Test</Button>
                   </div>
 
                   {formData.items.length > 0 ? (
                     <div className="space-y-2">
+                      {/* Header row */}
+                      <div className="hidden md:grid grid-cols-12 gap-2 px-2 pb-1">
+                        <div className="col-span-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Test Name</div>
+                        <div className="col-span-2 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Test Type</div>
+                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Sample</div>
+                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Urgent</div>
+                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Price</div>
+                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Qty</div>
+                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Disc. Type</div>
+                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Disc. Val</div>
+                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Amount</div>
+                      </div>
                       {formData.items.map((item, index) => (
                         <div
                           key={item.id}
-                          className="grid grid-cols-12 gap-2 items-end p-2 border border-border-base rounded-lg bg-surface-2/10"
+                          className="grid grid-cols-12 gap-2 items-end p-2 border border-border-base rounded-lg bg-surface-2/20"
                         >
-                          <div className="col-span-2">
+                          <div className="col-span-3">
                             <Autocomplete
                               allowsCustomValue
                               isRequired
                               defaultItems={testCatalog}
+                              inputValue={item.testName}
                               label="Test Name *"
                               placeholder="Select"
-                              size="sm"
-                              variant="flat"
                               popoverProps={{
                                 shouldCloseOnBlur: false,
                                 classNames: {
                                   content: "max-h-60 overflow-auto z-[1001]",
                                 },
                               }}
-                              inputValue={item.testName}
+                              size="sm"
+                              variant="flat"
+                              onInputChange={(value) => {
+                                updateInvoiceItem(index, "testName", value);
+                              }}
                               onOpenChange={
                                 invoiceModal.handleDropdownInteraction
                               }
-                              onInputChange={(value) => {
-                                updateInvoiceItem(
-                                  index,
-                                  "testName",
-                                  value,
-                                );
-                              }}
                               onSelectionChange={(key) => {
-                                const selected = testCatalog.find(t => t.id === key);
+                                const selected = testCatalog.find(
+                                  (t) => t.id === key,
+                                );
+
                                 if (selected) {
                                   updateInvoiceItem(
                                     index,
@@ -1176,7 +1218,9 @@ export default function PathologyBillingTab({
                                   textValue={test.name}
                                 >
                                   <div className="flex justify-between items-center">
-                                    <span className="text-[13px]">{test.name}</span>
+                                    <span className="text-[13px]">
+                                      {test.name}
+                                    </span>
                                     <span className="text-[10px] text-text-muted px-1.5 py-0.5 bg-surface-3 rounded uppercase tracking-wider font-bold">
                                       {test.type}
                                     </span>
@@ -1190,8 +1234,6 @@ export default function PathologyBillingTab({
                               defaultItems={testTypes}
                               label="Test Type"
                               placeholder="Type"
-                              size="sm"
-                              variant="flat"
                               popoverProps={{
                                 shouldCloseOnBlur: false,
                                 classNames: {
@@ -1199,12 +1241,13 @@ export default function PathologyBillingTab({
                                 },
                               }}
                               selectedKey={item.testType || null}
+                              size="sm"
+                              variant="flat"
                               onOpenChange={
                                 invoiceModal.handleDropdownInteraction
                               }
                               onSelectionChange={(key) => {
                                 const selectedName = key ? key.toString() : "";
-
                                 updateInvoiceItem(
                                   index,
                                   "testType",
@@ -1229,78 +1272,69 @@ export default function PathologyBillingTab({
                               )}
                             </Autocomplete>
                           </div>
-                          <div className="col-span-2">
-                            <Select
-                              label="Sample"
-                              placeholder="Select"
-                              size="sm"
-                              variant="flat"
-                              selectedKeys={item.sampleType ? [item.sampleType] : []}
-                              onSelectionChange={(keys) => {
-                                const selected = Array.from(keys)[0] as string;
-                                updateInvoiceItem(index, "sampleType", selected);
-                              }}
-                            >
-                              <SelectItem key="Blood">Blood</SelectItem>
-                              <SelectItem key="Urine">Urine</SelectItem>
-                              <SelectItem key="Stool">Stool</SelectItem>
-                              <SelectItem key="Swab">Swab</SelectItem>
-                              <SelectItem key="Sputum">Sputum</SelectItem>
-                              <SelectItem key="Other">Other</SelectItem>
-                            </Select>
+                          <div className="col-span-1">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[12px] font-medium text-text-muted">Sample</label>
+                              <select className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" value={item.sampleType || ""} onChange={(e) => updateInvoiceItem(index, "sampleType", e.target.value)}>
+                                <option value="">Select</option>
+                                <option value="Blood">Blood</option>
+                                <option value="Urine">Urine</option>
+                                <option value="Stool">Stool</option>
+                                <option value="Swab">Swab</option>
+                                <option value="Sputum">Sputum</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </div>
                           </div>
-                          <div className="col-span-1 flex flex-col items-center pb-1">
-                            <span className="text-[10px] text-text-muted font-bold uppercase mb-1">Urgent</span>
-                            <Switch 
-                              size="sm"
-                              isSelected={item.isUrgent}
-                              onValueChange={(val) => updateInvoiceItem(index, "isUrgent", val)}
-                            />
+                          <div className="col-span-1 flex flex-col items-center gap-1">
+                            <label className="text-[12px] font-medium text-text-muted">Urgent</label>
+                            <input type="checkbox" className="w-4 h-4 mt-1.5 cursor-pointer accent-primary" checked={item.isUrgent} onChange={(e) => updateInvoiceItem(index, "isUrgent", e.target.checked)} />
                           </div>
                           <div className="col-span-1">
-                            <Input
-                              isRequired
-                              label="Price"
-                              placeholder="0"
-                              type="number"
-                              size="sm"
-                              variant="flat"
-                              value={item.price.toString()}
-                              onValueChange={(value) =>
-                                updateInvoiceItem(index, "price", value)
-                              }
-                            />
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[12px] font-medium text-text-muted">Price</label>
+                              <input className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" placeholder="0" type="number" value={item.price} onChange={(e) => updateInvoiceItem(index, "price", parseFloat(e.target.value) || 0)} />
+                            </div>
                           </div>
                           <div className="col-span-1">
-                            <Input
-                              isRequired
-                              label="Qty"
-                              min={1}
-                              placeholder="1"
-                              type="number"
-                              size="sm"
-                              variant="flat"
-                              value={item.quantity.toString()}
-                              onValueChange={(value) =>
-                                updateInvoiceItem(index, "quantity", value)
-                              }
-                            />
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[12px] font-medium text-text-muted">Qty</label>
+                              <input className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={1} placeholder="1" type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(index, "quantity", parseInt(e.target.value, 10) || 1)} />
+                            </div>
                           </div>
-                          <div className="col-span-2">
-                            <Input
-                              isRequired
-                              label="Amount *"
-                              placeholder="0.00"
-                              type="number"
-                              size="sm"
-                              variant="flat"
-                              value={item.amount.toString()}
-                              onValueChange={(value) =>
-                                updateInvoiceItem(index, "amount", value)
-                              }
-                            />
-                          </div>
+                          {/* Per-item Discount Type */}
                           <div className="col-span-1">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[12px] font-medium text-text-muted">Disc. Type</label>
+                              <select
+                                className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                                value={item.discountType || "percent"}
+                                onChange={(e) =>
+                                  updateInvoiceItem(index, "discountType", e.target.value)
+                                }
+                              >
+                                <option value="percent">%</option>
+                                <option value="flat">Flat</option>
+                              </select>
+                            </div>
+                          </div>
+                          {/* Per-item Discount Value */}
+                          <div className="col-span-1">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[12px] font-medium text-text-muted">Disc. Val</label>
+                              <input className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={0} placeholder="0" type="number" value={item.discountValue || ""} onChange={(e) => updateInvoiceItem(index, "discountValue", parseFloat(e.target.value) || 0)} />
+                            </div>
+                          </div>
+                          {/* Final Amount */}
+                          <div className="col-span-1">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[12px] font-medium text-text-muted">Amount</label>
+                              <div className="h-9 flex items-center px-2.5 border border-border-base/50 rounded bg-surface-2 text-[12.5px] font-semibold text-text-main">
+                                {item.amount.toFixed(0)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-span-12 md:col-span-1 flex justify-end items-end">
                             <Button
                               isIconOnly
                               color="danger"
@@ -1499,21 +1533,30 @@ export default function PathologyBillingTab({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border-base pt-3">
-                  <div className="space-y-2">
-                    <Input
-                      label="Notes"
-                      placeholder="Additional notes (optional)"
-                      value={formData.notes}
-                      size="sm"
-                      variant="flat"
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, notes: value }))
-                      }
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border-base pt-4">
+                  <div className="space-y-3">
+                    <h3 className="text-[14px] font-semibold text-primary">Invoice Discount &amp; Notes</h3>
+                    <div className="flex gap-3">
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="text-[12px] font-medium text-text-muted">Discount Type</label>
+                        <select className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" value={formData.discountType} onChange={(e) => setFormData((p) => ({ ...p, discountType: e.target.value as "percent" | "flat" }))}>
+                          <option value="percent">Percentage (%)</option>
+                          <option value="flat">Flat Amount (NPR)</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="text-[12px] font-medium text-text-muted">Discount Value</label>
+                        <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={0} placeholder="0" type="number" value={formData.discountValue} onChange={(e) => setFormData((p) => ({ ...p, discountValue: parseFloat(e.target.value) || 0 }))} />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-text-muted">Notes</label>
+                      <textarea className="px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main resize-none" placeholder="Additional notes (optional)" rows={2} value={formData.notes} onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))} />
+                    </div>
                   </div>
 
                   <div className="bg-surface-2/30 p-3 rounded-lg border border-border-base">
+                    <p className="text-[12px] font-bold text-text-muted uppercase tracking-wider mb-2">Summary</p>
                     <div className="space-y-1">
                       <div className="flex justify-between text-[13px] text-text-muted">
                         <span>Subtotal:</span>
@@ -1521,13 +1564,33 @@ export default function PathologyBillingTab({
                           {formatCurrency(calculations.subtotal)}
                         </span>
                       </div>
+                      {(calculations.itemDiscountAmount > 0) && (
+                        <div className="flex justify-between text-[13px] text-danger-500">
+                          <span>Item Discount:</span>
+                          <span>- {formatCurrency(calculations.itemDiscountAmount)}</span>
+                        </div>
+                      )}
+                      {(calculations.mainDiscountAmount > 0) && (
+                        <div className="flex justify-between text-[13px] text-danger-500">
+                          <span>Invoice Discount:</span>
+                          <span>- {formatCurrency(calculations.mainDiscountAmount)}</span>
+                        </div>
+                      )}
+                      {(calculations.totalDiscount > 0) && (
+                        <div className="flex justify-between text-[13px] font-semibold text-danger-600 border-t border-border-base/50 pt-1">
+                          <span>Total Discount:</span>
+                          <span>- {formatCurrency(calculations.totalDiscount)}</span>
+                        </div>
+                      )}
                       {billingSettings?.enableTax &&
                         calculations.taxAmount > 0 && (
                           <div className="flex justify-between text-[13px] text-text-muted">
                             <span>
                               Tax ({billingSettings.defaultTaxPercentage}%):
                             </span>
-                            <span>{formatCurrency(calculations.taxAmount)}</span>
+                            <span>
+                              {formatCurrency(calculations.taxAmount)}
+                            </span>
                           </div>
                         )}
                       <div className="flex justify-between text-[16px] font-black text-primary border-t border-primary/20 pt-1 mt-1">
@@ -1536,38 +1599,50 @@ export default function PathologyBillingTab({
                       </div>
                     </div>
 
-                    <div className="flex justify-end pt-3">
+                    <div className="flex justify-end gap-2 pt-3">
+                      {editingInvoiceId && (
+                        <Button
+                          className="w-full md:w-auto px-6 font-medium"
+                          color="default"
+                          variant="flat"
+                          size="md"
+                          onPress={cancelEdit}
+                        >
+                          Cancel
+                        </Button>
+                      )}
                       <Button
                         className="w-full md:w-auto px-10 font-bold"
                         color="primary"
                         isDisabled={
-                          !formData.patientName.trim() || formData.items.length === 0
+                          !formData.patientName.trim() ||
+                          formData.items.length === 0
                         }
                         isLoading={submitting}
                         size="md"
                         onPress={handleSubmit}
                       >
-                        Create Invoice
+                        {editingInvoiceId ? "Update Invoice" : "Create Invoice"}
                       </Button>
                     </div>
                   </div>
                 </div>
-              </CardBody>
-            </Card>
-          </div>
-        </Tab>
+        </div>
+      )}
 
         {/* Manage Invoices Tab */}
-        <Tab key="manage" title="Manage Invoices">
-          <div className="space-y-4 py-4">
+        {activeTab === "manage" && (
+          <div className="p-5 space-y-4">
             <div className="flex justify-between items-center">
-              <Input
-                className="w-80"
-                placeholder="Search by invoice number or patient name..."
-                startContent={<IoSearchOutline />}
-                value={searchQuery}
-                onValueChange={setSearchQuery}
-              />
+              <div className="relative">
+                <IoSearchOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted/50 w-4 h-4" />
+                <input
+                  className="pl-8 pr-3 h-9 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary w-72 text-text-main placeholder:text-text-muted/40"
+                  placeholder="Search by invoice number or patient name…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
 
             {filteredBillings.length > 0 ? (
@@ -1678,6 +1753,15 @@ export default function PathologyBillingTab({
                             <Button
                               isIconOnly
                               size="sm"
+                              title="Edit"
+                              variant="light"
+                              onPress={() => handleEditInvoice(billing)}
+                            >
+                              <IoPencilOutline className="text-lg text-default-500 hover:text-primary" />
+                            </Button>
+                            <Button
+                              isIconOnly
+                              size="sm"
                               title="Print"
                               variant="light"
                               onPress={() => handlePrint(billing)}
@@ -1711,8 +1795,8 @@ export default function PathologyBillingTab({
               </div>
             )}
           </div>
-        </Tab>
-      </Tabs>
+        )}
+      </div>
 
       {/* Payment Modal */}
       <Modal
