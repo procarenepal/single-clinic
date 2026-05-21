@@ -1,4 +1,19 @@
 import React, { useState, useEffect } from "react";
+import { PlusIcon, EditIcon, TrashIcon, MoreVerticalIcon } from "lucide-react";
+
+import { Role, Page } from "../../types/models";
+import { rbacService } from "../../services/rbacService";
+import { useAuth } from "../../hooks/useAuth";
+
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+} from "@/components/ui/modal";
+import { addToast } from "@/components/ui/toast";
 import {
   Card,
   CardBody,
@@ -20,14 +35,6 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@/components/ui";
-import { PlusIcon, EditIcon, TrashIcon, MoreVerticalIcon } from "lucide-react";
-import { addToast } from "@/components/ui/toast";
-
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@/components/ui/modal";
-
-import { Role, Page } from "../../types/models";
-import { rbacService } from "../../services/rbacService";
-import { useAuth } from "../../hooks/useAuth";
 
 interface RoleManagementProps {
   clinicId: string;
@@ -50,6 +57,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
     description: "",
     permissions: [] as string[],
     linkedToDoctor: false,
+    linkedToExpert: false,
   });
 
   useEffect(() => {
@@ -88,6 +96,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
       description: "",
       permissions: [],
       linkedToDoctor: false,
+      linkedToExpert: false,
     });
     onOpen();
   };
@@ -100,6 +109,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
       description: role.description,
       permissions: role.permissions,
       linkedToDoctor: role.linkedToDoctor || false,
+      linkedToExpert: role.linkedToExpert || false,
     });
     onOpen();
   };
@@ -196,9 +206,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               errorMessage,
               {
                 branchId:
-                  false && userData?.branchId
-                    ? userData.branchId
-                    : undefined,
+                  false && userData?.branchId ? userData.branchId : undefined,
               },
             );
           } catch (logError) {
@@ -248,7 +256,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   },
                   "failure",
                   permissionValidation.error ||
-                  "One or more permissions are invalid",
+                    "One or more permissions are invalid",
                   {
                     branchId: undefined,
                   },
@@ -320,6 +328,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
           isDefault: false,
           isBranchSpecific: false,
           linkedToDoctor: formData.linkedToDoctor,
+          linkedToExpert: formData.linkedToExpert,
         };
 
         try {
@@ -445,9 +454,9 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
 
         try {
           const permissionNames = formData.permissions.map(
-            (id) => availablePages.find((p) => p.id === id)?.name || id
+            (id) => availablePages.find((p) => p.id === id)?.name || id,
           );
-          
+
           console.log("Updating role with permissions:", permissionNames);
 
           await rbacService.updateRole(selectedRole!.id, {
@@ -455,6 +464,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
             description: formData.description,
             permissions: formData.permissions,
             linkedToDoctor: formData.linkedToDoctor,
+            linkedToExpert: formData.linkedToExpert,
           });
 
           // Invalidate cache for all users holding this role so their UI updates immediately
@@ -463,16 +473,19 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               selectedRole!.id,
               clinicId,
             );
-            
+
             if (usersWithRole.length > 0) {
               await Promise.allSettled(
-                usersWithRole.map(user => 
-                  rbacService.clearUserPermissionsCache(user.id, clinicId)
-                )
+                usersWithRole.map((user) =>
+                  rbacService.clearUserPermissionsCache(user.id, clinicId),
+                ),
               );
             }
           } catch (cacheError) {
-            console.error("Failed to clear cache for users holding updated role:", cacheError);
+            console.error(
+              "Failed to clear cache for users holding updated role:",
+              cacheError,
+            );
           }
 
           addToast({
@@ -487,7 +500,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               : "Failed to update role";
 
           const permissionNames = formData.permissions.map(
-            (id) => availablePages.find((p) => p.id === id)?.name || id
+            (id) => availablePages.find((p) => p.id === id)?.name || id,
           );
 
           console.error("Error updating role:", updateError, {
@@ -497,6 +510,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               description: formData.description,
               permissions: permissionNames,
               linkedToDoctor: formData.linkedToDoctor,
+              linkedToExpert: formData.linkedToExpert,
             },
           });
           addToast({
@@ -709,9 +723,18 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                           Branch Role
                         </Chip>
                       )}
-                      {role.linkedToDoctor && (
-                        <Chip color="success" size="sm" variant="flat" className="bg-green-100 text-green-700 font-medium">
-                          {role.name.toLowerCase().includes("expert") ? "Expert Linked" : "Doctor Linked"}
+                      {(role.linkedToDoctor || role.linkedToExpert) && (
+                        <Chip
+                          className="bg-green-100 text-green-700 font-medium"
+                          color="success"
+                          size="sm"
+                          variant="flat"
+                        >
+                          {role.linkedToExpert ||
+                          (role.linkedToDoctor &&
+                            role.name.toLowerCase().includes("expert"))
+                            ? "Expert Linked"
+                            : "Doctor Linked"}
                         </Chip>
                       )}
                     </div>
@@ -736,9 +759,9 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                       // Check if branch admin can manage this role
                       const canManage = false
                         ? role.isBranchSpecific &&
-                        (!role.branchId ||
-                          role.branchId === userData?.branchId) &&
-                        !role.isDefault
+                          (!role.branchId ||
+                            role.branchId === userData?.branchId) &&
+                          !role.isDefault
                         : true;
 
                       if (!canManage && false) {
@@ -822,85 +845,240 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
               }
             />
 
-            <label className="flex items-center justify-between gap-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors select-none">
-              <div className="flex flex-col">
-                <span className="text-[13.5px] font-semibold text-gray-800 dark:text-gray-200">Link to Doctors / Experts</span>
-                <span className="text-xs text-gray-500 mt-0.5">
-                  When creating users with this role, show doctor/expert selection to auto-fill user details
-                </span>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={formData.linkedToDoctor}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
-                  formData.linkedToDoctor ? "bg-purple-600" : "bg-gray-300 dark:bg-gray-600"
-                }`}
-                onClick={() =>
-                  setFormData((prev) => ({ ...prev, linkedToDoctor: !prev.linkedToDoctor }))
-                }
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                    formData.linkedToDoctor ? "translate-x-6" : "translate-x-1"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="flex items-center justify-between gap-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors select-none">
+                <div className="flex flex-col">
+                  <span className="text-[13.5px] font-semibold text-gray-800 dark:text-gray-200">
+                    Link to Doctors
+                  </span>
+                  <span className="text-xs text-gray-500 mt-0.5">
+                    Show doctor selection to auto-fill user details
+                  </span>
+                </div>
+                <button
+                  aria-checked={formData.linkedToDoctor}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                    formData.linkedToDoctor
+                      ? "bg-purple-600"
+                      : "bg-gray-300 dark:bg-gray-600"
                   }`}
-                />
-              </button>
-            </label>
+                  role="switch"
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      linkedToDoctor: !prev.linkedToDoctor,
+                      linkedToExpert: prev.linkedToDoctor
+                        ? prev.linkedToExpert
+                        : false,
+                    }))
+                  }
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      formData.linkedToDoctor
+                        ? "translate-x-6"
+                        : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </label>
+
+              <label className="flex items-center justify-between gap-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors select-none">
+                <div className="flex flex-col">
+                  <span className="text-[13.5px] font-semibold text-gray-800 dark:text-gray-200">
+                    Link to Experts
+                  </span>
+                  <span className="text-xs text-gray-500 mt-0.5">
+                    Show expert selection to auto-fill user details
+                  </span>
+                </div>
+                <button
+                  aria-checked={formData.linkedToExpert}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                    formData.linkedToExpert
+                      ? "bg-blue-600"
+                      : "bg-gray-300 dark:bg-gray-600"
+                  }`}
+                  role="switch"
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      linkedToExpert: !prev.linkedToExpert,
+                      linkedToDoctor: prev.linkedToExpert
+                        ? prev.linkedToDoctor
+                        : false,
+                    }))
+                  }
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      formData.linkedToExpert
+                        ? "translate-x-6"
+                        : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </label>
+            </div>
 
             <Divider />
 
             <div>
               <h4 className="text-lg font-medium mb-4">Page Permissions</h4>
-              <p className="text-sm text-gray-600 mb-4">
-                Select which pages this role can access
+              <p className="text-sm text-gray-600 mb-6">
+                Select which pages this role can access, grouped by functional
+                area.
               </p>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                {availablePages.map((page) => {
-                  const isChecked = formData.permissions.includes(page.id);
+              <div className="space-y-6">
+                {[
+                  {
+                    id: "clinical",
+                    label: "Clinical & Patient Care",
+                    paths: [
+                      "patient",
+                      "prescription",
+                      "pathology",
+                      "medicine",
+                      "bed",
+                      "text-editor",
+                    ],
+                  },
+                  {
+                    id: "scheduling",
+                    label: "Scheduling & Appointments",
+                    paths: ["appointment", "doctor", "expert"],
+                  },
+                  {
+                    id: "front_office",
+                    label: "Front Office & Ops",
+                    paths: ["front-office", "visitor", "call", "enquir"],
+                  },
+                  {
+                    id: "billing_inventory",
+                    label: "Billing & Inventory",
+                    paths: ["billing", "inventory", "pharmacy"],
+                  },
+                  {
+                    id: "admin",
+                    label: "Administration & Settings",
+                    paths: ["setting", "report", "communication", "dashboard"],
+                  },
+                  { id: "other", label: "Other", paths: [] },
+                ].map((category) => {
+                  const categoryPages = availablePages.filter((page) => {
+                    const p = page.path.toLowerCase();
+                    const isOther = category.id === "other";
+
+                    if (isOther) {
+                      return ![
+                        "patient",
+                        "prescription",
+                        "pathology",
+                        "medicine",
+                        "bed",
+                        "text-editor",
+                        "appointment",
+                        "doctor",
+                        "expert",
+                        "front-office",
+                        "visitor",
+                        "call",
+                        "enquir",
+                        "billing",
+                        "inventory",
+                        "pharmacy",
+                        "setting",
+                        "report",
+                        "communication",
+                        "dashboard",
+                      ].some((path) => p.includes(path));
+                    }
+
+                    return category.paths.some((path) => p.includes(path));
+                  });
+
+                  if (categoryPages.length === 0) return null;
+
                   return (
-                    <label
-                      key={page.id}
-                      className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all select-none ${
-                        isChecked
-                          ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/40"
-                      }`}
-                    >
-                      <input
-                        checked={isChecked}
-                        className="sr-only"
-                        type="checkbox"
-                        onChange={() => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            permissions: isChecked
-                              ? prev.permissions.filter((id) => id !== page.id)
-                              : [...prev.permissions, page.id],
-                          }));
-                        }}
-                      />
-                      <div
-                        className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all ${
-                          isChecked
-                            ? "border-purple-600 bg-purple-600"
-                            : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                        }`}
-                      >
-                        {isChecked && (
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 12 12">
-                            <path d="M2 6l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
+                    <div key={category.id} className="mb-6">
+                      <h5 className="text-[13px] font-bold text-gray-500 uppercase tracking-wider mb-3 pb-1 border-b">
+                        {category.label}
+                      </h5>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {categoryPages.map((page) => {
+                          const isChecked = formData.permissions.includes(
+                            page.id,
+                          );
+
+                          return (
+                            <label
+                              key={page.id}
+                              className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all select-none ${
+                                isChecked
+                                  ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
+                                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/40"
+                              }`}
+                            >
+                              <input
+                                checked={isChecked}
+                                className="sr-only"
+                                type="checkbox"
+                                onChange={() => {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    permissions: isChecked
+                                      ? prev.permissions.filter(
+                                          (id) => id !== page.id,
+                                        )
+                                      : [...prev.permissions, page.id],
+                                  }));
+                                }}
+                              />
+                              <div
+                                className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all ${
+                                  isChecked
+                                    ? "border-purple-600 bg-purple-600"
+                                    : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                                }`}
+                              >
+                                {isChecked && (
+                                  <svg
+                                    className="w-2.5 h-2.5 text-white"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={3}
+                                    viewBox="0 0 12 12"
+                                  >
+                                    <path
+                                      d="M2 6l3 3 5-5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span
+                                  className={`text-[12.5px] font-semibold leading-tight truncate ${
+                                    isChecked
+                                      ? "text-purple-700 dark:text-purple-300"
+                                      : "text-gray-800 dark:text-gray-200"
+                                  }`}
+                                >
+                                  {page.name}
+                                </span>
+                                <span className="text-[10.5px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                                  {page.path}
+                                </span>
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className={`text-[12.5px] font-semibold leading-tight truncate ${
-                          isChecked ? "text-purple-700 dark:text-purple-300" : "text-gray-800 dark:text-gray-200"
-                        }`}>{page.name}</span>
-                        <span className="text-[10.5px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{page.path}</span>
-                      </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>

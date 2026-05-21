@@ -9,9 +9,7 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
-  arrayUnion,
   runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
@@ -24,8 +22,6 @@ import {
   PharmacySettings,
   PaymentMethod,
 } from "../types/models";
-
-import { medicineService } from "./medicineService";
 
 const MEDICINE_PURCHASES_COLLECTION = "medicinePurchases";
 const MEDICINE_USAGE_COLLECTION = "medicineUsage";
@@ -50,7 +46,9 @@ export const pharmacyService = {
       );
 
       // Pre-fetch all active stock batch document references for the medicine IDs
-      const medicineIds = Array.from(new Set(medicineItems.map((item) => item.medicineId)));
+      const medicineIds = Array.from(
+        new Set(medicineItems.map((item) => item.medicineId)),
+      );
       const allStockRefs: Record<string, { docRef: any; id: string }[]> = {};
 
       for (const medicineId of medicineIds) {
@@ -60,6 +58,7 @@ export const pharmacyService = {
           where("clinicId", "==", purchaseData.clinicId),
         );
         const snap = await getDocs(q);
+
         allStockRefs[medicineId] = snap.docs.map((docVal) => ({
           docRef: docVal.ref,
           id: docVal.id,
@@ -68,7 +67,10 @@ export const pharmacyService = {
 
       const purchaseId = await runTransaction(db, async (transaction) => {
         // 1. Read all active stock documents for transaction consistency
-        const activeBatchesByMedicine: Record<string, { id: string; docRef: any; data: any }[]> = {};
+        const activeBatchesByMedicine: Record<
+          string,
+          { id: string; docRef: any; data: any }[]
+        > = {};
 
         for (const medicineId of medicineIds) {
           const refs = allStockRefs[medicineId] || [];
@@ -76,6 +78,7 @@ export const pharmacyService = {
 
           for (const ref of refs) {
             const snap = await transaction.get(ref.docRef);
+
             if (snap.exists()) {
               loadedBatches.push({
                 id: ref.id,
@@ -107,7 +110,10 @@ export const pharmacyService = {
           // A. Filter out expired batches (expiryDate < now)
           const activeNonExpiredBatches = batches.filter((b) => {
             if (!b.data.expiryDate) return true; // Treat no expiry as non-expired
-            const exp = b.data.expiryDate.toDate ? b.data.expiryDate.toDate() : new Date(b.data.expiryDate);
+            const exp = b.data.expiryDate.toDate
+              ? b.data.expiryDate.toDate()
+              : new Date(b.data.expiryDate);
+
             return exp >= now;
           });
 
@@ -137,12 +143,18 @@ export const pharmacyService = {
                 ? b.data.createdAt.toDate().getTime()
                 : new Date(b.data.createdAt).getTime()
               : 0;
+
             return createdA - createdB;
           });
 
           const stockType = (item as any).stockType || "regular";
           let remainingQty = item.quantity;
-          const batchesUsed: { batchNumber: string; qty: number; price: number; expiryDate?: any }[] = [];
+          const batchesUsed: {
+            batchNumber: string;
+            qty: number;
+            price: number;
+            expiryDate?: any;
+          }[] = [];
           let itemTotalAmount = 0;
 
           // C. Iterate over sorted batches and deduct stock
@@ -152,8 +164,8 @@ export const pharmacyService = {
             const batchStockData = batch.data;
             const batchStockAvailable =
               stockType === "scheme"
-                ? batchStockData.schemeStock ?? 0
-                : batchStockData.currentStock ?? 0;
+                ? (batchStockData.schemeStock ?? 0)
+                : (batchStockData.currentStock ?? 0);
 
             if (batchStockAvailable <= 0) continue;
 
@@ -162,23 +174,29 @@ export const pharmacyService = {
             const newRegularStock =
               stockType === "regular"
                 ? (batchStockData.currentStock ?? 0) - qtyToDeduct
-                : batchStockData.currentStock ?? 0;
+                : (batchStockData.currentStock ?? 0);
 
             const newSchemeStock =
               stockType === "scheme"
                 ? (batchStockData.schemeStock ?? 0) - qtyToDeduct
-                : batchStockData.schemeStock ?? 0;
+                : (batchStockData.schemeStock ?? 0);
 
             // Generate detailed stock transaction logs per batch with dynamic pricing
             const itemWithPrices = item as any;
-            const regularSalePrice = itemWithPrices.regularSalePrice || item.salePrice;
-            const schemeSalePrice = itemWithPrices.schemeSalePrice || item.salePrice;
-            const priceToUse = stockType === "scheme" ? schemeSalePrice : regularSalePrice;
+            const regularSalePrice =
+              itemWithPrices.regularSalePrice || item.salePrice;
+            const schemeSalePrice =
+              itemWithPrices.schemeSalePrice || item.salePrice;
+            const priceToUse =
+              stockType === "scheme" ? schemeSalePrice : regularSalePrice;
 
             // Fetch dynamic selling price for this specific batch, fallback to cart unit price if not configured
-            const batchPrice = stockType === "scheme"
-              ? (batchStockData.schemePrice ?? batchStockData.salePrice ?? priceToUse)
-              : (batchStockData.salePrice ?? priceToUse);
+            const batchPrice =
+              stockType === "scheme"
+                ? (batchStockData.schemePrice ??
+                  batchStockData.salePrice ??
+                  priceToUse)
+                : (batchStockData.salePrice ?? priceToUse);
 
             itemTotalAmount += batchPrice * qtyToDeduct;
 
@@ -207,9 +225,10 @@ export const pharmacyService = {
               quantity: qtyToDeduct,
               previousStock:
                 stockType === "scheme"
-                  ? batchStockData.schemeStock ?? 0
-                  : batchStockData.currentStock ?? 0,
-              newStock: stockType === "scheme" ? newSchemeStock : newRegularStock,
+                  ? (batchStockData.schemeStock ?? 0)
+                  : (batchStockData.currentStock ?? 0),
+              newStock:
+                stockType === "scheme" ? newSchemeStock : newRegularStock,
               isSchemeStock: stockType === "scheme",
               salePrice: batchPrice,
               unitPrice: batchPrice,
@@ -234,12 +253,18 @@ export const pharmacyService = {
 
           // D. Prevent sale and throw explicit error if requested quantity exceeds non-expired batch stocks
           if (remainingQty > 0) {
-            const totalActiveStock = activeNonExpiredBatches.reduce((sum, b) => {
-              return (
-                sum +
-                (stockType === "scheme" ? b.data.schemeStock ?? 0 : b.data.currentStock ?? 0)
-              );
-            }, 0);
+            const totalActiveStock = activeNonExpiredBatches.reduce(
+              (sum, b) => {
+                return (
+                  sum +
+                  (stockType === "scheme"
+                    ? (b.data.schemeStock ?? 0)
+                    : (b.data.currentStock ?? 0))
+                );
+              },
+              0,
+            );
+
             throw new Error(
               `Insufficient non-expired stock for "${item.medicineName}". ` +
                 `Requested: ${item.quantity}, Available: ${totalActiveStock + (item.quantity - remainingQty)}.`,
@@ -252,9 +277,14 @@ export const pharmacyService = {
           const batchString = batchesUsed
             .map((b) => {
               let expStr = "";
+
               if (b.expiryDate) {
                 try {
-                  const d = typeof b.expiryDate.toDate === "function" ? b.expiryDate.toDate() : new Date(b.expiryDate);
+                  const d =
+                    typeof b.expiryDate.toDate === "function"
+                      ? b.expiryDate.toDate()
+                      : new Date(b.expiryDate);
+
                   if (d && !isNaN(d.getTime())) {
                     expStr = d.toISOString().split("T")[0];
                   }
@@ -263,18 +293,25 @@ export const pharmacyService = {
                 }
               }
               const expPart = expStr ? `|Exp: ${expStr}` : "";
+
               return `${b.batchNumber}${expPart} (x${b.qty} @ NPR ${b.price})`;
             })
             .join(", ");
-          
-          const weightedSalePrice = item.quantity > 0 ? (itemTotalAmount / item.quantity) : item.salePrice;
+
+          const weightedSalePrice =
+            item.quantity > 0
+              ? itemTotalAmount / item.quantity
+              : item.salePrice;
 
           let finalExpiryDate = item.expiryDate;
+
           if (batchesUsed.length === 1 && batchesUsed[0].expiryDate) {
             try {
-              const d = typeof batchesUsed[0].expiryDate.toDate === "function"
-                ? batchesUsed[0].expiryDate.toDate()
-                : new Date(batchesUsed[0].expiryDate);
+              const d =
+                typeof batchesUsed[0].expiryDate.toDate === "function"
+                  ? batchesUsed[0].expiryDate.toDate()
+                  : new Date(batchesUsed[0].expiryDate);
+
               if (d && !isNaN(d.getTime())) {
                 finalExpiryDate = d.toISOString().split("T")[0];
               }
@@ -293,15 +330,21 @@ export const pharmacyService = {
         }
 
         // F. Calculate final consistent parent totals based on dynamic batch items
-        const finalDiscount = Math.min(purchaseData.discount || 0, newGrossTotal);
-          
+        const finalDiscount = Math.min(
+          purchaseData.discount || 0,
+          newGrossTotal,
+        );
+
         const taxableAmount = Math.max(0, newGrossTotal - finalDiscount);
-        const finalTaxAmount = Math.round(taxableAmount * ((purchaseData.taxPercentage || 0) / 100));
+        const finalTaxAmount = Math.round(
+          taxableAmount * ((purchaseData.taxPercentage || 0) / 100),
+        );
         const finalNetAmount = Math.round(taxableAmount + finalTaxAmount);
 
         // 3. Perform Writes
         // Create Purchase/Invoice with batch-filled items and dynamically computed totals
         const purchaseRef = doc(collection(db, MEDICINE_PURCHASES_COLLECTION));
+
         transaction.set(purchaseRef, {
           ...purchaseData,
           items: updatedPurchaseItems,
@@ -322,6 +365,7 @@ export const pharmacyService = {
         // Create Stock Transactions
         for (const log of transactionLogs) {
           const logRef = doc(collection(db, "stockTransactions"));
+
           transaction.set(logRef, {
             ...log,
             createdAt: serverTimestamp(),
@@ -407,8 +451,17 @@ export const pharmacyService = {
       });
 
       return purchases.sort((a, b) => {
-        const dateA = a.purchaseDate ? (a.purchaseDate instanceof Date ? a.purchaseDate.getTime() : new Date(a.purchaseDate).getTime()) : 0;
-        const dateB = b.purchaseDate ? (b.purchaseDate instanceof Date ? b.purchaseDate.getTime() : new Date(b.purchaseDate).getTime()) : 0;
+        const dateA = a.purchaseDate
+          ? a.purchaseDate instanceof Date
+            ? a.purchaseDate.getTime()
+            : new Date(a.purchaseDate).getTime()
+          : 0;
+        const dateB = b.purchaseDate
+          ? b.purchaseDate instanceof Date
+            ? b.purchaseDate.getTime()
+            : new Date(b.purchaseDate).getTime()
+          : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -449,34 +502,42 @@ export const pharmacyService = {
   ): Promise<string> {
     try {
       const purchaseRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseId);
-      
+
       const medicineItems = returnData.items;
       const stockRefs: Record<string, any> = {};
-      
+
       for (const item of medicineItems) {
         const q = query(
           collection(db, "medicineStock"),
           where("medicineId", "==", item.medicineId),
-          where("clinicId", "==", returnData.clinicId)
+          where("clinicId", "==", returnData.clinicId),
         );
         const snap = await getDocs(q);
+
         if (!snap.empty) {
-          stockRefs[item.medicineId] = doc(db, "medicineStock", snap.docs[0].id);
+          stockRefs[item.medicineId] = doc(
+            db,
+            "medicineStock",
+            snap.docs[0].id,
+          );
         }
       }
 
       const returnId = await runTransaction(db, async (transaction) => {
         // 1. Read Purchase Document
         const purchaseSnap = await transaction.get(purchaseRef);
+
         if (!purchaseSnap.exists()) {
           throw new Error("Purchase not found");
         }
         const originalPurchase = purchaseSnap.data() as MedicinePurchase;
-        
+
         // 2. Read all Stock Documents
         const stockSnaps: Record<string, any> = {};
+
         for (const medicineId in stockRefs) {
           const snap = await transaction.get(stockRefs[medicineId]);
+
           if (snap.exists()) {
             stockSnaps[medicineId] = snap.data();
           }
@@ -485,7 +546,7 @@ export const pharmacyService = {
         // 3. Prepare data
         const now = Timestamp.now();
         const generatedId = doc(collection(db, "temp")).id;
-        
+
         const returnRecord: any = {
           id: generatedId,
           clinicId: returnData.clinicId,
@@ -516,6 +577,7 @@ export const pharmacyService = {
 
         // Map for item types
         const purchaseItemTypeMap = new Map<string, string>();
+
         if (originalPurchase.items) {
           originalPurchase.items.forEach((item: any) => {
             purchaseItemTypeMap.set(item.id, item.type || "medicine");
@@ -533,12 +595,15 @@ export const pharmacyService = {
         // Update Stock and Create Transactions
         for (const item of medicineItems) {
           const itemType = purchaseItemTypeMap.get(item.purchaseItemId);
+
           if (itemType !== "medicine" && itemType !== undefined) continue;
 
           const currentStockData = stockSnaps[item.medicineId];
+
           if (currentStockData) {
-            const newStock = (currentStockData.currentStock || 0) + item.quantity;
-            
+            const newStock =
+              (currentStockData.currentStock || 0) + item.quantity;
+
             // Update stock
             transaction.update(stockRefs[item.medicineId], {
               currentStock: newStock,
@@ -548,6 +613,7 @@ export const pharmacyService = {
 
             // Create stock transaction
             const logRef = doc(collection(db, "stockTransactions"));
+
             transaction.set(logRef, {
               medicineId: item.medicineId,
               type: "returned",
@@ -600,10 +666,7 @@ export const pharmacyService = {
   ): Promise<MedicinePurchase[]> {
     try {
       const purchasesRef = collection(db, MEDICINE_PURCHASES_COLLECTION);
-      let q = query(
-        purchasesRef,
-        where("paymentStatus", "==", paymentStatus),
-      );
+      let q = query(purchasesRef, where("paymentStatus", "==", paymentStatus));
 
       if (branchId) {
         q = query(
@@ -704,10 +767,7 @@ export const pharmacyService = {
 
       // Filter by branch if specified
       if (branchId) {
-        q = query(
-          usageRef,
-          where("branchId", "==", branchId),
-        );
+        q = query(usageRef, where("branchId", "==", branchId));
       }
 
       const querySnapshot = await getDocs(q);
@@ -739,10 +799,7 @@ export const pharmacyService = {
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
-      let q = query(
-        usageRef,
-        where("medicineId", "==", medicineId),
-      );
+      let q = query(usageRef, where("medicineId", "==", medicineId));
 
       if (branchId) {
         q = query(
@@ -781,10 +838,7 @@ export const pharmacyService = {
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
-      let q = query(
-        usageRef,
-        where("patientId", "==", patientId),
-      );
+      let q = query(usageRef, where("patientId", "==", patientId));
 
       if (branchId) {
         q = query(

@@ -38,15 +38,15 @@ const STATUS_OPTIONS: {
   label: string;
   color: "primary" | "warning" | "secondary" | "success" | "danger" | "default";
 }[] = [
-    { key: "all", label: "All Statuses", color: "default" },
-    { key: "new", label: "New", color: "primary" },
-    { key: "contacted", label: "Contacted", color: "warning" },
-    // Backward-compatible: underlying status key stays `scheduled` but UI label is "Technician"
-    { key: "scheduled", label: "Technician", color: "secondary" },
-    // Backward-compatible: underlying status key stays `converted` but UI label is "Done"
-    { key: "converted", label: "Done", color: "success" },
-    { key: "closed", label: "Closed", color: "danger" },
-  ];
+  { key: "all", label: "All Statuses", color: "default" },
+  { key: "new", label: "New", color: "primary" },
+  { key: "contacted", label: "Contacted", color: "warning" },
+  // Backward-compatible: underlying status key stays `scheduled` but UI label is "Technician"
+  { key: "scheduled", label: "Technician", color: "secondary" },
+  // Backward-compatible: underlying status key stays `converted` but UI label is "Done"
+  { key: "converted", label: "Done", color: "success" },
+  { key: "closed", label: "Closed", color: "danger" },
+];
 
 const ACTION_OPTIONS: { key: "call" | "offer" | "council"; label: string }[] = [
   { key: "call", label: "Call" },
@@ -437,9 +437,7 @@ export default function EnquiriesPage() {
     <div className="space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
-          <h1 className={`${title({ size: "lg" })} text-primary`}>
-            Enquiries
-          </h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>Enquiries</h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Log social media and marketing leads in one place.
           </p>
@@ -485,14 +483,22 @@ export default function EnquiriesPage() {
         </div>
         <div className="h-6 w-px bg-border-base hidden sm:block" />
         <div className="flex items-center gap-2">
-          <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Status</label>
+          <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+            Status
+          </label>
           <select
             className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as EnquiryStatus | "all")}
+            onChange={(e) =>
+              setStatusFilter(e.target.value as EnquiryStatus | "all")
+            }
           >
             {STATUS_OPTIONS.map((option) => (
-              <option className="bg-surface" key={option.key} value={option.key}>
+              <option
+                key={option.key}
+                className="bg-surface"
+                value={option.key}
+              >
                 {option.label}
               </option>
             ))}
@@ -601,8 +607,8 @@ export default function EnquiriesPage() {
                       <td className="px-4 py-3 align-top text-xs font-medium text-text-main">
                         {enquiry.action
                           ? (ACTION_OPTIONS.find(
-                            (o) => o.key === enquiry.action,
-                          )?.label ?? enquiry.action)
+                              (o) => o.key === enquiry.action,
+                            )?.label ?? enquiry.action)
                           : "—"}
                       </td>
                       <td className="px-4 py-3 align-top">
@@ -673,7 +679,11 @@ export default function EnquiriesPage() {
                               {STATUS_OPTIONS.filter(
                                 (o) => o.key !== "all",
                               ).map((option) => (
-                                <option className="bg-surface" key={option.key} value={option.key}>
+                                <option
+                                  key={option.key}
+                                  className="bg-surface"
+                                  value={option.key}
+                                >
                                   {option.label}
                                 </option>
                               ))}
@@ -853,9 +863,15 @@ export default function EnquiriesPage() {
                         }))
                       }
                     >
-                      <option className="bg-surface" value="">—</option>
+                      <option className="bg-surface" value="">
+                        —
+                      </option>
                       {ACTION_OPTIONS.map((option) => (
-                        <option className="bg-surface" key={option.key} value={option.key}>
+                        <option
+                          key={option.key}
+                          className="bg-surface"
+                          value={option.key}
+                        >
                           {option.label}
                         </option>
                       ))}
@@ -877,7 +893,11 @@ export default function EnquiriesPage() {
                     >
                       {STATUS_OPTIONS.filter((opt) => opt.key !== "all").map(
                         (option) => (
-                          <option className="bg-surface" key={option.key} value={option.key}>
+                          <option
+                            key={option.key}
+                            className="bg-surface"
+                            value={option.key}
+                          >
                             {option.label}
                           </option>
                         ),

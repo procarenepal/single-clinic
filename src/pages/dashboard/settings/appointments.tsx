@@ -9,7 +9,7 @@ import {
   IoSparklesOutline,
 } from "react-icons/io5";
 
-import { title, subtitle } from "@/components/primitives";
+import { title } from "@/components/primitives";
 import {
   Card,
   CardBody,
@@ -232,7 +232,7 @@ export default function AppointmentSettingsPage() {
     if (!clinicId || !currentUser) return;
     if (
       !confirm(
-        "Are you sure you want to seed 10 skincare hospital appointment types? This will replace your current appointment types."
+        "Are you sure you want to seed 10 skincare hospital appointment types? This will replace your current appointment types.",
       )
     )
       return;
@@ -258,25 +258,59 @@ export default function AppointmentSettingsPage() {
       // 1. Delete existing types
       const q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
       const snapshot = await getDocs(q);
+
       if (!snapshot.empty) {
         const deletePromises = snapshot.docs.map((docSnap) =>
-          deleteDoc(doc(db, "appointment_types", docSnap.id))
+          deleteDoc(doc(db, "appointment_types", docSnap.id)),
         );
+
         await Promise.all(deletePromises);
       }
 
       // 2. Add the 10 skincare types
       const skincareTypes = [
         { name: "Acne Consultation & Care", price: 1200, color: "cyan" },
-        { name: "Botox & Anti-Aging Consultation", price: 3000, color: "purple" },
+        {
+          name: "Botox & Anti-Aging Consultation",
+          price: 3000,
+          color: "purple",
+        },
         { name: "Advanced Chemical Peel", price: 2500, color: "orange" },
-        { name: "Laser Hair Reduction Consultation", price: 1500, color: "blue" },
-        { name: "Platelet-Rich Plasma (PRP) Therapy", price: 4500, color: "pink" },
-        { name: "Microdermabrasion & Facial Rejuvenation", price: 3500, color: "emerald" },
-        { name: "Mole & Skin Tag Removal (Electrocautery)", price: 2000, color: "red" },
-        { name: "Hyperpigmentation & Melasma Treatment", price: 1800, color: "amber" },
-        { name: "Eczema, Psoriasis & Allergy Management", price: 1000, color: "default" },
-        { name: "Customized Skincare Routine & Product Audit", price: 800, color: "teal" }
+        {
+          name: "Laser Hair Reduction Consultation",
+          price: 1500,
+          color: "blue",
+        },
+        {
+          name: "Platelet-Rich Plasma (PRP) Therapy",
+          price: 4500,
+          color: "pink",
+        },
+        {
+          name: "Microdermabrasion & Facial Rejuvenation",
+          price: 3500,
+          color: "emerald",
+        },
+        {
+          name: "Mole & Skin Tag Removal (Electrocautery)",
+          price: 2000,
+          color: "red",
+        },
+        {
+          name: "Hyperpigmentation & Melasma Treatment",
+          price: 1800,
+          color: "amber",
+        },
+        {
+          name: "Eczema, Psoriasis & Allergy Management",
+          price: 1000,
+          color: "default",
+        },
+        {
+          name: "Customized Skincare Routine & Product Audit",
+          price: 800,
+          color: "teal",
+        },
       ];
 
       const addPromises = skincareTypes.map((type) => {
@@ -288,9 +322,11 @@ export default function AppointmentSettingsPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         };
+
         if (branchId) {
           newType.branchId = branchId;
         }
+
         return addDoc(appointmentTypesRef, newType);
       });
 
@@ -298,16 +334,19 @@ export default function AppointmentSettingsPage() {
 
       // Invalidate cache
       const { cacheService } = await import("@/services/cacheService");
+
       cacheService.invalidateClinicAppointmentTypes(clinicId);
 
       // Reload
       await loadAppointmentTypes();
-      alert("Successfully seeded 10 professional skincare hospital appointment types!");
+      alert(
+        "Successfully seeded 10 professional skincare hospital appointment types!",
+      );
     } catch (error) {
       console.error("Error seeding skincare types:", error);
       alert(
         "Failed to seed appointment types: " +
-          (error instanceof Error ? error.message : String(error))
+          (error instanceof Error ? error.message : String(error)),
       );
     } finally {
       setIsLoadingData(false);
@@ -401,7 +440,9 @@ export default function AppointmentSettingsPage() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Appointment Configuration</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Appointment Configuration
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
@@ -430,7 +471,9 @@ export default function AppointmentSettingsPage() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Appointment Configuration</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Appointment Configuration
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               Manage appointment types and pricing in Nepali Rupees (NPR)
             </p>
@@ -451,11 +494,11 @@ export default function AppointmentSettingsPage() {
               </Button>
             </Link>
             <Button
-              color="warning"
-              variant="flat"
-              startContent={<IoSparklesOutline className="text-warning-500" />}
-              onClick={handleSeedSkincareTypes}
               className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 font-medium"
+              color="warning"
+              startContent={<IoSparklesOutline className="text-warning-500" />}
+              variant="flat"
+              onClick={handleSeedSkincareTypes}
             >
               Seed Skincare Types
             </Button>
@@ -563,10 +606,11 @@ export default function AppointmentSettingsPage() {
                 {filteredAppointmentTypes.map((type) => (
                   <Card
                     key={type.id}
-                    className={`border border-mountain-200 ${!type.isActive ? "opacity-60" : ""} ${selectedTypes.has(type.id)
-                      ? "ring-2 ring-teal-200 bg-teal-50/30"
-                      : ""
-                      }`}
+                    className={`border border-mountain-200 ${!type.isActive ? "opacity-60" : ""} ${
+                      selectedTypes.has(type.id)
+                        ? "ring-2 ring-teal-200 bg-teal-50/30"
+                        : ""
+                    }`}
                   >
                     <CardBody className="p-4">
                       <div className="flex items-center justify-between">
@@ -585,14 +629,20 @@ export default function AppointmentSettingsPage() {
                               {type.color !== "none" ? (
                                 <div
                                   style={{
-                                    backgroundColor: isDark ? getAppointmentColorById(type.color).darkColor : getAppointmentColorById(type.color).lightColor,
+                                    backgroundColor: isDark
+                                      ? getAppointmentColorById(type.color)
+                                          .darkColor
+                                      : getAppointmentColorById(type.color)
+                                          .lightColor,
                                     boxShadow: `0 0 0 2px ${isDark ? getAppointmentColorById(type.color).darkBg : getAppointmentColorById(type.color).lightBg}`,
                                   }}
                                 />
                               ) : (
                                 <div className="w-4 h-4 rounded-full border-2 border-dashed border-border-base bg-surface-2" />
                               )}
-                              <h4 className="font-semibold text-text-main">{type.name}</h4>
+                              <h4 className="font-semibold text-text-main">
+                                {type.name}
+                              </h4>
                               <Chip
                                 color={type.isActive ? "success" : "default"}
                                 size="sm"
@@ -787,7 +837,9 @@ function AppointmentTypeModal({
                     <div
                       className="w-4 h-4 rounded-full border border-border-base"
                       style={{
-                        backgroundColor: isDark ? selected.darkColor : selected.lightColor,
+                        backgroundColor: isDark
+                          ? selected.darkColor
+                          : selected.lightColor,
                         boxShadow: `0 0 0 2px ${isDark ? selected.darkBg : selected.lightBg}`,
                       }}
                     />
@@ -836,7 +888,9 @@ function AppointmentTypeModal({
                       <div
                         className="w-4 h-4 rounded-full border border-border-base flex-shrink-0"
                         style={{
-                          backgroundColor: isDark ? color.darkColor : color.lightColor,
+                          backgroundColor: isDark
+                            ? color.darkColor
+                            : color.lightColor,
                           boxShadow: `0 0 0 2px ${isDark ? color.darkBg : color.lightBg}`,
                         }}
                       />

@@ -6,11 +6,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  query,
-  where,
   addDoc,
   serverTimestamp,
-  writeBatch,
 } from "firebase/firestore";
 
 import { auth, db } from "../config/firebase";

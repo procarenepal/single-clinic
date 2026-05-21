@@ -236,9 +236,7 @@ export default function PatientNotesTab({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-section-title text-text-main">
-            Patient Notes
-          </h2>
+          <h2 className="text-section-title text-text-main">Patient Notes</h2>
           <p className="text-[12.5px] text-text-muted">
             Document patient notes in configured sections
           </p>
@@ -282,9 +280,7 @@ export default function PatientNotesTab({
                 {s.sectionLabel}
               </label>
               {s.description && (
-                <p className="text-[10.5px] text-text-muted">
-                  {s.description}
-                </p>
+                <p className="text-[10.5px] text-text-muted">{s.description}</p>
               )}
               <textarea
                 className="w-full px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main
@@ -331,7 +327,10 @@ export default function PatientNotesTab({
               </thead>
               <tbody className="divide-y divide-mountain-100">
                 {noteEntries.map((e) => (
-                  <tr key={e.id} className="hover:bg-surface-2 transition-colors">
+                  <tr
+                    key={e.id}
+                    className="hover:bg-surface-2 transition-colors"
+                  >
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       <SectionBadge label={e.sectionLabel} />
                     </td>

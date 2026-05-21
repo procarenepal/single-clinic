@@ -14,7 +14,7 @@ import {
   IoCheckmarkCircleOutline,
 } from "react-icons/io5";
 
-import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
+import { Skeleton } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { branchService } from "@/services/branchService";
 import { clinicService } from "@/services/clinicService";
@@ -47,8 +47,7 @@ export default function SystemOwnerDashboard() {
   });
 
   const isSystemOwner =
-    userData?.role === "system-owner" ||
-    userData?.role === "clinic-admin";
+    userData?.role === "system-owner" || userData?.role === "clinic-admin";
 
   useEffect(() => {
     if (clinicId && isSystemOwner) {

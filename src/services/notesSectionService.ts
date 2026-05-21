@@ -8,7 +8,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -65,7 +64,9 @@ export const notesSectionService = {
       return sections.sort((a, b) => {
         const orderA = a.displayOrder ?? 0;
         const orderB = b.displayOrder ?? 0;
+
         if (orderA !== orderB) return orderA - orderB;
+
         // Secondary sort by createdAt desc
         return b.createdAt.getTime() - a.createdAt.getTime();
       });
@@ -95,14 +96,17 @@ export const notesSectionService = {
 
       // Self-healing: If no notes sections are configured for this clinic, auto-seed standard default sections
       if (sections.length === 0) {
-        console.log(`[notesSectionService] Seeding default notes sections for clinic: ${clinicId}`);
+        console.log(
+          `[notesSectionService] Seeding default notes sections for clinic: ${clinicId}`,
+        );
         const defaultSections = [
           {
             clinicId,
             branchId: "",
             sectionKey: "triage-vitals",
             sectionLabel: "Triage Vitals",
-            description: "BP, Heart Rate, Temperature, Respiratory Rate, Oxygen Saturation (SpO2), Weight & Height.",
+            description:
+              "BP, Heart Rate, Temperature, Respiratory Rate, Oxygen Saturation (SpO2), Weight & Height.",
             isActive: true,
             displayOrder: 1,
             createdBy: "system",
@@ -112,7 +116,8 @@ export const notesSectionService = {
             branchId: "",
             sectionKey: "nursing-observations",
             sectionLabel: "Nursing Observations",
-            description: "Recorded physical status, pain levels, active complaints, and triage priority.",
+            description:
+              "Recorded physical status, pain levels, active complaints, and triage priority.",
             isActive: true,
             displayOrder: 2,
             createdBy: "system",
@@ -122,7 +127,8 @@ export const notesSectionService = {
             branchId: "",
             sectionKey: "progress-notes",
             sectionLabel: "Progress Notes",
-            description: "General nurse ward updates, chief complaints timeline, and hourly ward notes.",
+            description:
+              "General nurse ward updates, chief complaints timeline, and hourly ward notes.",
             isActive: true,
             displayOrder: 3,
             createdBy: "system",
@@ -130,6 +136,7 @@ export const notesSectionService = {
         ];
 
         const seededList: NotesSection[] = [];
+
         for (const defaultSect of defaultSections) {
           const docData = {
             ...defaultSect,
@@ -137,6 +144,7 @@ export const notesSectionService = {
             updatedAt: Timestamp.now(),
           };
           const docRef = await addDoc(collection(db, COLLECTION_NAME), docData);
+
           seededList.push({
             id: docRef.id,
             ...defaultSect,
@@ -144,6 +152,7 @@ export const notesSectionService = {
             updatedAt: new Date(),
           });
         }
+
         return seededList;
       }
 
@@ -153,6 +162,7 @@ export const notesSectionService = {
         .sort((a, b) => {
           const orderA = a.displayOrder ?? 0;
           const orderB = b.displayOrder ?? 0;
+
           return orderA - orderB;
         });
     } catch (error) {

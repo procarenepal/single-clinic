@@ -9,7 +9,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
   increment,
 } from "firebase/firestore";
@@ -90,12 +89,17 @@ export const appointmentBillingService = {
       }
 
       // If document doesn't exist, create it auto-enabled
-      const defaultSettings = this.getDefaultBillingSettings(clinicId, "system");
+      const defaultSettings = this.getDefaultBillingSettings(
+        clinicId,
+        "system",
+      );
+
       await setDoc(settingsRef, {
         ...defaultSettings,
         createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        updatedAt: Timestamp.now(),
       });
+
       return defaultSettings;
     } catch (error) {
       console.error("Error getting billing settings:", error);
@@ -625,7 +629,9 @@ export const appointmentBillingService = {
       });
 
       // Sort in-memory to avoid index requirement
-      return billingRecords.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return billingRecords.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     } catch (error) {
       console.error("Error getting billing records by patient:", error);
       throw error;
@@ -719,31 +725,34 @@ export const appointmentBillingService = {
         // 1. Try finding by billingId
         let q = query(appointmentsRef, where("billingId", "==", id));
         let querySnapshot = await getDocs(q);
-        
+
         // 1.5. Try finding by consultationBillingId
         if (querySnapshot.empty) {
           q = query(appointmentsRef, where("consultationBillingId", "==", id));
           querySnapshot = await getDocs(q);
         }
-        
+
         // 2. Fallback: if not found by billingId or consultationBillingId (legacy/external creation), try patientId & status = completed
         if (querySnapshot.empty) {
           q = query(
-            appointmentsRef, 
+            appointmentsRef,
             where("patientId", "==", billing.patientId),
-            where("status", "==", "completed")
+            where("status", "==", "completed"),
           );
           querySnapshot = await getDocs(q);
         }
 
         if (!querySnapshot.empty) {
-          const isConsultationOnly = billing.items && billing.items.some(
-            (item: any) =>
-              item.appointmentTypeId === "consultation-fee" ||
-              (item.appointmentTypeName && item.appointmentTypeName.includes("Consultation Fee"))
-          );
+          const isConsultationOnly =
+            billing.items &&
+            billing.items.some(
+              (item: any) =>
+                item.appointmentTypeId === "consultation-fee" ||
+                (item.appointmentTypeName &&
+                  item.appointmentTypeName.includes("Consultation Fee")),
+            );
 
-          const updatePromises = querySnapshot.docs.map(docSnap => {
+          const updatePromises = querySnapshot.docs.map((docSnap) => {
             const apptDocRef = doc(db, "appointments", docSnap.id);
             const apptUpdates: any = {
               billingStatus: paymentStatus,
@@ -751,16 +760,24 @@ export const appointmentBillingService = {
               consultationBillingStatus: paymentStatus,
               updatedAt: Timestamp.now(),
             };
+
             if (!isConsultationOnly) {
               apptUpdates.status = "completed";
             }
+
             return updateDoc(apptDocRef, apptUpdates);
           });
+
           await Promise.all(updatePromises);
-          console.log(`Updated associated appointments for billing ID ${id} to billingStatus: ${paymentStatus}`);
+          console.log(
+            `Updated associated appointments for billing ID ${id} to billingStatus: ${paymentStatus}`,
+          );
         }
       } catch (apptError) {
-        console.error("Error updating associated appointment status:", apptError);
+        console.error(
+          "Error updating associated appointment status:",
+          apptError,
+        );
       }
     } catch (error) {
       console.error("Error recording payment:", error);

@@ -86,7 +86,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
       setSettings({
         canSellMedicines: clinicSettings?.sellsMedicines || false,
-        enableInventoryManagement: clinicSettings?.enableInventoryManagement || false,
+        enableInventoryManagement:
+          clinicSettings?.enableInventoryManagement || false,
         enableLowStockAlerts: clinicSettings?.enableLowStockAlerts || false,
         lowStockThreshold: clinicSettings?.lowStockThreshold || 10,
         enableExpiryAlerts: clinicSettings?.enableExpiryAlerts || false,

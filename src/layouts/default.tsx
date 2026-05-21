@@ -22,6 +22,7 @@ export default function DefaultLayout({
     if (logo.startsWith("http")) return logo;
     try {
       const url = storage.getFileView(APPWRITE_BUCKET_ID, logo);
+
       return `${url.toString()}&t=${Date.now()}`;
     } catch {
       return null;
@@ -33,13 +34,20 @@ export default function DefaultLayout({
     if (!clinicId) return;
     let cancelled = false;
 
-    clinicService.getClinicById(clinicId).then((clinic) => {
-      if (cancelled || !clinic) return;
-      setClinicName(clinic.name);
-      if (clinic.logo) setClinicLogo(getLogoUrl(clinic.logo));
-    }).catch(() => {/* silently fall back to defaults */ });
+    clinicService
+      .getClinicById(clinicId)
+      .then((clinic) => {
+        if (cancelled || !clinic) return;
+        setClinicName(clinic.name);
+        if (clinic.logo) setClinicLogo(getLogoUrl(clinic.logo));
+      })
+      .catch(() => {
+        /* silently fall back to defaults */
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [clinicId]);
 
   return (
@@ -256,13 +264,14 @@ export default function DefaultLayout({
           <div className="pt-8 border-t border-[rgb(var(--color-border))] flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-col items-center md:items-start gap-1">
               <p className="text-[rgb(var(--color-text-muted))] text-sm font-medium">
-                © {new Date().getFullYear()} {clinicName}. All rights
-                reserved.
+                © {new Date().getFullYear()} {clinicName}. All rights reserved.
               </p>
               <div className="flex items-center gap-1.5 text-xs text-[rgb(var(--color-text-muted))] opacity-70">
                 <span>Designed & Engineered in</span>
                 <span className="text-red-500">🇳🇵</span>
-                <span className="font-medium text-[rgb(var(--color-text-muted))]">Nepal</span>
+                <span className="font-medium text-[rgb(var(--color-text-muted))]">
+                  Nepal
+                </span>
               </div>
             </div>
 

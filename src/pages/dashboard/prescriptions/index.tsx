@@ -4,19 +4,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  getPrintBrandingCSS,
-  getPrintHeaderHTML,
-  getPrintFooterHTML,
-} from "@/utils/printBranding";
-import { clinicService } from "@/services/clinicService";
-import { PrintLayoutConfig } from "@/types/printLayout";
-import {
   IoAddOutline,
   IoEyeOutline,
   IoCloseOutline,
   IoCreateOutline,
   IoDownloadOutline,
-  IoEllipsisVerticalOutline,
   IoFilterOutline,
   IoTrashOutline,
   IoSearchOutline,
@@ -28,9 +20,16 @@ import {
 } from "react-icons/io5";
 import * as XLSX from "xlsx";
 
+import {
+  getPrintBrandingCSS,
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+} from "@/utils/printBranding";
+import { clinicService } from "@/services/clinicService";
+import { PrintLayoutConfig } from "@/types/printLayout";
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
+import { TableSkeleton } from "@/components/ui";
 import {
   Dropdown,
   DropdownTrigger,
@@ -82,13 +81,7 @@ function CustomInput({
   );
 }
 
-function CustomSelect({
-  value,
-  onChange,
-  options,
-  className,
-  label,
-}: any) {
+function CustomSelect({ value, onChange, options, className, label }: any) {
   const selectedOption = options.find((o: any) => o.value === value);
 
   return (
@@ -98,7 +91,7 @@ function CustomSelect({
           {label}
         </label>
       )}
-      <Dropdown placement="bottom-start" className="w-full">
+      <Dropdown className="w-full" placement="bottom-start">
         <DropdownTrigger className="w-full">
           <div className="w-full h-[36px] bg-surface-2 border border-border-base rounded-[10px] px-3 flex items-center justify-between text-[13px] font-medium text-text-main hover:bg-surface-3 transition-all cursor-pointer">
             <span className="truncate">
@@ -111,8 +104,14 @@ function CustomSelect({
           {options.map((option: any) => (
             <DropdownItem
               key={option.value}
-              className={value === option.value ? "bg-primary/10 text-primary font-bold" : ""}
-              onClick={() => onChange({ target: { value: option.value } } as any)}
+              className={
+                value === option.value
+                  ? "bg-primary/10 text-primary font-bold"
+                  : ""
+              }
+              onClick={() =>
+                onChange({ target: { value: option.value } } as any)
+              }
             >
               {option.label}
             </DropdownItem>
@@ -145,9 +144,7 @@ function ModalShell({ isOpen, onClose, title, children, size = "md" }: any) {
           className={`bg-surface border border-border-base rounded-[10px] shadow-2xl w-full ${maxWidth} pointer-events-auto flex flex-col max-h-[90vh] overflow-hidden`}
         >
           <div className="flex items-center justify-between px-6 py-5 border-b border-border-base bg-surface-2/50">
-            <h3 className="text-lg font-bold text-text-main">
-              {title}
-            </h3>
+            <h3 className="text-lg font-bold text-text-main">{title}</h3>
             <button
               className="text-text-muted hover:text-text-main transition-colors"
               onClick={onClose}
@@ -169,8 +166,7 @@ export default function PrescriptionsPage() {
 
   const branchId = userData?.branchId ?? contextBranchId ?? null;
   const isClinicAdmin =
-    userData?.role === "clinic-admin" ||
-    userData?.role === "system-owner";
+    userData?.role === "clinic-admin" || userData?.role === "system-owner";
 
   const [prescriptions, setPrescriptions] = useState<ExtendedPrescription[]>(
     [],
@@ -181,7 +177,9 @@ export default function PrescriptionsPage() {
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
   const [branchMap, setBranchMap] = useState<Record<string, string>>({});
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(null);
+  const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(
+    null,
+  );
   const [clinic, setClinic] = useState<any>(null);
 
   const effectiveBranchId = branchId ?? selectedBranchId ?? undefined;
@@ -272,6 +270,7 @@ export default function PrescriptionsPage() {
     (async () => {
       try {
         const doctorsData = await doctorService.getDoctors();
+
         setAllDoctors(doctorsData);
       } catch (err) {
         console.error("Error fetching doctors:", err);
@@ -309,7 +308,7 @@ export default function PrescriptionsPage() {
               );
 
               itemsCount = items.length;
-            } catch (e) { }
+            } catch (e) {}
 
             return {
               ...prescription,
@@ -368,7 +367,6 @@ export default function PrescriptionsPage() {
 
     return searchMatch && statusMatch && doctorMatch && dateMatch;
   });
-
 
   const totalPages = Math.max(
     1,
@@ -488,7 +486,9 @@ export default function PrescriptionsPage() {
       if (!printWindow) throw new Error();
 
       const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
-      const headerHTML = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic) : "";
+      const headerHTML = layoutConfig
+        ? getPrintHeaderHTML(layoutConfig, clinic)
+        : "";
       const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
       const printContent = `
@@ -545,7 +545,9 @@ export default function PrescriptionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className={`${title({ size: "lg" })} text-primary`}>Prescriptions</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
+            Prescriptions
+          </h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Manage patient prescriptions and medical records
           </p>
@@ -553,12 +555,15 @@ export default function PrescriptionsPage() {
         <div className="flex flex-wrap items-center gap-3">
           {!branchId && isClinicAdmin && branches.length > 0 && (
             <div className="flex items-center gap-1.5 bg-surface-2 border border-border-base px-2.5 py-1 rounded-[10px]">
-              <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Branch</span>
+              <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                Branch
+              </span>
               <Dropdown placement="bottom-end">
                 <DropdownTrigger>
                   <div className="h-6 flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity">
                     <span className="text-[12px] font-bold text-text-main">
-                      {branches.find((b) => b.id === (selectedBranchId ?? ""))?.name || "All Branches"}
+                      {branches.find((b) => b.id === (selectedBranchId ?? ""))
+                        ?.name || "All Branches"}
                     </span>
                     <IoChevronDown className="w-3 h-3 text-text-muted" />
                   </div>
@@ -567,7 +572,11 @@ export default function PrescriptionsPage() {
                   {branches.map((b) => (
                     <DropdownItem
                       key={b.id}
-                      className={selectedBranchId === b.id ? "bg-primary/10 text-primary font-bold" : ""}
+                      className={
+                        selectedBranchId === b.id
+                          ? "bg-primary/10 text-primary font-bold"
+                          : ""
+                      }
                       onClick={() => setSelectedBranchId(b.id)}
                     >
                       {b.name}
@@ -677,7 +686,10 @@ export default function PrescriptionsPage() {
               className="w-full md:w-48"
               options={[
                 { value: "all", label: "All Doctors" },
-                ...allDoctors.map((d) => ({ value: d.id, label: `Dr. ${d.name}` })),
+                ...allDoctors.map((d) => ({
+                  value: d.id,
+                  label: `Dr. ${d.name}`,
+                })),
               ]}
               value={selectedDoctor}
               onChange={(e: any) => {
@@ -793,7 +805,9 @@ export default function PrescriptionsPage() {
                 <h3 className="text-lg font-bold text-text-main">
                   Error Loading Prescriptions
                 </h3>
-                <p className="text-sm font-medium text-text-muted mt-1 max-w-sm">{error}</p>
+                <p className="text-sm font-medium text-text-muted mt-1 max-w-sm">
+                  {error}
+                </p>
               </div>
               <Button color="primary" onClick={() => window.location.reload()}>
                 Try Again
@@ -883,7 +897,10 @@ export default function PrescriptionsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-text-muted truncate max-w-[150px]" title={prescription.diagnosis}>
+                      <div
+                        className="text-sm text-text-muted truncate max-w-[150px]"
+                        title={prescription.diagnosis}
+                      >
                         {prescription.diagnosis || "—"}
                       </div>
                     </td>
@@ -901,7 +918,9 @@ export default function PrescriptionsPage() {
                           size="sm"
                           variant="light"
                           onClick={() =>
-                            navigate(`/dashboard/prescriptions/${prescription.id}`)
+                            navigate(
+                              `/dashboard/prescriptions/${prescription.id}`,
+                            )
                           }
                         >
                           <IoEyeOutline className="w-4 h-4" />
@@ -911,7 +930,9 @@ export default function PrescriptionsPage() {
                           size="sm"
                           variant="light"
                           onClick={() =>
-                            navigate(`/dashboard/prescriptions/${prescription.id}/edit`)
+                            navigate(
+                              `/dashboard/prescriptions/${prescription.id}/edit`,
+                            )
                           }
                         >
                           <IoCreateOutline className="w-4 h-4" />

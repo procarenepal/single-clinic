@@ -10,10 +10,6 @@ import {
   where,
   addDoc,
   serverTimestamp,
-  orderBy,
-  limit,
-  startAfter,
-  getCountFromServer,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
 
@@ -256,7 +252,9 @@ export const medicineService = {
         } as Medicine;
       });
 
-      console.log(`[Diagnostic] clinicId: "${clinicId}", Found: ${medicines.length} medicines`);
+      console.log(
+        `[Diagnostic] clinicId: "${clinicId}", Found: ${medicines.length} medicines`,
+      );
 
       // Sort in memory by name
       return medicines.sort((a, b) => a.name.localeCompare(b.name));
@@ -289,10 +287,7 @@ export const medicineService = {
       }
 
       // Fetch all to handle in-memory search and pagination without composite indices
-      const q = query(
-        collection(db, MEDICINES_COLLECTION),
-        ...baseConstraints,
-      );
+      const q = query(collection(db, MEDICINES_COLLECTION), ...baseConstraints);
 
       const querySnapshot = await getDocs(q);
       let allMedicines = querySnapshot.docs.map((d) => {
@@ -310,8 +305,9 @@ export const medicineService = {
       // Handle search in memory
       if (searchPrefix != null && searchPrefix !== "") {
         const prefix = searchPrefix.toLowerCase().trim();
-        allMedicines = allMedicines.filter((m) => 
-          m.name.toLowerCase().startsWith(prefix)
+
+        allMedicines = allMedicines.filter((m) =>
+          m.name.toLowerCase().startsWith(prefix),
         );
       }
 
@@ -320,14 +316,21 @@ export const medicineService = {
 
       // Handle pagination in memory
       let startIndex = 0;
+
       if (lastDoc) {
         startIndex = allMedicines.findIndex((m) => m.id === lastDoc.id) + 1;
       }
-      
-      const paginatedMedicines = allMedicines.slice(startIndex, startIndex + pageSize);
+
+      const paginatedMedicines = allMedicines.slice(
+        startIndex,
+        startIndex + pageSize,
+      );
       const last =
         paginatedMedicines.length === pageSize
-          ? querySnapshot.docs.find(d => d.id === paginatedMedicines[paginatedMedicines.length - 1].id) || null
+          ? querySnapshot.docs.find(
+              (d) =>
+                d.id === paginatedMedicines[paginatedMedicines.length - 1].id,
+            ) || null
           : null;
 
       return { medicines: paginatedMedicines, lastDoc: last as any };
@@ -354,18 +357,16 @@ export const medicineService = {
         baseConstraints.push(where("branchId", "==", branchId));
       }
 
-      const q = query(
-        collection(db, MEDICINES_COLLECTION),
-        ...baseConstraints,
-      );
+      const q = query(collection(db, MEDICINES_COLLECTION), ...baseConstraints);
 
       const querySnapshot = await getDocs(q);
       let count = querySnapshot.size;
 
       if (searchPrefix != null && searchPrefix !== "") {
         const prefix = searchPrefix.toLowerCase().trim();
-        count = querySnapshot.docs.filter((doc) => 
-          (doc.data().name || "").toLowerCase().startsWith(prefix)
+
+        count = querySnapshot.docs.filter((doc) =>
+          (doc.data().name || "").toLowerCase().startsWith(prefix),
         ).length;
       }
 
@@ -500,22 +501,49 @@ export const medicineService = {
       // Aggregate all active stock entries for this medicine
       const stocks: MedicineStock[] = querySnapshot.docs.map((d) => {
         const data = d.data() as any;
+
         return {
           id: d.id,
           ...data,
           currentStock: data.currentStock ?? 0,
           schemeStock: data.schemeStock ?? 0,
-          expiryDate: data.expiryDate?.toDate ? data.expiryDate.toDate() : (data.expiryDate ? new Date(data.expiryDate) : undefined),
-          manufactureDate: data.manufactureDate?.toDate ? data.manufactureDate.toDate() : (data.manufactureDate ? new Date(data.manufactureDate) : undefined),
-          lastRestocked: data.lastRestocked?.toDate ? data.lastRestocked.toDate() : (data.lastRestocked ? new Date(data.lastRestocked) : undefined),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : undefined),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
+          expiryDate: data.expiryDate?.toDate
+            ? data.expiryDate.toDate()
+            : data.expiryDate
+              ? new Date(data.expiryDate)
+              : undefined,
+          manufactureDate: data.manufactureDate?.toDate
+            ? data.manufactureDate.toDate()
+            : data.manufactureDate
+              ? new Date(data.manufactureDate)
+              : undefined,
+          lastRestocked: data.lastRestocked?.toDate
+            ? data.lastRestocked.toDate()
+            : data.lastRestocked
+              ? new Date(data.lastRestocked)
+              : undefined,
+          createdAt: data.createdAt?.toDate
+            ? data.createdAt.toDate()
+            : data.createdAt
+              ? new Date(data.createdAt)
+              : undefined,
+          updatedAt: data.updatedAt?.toDate
+            ? data.updatedAt.toDate()
+            : data.updatedAt
+              ? new Date(data.updatedAt)
+              : undefined,
         } as MedicineStock;
       });
 
       // Sum up regular and scheme stocks
-      const totalCurrentStock = stocks.reduce((acc, curr) => acc + curr.currentStock, 0);
-      const totalSchemeStock = stocks.reduce((acc, curr) => acc + curr.schemeStock, 0);
+      const totalCurrentStock = stocks.reduce(
+        (acc, curr) => acc + curr.currentStock,
+        0,
+      );
+      const totalSchemeStock = stocks.reduce(
+        (acc, curr) => acc + curr.schemeStock,
+        0,
+      );
 
       // Find the first stock document to preserve main details (min stock, reorder levels, etc.)
       const baseStock = stocks[0];
@@ -537,6 +565,7 @@ export const medicineService = {
   ): Promise<MedicineStock[]> {
     try {
       let q;
+
       if (clinicId) {
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
@@ -550,16 +579,38 @@ export const medicineService = {
         );
       }
       const querySnapshot = await getDocs(q);
+
       return querySnapshot.docs.map((d) => {
         const data = d.data() as any;
+
         return {
           id: d.id,
           ...data,
-          expiryDate: data.expiryDate?.toDate ? data.expiryDate.toDate() : (data.expiryDate ? new Date(data.expiryDate) : undefined),
-          manufactureDate: data.manufactureDate?.toDate ? data.manufactureDate.toDate() : (data.manufactureDate ? new Date(data.manufactureDate) : undefined),
-          lastRestocked: data.lastRestocked?.toDate ? data.lastRestocked.toDate() : (data.lastRestocked ? new Date(data.lastRestocked) : undefined),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : undefined),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
+          expiryDate: data.expiryDate?.toDate
+            ? data.expiryDate.toDate()
+            : data.expiryDate
+              ? new Date(data.expiryDate)
+              : undefined,
+          manufactureDate: data.manufactureDate?.toDate
+            ? data.manufactureDate.toDate()
+            : data.manufactureDate
+              ? new Date(data.manufactureDate)
+              : undefined,
+          lastRestocked: data.lastRestocked?.toDate
+            ? data.lastRestocked.toDate()
+            : data.lastRestocked
+              ? new Date(data.lastRestocked)
+              : undefined,
+          createdAt: data.createdAt?.toDate
+            ? data.createdAt.toDate()
+            : data.createdAt
+              ? new Date(data.createdAt)
+              : undefined,
+          updatedAt: data.updatedAt?.toDate
+            ? data.updatedAt.toDate()
+            : data.updatedAt
+              ? new Date(data.updatedAt)
+              : undefined,
         } as MedicineStock;
       });
     } catch (error) {
@@ -581,10 +632,12 @@ export const medicineService = {
         where("clinicId", "==", clinicId),
       );
       const querySnapshot = await getDocs(q);
+
       if (querySnapshot.empty) return null;
 
       const docVal = querySnapshot.docs[0];
       const data = docVal.data();
+
       return {
         id: docVal.id,
         ...data,
@@ -676,10 +729,13 @@ export const medicineService = {
 
         snapshot.docs.forEach((d) => {
           const data = d.data();
-          const existing = results.find(r => r.medicineId === data.medicineId);
+          const existing = results.find(
+            (r) => r.medicineId === data.medicineId,
+          );
+
           if (existing) {
-            existing.currentStock += (data.currentStock ?? 0);
-            existing.schemeStock += (data.schemeStock ?? 0);
+            existing.currentStock += data.currentStock ?? 0;
+            existing.schemeStock += data.schemeStock ?? 0;
           } else {
             results.push({
               medicineId: data.medicineId,
@@ -779,6 +835,7 @@ export const medicineService = {
       transactions.sort((a, b) => {
         const timeA = a.createdAt?.getTime() || 0;
         const timeB = b.createdAt?.getTime() || 0;
+
         return timeB - timeA; // Descending
       });
 
@@ -874,8 +931,17 @@ export const medicineService = {
 
       // Sort by createdAt desc in memory
       transactions.sort((a, b) => {
-        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
-        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        const dateA = a.createdAt
+          ? a.createdAt instanceof Date
+            ? a.createdAt.getTime()
+            : new Date(a.createdAt).getTime()
+          : 0;
+        const dateB = b.createdAt
+          ? b.createdAt instanceof Date
+            ? b.createdAt.getTime()
+            : new Date(b.createdAt).getTime()
+          : 0;
+
         return dateB - dateA;
       });
 
@@ -957,7 +1023,9 @@ export const medicineService = {
       });
 
       // Sort by name in memory
-      return suppliers.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      return suppliers.sort((a, b) =>
+        (a.name || "").localeCompare(b.name || ""),
+      );
     } catch (error) {
       console.error("Error fetching suppliers:", error);
       throw error;
@@ -1072,7 +1140,9 @@ export const medicineService = {
       });
 
       // Sort by purchaseDate desc in memory
-      return records.sort((a, b) => b.purchaseDate.getTime() - a.purchaseDate.getTime());
+      return records.sort(
+        (a, b) => b.purchaseDate.getTime() - a.purchaseDate.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching purchase records:", error);
       throw error;
@@ -1142,7 +1212,9 @@ export const medicineService = {
       });
 
       // Sort by purchaseDate desc in memory
-      return records.sort((a, b) => b.purchaseDate.getTime() - a.purchaseDate.getTime());
+      return records.sort(
+        (a, b) => b.purchaseDate.getTime() - a.purchaseDate.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching purchase records by supplier:", error);
       throw error;
@@ -1185,7 +1257,9 @@ export const medicineService = {
       });
 
       // Sort by purchaseDate asc in memory
-      records.sort((a, b) => a.purchaseDate.getTime() - b.purchaseDate.getTime());
+      records.sort(
+        (a, b) => a.purchaseDate.getTime() - b.purchaseDate.getTime(),
+      );
 
       // Filter for records that are overdue (older than 30 days and not paid)
       const thirtyDaysAgo = new Date();
@@ -1305,8 +1379,17 @@ export const medicineService = {
 
       // Sort by date desc in memory
       return payments.sort((a, b) => {
-        const dateA = a.date ? (a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime()) : 0;
-        const dateB = b.date ? (b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime()) : 0;
+        const dateA = a.date
+          ? a.date instanceof Date
+            ? a.date.getTime()
+            : new Date(a.date).getTime()
+          : 0;
+        const dateB = b.date
+          ? b.date instanceof Date
+            ? b.date.getTime()
+            : new Date(b.date).getTime()
+          : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -1354,8 +1437,17 @@ export const medicineService = {
 
       // Sort by date desc in memory
       return payments.sort((a, b) => {
-        const dateA = a.date ? (a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime()) : 0;
-        const dateB = b.date ? (b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime()) : 0;
+        const dateA = a.date
+          ? a.date instanceof Date
+            ? a.date.getTime()
+            : new Date(a.date).getTime()
+          : 0;
+        const dateB = b.date
+          ? b.date instanceof Date
+            ? b.date.getTime()
+            : new Date(b.date).getTime()
+          : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -1435,6 +1527,7 @@ export const medicineService = {
       return entries.sort((a, b) => {
         const timeA = a.createdAt?.getTime() || 0;
         const timeB = b.createdAt?.getTime() || 0;
+
         return timeA - timeB;
       });
     } catch (error) {
@@ -1857,7 +1950,10 @@ export const medicineService = {
         { name: "Antihistamine", description: "Allergy relief" },
         { name: "Supplements", description: "Vitamins and minerals" },
         { name: "Cardiovascular", description: "Heart and lipid medications" },
-        { name: "Gastrointestinal", description: "Stomach and bowel medications" },
+        {
+          name: "Gastrointestinal",
+          description: "Stomach and bowel medications",
+        },
         { name: "Antidiabetic", description: "Blood sugar control" },
         { name: "Antihypertensive", description: "Blood pressure control" },
         { name: "Respiratory", description: "Asthma and allergy inhalers" },
@@ -2528,19 +2624,30 @@ export const medicineService = {
       for (const med of meds) {
         // Clinically assign a brand or fallback to random
         let brandName = "GSK";
-        if (med.categoryId === catMap["Analgesic"]) brandName = index % 2 === 0 ? "GSK" : "Novartis";
-        else if (med.categoryId === catMap["Antibiotic"]) brandName = index % 2 === 0 ? "GSK" : "Pfizer";
-        else if (med.categoryId === catMap["Antihistamine"]) brandName = index % 2 === 0 ? "GSK" : "Pfizer";
-        else if (med.categoryId === catMap["Supplements"]) brandName = index % 2 === 0 ? "Abbott" : "Pfizer";
-        else if (med.categoryId === catMap["Antidiabetic"]) brandName = index % 2 === 0 ? "Sun Pharma" : "Novartis";
-        else if (med.categoryId === catMap["Antihypertensive"]) brandName = index % 2 === 0 ? "Sun Pharma" : "Torrent";
-        else if (med.categoryId === catMap["Cardiovascular"]) brandName = index % 2 === 0 ? "Lupin" : "Sun Pharma";
-        else if (med.categoryId === catMap["Gastrointestinal"]) brandName = index % 2 === 0 ? "Alkem" : "NPL";
+
+        if (med.categoryId === catMap["Analgesic"])
+          brandName = index % 2 === 0 ? "GSK" : "Novartis";
+        else if (med.categoryId === catMap["Antibiotic"])
+          brandName = index % 2 === 0 ? "GSK" : "Pfizer";
+        else if (med.categoryId === catMap["Antihistamine"])
+          brandName = index % 2 === 0 ? "GSK" : "Pfizer";
+        else if (med.categoryId === catMap["Supplements"])
+          brandName = index % 2 === 0 ? "Abbott" : "Pfizer";
+        else if (med.categoryId === catMap["Antidiabetic"])
+          brandName = index % 2 === 0 ? "Sun Pharma" : "Novartis";
+        else if (med.categoryId === catMap["Antihypertensive"])
+          brandName = index % 2 === 0 ? "Sun Pharma" : "Torrent";
+        else if (med.categoryId === catMap["Cardiovascular"])
+          brandName = index % 2 === 0 ? "Lupin" : "Sun Pharma";
+        else if (med.categoryId === catMap["Gastrointestinal"])
+          brandName = index % 2 === 0 ? "Alkem" : "NPL";
         else if (med.categoryId === catMap["Respiratory"]) brandName = "Cipla";
-        else if (med.categoryId === catMap["Dermatological"]) brandName = index % 2 === 0 ? "Pfizer" : "Alkem";
+        else if (med.categoryId === catMap["Dermatological"])
+          brandName = index % 2 === 0 ? "Pfizer" : "Alkem";
         else if (med.categoryId === catMap["Pediatric"]) brandName = "NPL";
-        
-        const brandId = brandMap[brandName] || brandKeys[index % brandKeys.length];
+
+        const brandId =
+          brandMap[brandName] || brandKeys[index % brandKeys.length];
 
         const medicineId = await this.createMedicine({
           ...med,
@@ -2553,13 +2660,19 @@ export const medicineService = {
 
         // Determine a realistic stock count (make 5 items low stock, others high stock)
         const isLowStockItem = index < 5;
-        const currentStock = isLowStockItem ? Math.floor(3 + Math.random() * 6) : Math.floor(100 + Math.random() * 150);
-        
+        const currentStock = isLowStockItem
+          ? Math.floor(3 + Math.random() * 6)
+          : Math.floor(100 + Math.random() * 150);
+
         // Generate a future expiry date (e.g. 1 to 2 years from now)
         const futureExpiry = new Date();
-        futureExpiry.setMonth(futureExpiry.getMonth() + Math.floor(12 + Math.random() * 12));
 
-        const seededBatchNumber = "B" + Math.floor(100000 + Math.random() * 900000);
+        futureExpiry.setMonth(
+          futureExpiry.getMonth() + Math.floor(12 + Math.random() * 12),
+        );
+
+        const seededBatchNumber =
+          "B" + Math.floor(100000 + Math.random() * 900000);
 
         // Create Stock Record
         await this.createMedicineStock({

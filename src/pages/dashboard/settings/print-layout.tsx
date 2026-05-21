@@ -17,7 +17,6 @@ import {
   IoMailOutline,
   IoGlobeOutline,
   IoTrashOutline,
-  IoTextOutline,
   IoColorPaletteOutline,
 } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
@@ -281,14 +280,19 @@ export default function PrintLayoutPage() {
     document.body.appendChild(iframe);
 
     const doc = iframe.contentWindow?.document || iframe.contentDocument;
+
     if (!doc) {
       setIsPrinting(false);
+
       return;
     }
 
     const headerHeight =
-      layoutConfig.headerHeight === "compact" ? 140 :
-        layoutConfig.headerHeight === "expanded" ? 220 : 180;
+      layoutConfig.headerHeight === "compact"
+        ? 140
+        : layoutConfig.headerHeight === "expanded"
+          ? 220
+          : 180;
 
     const primaryColor = layoutConfig.primaryColor || "#0ea5e9";
     const fontSize = layoutConfig.fontSize || "medium";
@@ -370,12 +374,12 @@ export default function PrintLayoutPage() {
           if (document.body.contains(iframe)) {
             document.body.removeChild(iframe);
           }
-          window.removeEventListener('focus', handleAfterPrint);
+          window.removeEventListener("focus", handleAfterPrint);
         };
 
         // Listen for the dialog closing (either Print or Cancel)
-        iframe.contentWindow.addEventListener('afterprint', handleAfterPrint);
-        window.addEventListener('focus', handleAfterPrint, { once: true });
+        iframe.contentWindow.addEventListener("afterprint", handleAfterPrint);
+        window.addEventListener("focus", handleAfterPrint, { once: true });
 
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
@@ -505,7 +509,11 @@ export default function PrintLayoutPage() {
                 </CardHeader>
                 <CardBody className="space-y-4">
                   <Input
-                    description={clinic?.name ? `Default: ${clinic.name}` : "You can override the clinic name for printing"}
+                    description={
+                      clinic?.name
+                        ? `Default: ${clinic.name}`
+                        : "You can override the clinic name for printing"
+                    }
                     label="Clinic Name"
                     placeholder="Clinic name to show on print"
                     value={layoutConfig.clinicName || ""}
@@ -670,28 +678,47 @@ export default function PrintLayoutPage() {
                 <CardHeader className="bg-default-50 border-b border-default-200">
                   <div className="flex items-center gap-2">
                     <IoColorPaletteOutline className="w-5 h-5 text-primary" />
-                    <h3 className="text-lg font-semibold">Typography & Colors</h3>
+                    <h3 className="text-lg font-semibold">
+                      Typography & Colors
+                    </h3>
                   </div>
                 </CardHeader>
                 <CardBody className="space-y-4">
                   <Select
                     label="Font Family"
-                    selectedKeys={layoutConfig.fontFamily ? [layoutConfig.fontFamily] : ["'Inter', sans-serif"]}
+                    selectedKeys={
+                      layoutConfig.fontFamily
+                        ? [layoutConfig.fontFamily]
+                        : ["'Inter', sans-serif"]
+                    }
                     onSelectionChange={(keys) => {
                       const font = Array.from(keys)[0] as string;
+
                       setLayoutConfig((prev) => ({
                         ...prev,
                         fontFamily: font,
                       }));
                     }}
                   >
-                    <SelectItem key="'Inter', sans-serif">Inter (Modern)</SelectItem>
-                    <SelectItem key="'Nunito', sans-serif">Nunito (Friendly)</SelectItem>
-                    <SelectItem key="'Plus Jakarta Sans', sans-serif">Jakarta Sans (Tech)</SelectItem>
-                    <SelectItem key="'Roboto', sans-serif">Roboto (Classic)</SelectItem>
-                    <SelectItem key="'Outfit', sans-serif">Outfit (Premium)</SelectItem>
+                    <SelectItem key="'Inter', sans-serif">
+                      Inter (Modern)
+                    </SelectItem>
+                    <SelectItem key="'Nunito', sans-serif">
+                      Nunito (Friendly)
+                    </SelectItem>
+                    <SelectItem key="'Plus Jakarta Sans', sans-serif">
+                      Jakarta Sans (Tech)
+                    </SelectItem>
+                    <SelectItem key="'Roboto', sans-serif">
+                      Roboto (Classic)
+                    </SelectItem>
+                    <SelectItem key="'Outfit', sans-serif">
+                      Outfit (Premium)
+                    </SelectItem>
                     <SelectItem key="Arial, sans-serif">Arial</SelectItem>
-                    <SelectItem key="'Times New Roman', serif">Times New Roman</SelectItem>
+                    <SelectItem key="'Times New Roman', serif">
+                      Times New Roman
+                    </SelectItem>
                   </Select>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -739,6 +766,7 @@ export default function PrintLayoutPage() {
                       value={layoutConfig.contentFontSize?.toString() || "12"}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
+
                         setLayoutConfig((prev) => ({
                           ...prev,
                           contentFontSize: isNaN(val) ? 12 : val,
@@ -765,10 +793,11 @@ export default function PrintLayoutPage() {
                     <div className="space-y-3">
                       {/* File Drop Zone */}
                       <div
-                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${isUploading
-                          ? "border-primary bg-primary/5 opacity-50"
-                          : "border-default-300 hover:border-default-400 cursor-pointer"
-                          }`}
+                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                          isUploading
+                            ? "border-primary bg-primary/5 opacity-50"
+                            : "border-default-300 hover:border-default-400 cursor-pointer"
+                        }`}
                         onDragEnter={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -940,7 +969,8 @@ export default function PrintLayoutPage() {
                           | "medium"
                           | "large";
 
-                        const width = size === "small" ? 60 : size === "large" ? 140 : 100;
+                        const width =
+                          size === "small" ? 60 : size === "large" ? 140 : 100;
 
                         setLayoutConfig((prev) => ({
                           ...prev,
@@ -1062,7 +1092,7 @@ export default function PrintLayoutPage() {
                       type="number"
                       value={
                         layoutConfig.contentTopMarginWithoutLetterheadMm !==
-                          undefined
+                        undefined
                           ? layoutConfig.contentTopMarginWithoutLetterheadMm.toString()
                           : "20"
                       }
@@ -1088,7 +1118,9 @@ export default function PrintLayoutPage() {
                 <CardHeader className="bg-default-50 border-b border-default-200">
                   <div className="flex items-center gap-2">
                     <IoPrintOutline className="w-5 h-5 text-primary" />
-                    <h3 className="text-lg font-semibold">Printer & Paper Settings</h3>
+                    <h3 className="text-lg font-semibold">
+                      Printer & Paper Settings
+                    </h3>
                   </div>
                 </CardHeader>
                 <CardBody className="space-y-4">
@@ -1098,6 +1130,7 @@ export default function PrintLayoutPage() {
                       selectedKeys={[layoutConfig.defaultPrintFormat || "A4"]}
                       onSelectionChange={(keys) => {
                         const format = Array.from(keys)[0] as string;
+
                         setLayoutConfig((prev) => ({
                           ...prev,
                           defaultPrintFormat: format,
@@ -1108,14 +1141,20 @@ export default function PrintLayoutPage() {
                       <SelectItem key="A4_HALF">A4 Half (A5)</SelectItem>
                       <SelectItem key="THERMAL_80MM">Thermal 80mm</SelectItem>
                       <SelectItem key="THERMAL_58MM">Thermal 58mm</SelectItem>
-                      <SelectItem key="THERMAL_4INCH">Label (4-inch)</SelectItem>
+                      <SelectItem key="THERMAL_4INCH">
+                        Label (4-inch)
+                      </SelectItem>
                     </Select>
 
                     <Select
                       label="Standard Paper Size"
                       selectedKeys={[layoutConfig.paperSize]}
                       onSelectionChange={(keys) => {
-                        const size = Array.from(keys)[0] as "A4" | "Letter" | "A5";
+                        const size = Array.from(keys)[0] as
+                          | "A4"
+                          | "Letter"
+                          | "A5";
+
                         setLayoutConfig((prev) => ({
                           ...prev,
                           paperSize: size,
@@ -1129,16 +1168,21 @@ export default function PrintLayoutPage() {
                   </div>
 
                   <div className="bg-default-50 p-3 rounded-lg border border-default-200">
-                    <p className="text-sm font-medium mb-2">Thermal Printer Configuration</p>
+                    <p className="text-sm font-medium mb-2">
+                      Thermal Printer Configuration
+                    </p>
                     <div className="grid grid-cols-1 gap-4">
                       <Input
                         description="Specify your thermal printer's paper width in millimeters. Standard is 80 or 58."
                         label="Thermal Paper Width (mm)"
                         placeholder="80"
                         type="number"
-                        value={layoutConfig.thermalPaperWidthMm?.toString() || "80"}
+                        value={
+                          layoutConfig.thermalPaperWidthMm?.toString() || "80"
+                        }
                         onChange={(e) => {
                           const val = parseInt(e.target.value);
+
                           setLayoutConfig((prev) => ({
                             ...prev,
                             thermalPaperWidthMm: isNaN(val) ? 80 : val,
@@ -1170,10 +1214,12 @@ export default function PrintLayoutPage() {
                     <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
                       <Button
                         isIconOnly
+                        className="h-7 w-7 min-w-0"
                         size="sm"
                         variant="light"
-                        className="h-7 w-7 min-w-0"
-                        onPress={() => setZoom(prev => Math.max(0.4, prev - 0.1))}
+                        onPress={() =>
+                          setZoom((prev) => Math.max(0.4, prev - 0.1))
+                        }
                       >
                         -
                       </Button>
@@ -1182,10 +1228,12 @@ export default function PrintLayoutPage() {
                       </span>
                       <Button
                         isIconOnly
+                        className="h-7 w-7 min-w-0"
                         size="sm"
                         variant="light"
-                        className="h-7 w-7 min-w-0"
-                        onPress={() => setZoom(prev => Math.min(1.5, prev + 0.1))}
+                        onPress={() =>
+                          setZoom((prev) => Math.min(1.5, prev + 0.1))
+                        }
                       >
                         +
                       </Button>
@@ -1239,9 +1287,7 @@ export default function PrintLayoutPage() {
                     onWidthChange={handleWidthChange}
                   >
                     {/* Sample Content - This will take up the remaining space */}
-                    <div
-                      className="flex-1 flex items-center justify-center p-10"
-                    >
+                    <div className="flex-1 flex items-center justify-center p-10">
                       <div className="text-center w-full max-w-md">
                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-slate-200">
                           <IoBusinessOutline className="w-8 h-8 text-slate-300" />
@@ -1251,7 +1297,10 @@ export default function PrintLayoutPage() {
                         </h2>
                         <div className="h-0.5 w-12 bg-slate-100 mx-auto mb-4" />
                         <p className="text-sm text-slate-400 leading-relaxed">
-                          This area represents where your clinical findings, prescriptions, and reports will be rendered. The header and footer above are what you are currently customizing.
+                          This area represents where your clinical findings,
+                          prescriptions, and reports will be rendered. The
+                          header and footer above are what you are currently
+                          customizing.
                         </p>
                       </div>
                     </div>

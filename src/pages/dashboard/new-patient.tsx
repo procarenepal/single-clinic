@@ -195,10 +195,10 @@ function DoctorSelect({
   const triggerRef = useRef<HTMLDivElement>(null);
   const filtered = q
     ? doctors.filter(
-      (d) =>
-        d.name.toLowerCase().includes(q.toLowerCase()) ||
-        d.speciality?.toLowerCase().includes(q.toLowerCase()),
-    )
+        (d) =>
+          d.name.toLowerCase().includes(q.toLowerCase()) ||
+          d.speciality?.toLowerCase().includes(q.toLowerCase()),
+      )
     : doctors;
   const selected = doctors.find((d) => d.id === value);
 
@@ -407,9 +407,7 @@ function AppointmentTypeSelect({
         {loading ? (
           <div className="flex items-center gap-2 px-2.5">
             <Spinner size="xs" />
-            <span className="text-[12px] text-text-muted">
-              Loading types…
-            </span>
+            <span className="text-[12px] text-text-muted">Loading types…</span>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 px-2.5 w-full">
@@ -501,7 +499,11 @@ function ReferralSourceSelect({
     rawType: "doctor" | "partner" | "expert" | "staff";
   }[];
   value: string;
-  onChange: (id: string, name: string, type: "doctor" | "partner" | "expert" | "staff" | "") => void;
+  onChange: (
+    id: string,
+    name: string,
+    type: "doctor" | "partner" | "expert" | "staff" | "",
+  ) => void;
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -699,9 +701,7 @@ function SectionHeader({
       <span className="text-primary">{icon}</span>
       <div>
         <h3 className="text-[13px] font-semibold text-text-main">{title}</h3>
-        {subtitle && (
-          <p className="text-[11px] text-text-muted">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-[11px] text-text-muted">{subtitle}</p>}
       </div>
     </div>
   );
@@ -770,7 +770,9 @@ const NewPatientPage: React.FC = () => {
   // ── Step
   const [step, setStep] = useState(1);
   const [isQuickMode, setIsQuickMode] = useState(false);
-  const [mobileStatus, setMobileStatus] = useState<"idle" | "checking" | "duplicate" | "clear">("idle");
+  const [mobileStatus, setMobileStatus] = useState<
+    "idle" | "checking" | "duplicate" | "clear"
+  >("idle");
   const TOTAL_STEPS = 2;
   const formattedToday = new Date().toISOString().split("T")[0];
 
@@ -837,13 +839,12 @@ const NewPatientPage: React.FC = () => {
           type: e.expertType || "Expert",
           rawType: "expert" as const,
         })),
-      ...staff
-        .map((s) => ({
-          id: s.id,
-          name: s.name,
-          type: s.role || "Staff",
-          rawType: "staff" as const,
-        })),
+      ...staff.map((s) => ({
+        id: s.id,
+        name: s.name,
+        type: s.role || "Staff",
+        rawType: "staff" as const,
+      })),
     ];
   }, [referralPartners, doctors, experts, staff]);
 
@@ -867,17 +868,22 @@ const NewPatientPage: React.FC = () => {
     debounce(async (mobileNumber: string) => {
       if (!mobileNumber || mobileNumber.length < 10 || !clinicId) {
         setMobileStatus("idle");
+
         return;
       }
       setMobileStatus("checking");
       try {
-        const exists = await patientService.checkMobileExists(mobileNumber, clinicId);
+        const exists = await patientService.checkMobileExists(
+          mobileNumber,
+          clinicId,
+        );
+
         setMobileStatus(exists ? "duplicate" : "clear");
       } catch {
         setMobileStatus("idle");
       }
     }, 500),
-    [clinicId]
+    [clinicId],
   );
 
   // ── Debounced date conversion ─────────────────────────────────────────────
@@ -1037,10 +1043,7 @@ const NewPatientPage: React.FC = () => {
       .finally(() => setExpertsLoading(false));
 
     // Load patients for existing appointment lookup
-    patientService
-      .getPatients()
-      .then(setPatients)
-      .catch(console.error);
+    patientService.getPatients().then(setPatients).catch(console.error);
 
     // Load appointment types
     appointmentTypeService
@@ -1076,8 +1079,8 @@ const NewPatientPage: React.FC = () => {
       .then((multi) =>
         multi
           ? branchService
-            .getMainBranch()
-            .then((b) => b && setDefaultBranchId(b.id))
+              .getMainBranch()
+              .then((b) => b && setDefaultBranchId(b.id))
           : setDefaultBranchId(clinicId),
       )
       .catch(() => setDefaultBranchId(clinicId));
@@ -1126,6 +1129,7 @@ const NewPatientPage: React.FC = () => {
     if (days < 0) {
       months--;
       const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+
       days += prevMonth;
     }
     if (months < 0) {
@@ -1136,6 +1140,7 @@ const NewPatientPage: React.FC = () => {
     if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
     if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
     if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+
     return "0 Days";
   };
 
@@ -1200,6 +1205,7 @@ const NewPatientPage: React.FC = () => {
         referredById: "",
         referredByName: "",
       };
+
       return {
         ...prev,
         referrals: [...(prev.referrals || []), newRef],
@@ -1216,21 +1222,25 @@ const NewPatientPage: React.FC = () => {
         current.type = value;
         if (value === "referral-partner") {
           const first = referralPartners[0];
+
           current.id = first?.id || "";
           current.name = first?.name || "";
           current.commissionPercentage = first?.defaultCommission || 0;
         } else if (value === "doctor") {
           const first = doctors[0];
+
           current.id = first?.id || "";
           current.name = first?.name || "";
           current.commissionPercentage = first?.defaultCommission || 0;
         } else if (value === "expert") {
           const first = experts[0];
+
           current.id = first?.id || "";
           current.name = first?.name || "";
           current.commissionPercentage = first?.defaultCommission || 0;
         } else if (value === "staff") {
           const first = staff[0];
+
           current.id = first?.id || "";
           current.name = first?.name || "";
           current.commissionPercentage = first?.defaultCommission || 0;
@@ -1238,19 +1248,23 @@ const NewPatientPage: React.FC = () => {
       } else if (key === "id") {
         current.id = value;
         if (current.type === "referral-partner") {
-          const match = referralPartners.find(rp => rp.id === value);
+          const match = referralPartners.find((rp) => rp.id === value);
+
           current.name = match?.name || "";
           current.commissionPercentage = match?.defaultCommission || 0;
         } else if (current.type === "doctor") {
-          const match = doctors.find(d => d.id === value);
+          const match = doctors.find((d) => d.id === value);
+
           current.name = match?.name || "";
           current.commissionPercentage = match?.defaultCommission || 0;
         } else if (current.type === "expert") {
-          const match = experts.find(e => e.id === value);
+          const match = experts.find((e) => e.id === value);
+
           current.name = match?.name || "";
           current.commissionPercentage = match?.defaultCommission || 0;
         } else if (current.type === "staff") {
-          const match = staff.find(s => s.id === value);
+          const match = staff.find((s) => s.id === value);
+
           current.name = match?.name || "";
           current.commissionPercentage = match?.defaultCommission || 0;
         }
@@ -1258,12 +1272,16 @@ const NewPatientPage: React.FC = () => {
         current.commissionPercentage = Number(value) || 0;
       } else if (key === "referredById") {
         current.referredById = value;
-        const matchDoc = doctors.find(d => d.id === value);
-        const matchExp = experts.find(e => e.id === value);
-        current.referredByName = matchDoc ? `Dr. ${matchDoc.name}` : (matchExp?.name || "");
+        const matchDoc = doctors.find((d) => d.id === value);
+        const matchExp = experts.find((e) => e.id === value);
+
+        current.referredByName = matchDoc
+          ? `Dr. ${matchDoc.name}`
+          : matchExp?.name || "";
       }
 
       updated[index] = current;
+
       return { ...prev, referrals: updated };
     });
   };
@@ -1336,7 +1354,9 @@ const NewPatientPage: React.FC = () => {
       ) {
         addToast({
           title: "Required fields missing",
-          description: isQuickMode ? "Fill in: Reg#, Name, Mobile" : "Fill in: Reg#, Name, Address, Mobile",
+          description: isQuickMode
+            ? "Fill in: Reg#, Name, Mobile"
+            : "Fill in: Reg#, Name, Address, Mobile",
           color: "warning",
         });
 
@@ -1379,13 +1399,17 @@ const NewPatientPage: React.FC = () => {
 
     patientData.referrals = profile.referrals || [];
     if (profile.referrals && profile.referrals.length > 0) {
-      const firstPartner = profile.referrals.find(r => r.type === "referral-partner");
+      const firstPartner = profile.referrals.find(
+        (r) => r.type === "referral-partner",
+      );
+
       if (firstPartner) {
         patientData.referralPartnerId = firstPartner.id;
         patientData.referralType = "partner";
         patientData.referredBy = firstPartner.name;
       } else {
         const first = profile.referrals[0];
+
         patientData.referralPartnerId = first.id;
         patientData.referralType = first.type;
         patientData.referredBy = first.name;
@@ -1394,7 +1418,10 @@ const NewPatientPage: React.FC = () => {
       if (profile.referralPartnerId && profile.referralType === "partner") {
         patientData.referralPartnerId = profile.referralPartnerId;
         patientData.referralType = "partner";
-      } else if (profile.referralPartnerId && profile.referralType === "doctor") {
+      } else if (
+        profile.referralPartnerId &&
+        profile.referralType === "doctor"
+      ) {
         patientData.referredBy = profile.referredBy;
         patientData.referralType = "doctor";
       }
@@ -1425,7 +1452,9 @@ const NewPatientPage: React.FC = () => {
       // ── Uniqueness Checks ──────────────────────────────────────────────────
       const [mobileExists, emailExists] = await Promise.all([
         patientService.checkMobileExists(profile.mobile, clinicId),
-        profile.email ? patientService.checkEmailExists(profile.email, clinicId) : Promise.resolve(false),
+        profile.email
+          ? patientService.checkEmailExists(profile.email, clinicId)
+          : Promise.resolve(false),
       ]);
 
       if (mobileExists) {
@@ -1435,6 +1464,7 @@ const NewPatientPage: React.FC = () => {
           color: "danger",
         });
         setLoading(false);
+
         return;
       }
 
@@ -1445,12 +1475,15 @@ const NewPatientPage: React.FC = () => {
           color: "danger",
         });
         setLoading(false);
+
         return;
       }
 
       const patientId = await patientService.createPatient(buildPatientData());
 
-      const doctorName = doctors.find(d => d.id === profile.doctor)?.name || "";
+      const doctorName =
+        doctors.find((d) => d.id === profile.doctor)?.name || "";
+
       setOpdTicket({
         patientId,
         name: profile.name,
@@ -1490,7 +1523,9 @@ const NewPatientPage: React.FC = () => {
       // ── Uniqueness Checks ──────────────────────────────────────────────────
       const [mobileExists, emailExists] = await Promise.all([
         patientService.checkMobileExists(profile.mobile, clinicId),
-        profile.email ? patientService.checkEmailExists(profile.email, clinicId) : Promise.resolve(false),
+        profile.email
+          ? patientService.checkEmailExists(profile.email, clinicId)
+          : Promise.resolve(false),
       ]);
 
       if (mobileExists) {
@@ -1500,6 +1535,7 @@ const NewPatientPage: React.FC = () => {
           color: "danger",
         });
         setLoading(false);
+
         return;
       }
 
@@ -1510,6 +1546,7 @@ const NewPatientPage: React.FC = () => {
           color: "danger",
         });
         setLoading(false);
+
         return;
       }
 
@@ -1518,29 +1555,41 @@ const NewPatientPage: React.FC = () => {
       // Handle Referral Commissions (Polymorphic Multiple Referrals)
       if (appt.appointmentType) {
         try {
-          const selectedType = appointmentTypes.find(t => t.id === appt.appointmentType);
+          const selectedType = appointmentTypes.find(
+            (t) => t.id === appt.appointmentType,
+          );
+
           if (selectedType) {
             const price = selectedType.price || 0;
-            const referralsToUse = (profile.referrals && profile.referrals.length > 0)
-              ? profile.referrals
-              : (profile.referralPartnerId ? [{
-                  type: profile.referralType || "referral-partner",
-                  id: profile.referralPartnerId,
-                  name: profile.referredBy,
-                  commissionPercentage: 0,
-                }] : []);
+            const referralsToUse =
+              profile.referrals && profile.referrals.length > 0
+                ? profile.referrals
+                : profile.referralPartnerId
+                  ? [
+                      {
+                        type: profile.referralType || "referral-partner",
+                        id: profile.referralPartnerId,
+                        name: profile.referredBy,
+                        commissionPercentage: 0,
+                      },
+                    ]
+                  : [];
 
             for (const ref of referralsToUse) {
-              const commissionPercent = ref.commissionPercentage > 0
-                ? ref.commissionPercentage
-                : 0;
+              const commissionPercent =
+                ref.commissionPercentage > 0 ? ref.commissionPercentage : 0;
 
               if (ref.type === "referral-partner") {
-                const partner = await referralPartnerService.getReferralPartnerById(ref.id);
+                const partner =
+                  await referralPartnerService.getReferralPartnerById(ref.id);
+
                 if (partner) {
-                  const finalPercentage = commissionPercent || partner.defaultCommission || 0;
+                  const finalPercentage =
+                    commissionPercent || partner.defaultCommission || 0;
+
                   if (finalPercentage > 0) {
                     const commissionAmount = (price * finalPercentage) / 100;
+
                     await referralCommissionService.createRegistrationCommission(
                       { ...partner, defaultCommission: finalPercentage },
                       clinicId,
@@ -1550,16 +1599,20 @@ const NewPatientPage: React.FC = () => {
                       selectedType.name,
                       price,
                       commissionAmount,
-                      currentUser?.uid || ""
+                      currentUser?.uid || "",
                     );
                   }
                 }
               } else if (ref.type === "doctor") {
                 const doctor = await doctorService.getDoctorById(ref.id);
+
                 if (doctor) {
-                  const finalPercentage = commissionPercent || doctor.defaultCommission || 0;
+                  const finalPercentage =
+                    commissionPercent || doctor.defaultCommission || 0;
+
                   if (finalPercentage > 0) {
                     const commissionAmount = (price * finalPercentage) / 100;
+
                     await doctorCommissionService.createRegistrationCommission(
                       doctor.id,
                       doctor.name,
@@ -1571,16 +1624,20 @@ const NewPatientPage: React.FC = () => {
                       price,
                       commissionAmount,
                       finalPercentage,
-                      currentUser?.uid || ""
+                      currentUser?.uid || "",
                     );
                   }
                 }
               } else if (ref.type === "expert") {
                 const expert = await expertService.getExpertById(ref.id);
+
                 if (expert) {
-                  const finalPercentage = commissionPercent || expert.defaultCommission || 0;
+                  const finalPercentage =
+                    commissionPercent || expert.defaultCommission || 0;
+
                   if (finalPercentage > 0) {
                     const commissionAmount = (price * finalPercentage) / 100;
+
                     await expertCommissionService.createRegistrationCommission(
                       expert.id,
                       expert.name,
@@ -1592,16 +1649,20 @@ const NewPatientPage: React.FC = () => {
                       price,
                       commissionAmount,
                       finalPercentage,
-                      currentUser?.uid || ""
+                      currentUser?.uid || "",
                     );
                   }
                 }
               } else if (ref.type === "staff") {
-                const staffMember = staff.find(s => s.id === ref.id);
+                const staffMember = staff.find((s) => s.id === ref.id);
+
                 if (staffMember) {
-                  const finalPercentage = commissionPercent || staffMember.defaultCommission || 0;
+                  const finalPercentage =
+                    commissionPercent || staffMember.defaultCommission || 0;
+
                   if (finalPercentage > 0) {
                     const commissionAmount = (price * finalPercentage) / 100;
+
                     await staffCommissionService.createRegistrationCommission(
                       staffMember.id,
                       staffMember.name,
@@ -1613,7 +1674,7 @@ const NewPatientPage: React.FC = () => {
                       price,
                       commissionAmount,
                       finalPercentage,
-                      currentUser?.uid || ""
+                      currentUser?.uid || "",
                     );
                   }
                 }
@@ -1665,8 +1726,12 @@ const NewPatientPage: React.FC = () => {
             color: "success",
           });
 
-          const doctorName = doctors.find(d => d.id === appt.doctor)?.name || "";
-          const apptTypeName = appointmentTypes.find(t => t.id === appt.appointmentType)?.name || "";
+          const doctorName =
+            doctors.find((d) => d.id === appt.doctor)?.name || "";
+          const apptTypeName =
+            appointmentTypes.find((t) => t.id === appt.appointmentType)?.name ||
+            "";
+
           setOpdTicket({
             patientId,
             name: profile.name,
@@ -1676,7 +1741,12 @@ const NewPatientPage: React.FC = () => {
             age: profile.age,
             doctorName,
             appointmentDate: appt.appointmentDate
-              ? new Date(appt.appointmentDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+              ? new Date(appt.appointmentDate).toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })
               : "",
             appointmentType: apptTypeName,
           });
@@ -1694,7 +1764,9 @@ const NewPatientPage: React.FC = () => {
           color: "success",
         });
 
-        const doctorName = doctors.find(d => d.id === profile.doctor)?.name || "";
+        const doctorName =
+          doctors.find((d) => d.id === profile.doctor)?.name || "";
+
         setOpdTicket({
           patientId,
           name: profile.name,
@@ -1717,6 +1789,7 @@ const NewPatientPage: React.FC = () => {
   // ── Print OPD Ticket ───────────────────────────────────────────────────────
   const printOpdTicket = () => {
     const printWindow = window.open("", "_blank", "width=400,height=600");
+
     if (!printWindow || !opdTicket) return;
     const html = `
 <!DOCTYPE html>
@@ -1750,18 +1823,23 @@ const NewPatientPage: React.FC = () => {
   ${opdTicket.gender ? `<div class="row"><span class="label">Gender</span><span class="value">${opdTicket.gender.charAt(0).toUpperCase() + opdTicket.gender.slice(1)}</span></div>` : ""}
   ${opdTicket.age ? `<div class="row"><span class="label">Age</span><span class="value">${opdTicket.age}</span></div>` : ""}
   ${opdTicket.doctorName ? `<div class="row"><span class="label">Assigned Doctor</span><span class="value">Dr. ${opdTicket.doctorName}</span></div>` : ""}
-  ${(opdTicket.appointmentDate || opdTicket.appointmentType) ? `
+  ${
+    opdTicket.appointmentDate || opdTicket.appointmentType
+      ? `
   <div class="appt-box">
     <div class="appt-title">📅 Appointment</div>
     ${opdTicket.appointmentType ? `<div class="row"><span class="label">Type</span><span class="value">${opdTicket.appointmentType}</span></div>` : ""}
     ${opdTicket.appointmentDate ? `<div class="row"><span class="label">Date</span><span class="value">${opdTicket.appointmentDate}</span></div>` : ""}
-  </div>` : ""}
+  </div>`
+      : ""
+  }
   <div class="footer">
     Issued: ${new Date().toLocaleString()}<br/>
     Please show this slip at reception.
   </div>
 </body>
 </html>`;
+
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
@@ -1815,12 +1893,13 @@ const NewPatientPage: React.FC = () => {
               <div className="flex items-center gap-2.5">
                 <div
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 border-2 transition-colors
-                  ${done
+                  ${
+                    done
                       ? "bg-primary border-primary text-white"
                       : active
                         ? "bg-surface border-primary text-primary"
                         : "bg-surface border-border-base text-text-muted"
-                    }`}
+                  }`}
                 >
                   {done ? <IoCheckmarkCircleOutline className="w-4 h-4" /> : n}
                 </div>
@@ -1855,20 +1934,28 @@ const NewPatientPage: React.FC = () => {
             <div className="bg-surface border border-border-base rounded overflow-hidden">
               <div className="flex items-center justify-between px-4 py-2.5 bg-surface-2 border-b border-border-base/50">
                 <div className="flex items-center gap-2">
-                  <span className="text-primary"><IoPersonOutline className="w-4 h-4" /></span>
+                  <span className="text-primary">
+                    <IoPersonOutline className="w-4 h-4" />
+                  </span>
                   <div>
-                    <h3 className="text-[13px] font-semibold text-text-main">Patient Profile</h3>
-                    <p className="text-[11px] text-text-muted hidden sm:block">Basic demographics and contact info</p>
+                    <h3 className="text-[13px] font-semibold text-text-main">
+                      Patient Profile
+                    </h3>
+                    <p className="text-[11px] text-text-muted hidden sm:block">
+                      Basic demographics and contact info
+                    </p>
                   </div>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer bg-warning/10 border border-warning/20 px-2.5 py-1 rounded select-none">
-                  <input 
-                    type="checkbox" 
-                    checked={isQuickMode} 
-                    onChange={(e) => setIsQuickMode(e.target.checked)}
+                  <input
+                    checked={isQuickMode}
                     className="accent-warning"
+                    type="checkbox"
+                    onChange={(e) => setIsQuickMode(e.target.checked)}
                   />
-                  <span className="text-[11px] font-bold text-warning-600">⚡ Quick Add</span>
+                  <span className="text-[11px] font-bold text-warning-600">
+                    ⚡ Quick Add
+                  </span>
                 </label>
               </div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1917,11 +2004,13 @@ const NewPatientPage: React.FC = () => {
 
                 {/* Address */}
                 {!isQuickMode && (
-                  <Field required={!isQuickMode} label="Address">
+                  <Field label="Address" required={!isQuickMode}>
                     <FlatInput
                       placeholder="Home address"
                       value={profile.address}
-                      onChange={(v) => setProfile((p) => ({ ...p, address: v }))}
+                      onChange={(v) =>
+                        setProfile((p) => ({ ...p, address: v }))
+                      }
                     />
                   </Field>
                 )}
@@ -1929,9 +2018,13 @@ const NewPatientPage: React.FC = () => {
                 {/* Mobile */}
                 <Field required hint="Format: +977XXXXXXXXXX" label="Mobile">
                   <FlatInput
+                    endContent={
+                      mobileStatus === "checking" ? (
+                        <Spinner size="xs" />
+                      ) : undefined
+                    }
                     placeholder="+977 98XXXXXXXX"
                     value={profile.mobile}
-                    endContent={mobileStatus === "checking" ? <Spinner size="xs" /> : undefined}
                     onChange={(v) =>
                       handleProfileChange({
                         target: { name: "mobile", value: v },
@@ -1979,7 +2072,9 @@ const NewPatientPage: React.FC = () => {
                 {!isQuickMode && (
                   <Field hint="Auto-converts to BS" label="Date of Birth (AD)">
                     <FlatInput
-                      disabled={dateConv.isConverting && dateConv.field === "dob"}
+                      disabled={
+                        dateConv.isConverting && dateConv.field === "dob"
+                      }
                       endContent={
                         dateConv.isConverting && dateConv.field === "dob" ? (
                           <Spinner size="xs" />
@@ -2072,8 +2167,6 @@ const NewPatientPage: React.FC = () => {
                     onChange={(v) => setProfile((p) => ({ ...p, age: v }))}
                   />
                 </Field>
-
-
 
                 {/* Phone */}
                 {!isQuickMode && (
@@ -2172,26 +2265,30 @@ const NewPatientPage: React.FC = () => {
                         Referral Sources & Commission Splits
                       </label>
                       <p className="text-[11px] text-text-muted">
-                        Assign split percentages to referral partners, doctors, experts, or staff.
+                        Assign split percentages to referral partners, doctors,
+                        experts, or staff.
                       </p>
                     </div>
                     <button
+                      className="px-2.5 py-1 text-[11px] font-bold text-primary border border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded transition-colors"
                       type="button"
                       onClick={addReferrerRow}
-                      className="px-2.5 py-1 text-[11px] font-bold text-primary border border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded transition-colors"
                     >
                       ➕ Add Referrer
                     </button>
                   </div>
 
-                  {(!profile.referrals || profile.referrals.length === 0) ? (
+                  {!profile.referrals || profile.referrals.length === 0 ? (
                     <div className="py-6 text-center text-[12px] text-text-muted bg-surface-2/30 border border-dashed border-border-base rounded">
                       No active referrals added (Patient is a Direct Walk-in).
                     </div>
                   ) : (
                     <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
                       {(profile.referrals || []).map((ref, idx) => (
-                        <div key={idx} className="flex flex-col gap-3 bg-surface p-3 border border-border-base rounded shadow-none relative">
+                        <div
+                          key={idx}
+                          className="flex flex-col gap-3 bg-surface p-3 border border-border-base rounded shadow-none relative"
+                        >
                           <div className="flex items-center gap-3">
                             <div className="grid grid-cols-12 gap-3 flex-1">
                               {/* Referrer Type Dropdown */}
@@ -2202,11 +2299,23 @@ const NewPatientPage: React.FC = () => {
                                 <select
                                   className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
                                   value={ref.type}
-                                  onChange={(e) => updateReferrerRow(idx, "type", e.target.value)}
+                                  onChange={(e) =>
+                                    updateReferrerRow(
+                                      idx,
+                                      "type",
+                                      e.target.value,
+                                    )
+                                  }
                                 >
-                                  <option value="referral-partner">External Partner</option>
-                                  <option value="doctor">Internal Doctor</option>
-                                  <option value="expert">External Expert</option>
+                                  <option value="referral-partner">
+                                    External Partner
+                                  </option>
+                                  <option value="doctor">
+                                    Internal Doctor
+                                  </option>
+                                  <option value="expert">
+                                    External Expert
+                                  </option>
                                   <option value="staff">Internal Staff</option>
                                 </select>
                               </div>
@@ -2219,11 +2328,15 @@ const NewPatientPage: React.FC = () => {
                                 <select
                                   className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
                                   value={ref.id}
-                                  onChange={(e) => updateReferrerRow(idx, "id", e.target.value)}
+                                  onChange={(e) =>
+                                    updateReferrerRow(idx, "id", e.target.value)
+                                  }
                                 >
                                   {ref.type === "referral-partner" && (
                                     <>
-                                      <option value="">-- Choose Partner --</option>
+                                      <option value="">
+                                        -- Choose Partner --
+                                      </option>
                                       {referralPartners.map((rp) => (
                                         <option key={rp.id} value={rp.id}>
                                           {rp.name}
@@ -2233,7 +2346,9 @@ const NewPatientPage: React.FC = () => {
                                   )}
                                   {ref.type === "doctor" && (
                                     <>
-                                      <option value="">-- Choose Doctor --</option>
+                                      <option value="">
+                                        -- Choose Doctor --
+                                      </option>
                                       {doctors.map((d) => (
                                         <option key={d.id} value={d.id}>
                                           Dr. {d.name}
@@ -2243,7 +2358,9 @@ const NewPatientPage: React.FC = () => {
                                   )}
                                   {ref.type === "expert" && (
                                     <>
-                                      <option value="">-- Choose Expert --</option>
+                                      <option value="">
+                                        -- Choose Expert --
+                                      </option>
                                       {experts.map((exp) => (
                                         <option key={exp.id} value={exp.id}>
                                           {exp.name}
@@ -2253,7 +2370,9 @@ const NewPatientPage: React.FC = () => {
                                   )}
                                   {ref.type === "staff" && (
                                     <>
-                                      <option value="">-- Choose Staff --</option>
+                                      <option value="">
+                                        -- Choose Staff --
+                                      </option>
                                       {staff.map((s) => (
                                         <option key={s.id} value={s.id}>
                                           {s.name}
@@ -2270,22 +2389,28 @@ const NewPatientPage: React.FC = () => {
                                   Split %
                                 </label>
                                 <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
                                   className="w-full h-9 px-2 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors text-right"
+                                  max="100"
+                                  min="0"
+                                  type="number"
                                   value={ref.commissionPercentage}
-                                  onChange={(e) => updateReferrerRow(idx, "commissionPercentage", e.target.value)}
+                                  onChange={(e) =>
+                                    updateReferrerRow(
+                                      idx,
+                                      "commissionPercentage",
+                                      e.target.value,
+                                    )
+                                  }
                                 />
                               </div>
                             </div>
 
                             {/* Action delete button */}
                             <button
-                              type="button"
-                              onClick={() => removeReferrerRow(idx)}
                               className="h-9 w-9 rounded border border-border-base text-red-500 hover:bg-red-500/5 flex items-center justify-center transition-colors shrink-0 mt-5"
                               title="Remove referrer"
+                              type="button"
+                              onClick={() => removeReferrerRow(idx)}
                             >
                               &times;
                             </button>
@@ -2295,15 +2420,25 @@ const NewPatientPage: React.FC = () => {
                           {ref.type === "referral-partner" && (
                             <div className="border-t border-border-base/50 pt-3 mt-1 grid grid-cols-12 gap-3 items-center">
                               <div className="col-span-12 sm:col-span-4">
-                                <span className="text-[11px] font-bold text-text-muted">Referred By (Doc/Expert):</span>
+                                <span className="text-[11px] font-bold text-text-muted">
+                                  Referred By (Doc/Expert):
+                                </span>
                               </div>
                               <div className="col-span-12 sm:col-span-8">
                                 <select
                                   className="w-full h-9 pl-2 pr-6 text-[12px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
                                   value={ref.referredById || ""}
-                                  onChange={(e) => updateReferrerRow(idx, "referredById", e.target.value)}
+                                  onChange={(e) =>
+                                    updateReferrerRow(
+                                      idx,
+                                      "referredById",
+                                      e.target.value,
+                                    )
+                                  }
                                 >
-                                  <option value="">-- Optional Referring Person --</option>
+                                  <option value="">
+                                    -- Optional Referring Person --
+                                  </option>
                                   <optgroup label="Internal Doctors">
                                     {doctors.map((d) => (
                                       <option key={d.id} value={d.id}>
@@ -2314,7 +2449,8 @@ const NewPatientPage: React.FC = () => {
                                   <optgroup label="External Experts">
                                     {experts.map((exp) => (
                                       <option key={exp.id} value={exp.id}>
-                                        {exp.name} ({exp.expertType || "Expert"})
+                                        {exp.name} ({exp.expertType || "Expert"}
+                                        )
                                       </option>
                                     ))}
                                   </optgroup>
@@ -2347,7 +2483,8 @@ const NewPatientPage: React.FC = () => {
                       value={conditionInput}
                       onChange={(e) => setConditionInput(e.target.value)}
                       onKeyDown={(e) =>
-                        e.key === "Enter" && (e.preventDefault(), addCondition())
+                        e.key === "Enter" &&
+                        (e.preventDefault(), addCondition())
                       }
                     />
                     <Button
@@ -2401,7 +2538,7 @@ const NewPatientPage: React.FC = () => {
                     disabled
                     type="date"
                     value={appt.registrationDate}
-                    onChange={() => { }}
+                    onChange={() => {}}
                   />
                 </Field>
 
@@ -2418,7 +2555,7 @@ const NewPatientPage: React.FC = () => {
                     }
                     endContent={
                       dateConv.isConverting &&
-                        dateConv.field === "appointmentDate" ? (
+                      dateConv.field === "appointmentDate" ? (
                         <Spinner size="xs" />
                       ) : undefined
                     }
@@ -2449,7 +2586,7 @@ const NewPatientPage: React.FC = () => {
                     }
                     endContent={
                       dateConv.isConverting &&
-                        dateConv.field === "appointmentBS" ? (
+                      dateConv.field === "appointmentBS" ? (
                         <Spinner size="xs" />
                       ) : appt.appointmentBS &&
                         dateConv.lastConversion.timestamp > 0 ? (
@@ -2701,107 +2838,133 @@ const NewPatientPage: React.FC = () => {
       </form>
 
       {/* ── OPD Ticket Modal ──────────────────────────────────────────────── */}
-      {opdTicket && createPortal(
-        <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 z-[9990] bg-black/50 backdrop-blur-sm" />
+      {opdTicket &&
+        createPortal(
+          <>
+            {/* Backdrop */}
+            <div className="fixed inset-0 z-[9990] bg-black/50 backdrop-blur-sm" />
 
-          {/* Modal */}
-          <div className="fixed inset-0 z-[9991] flex items-center justify-center p-4">
-            <div className="bg-surface border border-border-base rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-              {/* Header */}
-              <div className="bg-primary px-5 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-white">
-                  <IoPrintOutline className="w-5 h-5" />
-                  <h2 className="text-[15px] font-bold">Patient Registered!</h2>
-                </div>
-                <button
-                  className="text-white/70 hover:text-white transition-colors"
-                  onClick={() => { setOpdTicket(null); navigate(`/dashboard/patients/${opdTicket.patientId}`); }}
-                >
-                  <IoCloseOutline className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Ticket Preview */}
-              <div className="p-5 space-y-3">
-                <div className="text-center border-2 border-dashed border-border-base rounded-lg p-3 bg-surface-2/40">
-                  <p className="text-[10px] text-text-muted uppercase tracking-widest">OPD Registration Number</p>
-                  <p className="text-3xl font-black text-primary tracking-widest mt-1">{opdTicket.regNumber}</p>
-                </div>
-
-                <div className="space-y-1.5 text-[12.5px]">
-                  <div className="flex justify-between py-1.5 border-b border-border-base/50">
-                    <span className="text-text-muted">Patient Name</span>
-                    <span className="font-semibold text-text-main">{opdTicket.name}</span>
+            {/* Modal */}
+            <div className="fixed inset-0 z-[9991] flex items-center justify-center p-4">
+              <div className="bg-surface border border-border-base rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+                {/* Header */}
+                <div className="bg-primary px-5 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-white">
+                    <IoPrintOutline className="w-5 h-5" />
+                    <h2 className="text-[15px] font-bold">
+                      Patient Registered!
+                    </h2>
                   </div>
-                  <div className="flex justify-between py-1.5 border-b border-border-base/50">
-                    <span className="text-text-muted">Mobile</span>
-                    <span className="font-semibold text-text-main">{opdTicket.mobile}</span>
-                  </div>
-                  {opdTicket.gender && (
-                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
-                      <span className="text-text-muted">Gender</span>
-                      <span className="font-semibold text-text-main capitalize">{opdTicket.gender}</span>
-                    </div>
-                  )}
-                  {opdTicket.age && (
-                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
-                      <span className="text-text-muted">Age</span>
-                      <span className="font-semibold text-text-main">{opdTicket.age}</span>
-                    </div>
-                  )}
-                  {opdTicket.doctorName && (
-                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
-                      <span className="text-text-muted">Doctor</span>
-                      <span className="font-semibold text-text-main">Dr. {opdTicket.doctorName}</span>
-                    </div>
-                  )}
-                  {opdTicket.appointmentType && (
-                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
-                      <span className="text-text-muted">Appt. Type</span>
-                      <span className="font-semibold text-text-main">{opdTicket.appointmentType}</span>
-                    </div>
-                  )}
-                  {opdTicket.appointmentDate && (
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-text-muted">Appt. Date</span>
-                      <span className="font-semibold text-text-main">{opdTicket.appointmentDate}</span>
-                    </div>
-                  )}
+                  <button
+                    className="text-white/70 hover:text-white transition-colors"
+                    onClick={() => {
+                      setOpdTicket(null);
+                      navigate(`/dashboard/patients/${opdTicket.patientId}`);
+                    }}
+                  >
+                    <IoCloseOutline className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <p className="text-[10.5px] text-text-muted text-center">
-                  Please show this slip at reception.
-                </p>
-              </div>
+                {/* Ticket Preview */}
+                <div className="p-5 space-y-3">
+                  <div className="text-center border-2 border-dashed border-border-base rounded-lg p-3 bg-surface-2/40">
+                    <p className="text-[10px] text-text-muted uppercase tracking-widest">
+                      OPD Registration Number
+                    </p>
+                    <p className="text-3xl font-black text-primary tracking-widest mt-1">
+                      {opdTicket.regNumber}
+                    </p>
+                  </div>
 
-              {/* Actions */}
-              <div className="px-5 pb-5 flex flex-col gap-2">
-                <Button
-                  className="w-full"
-                  color="primary"
-                  size="sm"
-                  startContent={<IoPrintOutline className="w-4 h-4" />}
-                  onClick={printOpdTicket}
-                >
-                  Print OPD Ticket
-                </Button>
-                <button
-                  className="w-full text-[12px] text-text-muted hover:text-text-main py-1.5 transition-colors"
-                  onClick={() => { setOpdTicket(null); navigate(`/dashboard/patients/${opdTicket.patientId}`); }}
-                >
-                  Skip & Go to Patient Profile →
-                </button>
+                  <div className="space-y-1.5 text-[12.5px]">
+                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                      <span className="text-text-muted">Patient Name</span>
+                      <span className="font-semibold text-text-main">
+                        {opdTicket.name}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                      <span className="text-text-muted">Mobile</span>
+                      <span className="font-semibold text-text-main">
+                        {opdTicket.mobile}
+                      </span>
+                    </div>
+                    {opdTicket.gender && (
+                      <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                        <span className="text-text-muted">Gender</span>
+                        <span className="font-semibold text-text-main capitalize">
+                          {opdTicket.gender}
+                        </span>
+                      </div>
+                    )}
+                    {opdTicket.age && (
+                      <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                        <span className="text-text-muted">Age</span>
+                        <span className="font-semibold text-text-main">
+                          {opdTicket.age}
+                        </span>
+                      </div>
+                    )}
+                    {opdTicket.doctorName && (
+                      <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                        <span className="text-text-muted">Doctor</span>
+                        <span className="font-semibold text-text-main">
+                          Dr. {opdTicket.doctorName}
+                        </span>
+                      </div>
+                    )}
+                    {opdTicket.appointmentType && (
+                      <div className="flex justify-between py-1.5 border-b border-border-base/50">
+                        <span className="text-text-muted">Appt. Type</span>
+                        <span className="font-semibold text-text-main">
+                          {opdTicket.appointmentType}
+                        </span>
+                      </div>
+                    )}
+                    {opdTicket.appointmentDate && (
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-text-muted">Appt. Date</span>
+                        <span className="font-semibold text-text-main">
+                          {opdTicket.appointmentDate}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[10.5px] text-text-muted text-center">
+                    Please show this slip at reception.
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="px-5 pb-5 flex flex-col gap-2">
+                  <Button
+                    className="w-full"
+                    color="primary"
+                    size="sm"
+                    startContent={<IoPrintOutline className="w-4 h-4" />}
+                    onClick={printOpdTicket}
+                  >
+                    Print OPD Ticket
+                  </Button>
+                  <button
+                    className="w-full text-[12px] text-text-muted hover:text-text-main py-1.5 transition-colors"
+                    onClick={() => {
+                      setOpdTicket(null);
+                      navigate(`/dashboard/patients/${opdTicket.patientId}`);
+                    }}
+                  >
+                    Skip & Go to Patient Profile →
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </>,
-        document.body
-      )}
+          </>,
+          document.body,
+        )}
     </div>
   );
 };
 
 export default NewPatientPage;
-

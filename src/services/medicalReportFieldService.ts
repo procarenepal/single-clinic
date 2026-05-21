@@ -8,7 +8,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -63,8 +62,13 @@ export const medicalReportFieldService = {
 
       // Self-healing auto-seeder if no fields exist yet
       if (fields.length === 0) {
-        console.log("No medical report fields found, running self-healing auto-seeder...");
-        const defaultFields: Omit<MedicalReportField, "id" | "createdAt" | "updatedAt">[] = [
+        console.log(
+          "No medical report fields found, running self-healing auto-seeder...",
+        );
+        const defaultFields: Omit<
+          MedicalReportField,
+          "id" | "createdAt" | "updatedAt"
+        >[] = [
           {
             clinicId,
             branchId: "",
@@ -75,7 +79,7 @@ export const medicalReportFieldService = {
             isRequired: true,
             placeholder: "Describe the primary reason for the patient visit...",
             displayOrder: 1,
-            isActive: true
+            isActive: true,
           },
           {
             clinicId,
@@ -85,9 +89,10 @@ export const medicalReportFieldService = {
             fieldLabel: "Past Medical History",
             fieldType: "textarea",
             isRequired: false,
-            placeholder: "List any relevant medical conditions, past surgeries, etc.",
+            placeholder:
+              "List any relevant medical conditions, past surgeries, etc.",
             displayOrder: 2,
-            isActive: true
+            isActive: true,
           },
           {
             clinicId,
@@ -100,7 +105,7 @@ export const medicalReportFieldService = {
             isRequired: false,
             placeholder: "Select blood type",
             displayOrder: 3,
-            isActive: true
+            isActive: true,
           },
           {
             clinicId,
@@ -112,7 +117,7 @@ export const medicalReportFieldService = {
             isRequired: false,
             placeholder: "List allergies (e.g. Penicillin, Pollen) or 'None'",
             displayOrder: 4,
-            isActive: true
+            isActive: true,
           },
           {
             clinicId,
@@ -123,7 +128,7 @@ export const medicalReportFieldService = {
             fieldType: "yes-no",
             isRequired: false,
             displayOrder: 5,
-            isActive: true
+            isActive: true,
           },
           {
             clinicId,
@@ -133,16 +138,19 @@ export const medicalReportFieldService = {
             fieldLabel: "Family Medical History",
             fieldType: "textarea",
             isRequired: false,
-            placeholder: "Describe hereditary illnesses (e.g. hypertension, diabetes)...",
+            placeholder:
+              "Describe hereditary illnesses (e.g. hypertension, diabetes)...",
             displayOrder: 6,
-            isActive: true
-          }
+            isActive: true,
+          },
         ];
 
-        const promises = defaultFields.map(field => this.createField(field));
+        const promises = defaultFields.map((field) => this.createField(field));
+
         await Promise.all(promises);
 
         const reSnapshot = await getDocs(q);
+
         fields = reSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -155,7 +163,9 @@ export const medicalReportFieldService = {
       return fields.sort((a, b) => {
         const orderA = a.displayOrder ?? 0;
         const orderB = b.displayOrder ?? 0;
+
         if (orderA !== orderB) return orderA - orderB;
+
         // Secondary sort by createdAt desc
         return b.createdAt.getTime() - a.createdAt.getTime();
       });
@@ -171,11 +181,13 @@ export const medicalReportFieldService = {
   ): Promise<MedicalReportField[]> {
     try {
       const fields = await this.getFieldsByClinic(clinicId);
+
       return fields
         .filter((f) => f.isActive)
         .sort((a, b) => {
           const orderA = a.displayOrder ?? 0;
           const orderB = b.displayOrder ?? 0;
+
           return orderA - orderB;
         });
     } catch (error) {

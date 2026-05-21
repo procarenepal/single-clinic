@@ -189,21 +189,15 @@ export const specialityService = {
    * @param {string} excludeId - ID to exclude from check (for updates)
    * @returns {Promise<boolean>} - True if key exists
    */
-  async isKeyExists(
-    key: string,
-    _excludeId?: string,
-  ): Promise<boolean> {
+  async isKeyExists(key: string, _excludeId?: string): Promise<boolean> {
     try {
       const specialitiesCollection = collection(db, "doctor_specialities");
-      const q = query(
-        specialitiesCollection,
-        where("key", "==", key),
-      );
+      const q = query(specialitiesCollection, where("key", "==", key));
 
       const querySnapshot = await getDocs(q);
 
       if (_excludeId) {
-        return querySnapshot.docs.some(doc => doc.id !== _excludeId);
+        return querySnapshot.docs.some((doc) => doc.id !== _excludeId);
       }
 
       return !querySnapshot.empty;

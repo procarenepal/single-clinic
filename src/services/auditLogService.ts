@@ -50,7 +50,7 @@ export const auditLogService = {
 
       // Clean up undefined values from logData to prevent Firestore errors
       const sanitizedLogData = Object.fromEntries(
-        Object.entries(logData).filter(([_, value]) => value !== undefined)
+        Object.entries(logData).filter(([_, value]) => value !== undefined),
       );
 
       const logEntry = {
@@ -214,7 +214,38 @@ export const auditLogService = {
           createdAt: data.createdAt?.toDate() || new Date(),
         } as AuditLog;
       });
-    } catch (error) {
+    } catch (error: any) {
+      // Fallback: If composite index is missing, do client-side sorting
+      if (error.message?.includes("requires an index")) {
+        console.warn(
+          "Firestore index missing. Falling back to client-side sorting.",
+          error.message,
+        );
+
+        const fallbackQuery = query(
+          collection(db, AUDIT_LOGS_COLLECTION),
+          where("clinicId", "==", clinicId),
+          limit(limitCount),
+        );
+
+        const querySnapshot = await getDocs(fallbackQuery);
+        const logs = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+
+          return {
+            id: doc.id,
+            ...data,
+            timestamp: data.timestamp?.toDate() || new Date(),
+            createdAt: data.createdAt?.toDate() || new Date(),
+          } as AuditLog;
+        });
+
+        // Sort client-side descending
+        return logs.sort(
+          (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+        );
+      }
+
       console.error("Error getting clinic audit logs:", error);
       throw error;
     }

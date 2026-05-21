@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { 
-  Users, 
-  Calendar, 
-  Filter, 
-  Send, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  Users,
+  Filter,
+  Send,
+  AlertCircle,
   Info,
   Sparkles,
   Search,
-  X,
-  UserPlus,
   Trash2,
   Check,
-  UserCheck
+  UserCheck,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -41,13 +37,21 @@ const BulkMessagingTab: React.FC = () => {
   const [clinicData, setClinicData] = useState<any>(null);
 
   // Filters
-  const [audienceType, setAudienceType] = useState<"all" | "recent" | "upcoming" | "custom" | "manual">("all");
+  const [audienceType, setAudienceType] = useState<
+    "all" | "recent" | "upcoming" | "custom" | "manual"
+  >("all");
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>("all");
-  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [endDate, setEndDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  
+  const [startDate, setStartDate] = useState<string>(
+    new Date().toISOString().split("T")[0],
+  );
+  const [endDate, setEndDate] = useState<string>(
+    new Date().toISOString().split("T")[0],
+  );
+
   // Manual Selection State
-  const [manualRecipientIds, setManualRecipientIds] = useState<Set<string>>(new Set());
+  const [manualRecipientIds, setManualRecipientIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
 
   // Message
@@ -64,8 +68,9 @@ const BulkMessagingTab: React.FC = () => {
           doctorService.getDoctorsByClinic(clinicId),
           smsService.getSMSTemplates(clinicId),
           clinicService.getClinicById(clinicId),
-          appointmentService.getAppointmentsByClinic(clinicId)
+          appointmentService.getAppointmentsByClinic(clinicId),
         ]);
+
         setPatients(p || []);
         setDoctors(d || []);
         setTemplates(t || []);
@@ -73,18 +78,23 @@ const BulkMessagingTab: React.FC = () => {
         setAppointments(a || []);
       } catch (error) {
         console.error("Error loading bulk data:", error);
-        addToast({ title: "Error", description: "Failed to load clinic data", color: "danger" });
+        addToast({
+          title: "Error",
+          description: "Failed to load clinic data",
+          color: "danger",
+        });
       } finally {
         setLoading(false);
       }
     };
+
     loadAllData();
   }, [clinicId]);
 
   // Filtering Logic
   const targetedPatients = useMemo(() => {
     if (audienceType === "manual") {
-      return patients.filter(p => manualRecipientIds.has(p.id));
+      return patients.filter((p) => manualRecipientIds.has(p.id));
     }
 
     let result: Patient[] = [];
@@ -94,56 +104,82 @@ const BulkMessagingTab: React.FC = () => {
     } else {
       let filteredApps = [...appointments];
       const today = new Date();
+
       today.setHours(0, 0, 0, 0);
-      
+
       if (audienceType === "recent") {
         const thirtyDaysAgo = new Date();
+
         thirtyDaysAgo.setDate(today.getDate() - 30);
-        filteredApps = appointments.filter(a => {
+        filteredApps = appointments.filter((a) => {
           const d = new Date(a.appointmentDate);
+
           return d >= thirtyDaysAgo && d <= new Date();
         });
       } else if (audienceType === "upcoming") {
         const sevenDaysAhead = new Date();
+
         sevenDaysAhead.setDate(today.getDate() + 7);
-        filteredApps = appointments.filter(a => {
+        filteredApps = appointments.filter((a) => {
           const d = new Date(a.appointmentDate);
+
           return d >= today && d <= sevenDaysAhead;
         });
       } else if (audienceType === "custom") {
         const start = new Date(startDate);
         const end = new Date(endDate);
+
         end.setHours(23, 59, 59);
-        filteredApps = appointments.filter(a => {
+        filteredApps = appointments.filter((a) => {
           const d = new Date(a.appointmentDate);
+
           return d >= start && d <= end;
         });
       }
 
       if (selectedDoctorId !== "all") {
-        filteredApps = filteredApps.filter(a => a.doctorId === selectedDoctorId);
+        filteredApps = filteredApps.filter(
+          (a) => a.doctorId === selectedDoctorId,
+        );
       }
 
-      const matchedPatientIds = new Set(filteredApps.map(a => a.patientId));
-      result = patients.filter(p => matchedPatientIds.has(p.id));
+      const matchedPatientIds = new Set(filteredApps.map((a) => a.patientId));
+
+      result = patients.filter((p) => matchedPatientIds.has(p.id));
     }
 
-    return result.filter(p => p.mobile || p.phone);
-  }, [audienceType, patients, appointments, selectedDoctorId, startDate, endDate, manualRecipientIds]);
+    return result.filter((p) => p.mobile || p.phone);
+  }, [
+    audienceType,
+    patients,
+    appointments,
+    selectedDoctorId,
+    startDate,
+    endDate,
+    manualRecipientIds,
+  ]);
 
   // Patient List for Browser (filtered by search query if any)
   const browserPatients = useMemo(() => {
     const query = patientSearchQuery.toLowerCase().trim();
-    const baseList = patients.filter(p => p.mobile || p.phone);
+    const baseList = patients.filter((p) => p.mobile || p.phone);
+
     if (!query) return baseList;
-    return baseList.filter(p => p.name.toLowerCase().includes(query) || p.regNumber.toLowerCase().includes(query));
+
+    return baseList.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        p.regNumber.toLowerCase().includes(query),
+    );
   }, [patientSearchQuery, patients]);
 
   const toggleManualRecipient = (patientId: string) => {
-    setManualRecipientIds(prev => {
+    setManualRecipientIds((prev) => {
       const next = new Set(prev);
+
       if (next.has(patientId)) next.delete(patientId);
       else next.add(patientId);
+
       return next;
     });
   };
@@ -154,13 +190,22 @@ const BulkMessagingTab: React.FC = () => {
     setSelectedTemplateId(templateId);
     if (!templateId) {
       setMessage("");
+
       return;
     }
-    const template = templates.find(t => t.id === templateId);
+    const template = templates.find((t) => t.id === templateId);
+
     if (template) {
       let processed = template.message;
-      processed = processed.replace(/{clinicName}/g, clinicData?.hospitalName || clinicData?.name || "Our Clinic");
-      processed = processed.replace(/{clinicPhone}/g, clinicData?.phone || "the clinic");
+
+      processed = processed.replace(
+        /{clinicName}/g,
+        clinicData?.hospitalName || clinicData?.name || "Our Clinic",
+      );
+      processed = processed.replace(
+        /{clinicPhone}/g,
+        clinicData?.phone || "the clinic",
+      );
       setMessage(processed);
     }
   };
@@ -168,13 +213,19 @@ const BulkMessagingTab: React.FC = () => {
   const handleSendBulk = async () => {
     if (targetedPatients.length === 0) return;
     if (!message.trim()) {
-      addToast({ title: "Validation Error", description: "Please enter a message", color: "danger" });
+      addToast({
+        title: "Validation Error",
+        description: "Please enter a message",
+        color: "danger",
+      });
+
       return;
     }
 
     const confirmSend = window.confirm(
-      `Confirm Campaign:\n- Recipients: ${targetedPatients.length}\n- Est. Cost: Rs. ${(targetedPatients.length * 1.5).toFixed(2)}\n\nProceed?`
+      `Confirm Campaign:\n- Recipients: ${targetedPatients.length}\n- Est. Cost: Rs. ${(targetedPatients.length * 1.5).toFixed(2)}\n\nProceed?`,
     );
+
     if (!confirmSend) return;
 
     setSending(true);
@@ -186,13 +237,18 @@ const BulkMessagingTab: React.FC = () => {
     for (const patient of targetedPatients) {
       try {
         let patientMessage = message;
+
         patientMessage = patientMessage.replace(/{patientName}/g, patient.name);
-        
+
         const phone = patient.mobile || patient.phone || "";
+
         if (!phone) continue;
 
-        const response = await smsTestService.sendTestSMS(phone, patientMessage);
-        
+        const response = await smsTestService.sendTestSMS(
+          phone,
+          patientMessage,
+        );
+
         await smsService.createSMSLog({
           clinicId: clinicId!,
           message: patientMessage,
@@ -203,7 +259,9 @@ const BulkMessagingTab: React.FC = () => {
           patientPhone: phone,
           createdBy: currentUser?.uid || "system",
           status: response.success ? "sent" : "failed",
-          ...(response.success ? {} : { errorMessage: response.error || "Delivery failure" })
+          ...(response.success
+            ? {}
+            : { errorMessage: response.error || "Delivery failure" }),
         });
 
         if (response.success) successCount++;
@@ -212,18 +270,23 @@ const BulkMessagingTab: React.FC = () => {
         console.error(`Failed to send to ${patient.name}:`, error);
         failCount++;
       }
-      setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      setProgress((prev) => ({ ...prev, current: prev.current + 1 }));
     }
 
     setSending(false);
     addToast({
       title: "Campaign Finished",
       description: `Sent: ${successCount} | Failed: ${failCount}`,
-      color: successCount > 0 ? "success" : "danger"
+      color: successCount > 0 ? "success" : "danger",
     });
   };
 
-  if (loading) return <div className="flex justify-center py-12 bg-surface-base"><Spinner size="lg" /></div>;
+  if (loading)
+    return (
+      <div className="flex justify-center py-12 bg-surface-base">
+        <Spinner size="lg" />
+      </div>
+    );
 
   return (
     <div className="space-y-6">
@@ -235,11 +298,13 @@ const BulkMessagingTab: React.FC = () => {
               <Users className="text-primary" size={14} />
               1. Select Recipients
             </h3>
-            
+
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">Campaign Target</label>
-                <select 
+                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">
+                  Campaign Target
+                </label>
+                <select
                   className="clarity-input w-full text-xs"
                   value={audienceType}
                   onChange={(e) => setAudienceType(e.target.value as any)}
@@ -256,8 +321,10 @@ const BulkMessagingTab: React.FC = () => {
               {audienceType === "manual" && (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wide">Patient Directory</label>
-                    <button 
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wide">
+                      Patient Directory
+                    </label>
+                    <button
                       className="text-[9px] font-bold uppercase text-rose-500 hover:underline flex items-center gap-1"
                       onClick={clearManualSelection}
                     >
@@ -270,10 +337,10 @@ const BulkMessagingTab: React.FC = () => {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-muted">
                       <Search size={13} />
                     </div>
-                    <input 
-                      className="clarity-input w-full pl-9 text-[11px]" 
+                    <input
+                      className="clarity-input w-full pl-9 text-[11px]"
                       placeholder="Quick find by name..."
-                      type="text" 
+                      type="text"
                       value={patientSearchQuery}
                       onChange={(e) => setPatientSearchQuery(e.target.value)}
                     />
@@ -285,31 +352,36 @@ const BulkMessagingTab: React.FC = () => {
                         No patients match your search
                       </p>
                     ) : (
-                      browserPatients.map(p => {
+                      browserPatients.map((p) => {
                         const isSelected = manualRecipientIds.has(p.id);
+
                         return (
-                          <div 
-                            key={p.id} 
+                          <div
+                            key={p.id}
                             className={`flex justify-between items-center px-3 py-2 rounded cursor-pointer transition-all border ${
-                              isSelected 
-                                ? "bg-primary/10 border-primary/40" 
+                              isSelected
+                                ? "bg-primary/10 border-primary/40"
                                 : "bg-surface-1 border-border-base hover:border-primary/30"
                             }`}
                             onClick={() => toggleManualRecipient(p.id)}
                           >
                             <div className="flex flex-col">
-                              <span className={`text-[11px] font-bold ${isSelected ? "text-primary" : "text-text-main"}`}>
+                              <span
+                                className={`text-[11px] font-bold ${isSelected ? "text-primary" : "text-text-main"}`}
+                              >
                                 {p.name}
                               </span>
                               <span className="text-[9px] text-text-muted uppercase font-bold tracking-tighter">
                                 ID: {p.regNumber} • {p.mobile || p.phone}
                               </span>
                             </div>
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${
-                              isSelected 
-                                ? "bg-primary border-primary text-white" 
-                                : "bg-transparent border-border-base text-transparent"
-                            }`}>
+                            <div
+                              className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${
+                                isSelected
+                                  ? "bg-primary border-primary text-white"
+                                  : "bg-transparent border-border-base text-transparent"
+                              }`}
+                            >
                               <Check size={10} />
                             </div>
                           </div>
@@ -323,34 +395,66 @@ const BulkMessagingTab: React.FC = () => {
               {audienceType === "custom" && (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">Start Date</label>
-                    <input className="clarity-input w-full text-xs" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">
+                      Start Date
+                    </label>
+                    <input
+                      className="clarity-input w-full text-xs"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">End Date</label>
-                    <input className="clarity-input w-full text-xs" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">
+                      End Date
+                    </label>
+                    <input
+                      className="clarity-input w-full text-xs"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
                   </div>
                 </div>
               )}
 
-              {(audienceType !== "all" && audienceType !== "manual") && (
+              {audienceType !== "all" && audienceType !== "manual" && (
                 <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">Filter by Doctor</label>
-                  <select className="clarity-input w-full text-xs" value={selectedDoctorId} onChange={(e) => setSelectedDoctorId(e.target.value)}>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">
+                    Filter by Doctor
+                  </label>
+                  <select
+                    className="clarity-input w-full text-xs"
+                    value={selectedDoctorId}
+                    onChange={(e) => setSelectedDoctorId(e.target.value)}
+                  >
                     <option value="all">Any Doctor</option>
-                    {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {doctors.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               )}
 
               <div className="pt-4 border-t border-border-base bg-surface-2 -mx-4 px-4 pb-0">
                 <div className="flex justify-between items-center text-xs py-2">
-                  <span className="text-text-muted font-medium">Total Recipients:</span>
-                  <span className="font-bold text-primary">{targetedPatients.length}</span>
+                  <span className="text-text-muted font-medium">
+                    Total Recipients:
+                  </span>
+                  <span className="font-bold text-primary">
+                    {targetedPatients.length}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center text-xs py-2 border-t border-border-base/50">
-                  <span className="text-text-muted font-medium">Estimated Cost:</span>
-                  <span className="font-bold text-text-main">Rs. {(targetedPatients.length * 1.5).toFixed(2)}</span>
+                  <span className="text-text-muted font-medium">
+                    Estimated Cost:
+                  </span>
+                  <span className="font-bold text-text-main">
+                    Rs. {(targetedPatients.length * 1.5).toFixed(2)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -362,7 +466,8 @@ const BulkMessagingTab: React.FC = () => {
               Important Notice
             </h4>
             <p className="text-[10px] leading-relaxed text-text-muted font-medium">
-              Bulk messages are sent sequentially. Do not navigate away while the campaign is in progress.
+              Bulk messages are sent sequentially. Do not navigate away while
+              the campaign is in progress.
             </p>
           </div>
         </div>
@@ -377,18 +482,30 @@ const BulkMessagingTab: React.FC = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">Use Template</label>
-                <select className="clarity-input w-full text-xs" value={selectedTemplateId} onChange={(e) => handleTemplateChange(e.target.value)}>
+                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">
+                  Use Template
+                </label>
+                <select
+                  className="clarity-input w-full text-xs"
+                  value={selectedTemplateId}
+                  onChange={(e) => handleTemplateChange(e.target.value)}
+                >
                   <option value="">Custom Message (No Template)</option>
-                  {templates.filter(t => t.type === "general" || t.type === "patient").map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
+                  {templates
+                    .filter((t) => t.type === "general" || t.type === "patient")
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">Message Content</label>
-                <textarea 
+                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1.5 tracking-wide">
+                  Message Content
+                </label>
+                <textarea
                   className="clarity-textarea w-full min-h-[160px] text-xs leading-relaxed"
                   placeholder="Enter your announcement here..."
                   value={message}
@@ -407,10 +524,17 @@ const BulkMessagingTab: React.FC = () => {
                       <Sparkles className="animate-spin" size={12} />
                       Executing Campaign...
                     </span>
-                    <span className="font-mono text-[10px] font-bold text-text-main">{progress.current} / {progress.total}</span>
+                    <span className="font-mono text-[10px] font-bold text-text-main">
+                      {progress.current} / {progress.total}
+                    </span>
                   </div>
                   <div className="w-full h-1.5 bg-surface-2 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }} />
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{
+                        width: `${(progress.current / progress.total) * 100}%`,
+                      }}
+                    />
                   </div>
                 </div>
               ) : (
@@ -423,9 +547,13 @@ const BulkMessagingTab: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <button 
+                  <button
                     className="clarity-btn clarity-btn-primary min-w-[200px] justify-center text-xs uppercase font-bold tracking-tight py-2.5"
-                    disabled={targetedPatients.length === 0 || !message.trim() || sending}
+                    disabled={
+                      targetedPatients.length === 0 ||
+                      !message.trim() ||
+                      sending
+                    }
                     type="button"
                     onClick={handleSendBulk}
                   >

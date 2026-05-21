@@ -7,7 +7,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -66,7 +65,9 @@ export const callLogService = {
         } as CallLog);
       });
 
-      return callLogs.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
+      return callLogs.sort(
+        (a, b) => b.receivedOn.getTime() - a.receivedOn.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching call logs:", error);
       throw new Error("Failed to fetch call logs");
@@ -147,11 +148,17 @@ export const callLogService = {
       const endMs = endDate.getTime();
 
       const filtered = callLogs.filter((c) => {
-        const t = c.receivedOn instanceof Date ? c.receivedOn.getTime() : new Date(c.receivedOn).getTime();
+        const t =
+          c.receivedOn instanceof Date
+            ? c.receivedOn.getTime()
+            : new Date(c.receivedOn).getTime();
+
         return t >= startMs && t <= endMs;
       });
 
-      return filtered.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
+      return filtered.sort(
+        (a, b) => b.receivedOn.getTime() - a.receivedOn.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching call logs by date range:", error);
       throw new Error("Failed to fetch call logs by date range");
@@ -205,7 +212,9 @@ export const callLogService = {
         } as CallLog);
       });
 
-      return callLogs.sort((a, b) => b.receivedOn.getTime() - a.receivedOn.getTime());
+      return callLogs.sort(
+        (a, b) => b.receivedOn.getTime() - a.receivedOn.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching call logs by type:", error);
       throw new Error("Failed to fetch call logs by type");

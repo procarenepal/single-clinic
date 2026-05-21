@@ -277,12 +277,22 @@ export default function LabTechnicianManagement({
             {filteredTechnicians.map((technician) => (
               <TableRow key={technician.id}>
                 <TableCell>
-                  <p className="font-medium text-text-main">{technician.name}</p>
+                  <p className="font-medium text-text-main">
+                    {technician.name}
+                  </p>
                 </TableCell>
-                <TableCell className="text-text-main">{technician.employeeId || "—"}</TableCell>
-                <TableCell className="text-text-main">{technician.phone || "—"}</TableCell>
-                <TableCell className="text-text-main">{technician.email || "—"}</TableCell>
-                <TableCell className="text-text-main">{technician.specialization || "—"}</TableCell>
+                <TableCell className="text-text-main">
+                  {technician.employeeId || "—"}
+                </TableCell>
+                <TableCell className="text-text-main">
+                  {technician.phone || "—"}
+                </TableCell>
+                <TableCell className="text-text-main">
+                  {technician.email || "—"}
+                </TableCell>
+                <TableCell className="text-text-main">
+                  {technician.specialization || "—"}
+                </TableCell>
                 <TableCell>
                   <Chip
                     color={technician.isActive ? "success" : "default"}

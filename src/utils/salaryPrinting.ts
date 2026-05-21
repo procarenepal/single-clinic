@@ -1,7 +1,13 @@
+import { format } from "date-fns";
+
+import {
+  getPrintBrandingCSS,
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+} from "./printBranding";
+
 import { StaffMember, AccountBill, Clinic } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
-import { format } from "date-fns";
-import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "./printBranding";
 
 /**
  * Generates and prints a professional, high-density salary slip for a staff member.
@@ -11,18 +17,28 @@ export const printSalarySlip = (
   bill: AccountBill,
   staff: StaffMember,
   clinic: Clinic,
-  config: PrintLayoutConfig
+  config: PrintLayoutConfig,
 ) => {
   const printWindow = window.open("", "_blank");
+
   if (!printWindow) {
     alert("Please allow popups to print the salary slip.");
+
     return;
   }
 
   // Ensure dates are valid Date objects
-  const paymentDate = bill.billDate instanceof Date ? bill.billDate : new Date((bill.billDate as any)?.seconds * 1000 || bill.billDate);
-  const joiningDate = staff.joiningDate instanceof Date ? staff.joiningDate : new Date((staff.joiningDate as any)?.seconds * 1000 || staff.joiningDate);
-  
+  const paymentDate =
+    bill.billDate instanceof Date
+      ? bill.billDate
+      : new Date((bill.billDate as any)?.seconds * 1000 || bill.billDate);
+  const joiningDate =
+    staff.joiningDate instanceof Date
+      ? staff.joiningDate
+      : new Date(
+          (staff.joiningDate as any)?.seconds * 1000 || staff.joiningDate,
+        );
+
   const primaryColor = config.primaryColor || "#7c3aed";
 
   const html = `
@@ -246,7 +262,7 @@ export const printSalarySlip = (
             <div class="info-item">
               <span class="info-label">Salary Period</span>
               <span class="info-value">
-                ${bill.description?.split('. ')[0]?.replace('Salary for ', '') || format(paymentDate, "MMMM yyyy")}
+                ${bill.description?.split(". ")[0]?.replace("Salary for ", "") || format(paymentDate, "MMMM yyyy")}
               </span>
             </div>
             <div class="info-item">

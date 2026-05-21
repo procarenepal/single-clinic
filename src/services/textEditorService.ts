@@ -242,7 +242,6 @@ class TextEditorService {
       throw error;
     }
   }
-
 }
 
 export const textEditorService = new TextEditorService();

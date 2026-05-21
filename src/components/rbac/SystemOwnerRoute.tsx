@@ -31,8 +31,7 @@ export function SystemOwnerRoute({
 
   // Check if user is clinic super admin or clinic admin
   const isAuthorized =
-    userData?.role === "system-owner" ||
-    userData?.role === "clinic-admin";
+    userData?.role === "system-owner" || userData?.role === "clinic-admin";
 
   if (!isAuthorized) {
     return (

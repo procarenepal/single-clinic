@@ -1,13 +1,8 @@
 import {
   IoSettingsOutline,
   IoLockClosedOutline,
-  IoCallOutline,
-  IoMailOutline,
-  IoIdCardOutline,
-  IoBusinessOutline,
   IoCalendarOutline,
   IoPeopleOutline,
-  IoStatsChartOutline,
   IoTimeOutline,
   IoCheckmarkCircleOutline,
   IoWalletOutline,
@@ -31,7 +26,14 @@ import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
 import { doctorCommissionService } from "@/services/doctorCommissionService";
 import { expertCommissionService } from "@/services/expertCommissionService";
-import { Doctor, Expert, Appointment, Patient, DoctorCommission, ExpertCommission } from "@/types/models";
+import {
+  Doctor,
+  Expert,
+  Appointment,
+  Patient,
+  DoctorCommission,
+  ExpertCommission,
+} from "@/types/models";
 
 export default function ProfilePage() {
   const { currentUser, userData, isClinicAdmin, isSystemOwner } =
@@ -55,7 +57,9 @@ export default function ProfilePage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientNames, setPatientNames] = useState<Record<string, string>>({});
-  const [doctorCommissions, setDoctorCommissions] = useState<DoctorCommission[]>([]);
+  const [doctorCommissions, setDoctorCommissions] = useState<
+    DoctorCommission[]
+  >([]);
   const [doctorCommissionStats, setDoctorCommissionStats] = useState({
     totalCommission: 0,
     paidCommission: 0,
@@ -70,8 +74,11 @@ export default function ProfilePage() {
   const [commissionsLoading, setCommissionsLoading] = useState(false);
 
   // Expert state
-  const [expertCommissions, setExpertCommissions] = useState<ExpertCommission[]>([]);
-  const [expertCommissionsLoading, setExpertCommissionsLoading] = useState(false);
+  const [expertCommissions, setExpertCommissions] = useState<
+    ExpertCommission[]
+  >([]);
+  const [expertCommissionsLoading, setExpertCommissionsLoading] =
+    useState(false);
 
   const [doctorOrExpertTab, setDoctorOrExpertTab] = useState("overview");
 
@@ -83,6 +90,7 @@ export default function ProfilePage() {
     try {
       setAppointmentsLoading(true);
       const data = await appointmentService.getAppointmentsByDoctor(docId);
+
       setAppointments(data || []);
 
       if (data && data.length > 0) {
@@ -90,6 +98,7 @@ export default function ProfilePage() {
         const patientNamePromises = uniquePatientIds.map(async (patientId) => {
           try {
             const patient = await patientService.getPatientById(patientId);
+
             return { patientId, name: patient?.name || "Unknown Patient" };
           } catch {
             return { patientId, name: "Unknown Patient" };
@@ -97,6 +106,7 @@ export default function ProfilePage() {
         });
         const results = await Promise.allSettled(patientNamePromises);
         const nameMap: Record<string, string> = {};
+
         results.forEach((r) => {
           if (r.status === "fulfilled") {
             nameMap[r.value.patientId] = r.value.name;
@@ -115,8 +125,12 @@ export default function ProfilePage() {
     try {
       setPatientsLoading(true);
       let data: Patient[] | null = null;
+
       if (userData?.clinicId) {
-        data = await patientService.getPatientsByDoctor(docId, userData.clinicId);
+        data = await patientService.getPatientsByDoctor(
+          docId,
+          userData.clinicId,
+        );
       }
       setPatients(data || []);
     } catch (err) {
@@ -131,9 +145,13 @@ export default function ProfilePage() {
     try {
       setCommissionsLoading(true);
       const [commissionsData, statsData] = await Promise.all([
-        doctorCommissionService.getCommissionsByDoctor(docId, userData.clinicId),
+        doctorCommissionService.getCommissionsByDoctor(
+          docId,
+          userData.clinicId,
+        ),
         doctorCommissionService.getCommissionStats(docId, userData.clinicId),
       ]);
+
       setDoctorCommissions(commissionsData);
       setDoctorCommissionStats(statsData);
     } catch (err) {
@@ -151,6 +169,7 @@ export default function ProfilePage() {
         expId,
         userData.clinicId,
       );
+
       setExpertCommissions(data || []);
     } catch (err) {
       console.error(err);
@@ -173,6 +192,7 @@ export default function ProfilePage() {
     const checkDoctorOrExpert = async () => {
       if (!email || email === "No email provided") {
         setLoadingDoctorOrExpert(false);
+
         return;
       }
 
@@ -180,6 +200,7 @@ export default function ProfilePage() {
         setLoadingDoctorOrExpert(true);
         // Check doctor first
         const doctorData = await doctorService.getDoctorByEmail(email);
+
         if (doctorData) {
           setDoctor(doctorData);
           // Load doctor details
@@ -191,6 +212,7 @@ export default function ProfilePage() {
         } else {
           // Check expert
           const expertData = await expertService.getExpertByEmail(email);
+
           if (expertData) {
             setExpert(expertData);
             await loadExpertCommissions(expertData.id);
@@ -231,6 +253,7 @@ export default function ProfilePage() {
 
   const formatSpeciality = (spec: string) => {
     if (!spec) return "";
+
     return spec
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -362,7 +385,9 @@ export default function ProfilePage() {
                 key={i}
                 className={`flex items-center gap-4 p-5 rounded-2xl border bg-surface ${s.bg}`}
               >
-                <div className="p-3 bg-surface border border-border-base rounded-full shadow-sm">{s.icon}</div>
+                <div className="p-3 bg-surface border border-border-base rounded-full shadow-sm">
+                  {s.icon}
+                </div>
                 <div>
                   <p className="text-xl font-bold text-text-main leading-none">
                     {s.val}
@@ -408,11 +433,15 @@ export default function ProfilePage() {
                     </h3>
                     <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                       <span className="text-text-muted">Email address</span>
-                      <span className="font-semibold text-text-main">{email}</span>
+                      <span className="font-semibold text-text-main">
+                        {email}
+                      </span>
                     </div>
                     <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                       <span className="text-text-muted">Phone number</span>
-                      <span className="font-semibold text-text-main">{userData?.phone || "—"}</span>
+                      <span className="font-semibold text-text-main">
+                        {userData?.phone || "—"}
+                      </span>
                     </div>
                     <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                       <span className="text-text-muted">User type</span>
@@ -424,7 +453,9 @@ export default function ProfilePage() {
                       <span className="text-text-muted">Member since</span>
                       <span className="font-semibold text-text-main">
                         {currentUser?.metadata.creationTime
-                          ? new Date(currentUser.metadata.creationTime).toLocaleDateString(undefined, {
+                          ? new Date(
+                              currentUser.metadata.creationTime,
+                            ).toLocaleDateString(undefined, {
                               month: "long",
                               year: "numeric",
                             })
@@ -457,13 +488,19 @@ export default function ProfilePage() {
                       </span>
                     </div>
                     <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
-                      <span className="text-text-muted">Consultation Charge</span>
+                      <span className="text-text-muted">
+                        Consultation Charge
+                      </span>
                       <span className="font-semibold text-text-main">
-                        {doctor.consultationCharge !== undefined ? `NPR ${doctor.consultationCharge.toLocaleString()}` : "—"}
+                        {doctor.consultationCharge !== undefined
+                          ? `NPR ${doctor.consultationCharge.toLocaleString()}`
+                          : "—"}
                       </span>
                     </div>
                     <div className="flex justify-between text-[14px] pb-2">
-                      <span className="text-text-muted">Default Commission</span>
+                      <span className="text-text-muted">
+                        Default Commission
+                      </span>
                       <span className="font-semibold text-text-main">
                         {doctor.defaultCommission}%
                       </span>
@@ -511,11 +548,14 @@ export default function ProfilePage() {
                             >
                               <td className="px-5 py-3">
                                 <div className="font-medium text-[13.5px] text-text-main">
-                                  {patientNames[appointment.patientId] || "Unknown"}
+                                  {patientNames[appointment.patientId] ||
+                                    "Unknown"}
                                 </div>
                               </td>
                               <td className="px-5 py-3 text-[13px] text-text-muted">
-                                {new Date(appointment.appointmentDate).toLocaleDateString()}{" "}
+                                {new Date(
+                                  appointment.appointmentDate,
+                                ).toLocaleDateString()}{" "}
                                 at {appointment.startTime || "N/A"}
                               </td>
                               <td className="px-5 py-3">
@@ -624,7 +664,9 @@ export default function ProfilePage() {
                         key={i}
                         className="p-5 text-center border border-border-base rounded-2xl shadow-sm bg-surface-2/50"
                       >
-                        <p className={`text-2xl font-bold leading-none ${s.color}`}>
+                        <p
+                          className={`text-2xl font-bold leading-none ${s.color}`}
+                        >
                           {s.val}
                         </p>
                         <p className="text-[13px] text-text-muted font-medium mt-1">
@@ -677,7 +719,8 @@ export default function ProfilePage() {
                               {(commission.serviceNames || []).join(", ")}
                             </p>
                             <p className="text-[12px] text-text-muted mt-1">
-                              Rate: {commission.commissionPercentage}% • Invoiced: NPR{" "}
+                              Rate: {commission.commissionPercentage}% •
+                              Invoiced: NPR{" "}
                               {commission.totalInvoiceAmount.toLocaleString()}
                             </p>
                           </div>
@@ -688,7 +731,10 @@ export default function ProfilePage() {
                             {commission.status === "pending" && (
                               <p className="text-[12px] text-amber-500 font-medium mt-1">
                                 Pending: NPR{" "}
-                                {(commission.commissionAmount - (commission.paidAmount || 0)).toLocaleString()}
+                                {(
+                                  commission.commissionAmount -
+                                  (commission.paidAmount || 0)
+                                ).toLocaleString()}
                               </p>
                             )}
                           </div>
@@ -738,11 +784,15 @@ export default function ProfilePage() {
                     </h3>
                     <div className="flex justify-between">
                       <span className="text-text-muted">Email address</span>
-                      <span className="font-semibold text-text-main">{email}</span>
+                      <span className="font-semibold text-text-main">
+                        {email}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">Phone number</span>
-                      <span className="font-semibold text-text-main">{userData?.phone || "—"}</span>
+                      <span className="font-semibold text-text-main">
+                        {userData?.phone || "—"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">User type</span>
@@ -754,7 +804,9 @@ export default function ProfilePage() {
                       <span className="text-text-muted">Member since</span>
                       <span className="font-semibold text-text-main">
                         {currentUser?.metadata.creationTime
-                          ? new Date(currentUser.metadata.creationTime).toLocaleDateString(undefined, {
+                          ? new Date(
+                              currentUser.metadata.creationTime,
+                            ).toLocaleDateString(undefined, {
                               month: "long",
                               year: "numeric",
                             })
@@ -770,7 +822,9 @@ export default function ProfilePage() {
                     </h3>
                     <div className="flex justify-between">
                       <span className="text-text-muted">Speciality</span>
-                      <span className="font-semibold text-text-main">{expert.speciality}</span>
+                      <span className="font-semibold text-text-main">
+                        {expert.speciality}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">Type</span>
@@ -780,10 +834,14 @@ export default function ProfilePage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">License</span>
-                      <span className="font-semibold text-text-main">{expert.licenseNumber}</span>
+                      <span className="font-semibold text-text-main">
+                        {expert.licenseNumber}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-text-muted">Default Commission</span>
+                      <span className="text-text-muted">
+                        Default Commission
+                      </span>
                       <span className="font-semibold text-text-main">
                         {expert.defaultCommission}%
                       </span>
@@ -791,13 +849,15 @@ export default function ProfilePage() {
                     <div className="flex justify-between">
                       <span className="text-text-muted">Balance</span>
                       <span className="font-bold text-success">
-                        NPR {(expert.totalCommissionBalance || 0).toLocaleString()}
+                        NPR{" "}
+                        {(expert.totalCommissionBalance || 0).toLocaleString()}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">Lifetime Earned</span>
                       <span className="font-semibold text-text-main">
-                        NPR {(expert.totalCommissionEarned || 0).toLocaleString()}
+                        NPR{" "}
+                        {(expert.totalCommissionEarned || 0).toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -836,14 +896,21 @@ export default function ProfilePage() {
                           {expertCommissions.map((c) => (
                             <tr key={c.id}>
                               <td className="p-3">#{c.invoiceNumber}</td>
-                              <td className="p-3 font-medium text-text-main">{c.patientName}</td>
-                              <td className="p-3 text-text-muted">{(c.serviceNames || []).join(", ") || "Expert Consultation"}</td>
+                              <td className="p-3 font-medium text-text-main">
+                                {c.patientName}
+                              </td>
+                              <td className="p-3 text-text-muted">
+                                {(c.serviceNames || []).join(", ") ||
+                                  "Expert Consultation"}
+                              </td>
                               <td className="p-3 font-semibold">
                                 NPR {c.commissionAmount.toLocaleString()}
                               </td>
                               <td className="p-3">
                                 <Chip
-                                  color={c.status === "paid" ? "success" : "warning"}
+                                  color={
+                                    c.status === "paid" ? "success" : "warning"
+                                  }
                                   size="sm"
                                   variant="flat"
                                 >
@@ -902,11 +969,11 @@ export default function ProfilePage() {
                     <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                       {currentUser?.metadata.creationTime
                         ? new Date(
-                          currentUser.metadata.creationTime,
-                        ).toLocaleDateString(undefined, {
-                          month: "long",
-                          year: "numeric",
-                        })
+                            currentUser.metadata.creationTime,
+                          ).toLocaleDateString(undefined, {
+                            month: "long",
+                            year: "numeric",
+                          })
                         : "N/A"}
                     </p>
                   </div>
@@ -964,7 +1031,11 @@ export default function ProfilePage() {
                     {clinicName || "Loading..."}
                   </h4>
                   <p className="text-[12px] text-zinc-500 font-medium mt-1">
-                    {isSystemOwner() ? "System platform" : userData?.clinicId ? "Clinic head" : "Clinic unit"}
+                    {isSystemOwner()
+                      ? "System platform"
+                      : userData?.clinicId
+                        ? "Clinic head"
+                        : "Clinic unit"}
                   </p>
                 </CardBody>
               </Card>
@@ -983,8 +1054,8 @@ export default function ProfilePage() {
                   <p className="text-[10px] text-zinc-500">
                     {currentUser?.metadata.lastSignInTime
                       ? new Date(
-                        currentUser.metadata.lastSignInTime,
-                      ).toLocaleString()
+                          currentUser.metadata.lastSignInTime,
+                        ).toLocaleString()
                       : "First Session"}
                   </p>
                 </div>
@@ -996,8 +1067,8 @@ export default function ProfilePage() {
                   <p className="text-[10px] text-zinc-500">
                     {currentUser?.metadata.creationTime
                       ? new Date(
-                        currentUser.metadata.creationTime,
-                      ).toLocaleString()
+                          currentUser.metadata.creationTime,
+                        ).toLocaleString()
                       : "N/A"}
                   </p>
                 </div>
@@ -1013,6 +1084,6 @@ export default function ProfilePage() {
         isOpen={isCredentialsModalOpen}
         onClose={onCredentialsModalClose}
       />
-    </div >
+    </div>
   );
 }

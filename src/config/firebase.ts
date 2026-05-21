@@ -37,7 +37,7 @@ const validateEnvVars = () => {
   if (missingVars.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missingVars.join(", ")}. ` +
-      `Please add them to your .env file.`,
+        `Please add them to your .env file.`,
     );
   }
 };

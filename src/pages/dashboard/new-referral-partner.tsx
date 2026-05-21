@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 
-
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function NewReferralPartnerPage() {
   const navigate = useNavigate();
@@ -79,8 +78,8 @@ export default function NewReferralPartnerPage() {
       .then((multi) =>
         multi
           ? branchService
-            .getMainBranch(clinicId)
-            .then((b) => b && setDefaultBranchId(b.id))
+              .getMainBranch(clinicId)
+              .then((b) => b && setDefaultBranchId(b.id))
           : setDefaultBranchId(clinicId),
       )
       .catch(() => setDefaultBranchId(clinicId));

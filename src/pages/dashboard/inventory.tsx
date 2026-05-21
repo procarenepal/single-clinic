@@ -24,22 +24,14 @@ import { Select, SelectItem } from "@heroui/select";
 import { Spinner } from "@heroui/spinner";
 import { addToast } from "@heroui/toast";
 import { format } from "date-fns";
-import { title } from "@/components/primitives";
 import {
   IoAdd,
   IoSearch,
-  IoCreate,
   IoCheckmark,
-  IoTime,
-  IoWarning,
-  IoArrowForward,
   IoTimeOutline,
-  IoCheckmarkCircleOutline,
-  IoWarningOutline,
   IoCreateOutline,
-  IoArrowForwardOutline,
   IoCloseCircleOutline,
-  IoTrashOutline
+  IoTrashOutline,
 } from "react-icons/io5";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -54,7 +46,7 @@ import { accountService } from "@/services/accountService";
 import { hrService } from "@/services/hrService";
 
 // Types
-import { Item, ItemCategory, IssuedItem, Vendor, StaffMember } from "@/types/models";
+import { Item, ItemCategory, IssuedItem, Vendor } from "@/types/models";
 
 // Icons
 
@@ -90,8 +82,19 @@ export default function InventoryPage() {
   const [isAddingUnit, setIsAddingUnit] = useState(false);
   const [newUnit, setNewUnit] = useState("");
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [units, setUnits] = useState<string[]>(["piece", "box", "kg", "meter", "vial", "strip", "set", "unit"]);
-  const [staffList, setStaffList] = useState<{ id: string, name: string, role: string }[]>([]);
+  const [units, setUnits] = useState<string[]>([
+    "piece",
+    "box",
+    "kg",
+    "meter",
+    "vial",
+    "strip",
+    "set",
+    "unit",
+  ]);
+  const [staffList, setStaffList] = useState<
+    { id: string; name: string; role: string }[]
+  >([]);
 
   // Form states
   const [itemForm, setItemForm] = useState({
@@ -125,7 +128,7 @@ export default function InventoryPage() {
 
   const [returnForm, setReturnForm] = useState({
     notes: "",
-    returnDate: new Date().toISOString().split('T')[0],
+    returnDate: new Date().toISOString().split("T")[0],
     condition: "used" as "new" | "used" | "damaged",
     returnQuantity: 1,
   });
@@ -151,7 +154,13 @@ export default function InventoryPage() {
 
     try {
       setLoading(true);
-      const [itemsData, categoriesData, issuedItemsData, vendorsData, staffData] = await Promise.all([
+      const [
+        itemsData,
+        categoriesData,
+        issuedItemsData,
+        vendorsData,
+        staffData,
+      ] = await Promise.all([
         itemService.getItemsByClinic(clinicId, branchId),
         itemCategoryService.getCategoriesByClinic(clinicId, branchId),
         issuedItemService.getIssuedItemsByClinic(clinicId, branchId),
@@ -159,20 +168,24 @@ export default function InventoryPage() {
         hrService.getStaffByClinic(clinicId), // Fetch all clinic staff
       ]);
 
-      setItems(itemsData.filter(i => !i.isDisposed));
+      setItems(itemsData.filter((i) => !i.isDisposed));
       setCategories(categoriesData);
       setIssuedItems(issuedItemsData);
       setVendors(vendorsData);
 
       // Map HR staff for selection
       const staffMembers = staffData
-        .map(s => ({ id: s.id, name: s.name, role: s.role }))
+        .map((s) => ({ id: s.id, name: s.name, role: s.role }))
         .sort((a, b) => a.name.localeCompare(b.name));
+
       setStaffList(staffMembers);
 
       // Extract unique units from items and merge with defaults
-      const existingUnits = itemsData.map(i => i.unit).filter((u): u is string => !!u);
+      const existingUnits = itemsData
+        .map((i) => i.unit)
+        .filter((u): u is string => !!u);
       const uniqueUnits = Array.from(new Set([...units, ...existingUnits]));
+
       setUnits(uniqueUnits);
     } catch (error) {
       console.error("Error loading inventory data:", error);
@@ -190,13 +203,15 @@ export default function InventoryPage() {
     if (!date) return "—";
     try {
       let dateObj;
+
       if (date.toDate) {
         dateObj = date.toDate();
       } else {
         dateObj = new Date(date);
       }
-      
+
       if (isNaN(dateObj.getTime())) return "—";
+
       return format(dateObj, formatStr);
     } catch (error) {
       return "—";
@@ -206,17 +221,27 @@ export default function InventoryPage() {
   const handleAddUnit = () => {
     if (newUnit.trim() && !units.includes(newUnit.trim().toLowerCase())) {
       const unit = newUnit.trim().toLowerCase();
-      setUnits(prev => [...prev, unit]);
-      setItemForm(prev => ({ ...prev, unit: unit }));
+
+      setUnits((prev) => [...prev, unit]);
+      setItemForm((prev) => ({ ...prev, unit: unit }));
       setNewUnit("");
       setIsAddingUnit(false);
-      addToast({ title: "Unit added", description: `"${unit}" added to options`, color: "success" });
+      addToast({
+        title: "Unit added",
+        description: `"${unit}" added to options`,
+        color: "success",
+      });
     }
   };
 
   const handleSaveVendor = async () => {
     if (!vendorForm.name) {
-      addToast({ title: "Error", description: "Please enter vendor name", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Please enter vendor name",
+        color: "danger",
+      });
+
       return;
     }
 
@@ -231,16 +256,29 @@ export default function InventoryPage() {
       };
 
       const vendorId = await accountService.createVendor(vendorData);
-      const newVendor = { id: vendorId, ...vendorData, createdAt: new Date(), updatedAt: new Date() };
-      
-      setVendors(prev => [...prev, newVendor as Vendor]);
-      setItemForm(prev => ({ ...prev, supplierName: vendorForm.name }));
-      
-      addToast({ title: "Success", description: "Vendor added successfully", color: "success" });
+      const newVendor = {
+        id: vendorId,
+        ...vendorData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      setVendors((prev) => [...prev, newVendor as Vendor]);
+      setItemForm((prev) => ({ ...prev, supplierName: vendorForm.name }));
+
+      addToast({
+        title: "Success",
+        description: "Vendor added successfully",
+        color: "success",
+      });
       vendorModalState.close();
       setVendorForm({ name: "", phone: "", email: "", category: "Equipment" });
     } catch (error) {
-      addToast({ title: "Error", description: "Failed to add vendor", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to add vendor",
+        color: "danger",
+      });
     } finally {
       setSaving(false);
     }
@@ -271,14 +309,28 @@ export default function InventoryPage() {
     setLogsPage(1);
   }, [searchQuery]);
 
-  const paginatedItems = filteredItems.slice((itemsPage - 1) * itemsPerPage, itemsPage * itemsPerPage);
-  const paginatedCategories = filteredCategories.slice((categoriesPage - 1) * itemsPerPage, categoriesPage * itemsPerPage);
-  const paginatedLogs = filteredIssuedItems.slice((logsPage - 1) * itemsPerPage, logsPage * itemsPerPage);
+  const paginatedItems = filteredItems.slice(
+    (itemsPage - 1) * itemsPerPage,
+    itemsPage * itemsPerPage,
+  );
+  const paginatedCategories = filteredCategories.slice(
+    (categoriesPage - 1) * itemsPerPage,
+    categoriesPage * itemsPerPage,
+  );
+  const paginatedLogs = filteredIssuedItems.slice(
+    (logsPage - 1) * itemsPerPage,
+    logsPage * itemsPerPage,
+  );
 
   // Handle item operations
   const handleSaveItem = async () => {
     if (!itemForm.name || !itemForm.category) {
-      addToast({ title: "Error", description: "Please fill in required fields", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Please fill in required fields",
+        color: "danger",
+      });
+
       return;
     }
 
@@ -300,49 +352,88 @@ export default function InventoryPage() {
 
       if (isEditing && id) {
         await itemService.updateItem(id, itemData);
-        addToast({ title: "Success", description: "Asset updated successfully", color: "success" });
+        addToast({
+          title: "Success",
+          description: "Asset updated successfully",
+          color: "success",
+        });
       } else {
         await itemService.createItem(itemData);
-        addToast({ title: "Success", description: "Asset recorded successfully", color: "success" });
+        addToast({
+          title: "Success",
+          description: "Asset recorded successfully",
+          color: "success",
+        });
       }
 
       itemModalState.forceClose();
       loadInventoryData();
       resetItemForm();
     } catch (error) {
-      addToast({ title: "Error", description: "Failed to save asset", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to save asset",
+        color: "danger",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const handleDisposeItem = async (itemId: string) => {
-    if (!window.confirm("Are you sure you want to dispose of this asset? This will remove it from active inventory.")) return;
+    if (
+      !window.confirm(
+        "Are you sure you want to dispose of this asset? This will remove it from active inventory.",
+      )
+    )
+      return;
     try {
-      await itemService.updateItem(itemId, { 
-        isDisposed: true, 
-        disposalDate: new Date(), 
-        disposalReason: "Marked as damaged or removed by user" 
+      await itemService.updateItem(itemId, {
+        isDisposed: true,
+        disposalDate: new Date(),
+        disposalReason: "Marked as damaged or removed by user",
       });
-      addToast({ title: "Disposed", description: "Asset removed from active inventory", color: "success" });
+      addToast({
+        title: "Disposed",
+        description: "Asset removed from active inventory",
+        color: "success",
+      });
       loadInventoryData();
     } catch (error) {
-      addToast({ title: "Error", description: "Failed to dispose asset", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to dispose asset",
+        color: "danger",
+      });
     }
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
     if (!categoryId) {
-      addToast({ title: "Error", description: "Invalid category ID", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Invalid category ID",
+        color: "danger",
+      });
+
       return;
     }
-    if (!window.confirm("Are you sure you want to delete this category?")) return;
+    if (!window.confirm("Are you sure you want to delete this category?"))
+      return;
     try {
       await itemCategoryService.deleteCategory(categoryId);
-      addToast({ title: "Deleted", description: "Category removed successfully", color: "success" });
+      addToast({
+        title: "Deleted",
+        description: "Category removed successfully",
+        color: "success",
+      });
       loadInventoryData();
     } catch (error) {
-      addToast({ title: "Error", description: "Failed to delete category", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to delete category",
+        color: "danger",
+      });
     }
   };
 
@@ -364,7 +455,7 @@ export default function InventoryPage() {
         clinicId!,
         branchId!,
         categoryForm.name,
-        isEditing ? categoryForm.id : undefined
+        isEditing ? categoryForm.id : undefined,
       );
 
       if (exists) {
@@ -374,6 +465,7 @@ export default function InventoryPage() {
           color: "warning",
         });
         setSaving(false);
+
         return;
       }
 
@@ -387,7 +479,10 @@ export default function InventoryPage() {
       const { id, ...dataToSave } = categoryData;
 
       if (isEditing && categoryForm.id) {
-        await itemCategoryService.updateCategory(categoryForm.id, dataToSave as any);
+        await itemCategoryService.updateCategory(
+          categoryForm.id,
+          dataToSave as any,
+        );
         addToast({
           title: "Success",
           description: "Category updated successfully",
@@ -460,8 +555,13 @@ export default function InventoryPage() {
         itemCategory: selectedItem.category,
         quantity: issueForm.quantity,
         issuedDate: new Date(),
-        expectedReturnDate: selectedItem.itemType === 'consumable' ? null : issueForm.expectedReturnDate,
-        status: (selectedItem.itemType === 'consumable' ? "consumed" : "issued") as any,
+        expectedReturnDate:
+          selectedItem.itemType === "consumable"
+            ? null
+            : issueForm.expectedReturnDate,
+        status: (selectedItem.itemType === "consumable"
+          ? "consumed"
+          : "issued") as any,
         issuedTo: issueForm.issuedTo,
         issuedBy: currentUser?.uid || "",
         notes: issueForm.notes,
@@ -504,15 +604,23 @@ export default function InventoryPage() {
     if (!selectedIssuedItem) return;
 
     if (!selectedIssuedItem) return;
-    
-    if (returnForm.returnQuantity <= 0 || returnForm.returnQuantity > selectedIssuedItem.quantity) {
-      addToast({ title: "Error", description: "Invalid return quantity", color: "danger" });
+
+    if (
+      returnForm.returnQuantity <= 0 ||
+      returnForm.returnQuantity > selectedIssuedItem.quantity
+    ) {
+      addToast({
+        title: "Error",
+        description: "Invalid return quantity",
+        color: "danger",
+      });
+
       return;
     }
 
     try {
       setSaving(true);
-      
+
       const isPartial = returnForm.returnQuantity < selectedIssuedItem.quantity;
       const returnQty = returnForm.returnQuantity;
 
@@ -532,6 +640,7 @@ export default function InventoryPage() {
           returnCondition: returnForm.condition,
           returnNotes: returnForm.notes,
         };
+
         // Use service to add new doc (assuming createIssuedItem exists or using addDoc logic)
         await issuedItemService.createIssuedItem(returnedRecord);
       } else {
@@ -543,27 +652,40 @@ export default function InventoryPage() {
           returnNotes: returnForm.notes,
           updatedAt: new Date(),
         };
-        await issuedItemService.updateIssuedItem(selectedIssuedItem.id, updateData);
+
+        await issuedItemService.updateIssuedItem(
+          selectedIssuedItem.id,
+          updateData,
+        );
       }
 
       // Update master inventory stock
-      const selectedItem = items.find((item) => item.id === selectedIssuedItem.itemId);
+      const selectedItem = items.find(
+        (item) => item.id === selectedIssuedItem.itemId,
+      );
 
       if (selectedItem) {
         const updatedItemData = {
           ...selectedItem,
           quantity: selectedItem.quantity + returnQty,
           // Update master condition if returned as damaged
-          condition: returnForm.condition === 'damaged' ? 'damaged' : selectedItem.condition,
+          condition:
+            returnForm.condition === "damaged"
+              ? "damaged"
+              : selectedItem.condition,
         };
 
-        const { id, createdAt, updatedAt, ...itemUpdates } = updatedItemData as any;
+        const { id, createdAt, updatedAt, ...itemUpdates } =
+          updatedItemData as any;
+
         await itemService.updateItem(selectedItem.id, itemUpdates);
       }
 
       addToast({
         title: "Success",
-        description: isPartial ? `${returnQty} items returned (partial)` : "All items returned successfully",
+        description: isPartial
+          ? `${returnQty} items returned (partial)`
+          : "All items returned successfully",
         color: "success",
       });
 
@@ -571,7 +693,7 @@ export default function InventoryPage() {
       loadInventoryData();
       setReturnForm({
         notes: "",
-        returnDate: new Date().toISOString().split('T')[0],
+        returnDate: new Date().toISOString().split("T")[0],
         condition: "used",
         returnQuantity: 1,
       });
@@ -646,7 +768,9 @@ export default function InventoryPage() {
       unit: item.unit || "piece",
       barcode: item.barcode || "",
       purchasePrice: item.purchasePrice?.toString() || "",
-      purchaseDate: item.purchaseDate ? format(new Date(item.purchaseDate), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+      purchaseDate: item.purchaseDate
+        ? format(new Date(item.purchaseDate), "yyyy-MM-dd")
+        : format(new Date(), "yyyy-MM-dd"),
       supplierName: item.supplierName || "",
       condition: item.condition || "new",
       itemType: item.itemType || "asset",
@@ -690,7 +814,10 @@ export default function InventoryPage() {
     }
   };
 
-  const valuation = items.reduce((acc, item) => acc + (item.purchasePrice || 0) * (item.quantity || 0), 0);
+  const valuation = items.reduce(
+    (acc, item) => acc + (item.purchasePrice || 0) * (item.quantity || 0),
+    0,
+  );
 
   if (loading) {
     return (
@@ -705,7 +832,9 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="flex justify-between items-center mb-2">
         <div>
-          <h1 className="text-[15.5px] font-semibold text-primary tracking-tight">Asset inventory</h1>
+          <h1 className="text-[15.5px] font-semibold text-primary tracking-tight">
+            Asset inventory
+          </h1>
           <p className="text-[10.5px] text-[rgb(var(--color-text-muted))] font-medium uppercase tracking-wider opacity-60">
             Track clinic assets, machines, and equipment lifecycle.
           </p>
@@ -715,19 +844,29 @@ export default function InventoryPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl relative overflow-hidden group">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Total valuation</p>
-          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">Rs. {valuation.toLocaleString()}</p>
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
+            Total valuation
+          </p>
+          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">
+            Rs. {valuation.toLocaleString()}
+          </p>
         </div>
         <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl relative overflow-hidden group border-l-4 border-l-primary">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Active assets</p>
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
+            Active assets
+          </p>
           <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">
             {items.reduce((acc, item) => acc + (item.quantity || 0), 0)}
           </p>
         </div>
         <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl relative overflow-hidden group border-l-4 border-l-amber-500">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Items in use</p>
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
+            Items in use
+          </p>
           <p className="text-[16px] font-semibold text-amber-500 tracking-tighter mt-0.5">
-            {issuedItems.filter(i => i.status === 'issued').reduce((acc, i) => acc + (i.quantity || 0), 0)}
+            {issuedItems
+              .filter((i) => i.status === "issued")
+              .reduce((acc, i) => acc + (i.quantity || 0), 0)}
           </p>
         </div>
       </div>
@@ -738,21 +877,21 @@ export default function InventoryPage() {
           <div className="relative w-80">
             <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted))] w-4 h-4" />
             <input
-              type="text"
+              className="w-full h-9 pl-10 pr-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-xl text-[12px] focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
               placeholder="Search assets or categories..."
+              type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-9 pl-10 pr-4 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-xl text-[12px] focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
             />
           </div>
           <Button
+            className="h-9 px-4 rounded-xl text-[12.5px] font-semibold tracking-tight"
             color="primary"
             startContent={<IoAdd className="w-4 h-4" />}
             onPress={() => {
               resetItemForm();
               itemModalState.open();
             }}
-            className="h-9 px-4 rounded-xl text-[12.5px] font-semibold tracking-tight"
           >
             Add new asset
           </Button>
@@ -761,68 +900,133 @@ export default function InventoryPage() {
         <CardBody className="p-0">
           <Tabs
             className="px-4 pt-2"
-            selectedKey={selectedTab}
-            onSelectionChange={(key) => setSelectedTab(key as string)}
-            variant="underlined"
             color="primary"
+            selectedKey={selectedTab}
+            variant="underlined"
+            onSelectionChange={(key) => setSelectedTab(key as string)}
           >
             <Tab key="items" title="Asset Registry">
               <div className="p-4 space-y-4">
                 {filteredItems.length > 0 ? (
                   <>
-                    <Table aria-label="Items table" removeWrapper className="border border-[rgb(var(--color-border))] rounded-xl overflow-hidden">
+                    <Table
+                      removeWrapper
+                      aria-label="Items table"
+                      className="border border-[rgb(var(--color-border))] rounded-xl overflow-hidden"
+                    >
                       <TableHeader className="bg-[rgb(var(--color-surface-2))]">
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))] py-4">Asset details</TableColumn>
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Category</TableColumn>
-                        <TableColumn align="center" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Qty</TableColumn>
-                        <TableColumn align="end" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Cost</TableColumn>
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Purchase date</TableColumn>
-                        <TableColumn align="center" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Actions</TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))] py-4"
+                        >
+                          Asset details
+                        </TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Category
+                        </TableColumn>
+                        <TableColumn
+                          align="center"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Qty
+                        </TableColumn>
+                        <TableColumn
+                          align="end"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Cost
+                        </TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Purchase date
+                        </TableColumn>
+                        <TableColumn
+                          align="center"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Actions
+                        </TableColumn>
                       </TableHeader>
                       <TableBody>
                         {paginatedItems.map((item, index) => (
                           <TableRow key={item.id || `item-${index}`}>
                             <TableCell>
                               <div>
-                                <p className="font-semibold text-[14.5px]">{item.name}</p>
+                                <p className="font-semibold text-[14.5px]">
+                                  {item.name}
+                                </p>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                  <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border ${
-                                    item.condition === 'new' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-                                    item.condition === 'damaged' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' :
-                                    'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                                  }`}>
-                                    {item.condition ? item.condition.charAt(0).toUpperCase() + item.condition.slice(1) : 'New'}
+                                  <span
+                                    className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border ${
+                                      item.condition === "new"
+                                        ? "bg-green-500/10 text-green-600 border-green-500/20"
+                                        : item.condition === "damaged"
+                                          ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                          : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                    }`}
+                                  >
+                                    {item.condition
+                                      ? item.condition.charAt(0).toUpperCase() +
+                                        item.condition.slice(1)
+                                      : "New"}
                                   </span>
-                                  {item.supplierName && <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium italic opacity-70">from {item.supplierName}</span>}
+                                  {item.supplierName && (
+                                    <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium italic opacity-70">
+                                      from {item.supplierName}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell align="left">
-                              <Chip color="primary" size="sm" variant="flat" className="font-bold">
+                              <Chip
+                                className="font-bold"
+                                color="primary"
+                                size="sm"
+                                variant="flat"
+                              >
                                 {item.category}
                               </Chip>
                             </TableCell>
                             <TableCell align="center">
-                              <span className="font-medium">{item.quantity || 0}</span>
+                              <span className="font-medium">
+                                {item.quantity || 0}
+                              </span>
                             </TableCell>
                             <TableCell align="right">
-                              <p className="font-semibold text-primary">Rs. {(item.purchasePrice || 0).toLocaleString()}</p>
+                              <p className="font-semibold text-primary">
+                                Rs. {(item.purchasePrice || 0).toLocaleString()}
+                              </p>
                             </TableCell>
                             <TableCell align="left">
                               <span className="text-[13.5px] text-text-muted">
-                                {item.purchaseDate ? safeFormatDate(item.purchaseDate) : '—'}
+                                {item.purchaseDate
+                                  ? safeFormatDate(item.purchaseDate)
+                                  : "—"}
                               </span>
                             </TableCell>
                             <TableCell align="center">
                               <div className="flex items-center justify-center gap-2">
                                 <button
-                                  onClick={() => editItem(item)}
                                   className="p-2 text-[rgb(var(--color-text-muted))] hover:text-primary transition-colors"
                                   title="Edit"
+                                  onClick={() => editItem(item)}
                                 >
                                   <IoCreateOutline size={18} />
                                 </button>
                                 <button
+                                  className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all ${
+                                    item.quantity > 0
+                                      ? "bg-primary text-white hover:opacity-90"
+                                      : "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] cursor-not-allowed"
+                                  }`}
+                                  disabled={item.quantity === 0}
+                                  title="Issue item"
                                   onClick={() => {
                                     setIssueForm({
                                       ...issueForm,
@@ -830,20 +1034,13 @@ export default function InventoryPage() {
                                     });
                                     issueModalState.open();
                                   }}
-                                  disabled={item.quantity === 0}
-                                  className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all ${
-                                    item.quantity > 0 
-                                    ? 'bg-primary text-white hover:opacity-90' 
-                                    : 'bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] cursor-not-allowed'
-                                  }`}
-                                  title="Issue item"
                                 >
                                   Issue
                                 </button>
                                 <button
-                                  onClick={() => handleDisposeItem(item.id)}
                                   className="p-2 text-[rgb(var(--color-text-muted))] hover:text-rose-500 transition-colors"
                                   title="Mark as damaged / Dispose"
+                                  onClick={() => handleDisposeItem(item.id)}
                                 >
                                   <IoCloseCircleOutline size={18} />
                                 </button>
@@ -862,9 +1059,9 @@ export default function InventoryPage() {
                           showShadow
                           color="primary"
                           page={itemsPage}
+                          size="sm"
                           total={Math.ceil(filteredItems.length / itemsPerPage)}
                           onChange={(page) => setItemsPage(page)}
-                          size="sm"
                         />
                       </div>
                     )}
@@ -884,19 +1081,19 @@ export default function InventoryPage() {
                           : "Start building your clinic inventory by adding machines, furniture, or equipment."}
                       </p>
                     </div>
-                      {!searchQuery && (
-                        <Button
-                          color="primary"
-                          startContent={<IoAdd />}
-                          onPress={() => {
-                            resetItemForm();
-                            itemModalState.open();
-                          }}
-                        >
-                          Add Your First Item
-                        </Button>
-                      )}
-                    </div>
+                    {!searchQuery && (
+                      <Button
+                        color="primary"
+                        startContent={<IoAdd />}
+                        onPress={() => {
+                          resetItemForm();
+                          itemModalState.open();
+                        }}
+                      >
+                        Add Your First Item
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             </Tab>
@@ -925,8 +1122,16 @@ export default function InventoryPage() {
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                       <thead>
                         <tr className="bg-surface-2 border-b border-border-base">
-                          {["Category name", "Description", "Items count", "Actions"].map((h) => (
-                            <th key={h} className="px-4 py-3 text-[11px] font-semibold text-primary tracking-wider">
+                          {[
+                            "Category name",
+                            "Description",
+                            "Items count",
+                            "Actions",
+                          ].map((h) => (
+                            <th
+                              key={h}
+                              className="px-4 py-3 text-[11px] font-semibold text-primary tracking-wider"
+                            >
                               {h}
                             </th>
                           ))}
@@ -934,7 +1139,10 @@ export default function InventoryPage() {
                       </thead>
                       <tbody className="divide-y divide-border-base bg-surface">
                         {paginatedCategories.map((category, index) => (
-                          <tr key={category.id || `cat-${index}`} className="hover:bg-surface-2 transition-colors">
+                          <tr
+                            key={category.id || `cat-${index}`}
+                            className="hover:bg-surface-2 transition-colors"
+                          >
                             <td className="px-4 py-3 text-[13.5px] font-semibold text-text-main">
                               {category.name}
                             </td>
@@ -943,7 +1151,11 @@ export default function InventoryPage() {
                             </td>
                             <td className="px-4 py-3">
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-medium bg-primary/10 text-primary border border-primary/20">
-                                {items.filter((item) => item.category === category.name).length}
+                                {
+                                  items.filter(
+                                    (item) => item.category === category.name,
+                                  ).length
+                                }
                               </span>
                             </td>
                             <td className="px-4 py-3">
@@ -958,7 +1170,9 @@ export default function InventoryPage() {
                                 <button
                                   className="p-1.5 text-text-muted hover:text-rose-500 hover:bg-rose-500/10 rounded transition-colors"
                                   title="Delete"
-                                  onClick={() => handleDeleteCategory(category.id)}
+                                  onClick={() =>
+                                    handleDeleteCategory(category.id)
+                                  }
                                 >
                                   <IoTrashOutline size={18} />
                                 </button>
@@ -968,7 +1182,7 @@ export default function InventoryPage() {
                         ))}
                       </tbody>
                     </table>
-                    
+
                     {filteredCategories.length > itemsPerPage && (
                       <div className="flex w-full justify-center p-4 border-t border-border-base">
                         <Pagination
@@ -977,9 +1191,11 @@ export default function InventoryPage() {
                           showShadow
                           color="primary"
                           page={categoriesPage}
-                          total={Math.ceil(filteredCategories.length / itemsPerPage)}
-                          onChange={(page) => setCategoriesPage(page)}
                           size="sm"
+                          total={Math.ceil(
+                            filteredCategories.length / itemsPerPage,
+                          )}
+                          onChange={(page) => setCategoriesPage(page)}
                         />
                       </div>
                     )}
@@ -992,7 +1208,9 @@ export default function InventoryPage() {
                       </div>
                       <div>
                         <h3 className="text-lg font-medium text-text-main mb-2">
-                          {searchQuery ? "No categories found" : "No categories yet"}
+                          {searchQuery
+                            ? "No categories found"
+                            : "No categories yet"}
                         </h3>
                         <p className="text-sm text-text-muted max-w-sm">
                           {searchQuery
@@ -1011,46 +1229,119 @@ export default function InventoryPage() {
               <div className="p-4 space-y-4">
                 {filteredIssuedItems.length > 0 ? (
                   <>
-                    <Table aria-label="Usage logs table" removeWrapper className="border border-[rgb(var(--color-border))] rounded-xl overflow-hidden">
+                    <Table
+                      removeWrapper
+                      aria-label="Usage logs table"
+                      className="border border-[rgb(var(--color-border))] rounded-xl overflow-hidden"
+                    >
                       <TableHeader className="bg-[rgb(var(--color-surface-2))]">
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))] py-4">Item details</TableColumn>
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Category</TableColumn>
-                        <TableColumn align="center" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Qty</TableColumn>
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Issued date</TableColumn>
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))] text-primary">Issued to (User)</TableColumn>
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Return details</TableColumn>
-                        <TableColumn align="start" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Status</TableColumn>
-                        <TableColumn align="center" className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]">Action</TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))] py-4"
+                        >
+                          Item details
+                        </TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Category
+                        </TableColumn>
+                        <TableColumn
+                          align="center"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Qty
+                        </TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Issued date
+                        </TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))] text-primary"
+                        >
+                          Issued to (User)
+                        </TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Return details
+                        </TableColumn>
+                        <TableColumn
+                          align="start"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Status
+                        </TableColumn>
+                        <TableColumn
+                          align="center"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                        >
+                          Action
+                        </TableColumn>
                       </TableHeader>
                       <TableBody>
                         {paginatedLogs.map((issuedItem, index) => (
-                          <TableRow key={issuedItem.id || `issued-${index}`} className="border-b border-[rgb(var(--color-border))]">
+                          <TableRow
+                            key={issuedItem.id || `issued-${index}`}
+                            className="border-b border-[rgb(var(--color-border))]"
+                          >
                             <TableCell align="left">
-                              <p className="text-[14px] font-semibold text-[rgb(var(--color-text))]">{issuedItem.itemName}</p>
+                              <p className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
+                                {issuedItem.itemName}
+                              </p>
                             </TableCell>
                             <TableCell align="left">
-                              <span className="text-[13px] font-medium text-primary px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20">{issuedItem.itemCategory}</span>
+                              <span className="text-[13px] font-medium text-primary px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20">
+                                {issuedItem.itemCategory}
+                              </span>
                             </TableCell>
-                            <TableCell align="center" className="font-medium text-[14px]">{issuedItem.quantity}</TableCell>
-                            <TableCell align="left">
-                              <span className="text-[14px] text-[rgb(var(--color-text-muted))]">{safeFormatDate(issuedItem.issuedDate)}</span>
+                            <TableCell
+                              align="center"
+                              className="font-medium text-[14px]"
+                            >
+                              {issuedItem.quantity}
                             </TableCell>
                             <TableCell align="left">
-                              <p className="text-[14.5px] font-semibold text-primary tracking-tighter">{issuedItem.issuedTo || "—"}</p>
+                              <span className="text-[14px] text-[rgb(var(--color-text-muted))]">
+                                {safeFormatDate(issuedItem.issuedDate)}
+                              </span>
+                            </TableCell>
+                            <TableCell align="left">
+                              <p className="text-[14.5px] font-semibold text-primary tracking-tighter">
+                                {issuedItem.issuedTo || "—"}
+                              </p>
                             </TableCell>
                             <TableCell align="left">
                               {issuedItem.status === "returned" ? (
                                 <div className="flex flex-col gap-0.5">
                                   <span className="text-[13.5px] text-[rgb(var(--color-text-muted))] font-medium">
-                                    {issuedItem.quantity} ret: {safeFormatDate(issuedItem.returnDate)}
+                                    {issuedItem.quantity} ret:{" "}
+                                    {safeFormatDate(issuedItem.returnDate)}
                                   </span>
-                                  <span className={`text-[11.5px] font-semibold w-fit px-1.5 py-0.5 rounded border tracking-wide ${
-                                    issuedItem.returnCondition === 'damaged' ? 'text-rose-500 border-rose-500/20 bg-rose-500/5' : 'text-green-600 border-green-500/20 bg-green-500/5'
-                                  }`}>
-                                    {issuedItem.returnCondition ? issuedItem.returnCondition.charAt(0).toUpperCase() + issuedItem.returnCondition.slice(1) : 'Good'}
+                                  <span
+                                    className={`text-[11.5px] font-semibold w-fit px-1.5 py-0.5 rounded border tracking-wide ${
+                                      issuedItem.returnCondition === "damaged"
+                                        ? "text-rose-500 border-rose-500/20 bg-rose-500/5"
+                                        : "text-green-600 border-green-500/20 bg-green-500/5"
+                                    }`}
+                                  >
+                                    {issuedItem.returnCondition
+                                      ? issuedItem.returnCondition
+                                          .charAt(0)
+                                          .toUpperCase() +
+                                        issuedItem.returnCondition.slice(1)
+                                      : "Good"}
                                   </span>
                                   {issuedItem.returnNotes && (
-                                    <p className="text-[12px] text-[rgb(var(--color-text-muted))] italic mt-1 line-clamp-2 max-w-[180px]" title={issuedItem.returnNotes}>
+                                    <p
+                                      className="text-[12px] text-[rgb(var(--color-text-muted))] italic mt-1 line-clamp-2 max-w-[180px]"
+                                      title={issuedItem.returnNotes}
+                                    >
                                       "{issuedItem.returnNotes}"
                                     </p>
                                   )}
@@ -1060,15 +1351,17 @@ export default function InventoryPage() {
                                   Consumed / Depleted
                                 </span>
                               ) : (
-                                <span className="text-[13px] text-[rgb(var(--color-text-muted))] italic opacity-60">In use...</span>
+                                <span className="text-[13px] text-[rgb(var(--color-text-muted))] italic opacity-60">
+                                  In use...
+                                </span>
                               )}
                             </TableCell>
                             <TableCell>
-                              <Chip 
-                                size="sm" 
-                                color={getStatusColor(issuedItem.status)} 
-                                variant="flat" 
+                              <Chip
                                 className="text-[12.5px] font-semibold rounded-lg"
+                                color={getStatusColor(issuedItem.status)}
+                                size="sm"
+                                variant="flat"
                               >
                                 {issuedItem.status}
                               </Chip>
@@ -1077,14 +1370,16 @@ export default function InventoryPage() {
                               <div className="flex justify-center">
                                 {issuedItem.status === "issued" && (
                                   <button
-                                    onClick={() => openReturnModal(issuedItem)}
                                     className="px-3 py-1 rounded-xl bg-green-500 text-white text-[10px] font-black uppercase tracking-tighter hover:opacity-90 transition-all"
+                                    onClick={() => openReturnModal(issuedItem)}
                                   >
                                     Return
                                   </button>
                                 )}
                                 {issuedItem.status === "consumed" && (
-                                  <span className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase opacity-50 italic">Non-returnable</span>
+                                  <span className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase opacity-50 italic">
+                                    Non-returnable
+                                  </span>
                                 )}
                               </div>
                             </TableCell>
@@ -1101,9 +1396,11 @@ export default function InventoryPage() {
                           showShadow
                           color="primary"
                           page={logsPage}
-                          total={Math.ceil(filteredIssuedItems.length / itemsPerPage)}
-                          onChange={(page) => setLogsPage(page)}
                           size="sm"
+                          total={Math.ceil(
+                            filteredIssuedItems.length / itemsPerPage,
+                          )}
+                          onChange={(page) => setLogsPage(page)}
                         />
                       </div>
                     )}
@@ -1114,9 +1411,12 @@ export default function InventoryPage() {
                       <IoTimeOutline className="text-3xl text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-[rgb(var(--color-text))]">No usage logs yet</h3>
+                      <h3 className="text-lg font-semibold text-[rgb(var(--color-text))]">
+                        No usage logs yet
+                      </h3>
                       <p className="text-[13px] text-text-muted mt-1 max-w-sm mx-auto">
-                        Record equipment assignments to track who is using what in the clinic.
+                        Record equipment assignments to track who is using what
+                        in the clinic.
                       </p>
                     </div>
                   </div>
@@ -1129,12 +1429,12 @@ export default function InventoryPage() {
 
       {/* Add/Edit Item Modal */}
       <Modal
-        isOpen={itemModalState.isOpen}
-        onClose={itemModalState.close}
-        size="3xl"
         classNames={{
           base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
         }}
+        isOpen={itemModalState.isOpen}
+        size="3xl"
+        onClose={itemModalState.close}
       >
         <ModalContent>
           {(onClose) => (
@@ -1144,89 +1444,123 @@ export default function InventoryPage() {
                   {isEditing ? "Edit asset details" : "Record new asset"}
                 </h2>
                 <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-bold">
-                  Enter acquisition and condition details for the clinical asset.
+                  Enter acquisition and condition details for the clinical
+                  asset.
                 </p>
               </ModalHeader>
               <ModalBody className="py-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-4">
                   {/* Row 1 */}
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] mb-1.5 block">Item name *</label>
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Item name *
+                    </label>
                     <Input
-                      placeholder="e.g. Dell Latitude 5420"
-                      value={itemForm.name}
-                      onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="e.g. Dell Latitude 5420"
+                      size="sm"
+                      value={itemForm.name}
+                      onChange={(e) =>
+                        setItemForm({ ...itemForm, name: e.target.value })
+                      }
                     />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] block">Category *</label>
-                      <button 
+                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] block">
+                        Category *
+                      </label>
+                      <button
+                        className="text-primary hover:bg-primary/10 p-0.5 rounded transition-colors"
+                        title="Add new category"
                         onClick={() => {
                           resetCategoryForm();
                           categoryModalState.open();
                         }}
-                        className="text-primary hover:bg-primary/10 p-0.5 rounded transition-colors"
-                        title="Add new category"
                       >
                         <IoAdd size={14} />
                       </button>
                     </div>
                     <Select
-                      placeholder="Select category"
-                      selectedKeys={itemForm.category ? [itemForm.category] : []}
-                      onSelectionChange={(keys) => setItemForm({ ...itemForm, category: Array.from(keys)[0] as string })}
-                      size="sm"
                       classNames={{ trigger: "rounded-xl" }}
+                      placeholder="Select category"
+                      selectedKeys={
+                        itemForm.category ? [itemForm.category] : []
+                      }
+                      size="sm"
+                      onSelectionChange={(keys) =>
+                        setItemForm({
+                          ...itemForm,
+                          category: Array.from(keys)[0] as string,
+                        })
+                      }
                     >
                       {/* Filter unique categories by name just in case duplicates exist in DB */}
-                      {Array.from(new Set(categories.map(c => c.name))).map((catName, index) => (
-                        <SelectItem key={catName || `cn-${index}`} textValue={catName}>
-                          {catName}
-                        </SelectItem>
-                      ))}
+                      {Array.from(new Set(categories.map((c) => c.name))).map(
+                        (catName, index) => (
+                          <SelectItem
+                            key={catName || `cn-${index}`}
+                            textValue={catName}
+                          >
+                            {catName}
+                          </SelectItem>
+                        ),
+                      )}
                     </Select>
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Quantity *</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Quantity *
+                    </label>
                     <Input
-                      type="number"
-                      placeholder="1"
-                      value={itemForm.quantity.toString()}
-                      onChange={(e) => setItemForm({ ...itemForm, quantity: parseInt(e.target.value) || 0 })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="1"
+                      size="sm"
+                      type="number"
+                      value={itemForm.quantity.toString()}
+                      onChange={(e) =>
+                        setItemForm({
+                          ...itemForm,
+                          quantity: parseInt(e.target.value) || 0,
+                        })
+                      }
                     />
                   </div>
 
                   {/* Row 2 */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] block">Unit</label>
-                      <button 
-                        onClick={() => setIsAddingUnit(!isAddingUnit)}
+                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] block">
+                        Unit
+                      </label>
+                      <button
                         className="text-primary hover:bg-primary/10 p-0.5 rounded transition-colors"
-                        title={isAddingUnit ? "Back to selection" : "Add new unit"}
+                        title={
+                          isAddingUnit ? "Back to selection" : "Add new unit"
+                        }
+                        onClick={() => setIsAddingUnit(!isAddingUnit)}
                       >
-                        {isAddingUnit ? <IoCloseCircleOutline size={14} /> : <IoAdd size={14} />}
+                        {isAddingUnit ? (
+                          <IoCloseCircleOutline size={14} />
+                        ) : (
+                          <IoAdd size={14} />
+                        )}
                       </button>
                     </div>
                     {isAddingUnit ? (
                       <div className="flex gap-1">
                         <Input
+                          classNames={{ inputWrapper: "rounded-xl" }}
                           placeholder="New unit"
+                          size="sm"
                           value={newUnit}
                           onChange={(e) => setNewUnit(e.target.value)}
-                          size="sm"
-                          classNames={{ inputWrapper: "rounded-xl" }}
                         />
-                        <Button 
-                          isIconOnly 
-                          size="sm" 
-                          color="primary" 
+                        <Button
+                          isIconOnly
                           className="rounded-xl min-w-[32px] w-[32px]"
+                          color="primary"
+                          size="sm"
                           onClick={handleAddUnit}
                         >
                           <IoCheckmark size={16} />
@@ -1234,11 +1568,16 @@ export default function InventoryPage() {
                       </div>
                     ) : (
                       <Select
+                        classNames={{ trigger: "rounded-xl" }}
                         placeholder="Select unit"
                         selectedKeys={[itemForm.unit || "piece"]}
-                        onSelectionChange={(keys) => setItemForm({ ...itemForm, unit: Array.from(keys)[0] as string })}
                         size="sm"
-                        classNames={{ trigger: "rounded-xl" }}
+                        onSelectionChange={(keys) =>
+                          setItemForm({
+                            ...itemForm,
+                            unit: Array.from(keys)[0] as string,
+                          })
+                        }
                       >
                         {units.map((unit) => (
                           <SelectItem key={unit} textValue={unit}>
@@ -1249,59 +1588,88 @@ export default function InventoryPage() {
                     )}
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Barcode</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Barcode
+                    </label>
                     <Input
-                      placeholder="Scan or enter barcode"
-                      value={itemForm.barcode}
-                      onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="Scan or enter barcode"
+                      size="sm"
+                      value={itemForm.barcode}
+                      onChange={(e) =>
+                        setItemForm({ ...itemForm, barcode: e.target.value })
+                      }
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Purchase price (Rs.)</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Purchase price (Rs.)
+                    </label>
                     <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={itemForm.purchasePrice}
-                      onChange={(e) => setItemForm({ ...itemForm, purchasePrice: e.target.value })}
-                      size="sm"
-                      startContent={<span className="text-[12px] text-text-muted">Rs.</span>}
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="0.00"
+                      size="sm"
+                      startContent={
+                        <span className="text-[12px] text-text-muted">Rs.</span>
+                      }
+                      type="number"
+                      value={itemForm.purchasePrice}
+                      onChange={(e) =>
+                        setItemForm({
+                          ...itemForm,
+                          purchasePrice: e.target.value,
+                        })
+                      }
                     />
                   </div>
 
                   {/* Row 3 */}
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Purchase date</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Purchase date
+                    </label>
                     <Input
+                      classNames={{ inputWrapper: "rounded-xl" }}
+                      size="sm"
                       type="date"
                       value={itemForm.purchaseDate}
-                      onChange={(e) => setItemForm({ ...itemForm, purchaseDate: e.target.value })}
-                      size="sm"
-                      classNames={{ inputWrapper: "rounded-xl" }}
+                      onChange={(e) =>
+                        setItemForm({
+                          ...itemForm,
+                          purchaseDate: e.target.value,
+                        })
+                      }
                     />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] block">Supplier / Vendor</label>
-                      <button 
+                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] block">
+                        Supplier / Vendor
+                      </label>
+                      <button
+                        className="text-primary hover:bg-primary/10 p-0.5 rounded transition-colors"
+                        title="Add new vendor"
                         onClick={() => {
                           resetVendorForm();
                           vendorModalState.open();
                         }}
-                        className="text-primary hover:bg-primary/10 p-0.5 rounded transition-colors"
-                        title="Add new vendor"
                       >
                         <IoAdd size={14} />
                       </button>
                     </div>
                     <Select
-                      placeholder="Select supplier"
-                      selectedKeys={itemForm.supplierName ? [itemForm.supplierName] : []}
-                      onSelectionChange={(keys) => setItemForm({ ...itemForm, supplierName: Array.from(keys)[0] as string })}
-                      size="sm"
                       classNames={{ trigger: "rounded-xl" }}
+                      placeholder="Select supplier"
+                      selectedKeys={
+                        itemForm.supplierName ? [itemForm.supplierName] : []
+                      }
+                      size="sm"
+                      onSelectionChange={(keys) =>
+                        setItemForm({
+                          ...itemForm,
+                          supplierName: Array.from(keys)[0] as string,
+                        })
+                      }
                     >
                       {vendors.map((vendor) => (
                         <SelectItem key={vendor.name} textValue={vendor.name}>
@@ -1311,53 +1679,91 @@ export default function InventoryPage() {
                     </Select>
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Item Type *</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Item Type *
+                    </label>
                     <Select
+                      classNames={{ trigger: "rounded-xl" }}
                       placeholder="Select type"
                       selectedKeys={[itemForm.itemType]}
-                      onSelectionChange={(keys) => setItemForm({ ...itemForm, itemType: Array.from(keys)[0] as any })}
                       size="sm"
-                      classNames={{ trigger: "rounded-xl" }}
+                      onSelectionChange={(keys) =>
+                        setItemForm({
+                          ...itemForm,
+                          itemType: Array.from(keys)[0] as any,
+                        })
+                      }
                     >
-                      <SelectItem key="asset" textValue="Fixed Asset">Fixed Asset (Equipment)</SelectItem>
-                      <SelectItem key="consumable" textValue="Consumable">Consumable (Depleted on use)</SelectItem>
+                      <SelectItem key="asset" textValue="Fixed Asset">
+                        Fixed Asset (Equipment)
+                      </SelectItem>
+                      <SelectItem key="consumable" textValue="Consumable">
+                        Consumable (Depleted on use)
+                      </SelectItem>
                     </Select>
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Condition</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Condition
+                    </label>
                     <Select
+                      classNames={{ trigger: "rounded-xl" }}
                       placeholder="Select condition"
                       selectedKeys={[itemForm.condition]}
-                      onSelectionChange={(keys) => setItemForm({ ...itemForm, condition: Array.from(keys)[0] as any })}
                       size="sm"
-                      classNames={{ trigger: "rounded-xl" }}
+                      onSelectionChange={(keys) =>
+                        setItemForm({
+                          ...itemForm,
+                          condition: Array.from(keys)[0] as any,
+                        })
+                      }
                     >
-                      <SelectItem key="new" textValue="New / Mint">New / Mint</SelectItem>
-                      <SelectItem key="used" textValue="Used / Good">Used / Good</SelectItem>
-                      <SelectItem key="damaged" textValue="Damaged / Poor">Damaged / Poor</SelectItem>
+                      <SelectItem key="new" textValue="New / Mint">
+                        New / Mint
+                      </SelectItem>
+                      <SelectItem key="used" textValue="Used / Good">
+                        Used / Good
+                      </SelectItem>
+                      <SelectItem key="damaged" textValue="Damaged / Poor">
+                        Damaged / Poor
+                      </SelectItem>
                     </Select>
                   </div>
 
                   <div className="md:col-span-3">
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Description / Notes</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Description / Notes
+                    </label>
                     <Textarea
-                      placeholder="Enter item description, specifications or location..."
-                      value={itemForm.description}
-                      onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="Enter item description, specifications or location..."
+                      size="sm"
+                      value={itemForm.description}
+                      onChange={(e) =>
+                        setItemForm({
+                          ...itemForm,
+                          description: e.target.value,
+                        })
+                      }
                     />
                   </div>
                 </div>
               </ModalBody>
               <ModalFooter className="border-t border-[rgb(var(--color-border))] mt-2">
-                <Button variant="light" onPress={onClose} size="sm" className="font-semibold text-[12px] rounded-xl">Cancel</Button>
-                <Button 
-                  color="primary" 
-                  onPress={handleSaveItem} 
-                  isLoading={saving} 
-                  size="sm" 
+                <Button
+                  className="font-semibold text-[12px] rounded-xl"
+                  size="sm"
+                  variant="light"
+                  onPress={onClose}
+                >
+                  Cancel
+                </Button>
+                <Button
                   className="font-semibold text-[12px] rounded-xl px-8"
+                  color="primary"
+                  isLoading={saving}
+                  size="sm"
+                  onPress={handleSaveItem}
                 >
                   {isEditing ? "Update asset" : "Add asset"}
                 </Button>
@@ -1369,65 +1775,94 @@ export default function InventoryPage() {
 
       {/* Quick Add Vendor Modal */}
       <Modal
-        isOpen={vendorModalState.isOpen}
-        onClose={vendorModalState.close}
-        size="md"
         classNames={{
           base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
         }}
+        isOpen={vendorModalState.isOpen}
+        size="md"
+        onClose={vendorModalState.close}
       >
         <ModalContent>
           {(onClose) => (
             <>
               <ModalHeader className="flex flex-col gap-1">
-                <h2 className="text-[16px] font-semibold text-primary">Add new supplier</h2>
-                <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">Register a new vendor to your clinic registry.</p>
+                <h2 className="text-[16px] font-semibold text-primary">
+                  Add new supplier
+                </h2>
+                <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">
+                  Register a new vendor to your clinic registry.
+                </p>
               </ModalHeader>
               <ModalBody className="py-4">
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Vendor name *</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Vendor name *
+                    </label>
                     <Input
-                      placeholder="e.g. Acme Clinical Supplies"
-                      value={vendorForm.name}
-                      onChange={(e) => setVendorForm({ ...vendorForm, name: e.target.value })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="e.g. Acme Clinical Supplies"
+                      size="sm"
+                      value={vendorForm.name}
+                      onChange={(e) =>
+                        setVendorForm({ ...vendorForm, name: e.target.value })
+                      }
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Phone number</label>
+                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                        Phone number
+                      </label>
                       <Input
-                        placeholder="e.g. 98XXXXXXXX"
-                        value={vendorForm.phone}
-                        onChange={(e) => setVendorForm({ ...vendorForm, phone: e.target.value })}
-                        size="sm"
                         classNames={{ inputWrapper: "rounded-xl" }}
+                        placeholder="e.g. 98XXXXXXXX"
+                        size="sm"
+                        value={vendorForm.phone}
+                        onChange={(e) =>
+                          setVendorForm({
+                            ...vendorForm,
+                            phone: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Email address</label>
+                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                        Email address
+                      </label>
                       <Input
-                        type="email"
-                        placeholder="e.g. info@acme.com"
-                        value={vendorForm.email}
-                        onChange={(e) => setVendorForm({ ...vendorForm, email: e.target.value })}
-                        size="sm"
                         classNames={{ inputWrapper: "rounded-xl" }}
+                        placeholder="e.g. info@acme.com"
+                        size="sm"
+                        type="email"
+                        value={vendorForm.email}
+                        onChange={(e) =>
+                          setVendorForm({
+                            ...vendorForm,
+                            email: e.target.value,
+                          })
+                        }
                       />
                     </div>
                   </div>
                 </div>
               </ModalBody>
               <ModalFooter className="border-t border-[rgb(var(--color-border))] mt-2">
-                <Button variant="light" onPress={onClose} size="sm" className="font-semibold text-[12px] rounded-xl">Cancel</Button>
-                <Button 
-                  color="primary" 
-                  onPress={handleSaveVendor} 
-                  isLoading={saving}
-                  size="sm" 
+                <Button
+                  className="font-semibold text-[12px] rounded-xl"
+                  size="sm"
+                  variant="light"
+                  onPress={onClose}
+                >
+                  Cancel
+                </Button>
+                <Button
                   className="font-semibold text-[12px] rounded-xl px-6"
+                  color="primary"
+                  isLoading={saving}
+                  size="sm"
+                  onPress={handleSaveVendor}
                 >
                   Save vendor
                 </Button>
@@ -1439,12 +1874,12 @@ export default function InventoryPage() {
 
       {/* Category Modal */}
       <Modal
-        isOpen={categoryModalState.isOpen}
-        onClose={categoryModalState.close}
-        size="md"
         classNames={{
           base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
         }}
+        isOpen={categoryModalState.isOpen}
+        size="md"
+        onClose={categoryModalState.close}
       >
         <ModalContent>
           {(onClose) => (
@@ -1460,34 +1895,55 @@ export default function InventoryPage() {
               <ModalBody className="py-4">
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Category name</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Category name
+                    </label>
                     <Input
-                      placeholder="e.g. Clinical Machines"
-                      value={categoryForm.name}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="e.g. Clinical Machines"
+                      size="sm"
+                      value={categoryForm.name}
+                      onChange={(e) =>
+                        setCategoryForm({
+                          ...categoryForm,
+                          name: e.target.value,
+                        })
+                      }
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Description</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Description
+                    </label>
                     <Textarea
-                      placeholder="Enter description..."
-                      value={categoryForm.description}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="Enter description..."
+                      size="sm"
+                      value={categoryForm.description}
+                      onChange={(e) =>
+                        setCategoryForm({
+                          ...categoryForm,
+                          description: e.target.value,
+                        })
+                      }
                     />
                   </div>
                 </div>
               </ModalBody>
               <ModalFooter className="border-t border-[rgb(var(--color-border))] mt-2">
-                <Button variant="light" onPress={onClose} size="sm" className="font-semibold text-[12px] rounded-xl">Cancel</Button>
-                <Button 
-                  color="primary" 
-                  onPress={handleSaveCategory} 
-                  size="sm" 
+                <Button
+                  className="font-semibold text-[12px] rounded-xl"
+                  size="sm"
+                  variant="light"
+                  onPress={onClose}
+                >
+                  Cancel
+                </Button>
+                <Button
                   className="font-semibold text-[12px] rounded-xl px-6"
+                  color="primary"
+                  size="sm"
+                  onPress={handleSaveCategory}
                 >
                   {isEditing ? "Update" : "Add"} category
                 </Button>
@@ -1499,83 +1955,130 @@ export default function InventoryPage() {
 
       {/* Issue Item Modal */}
       <Modal
-        isOpen={issueModalState.isOpen}
-        onClose={issueModalState.close}
-        size="lg"
         classNames={{
           base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
         }}
+        isOpen={issueModalState.isOpen}
+        size="lg"
+        onClose={issueModalState.close}
       >
         <ModalContent>
           {(onClose) => (
             <>
               <ModalHeader className="flex flex-col gap-1">
-                <h2 className="text-[16px] font-semibold text-primary">Issue asset</h2>
-                <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">Assign equipment to a user or department.</p>
+                <h2 className="text-[16px] font-semibold text-primary">
+                  Issue asset
+                </h2>
+                <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">
+                  Assign equipment to a user or department.
+                </p>
               </ModalHeader>
               <ModalBody className="py-4">
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Select item</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Select item
+                    </label>
                     <Select
+                      classNames={{ trigger: "rounded-xl" }}
                       placeholder="Choose asset"
                       selectedKeys={issueForm.itemId ? [issueForm.itemId] : []}
+                      size="sm"
                       onSelectionChange={(keys) => {
                         const selectedKey = Array.from(keys)[0] as string;
-                        setIssueForm({ ...issueForm, itemId: selectedKey || "" });
+
+                        setIssueForm({
+                          ...issueForm,
+                          itemId: selectedKey || "",
+                        });
                       }}
-                      size="sm"
-                      classNames={{ trigger: "rounded-xl" }}
                     >
-                      {items.filter(item => item.quantity > 0).map((item) => (
-                        <SelectItem key={item.id} textValue={item.name}>
-                          {item.name} ({item.category}) - {item.quantity} available
-                        </SelectItem>
-                      ))}
+                      {items
+                        .filter((item) => item.quantity > 0)
+                        .map((item) => (
+                          <SelectItem key={item.id} textValue={item.name}>
+                            {item.name} ({item.category}) - {item.quantity}{" "}
+                            available
+                          </SelectItem>
+                        ))}
                     </Select>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Quantity</label>
+                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                        Quantity
+                      </label>
                       <Input
-                        type="number"
-                        placeholder="1"
-                        value={issueForm.quantity.toString()}
-                        onChange={(e) => setIssueForm({ ...issueForm, quantity: parseInt(e.target.value) || 0 })}
-                        size="sm"
                         classNames={{ inputWrapper: "rounded-xl" }}
+                        placeholder="1"
+                        size="sm"
+                        type="number"
+                        value={issueForm.quantity.toString()}
+                        onChange={(e) =>
+                          setIssueForm({
+                            ...issueForm,
+                            quantity: parseInt(e.target.value) || 0,
+                          })
+                        }
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Expected return</label>
+                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                        Expected return
+                      </label>
                       <Input
-                        type="date"
-                        value={issueForm.expectedReturnDate ? issueForm.expectedReturnDate.toISOString().split('T')[0] : ""}
-                        onChange={(e) => setIssueForm({ ...issueForm, expectedReturnDate: e.target.value ? new Date(e.target.value) : null })}
-                        size="sm"
                         classNames={{ inputWrapper: "rounded-xl" }}
+                        size="sm"
+                        type="date"
+                        value={
+                          issueForm.expectedReturnDate
+                            ? issueForm.expectedReturnDate
+                                .toISOString()
+                                .split("T")[0]
+                            : ""
+                        }
+                        onChange={(e) =>
+                          setIssueForm({
+                            ...issueForm,
+                            expectedReturnDate: e.target.value
+                              ? new Date(e.target.value)
+                              : null,
+                          })
+                        }
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Issued to (Staff member) *</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Issued to (Staff member) *
+                    </label>
                     <Select
+                      classNames={{ trigger: "rounded-xl" }}
                       placeholder="Select staff member"
-                      selectedKeys={issueForm.issuedTo ? [issueForm.issuedTo] : []}
+                      selectedKeys={
+                        issueForm.issuedTo ? [issueForm.issuedTo] : []
+                      }
+                      size="sm"
                       onSelectionChange={(keys) => {
                         const selectedKey = Array.from(keys)[0] as string;
-                        setIssueForm({ ...issueForm, issuedTo: selectedKey || "" });
+
+                        setIssueForm({
+                          ...issueForm,
+                          issuedTo: selectedKey || "",
+                        });
                       }}
-                      size="sm"
-                      classNames={{ trigger: "rounded-xl" }}
                     >
                       {staffList.map((staff) => (
                         <SelectItem key={staff.name} textValue={staff.name}>
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium">{staff.name}</span>
-                            <span className="text-[10px] text-text-muted">{staff.role}</span>
+                            <span className="text-sm font-medium">
+                              {staff.name}
+                            </span>
+                            <span className="text-[10px] text-text-muted">
+                              {staff.role}
+                            </span>
                           </div>
                         </SelectItem>
                       ))}
@@ -1583,24 +2086,35 @@ export default function InventoryPage() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Notes</label>
+                    <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                      Notes
+                    </label>
                     <Textarea
-                      placeholder="Enter usage reason or assignment notes..."
-                      value={issueForm.notes}
-                      onChange={(e) => setIssueForm({ ...issueForm, notes: e.target.value })}
-                      size="sm"
                       classNames={{ inputWrapper: "rounded-xl" }}
+                      placeholder="Enter usage reason or assignment notes..."
+                      size="sm"
+                      value={issueForm.notes}
+                      onChange={(e) =>
+                        setIssueForm({ ...issueForm, notes: e.target.value })
+                      }
                     />
                   </div>
                 </div>
               </ModalBody>
               <ModalFooter className="border-t border-[rgb(var(--color-border))] mt-2">
-                <Button variant="light" onPress={onClose} size="sm" className="font-semibold text-[12px] rounded-xl">Cancel</Button>
-                <Button 
-                  color="primary" 
-                  onPress={handleIssueItem} 
-                  size="sm" 
+                <Button
+                  className="font-semibold text-[12px] rounded-xl"
+                  size="sm"
+                  variant="light"
+                  onPress={onClose}
+                >
+                  Cancel
+                </Button>
+                <Button
                   className="font-semibold text-[12px] rounded-xl px-6"
+                  color="primary"
+                  size="sm"
+                  onPress={handleIssueItem}
                 >
                   Issue asset
                 </Button>
@@ -1612,97 +2126,153 @@ export default function InventoryPage() {
 
       {/* Return Item Modal */}
       <Modal
-        isOpen={returnModalState.isOpen}
-        onClose={returnModalState.close}
-        size="md"
         classNames={{
           base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
         }}
+        isOpen={returnModalState.isOpen}
+        size="md"
+        onClose={returnModalState.close}
       >
         <ModalContent>
           {(onClose) => (
             <>
               <ModalHeader className="flex flex-col gap-1">
-                <h2 className="text-[16px] font-semibold text-primary">Confirm return</h2>
-                <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">Process the return of issued equipment.</p>
+                <h2 className="text-[16px] font-semibold text-primary">
+                  Confirm return
+                </h2>
+                <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">
+                  Process the return of issued equipment.
+                </p>
               </ModalHeader>
               <ModalBody className="py-4">
                 {selectedIssuedItem && (
                   <div className="space-y-4">
                     <div className="p-4 bg-[rgb(var(--color-surface-2))] rounded-xl border border-[rgb(var(--color-border))]">
-                      <p className="text-[14px] font-semibold text-[rgb(var(--color-text))] mb-1">{selectedIssuedItem.itemName}</p>
+                      <p className="text-[14px] font-semibold text-[rgb(var(--color-text))] mb-1">
+                        {selectedIssuedItem.itemName}
+                      </p>
                       <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">
-                        Quantity: {selectedIssuedItem.quantity} units • Issued to: {selectedIssuedItem.issuedTo || "staff"}
+                        Quantity: {selectedIssuedItem.quantity} units • Issued
+                        to: {selectedIssuedItem.issuedTo || "staff"}
                       </p>
                       <div className="mt-3 pt-3 border-t border-[rgb(var(--color-border))] text-[11px] text-[rgb(var(--color-text-muted))]">
-                        <p className="font-medium">Issued on: {safeFormatDate(selectedIssuedItem.issuedDate)}</p>
-                        {selectedIssuedItem.notes && <p className="italic mt-1 opacity-80">Notes: {selectedIssuedItem.notes}</p>}
+                        <p className="font-medium">
+                          Issued on:{" "}
+                          {safeFormatDate(selectedIssuedItem.issuedDate)}
+                        </p>
+                        {selectedIssuedItem.notes && (
+                          <p className="italic mt-1 opacity-80">
+                            Notes: {selectedIssuedItem.notes}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
-                        <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Qty to return</label>
+                        <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                          Qty to return
+                        </label>
                         <Input
-                          type="number"
-                          max={selectedIssuedItem.quantity}
-                          min={1}
-                          value={returnForm.returnQuantity.toString()}
-                          onChange={(e) => setReturnForm({ ...returnForm, returnQuantity: parseInt(e.target.value) || 0 })}
-                          size="sm"
                           classNames={{ inputWrapper: "rounded-xl" }}
                           description={
-                            returnForm.returnQuantity < selectedIssuedItem.quantity 
-                            ? `${selectedIssuedItem.quantity - returnForm.returnQuantity} remain`
-                            : "Full return"
+                            returnForm.returnQuantity <
+                            selectedIssuedItem.quantity
+                              ? `${selectedIssuedItem.quantity - returnForm.returnQuantity} remain`
+                              : "Full return"
+                          }
+                          max={selectedIssuedItem.quantity}
+                          min={1}
+                          size="sm"
+                          type="number"
+                          value={returnForm.returnQuantity.toString()}
+                          onChange={(e) =>
+                            setReturnForm({
+                              ...returnForm,
+                              returnQuantity: parseInt(e.target.value) || 0,
+                            })
                           }
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Return date</label>
+                        <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                          Return date
+                        </label>
                         <Input
+                          classNames={{ inputWrapper: "rounded-xl" }}
+                          size="sm"
                           type="date"
                           value={returnForm.returnDate}
-                          onChange={(e) => setReturnForm({ ...returnForm, returnDate: e.target.value })}
-                          size="sm"
-                          classNames={{ inputWrapper: "rounded-xl" }}
+                          onChange={(e) =>
+                            setReturnForm({
+                              ...returnForm,
+                              returnDate: e.target.value,
+                            })
+                          }
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Condition</label>
+                        <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                          Condition
+                        </label>
                         <Select
-                          selectedKeys={[returnForm.condition]}
-                          onSelectionChange={(keys) => setReturnForm({ ...returnForm, condition: Array.from(keys)[0] as any })}
-                          size="sm"
                           classNames={{ trigger: "rounded-xl" }}
+                          selectedKeys={[returnForm.condition]}
+                          size="sm"
+                          onSelectionChange={(keys) =>
+                            setReturnForm({
+                              ...returnForm,
+                              condition: Array.from(keys)[0] as any,
+                            })
+                          }
                         >
-                          <SelectItem key="new" textValue="New / Mint">New / Mint</SelectItem>
-                          <SelectItem key="used" textValue="Used / Good">Used / Good</SelectItem>
-                          <SelectItem key="damaged" textValue="Damaged / Poor">Damaged / Poor</SelectItem>
+                          <SelectItem key="new" textValue="New / Mint">
+                            New / Mint
+                          </SelectItem>
+                          <SelectItem key="used" textValue="Used / Good">
+                            Used / Good
+                          </SelectItem>
+                          <SelectItem key="damaged" textValue="Damaged / Poor">
+                            Damaged / Poor
+                          </SelectItem>
                         </Select>
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">Return notes</label>
+                      <label className="text-[11px] font-semibold text-[rgb(var(--color-text-muted))] mb-1.5 block">
+                        Return notes
+                      </label>
                       <Textarea
-                        placeholder="Add notes about the item state or return reason..."
-                        value={returnForm.notes}
-                        onChange={(e) => setReturnForm({ ...returnForm, notes: e.target.value })}
-                        size="sm"
                         classNames={{ inputWrapper: "rounded-xl" }}
+                        placeholder="Add notes about the item state or return reason..."
+                        size="sm"
+                        value={returnForm.notes}
+                        onChange={(e) =>
+                          setReturnForm({
+                            ...returnForm,
+                            notes: e.target.value,
+                          })
+                        }
                       />
                     </div>
                   </div>
                 )}
               </ModalBody>
               <ModalFooter className="border-t border-[rgb(var(--color-border))] mt-2">
-                <Button variant="light" onPress={onClose} size="sm" className="font-semibold text-[12px] rounded-xl">Cancel</Button>
-                <Button 
-                  color="success" 
-                  onPress={handleReturnItem} 
-                  isLoading={saving}
-                  size="sm" 
+                <Button
+                  className="font-semibold text-[12px] rounded-xl"
+                  size="sm"
+                  variant="light"
+                  onPress={onClose}
+                >
+                  Cancel
+                </Button>
+                <Button
                   className="font-semibold text-[12px] text-white rounded-xl px-8"
+                  color="success"
+                  isLoading={saving}
+                  size="sm"
+                  onPress={handleReturnItem}
                 >
                   Confirm return
                 </Button>

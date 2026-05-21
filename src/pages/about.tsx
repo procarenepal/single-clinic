@@ -1,20 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
-  Building2,
-  HeartPulse,
-  MapPin,
-  CalendarDays,
-  Users,
   Activity,
-  Lightbulb,
-  Handshake,
-  ArrowRight,
   MonitorSmartphone,
   ShieldCheck,
   Sparkles,
-  Stethoscope,
-  Clock,
 } from "lucide-react";
 
 import { useAuthContext } from "@/context/AuthContext";
@@ -29,14 +19,22 @@ export default function AboutPage() {
   // Fetch clinic branding
   useEffect(() => {
     if (!clinicId) return;
-    
-    let cancelled = false;
-    clinicService.getClinicById(clinicId).then((clinic) => {
-      if (cancelled || !clinic) return;
-      setClinicName(clinic.name);
-    }).catch(() => {/* silently fall back */ });
 
-    return () => { cancelled = true; };
+    let cancelled = false;
+
+    clinicService
+      .getClinicById(clinicId)
+      .then((clinic) => {
+        if (cancelled || !clinic) return;
+        setClinicName(clinic.name);
+      })
+      .catch(() => {
+        /* silently fall back */
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [clinicId]);
 
   return (
@@ -58,12 +56,16 @@ export default function AboutPage() {
             </div>
 
             <h1 className="text-4xl lg:text-6xl font-bold mb-6 text-[rgb(var(--color-text))] leading-[1.2] tracking-tight">
-              Empowering Your Glow at <span className="text-[rgb(var(--color-primary))]">{clinicName}</span>
+              Empowering Your Glow at{" "}
+              <span className="text-[rgb(var(--color-primary))]">
+                {clinicName}
+              </span>
             </h1>
 
             <p className="text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed mb-10 max-w-xl mx-auto lg:mx-0">
-              Redefining aesthetic standards in Kathmandu through the fusion of authentic 
-              Korean skincare philosophy and advanced medical technology.
+              Redefining aesthetic standards in Kathmandu through the fusion of
+              authentic Korean skincare philosophy and advanced medical
+              technology.
             </p>
 
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-10 lg:gap-16 pt-10 border-t border-[rgb(var(--color-border))]">
@@ -94,17 +96,29 @@ export default function AboutPage() {
                   autoPlayInterval={5000}
                   items={[
                     <div key="c1" className="w-full h-full relative">
-                      <img src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Clinic Interior" className="w-full h-full object-cover rounded-xl" />
+                      <img
+                        alt="Clinic Interior"
+                        className="w-full h-full object-cover rounded-xl"
+                        src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                     </div>,
                     <div key="c2" className="w-full h-full relative">
-                      <img src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Skincare Technology" className="w-full h-full object-cover rounded-xl" />
+                      <img
+                        alt="Skincare Technology"
+                        className="w-full h-full object-cover rounded-xl"
+                        src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                     </div>,
                     <div key="c3" className="w-full h-full relative">
-                      <img src="https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Clinical Procedure" className="w-full h-full object-cover rounded-xl" />
+                      <img
+                        alt="Clinical Procedure"
+                        className="w-full h-full object-cover rounded-xl"
+                        src="https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                    </div>
+                    </div>,
                   ]}
                 />
               </div>
@@ -136,15 +150,17 @@ export default function AboutPage() {
             </h2>
             <div className="space-y-6 text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed font-medium">
               <p>
-                At ProCare, we believe that true beauty stems from biological health. 
-                Our journey began with a singular vision: to bring the legendary "Glass Skin" 
-                expertise of Seoul to the heart of Kathmandu.
+                At ProCare, we believe that true beauty stems from biological
+                health. Our journey began with a singular vision: to bring the
+                legendary "Glass Skin" expertise of Seoul to the heart of
+                Kathmandu.
               </p>
               <p>
-                We have meticulously curated every treatment, from our signature 10-step 
-                facials to advanced laser therapies, ensuring they meet the rigorous 
-                standards of K-Beauty certification while respecting the unique 
-                environmental factors of the Himalayan region.
+                We have meticulously curated every treatment, from our signature
+                10-step facials to advanced laser therapies, ensuring they meet
+                the rigorous standards of K-Beauty certification while
+                respecting the unique environmental factors of the Himalayan
+                region.
               </p>
             </div>
           </div>
@@ -159,7 +175,8 @@ export default function AboutPage() {
               Clinical Pillars
             </h2>
             <p className="text-base lg:text-lg text-[rgb(var(--color-text-muted))] font-medium max-w-2xl mx-auto">
-              Four concrete values defining our patient care and clinical execution.
+              Four concrete values defining our patient care and clinical
+              execution.
             </p>
           </div>
 
@@ -169,29 +186,41 @@ export default function AboutPage() {
                 title: "K-Beauty Precision",
                 description:
                   "Fusing centuries-old Korean skincare wisdom with modern pharmacological breakthroughs for unprecedented results.",
-                icon: <Sparkles className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
-                image: "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+                icon: (
+                  <Sparkles className="w-6 h-6 text-[rgb(var(--color-primary))]" />
+                ),
+                image:
+                  "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
               },
               {
                 title: "Medical Authority",
                 description:
                   "All procedures are supervised by board-certified clinicians using FDA-approved and K-certified medical technologies.",
-                icon: <ShieldCheck className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
-                image: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+                icon: (
+                  <ShieldCheck className="w-6 h-6 text-[rgb(var(--color-primary))]" />
+                ),
+                image:
+                  "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
               },
               {
                 title: "Himalayan Adaptation",
                 description:
                   "Treatment protocols specifically optimized for the high-altitude and environmental conditions of Kathmandu.",
-                icon: <Activity className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
-                image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+                icon: (
+                  <Activity className="w-6 h-6 text-[rgb(var(--color-primary))]" />
+                ),
+                image:
+                  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
               },
               {
                 title: "Bespoke Care",
                 description:
                   "Every patient undergoes a 3D digital skin analysis before a customized treatment roadmap is engineered.",
-                icon: <MonitorSmartphone className="w-6 h-6 text-[rgb(var(--color-primary))]" />,
-                image: "https://images.unsplash.com/photo-1516533075015-a3838414c3ca?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+                icon: (
+                  <MonitorSmartphone className="w-6 h-6 text-[rgb(var(--color-primary))]" />
+                ),
+                image:
+                  "https://images.unsplash.com/photo-1516533075015-a3838414c3ca?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
               },
             ].map((approach, index) => (
               <div
@@ -200,7 +229,11 @@ export default function AboutPage() {
               >
                 {/* Background Image Accent */}
                 <div className="absolute inset-0 z-0 opacity-10 group-hover:opacity-20 transition-opacity duration-700 pointer-events-none">
-                  <img src={approach.image} alt="" className="w-full h-full object-cover grayscale" />
+                  <img
+                    alt=""
+                    className="w-full h-full object-cover grayscale"
+                    src={approach.image}
+                  />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--color-surface))] via-[rgb(var(--color-surface))/0.98] to-[rgb(var(--color-surface))/0.9] z-[1] pointer-events-none" />
 
@@ -233,13 +266,17 @@ export default function AboutPage() {
                 Visionary Care
               </h2>
               <p className="text-xl text-[rgb(var(--color-text))] font-bold mb-6 leading-relaxed">
-                "Our mission is to democratize high-end clinical skincare in Nepal, 
-                ensuring every patient has access to the world's most advanced aesthetic 
-                solutions right here in Kathmandu."
+                "Our mission is to democratize high-end clinical skincare in
+                Nepal, ensuring every patient has access to the world's most
+                advanced aesthetic solutions right here in Kathmandu."
               </p>
               <div className="space-y-2">
-                <h3 className="text-2xl font-bold text-[rgb(var(--color-text))]">Sanjeev Baral</h3>
-                <p className="text-[10px] font-bold text-[rgb(var(--color-primary))] uppercase tracking-widest">Founder & Medical Director</p>
+                <h3 className="text-2xl font-bold text-[rgb(var(--color-text))]">
+                  Sanjeev Baral
+                </h3>
+                <p className="text-[10px] font-bold text-[rgb(var(--color-primary))] uppercase tracking-widest">
+                  Founder & Medical Director
+                </p>
               </div>
             </div>
 
@@ -268,7 +305,7 @@ export default function AboutPage() {
             Begin Your Glow Journey
           </h2>
           <p className="text-[rgb(var(--color-bg))] opacity-70 text-lg mb-12 font-medium leading-relaxed max-w-2xl mx-auto">
-            Book your comprehensive digital skin analysis and experience the 
+            Book your comprehensive digital skin analysis and experience the
             standard of authentic Korean clinical care.
           </p>
 

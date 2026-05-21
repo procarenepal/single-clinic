@@ -24,6 +24,12 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
+import {
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@/components/ui/dropdown";
 import { prescriptionService } from "@/services/prescriptionService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
@@ -65,7 +71,8 @@ interface PrescriptionFormData {
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 const STATUS_STYLE: Record<string, string> = {
-  active: "bg-health-500/10 text-health-600 dark:text-health-400 border-health-500/20",
+  active:
+    "bg-health-500/10 text-health-600 dark:text-health-400 border-health-500/20",
   completed: "bg-primary/10 text-primary border-primary/20",
   cancelled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
 };
@@ -100,9 +107,7 @@ function FlatInput({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[12px] font-medium text-text-muted">
-        {label}
-      </label>
+      <label className="text-[12px] font-medium text-text-muted">{label}</label>
       <input
         className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface text-text-main
           placeholder:text-text-muted/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10
@@ -141,9 +146,7 @@ function SearchSelect({
 
   return (
     <div className="flex flex-col gap-1 relative">
-      <label className="text-[12px] font-medium text-text-muted">
-        {label}
-      </label>
+      <label className="text-[12px] font-medium text-text-muted">{label}</label>
       <div
         className={`flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10 ${disabled ? "bg-surface-2" : "cursor-text"}`}
         onClick={() => !disabled && setOpen(true)}
@@ -239,47 +242,40 @@ function ActionsMenu({
   onEdit: () => void;
   onPrint: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className="relative">
-      <button
-        className="p-1.5 rounded border border-border-base text-text-muted hover:text-text-main hover:border-primary transition-colors"
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <IoEllipsisVerticalOutline className="w-3.5 h-3.5" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 bg-surface border border-border-base rounded shadow-xl min-w-[150px] overflow-hidden">
-            {[
-              { label: "View Details", icon: <IoEyeOutline />, action: onView },
-              { label: "Edit", icon: <IoCreateOutline />, action: onEdit },
-              {
-                label: "Download PDF",
-                icon: <IoDownloadOutline />,
-                action: onPrint,
-              },
-            ].map((item) => (
-              <button
-                key={item.label}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-text-main hover:bg-surface-2 transition-colors"
-                type="button"
-                onClick={() => {
-                  item.action();
-                  setOpen(false);
-                }}
-              >
-                <span className="text-text-muted/60">{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <Dropdown placement="bottom-end">
+      <DropdownTrigger>
+        <button
+          className="p-1.5 rounded border border-border-base text-text-muted hover:text-text-main hover:border-primary transition-colors"
+          type="button"
+        >
+          <IoEllipsisVerticalOutline className="w-3.5 h-3.5" />
+        </button>
+      </DropdownTrigger>
+      <DropdownMenu>
+        <DropdownItem
+          key="view"
+          startContent={<IoEyeOutline className="text-text-muted/60" />}
+          onClick={onView}
+        >
+          View Details
+        </DropdownItem>
+        <DropdownItem
+          key="edit"
+          startContent={<IoCreateOutline className="text-text-muted/60" />}
+          onClick={onEdit}
+        >
+          Edit
+        </DropdownItem>
+        <DropdownItem
+          key="print"
+          startContent={<IoDownloadOutline className="text-text-muted/60" />}
+          onClick={onPrint}
+        >
+          Download PDF
+        </DropdownItem>
+      </DropdownMenu>
+    </Dropdown>
   );
 }
 
@@ -379,7 +375,12 @@ export default function PatientPrescriptionsTab({
 
   // Presets
   const frequencyPresets = ["OD", "BD", "TDS", "QID", "SOS"];
-  const timePresets = ["Before Meal", "After Meal", "Empty Stomach", "At Bedtime"];
+  const timePresets = [
+    "Before Meal",
+    "After Meal",
+    "Empty Stomach",
+    "At Bedtime",
+  ];
 
   // ── Load data ───────────────────────────────────────────────────────────────
   const loadData = async () => {
@@ -410,7 +411,7 @@ export default function PatientPrescriptionsTab({
           try {
             itemsCount = (await prescriptionService.getPrescriptionItems(rx.id))
               .length;
-          } catch { }
+          } catch {}
 
           return {
             ...rx,
@@ -486,7 +487,7 @@ export default function PatientPrescriptionsTab({
 
       if (!isNaN(d.getTime()))
         return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
-    } catch { }
+    } catch {}
 
     return "Unknown Date";
   };
@@ -767,8 +768,8 @@ export default function PatientPrescriptionsTab({
       </div>
 
       {/* Table */}
-      <div className="bg-surface border border-border-base rounded overflow-hidden">
-        <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
+      <div className="bg-surface border border-border-base rounded overflow-visible">
+        <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-2 border-b border-border-base/50 rounded-t">
           <IoReceiptOutline className="w-4 h-4 text-primary" />
           <div>
             <h4 className="text-[13px] font-semibold text-text-main">
@@ -813,7 +814,7 @@ export default function PatientPrescriptionsTab({
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-visible">
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-border-base/50">
@@ -837,7 +838,10 @@ export default function PatientPrescriptionsTab({
                 </thead>
                 <tbody className="divide-y divide-mountain-100">
                   {paginated.map((rx) => (
-                    <tr key={rx.id} className="hover:bg-surface-2 transition-colors">
+                    <tr
+                      key={rx.id}
+                      className="hover:bg-surface-2 transition-colors"
+                    >
                       <td className="py-2.5 px-3">
                         <Link
                           className="text-[12.5px] font-medium text-primary/80 hover:text-teal-900 hover:underline underline-offset-2"
@@ -853,7 +857,10 @@ export default function PatientPrescriptionsTab({
                         {fmtDate(rx.prescriptionDate)}
                       </td>
                       <td className="py-2.5 px-3">
-                        <p className="text-[12.5px] text-text-muted truncate max-w-[150px]" title={rx.diagnosis}>
+                        <p
+                          className="text-[12.5px] text-text-muted truncate max-w-[150px]"
+                          title={rx.diagnosis}
+                        >
                           {rx.diagnosis || "—"}
                         </p>
                       </td>
@@ -977,7 +984,9 @@ export default function PatientPrescriptionsTab({
                     placeholder:text-text-muted/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 resize-none h-16"
                   placeholder="Enter patient diagnosis, complaints, or findings…"
                   value={formData.diagnosis}
-                  onChange={(e) => setFormData(p => ({ ...p, diagnosis: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, diagnosis: e.target.value }))
+                  }
                 />
               </div>
 
@@ -993,7 +1002,9 @@ export default function PatientPrescriptionsTab({
                     items={medicines.map((m) => ({
                       id: m.id,
                       primary: m.name,
-                      secondary: m.genericName ? `${m.genericName} (${m.manufacturer || 'Unknown'})` : m.manufacturer,
+                      secondary: m.genericName
+                        ? `${m.genericName} (${m.manufacturer || "Unknown"})`
+                        : m.manufacturer,
                     }))}
                     label="Medicine"
                     value={medicineId}
@@ -1019,7 +1030,7 @@ export default function PatientPrescriptionsTab({
                       onChange={setTime}
                     />
                     <div className="flex flex-wrap gap-1">
-                      {timePresets.map(p => (
+                      {timePresets.map((p) => (
                         <button
                           key={p}
                           className={`px-2 py-0.5 text-[10px] font-semibold border rounded transition-colors ${time === p ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
@@ -1039,7 +1050,7 @@ export default function PatientPrescriptionsTab({
                       onChange={setIntervalValue}
                     />
                     <div className="flex flex-wrap gap-1">
-                      {frequencyPresets.map(p => (
+                      {frequencyPresets.map((p) => (
                         <button
                           key={p}
                           className={`px-2 py-0.5 text-[10px] font-semibold border rounded transition-colors ${intervalValue === p ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}

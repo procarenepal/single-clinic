@@ -424,12 +424,13 @@ class CacheService {
    */
   clearUserPermissions(userId: string, clinicId: string): void {
     const key = this.generatePermissionsCacheKey(userId, clinicId);
+
     this.cache.delete(key);
 
     // Also invalidate any navigation caches for this user
     const navPrefix = `nav:${userId}:${clinicId}:`;
     const keysToDelete: string[] = [key]; // include the permissions key for storage deletion
-    
+
     this.cache.forEach((_, cacheKey) => {
       if (cacheKey.startsWith(navPrefix)) {
         keysToDelete.push(cacheKey);
@@ -440,7 +441,7 @@ class CacheService {
     // Remove from localStorage if available
     if (this.isStorageAvailable()) {
       try {
-        keysToDelete.forEach(k => {
+        keysToDelete.forEach((k) => {
           window.localStorage.removeItem(`${this.STORAGE_PREFIX}${k}`);
         });
       } catch {

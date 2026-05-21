@@ -1,12 +1,4 @@
 import React, { useState, useEffect } from "react";
-import SendSMSTab from "./components/SendSMSTab";
-import ViewSMSLogsTab from "./components/ViewSMSLogsTab";
-import SettingsTab from "./components/SettingsTab";
-import SMSTemplatesTab from "./components/SMSTemplatesTab";
-import BulkMessagingTab from "./components/BulkMessagingTab";
-import { useAuth } from "@/hooks/useAuth";
-import { smsService, SMSLog, getSMSSettings, SMSSettings } from "@/services/sendMessageService";
-import { smsTestService } from "@/services/smsTestService";
 import {
   IoChatbubbleEllipsesOutline,
   IoClipboardOutline,
@@ -16,10 +8,22 @@ import {
   IoStatsChartOutline,
   IoCalendarOutline,
   IoLayersOutline,
-  IoSyncOutline
+  IoSyncOutline,
 } from "react-icons/io5";
+
+import SendSMSTab from "./components/SendSMSTab";
+import ViewSMSLogsTab from "./components/ViewSMSLogsTab";
+import SettingsTab from "./components/SettingsTab";
+import SMSTemplatesTab from "./components/SMSTemplatesTab";
+import BulkMessagingTab from "./components/BulkMessagingTab";
+
+import { useAuth } from "@/hooks/useAuth";
+import {
+  smsService,
+  getSMSSettings,
+  SMSSettings,
+} from "@/services/sendMessageService";
 import { title } from "@/components/primitives";
-import { addToast } from "@/components/ui/toast";
 
 type TabKey = "send-sms" | "bulk-sms" | "templates" | "sms-logs" | "settings";
 
@@ -60,7 +64,7 @@ const CommunicationPage: React.FC = () => {
     sentToday: 0,
     totalHistory: 0,
     failedLogs: 0,
-    usagePercent: 0
+    usagePercent: 0,
   });
 
   useEffect(() => {
@@ -70,19 +74,23 @@ const CommunicationPage: React.FC = () => {
       try {
         const [logs, smsSettings] = await Promise.all([
           smsService.getSMSLogs(clinicId, undefined, 500),
-          getSMSSettings(clinicId)
+          getSMSSettings(clinicId),
         ]);
 
         const today = new Date().toDateString();
-        const todayLogs = logs.filter(l => new Date(l.createdAt).toDateString() === today);
-        const sentTodayCount = todayLogs.filter(l => l.status === "sent").length;
+        const todayLogs = logs.filter(
+          (l) => new Date(l.createdAt).toDateString() === today,
+        );
+        const sentTodayCount = todayLogs.filter(
+          (l) => l.status === "sent",
+        ).length;
         const dailyLimit = smsSettings?.maxDailySMS || 100;
 
         setStats({
           sentToday: sentTodayCount,
           totalHistory: logs.length,
-          failedLogs: logs.filter(l => l.status === "failed").length,
-          usagePercent: Math.round((sentTodayCount / dailyLimit) * 100)
+          failedLogs: logs.filter((l) => l.status === "failed").length,
+          usagePercent: Math.round((sentTodayCount / dailyLimit) * 100),
         });
         setSettings(smsSettings);
       } catch (error) {
@@ -98,7 +106,9 @@ const CommunicationPage: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className={title()}>Communication</h1>
-          <p className="text-default-500">Manage SMS communications with patients and doctors</p>
+          <p className="text-default-500">
+            Manage SMS communications with patients and doctors
+          </p>
         </div>
         <div className="flex gap-2">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-success-50 text-success-700 rounded-md border border-success-100 font-bold text-[10px] uppercase tracking-wider">
@@ -106,7 +116,7 @@ const CommunicationPage: React.FC = () => {
             Service: Online
           </div>
           <button className="clarity-btn clarity-btn-ghost text-[10px] uppercase font-bold tracking-wider">
-            <IoSyncOutline size={14} className="animate-spin-slow" />
+            <IoSyncOutline className="animate-spin-slow" size={14} />
             Process Reminders
           </button>
         </div>
@@ -120,7 +130,9 @@ const CommunicationPage: React.FC = () => {
           </div>
           <div>
             <p className="text-xl font-bold">{stats.sentToday}</p>
-            <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight">Sent Today</p>
+            <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight">
+              Sent Today
+            </p>
           </div>
         </div>
         <div className="clarity-card p-4 flex items-center gap-4">
@@ -129,7 +141,9 @@ const CommunicationPage: React.FC = () => {
           </div>
           <div>
             <p className="text-xl font-bold">{stats.totalHistory}</p>
-            <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight">Total History</p>
+            <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight">
+              Total History
+            </p>
           </div>
         </div>
         <div className="clarity-card p-4 flex items-center gap-4">
@@ -138,7 +152,9 @@ const CommunicationPage: React.FC = () => {
           </div>
           <div>
             <p className="text-xl font-bold">{stats.failedLogs}</p>
-            <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight">Failed Logs</p>
+            <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight">
+              Failed Logs
+            </p>
           </div>
         </div>
         <div className="clarity-card p-4 flex items-center gap-4">
@@ -148,11 +164,13 @@ const CommunicationPage: React.FC = () => {
           <div className="flex-1">
             <div className="flex justify-between mb-1">
               <p className="text-xl font-bold">{stats.usagePercent}%</p>
-              <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight self-end">Daily Limit</p>
+              <p className="text-[10px] text-default-500 uppercase font-bold tracking-tight self-end">
+                Daily Limit
+              </p>
             </div>
             <div className="w-full bg-default-100 rounded-full h-1.5">
-              <div 
-                className="bg-warning h-1.5 rounded-full transition-all duration-500" 
+              <div
+                className="bg-warning h-1.5 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(stats.usagePercent, 100)}%` }}
               />
             </div>

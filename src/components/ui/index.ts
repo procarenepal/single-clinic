@@ -66,5 +66,11 @@ export {
   ModalFooter,
   useDisclosure,
 } from "./modal";
-export { Skeleton, TableSkeleton, CardSkeleton, ListSkeleton, PageSkeleton } from "./skeleton";
+export {
+  Skeleton,
+  TableSkeleton,
+  CardSkeleton,
+  ListSkeleton,
+  PageSkeleton,
+} from "./skeleton";
 export type { SkeletonProps } from "./skeleton";

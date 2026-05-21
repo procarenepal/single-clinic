@@ -109,7 +109,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className={clsx(
             "flex items-center gap-2 rounded-md border bg-surface text-text-main border-border-base focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200 min-h-[40px] w-full",
             (isInvalid || errorMessage) &&
-            "!border-danger focus-within:!ring-danger/20",
+              "!border-danger focus-within:!ring-danger/20",
             isDisabled && "opacity-50 cursor-not-allowed",
             SIZE_WRAPPER[size],
             fullWidth && "w-full",

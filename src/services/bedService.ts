@@ -8,7 +8,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -70,7 +69,9 @@ export const bedService = {
       });
 
       // Sort by name in memory
-      return categories.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      return categories.sort((a, b) =>
+        (a.name || "").localeCompare(b.name || ""),
+      );
     } catch (error) {
       console.error("Error getting bed categories by clinic:", error);
       throw error;
@@ -204,7 +205,9 @@ export const bedService = {
       });
 
       // Sort by bedNumber in memory
-      return beds.sort((a, b) => (a.bedNumber || "").localeCompare(b.bedNumber || ""));
+      return beds.sort((a, b) =>
+        (a.bedNumber || "").localeCompare(b.bedNumber || ""),
+      );
     } catch (error) {
       console.error("Error getting beds by clinic:", error);
       throw error;
@@ -244,7 +247,9 @@ export const bedService = {
       });
 
       // Sort by bedNumber in memory
-      return beds.sort((a, b) => (a.bedNumber || "").localeCompare(b.bedNumber || ""));
+      return beds.sort((a, b) =>
+        (a.bedNumber || "").localeCompare(b.bedNumber || ""),
+      );
     } catch (error) {
       console.error("Error getting available beds by clinic:", error);
       throw error;
@@ -402,8 +407,17 @@ export const bedService = {
 
       // Sort by createdAt desc in memory
       return allotments.sort((a, b) => {
-        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
-        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        const dateA = a.createdAt
+          ? a.createdAt instanceof Date
+            ? a.createdAt.getTime()
+            : new Date(a.createdAt).getTime()
+          : 0;
+        const dateB = b.createdAt
+          ? b.createdAt instanceof Date
+            ? b.createdAt.getTime()
+            : new Date(b.createdAt).getTime()
+          : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -447,8 +461,17 @@ export const bedService = {
 
       // Sort by createdAt desc in memory
       return allotments.sort((a, b) => {
-        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
-        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        const dateA = a.createdAt
+          ? a.createdAt instanceof Date
+            ? a.createdAt.getTime()
+            : new Date(a.createdAt).getTime()
+          : 0;
+        const dateB = b.createdAt
+          ? b.createdAt instanceof Date
+            ? b.createdAt.getTime()
+            : new Date(b.createdAt).getTime()
+          : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -463,10 +486,7 @@ export const bedService = {
   async getAllotmentsByBed(bedId: string): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      const q = query(
-        allotmentsRef,
-        where("bedId", "==", bedId),
-      );
+      const q = query(allotmentsRef, where("bedId", "==", bedId));
 
       const querySnapshot = await getDocs(q);
       const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {
@@ -484,8 +504,17 @@ export const bedService = {
 
       // Sort by createdAt desc in memory
       return allotments.sort((a, b) => {
-        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
-        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        const dateA = a.createdAt
+          ? a.createdAt instanceof Date
+            ? a.createdAt.getTime()
+            : new Date(a.createdAt).getTime()
+          : 0;
+        const dateB = b.createdAt
+          ? b.createdAt instanceof Date
+            ? b.createdAt.getTime()
+            : new Date(b.createdAt).getTime()
+          : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -500,10 +529,7 @@ export const bedService = {
   async getAllotmentsByPatient(patientId: string): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      const q = query(
-        allotmentsRef,
-        where("patientId", "==", patientId),
-      );
+      const q = query(allotmentsRef, where("patientId", "==", patientId));
 
       const querySnapshot = await getDocs(q);
       const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {
@@ -521,8 +547,17 @@ export const bedService = {
 
       // Sort by createdAt desc in memory
       return allotments.sort((a, b) => {
-        const dateA = a.createdAt ? (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) : 0;
-        const dateB = b.createdAt ? (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()) : 0;
+        const dateA = a.createdAt
+          ? a.createdAt instanceof Date
+            ? a.createdAt.getTime()
+            : new Date(a.createdAt).getTime()
+          : 0;
+        const dateB = b.createdAt
+          ? b.createdAt instanceof Date
+            ? b.createdAt.getTime()
+            : new Date(b.createdAt).getTime()
+          : 0;
+
         return dateB - dateA;
       });
     } catch (error) {

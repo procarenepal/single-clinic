@@ -5,7 +5,6 @@ import {
   getDocs,
   query,
   where,
-  orderBy,
   deleteDoc,
   updateDoc,
   Timestamp,
@@ -83,6 +82,7 @@ export class PatientNoteEntriesService {
       return entries.sort((a, b) => {
         const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
         const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -123,6 +123,7 @@ export class PatientNoteEntriesService {
       return entries.sort((a, b) => {
         const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
         const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -198,6 +199,7 @@ export class PatientNoteEntriesService {
       return entries.sort((a, b) => {
         const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
         const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+
         return dateB - dateA;
       });
     } catch (error) {

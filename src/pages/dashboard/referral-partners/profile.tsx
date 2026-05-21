@@ -382,7 +382,9 @@ export default function ReferralPartnerProfilePage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Partner Profile</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Partner Profile
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               View and manage information
             </p>
@@ -497,10 +499,11 @@ export default function ReferralPartnerProfilePage() {
           ].map((t) => (
             <button
               key={t.key}
-              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTab === t.key
-                ? "border-teal-600 text-teal-700 bg-teal-50/30"
-                : "border-transparent text-mountain-600 hover:text-mountain-900 hover:bg-mountain-50"
-                }`}
+              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${
+                selectedTab === t.key
+                  ? "border-teal-600 text-teal-700 bg-teal-50/30"
+                  : "border-transparent text-mountain-600 hover:text-mountain-900 hover:bg-mountain-50"
+              }`}
               onClick={() => setSelectedTab(t.key)}
             >
               {t.label}
@@ -710,7 +713,11 @@ export default function ReferralPartnerProfilePage() {
                           </span>
                         </div>
                         <p className="text-[13.5px] font-medium text-mountain-700">
-                          {c.patientName} - <span className="text-[12.5px] text-mountain-500 font-normal">{(c.serviceNames || []).join(", ") || "Referral Service / Registration"}</span>
+                          {c.patientName} -{" "}
+                          <span className="text-[12.5px] text-mountain-500 font-normal">
+                            {(c.serviceNames || []).join(", ") ||
+                              "Referral Service / Registration"}
+                          </span>
                         </p>
                         <p className="text-[12px] text-mountain-500 mt-1">
                           Rate: {c.commissionPercentage}% • Total:{" "}
@@ -781,7 +788,7 @@ export default function ReferralPartnerProfilePage() {
                 <p className="text-[20px] font-bold text-amber-600 leading-none">
                   {formatCurrency(
                     selectedCommission.commissionAmount -
-                    (selectedCommission.paidAmount || 0),
+                      (selectedCommission.paidAmount || 0),
                   )}
                 </p>
               </div>
@@ -814,15 +821,15 @@ export default function ReferralPartnerProfilePage() {
             />
             {(paymentForm.method === "bank_transfer" ||
               paymentForm.method === "cheque") && (
-                <CustomInput
-                  label="Reference / Transaction ID"
-                  placeholder="Enter transaction number..."
-                  value={paymentForm.reference}
-                  onChange={(e: any) =>
-                    setPaymentForm({ ...paymentForm, reference: e.target.value })
-                  }
-                />
-              )}
+              <CustomInput
+                label="Reference / Transaction ID"
+                placeholder="Enter transaction number..."
+                value={paymentForm.reference}
+                onChange={(e: any) =>
+                  setPaymentForm({ ...paymentForm, reference: e.target.value })
+                }
+              />
+            )}
             <CustomInput
               label="Notes (Optional)"
               placeholder="Add brief details..."

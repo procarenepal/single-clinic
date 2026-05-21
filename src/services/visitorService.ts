@@ -7,7 +7,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -66,7 +65,9 @@ export const visitorService = {
         } as Visitor);
       });
 
-      return visitors.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return visitors.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching visitors:", error);
       throw new Error("Failed to fetch visitors");
@@ -147,7 +148,11 @@ export const visitorService = {
       const endMs = endDate.getTime();
 
       const filtered = visitors.filter((v) => {
-        const t = v.date instanceof Date ? v.date.getTime() : new Date(v.date).getTime();
+        const t =
+          v.date instanceof Date
+            ? v.date.getTime()
+            : new Date(v.date).getTime();
+
         return t >= startMs && t <= endMs;
       });
 

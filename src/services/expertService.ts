@@ -4,8 +4,6 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  query,
-  where,
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -109,8 +107,12 @@ export const expertService = {
       return snap.docs
         .map((doc) => {
           const data = doc.data() as any;
-          const createdAt = data.createdAt ? data.createdAt.toDate() : new Date();
-          const updatedAt = data.updatedAt ? data.updatedAt.toDate() : new Date();
+          const createdAt = data.createdAt
+            ? data.createdAt.toDate()
+            : new Date();
+          const updatedAt = data.updatedAt
+            ? data.updatedAt.toDate()
+            : new Date();
 
           return {
             id: doc.id,
@@ -152,8 +154,9 @@ export const expertService = {
       const experts = await this.getExperts();
       const term = email.toLowerCase();
       const match = experts.find(
-        (expert) => expert.email && expert.email.toLowerCase() === term
+        (expert) => expert.email && expert.email.toLowerCase() === term,
       );
+
       return match || null;
     } catch (error) {
       console.error("Error getting expert by email:", error);

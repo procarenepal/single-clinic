@@ -1,25 +1,18 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  ShieldCheck,
-  MapPin,
-  Headphones,
-  Cross,
-} from "lucide-react";
+import { Eye, EyeOff, AlertTriangle, Cross } from "lucide-react";
 import { FirebaseError } from "firebase/app";
 
 import { useAuthContext } from "@/context/AuthContext";
-import { siteConfig } from "@/config/site";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Keyframe injection (only once)
 ───────────────────────────────────────────────────────────────────────── */
 const STYLE_ID = "login-page-animations";
+
 if (!document.getElementById(STYLE_ID)) {
   const style = document.createElement("style");
+
   style.id = STYLE_ID;
   style.textContent = `
     @keyframes login-fade-up {
@@ -104,29 +97,43 @@ export default function LoginPage() {
     const handleRedirect = async () => {
       if (!isLoading && currentUser) {
         try {
-          const { collection, query, where, getDocs, doc, setDoc } = await import("firebase/firestore");
+          const { collection, query, where, getDocs, doc, setDoc } =
+            await import("firebase/firestore");
           const { db } = await import("@/config/firebase");
-          
+
           const email = currentUser.email?.toLowerCase();
+
           if (email) {
             // 1. Check if email matches any doctor
-            const docSnap = await getDocs(query(collection(db, "doctors"), where("email", "==", email)));
+            const docSnap = await getDocs(
+              query(collection(db, "doctors"), where("email", "==", email)),
+            );
+
             if (!docSnap.empty) {
               navigate("/dashboard/front-office");
+
               return;
             }
             // 2. Check if email matches any expert
-            const expSnap = await getDocs(query(collection(db, "experts"), where("email", "==", email)));
+            const expSnap = await getDocs(
+              query(collection(db, "experts"), where("email", "==", email)),
+            );
+
             if (!expSnap.empty) {
               navigate("/dashboard/front-office");
+
               return;
             }
 
             // 3. Self-healing fallback: If they are registered in the staff collection as Doctor/Expert, sync them
-            const staffSnap = await getDocs(query(collection(db, "staff"), where("email", "==", email)));
+            const staffSnap = await getDocs(
+              query(collection(db, "staff"), where("email", "==", email)),
+            );
+
             if (!staffSnap.empty) {
               const staffDoc = staffSnap.docs[0];
               const staffData = staffDoc.data();
+
               if (staffData.role === "Doctor") {
                 await setDoc(doc(db, "doctors", staffDoc.id), {
                   name: staffData.name,
@@ -143,6 +150,7 @@ export default function LoginPage() {
                   updatedAt: new Date(),
                 });
                 navigate("/dashboard/front-office");
+
                 return;
               } else if (staffData.role === "Expert") {
                 await setDoc(doc(db, "experts", staffDoc.id), {
@@ -160,6 +168,7 @@ export default function LoginPage() {
                   updatedAt: new Date(),
                 });
                 navigate("/dashboard/front-office");
+
                 return;
               }
             }
@@ -170,6 +179,7 @@ export default function LoginPage() {
         navigate("/dashboard");
       }
     };
+
     handleRedirect();
   }, [currentUser, isLoading, navigate]);
 
@@ -224,7 +234,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-[rgb(var(--color-bg))] flex items-center justify-center p-4 font-sans text-[rgb(var(--color-text))] transition-colors duration-300 relative overflow-hidden">
-
       {/* ── Ambient glow blobs ── */}
       <div
         className="login-glow pointer-events-none absolute rounded-full"
@@ -241,11 +250,11 @@ export default function LoginPage() {
       />
 
       <div className="w-full max-w-md relative z-10">
-
         {/* ── Header ── */}
         <div className="text-center mb-8 login-fade-up">
           {/* Icon badge */}
-          <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-4"
+          <div
+            className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-4"
             style={{
               background: "rgba(var(--color-primary) / 0.12)",
               border: "1px solid rgba(var(--color-primary) / 0.25)",
@@ -268,7 +277,6 @@ export default function LoginPage() {
         {/* ── Card ── */}
         <div className="login-card login-fade-up login-delay-1 bg-[rgb(var(--color-surface))] p-8 border border-[rgb(var(--color-border))] rounded-xl mb-6 transition-colors">
           <form className="space-y-5" onSubmit={handleLogin}>
-
             {/* Email */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-[rgb(var(--color-text))] block">
@@ -343,10 +351,11 @@ export default function LoginPage() {
             {/* Error */}
             {errorMessage && (
               <div
-                className={`p-4 border rounded-lg ${errorMessage.includes("subscription")
-                  ? "text-[rgb(var(--color-warning))] bg-[rgb(var(--color-warning)/0.1)] border-[rgb(var(--color-warning)/0.2)]"
-                  : "text-[rgb(var(--color-danger))] bg-[rgb(var(--color-danger)/0.1)] border-[rgb(var(--color-danger)/0.2)]"
-                  }`}
+                className={`p-4 border rounded-lg ${
+                  errorMessage.includes("subscription")
+                    ? "text-[rgb(var(--color-warning))] bg-[rgb(var(--color-warning)/0.1)] border-[rgb(var(--color-warning)/0.2)]"
+                    : "text-[rgb(var(--color-danger))] bg-[rgb(var(--color-danger)/0.1)] border-[rgb(var(--color-danger)/0.2)]"
+                }`}
               >
                 {errorMessage.includes("subscription") && (
                   <div className="flex items-center gap-1.5 mb-1.5 font-bold">
@@ -373,16 +382,32 @@ export default function LoginPage() {
 
             {/* Submit */}
             <button
-              className={`login-btn w-full mt-2 text-white font-bold h-11 rounded-lg text-sm tracking-wide focus:outline-none flex items-center justify-center ${loading ? "opacity-70 cursor-not-allowed" : ""
-                }`}
+              className={`login-btn w-full mt-2 text-white font-bold h-11 rounded-lg text-sm tracking-wide focus:outline-none flex items-center justify-center ${
+                loading ? "opacity-70 cursor-not-allowed" : ""
+              }`}
               disabled={loading}
               type="submit"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  <svg
+                    className="w-4 h-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      d="M4 12a8 8 0 018-8v8z"
+                      fill="currentColor"
+                    />
                   </svg>
                   Authenticating…
                 </span>
@@ -390,14 +415,11 @@ export default function LoginPage() {
                 "Login"
               )}
             </button>
-
-
           </form>
         </div>
 
         {/* ── Footer ── */}
         <div className="text-center login-fade-up login-delay-2">
-
           <p className="text-xs text-[rgb(var(--color-text-muted))] font-medium opacity-50">
             Protected by stringent medical privacy protocols.{" "}
             <Link
@@ -408,9 +430,7 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-
       </div>
     </div>
   );
 }
-

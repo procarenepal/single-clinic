@@ -3,19 +3,17 @@ import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { db } from "@/config/firebase";
 import {
   IoMenuOutline,
   IoCloseOutline,
-  IoChevronDownOutline,
   IoChevronForwardOutline,
   IoAppsOutline,
-  IoGridOutline,
   IoWarningOutline,
   IoRefreshOutline,
   IoHeadsetOutline,
 } from "react-icons/io5";
 
+import { db } from "@/config/firebase";
 import { useAuthContext } from "@/context/AuthContext";
 import { useNavigation } from "@/hooks/useNavigation";
 import { useTheme } from "@/context/ThemeContext";
@@ -24,7 +22,6 @@ import { NavItem } from "@/services/navigationService";
 import { prefetchChunks } from "@/utils/prefetchRoutes";
 // Custom UI components — no HeroUI
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
 
 export interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -50,7 +47,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       prescriptionsRef,
       where("clinicId", "==", clinicId),
       where("sendToPharmacy", "==", true),
-      where("status", "==", "active")
+      where("status", "==", "active"),
     );
 
     const unsubscribe = onSnapshot(
@@ -60,7 +57,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       },
       (error) => {
         console.error("Error listening to prescriptions:", error);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -74,7 +71,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const q = query(
       pathologyRef,
       where("clinicId", "==", clinicId),
-      where("status", "==", "draft")
+      where("status", "==", "draft"),
     );
 
     const unsubscribe = onSnapshot(
@@ -84,7 +81,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       },
       (error) => {
         console.error("Error listening to pathology bills:", error);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -208,13 +205,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               {isActive && (
                 <>
                   <motion.div
-                    layoutId="active-nav-bg"
                     className="absolute inset-0 bg-primary/5 dark:bg-primary/10 rounded-lg z-0"
+                    layoutId="active-nav-bg"
                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   />
                   <motion.div
-                    layoutId="active-indicator"
                     className="absolute left-0 top-1 bottom-1 w-[3px] bg-primary rounded-r-full z-10"
+                    layoutId="active-indicator"
                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   />
                 </>
@@ -246,7 +243,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               )}
               onClick={() => toggleSubMenu(item.href)}
             >
-              <IoChevronForwardOutline className={clsx("w-3 h-3 transition-transform duration-300", isExpanded && "rotate-90")} />
+              <IoChevronForwardOutline
+                className={clsx(
+                  "w-3 h-3 transition-transform duration-300",
+                  isExpanded && "rotate-90",
+                )}
+              />
             </button>
           </div>
         ) : (
@@ -254,13 +256,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {isActive && (
               <>
                 <motion.div
-                  layoutId="active-nav-bg"
                   className="absolute inset-0 bg-primary/5 dark:bg-primary/10 rounded-lg z-0"
+                  layoutId="active-nav-bg"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
                 <motion.div
-                  layoutId="active-indicator"
                   className="absolute left-0 top-1.5 bottom-1.5 w-[3px] bg-primary rounded-r-full z-10"
+                  layoutId="active-indicator"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
               </>
@@ -332,8 +334,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
           style={{ height: "calc(100vh - 3.5rem)" }}
         >
-
-
           {/* Navigation */}
           <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-950">
             {loading ? (
@@ -363,12 +363,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
             ) : navItems.length > 0 ? (
               (() => {
-                const categories: ("MAIN" | "CLINICAL" | "OPERATIONS" | "ADMIN")[] = [
-                  "MAIN",
-                  "CLINICAL",
-                  "OPERATIONS",
-                  "ADMIN",
-                ];
+                const categories: (
+                  | "MAIN"
+                  | "CLINICAL"
+                  | "OPERATIONS"
+                  | "ADMIN"
+                )[] = ["MAIN", "CLINICAL", "OPERATIONS", "ADMIN"];
 
                 return categories.map((cat) => {
                   const items = navItems.filter((i) => i.category === cat);
@@ -427,7 +427,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </aside>
 
-
         <main
           className={clsx(
             "flex-1 w-full flex flex-col items-start justify-start transition-all duration-300 ease-in-out overflow-hidden relative",
@@ -442,10 +441,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             id="dashboard-scroll-container"
           >
             <motion.div
+              key={location.pathname}
               animate={{ opacity: 1, y: 0 }}
               className="w-full px-4 py-3 pb-10 min-h-full"
               initial={{ opacity: 0, y: 10 }}
-              key={location.pathname}
               transition={{ duration: 0.4, ease: "easeOut" }}
             >
               {children}

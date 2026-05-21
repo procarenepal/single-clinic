@@ -7,7 +7,6 @@ import {
   updateDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -98,21 +97,26 @@ export const itemCategoryService = {
       const now = Timestamp.now();
 
       const { id, ...dataToSave } = categoryData as any;
-      
+
       // Sanitize undefined fields
       const sanitize = (obj: any) => {
         const cleaned: any = {};
-        Object.keys(obj).forEach(key => {
+
+        Object.keys(obj).forEach((key) => {
           if (obj[key] !== undefined) cleaned[key] = obj[key];
         });
+
         return cleaned;
       };
 
-      const docRef = await addDoc(categoriesRef, sanitize({
-        ...dataToSave,
-        createdAt: now,
-        updatedAt: now,
-      }));
+      const docRef = await addDoc(
+        categoriesRef,
+        sanitize({
+          ...dataToSave,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      );
 
       return docRef.id;
     } catch (error) {
@@ -129,23 +133,28 @@ export const itemCategoryService = {
     categoryData: Partial<Omit<ItemCategory, "id" | "createdAt" | "updatedAt">>,
   ): Promise<void> {
     if (!categoryId) throw new Error("Category ID is required for update");
-    
+
     // Sanitize undefined fields
     const sanitize = (obj: any) => {
       const cleaned: any = {};
-      Object.keys(obj).forEach(key => {
+
+      Object.keys(obj).forEach((key) => {
         if (obj[key] !== undefined) cleaned[key] = obj[key];
       });
+
       return cleaned;
     };
 
     try {
       const categoryRef = doc(db, ITEM_CATEGORIES_COLLECTION, categoryId);
 
-      await updateDoc(categoryRef, sanitize({
-        ...categoryData,
-        updatedAt: Timestamp.now(),
-      }));
+      await updateDoc(
+        categoryRef,
+        sanitize({
+          ...categoryData,
+          updatedAt: Timestamp.now(),
+        }),
+      );
     } catch (error) {
       console.error("Error updating category:", error);
       throw error;

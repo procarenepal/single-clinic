@@ -131,10 +131,10 @@ function SearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-        (i.primary + " " + (i.secondary || ""))
-          .toLowerCase()
-          .includes(q.toLowerCase()),
-      )
+          (i.primary + " " + (i.secondary || ""))
+            .toLowerCase()
+            .includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -272,12 +272,17 @@ export default function EditPrescriptionPage() {
 
   // Quick Presets
   const frequencyPresets = ["OD", "BD", "TDS", "QID", "SOS"];
-  const timePresets = ["Before Meal", "After Meal", "Empty Stomach", "At Bedtime"];
+  const timePresets = [
+    "Before Meal",
+    "After Meal",
+    "Empty Stomach",
+    "At Bedtime",
+  ];
 
   const handleFrequencyChange = (val: string) => {
     setIntervalValue(val);
     const lower = val.toLowerCase().trim();
-    
+
     // 1. Standard Latin Abbreviations
     if (lower === "qd" || lower === "q.d.") {
       setIntervalValue("once daily");
@@ -291,7 +296,7 @@ export default function EditPrescriptionPage() {
       setIntervalValue("as needed (PRN)");
       setTime("when required");
     }
-    
+
     // 2. Numeric dose shortcodes (e.g. 1-0-1, 1-1-1)
     else if (lower === "1-0-0") {
       setIntervalValue("once daily");
@@ -322,15 +327,21 @@ export default function EditPrescriptionPage() {
     const loadTemplates = async () => {
       if (!clinicId || !doctorId) {
         setTemplates([]);
+
         return;
       }
       try {
-        const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+        const list = await prescriptionService.getTemplatesByDoctor(
+          clinicId,
+          doctorId,
+        );
+
         setTemplates(list || []);
       } catch (err) {
         console.error("Failed to load templates:", err);
       }
     };
+
     loadTemplates();
   }, [clinicId, doctorId]);
 
@@ -341,11 +352,16 @@ export default function EditPrescriptionPage() {
     const fetchPatientNotes = async () => {
       if (!clinicId || !patientId) {
         setPatientNotes([]);
+
         return;
       }
       setLoadingNotes(true);
       try {
-        const notesList = await PatientNoteEntriesService.getPatientNoteEntries(clinicId, patientId);
+        const notesList = await PatientNoteEntriesService.getPatientNoteEntries(
+          clinicId,
+          patientId,
+        );
+
         setPatientNotes(notesList || []);
       } catch (err) {
         console.error("Failed to fetch patient note entries:", err);
@@ -353,6 +369,7 @@ export default function EditPrescriptionPage() {
         setLoadingNotes(false);
       }
     };
+
     fetchPatientNotes();
   }, [clinicId, patientId]);
 
@@ -363,6 +380,7 @@ export default function EditPrescriptionPage() {
         description: "Please select both doctor and patient to save templates.",
         color: "warning",
       });
+
       return;
     }
     if (!templateName.trim()) {
@@ -371,6 +389,7 @@ export default function EditPrescriptionPage() {
         description: "Please enter a template name.",
         color: "warning",
       });
+
       return;
     }
     if (items.length === 0) {
@@ -379,6 +398,7 @@ export default function EditPrescriptionPage() {
         description: "Please add at least one medicine to save as a template.",
         color: "warning",
       });
+
       return;
     }
 
@@ -401,15 +421,19 @@ export default function EditPrescriptionPage() {
       };
 
       await prescriptionService.createTemplate(templateData);
-      
+
       addToast({
         title: "Success",
         description: `Template "${templateName}" saved successfully.`,
         color: "success",
       });
-      
+
       setTemplateName("");
-      const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+      const list = await prescriptionService.getTemplatesByDoctor(
+        clinicId,
+        doctorId,
+      );
+
       setTemplates(list || []);
     } catch (err) {
       addToast({
@@ -424,6 +448,7 @@ export default function EditPrescriptionPage() {
 
   const handleApplyTemplate = (templateId: string) => {
     const selectedTpl = templates.find((t) => t.id === templateId);
+
     if (!selectedTpl) return;
 
     const mappedItems = selectedTpl.items.map((it: any) => ({
@@ -448,7 +473,10 @@ export default function EditPrescriptionPage() {
     });
   };
 
-  const handleDeleteTemplate = async (templateId: string, e: React.MouseEvent) => {
+  const handleDeleteTemplate = async (
+    templateId: string,
+    e: React.MouseEvent,
+  ) => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to delete this template?")) return;
     try {
@@ -458,7 +486,11 @@ export default function EditPrescriptionPage() {
         description: "Template deleted successfully.",
         color: "success",
       });
-      const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+      const list = await prescriptionService.getTemplatesByDoctor(
+        clinicId,
+        doctorId,
+      );
+
       setTemplates(list || []);
     } catch (err) {
       addToast({
@@ -729,8 +761,13 @@ export default function EditPrescriptionPage() {
       return;
     }
     const userId = userData?.id || currentUser?.uid;
+
     if (!prescriptionId || !userId) {
-      console.warn("[handleUpdate] Missing required IDs:", { prescriptionId, userId });
+      console.warn("[handleUpdate] Missing required IDs:", {
+        prescriptionId,
+        userId,
+      });
+
       return;
     }
 
@@ -748,7 +785,10 @@ export default function EditPrescriptionPage() {
         quantity: 1,
       }));
 
-      console.log("[handleUpdate] Starting update for prescription:", prescriptionId);
+      console.log(
+        "[handleUpdate] Starting update for prescription:",
+        prescriptionId,
+      );
       await prescriptionService.updatePrescription(prescriptionId, {
         diagnosis,
         notes,
@@ -803,7 +843,9 @@ export default function EditPrescriptionPage() {
               Back to list
             </Button>
             <div>
-              <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Prescription</h1>
+              <h1 className={`${title({ size: "lg" })} text-primary`}>
+                Edit Prescription
+              </h1>
               <p className="text-[13.5px] text-text-muted mt-1">
                 {accessError}
               </p>
@@ -830,7 +872,9 @@ export default function EditPrescriptionPage() {
             Back
           </Button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Prescription</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Edit Prescription
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               Update prescription details
             </p>
@@ -909,7 +953,9 @@ export default function EditPrescriptionPage() {
                       }
                     }}
                   >
-                    <option value="">-- Click to choose a saved clinical set --</option>
+                    <option value="">
+                      -- Click to choose a saved clinical set --
+                    </option>
                     {templates.map((tpl) => (
                       <option key={tpl.id} value={tpl.id}>
                         {tpl.name} ({tpl.items.length} meds)
@@ -1025,58 +1071,82 @@ export default function EditPrescriptionPage() {
                 {patientNotes.length} recorded entry/ies
               </span>
             </div>
-            
+
             <div className="p-6">
               <p className="text-[12.5px] text-text-muted mb-4 leading-relaxed">
-                Nurses or junior clinical staff have documented the following observations for this patient. Click **"Import"** to instantly populate the matching assessment field below without retyping.
+                Nurses or junior clinical staff have documented the following
+                observations for this patient. Click **"Import"** to instantly
+                populate the matching assessment field below without retyping.
               </p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-2">
                 {patientNotes.slice(0, 6).map((note) => (
-                  <div key={note.id} className="p-4 bg-surface rounded-[12px] border border-border-base/60 hover:border-teal-500/30 transition-all flex flex-col justify-between shadow-sm">
+                  <div
+                    key={note.id}
+                    className="p-4 bg-surface rounded-[12px] border border-border-base/60 hover:border-teal-500/30 transition-all flex flex-col justify-between shadow-sm"
+                  >
                     <div>
                       <div className="flex justify-between items-center gap-2 pb-2 border-b border-border-base/40 mb-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100">
                           {note.sectionLabel || "Note"}
                         </span>
                         <span className="text-[11px] text-text-muted">
-                          {note.createdAt instanceof Date ? note.createdAt.toLocaleDateString() : "Just now"}
+                          {note.createdAt instanceof Date
+                            ? note.createdAt.toLocaleDateString()
+                            : "Just now"}
                         </span>
                       </div>
                       <p className="text-[13px] text-text-main line-clamp-4 italic">
                         "{note.content}"
                       </p>
                     </div>
-                    
+
                     <div className="mt-4 pt-3 border-t border-border-base/40">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[9.5px] font-bold text-text-muted mr-1">IMPORT INTO:</span>
+                        <span className="text-[9.5px] font-bold text-text-muted mr-1">
+                          IMPORT INTO:
+                        </span>
                         <button
-                          type="button"
                           className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          type="button"
                           onClick={() => {
-                            setHistory((prev) => prev ? `${prev}\n${note.content}` : note.content);
-                            addToast({ title: "Imported into History", color: "success" });
+                            setHistory((prev) =>
+                              prev ? `${prev}\n${note.content}` : note.content,
+                            );
+                            addToast({
+                              title: "Imported into History",
+                              color: "success",
+                            });
                           }}
                         >
                           History
                         </button>
                         <button
-                          type="button"
                           className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          type="button"
                           onClick={() => {
-                            setExamination((prev) => prev ? `${prev}\n${note.content}` : note.content);
-                            addToast({ title: "Imported into Examination", color: "success" });
+                            setExamination((prev) =>
+                              prev ? `${prev}\n${note.content}` : note.content,
+                            );
+                            addToast({
+                              title: "Imported into Examination",
+                              color: "success",
+                            });
                           }}
                         >
                           Examination
                         </button>
                         <button
-                          type="button"
                           className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          type="button"
                           onClick={() => {
-                            setDiagnosis((prev) => prev ? `${prev}\n${note.content}` : note.content);
-                            addToast({ title: "Imported into Diagnosis", color: "success" });
+                            setDiagnosis((prev) =>
+                              prev ? `${prev}\n${note.content}` : note.content,
+                            );
+                            addToast({
+                              title: "Imported into Diagnosis",
+                              color: "success",
+                            });
                           }}
                         >
                           Diagnosis
@@ -1098,13 +1168,15 @@ export default function EditPrescriptionPage() {
               Clinical Assessment & Case Record
             </h4>
           </div>
-          
+
           <div className="p-6 space-y-6">
             {/* 1. History */}
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoDocumentTextOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">HISTORY</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  HISTORY
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
@@ -1118,7 +1190,9 @@ export default function EditPrescriptionPage() {
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoPulseOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">EXAMINATION</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  EXAMINATION
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
@@ -1132,7 +1206,9 @@ export default function EditPrescriptionPage() {
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoFlaskOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">INVESTIGATION</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  INVESTIGATION
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
@@ -1146,7 +1222,9 @@ export default function EditPrescriptionPage() {
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoMedicalOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">DIAGNOSIS</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  DIAGNOSIS
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
@@ -1238,7 +1316,9 @@ export default function EditPrescriptionPage() {
           {items.length > 0 && (
             <div className="px-5 py-4 border-t border-border-base/50 bg-surface-2/30 flex flex-col sm:flex-row gap-3 items-end justify-between">
               <div className="flex flex-col gap-1.5 w-full max-w-sm">
-                <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Save these medicines as a template</span>
+                <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                  Save these medicines as a template
+                </span>
                 <input
                   className="w-full text-[13px] px-3.5 py-1.5 bg-surface border border-border-base rounded-[10px] outline-none text-text-main placeholder:text-text-muted/60 focus:border-primary text-[13px]"
                   placeholder="e.g. Acute Tonsillitis Pack, Hypertension Plan"
@@ -1267,13 +1347,15 @@ export default function EditPrescriptionPage() {
               Care & Treatment Plan
             </h4>
           </div>
-          
+
           <div className="p-6 space-y-6">
             {/* Treatment Plan */}
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoClipboardOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">TREATMENT PLAN</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  TREATMENT PLAN
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"

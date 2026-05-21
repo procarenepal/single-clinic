@@ -95,17 +95,22 @@ export default function PatientDetailPage() {
       const patientData = await patientService.getPatientById(patientId);
 
       // Authorization Check: Doctors should only view patients assigned to them
-      const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
+      const isAdmin =
+        userData?.role === "clinic-admin" || userData?.role === "system-owner";
+
       if (!isAdmin && userData?.email) {
         try {
           const docInfo = await doctorService.getDoctorByEmail(userData.email);
+
           if (docInfo && patientData && patientData.doctorId !== docInfo.id) {
             addToast({
               title: "Access Denied",
-              description: "You are only authorized to view patients assigned to you.",
+              description:
+                "You are only authorized to view patients assigned to you.",
               color: "danger",
             });
             navigate("/dashboard/patients");
+
             return;
           }
         } catch (e) {
@@ -144,6 +149,7 @@ export default function PatientDetailPage() {
   const calculateAge = (dob: Date | any): string => {
     if (!dob) return "";
     const b = new Date(dob);
+
     if (isNaN(b.getTime())) return "";
     const t = new Date();
 
@@ -154,6 +160,7 @@ export default function PatientDetailPage() {
     if (days < 0) {
       months--;
       const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+
       days += prevMonth;
     }
     if (months < 0) {
@@ -164,13 +171,16 @@ export default function PatientDetailPage() {
     if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
     if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
     if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+
     return "0 Days";
   };
 
   // Format date for display
   const formatDate = (date: Date | any): string => {
     const d = new Date(date);
+
     if (isNaN(d.getTime())) return "Invalid Date";
+
     return d.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
@@ -277,12 +287,12 @@ export default function PatientDetailPage() {
         }),
         isBillingEnabled
           ? appointmentBillingService
-            .getBillingByPatient(patientId, clinicId)
-            .catch((err) => {
-              console.warn("Failed to fetch billing records:", err);
+              .getBillingByPatient(patientId, clinicId)
+              .catch((err) => {
+                console.warn("Failed to fetch billing records:", err);
 
-              return [];
-            })
+                return [];
+              })
           : Promise.resolve([]),
       ]);
 
@@ -366,10 +376,16 @@ export default function PatientDetailPage() {
     } = data;
 
     const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
-    const headerHtml = (clinic && layoutConfig) ? getPrintHeaderHTML(layoutConfig, clinic) : "";
+    const headerHtml =
+      clinic && layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic) : "";
     const footerHtml = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
-    
-    const headerHeight = layoutConfig?.headerHeight === "compact" ? 140 : layoutConfig?.headerHeight === "expanded" ? 220 : 180;
+
+    const headerHeight =
+      layoutConfig?.headerHeight === "compact"
+        ? 140
+        : layoutConfig?.headerHeight === "expanded"
+          ? 220
+          : 180;
     const topMarginMm = layoutConfig?.contentTopMarginWithoutLetterheadMm || 10;
 
     return `<!DOCTYPE html>
@@ -509,8 +525,9 @@ export default function PatientDetailPage() {
         </div>
       </div>
 
-      ${medicalReportResponses && medicalReportFields.length > 0
-        ? `
+      ${
+        medicalReportResponses && medicalReportFields.length > 0
+          ? `
         <div class="section">
           <div class="section-header">Clinical History & Results</div>
           <table class="report-table">
@@ -523,8 +540,11 @@ export default function PatientDetailPage() {
             <tbody>
               ${medicalReportFields
                 .map((field: any) => {
-                  const response = medicalReportResponses.fieldValues?.[field.fieldKey];
+                  const response =
+                    medicalReportResponses.fieldValues?.[field.fieldKey];
+
                   if (!response || response === "") return "";
+
                   return `
                     <tr>
                       <td style="font-weight: 500; color: #475569;">${field.fieldLabel}</td>
@@ -536,11 +556,12 @@ export default function PatientDetailPage() {
             </tbody>
           </table>
         </div>`
-        : ""
+          : ""
       }
 
-      ${prescriptions.length > 0
-        ? `
+      ${
+        prescriptions.length > 0
+          ? `
         <div class="section">
           <div class="section-header">Medication Treatment Plans</div>
           <table class="report-table">
@@ -554,23 +575,31 @@ export default function PatientDetailPage() {
             </thead>
             <tbody>
               ${prescriptions
-                .map((p: any) => p.items?.map((item: any) => `
+                .map(
+                  (p: any) =>
+                    p.items
+                      ?.map(
+                        (item: any) => `
                   <tr>
                     <td style="font-weight: 500; color: #1e293b;">${item.medicineName}</td>
                     <td>${item.dosage || "-"} • ${item.frequency || "-"}</td>
                     <td>${item.duration || "-"}</td>
                     <td style="font-size: 10px; color: #64748b;">${p.prescriptionDate ? new Date(p.prescriptionDate).toLocaleDateString() : "-"}</td>
                   </tr>
-                `).join("") || "")
+                `,
+                      )
+                      .join("") || "",
+                )
                 .join("")}
             </tbody>
           </table>
         </div>`
-        : ""
+          : ""
       }
 
-      ${noteEntries.length > 0
-        ? `
+      ${
+        noteEntries.length > 0
+          ? `
         <div class="section">
           <div class="section-header">Clinical Progress Notes</div>
           <table class="report-table">
@@ -582,21 +611,24 @@ export default function PatientDetailPage() {
             </thead>
             <tbody>
               ${noteEntries
-                .map((note: any) => `
+                .map(
+                  (note: any) => `
                   <tr>
                     <td style="font-weight: 500; color: #475569;">${note.sectionLabel || "General"}</td>
                     <td>${note.content}</td>
                   </tr>
-                `)
+                `,
+                )
                 .join("")}
             </tbody>
           </table>
         </div>`
-        : ""
+          : ""
       }
 
-      ${isBillingEnabled && billingRecords.length > 0
-        ? `
+      ${
+        isBillingEnabled && billingRecords.length > 0
+          ? `
       <div class="section">
         <div class="section-header">Financial Summary</div>
         <table class="financial-summary-table">
@@ -610,19 +642,21 @@ export default function PatientDetailPage() {
           </thead>
           <tbody>
             ${billingRecords
-              .map((b: any) => `
+              .map(
+                (b: any) => `
                 <tr>
                   <td style="font-weight: 500; color: #1e293b;">${b.invoiceNumber || b.billNumber || "DRAFT"}</td>
                   <td>${b.invoiceDate ? new Date(b.invoiceDate).toLocaleDateString() : "-"}</td>
                   <td style="text-align: right; font-weight: 600; color: #0f172a;">NPR ${b.totalAmount?.toLocaleString() || "0"}</td>
                   <td style="text-align: center;"><span style="font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; text-transform: uppercase;">${b.status || "Pending"}</span></td>
                 </tr>
-              `)
+              `,
+              )
               .join("")}
           </tbody>
         </table>
       </div>`
-        : ""
+          : ""
       }
     </div>
     
@@ -699,12 +733,12 @@ export default function PatientDetailPage() {
     },
     ...(isBillingEnabled
       ? [
-        {
-          key: "billing",
-          icon: <IoWalletOutline className="w-4 h-4" />,
-          label: "Billing",
-        },
-      ]
+          {
+            key: "billing",
+            icon: <IoWalletOutline className="w-4 h-4" />,
+            label: "Billing",
+          },
+        ]
       : []),
   ];
 
@@ -722,7 +756,9 @@ export default function PatientDetailPage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary leading-tight`}>
+            <h1
+              className={`${title({ size: "lg" })} text-primary leading-tight`}
+            >
               Patient Profile
               {patient?.isCritical && (
                 <span className="ml-2 text-[11px] font-semibold bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded align-middle">
@@ -776,7 +812,7 @@ export default function PatientDetailPage() {
       </div>
 
       {/* ── Tabbed content shell ────────────────────────────────────────── */}
-      <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-surface border border-border-base rounded-2xl overflow-visible shadow-sm">
         {/* Custom tab strip — matches spec: underline style, teal active */}
         <div className="flex overflow-x-auto border-b border-border-base scrollbar-none">
           {TABS.map((tab) => (
@@ -785,10 +821,11 @@ export default function PatientDetailPage() {
               className={`
                   inline-flex items-center gap-1.5 px-4 py-3 text-[12.5px] font-medium whitespace-nowrap
                   border-b-2 transition-colors shrink-0
-                  ${selectedTab === tab.key
-                  ? "border-primary text-primary bg-primary/5"
-                  : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
-                }
+                  ${
+                    selectedTab === tab.key
+                      ? "border-primary text-primary bg-primary/5"
+                      : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
+                  }
                 `}
               type="button"
               onClick={() => handleTabChange(tab.key)}
@@ -808,26 +845,18 @@ export default function PatientDetailPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* Left: Medical Reports */}
                 <div className="flex flex-col gap-3">
-                  <h3 className="text-section-title text-text-main">
-                    Medical Reports
-                  </h3>
                   <PatientMedicalReportTab
                     clinicId={clinicId!}
+                    compactLayout={true}
                     patientId={patientId!}
                   />
                 </div>
                 {/* Middle: Appointments + Prescriptions */}
                 <div className="flex flex-col gap-5 lg:col-span-2">
                   <div>
-                    <h3 className="text-section-title text-text-main mb-3">
-                      Appointments
-                    </h3>
                     <PatientAppointmentsTab patientId={patientId!} />
                   </div>
                   <div>
-                    <h3 className="text-section-title text-text-main mb-3">
-                      Prescriptions
-                    </h3>
                     <PatientPrescriptionsTab patientId={patientId!} />
                   </div>
                 </div>

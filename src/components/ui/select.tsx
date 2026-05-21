@@ -132,9 +132,9 @@ export const Select: React.FC<SelectProps> = ({
             errorMessage && "!border-red-500",
             classNames?.value,
           )}
-          style={{ colorScheme: "inherit" }}
           disabled={isDisabled ?? rest.disabled}
           required={isRequired ?? rest.required}
+          style={{ colorScheme: "inherit" }}
           value={currentKey !== undefined ? String(currentKey) : ""}
           onChange={handleChange}
         >
@@ -156,6 +156,7 @@ export const Select: React.FC<SelectProps> = ({
                 </option>
               );
             }
+
             return child;
           })}
         </select>

@@ -7,7 +7,7 @@ import { Patient, Appointment } from "@/types/models";
 
 export interface DailyBillingSummary {
   id: string;
-  type: 'appointment' | 'pharmacy';
+  type: "appointment" | "pharmacy";
   invoiceNumber: string;
   patientName: string;
   totalAmount: number;
@@ -127,39 +127,53 @@ export const dailyReportService = {
 
       const [allBilling, allPurchases] = await Promise.all([
         appointmentBillingService.getBillingByClinic(clinicId, branchId),
-        pharmacyService.getMedicinePurchasesByClinic(clinicId, branchId)
+        pharmacyService.getMedicinePurchasesByClinic(clinicId, branchId),
       ]);
 
       const summaries: DailyBillingSummary[] = [];
 
-      allBilling.forEach(billing => {
-        const invoiceDate = billing.invoiceDate ? new Date(billing.invoiceDate) : null;
-        if (invoiceDate && invoiceDate >= startOfDay && invoiceDate <= endOfDay) {
+      allBilling.forEach((billing) => {
+        const invoiceDate = billing.invoiceDate
+          ? new Date(billing.invoiceDate)
+          : null;
+
+        if (
+          invoiceDate &&
+          invoiceDate >= startOfDay &&
+          invoiceDate <= endOfDay
+        ) {
           summaries.push({
             id: billing.id,
-            type: 'appointment',
+            type: "appointment",
             invoiceNumber: billing.invoiceNumber,
-            patientName: billing.patientName || 'Unknown Patient',
+            patientName: billing.patientName || "Unknown Patient",
             totalAmount: billing.totalAmount || 0,
             date: invoiceDate,
-            paymentStatus: billing.paymentStatus || 'unpaid',
+            paymentStatus: billing.paymentStatus || "unpaid",
             doctorName: billing.doctorName,
           });
         }
       });
 
-      allPurchases.forEach(purchase => {
-        const purchaseDate = purchase.purchaseDate ? new Date(purchase.purchaseDate) : null;
-        if (purchaseDate && purchaseDate >= startOfDay && purchaseDate <= endOfDay) {
+      allPurchases.forEach((purchase) => {
+        const purchaseDate = purchase.purchaseDate
+          ? new Date(purchase.purchaseDate)
+          : null;
+
+        if (
+          purchaseDate &&
+          purchaseDate >= startOfDay &&
+          purchaseDate <= endOfDay
+        ) {
           summaries.push({
             id: purchase.id,
-            type: 'pharmacy',
+            type: "pharmacy",
             invoiceNumber: purchase.purchaseNo,
-            patientName: purchase.patientName || 'Walk-in Customer',
+            patientName: purchase.patientName || "Walk-in Customer",
             totalAmount: purchase.netAmount || 0,
             date: purchaseDate,
-            paymentStatus: purchase.paymentStatus || 'unpaid',
-            doctorName: 'Pharmacy Counter',
+            paymentStatus: purchase.paymentStatus || "unpaid",
+            doctorName: "Pharmacy Counter",
           });
         }
       });

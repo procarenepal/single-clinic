@@ -23,7 +23,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
@@ -105,7 +105,11 @@ function CustomSelect({
           </option>
         )}
         {options.map((opt: any) => (
-          <option key={opt.value} value={opt.value} className="bg-surface text-text-main">
+          <option
+            key={opt.value}
+            className="bg-surface text-text-main"
+            value={opt.value}
+          >
             {opt.label}
           </option>
         ))}
@@ -224,9 +228,9 @@ export default function DoctorProfilePage() {
       setDoctor(doctorData);
 
       const loadTasks = [
-        loadAppointments(doctorId).catch(() => { }),
-        loadPatients(doctorId).catch(() => { }),
-        loadCommissions(doctorId).catch(() => { }),
+        loadAppointments(doctorId).catch(() => {}),
+        loadPatients(doctorId).catch(() => {}),
+        loadCommissions(doctorId).catch(() => {}),
       ];
 
       await Promise.allSettled(loadTasks);
@@ -405,10 +409,12 @@ export default function DoctorProfilePage() {
   const formatCurrency = (amount: number) => `NPR ${amount.toLocaleString()}`;
 
   const getCommissionStatusColor = (status: string) => {
-    if (status === "paid") return "bg-primary/10 text-primary border-primary/20";
+    if (status === "paid")
+      return "bg-primary/10 text-primary border-primary/20";
     if (status === "pending")
       return "bg-amber-500/10 text-amber-600 border-amber-500/20";
-    if (status === "cancelled") return "bg-red-500/10 text-red-600 border-red-500/20";
+    if (status === "cancelled")
+      return "bg-red-500/10 text-red-600 border-red-500/20";
 
     return "bg-surface-2 text-text-muted border-border-base";
   };
@@ -477,7 +483,9 @@ export default function DoctorProfilePage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Doctor Profile</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Doctor Profile
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               View and manage information
             </p>
@@ -590,7 +598,9 @@ export default function DoctorProfilePage() {
             key={i}
             className={`flex items-center gap-4 p-5 rounded-[10px] shadow-sm border bg-surface ${s.bg}`}
           >
-            <div className="p-3 bg-surface border border-border-base rounded-full shadow-sm">{s.icon}</div>
+            <div className="p-3 bg-surface border border-border-base rounded-full shadow-sm">
+              {s.icon}
+            </div>
             <div>
               <p className="text-stat-sm text-text-main leading-none">
                 {s.val}
@@ -614,10 +624,11 @@ export default function DoctorProfilePage() {
           ].map((t) => (
             <button
               key={t.key}
-              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTab === t.key
-                ? "border-primary text-primary bg-primary/5"
-                : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
-                }`}
+              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${
+                selectedTab === t.key
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
+              }`}
               onClick={() => handleTabChange(t.key)}
             >
               {t.label}
@@ -654,7 +665,9 @@ export default function DoctorProfilePage() {
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                   <span className="text-text-muted">Consultation Charge</span>
                   <span className="font-semibold text-text-main">
-                    {doctor.consultationCharge !== undefined ? `NPR ${doctor.consultationCharge.toLocaleString()}` : "N NPR"}
+                    {doctor.consultationCharge !== undefined
+                      ? `NPR ${doctor.consultationCharge.toLocaleString()}`
+                      : "N NPR"}
                   </span>
                 </div>
                 <div className="flex justify-between text-[14px] pb-2">
@@ -733,14 +746,15 @@ export default function DoctorProfilePage() {
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <span
-                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${appointment.status === "completed"
-                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                  : appointment.status === "scheduled"
-                                    ? "bg-primary/10 text-primary border-primary/20"
-                                    : appointment.status === "cancelled"
-                                      ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                      : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                  }`}
+                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${
+                                  appointment.status === "completed"
+                                    ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                    : appointment.status === "scheduled"
+                                      ? "bg-primary/10 text-primary border-primary/20"
+                                      : appointment.status === "cancelled"
+                                        ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                        : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                }`}
                               >
                                 {appointment.status}
                               </span>
@@ -835,9 +849,7 @@ export default function DoctorProfilePage() {
                     key={i}
                     className="p-5 text-center border border-border-base rounded-[10px] shadow-sm bg-surface-2/50"
                   >
-                    <p
-                      className={`text-stat-sm leading-none ${s.color}`}
-                    >
+                    <p className={`text-stat-sm leading-none ${s.color}`}>
                       {s.val}
                     </p>
                     <p className="text-[13px] text-text-muted font-medium mt-1">
@@ -898,7 +910,7 @@ export default function DoctorProfilePage() {
                               Pending:{" "}
                               {formatCurrency(
                                 commission.commissionAmount -
-                                (commission.paidAmount || 0),
+                                  (commission.paidAmount || 0),
                               )}
                             </p>
                           )}
@@ -955,7 +967,7 @@ export default function DoctorProfilePage() {
                 <span className="font-bold text-amber-500">
                   {formatCurrency(
                     selectedCommission.commissionAmount -
-                    (selectedCommission.paidAmount || 0),
+                      (selectedCommission.paidAmount || 0),
                   )}
                 </span>
               </p>
@@ -992,17 +1004,17 @@ export default function DoctorProfilePage() {
             />
             {(paymentForm.method === "bank_transfer" ||
               paymentForm.method === "cheque") && (
-                <CustomInput
-                  label="Reference / Transaction ID"
-                  value={paymentForm.reference}
-                  onChange={(e: any) =>
-                    setPaymentForm((prev) => ({
-                      ...prev,
-                      reference: e.target.value,
-                    }))
-                  }
-                />
-              )}
+              <CustomInput
+                label="Reference / Transaction ID"
+                value={paymentForm.reference}
+                onChange={(e: any) =>
+                  setPaymentForm((prev) => ({
+                    ...prev,
+                    reference: e.target.value,
+                  }))
+                }
+              />
+            )}
             <CustomInput
               label="Notes (Optional)"
               value={paymentForm.notes}

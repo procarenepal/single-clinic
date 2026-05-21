@@ -368,7 +368,7 @@ class DoctorCommissionService {
         updatedAt: Timestamp.fromDate(new Date()),
         status:
           (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
+          currentCommission.commissionAmount
             ? "paid"
             : "pending",
       };

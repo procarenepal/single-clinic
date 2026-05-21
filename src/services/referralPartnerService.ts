@@ -122,7 +122,9 @@ export const referralPartnerService = {
   async getAllReferralPartners(): Promise<ReferralPartner[]> {
     try {
       const cached = cacheService.getClinicReferralPartners("standalone");
-      if (cached) return (cached as ReferralPartner[]).filter((p) => !p.isDeleted);
+
+      if (cached)
+        return (cached as ReferralPartner[]).filter((p) => !p.isDeleted);
 
       const partnersRef = collection(db, PARTNERS_COLLECTION);
       const querySnapshot = await getDocs(partnersRef);
@@ -145,6 +147,7 @@ export const referralPartnerService = {
       });
 
       const activePartners = partners.filter((p) => !p.isDeleted);
+
       cacheService.setClinicReferralPartners("standalone", activePartners);
 
       return activePartners;
@@ -162,9 +165,11 @@ export const referralPartnerService = {
     branchId?: string,
   ): Promise<ReferralPartner[]> {
     const partners = await this.getAllReferralPartners();
+
     if (branchId) {
       return partners.filter((p) => p.branchId === branchId);
     }
+
     return partners;
   },
 

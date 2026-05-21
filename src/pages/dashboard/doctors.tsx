@@ -19,7 +19,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
+import { TableSkeleton, Spinner } from "@/components/ui";
 import {
   Dropdown,
   DropdownTrigger,
@@ -128,7 +128,7 @@ export default function DoctorsPage() {
 
       setSpecialities([
         { key: "all", label: "All Specialities" },
-        ...specialitiesData ?? [],
+        ...(specialitiesData ?? []),
       ]);
     } catch (error) {
       console.error("Error loading specialities:", error);
@@ -270,7 +270,7 @@ export default function DoctorsPage() {
     const matchesSpeciality =
       selectedSpeciality === "all" ||
       doctor.speciality.toLowerCase().replace(/\s+/g, "-") ===
-      selectedSpeciality;
+        selectedSpeciality;
 
     const matchesStatus =
       selectedStatus === "all" ||
@@ -343,9 +343,7 @@ export default function DoctorsPage() {
               </div>
             }
             variant="bordered"
-            onClick={() =>
-              navigate("/dashboard/settings/doctor-speciality")
-            }
+            onClick={() => navigate("/dashboard/settings/doctor-speciality")}
           >
             Manage Specialities
           </Button>
@@ -465,9 +463,7 @@ export default function DoctorsPage() {
                 <Button
                   color="primary"
                   startContent={<IoAddOutline />}
-                  onClick={() =>
-                    navigate("/dashboard/doctors/new")
-                  }
+                  onClick={() => navigate("/dashboard/doctors/new")}
                 >
                   Add First Doctor
                 </Button>
@@ -477,27 +473,13 @@ export default function DoctorsPage() {
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-surface-2 border-b border-border-base text-[12px] uppercase font-semibold text-primary tracking-wider">
-                  <th className="px-5 py-3">
-                    Doctor
-                  </th>
-                  <th className="px-5 py-3">
-                    Contact
-                  </th>
-                  <th className="px-5 py-3">
-                    Speciality
-                  </th>
-                  <th className="px-5 py-3">
-                    Type
-                  </th>
-                  <th className="px-5 py-3">
-                    Commission
-                  </th>
-                  <th className="px-5 py-3">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-right">
-                    Actions
-                  </th>
+                  <th className="px-5 py-3">Doctor</th>
+                  <th className="px-5 py-3">Contact</th>
+                  <th className="px-5 py-3">Speciality</th>
+                  <th className="px-5 py-3">Type</th>
+                  <th className="px-5 py-3">Commission</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-base">
@@ -548,10 +530,11 @@ export default function DoctorsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${doctor.doctorType === "regular"
-                          ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
-                          : "bg-purple-500/10 text-purple-600 border-purple-500/20"
-                          }`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${
+                          doctor.doctorType === "regular"
+                            ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                            : "bg-purple-500/10 text-purple-600 border-purple-500/20"
+                        }`}
                       >
                         {doctor.doctorType}
                       </span>
@@ -563,10 +546,11 @@ export default function DoctorsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${doctor.isActive
-                          ? "bg-green-500/10 text-green-600 border-green-500/20"
-                          : "bg-red-500/10 text-red-600 border-red-500/20"
-                          }`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${
+                          doctor.isActive
+                            ? "bg-green-500/10 text-green-600 border-green-500/20"
+                            : "bg-red-500/10 text-red-600 border-red-500/20"
+                        }`}
                       >
                         {doctor.isActive ? "Active" : "Inactive"}
                       </span>
@@ -592,7 +576,9 @@ export default function DoctorsPage() {
                             View Profile
                           </DropdownItem>
                           <DropdownItem
-                            startContent={<IoCreateOutline className="w-4 h-4" />}
+                            startContent={
+                              <IoCreateOutline className="w-4 h-4" />
+                            }
                             onClick={() =>
                               navigate(`/dashboard/doctors/${doctor.id}/edit`)
                             }
@@ -600,9 +586,13 @@ export default function DoctorsPage() {
                             Edit
                           </DropdownItem>
                           <DropdownItem
-                            startContent={<IoCalendarOutline className="w-4 h-4" />}
+                            startContent={
+                              <IoCalendarOutline className="w-4 h-4" />
+                            }
                             onClick={() =>
-                              navigate(`/dashboard/doctors/${doctor.id}/schedule`)
+                              navigate(
+                                `/dashboard/doctors/${doctor.id}/schedule`,
+                              )
                             }
                           >
                             Schedule
@@ -610,7 +600,9 @@ export default function DoctorsPage() {
                           <DropdownItem
                             startContent={<IoListOutline className="w-4 h-4" />}
                             onClick={() =>
-                              navigate(`/dashboard/appointments?doctorId=${doctor.id}`)
+                              navigate(
+                                `/dashboard/appointments?doctorId=${doctor.id}`,
+                              )
                             }
                           >
                             Appointments
@@ -636,7 +628,9 @@ export default function DoctorsPage() {
                           </DropdownItem>
                           <DropdownItem
                             color="danger"
-                            startContent={<IoTrashOutline className="w-4 h-4" />}
+                            startContent={
+                              <IoTrashOutline className="w-4 h-4" />
+                            }
                             onClick={() =>
                               handleDeleteDoctor(doctor.id, doctor.name)
                             }

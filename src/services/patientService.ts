@@ -32,10 +32,12 @@ const PATIENTS_COLLECTION = "patients";
 function normalizeMobile(mobile: string): string {
   // Remove everything except digits
   let digits = mobile.replace(/\D/g, "");
+
   // Nepal country code: strip leading "977" if 13 digits total
   if (digits.startsWith("977") && digits.length === 13) {
     digits = digits.slice(3);
   }
+
   return digits;
 }
 
@@ -111,6 +113,7 @@ export const patientService = {
       return String((maxReg || 1000) + 1);
     } catch (error) {
       console.error("Error generating next registration number:", error);
+
       return String(Math.floor(Math.random() * 9000) + 1000); // Absolute fallback
     }
   },
@@ -129,6 +132,7 @@ export const patientService = {
 
       // Filter out any undefined values to prevent Firestore unsupported field value: undefined errors
       const cleanData = { ...patientData };
+
       Object.keys(cleanData).forEach((key) => {
         if (cleanData[key as keyof typeof cleanData] === undefined) {
           delete cleanData[key as keyof typeof cleanData];
@@ -166,7 +170,7 @@ export const patientService = {
           mobile: patientData.mobile,
           clinicId: patientData.clinicId,
           branchId: (patientData as any).branchId,
-        }).catch(err => console.error("Auto-welcome SMS failed:", err));
+        }).catch((err) => console.error("Auto-welcome SMS failed:", err));
       }
 
       return docRef.id;
@@ -228,10 +232,12 @@ export const patientService = {
     try {
       const cacheKey = clinicId || "standalone";
       const cached = cacheService.getClinicPatients(cacheKey);
+
       if (cached) return cached as Patient[];
 
       const patientsRef = collection(db, PATIENTS_COLLECTION);
       const constraints: any[] = [];
+
       if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
         constraints.push(where("clinicId", "==", clinicId));
       }
@@ -269,11 +275,14 @@ export const patientService = {
       patients.sort((a, b) => {
         const aVal = (a as any).regNumberNumeric ?? 0;
         const bVal = (b as any).regNumberNumeric ?? 0;
+
         if (bVal !== aVal) return bVal - aVal;
+
         return (b.regNumber || "").localeCompare(a.regNumber || "");
       });
 
       cacheService.setClinicPatients(cacheKey, patients);
+
       return patients;
     } catch (error) {
       console.error("Error getting patients:", error);
@@ -417,10 +426,16 @@ export const patientService = {
 
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        const createdAt = data.createdAt ? new Date(data.createdAt.seconds * 1000) : new Date();
-        const updatedAt = data.updatedAt ? new Date(data.updatedAt.seconds * 1000) : new Date();
+        const createdAt = data.createdAt
+          ? new Date(data.createdAt.seconds * 1000)
+          : new Date();
+        const updatedAt = data.updatedAt
+          ? new Date(data.updatedAt.seconds * 1000)
+          : new Date();
         const dob = data.dob ? new Date(data.dob.seconds * 1000) : undefined;
-        const bsDate = data.bsDate ? new Date(data.bsDate.seconds * 1000) : undefined;
+        const bsDate = data.bsDate
+          ? new Date(data.bsDate.seconds * 1000)
+          : undefined;
 
         patients.push({
           id: docSnap.id,
@@ -512,14 +527,25 @@ export const patientService = {
         baseConstraints.push(orderBy("regNumberNumeric", "desc"));
         const probeQ = query(patientsRef, ...baseConstraints, limit(1));
         const probeSnap = await getDocs(probeQ);
+
         if (probeSnap.empty) {
-          throw new Error("No numeric sequence field found, fallback to string");
+          throw new Error(
+            "No numeric sequence field found, fallback to string",
+          );
         }
         q = query(patientsRef, ...baseConstraints);
       } catch {
         baseConstraints.pop(); // remove regNumberNumeric orderBy
-        baseConstraints.push(orderBy("regNumber", "desc"));
-        q = query(patientsRef, ...baseConstraints);
+        try {
+          baseConstraints.push(orderBy("regNumber", "desc"));
+          const probeQ2 = query(patientsRef, ...baseConstraints, limit(1));
+
+          await getDocs(probeQ2);
+          q = query(patientsRef, ...baseConstraints);
+        } catch {
+          baseConstraints.pop(); // remove regNumber orderBy
+          q = query(patientsRef, ...baseConstraints); // Ultimate fallback: no sorting
+        }
       }
     }
 
@@ -630,15 +656,26 @@ export const patientService = {
         q = query(patientsRef, ...baseConstraints);
         const countSnap = await getCountFromServer(q);
         const count = countSnap.data().count;
+
         if (count === 0) {
-          throw new Error("Numeric sequence count is 0, trying string fallback");
+          throw new Error(
+            "Numeric sequence count is 0, trying string fallback",
+          );
         }
 
         return count;
       } catch {
         baseConstraints.pop();
-        baseConstraints.push(orderBy("regNumber", "desc"));
-        q = query(patientsRef, ...baseConstraints);
+        try {
+          baseConstraints.push(orderBy("regNumber", "desc"));
+          q = query(patientsRef, ...baseConstraints);
+          const countSnap = await getCountFromServer(q);
+
+          return countSnap.data().count;
+        } catch {
+          baseConstraints.pop();
+          q = query(patientsRef, ...baseConstraints);
+        }
       }
     }
 
@@ -667,31 +704,45 @@ export const patientService = {
    * @param {string} [excludeId] - Optional patient ID to exclude from check (for updates)
    * @returns {Promise<boolean>} - True if mobile exists
    */
-  async checkMobileExists(mobile: string, clinicId: string, excludeId?: string): Promise<boolean> {
+  async checkMobileExists(
+    mobile: string,
+    clinicId: string,
+    excludeId?: string,
+  ): Promise<boolean> {
     if (!mobile || !clinicId) return false;
     try {
       const normalized = normalizeMobile(mobile);
       // Build variants to check: both the raw digits and the +977 version
-      const variants = Array.from(new Set([normalized, "+977" + normalized, "977" + normalized, mobile.trim()]));
+      const variants = Array.from(
+        new Set([
+          normalized,
+          "+977" + normalized,
+          "977" + normalized,
+          mobile.trim(),
+        ]),
+      );
 
       for (const variant of variants) {
         const q = query(
           collection(db, PATIENTS_COLLECTION),
           where("clinicId", "==", clinicId),
-          where("mobile", "==", variant)
+          where("mobile", "==", variant),
         );
         const snap = await getDocs(q);
+
         if (!snap.empty) {
           if (excludeId) {
-            if (snap.docs.some(d => d.id !== excludeId)) return true;
+            if (snap.docs.some((d) => d.id !== excludeId)) return true;
           } else {
             return true;
           }
         }
       }
+
       return false;
     } catch (error) {
       console.error("Error checking mobile existence:", error);
+
       return false;
     }
   },
@@ -703,22 +754,29 @@ export const patientService = {
    * @param {string} [excludeId] - Optional patient ID to exclude from check (for updates)
    * @returns {Promise<boolean>} - True if email exists
    */
-  async checkEmailExists(email: string, clinicId: string, excludeId?: string): Promise<boolean> {
+  async checkEmailExists(
+    email: string,
+    clinicId: string,
+    excludeId?: string,
+  ): Promise<boolean> {
     if (!email || !clinicId) return false;
     try {
       const q = query(
         collection(db, PATIENTS_COLLECTION),
         where("clinicId", "==", clinicId),
-        where("email", "==", email.trim().toLowerCase())
+        where("email", "==", email.trim().toLowerCase()),
       );
       const snap = await getDocs(q);
+
       if (snap.empty) return false;
       if (excludeId) {
-        return snap.docs.some(doc => doc.id !== excludeId);
+        return snap.docs.some((doc) => doc.id !== excludeId);
       }
+
       return true;
     } catch (error) {
       console.error("Error checking email existence:", error);
+
       return false;
     }
   },

@@ -44,21 +44,36 @@ interface DisplayItem {
 
 const getDisplayItems = (items: any[]): DisplayItem[] => {
   const displayItems: DisplayItem[] = [];
+
   items.forEach((item) => {
     const batchStr = item.batchNumber || "";
-    if (batchStr.includes("@ NPR") || (batchStr.includes("(") && batchStr.includes("x"))) {
+
+    if (
+      batchStr.includes("@ NPR") ||
+      (batchStr.includes("(") && batchStr.includes("x"))
+    ) {
       const batches = batchStr.split(", ");
       let parsedSuccessfully = true;
-      const parsedBatches: { batchNumber: string; qty: number; price: number; expiryDate?: string }[] = [];
-      
+      const parsedBatches: {
+        batchNumber: string;
+        qty: number;
+        price: number;
+        expiryDate?: string;
+      }[] = [];
+
       batches.forEach((bStr: string) => {
-        const match = bStr.match(/^([^\(]+)\s*\(x(\d+)\s*@\s*NPR\s*([\d\.]+)\)$/i);
+        const match = bStr.match(
+          /^([^\(]+)\s*\(x(\d+)\s*@\s*NPR\s*([\d\.]+)\)$/i,
+        );
+
         if (match) {
           const rawBatch = match[1].trim();
           let batchNumber = rawBatch;
           let expiryDate = item.expiryDate;
+
           if (rawBatch.includes("|Exp:")) {
             const parts = rawBatch.split("|Exp:");
+
             batchNumber = parts[0].trim();
             expiryDate = parts[1].trim();
           }
@@ -70,12 +85,15 @@ const getDisplayItems = (items: any[]): DisplayItem[] => {
           });
         } else {
           const simpleMatch = bStr.match(/^([^\(]+)\s*\(x(\d+)\)$/i);
+
           if (simpleMatch) {
             const rawBatch = simpleMatch[1].trim();
             let batchNumber = rawBatch;
             let expiryDate = item.expiryDate;
+
             if (rawBatch.includes("|Exp:")) {
               const parts = rawBatch.split("|Exp:");
+
               batchNumber = parts[0].trim();
               expiryDate = parts[1].trim();
             }
@@ -90,7 +108,7 @@ const getDisplayItems = (items: any[]): DisplayItem[] => {
           }
         }
       });
-      
+
       if (parsedSuccessfully && parsedBatches.length > 0) {
         parsedBatches.forEach((batch, idx) => {
           displayItems.push({
@@ -104,14 +122,17 @@ const getDisplayItems = (items: any[]): DisplayItem[] => {
             originalItem: item,
           });
         });
+
         return;
       }
     }
-    
+
     let fallbackBatchNumber = batchStr;
     let fallbackExpiryDate = item.expiryDate;
+
     if (batchStr.includes("|Exp:")) {
       const parts = batchStr.split("|Exp:");
+
       fallbackBatchNumber = parts[0].trim();
       fallbackExpiryDate = parts[1].trim();
     }
@@ -127,6 +148,7 @@ const getDisplayItems = (items: any[]): DisplayItem[] => {
       originalItem: item,
     });
   });
+
   return displayItems;
 };
 
@@ -593,6 +615,7 @@ export default function PurchaseDetailPage() {
           );
 
           let finalSettings = settingsData;
+
           if (!finalSettings) {
             finalSettings = pharmacyService.getDefaultPharmacySettings();
           }
@@ -786,12 +809,14 @@ export default function PurchaseDetailPage() {
     purchase?.totalReturnedAmount && purchase.totalReturnedAmount > 0
       ? purchase.totalReturnedAmount
       : (purchase?.returns ?? []).reduce(
-        (sum, r) => sum + Math.abs(r.totalAmount || 0),
-        0,
-      )
+          (sum, r) => sum + Math.abs(r.totalAmount || 0),
+          0,
+        ),
   );
   const netAfterReturns = Math.max(0, totalAmount - totalReturnedAmount);
-  const paidAmount = Math.round(payments.reduce((sum, payment) => sum + payment.amount, 0));
+  const paidAmount = Math.round(
+    payments.reduce((sum, payment) => sum + payment.amount, 0),
+  );
   const dueAmount = Math.max(0, netAfterReturns - paidAmount);
   const paymentProgress =
     totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
@@ -925,11 +950,16 @@ export default function PurchaseDetailPage() {
   const handlePrint = (format: string = "A4") => {
     if (!purchase) return;
 
-    const isThermal = format.startsWith("THERMAL") || format === "Thermal" || format === "THERMAL_4INCH";
+    const isThermal =
+      format.startsWith("THERMAL") ||
+      format === "Thermal" ||
+      format === "THERMAL_4INCH";
 
     // Use config-defined width if available and format is thermal
     let thermalWidth = "80mm";
-    if (format === "THERMAL_80MM" || format === "Thermal") thermalWidth = "80mm";
+
+    if (format === "THERMAL_80MM" || format === "Thermal")
+      thermalWidth = "80mm";
     else if (format === "THERMAL_58MM") thermalWidth = "58mm";
     else if (format === "THERMAL_4INCH") thermalWidth = "104mm";
     else if (isThermal && layoutConfig?.thermalPaperWidthMm) {
@@ -942,24 +972,34 @@ export default function PurchaseDetailPage() {
     if (printWindow) {
       // Build the table rows for Items
       const displayItems = getDisplayItems(purchase.items);
-      const itemsHtml = displayItems.map((item, index) => {
-        const price = item.salePrice;
-        const formattedPrice = price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-        return `<tr>
+      const itemsHtml = displayItems
+        .map((item, index) => {
+          const price = item.salePrice;
+          const formattedPrice = price.toLocaleString(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          });
+
+          return `<tr>
           <td style="text-align: center;">${index + 1}</td>
           <td>
             <div style="font-weight: bold;">${item.medicineName}</div>
-            ${item.batchNumber || item.expiryDate ? `
+            ${
+              item.batchNumber || item.expiryDate
+                ? `
               <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">
                 ${item.expiryDate ? `<strong>Exp:</strong> ${item.expiryDate}` : ""}
                 ${item.batchNumber ? `${item.expiryDate ? " | " : ""}<strong>Batch:</strong> ${item.batchNumber}` : ""}
-              </div>` : ""}
+              </div>`
+                : ""
+            }
           </td>
           <td style="text-align: center;">${item.quantity}</td>
           <td style="text-align: right;">NPR ${formattedPrice}</td>
           <td style="text-align: right;">NPR ${item.amount.toLocaleString()}</td>
         </tr>`;
-      }).join("");
+        })
+        .join("");
 
       // Build the summary rows (right side)
       const summaryRowsHtml = `
@@ -967,16 +1007,24 @@ export default function PurchaseDetailPage() {
           <td style="text-align: left; padding: 4px 0;">Subtotal</td>
           <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(purchase.total).toLocaleString()}</td>
         </tr>
-        ${purchase.discount > 0 ? `
+        ${
+          purchase.discount > 0
+            ? `
         <tr>
           <td style="text-align: left; padding: 4px 0;">Discount</td>
           <td style="text-align: right; padding: 4px 0;">- NPR ${Math.round(purchase.discount).toLocaleString()}</td>
-        </tr>` : ""}
-        ${purchase.taxAmount > 0 ? `
+        </tr>`
+            : ""
+        }
+        ${
+          purchase.taxAmount > 0
+            ? `
         <tr>
           <td style="text-align: left; padding: 4px 0;">Tax (${purchase.taxPercentage}%)</td>
           <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(purchase.taxAmount).toLocaleString()}</td>
-        </tr>` : ""}
+        </tr>`
+            : ""
+        }
         <tr style="font-weight: bold; font-size: 14px;">
           <td style="text-align: left; padding: 8px 0; border-top: 1px solid #e2e8f0;">Total</td>
           <td style="text-align: right; padding: 8px 0; border-top: 1px solid #e2e8f0;">NPR ${Math.round(purchase.netAmount).toLocaleString()}</td>
@@ -992,8 +1040,12 @@ export default function PurchaseDetailPage() {
       `;
 
       // Use Global Branding Utility
-      const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig, isThermal) : "";
-      const headerHTML = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic, isThermal) : "";
+      const brandingCSS = layoutConfig
+        ? getPrintBrandingCSS(layoutConfig, isThermal)
+        : "";
+      const headerHTML = layoutConfig
+        ? getPrintHeaderHTML(layoutConfig, clinic, isThermal)
+        : "";
       const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
       // Generate the HTML content for printing with dynamic clinic data
@@ -1190,12 +1242,16 @@ export default function PurchaseDetailPage() {
           <span class="detail-label">Date:</span>
           <span class="detail-val">${purchase.purchaseDate.toLocaleDateString()}</span>
         </div>
-        ${clinic?.panNumber ? `
+        ${
+          clinic?.panNumber
+            ? `
         <div class="detail-row">
           <span class="detail-label">Clinic PAN:</span>
           <span class="detail-val">${clinic.panNumber}</span>
         </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     </div>
 
@@ -1407,10 +1463,11 @@ export default function PurchaseDetailPage() {
           <div className="flex gap-2 items-center">
             <div className="w-32">
               <Select
-                size="sm"
                 selectedKeys={[receiptFormat]}
+                size="sm"
                 onSelectionChange={(keys) => {
                   const val = Array.from(keys)[0] as string;
+
                   if (val) setReceiptFormat(val);
                 }}
               >
@@ -1571,7 +1628,8 @@ export default function PurchaseDetailPage() {
                             {item.medicineName}
                           </p>
                           <p className="text-[11.5px] text-mountain-500 font-medium">
-                            Exp: {item.expiryDate} {item.batchNumber && `| Batch: ${item.batchNumber}`}
+                            Exp: {item.expiryDate}{" "}
+                            {item.batchNumber && `| Batch: ${item.batchNumber}`}
                           </p>
                         </div>
                       </td>
@@ -1586,7 +1644,9 @@ export default function PurchaseDetailPage() {
                             (sum, r) =>
                               sum +
                               r.items.reduce((inner, it) => {
-                                if (it.purchaseItemId === item.originalItem.id) {
+                                if (
+                                  it.purchaseItemId === item.originalItem.id
+                                ) {
                                   return inner + it.quantity;
                                 }
 
@@ -1606,7 +1666,9 @@ export default function PurchaseDetailPage() {
                             (sum, r) =>
                               sum +
                               r.items.reduce((inner, it) => {
-                                if (it.purchaseItemId === item.originalItem.id) {
+                                if (
+                                  it.purchaseItemId === item.originalItem.id
+                                ) {
                                   return inner + it.quantity;
                                 }
 
@@ -1685,7 +1747,9 @@ export default function PurchaseDetailPage() {
                 <div className="border-t border-mountain-200 my-2" />
                 <div className="flex justify-between font-bold text-mountain-900 text-[14px]">
                   <span>Net Total:</span>
-                  <span>NPR {Math.round(purchase.netAmount).toLocaleString()}</span>
+                  <span>
+                    NPR {Math.round(purchase.netAmount).toLocaleString()}
+                  </span>
                 </div>
                 {totalReturnedAmount > 0 && (
                   <div className="flex justify-between mt-1">
@@ -1899,12 +1963,16 @@ export default function PurchaseDetailPage() {
             maxWidth: receiptFormat === "Thermal" ? "80mm" : "100%",
             margin: "0 auto",
             padding: receiptFormat === "Thermal" ? "1mm" : "0",
-            boxSizing: "border-box"
+            boxSizing: "border-box",
           }}
         >
           {/* Header Area: Using Assigned Branding for A4, Fallback for Thermal */}
           {receiptFormat === "A4" && layoutConfig ? (
-            <div dangerouslySetInnerHTML={{ __html: getPrintHeaderHTML(layoutConfig, clinic) }} />
+            <div
+              dangerouslySetInnerHTML={{
+                __html: getPrintHeaderHTML(layoutConfig, clinic),
+              }}
+            />
           ) : (
             <div
               style={{
@@ -1955,11 +2023,19 @@ export default function PurchaseDetailPage() {
               Medicine &amp; Items Purchase Record
             </p>
             <div style={{ fontSize: 9, marginTop: 2 }}>
-              <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: "10px",
+                }}
+              >
                 <span>No: {purchase.purchaseNo}</span>
                 <span>Date: {purchase.purchaseDate.toLocaleDateString()}</span>
                 {purchase.patientName && (
-                  <span style={{ fontWeight: "bold" }}>Patient: {purchase.patientName}</span>
+                  <span style={{ fontWeight: "bold" }}>
+                    Patient: {purchase.patientName}
+                  </span>
                 )}
               </div>
             </div>
@@ -1976,81 +2052,341 @@ export default function PurchaseDetailPage() {
           >
             <thead>
               <tr style={{ backgroundColor: "#f9f9f9" }}>
-                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center", width: "30px" }}>S.N.</th>
-                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "left" }}>Medicine</th>
-                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center", width: "40px" }}>Qty</th>
-                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right", width: "70px" }}>Price</th>
-                <th style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right", width: "80px" }}>Amount</th>
+                <th
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "center",
+                    width: "30px",
+                  }}
+                >
+                  S.N.
+                </th>
+                <th
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "left",
+                  }}
+                >
+                  Medicine
+                </th>
+                <th
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "center",
+                    width: "40px",
+                  }}
+                >
+                  Qty
+                </th>
+                <th
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                    width: "70px",
+                  }}
+                >
+                  Price
+                </th>
+                <th
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                    width: "80px",
+                  }}
+                >
+                  Amount
+                </th>
               </tr>
             </thead>
             <tbody>
               {getDisplayItems(purchase.items).map((item, idx) => {
                 const price = item.salePrice;
-                const formattedPrice = price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                const formattedPrice = price.toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                });
+
                 return (
                   <tr key={idx}>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{idx + 1}</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px" }}>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {idx + 1}
+                    </td>
+                    <td
+                      style={{ border: "1px solid #000", padding: "1px 3px" }}
+                    >
                       <strong>{item.medicineName}</strong>
                       {(item.batchNumber || item.expiryDate) && (
-                        <div style={{ fontSize: "8.5px", color: "#666", marginTop: "1px" }}>
-                          {item.expiryDate && <span>Exp: {item.expiryDate}</span>}
-                          {item.batchNumber && <span>{item.expiryDate ? " | " : ""}Batch: {item.batchNumber}</span>}
+                        <div
+                          style={{
+                            fontSize: "8.5px",
+                            color: "#666",
+                            marginTop: "1px",
+                          }}
+                        >
+                          {item.expiryDate && (
+                            <span>Exp: {item.expiryDate}</span>
+                          )}
+                          {item.batchNumber && (
+                            <span>
+                              {item.expiryDate ? " | " : ""}Batch:{" "}
+                              {item.batchNumber}
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{item.quantity}</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {formattedPrice}</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {item.amount.toLocaleString()}</td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {item.quantity}
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "right",
+                      }}
+                    >
+                      NPR {formattedPrice}
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "right",
+                      }}
+                    >
+                      NPR {item.amount.toLocaleString()}
+                    </td>
                   </tr>
                 );
               })}
 
               {/* Summary Rows */}
               <tr>
-                <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Subtotal</td>
-                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {Math.round(purchase.total).toLocaleString()}</td>
+                <td
+                  colSpan={4}
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                  }}
+                >
+                  Subtotal
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                  }}
+                >
+                  NPR {Math.round(purchase.total).toLocaleString()}
+                </td>
               </tr>
               <tr>
-                <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Discount</td>
-                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>- NPR {Math.round(purchase.discount).toLocaleString()}</td>
+                <td
+                  colSpan={4}
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                  }}
+                >
+                  Discount
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                  }}
+                >
+                  - NPR {Math.round(purchase.discount).toLocaleString()}
+                </td>
               </tr>
               {purchase.taxAmount > 0 && (
                 <tr>
-                  <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Tax ({purchase.taxPercentage}%)</td>
-                  <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {Math.round(purchase.taxAmount).toLocaleString()}</td>
+                  <td
+                    colSpan={4}
+                    style={{
+                      border: "1px solid #000",
+                      padding: "1px 3px",
+                      textAlign: "right",
+                    }}
+                  >
+                    Tax ({purchase.taxPercentage}%)
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #000",
+                      padding: "1px 3px",
+                      textAlign: "right",
+                    }}
+                  >
+                    NPR {Math.round(purchase.taxAmount).toLocaleString()}
+                  </td>
                 </tr>
               )}
               <tr style={{ fontWeight: "bold", backgroundColor: "#f9f9f9" }}>
-                <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Net Total</td>
-                <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {Math.round(purchase.netAmount).toLocaleString()}</td>
+                <td
+                  colSpan={4}
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                  }}
+                >
+                  Net Total
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000",
+                    padding: "1px 3px",
+                    textAlign: "right",
+                  }}
+                >
+                  NPR {Math.round(purchase.netAmount).toLocaleString()}
+                </td>
               </tr>
 
               {/* Payment Section (Inline Header) */}
               {payments.length > 0 && (
                 <>
                   <tr style={{ backgroundColor: "#eee", fontWeight: "bold" }}>
-                    <td colSpan={5} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center", fontSize: 9 }}>PAYMENT SUMMARY</td>
+                    <td
+                      colSpan={5}
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "center",
+                        fontSize: 9,
+                      }}
+                    >
+                      PAYMENT SUMMARY
+                    </td>
                   </tr>
                   <tr style={{ fontSize: 9, backgroundColor: "#f9f9f9" }}>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }} colSpan={2}>Date</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>Method</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }} colSpan={2}>Amount/Ref</td>
+                    <td
+                      colSpan={2}
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "center",
+                      }}
+                    >
+                      Date
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "center",
+                      }}
+                    >
+                      Method
+                    </td>
+                    <td
+                      colSpan={2}
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "center",
+                      }}
+                    >
+                      Amount/Ref
+                    </td>
                   </tr>
                   {payments.map((p) => (
                     <tr key={p.id} style={{ fontSize: 9 }}>
-                      <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }} colSpan={2}>{p.paymentDate.toLocaleDateString()}</td>
-                      <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "center" }}>{p.paymentMethod.toUpperCase()}</td>
-                      <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }} colSpan={2}>NPR {p.amount.toLocaleString()} {p.reference ? `(${p.reference})` : ""}</td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          border: "1px solid #000",
+                          padding: "1px 3px",
+                          textAlign: "center",
+                        }}
+                      >
+                        {p.paymentDate.toLocaleDateString()}
+                      </td>
+                      <td
+                        style={{
+                          border: "1px solid #000",
+                          padding: "1px 3px",
+                          textAlign: "center",
+                        }}
+                      >
+                        {p.paymentMethod.toUpperCase()}
+                      </td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          border: "1px solid #000",
+                          padding: "1px 3px",
+                          textAlign: "right",
+                        }}
+                      >
+                        NPR {p.amount.toLocaleString()}{" "}
+                        {p.reference ? `(${p.reference})` : ""}
+                      </td>
                     </tr>
                   ))}
                   <tr style={{ fontWeight: "bold" }}>
-                    <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Total Paid</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {paidAmount.toLocaleString()}</td>
+                    <td
+                      colSpan={4}
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "right",
+                      }}
+                    >
+                      Total Paid
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "right",
+                      }}
+                    >
+                      NPR {paidAmount.toLocaleString()}
+                    </td>
                   </tr>
                   <tr style={{ fontWeight: "bold" }}>
-                    <td colSpan={4} style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>Due Amount</td>
-                    <td style={{ border: "1px solid #000", padding: "1px 3px", textAlign: "right" }}>NPR {dueAmount.toLocaleString()}</td>
+                    <td
+                      colSpan={4}
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "right",
+                      }}
+                    >
+                      Due Amount
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "1px 3px",
+                        textAlign: "right",
+                      }}
+                    >
+                      NPR {dueAmount.toLocaleString()}
+                    </td>
                   </tr>
                 </>
               )}
@@ -2059,7 +2395,11 @@ export default function PurchaseDetailPage() {
 
           {/* Footer Area: Using Assigned Branding for A4, Fallback for Thermal */}
           {receiptFormat === "A4" && layoutConfig ? (
-            <div dangerouslySetInnerHTML={{ __html: getPrintFooterHTML(layoutConfig) }} />
+            <div
+              dangerouslySetInnerHTML={{
+                __html: getPrintFooterHTML(layoutConfig),
+              }}
+            />
           ) : (
             <div
               style={{
@@ -2190,7 +2530,5 @@ export default function PurchaseDetailPage() {
         </ModalShell>
       )}
     </>
-
   );
 }
-

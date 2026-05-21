@@ -9,7 +9,10 @@ export const pathologySeeder = {
       console.log("Starting CBC seeding...");
 
       // 1. Create Units if they don't exist
-      const existingUnits = await pathologyService.getUnitsByClinic(clinicId, branchId);
+      const existingUnits = await pathologyService.getUnitsByClinic(
+        clinicId,
+        branchId,
+      );
       const unitMap: Record<string, string> = {};
 
       const unitsToCreate = [
@@ -22,7 +25,8 @@ export const pathologySeeder = {
       ];
 
       for (const unit of unitsToCreate) {
-        const found = existingUnits.find(u => u.name === unit.name);
+        const found = existingUnits.find((u) => u.name === unit.name);
+
         if (found) {
           unitMap[unit.name] = found.id;
         } else {
@@ -33,6 +37,7 @@ export const pathologySeeder = {
             isActive: true,
             createdBy: userId,
           });
+
           unitMap[unit.name] = id;
         }
       }
@@ -202,10 +207,11 @@ export const pathologySeeder = {
       });
 
       console.log("CBC seeding completed successfully!");
+
       return true;
     } catch (error) {
       console.error("Error seeding CBC data:", error);
       throw error;
     }
-  }
+  },
 };

@@ -40,7 +40,9 @@ const SettingsTab: React.FC = () => {
       setLoading(true);
       try {
         await refreshUsage();
-        const appointmentTypesData = await appointmentTypeService.getAppointmentTypes(clinicId);
+        const appointmentTypesData =
+          await appointmentTypeService.getAppointmentTypes(clinicId);
+
         setAppointmentTypes(appointmentTypesData);
       } catch (error) {
         console.error("Error loading settings:", error);
@@ -61,20 +63,22 @@ const SettingsTab: React.FC = () => {
     if (clinicId) {
       const [updatedSettings, logs] = await Promise.all([
         getSMSSettings(clinicId),
-        smsService.getSMSLogs(clinicId, undefined, 500)
+        smsService.getSMSLogs(clinicId, undefined, 500),
       ]);
-      
+
       if (updatedSettings) {
         const today = new Date().toDateString();
-        const todayCount = logs.filter(l => 
-          new Date(l.createdAt).toDateString() === today && l.status === "sent"
+        const todayCount = logs.filter(
+          (l) =>
+            new Date(l.createdAt).toDateString() === today &&
+            l.status === "sent",
         ).length;
-        
+
         setSettings({
           ...updatedSettings,
-          currentDailySMS: todayCount
+          currentDailySMS: todayCount,
         });
-        
+
         // Sync local states
         setEnableReminders(updatedSettings.enableReminders);
         setReminderHours(updatedSettings.reminderHours);
@@ -82,15 +86,20 @@ const SettingsTab: React.FC = () => {
         setSmsAppointmentTypes(
           Array.isArray(updatedSettings.smsAppointmentTypes)
             ? updatedSettings.smsAppointmentTypes
-            : updatedSettings.smsAppointmentType 
-              ? [updatedSettings.smsAppointmentType] 
-              : []
+            : updatedSettings.smsAppointmentType
+              ? [updatedSettings.smsAppointmentType]
+              : [],
         );
         setApiKey(updatedSettings.apiKey || "");
         setApiUrl(updatedSettings.apiUrl || "");
       } else {
-        await createDefaultSMSSettings(clinicId, null, currentUser?.uid || "system");
+        await createDefaultSMSSettings(
+          clinicId,
+          null,
+          currentUser?.uid || "system",
+        );
         const freshSettings = await getSMSSettings(clinicId);
+
         if (freshSettings) {
           setSettings(freshSettings);
           setEnableReminders(freshSettings.enableReminders);
@@ -157,7 +166,9 @@ const SettingsTab: React.FC = () => {
       <div className="flex justify-center items-center py-12 text-[rgb(var(--color-text-muted))]">
         <div className="flex flex-col items-center gap-2">
           <RefreshCwIcon className="animate-spin text-primary" size={24} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Initialising Console...</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest">
+            Initialising Console...
+          </span>
         </div>
       </div>
     );
@@ -167,7 +178,7 @@ const SettingsTab: React.FC = () => {
     <div className="space-y-5">
       <div className="space-y-3">
         <h4 className="text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-2">
-          <RefreshCwIcon size={12} className="text-primary" />
+          <RefreshCwIcon className="text-primary" size={12} />
           SMS Configuration
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -206,7 +217,9 @@ const SettingsTab: React.FC = () => {
             <div className="w-full h-1 rounded-full bg-surface-2 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  ((settings?.currentDailySMS || 0) / maxDailySMS) > 0.9 ? "bg-rose-500" : "bg-primary"
+                  (settings?.currentDailySMS || 0) / maxDailySMS > 0.9
+                    ? "bg-rose-500"
+                    : "bg-primary"
                 }`}
                 style={{
                   width: `${Math.min(((settings?.currentDailySMS || 0) / maxDailySMS) * 100, 100)}%`,
@@ -214,7 +227,8 @@ const SettingsTab: React.FC = () => {
               />
             </div>
             <div className="text-[8px] font-bold text-text-muted uppercase">
-              {maxDailySMS - (settings?.currentDailySMS || 0)} SMS remaining today
+              {maxDailySMS - (settings?.currentDailySMS || 0)} SMS remaining
+              today
             </div>
           </div>
         </div>
@@ -223,51 +237,89 @@ const SettingsTab: React.FC = () => {
           <div className="clarity-card p-3 bg-teal-500/10 border-teal-500/20">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-bold text-teal-500 uppercase tracking-widest">SMS Account Balance</span>
-                <button 
+                <span className="text-[9px] font-bold text-teal-500 uppercase tracking-widest">
+                  SMS Account Balance
+                </span>
+                <button
                   className="p-1 text-teal-500 hover:bg-teal-500/20 rounded transition-colors"
+                  disabled={loading}
                   title="Sync live balance"
                   type="button"
-                  disabled={loading}
                   onClick={async () => {
                     setLoading(true);
                     try {
-                      const balance = await smsService.getSMSBalance(settings.apiKey, settings.apiUrl);
+                      const balance = await smsService.getSMSBalance(
+                        settings.apiKey,
+                        settings.apiUrl,
+                      );
+
                       if (balance !== null) {
-                        await updateSMSSettings(clinicId!, { smsBalance: balance }, currentUser?.uid || "system");
+                        await updateSMSSettings(
+                          clinicId!,
+                          { smsBalance: balance },
+                          currentUser?.uid || "system",
+                        );
                         await refreshUsage();
-                        addToast({ title: "Balance Synced", description: `Your live balance is Rs. ${balance}`, color: "success" });
+                        addToast({
+                          title: "Balance Synced",
+                          description: `Your live balance is Rs. ${balance}`,
+                          color: "success",
+                        });
                       } else {
-                        addToast({ title: "Sync Failed", description: "Could not fetch balance from provider.", color: "danger" });
+                        addToast({
+                          title: "Sync Failed",
+                          description: "Could not fetch balance from provider.",
+                          color: "danger",
+                        });
                       }
                     } finally {
                       setLoading(false);
                     }
                   }}
                 >
-                  <RefreshCwIcon size={10} className={loading ? "animate-spin" : ""} />
+                  <RefreshCwIcon
+                    className={loading ? "animate-spin" : ""}
+                    size={10}
+                  />
                 </button>
               </div>
-              <span className="text-[8px] bg-teal-500/20 text-teal-400 px-1 py-0.5 rounded font-bold uppercase tracking-tighter">Live</span>
+              <span className="text-[8px] bg-teal-500/20 text-teal-400 px-1 py-0.5 rounded font-bold uppercase tracking-tighter">
+                Live
+              </span>
             </div>
-            <div 
+            <div
               className="text-base font-bold text-teal-400 cursor-pointer hover:text-teal-300 transition-colors group flex items-center gap-2"
               title="Click to edit manually"
               onClick={() => {
-                const manual = window.prompt("Enter your current SMS balance (Rs.):", settings.smsBalance.toString());
+                const manual = window.prompt(
+                  "Enter your current SMS balance (Rs.):",
+                  settings.smsBalance.toString(),
+                );
+
                 if (manual !== null) {
                   const val = parseFloat(manual);
+
                   if (!isNaN(val)) {
-                    updateSMSSettings(clinicId!, { smsBalance: val }, currentUser?.uid || "system").then(() => {
+                    updateSMSSettings(
+                      clinicId!,
+                      { smsBalance: val },
+                      currentUser?.uid || "system",
+                    ).then(() => {
                       refreshUsage();
-                      addToast({ title: "Balance Updated", description: `Balance manually set to Rs. ${val}`, color: "success" });
+                      addToast({
+                        title: "Balance Updated",
+                        description: `Balance manually set to Rs. ${val}`,
+                        color: "success",
+                      });
                     });
                   }
                 }
               }}
             >
               Rs. {settings.smsBalance.toLocaleString()}
-              <span className="text-[9px] opacity-0 group-hover:opacity-100 text-teal-500 font-medium tracking-tight">(Click to edit)</span>
+              <span className="text-[9px] opacity-0 group-hover:opacity-100 text-teal-500 font-medium tracking-tight">
+                (Click to edit)
+              </span>
             </div>
             <p className="text-[9px] text-teal-500/80 mt-0.5 font-bold uppercase tracking-tight">
               ~{Math.floor(settings.smsBalance / 1.5)} SMS messages remaining

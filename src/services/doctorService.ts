@@ -115,15 +115,17 @@ export const doctorService = {
     try {
       const cacheKey = clinicId || "standalone";
       const cached = cacheService.getClinicDoctors(cacheKey);
+
       if (cached) return cached as Doctor[];
 
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
       const constraints: any[] = [];
+
       if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
         constraints.push(where("clinicId", "==", clinicId));
       }
       const q = query(doctorsRef, ...constraints);
-        
+
       const querySnapshot = await getDocs(q);
 
       const doctors = querySnapshot.docs
@@ -146,6 +148,7 @@ export const doctorService = {
         .filter((doctor) => !doctor.isDeleted);
 
       cacheService.setClinicDoctors(cacheKey, doctors);
+
       return doctors;
     } catch (error) {
       console.error("Error getting doctors:", error);
@@ -172,10 +175,7 @@ export const doctorService = {
   ): Promise<Doctor | null> {
     try {
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
-      const qy = query(
-        doctorsRef,
-        where("email", "==", email.toLowerCase()),
-      );
+      const qy = query(doctorsRef, where("email", "==", email.toLowerCase()));
       const snap = await getDocs(qy);
 
       if (snap.empty) return null;

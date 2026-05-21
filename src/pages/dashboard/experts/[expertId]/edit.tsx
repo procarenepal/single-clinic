@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Expert } from "@/types/models";
 
-
 export default function EditExpertPage() {
   const { expertId } = useParams<{ expertId: string }>();
   const navigate = useNavigate();
@@ -165,12 +164,16 @@ export default function EditExpertPage() {
         </Select>
         <Input
           label="Default Commission (%)"
-          name="defaultCommission"
-          type="number"
-          step="0.01"
-          min="0"
           max="100"
-          value={expertProfile.defaultCommission !== undefined ? expertProfile.defaultCommission.toString() : ""}
+          min="0"
+          name="defaultCommission"
+          step="0.01"
+          type="number"
+          value={
+            expertProfile.defaultCommission !== undefined
+              ? expertProfile.defaultCommission.toString()
+              : ""
+          }
           variant="bordered"
           onChange={(e: any) =>
             setExpertProfile({

@@ -1503,13 +1503,13 @@ export default function ClinicDetailPage() {
                                     plan.yearlyPrice
                                   ).toLocaleString()}
                                   {plan.discountedYearlyPrice &&
-                                    plan.yearlyPrice ? (
+                                  plan.yearlyPrice ? (
                                     <span className="text-xs text-success ml-2">
                                       {Math.round(
                                         (1 -
                                           plan.discountedYearlyPrice /
-                                          plan.yearlyPrice) *
-                                        100,
+                                            plan.yearlyPrice) *
+                                          100,
                                       )}
                                       % off
                                     </span>
@@ -1691,13 +1691,13 @@ export default function ClinicDetailPage() {
                               <span className={getThemeClasses().textSecondary}>
                                 {user.createdAt
                                   ? new Date(user.createdAt).toLocaleDateString(
-                                    "en-US",
-                                    {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric",
-                                    },
-                                  )
+                                      "en-US",
+                                      {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      },
+                                    )
                                   : "Unknown"}
                               </span>
                             </TableCell>
@@ -2029,7 +2029,8 @@ export default function ClinicDetailPage() {
                         </p>
                         <p className={`text-sm ${getThemeClasses().textMuted}`}>
                           Enable invoice generation for appointments
-                          {!isSystemOwner() && " (Super admin control required)"}
+                          {!isSystemOwner() &&
+                            " (Super admin control required)"}
                         </p>
                         {billingSettings && (
                           <p

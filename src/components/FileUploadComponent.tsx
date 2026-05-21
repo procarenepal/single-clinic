@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@heroui/button";
 import { Card, CardBody } from "@heroui/card";
-import { Spinner } from "@heroui/spinner";
 import { addToast } from "@heroui/toast";
 import {
   IoCloudUploadOutline,
@@ -250,7 +249,9 @@ export const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
               <p className="font-semibold text-[11px] text-default-600 leading-tight">
                 {uploadType === "image" ? "Staff Photo" : "Upload File"}
               </p>
-              <p className="text-[9px] text-default-400 leading-tight">Max {maxSize}MB</p>
+              <p className="text-[9px] text-default-400 leading-tight">
+                Max {maxSize}MB
+              </p>
             </div>
           </div>
           <input

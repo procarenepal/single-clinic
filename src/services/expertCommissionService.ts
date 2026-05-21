@@ -6,7 +6,6 @@ import {
   updateDoc,
   query,
   where,
-  orderBy,
   Timestamp,
   getDoc,
   increment,
@@ -100,8 +99,15 @@ class ExpertCommissionService {
 
       // Sort in-memory to bypass Firestore composite index requirement
       return commissions.sort((a, b) => {
-        const timeA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-        const timeB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+        const timeA =
+          a.createdAt instanceof Date
+            ? a.createdAt.getTime()
+            : new Date(a.createdAt).getTime();
+        const timeB =
+          b.createdAt instanceof Date
+            ? b.createdAt.getTime()
+            : new Date(b.createdAt).getTime();
+
         return timeB - timeA;
       });
     } catch (error) {

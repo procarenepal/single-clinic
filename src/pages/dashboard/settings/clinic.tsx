@@ -21,7 +21,15 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
 import { Divider } from "@/components/ui/divider";
-import { Skeleton, TableSkeleton, CardSkeleton, Spinner, Badge, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@/components/ui";
+import {
+  Skeleton,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+} from "@/components/ui";
 import { Link } from "@/components/ui/link";
 import { Clinic, ClinicType, SubscriptionPlan } from "@/types/models";
 import { clinicService } from "@/services/clinicService";
@@ -515,19 +523,22 @@ export default function ClinicSettingsPage() {
       );
 
       // Update local state immediately so UI reflects changes
-      setClinic((prev) => ({
-        ...(prev || {
-          id: clinicId,
-          subscriptionStatus: "active",
-          subscriptionPlan: "trial",
-          subscriptionStartDate: new Date(),
-          isMultiBranchEnabled: false,
-          maxBranches: 1,
-          createdAt: new Date(),
-        }),
-        ...updateData,
-        updatedAt: new Date(),
-      } as Clinic));
+      setClinic(
+        (prev) =>
+          ({
+            ...(prev || {
+              id: clinicId,
+              subscriptionStatus: "active",
+              subscriptionPlan: "trial",
+              subscriptionStartDate: new Date(),
+              isMultiBranchEnabled: false,
+              maxBranches: 1,
+              createdAt: new Date(),
+            }),
+            ...updateData,
+            updatedAt: new Date(),
+          }) as Clinic,
+      );
 
       setOriginalFormData(formData);
 
@@ -880,10 +891,12 @@ export default function ClinicSettingsPage() {
                       <div className="w-24 h-24 rounded-lg overflow-hidden border-2 border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] flex items-center justify-center shadow-sm">
                         {isUploadingLogo ? (
                           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                             <div className="w-12 h-1 bg-border-base overflow-hidden rounded-full">
-                                <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2" />
-                             </div>
-                             <span className="text-[8px] font-bold text-primary uppercase">Uploading</span>
+                            <div className="w-12 h-1 bg-border-base overflow-hidden rounded-full">
+                              <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2" />
+                            </div>
+                            <span className="text-[8px] font-bold text-primary uppercase">
+                              Uploading
+                            </span>
                           </div>
                         ) : logoPreview ? (
                           <img
@@ -996,7 +1009,9 @@ export default function ClinicSettingsPage() {
                   </p>
                   <div className="flex items-center gap-2">
                     <IoMailOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
-                    <p className="text-[rgb(var(--color-text))]">{clinic.email}</p>
+                    <p className="text-[rgb(var(--color-text))]">
+                      {clinic.email}
+                    </p>
                     <Chip color="success" size="sm" variant="flat">
                       <IoShieldCheckmarkOutline className="w-3 h-3 mr-1" />
                       Verified
@@ -1010,7 +1025,9 @@ export default function ClinicSettingsPage() {
                   </p>
                   <div className="flex items-center gap-2">
                     <IoCallOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
-                    <p className="text-[rgb(var(--color-text))]">{clinic.phone}</p>
+                    <p className="text-[rgb(var(--color-text))]">
+                      {clinic.phone}
+                    </p>
                   </div>
                 </div>
 
@@ -1042,8 +1059,9 @@ export default function ClinicSettingsPage() {
                       Setup Your Clinic
                     </h3>
                     <p className="text-[rgb(var(--color-text-muted))] text-sm mb-6">
-                      You haven't configured your clinic information yet. Add your
-                      clinic name, logo, and contact details to get started.
+                      You haven't configured your clinic information yet. Add
+                      your clinic name, logo, and contact details to get
+                      started.
                     </p>
                     <Button
                       color="primary"
@@ -1091,8 +1109,10 @@ export default function ClinicSettingsPage() {
                           variant="flat"
                         >
                           {clinic.subscriptionStatus
-                            ? clinic.subscriptionStatus.charAt(0).toUpperCase() +
-                            clinic.subscriptionStatus.slice(1)
+                            ? clinic.subscriptionStatus
+                                .charAt(0)
+                                .toUpperCase() +
+                              clinic.subscriptionStatus.slice(1)
                             : "Unknown"}
                         </Chip>
                       </div>
@@ -1132,7 +1152,8 @@ export default function ClinicSettingsPage() {
                           Start Date
                         </p>
                         <p className="text-[rgb(var(--color-text))] text-sm">
-                          {clinic.subscriptionStartDate?.toLocaleDateString() || "N/A"}
+                          {clinic.subscriptionStartDate?.toLocaleDateString() ||
+                            "N/A"}
                         </p>
                       </div>
 
@@ -1218,7 +1239,9 @@ export default function ClinicSettingsPage() {
                   maxLength={VALIDATION_RULES.email.maxLength}
                   name="email"
                   placeholder="clinic@example.com"
-                  startContent={<IoMailOutline className="text-[rgb(var(--color-text-muted))]" />}
+                  startContent={
+                    <IoMailOutline className="text-[rgb(var(--color-text-muted))]" />
+                  }
                   type="email"
                   value={formData.email}
                   variant="bordered"
@@ -1243,7 +1266,9 @@ export default function ClinicSettingsPage() {
                   }
                   name="phone"
                   placeholder="9XXXXXXXX or +9779XXXXXXXX"
-                  startContent={<IoCallOutline className="text-[rgb(var(--color-text-muted))]" />}
+                  startContent={
+                    <IoCallOutline className="text-[rgb(var(--color-text-muted))]" />
+                  }
                   type="tel"
                   value={formData.phone}
                   variant="bordered"
@@ -1308,7 +1333,9 @@ export default function ClinicSettingsPage() {
                   <Input
                     isRequired
                     errorMessage={
-                      touchedFields.has("zipCode") ? validationErrors.zipCode : ""
+                      touchedFields.has("zipCode")
+                        ? validationErrors.zipCode
+                        : ""
                     }
                     isInvalid={
                       touchedFields.has("zipCode") && !!validationErrors.zipCode
@@ -1392,7 +1419,6 @@ export default function ClinicSettingsPage() {
                   {VALIDATION_RULES.description.maxLength} characters
                 </p>
               </div>
-
             </div>
           </ModalBody>
           <ModalFooter>

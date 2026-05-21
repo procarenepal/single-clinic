@@ -8,7 +8,6 @@ import {
   updateDoc,
   query,
   where,
-  orderBy,
   Timestamp,
   increment,
 } from "firebase/firestore";
@@ -436,10 +435,7 @@ export const pathologyBillingService = {
       }
 
       const billingRef = collection(db, PATHOLOGY_BILLING_COLLECTION);
-      let q = query(
-        billingRef,
-        where("clinicId", "==", clinicId),
-      );
+      let q = query(billingRef, where("clinicId", "==", clinicId));
 
       if (branchId) {
         q = query(
@@ -470,6 +466,7 @@ export const pathologyBillingService = {
       return billings.sort((a, b) => {
         const dateA = a.createdAt?.getTime() || 0;
         const dateB = b.createdAt?.getTime() || 0;
+
         return dateB - dateA;
       });
     } catch (error) {
@@ -570,6 +567,7 @@ export const pathologyBillingService = {
       };
 
       const paymentHistory = billing.paymentHistory || [];
+
       paymentHistory.push(paymentEvent);
 
       // Prepare update data, only including non-empty optional fields

@@ -4,7 +4,6 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  deleteDoc,
   query,
   where,
   addDoc,
@@ -372,10 +371,7 @@ export const rbacService = {
     try {
       const rolesRef = collection(db, ROLES_COLLECTION);
       // Remove orderBy("name") to avoid needing a Firestore composite index
-      let q = query(
-        rolesRef,
-        where("clinicId", "==", clinicId)
-      );
+      let q = query(rolesRef, where("clinicId", "==", clinicId));
       const querySnapshot = await getDocs(q);
 
       let roles = querySnapshot.docs.map(
@@ -589,7 +585,25 @@ export const rbacService = {
       const clinicId = roleData.clinicId;
       const branchId = roleData.branchId;
 
-      await deleteDoc(roleRef);
+      // Fetch all orphaned assignments for this role BEFORE deleting
+      const assignmentsRef = collection(db, USER_ROLE_ASSIGNMENTS_COLLECTION);
+      const orphanedQuery = query(assignmentsRef, where("roleId", "==", id));
+      const orphanedSnapshot = await getDocs(orphanedQuery);
+
+      // Atomically delete the role document and all its assignments in one batch
+      const deleteBatch = writeBatch(db);
+
+      deleteBatch.delete(roleRef);
+      orphanedSnapshot.docs.forEach((assignmentDoc) => {
+        deleteBatch.delete(assignmentDoc.ref);
+      });
+      await deleteBatch.commit();
+
+      console.log("Role and orphaned assignments deleted atomically:", {
+        roleId: id,
+        roleName: roleData.name,
+        assignmentsDeleted: orphanedSnapshot.size,
+      });
 
       // Log role deletion event
       try {
@@ -606,6 +620,8 @@ export const rbacService = {
             isDefault: roleData.isDefault,
             isBranchSpecific: roleData.isBranchSpecific,
             linkedToDoctor: roleData.linkedToDoctor,
+            linkedToExpert: roleData.linkedToExpert,
+            assignmentsDeleted: orphanedSnapshot.size,
           },
           "success",
           undefined,
@@ -617,10 +633,6 @@ export const rbacService = {
       } catch (logError) {
         console.error("Failed to log role deletion event:", logError);
       }
-
-      // Note: User role assignments are not automatically deleted
-      // to avoid query permission issues. Orphaned assignments
-      // should be cleaned up separately if needed.
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
@@ -681,7 +693,9 @@ export const rbacService = {
       if (clinicId === "default") {
         const { pageService } = await import("./pageService");
         const pages = await pageService.getAllPages();
+
         cacheService.setClinicPages(clinicId, pages);
+
         return pages;
       }
 
@@ -691,6 +705,7 @@ export const rbacService = {
 
       if (!clinicSnap.exists()) {
         console.warn(`Clinic not found: ${clinicId}, returning empty pages.`);
+
         return [];
       }
 
@@ -1478,6 +1493,7 @@ export const rbacService = {
       for (const roleData of systemRoles) {
         // Use the ID as the document ID
         const docRef = doc(rolesRef, roleData.id);
+
         batch.set(docRef, {
           ...roleData,
           createdAt: serverTimestamp(),

@@ -61,10 +61,18 @@ class ReferralCommissionService {
         branchId: billing.branchId,
         billingId: billing.id,
         invoiceNumber: billing.invoiceNumber,
-        invoiceDate: billing.invoiceDate instanceof Date ? billing.invoiceDate : (billing.invoiceDate?.toDate ? billing.invoiceDate.toDate() : new Date(billing.invoiceDate)),
+        invoiceDate:
+          billing.invoiceDate instanceof Date
+            ? billing.invoiceDate
+            : billing.invoiceDate?.toDate
+              ? billing.invoiceDate.toDate()
+              : new Date(billing.invoiceDate),
         patientId: billing.patientId || "",
         patientName: billing.patientName,
-        serviceNames: billing.items?.map((item: any) => item.testName || item.appointmentTypeName) || [],
+        serviceNames:
+          billing.items?.map(
+            (item: any) => item.testName || item.appointmentTypeName,
+          ) || [],
         totalInvoiceAmount: billing.totalAmount,
         commissionPercentage: partner.defaultCommission || 0,
         commissionAmount: commissionAmount,
@@ -293,7 +301,7 @@ class ReferralCommissionService {
         updatedAt: Timestamp.fromDate(new Date()),
         status:
           (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
+          currentCommission.commissionAmount
             ? "paid"
             : "pending",
       };

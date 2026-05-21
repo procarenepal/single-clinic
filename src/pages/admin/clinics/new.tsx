@@ -327,11 +327,11 @@ export default function NewClinicPage() {
       // Create and assign appropriate admin role to the user
       const adminRoleId = pendingClinicData.isMultiBranchEnabled
         ? await rbacService.createDefaultSystemOwnerRole(
-          pendingClinicData.clinicId,
-        )
+            pendingClinicData.clinicId,
+          )
         : await rbacService.createDefaultClinicAdminRole(
-          pendingClinicData.clinicId,
-        );
+            pendingClinicData.clinicId,
+          );
 
       await rbacService.assignRolesToUser(
         adminId,
@@ -653,14 +653,15 @@ export default function NewClinicPage() {
                         const price =
                           formData.subscriptionType === "monthly"
                             ? selectedPlan.discountedMonthlyPrice ||
-                            selectedPlan.monthlyPrice
+                              selectedPlan.monthlyPrice
                             : selectedPlan.discountedYearlyPrice ||
-                            selectedPlan.yearlyPrice;
+                              selectedPlan.yearlyPrice;
 
-                        return `Price: NPR ${price.toLocaleString()} ${formData.subscriptionType === "monthly"
+                        return `Price: NPR ${price.toLocaleString()} ${
+                          formData.subscriptionType === "monthly"
                             ? "/ month"
                             : "/ year"
-                          }`;
+                        }`;
                       })()}
                     </p>
                   </div>
@@ -720,11 +721,11 @@ export default function NewClinicPage() {
                     {new Date().toLocaleDateString()} —{" "}
                     {formData.subscriptionType === "monthly"
                       ? new Date(
-                        new Date().setMonth(new Date().getMonth() + 1),
-                      ).toLocaleDateString()
+                          new Date().setMonth(new Date().getMonth() + 1),
+                        ).toLocaleDateString()
                       : new Date(
-                        new Date().setFullYear(new Date().getFullYear() + 1),
-                      ).toLocaleDateString()}
+                          new Date().setFullYear(new Date().getFullYear() + 1),
+                        ).toLocaleDateString()}
                   </p>
                 </div>
               </div>

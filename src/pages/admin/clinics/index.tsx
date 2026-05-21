@@ -173,9 +173,7 @@ export default function ClinicListPage() {
         }
       }, 3000);
 
-      await clinicService.deleteClinic(
-        selectedClinic.id,
-      );
+      await clinicService.deleteClinic(selectedClinic.id);
 
       clearInterval(progressInterval);
       updateProgress("Deletion completed successfully!");
@@ -332,12 +330,12 @@ export default function ClinicListPage() {
                     <p className="text-3xl font-bold text-foreground">
                       {filteredClinics.length > 0
                         ? Math.round(
-                          (filteredClinics.filter(
-                            (c) => c.subscriptionStatus === "active",
-                          ).length /
-                            filteredClinics.length) *
-                          100,
-                        )
+                            (filteredClinics.filter(
+                              (c) => c.subscriptionStatus === "active",
+                            ).length /
+                              filteredClinics.length) *
+                              100,
+                          )
                         : 0}
                       %
                     </p>
@@ -358,12 +356,12 @@ export default function ClinicListPage() {
                 value={
                   filteredClinics.length > 0
                     ? Math.round(
-                      (filteredClinics.filter(
-                        (c) => c.subscriptionStatus === "active",
-                      ).length /
-                        filteredClinics.length) *
-                      100,
-                    )
+                        (filteredClinics.filter(
+                          (c) => c.subscriptionStatus === "active",
+                        ).length /
+                          filteredClinics.length) *
+                          100,
+                      )
                     : 0
                 }
               />
@@ -527,23 +525,23 @@ export default function ClinicListPage() {
                         {clinic.createdAt instanceof Date
                           ? clinic.createdAt.toLocaleDateString()
                           : new Date(
-                            String(clinic.createdAt),
-                          ).toLocaleDateString()}
+                              String(clinic.createdAt),
+                            ).toLocaleDateString()}
                       </div>
                       <div className="text-xs text-foreground-500">
                         {clinic.createdAt instanceof Date
                           ? clinic.createdAt.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            })
                           : new Date(
-                            String(clinic.createdAt),
-                          ).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: true,
-                          })}
+                              String(clinic.createdAt),
+                            ).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            })}
                       </div>
                     </td>
                     <td className="py-4 px-4">
@@ -673,7 +671,7 @@ export default function ClinicListPage() {
                             selectedClinic.subscriptionStatus === "active"
                               ? "success"
                               : selectedClinic.subscriptionStatus ===
-                                "suspended"
+                                  "suspended"
                                 ? "warning"
                                 : "danger"
                           }
@@ -690,22 +688,22 @@ export default function ClinicListPage() {
                           {selectedClinic.createdAt instanceof Date
                             ? selectedClinic.createdAt.toLocaleDateString()
                             : new Date(
-                              String(selectedClinic.createdAt),
-                            ).toLocaleDateString()}{" "}
+                                String(selectedClinic.createdAt),
+                              ).toLocaleDateString()}{" "}
                           at{" "}
                           {selectedClinic.createdAt instanceof Date
                             ? selectedClinic.createdAt.toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            })
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
                             : new Date(
-                              String(selectedClinic.createdAt),
-                            ).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            })}
+                                String(selectedClinic.createdAt),
+                              ).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })}
                         </span>
                       </div>
                     </div>

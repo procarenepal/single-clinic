@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 
-
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function NewExpertPage() {
   const navigate = useNavigate();
@@ -79,8 +78,8 @@ export default function NewExpertPage() {
       .then((multi) =>
         multi
           ? branchService
-            .getMainBranch(clinicId)
-            .then((b) => b && setDefaultBranchId(b.id))
+              .getMainBranch(clinicId)
+              .then((b) => b && setDefaultBranchId(b.id))
           : setDefaultBranchId(clinicId),
       )
       .catch(() => setDefaultBranchId(clinicId));
@@ -164,7 +163,9 @@ export default function NewExpertPage() {
           <IoArrowBackOutline className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className={`${title({ size: "lg" })} text-primary`}>Add New Expert</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
+            Add New Expert
+          </h1>
           <p className="text-[14px] text-text-muted mt-1">
             Enter expert information below
           </p>

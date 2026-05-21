@@ -164,33 +164,31 @@ function SearchSelect({
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-xl">
-            {filtered.length === 0 ? (
-              emptyContent || (
-                <p className="px-3 py-2 text-[12px] text-text-muted/60">
-                  No results
-                </p>
-              )
-            ) : (
-              filtered.map((i) => (
-                <button
-                  key={i.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-primary/10 ${i.id === value ? "bg-primary/10" : ""}`}
-                  type="button"
-                  onClick={() => {
-                    onChange(i.id);
-                    setQ("");
-                    setOpen(false);
-                  }}
-                >
-                  <p className="text-[12.5px] text-text-main">{i.primary}</p>
-                  {i.secondary && (
-                    <p className="text-[11px] text-text-muted">
-                      {i.secondary}
-                    </p>
-                  )}
-                </button>
-              ))
-            )}
+            {filtered.length === 0
+              ? emptyContent || (
+                  <p className="px-3 py-2 text-[12px] text-text-muted/60">
+                    No results
+                  </p>
+                )
+              : filtered.map((i) => (
+                  <button
+                    key={i.id}
+                    className={`w-full text-left px-3 py-2 hover:bg-primary/10 ${i.id === value ? "bg-primary/10" : ""}`}
+                    type="button"
+                    onClick={() => {
+                      onChange(i.id);
+                      setQ("");
+                      setOpen(false);
+                    }}
+                  >
+                    <p className="text-[12.5px] text-text-main">{i.primary}</p>
+                    {i.secondary && (
+                      <p className="text-[11px] text-text-muted">
+                        {i.secondary}
+                      </p>
+                    )}
+                  </button>
+                ))}
           </div>
         </>
       )}
@@ -223,9 +221,7 @@ function FlatInput({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[12px] font-medium text-text-main">
-        {label}
-      </label>
+      <label className="text-[12px] font-medium text-text-main">{label}</label>
       <div className="flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/10">
         {prefixText && (
           <span className="pl-2.5 text-[12px] text-text-muted shrink-0">
@@ -410,7 +406,7 @@ export default function PatientBillingTab({
       await appointmentTypeService.seedDefaultAppointmentTypes(
         clinicId,
         userData?.branchId || undefined,
-        currentUser.uid
+        currentUser.uid,
       );
       addToast({
         title: "Services Seeded",
@@ -651,8 +647,8 @@ export default function PatientBillingTab({
         referralPartnerId: referralPartner?.id || "",
         referralCommissionAmount: referralPartner
           ? (calculations.totalAmount *
-            (referralPartner.defaultCommission || 0)) /
-          100
+              (referralPartner.defaultCommission || 0)) /
+            100
           : 0,
       };
       const billingId =
@@ -1033,7 +1029,9 @@ export default function PatientBillingTab({
               </Button>
               <Button
                 color="primary"
-                disabled={formData.items.length === 0 || !formData.items[0].doctorId}
+                disabled={
+                  formData.items.length === 0 || !formData.items[0].doctorId
+                }
                 isLoading={submitting}
                 size="sm"
                 onClick={handleInvoiceSubmit}
@@ -1106,25 +1104,27 @@ export default function PatientBillingTab({
                         {/* Row 1: Type, Price, Doctor */}
                         <div className="sm:col-span-4">
                           <SearchSelect
-                            items={appointmentTypes.map((t) => ({
-                              id: t.id,
-                              primary: t.name,
-                              secondary: `NPR ${t.price.toLocaleString()}`,
-                            }))}
                             emptyContent={
                               <div className="p-4 text-center">
-                                <p className="text-[12px] text-text-muted mb-2">No services found.</p>
-                                <Button 
-                                  color="primary" 
-                                  size="sm" 
+                                <p className="text-[12px] text-text-muted mb-2">
+                                  No services found.
+                                </p>
+                                <Button
                                   className="w-full h-8 text-[11px]"
-                                  onClick={handleSeedServices}
+                                  color="primary"
                                   isLoading={loading}
+                                  size="sm"
+                                  onClick={handleSeedServices}
                                 >
                                   Seed Default Services
                                 </Button>
                               </div>
                             }
+                            items={appointmentTypes.map((t) => ({
+                              id: t.id,
+                              primary: t.name,
+                              secondary: `NPR ${t.price.toLocaleString()}`,
+                            }))}
                             label="Appointment Type"
                             placeholder="Search or seed services..."
                             value={item.appointmentTypeId}
@@ -1184,7 +1184,9 @@ export default function PatientBillingTab({
                             type="number"
                             value={item.commission.toString()}
                             onChange={(v) =>
-                              updateItem(idx, { commission: parseFloat(v) || 0 })
+                              updateItem(idx, {
+                                commission: parseFloat(v) || 0,
+                              })
                             }
                           />
                         </div>
@@ -1272,27 +1274,27 @@ export default function PatientBillingTab({
                         ["Subtotal", fmtCur(calculations.subtotal)],
                         ...(calculations.itemDiscountAmount > 0
                           ? [
-                            [
-                              "Service Discounts",
-                              `– ${fmtCur(calculations.itemDiscountAmount)}`,
-                            ],
-                          ]
+                              [
+                                "Service Discounts",
+                                `– ${fmtCur(calculations.itemDiscountAmount)}`,
+                              ],
+                            ]
                           : []),
                         ...(calculations.mainDiscountAmount > 0
                           ? [
-                            [
-                              "Main Discount",
-                              `– ${fmtCur(calculations.mainDiscountAmount)}`,
-                            ],
-                          ]
+                              [
+                                "Main Discount",
+                                `– ${fmtCur(calculations.mainDiscountAmount)}`,
+                              ],
+                            ]
                           : []),
                         ...(billingSettings?.enableTax
                           ? [
-                            [
-                              `${billingSettings.taxLabel} (${billingSettings.defaultTaxPercentage}%)`,
-                              fmtCur(calculations.taxAmount),
-                            ],
-                          ]
+                              [
+                                `${billingSettings.taxLabel} (${billingSettings.defaultTaxPercentage}%)`,
+                                fmtCur(calculations.taxAmount),
+                              ],
+                            ]
                           : []),
                       ].map(([l, v]) => (
                         <div
@@ -1401,16 +1403,16 @@ export default function PatientBillingTab({
             {/* Conditional reference */}
             {availableMethods.find((m) => m.key === paymentForm.method)
               ?.requiresReference && (
-                <FlatInput
-                  hint="Required for this payment method"
-                  label="Transaction Reference *"
-                  placeholder="Transaction ID / cheque number"
-                  value={paymentForm.reference}
-                  onChange={(v) =>
-                    setPaymentForm((p) => ({ ...p, reference: v }))
-                  }
-                />
-              )}
+              <FlatInput
+                hint="Required for this payment method"
+                label="Transaction Reference *"
+                placeholder="Transaction ID / cheque number"
+                value={paymentForm.reference}
+                onChange={(v) =>
+                  setPaymentForm((p) => ({ ...p, reference: v }))
+                }
+              />
+            )}
 
             <FlatInput
               label="Notes"
@@ -1457,9 +1459,7 @@ export default function PatientBillingTab({
                   </span>
                 </div>
                 <div className="flex justify-between text-[11.5px]">
-                  <span className="text-text-muted">
-                    Status after payment
-                  </span>
+                  <span className="text-text-muted">Status after payment</span>
                   <span
                     className={`font-semibold ${newBalance <= 0 ? "text-health-600" : "text-saffron-600"}`}
                   >

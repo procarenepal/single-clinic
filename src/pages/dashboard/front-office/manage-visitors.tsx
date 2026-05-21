@@ -265,7 +265,9 @@ export default function ManageVisitorsPage() {
         {/* Page header */}
         <div className="clarity-page-header">
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Manage Visitors</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Manage Visitors
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               Track and manage clinic visitors
             </p>

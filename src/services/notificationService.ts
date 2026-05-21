@@ -8,6 +8,7 @@ import {
   doc,
   Timestamp,
 } from "firebase/firestore";
+
 import { db } from "@/config/firebase";
 
 export interface ClinicNotification {
@@ -28,7 +29,7 @@ export class NotificationService {
 
   static async sendNotification(
     clinicId: string,
-    notification: Omit<ClinicNotification, "clinicId" | "read" | "createdAt">
+    notification: Omit<ClinicNotification, "clinicId" | "read" | "createdAt">,
   ): Promise<string> {
     try {
       const docRef = await addDoc(collection(db, this.COLLECTION_NAME), {
@@ -37,6 +38,7 @@ export class NotificationService {
         read: false,
         createdAt: Timestamp.now(),
       });
+
       return docRef.id;
     } catch (error) {
       console.error("Error sending notification:", error);
@@ -47,6 +49,7 @@ export class NotificationService {
   static async markAsRead(notificationId: string): Promise<void> {
     try {
       const docRef = doc(db, this.COLLECTION_NAME, notificationId);
+
       await updateDoc(docRef, { read: true });
     } catch (error) {
       console.error("Error marking notification as read:", error);
@@ -54,26 +57,48 @@ export class NotificationService {
     }
   }
 
-  static async markAllAsRead(clinicId: string, userIdOrRole: { userId?: string; role?: string; doctorId?: string; expertId?: string }): Promise<void> {
+  static async markAllAsRead(
+    clinicId: string,
+    userIdOrRole: {
+      userId?: string;
+      role?: string;
+      doctorId?: string;
+      expertId?: string;
+    },
+  ): Promise<void> {
     try {
       const q = query(
         collection(db, this.COLLECTION_NAME),
         where("clinicId", "==", clinicId),
-        where("read", "==", false)
+        where("read", "==", false),
       );
 
       const snapshot = await getDocs(q);
       const batchPromises = snapshot.docs
         .filter((docSnap) => {
           const data = docSnap.data();
-          if (userIdOrRole.userId && data.targetUserId === userIdOrRole.userId) return true;
-          if (userIdOrRole.doctorId && data.targetUserId === userIdOrRole.doctorId) return true;
-          if (userIdOrRole.expertId && data.targetUserId === userIdOrRole.expertId) return true;
-          if (userIdOrRole.role && data.targetRole === userIdOrRole.role) return true;
+
+          if (userIdOrRole.userId && data.targetUserId === userIdOrRole.userId)
+            return true;
+          if (
+            userIdOrRole.doctorId &&
+            data.targetUserId === userIdOrRole.doctorId
+          )
+            return true;
+          if (
+            userIdOrRole.expertId &&
+            data.targetUserId === userIdOrRole.expertId
+          )
+            return true;
+          if (userIdOrRole.role && data.targetRole === userIdOrRole.role)
+            return true;
+
           return !data.targetUserId && !data.targetRole; // general notification
         })
         .map((docSnap) => {
-          return updateDoc(doc(db, this.COLLECTION_NAME, docSnap.id), { read: true });
+          return updateDoc(doc(db, this.COLLECTION_NAME, docSnap.id), {
+            read: true,
+          });
         });
 
       await Promise.all(batchPromises);

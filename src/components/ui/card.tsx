@@ -12,7 +12,18 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, isPressable, isHoverable, isBlurred, onPress, onClick, ...rest }, ref) => {
+  (
+    {
+      className,
+      isPressable,
+      isHoverable,
+      isBlurred,
+      onPress,
+      onClick,
+      ...rest
+    },
+    ref,
+  ) => {
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
       onClick?.(e);
       if (!e.defaultPrevented) onPress?.();
@@ -22,28 +33,27 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
       <motion.div
         ref={ref as any}
         layout
-        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        whileHover={isHoverable || isPressable ? { y: -2 } : {}}
         className={clsx(
           "bg-surface border border-border-base rounded-xl overflow-hidden transition-all duration-300",
           isBlurred && "glass-morphism shadow-xl shadow-black/5",
           isPressable && "cursor-pointer select-none",
-          (isPressable || isHoverable) &&
-          "hover-glow hover:border-primary/30",
+          (isPressable || isHoverable) && "hover-glow hover:border-primary/30",
           className,
         )}
+        initial={{ opacity: 0, y: 10 }}
         role={isPressable ? "button" : undefined}
         tabIndex={isPressable ? 0 : undefined}
+        whileHover={isHoverable || isPressable ? { y: -2 } : {}}
         onClick={handleClick}
         onKeyDown={
           isPressable
             ? (e) => {
-              if (e.key === "Enter") onPress?.();
-            }
+                if (e.key === "Enter") onPress?.();
+              }
             : undefined
         }
-        {...rest as any}
+        {...(rest as any)}
       />
     );
   },

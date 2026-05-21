@@ -108,8 +108,6 @@ export function ProtectedRoute({
     );
   }
 
-
-
   // If background checks finished and denied
   if (permissionAllowed === false) {
     if (subscriptionValid === false) {

@@ -7,14 +7,12 @@ import {
   IoTrashOutline,
   IoReceiptOutline,
   IoCalendarOutline,
-  IoCashOutline,
   IoCheckmarkCircleOutline,
   IoCloseCircleOutline,
   IoWarningOutline,
   IoTimeOutline,
   IoCloseOutline,
   IoPrintOutline,
-  IoDocumentTextOutline,
   IoCopyOutline,
 } from "react-icons/io5";
 
@@ -240,7 +238,9 @@ export default function PurchaseRecordsTab({
 
     setSaving(true);
     try {
-      const supplier = suppliers.map((s) => s).find((s) => s.id === formData.supplierId);
+      const supplier = suppliers
+        .map((s) => s)
+        .find((s) => s.id === formData.supplierId);
 
       if (!supplier) {
         throw new Error("Selected supplier not found");
@@ -276,14 +276,18 @@ export default function PurchaseRecordsTab({
       };
 
       // Smart-Merge Logic: Check if a record with this bill number and supplier already exists
-      const existingMatch = !editingRecord ? purchaseRecords.find(
-        (r) =>
-          r.billNumber.trim().toLowerCase() === formData.billNumber.trim().toLowerCase() &&
-          r.supplierId === formData.supplierId
-      ) : null;
+      const existingMatch = !editingRecord
+        ? purchaseRecords.find(
+            (r) =>
+              r.billNumber.trim().toLowerCase() ===
+                formData.billNumber.trim().toLowerCase() &&
+              r.supplierId === formData.supplierId,
+          )
+        : null;
 
       if (editingRecord || existingMatch) {
         const targetId = editingRecord?.id || existingMatch?.id;
+
         if (!targetId) throw new Error("Target record ID not found");
 
         await medicineService.updateSupplierPurchaseRecord(
@@ -292,7 +296,7 @@ export default function PurchaseRecordsTab({
         );
         addToast({
           title: "Success",
-          description: existingMatch 
+          description: existingMatch
             ? `Existing bill ${formData.billNumber} updated successfully`
             : "Purchase record updated successfully",
         });
@@ -363,17 +367,27 @@ export default function PurchaseRecordsTab({
 
   const handlePrint = async (record: SupplierPurchaseRecord) => {
     try {
-      const clinic = clinicId ? await clinicService.getClinicById(clinicId) : null;
-      const printConfig = clinicId ? await clinicService.getPrintLayoutConfig(clinicId) : null;
-      
+      const clinic = clinicId
+        ? await clinicService.getClinicById(clinicId)
+        : null;
+      const printConfig = clinicId
+        ? await clinicService.getPrintLayoutConfig(clinicId)
+        : null;
+
       const printWindow = window.open("", "_blank");
+
       if (!printWindow) return;
 
       const brandingCSS = printConfig ? getPrintBrandingCSS(printConfig) : "";
-      const headerHTML = printConfig ? getPrintHeaderHTML(printConfig, clinic) : "";
+      const headerHTML = printConfig
+        ? getPrintHeaderHTML(printConfig, clinic)
+        : "";
       const footerHTML = printConfig ? getPrintFooterHTML(printConfig) : "";
 
-      const itemsHtml = record.items?.map((item, idx) => `
+      const itemsHtml =
+        record.items
+          ?.map(
+            (item, idx) => `
         <tr style="border-bottom: 1px solid #f1f5f9;">
           <td style="padding: 12px 10px; font-size: 12px;">${idx + 1}</td>
           <td style="padding: 12px 10px; font-size: 12px;">
@@ -384,7 +398,10 @@ export default function PurchaseRecordsTab({
           <td style="padding: 12px 10px; font-size: 12px; text-align: center; color: #475569;">${item.vatPercentage}%</td>
           <td style="padding: 12px 10px; font-size: 12px; text-align: right; font-weight: 500; color: #1e293b;">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
         </tr>
-      `).join("") || `
+      `,
+          )
+          .join("") ||
+        `
         <tr>
           <td colspan="6" style="padding: 30px; text-align: center; color: #94a3b8; font-style: italic;">No item details available for this record.</td>
         </tr>
@@ -416,7 +433,7 @@ export default function PurchaseRecordsTab({
             .summary-container { display: flex; justify-content: flex-end; margin-bottom: 40px; }
             .summary-box { width: 300px; background: #f8fafc; padding: 15px 20px; border-radius: 8px; border: 1px solid #f1f5f9; }
             .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12.5px; color: #475569; }
-            .summary-row.grand-total { border-top: 1.5px solid #e2e8f0; margin-top: 10px; padding-top: 12px; font-weight: 600; font-size: 17px; color: ${printConfig?.primaryColor || '#0d9488'}; }
+            .summary-row.grand-total { border-top: 1.5px solid #e2e8f0; margin-top: 10px; padding-top: 12px; font-weight: 600; font-size: 17px; color: ${printConfig?.primaryColor || "#0d9488"}; }
             
             @media print {
               @page { margin: 0; size: auto; }
@@ -449,8 +466,8 @@ export default function PurchaseRecordsTab({
               </div>
               <div class="info-box">
                 <h3>Payment Lifecycle</h3>
-                <p>Status: <span style="display: inline-block; padding: 1px 8px; border-radius: 3px; background: ${record.paymentStatus === 'paid' ? '#ecfdf5' : '#fef2f2'}; text-transform: uppercase; font-weight: 600; font-size: 10px; color: ${record.paymentStatus === 'paid' ? '#059669' : '#e11d48'}; border: 1px solid ${record.paymentStatus === 'paid' ? '#d1fae5' : '#fee2e2'};">${record.paymentStatus}</span></p>
-                <p>Clearing: <span style="font-weight: 500;">${record.paymentDone ? 'Fully Cleared' : 'Balance Pending'}</span></p>
+                <p>Status: <span style="display: inline-block; padding: 1px 8px; border-radius: 3px; background: ${record.paymentStatus === "paid" ? "#ecfdf5" : "#fef2f2"}; text-transform: uppercase; font-weight: 600; font-size: 10px; color: ${record.paymentStatus === "paid" ? "#059669" : "#e11d48"}; border: 1px solid ${record.paymentStatus === "paid" ? "#d1fae5" : "#fee2e2"};">${record.paymentStatus}</span></p>
+                <p>Clearing: <span style="font-weight: 500;">${record.paymentDone ? "Fully Cleared" : "Balance Pending"}</span></p>
               </div>
             </div>
 
@@ -467,7 +484,7 @@ export default function PurchaseRecordsTab({
                   </tr>
                 </thead>
                 <tbody>
-                  ${itemsHtml.replace(/padding: 12px 10px/g, 'padding: 8px 10px')}
+                  ${itemsHtml.replace(/padding: 12px 10px/g, "padding: 8px 10px")}
                 </tbody>
               </table>
             </div>
@@ -484,7 +501,7 @@ export default function PurchaseRecordsTab({
                 </div>
                 <div class="summary-row">
                   <span>Due Amount</span>
-                  <span style="color: ${record.dueAmount > 0 ? '#e11d48' : '#475569'}; font-weight: 500;">NPR ${record.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="color: ${record.dueAmount > 0 ? "#e11d48" : "#475569"}; font-weight: 500;">NPR ${record.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div class="summary-row grand-total">
                   <span>Invoice Total</span>
@@ -514,7 +531,7 @@ export default function PurchaseRecordsTab({
       addToast({
         title: "Print Error",
         description: "Failed to generate professional print view.",
-        color: "danger"
+        color: "danger",
       });
     }
   };
@@ -730,7 +747,7 @@ export default function PurchaseRecordsTab({
                             addToast({
                               title: "Copied",
                               description: "Bill number copied to clipboard",
-                              color: "success"
+                              color: "success",
                             });
                           }}
                         >
@@ -854,14 +871,18 @@ export default function PurchaseRecordsTab({
                 value={formData.billNumber}
                 onChange={(e) => {
                   const newBillNo = e.target.value;
+
                   setFormData((prev) => {
                     const updated = { ...prev, billNumber: newBillNo };
-                    
+
                     // Global lookup by Bill Number to auto-populate Supplier and financial data
                     if (!editingRecord && newBillNo.trim()) {
                       const match = purchaseRecords.find(
-                        r => r.billNumber.trim().toLowerCase() === newBillNo.trim().toLowerCase()
+                        (r) =>
+                          r.billNumber.trim().toLowerCase() ===
+                          newBillNo.trim().toLowerCase(),
                       );
+
                       if (match) {
                         updated.supplierId = match.supplierId;
                         updated.totalAmount = match.totalAmount.toString();
@@ -870,16 +891,25 @@ export default function PurchaseRecordsTab({
                         updated.paymentDone = match.paymentDone;
                       }
                     }
+
                     return updated;
                   });
                 }}
               />
-              {!editingRecord && formData.billNumber && purchaseRecords.some(r => r.billNumber.trim().toLowerCase() === formData.billNumber.trim().toLowerCase()) && (
-                <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium bg-teal-50 px-2 py-1 rounded border border-teal-100">
-                  <IoCheckmarkCircleOutline className="w-3 h-3" />
-                  <span>Existing bill found. Supplier and data auto-loaded.</span>
-                </div>
-              )}
+              {!editingRecord &&
+                formData.billNumber &&
+                purchaseRecords.some(
+                  (r) =>
+                    r.billNumber.trim().toLowerCase() ===
+                    formData.billNumber.trim().toLowerCase(),
+                ) && (
+                  <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium bg-teal-50 px-2 py-1 rounded border border-teal-100">
+                    <IoCheckmarkCircleOutline className="w-3 h-3" />
+                    <span>
+                      Existing bill found. Supplier and data auto-loaded.
+                    </span>
+                  </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -888,21 +918,29 @@ export default function PurchaseRecordsTab({
                   Supplier <span className="text-red-600">*</span>
                 </label>
                 <select
-                  disabled={saving}
                   required
                   className="clarity-input h-8 w-full text-[13px] px-2"
+                  disabled={saving}
                   value={formData.supplierId}
                   onChange={(e) => {
                     const newSupplierId = e.target.value;
+
                     setFormData((prev) => {
                       const updated = { ...prev, supplierId: newSupplierId };
-                      
+
                       // Check for existing match to auto-populate if bill already entered
-                      if (!editingRecord && prev.billNumber.trim() && newSupplierId) {
+                      if (
+                        !editingRecord &&
+                        prev.billNumber.trim() &&
+                        newSupplierId
+                      ) {
                         const match = purchaseRecords.find(
-                          r => r.billNumber.trim().toLowerCase() === prev.billNumber.trim().toLowerCase() && 
-                          r.supplierId === newSupplierId
+                          (r) =>
+                            r.billNumber.trim().toLowerCase() ===
+                              prev.billNumber.trim().toLowerCase() &&
+                            r.supplierId === newSupplierId,
                         );
+
                         if (match) {
                           updated.totalAmount = match.totalAmount.toString();
                           updated.paidAmount = match.paidAmount.toString();
@@ -910,6 +948,7 @@ export default function PurchaseRecordsTab({
                           updated.paymentDone = match.paymentDone;
                         }
                       }
+
                       return updated;
                     });
                   }}
@@ -960,10 +999,14 @@ export default function PurchaseRecordsTab({
                     value={formData.totalAmount}
                     onChange={(e) => {
                       const totalAmount = e.target.value;
+
                       setFormData((prev) => ({
                         ...prev,
                         totalAmount,
-                        paymentDone: (parseFloat(prev.paidAmount) || 0) >= (parseFloat(totalAmount) || 0) && (parseFloat(totalAmount) || 0) > 0,
+                        paymentDone:
+                          (parseFloat(prev.paidAmount) || 0) >=
+                            (parseFloat(totalAmount) || 0) &&
+                          (parseFloat(totalAmount) || 0) > 0,
                       }));
                     }}
                   />
@@ -987,10 +1030,14 @@ export default function PurchaseRecordsTab({
                     value={formData.paidAmount}
                     onChange={(e) => {
                       const paidAmount = e.target.value;
+
                       setFormData((prev) => ({
                         ...prev,
                         paidAmount,
-                        paymentDone: (parseFloat(paidAmount) || 0) >= (parseFloat(prev.totalAmount) || 0) && (parseFloat(prev.totalAmount) || 0) > 0,
+                        paymentDone:
+                          (parseFloat(paidAmount) || 0) >=
+                            (parseFloat(prev.totalAmount) || 0) &&
+                          (parseFloat(prev.totalAmount) || 0) > 0,
                       }));
                     }}
                   />
@@ -1009,10 +1056,10 @@ export default function PurchaseRecordsTab({
                       className="text-[10px] font-bold text-teal-600 hover:text-teal-700 uppercase tracking-wider bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 transition-all hover:bg-teal-100"
                       type="button"
                       onClick={() => {
-                        setFormData(prev => ({
+                        setFormData((prev) => ({
                           ...prev,
                           paidAmount: prev.totalAmount,
-                          paymentDone: true
+                          paymentDone: true,
                         }));
                       }}
                     >

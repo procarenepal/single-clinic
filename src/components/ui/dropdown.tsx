@@ -36,7 +36,7 @@ interface DropdownCtx {
 
 const Ctx = createContext<DropdownCtx>({
   open: false,
-  setOpen: () => { },
+  setOpen: () => {},
   triggerRef: { current: null },
   menuRef: { current: null },
   placement: "bottom-end",
@@ -166,7 +166,28 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
     let left = 0;
     const gap = 6; // slightly more gap for modern feel
 
-    switch (placement) {
+    // Smart vertical collision detection
+    let actualPlacement = placement;
+
+    if (placement.startsWith("bottom")) {
+      const wouldOverflowBottom =
+        triggerRect.bottom + gap + menuRect.height > window.innerHeight;
+      const hasSpaceTop = triggerRect.top - gap - menuRect.height > 0;
+
+      if (wouldOverflowBottom && hasSpaceTop) {
+        actualPlacement = placement.replace("bottom", "top") as Placement;
+      }
+    } else if (placement.startsWith("top")) {
+      const wouldOverflowTop = triggerRect.top - gap - menuRect.height < 0;
+      const hasSpaceBottom =
+        triggerRect.bottom + gap + menuRect.height < window.innerHeight;
+
+      if (wouldOverflowTop && hasSpaceBottom) {
+        actualPlacement = placement.replace("top", "bottom") as Placement;
+      }
+    }
+
+    switch (actualPlacement) {
       case "bottom-start":
         top = triggerRect.bottom + gap;
         left = triggerRect.left;
@@ -193,7 +214,19 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
         break;
     }
 
-    setCoords({ top, left, width: matchTriggerWidth ? triggerRect.width : undefined });
+    // Horizontal collision bounds
+    if (left + menuRect.width > window.innerWidth - gap) {
+      left = window.innerWidth - gap - menuRect.width;
+    }
+    if (left < gap) {
+      left = gap;
+    }
+
+    setCoords({
+      top,
+      left,
+      width: matchTriggerWidth ? triggerRect.width : undefined,
+    });
   }, [placement, matchTriggerWidth]);
 
   useLayoutEffect(() => {

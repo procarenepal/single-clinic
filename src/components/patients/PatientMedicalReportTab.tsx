@@ -23,6 +23,7 @@ interface PatientMedicalReportTabProps {
   patientId: string;
   clinicId: string;
   isReadOnly?: boolean;
+  compactLayout?: boolean;
 }
 
 // ── Shared field input styles ─────────────────────────────────────────────────
@@ -73,32 +74,24 @@ function YesNoField({
   disabled: boolean;
 }) {
   return (
-    <div className="flex items-center gap-4">
-      <span className="text-[12px] font-medium text-text-main shrink-0">
-        {field.fieldLabel}
-        {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-      </span>
-      <div className="flex gap-3">
-        {["yes", "no"].map((opt) => (
-          <label
-            key={opt}
-            className={`flex items-center gap-1.5 cursor-pointer select-none ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            <input
-              checked={value === opt}
-              className="w-3.5 h-3.5 accent-primary"
-              disabled={disabled}
-              name={field.fieldKey}
-              type="radio"
-              value={opt}
-              onChange={() => onChange(opt)}
-            />
-            <span className="text-[12.5px] text-text-main capitalize">
-              {opt}
-            </span>
-          </label>
-        ))}
-      </div>
+    <div className="flex gap-3">
+      {["yes", "no"].map((opt) => (
+        <label
+          key={opt}
+          className={`flex items-center gap-1.5 cursor-pointer select-none ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+        >
+          <input
+            checked={value === opt}
+            className="w-3.5 h-3.5 accent-primary"
+            disabled={disabled}
+            name={field.fieldKey}
+            type="radio"
+            value={opt}
+            onChange={() => onChange(opt)}
+          />
+          <span className="text-[12.5px] text-text-main capitalize">{opt}</span>
+        </label>
+      ))}
     </div>
   );
 }
@@ -106,7 +99,7 @@ function YesNoField({
 // ── Main component ────────────────────────────────────────────────────────────
 export const PatientMedicalReportTab: React.FC<
   PatientMedicalReportTabProps
-> = ({ patientId, clinicId, isReadOnly = false }) => {
+> = ({ patientId, clinicId, isReadOnly = false, compactLayout = false }) => {
   const { currentUser, userData: authUserData } = useAuth();
   const [fields, setFields] = useState<MedicalReportField[]>([]);
   const [responses, setResponses] = useState<Record<string, any>>({});
@@ -127,7 +120,18 @@ export const PatientMedicalReportTab: React.FC<
         MedicalReportResponseService.getPatientResponses(clinicId, patientId),
       ]);
 
-      setFields(flds);
+      // Deduplicate fields by fieldKey (in case seeder ran concurrently and created duplicates)
+      const uniqueFields: MedicalReportField[] = [];
+      const seenKeys = new Set<string>();
+
+      for (const field of flds) {
+        if (!seenKeys.has(field.fieldKey)) {
+          seenKeys.add(field.fieldKey);
+          uniqueFields.push(field);
+        }
+      }
+
+      setFields(uniqueFields);
       if (existing) {
         setResponses(existing.fieldValues || {});
         setLastSaved(existing.updatedAt ? new Date(existing.updatedAt) : null);
@@ -342,9 +346,7 @@ export const PatientMedicalReportTab: React.FC<
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-section-title text-text-main">
-            Medical Report
-          </h2>
+          <h2 className="text-section-title text-text-main">Medical Report</h2>
           <p className="text-[12.5px] text-text-muted">
             Complete the medical report fields configured by your clinic
           </p>
@@ -378,7 +380,9 @@ export const PatientMedicalReportTab: React.FC<
 
       {/* Grid fields */}
       {gridFields.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div
+          className={`grid grid-cols-1 ${compactLayout ? "" : "lg:grid-cols-2"} gap-4`}
+        >
           {gridFields.map((f) => (
             <div key={f.id}>
               {f.fieldType === "yes-no" ? (

@@ -64,10 +64,10 @@ function CustomSearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-        (i.primary + (i.secondary || ""))
-          .toLowerCase()
-          .includes(q.toLowerCase()),
-      )
+          (i.primary + (i.secondary || ""))
+            .toLowerCase()
+            .includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -112,7 +112,9 @@ function CustomSearchSelect({
           </button>
         )}
       </div>
-      {hint && <p className="text-[11.5px] font-medium text-text-muted mt-1">{hint}</p>}
+      {hint && (
+        <p className="text-[11.5px] font-medium text-text-muted mt-1">{hint}</p>
+      )}
       {open && !disabled && (
         <>
           <div
@@ -200,7 +202,9 @@ function CustomInput({
         )}
       </div>
       {description && (
-        <p className="text-[11.5px] font-medium text-text-muted mt-1">{description}</p>
+        <p className="text-[11.5px] font-medium text-text-muted mt-1">
+          {description}
+        </p>
       )}
     </div>
   );
@@ -802,7 +806,7 @@ export default function NewAppointmentPage() {
                   }
                   endContent={
                     dateConversionState.isConverting &&
-                      dateConversionState.field === "appointmentBS" ? (
+                    dateConversionState.field === "appointmentBS" ? (
                       <Spinner size="sm" />
                     ) : appointmentInfo.appointmentBS &&
                       dateConversionState.lastConversion.timestamp > 0 ? (

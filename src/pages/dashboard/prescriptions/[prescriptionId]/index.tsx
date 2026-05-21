@@ -113,7 +113,7 @@ export default function PrescriptionDetailPage() {
           patientData = await patientService.getPatientById(
             prescriptionData.patientId,
           );
-        } catch (e) { }
+        } catch (e) {}
 
         let doctorData: Doctor | null = null;
 
@@ -121,7 +121,7 @@ export default function PrescriptionDetailPage() {
           doctorData = await doctorService.getDoctorById(
             prescriptionData.doctorId,
           );
-        } catch (e) { }
+        } catch (e) {}
 
         let appointmentData: Appointment | null = null;
         let appointmentTypeName: string | undefined;
@@ -139,7 +139,7 @@ export default function PrescriptionDetailPage() {
 
               appointmentTypeName = appointmentType?.name;
             }
-          } catch (e) { }
+          } catch (e) {}
         }
 
         const combinedData: PrescriptionWithDetails = {
@@ -183,10 +183,16 @@ export default function PrescriptionDetailPage() {
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
-    const headerHtml = (clinic && layoutConfig) ? getPrintHeaderHTML(layoutConfig, clinic) : "";
+    const headerHtml =
+      clinic && layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic) : "";
     const footerHtml = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
-    
-    const headerHeight = layoutConfig?.headerHeight === "compact" ? 140 : layoutConfig?.headerHeight === "expanded" ? 220 : 180;
+
+    const headerHeight =
+      layoutConfig?.headerHeight === "compact"
+        ? 140
+        : layoutConfig?.headerHeight === "expanded"
+          ? 220
+          : 180;
     const topMarginMm = layoutConfig?.contentTopMarginWithoutLetterheadMm || 10;
 
     if (printWindow) {
@@ -327,7 +333,7 @@ export default function PrescriptionDetailPage() {
     .dossier-title {
       font-size: 9.5px;
       font-weight: 800;
-      color: ${layoutConfig?.primaryColor || '#0ea5e9'};
+      color: ${layoutConfig?.primaryColor || "#0ea5e9"};
       text-transform: uppercase;
       letter-spacing: 0.8px;
       border-bottom: 1.5px dashed #cbd5e1;
@@ -374,28 +380,49 @@ export default function PrescriptionDetailPage() {
         <div class="info-section">
           <h3>Patient Detail</h3>
           <div class="info-item"><span class="info-label">Name:</span><span class="info-value">${prescription.patientName}</span></div>
-          ${prescription.patientAge || prescription.patientGender ? `
+          ${
+            prescription.patientAge || prescription.patientGender
+              ? `
             <div class="info-item"><span class="info-label">Age/Gen:</span><span class="info-value">${[prescription.patientAge, prescription.patientGender].filter(Boolean).join(" / ")}</span></div>
-          ` : ""}
-          ${prescription.patientPhone ? `
+          `
+              : ""
+          }
+          ${
+            prescription.patientPhone
+              ? `
             <div class="info-item"><span class="info-label">Contact:</span><span class="info-value">${prescription.patientPhone}</span></div>
-          ` : ""}
+          `
+              : ""
+          }
         </div>
         <div class="info-section">
           <h3>Physician Detail</h3>
           <div class="info-item"><span class="info-label">Physician:</span><span class="info-value">${prescription.doctorName}</span></div>
-          ${prescription.doctorSpeciality ? `
+          ${
+            prescription.doctorSpeciality
+              ? `
             <div class="info-item"><span class="info-label">Speciality:</span><span class="info-value">${prescription.doctorSpeciality}</span></div>
-          ` : ""}
-          ${prescription.appointmentInfo && prescription.appointmentTypeName ? `
+          `
+              : ""
+          }
+          ${
+            prescription.appointmentInfo && prescription.appointmentTypeName
+              ? `
             <div class="info-item"><span class="info-label">Visit Type:</span><span class="info-value">${prescription.appointmentTypeName}</span></div>
-          ` : ""}
+          `
+              : ""
+          }
         </div>
       </div>
 
       ${(() => {
         let dossierHtml = "";
-        const hasDossier = prescription.history || prescription.examination || prescription.investigation || prescription.diagnosis;
+        const hasDossier =
+          prescription.history ||
+          prescription.examination ||
+          prescription.investigation ||
+          prescription.diagnosis;
+
         if (hasDossier) {
           dossierHtml += `<div class="dossier-grid">`;
           if (prescription.history) {
@@ -428,6 +455,7 @@ export default function PrescriptionDetailPage() {
           }
           dossierHtml += `</div>`;
         }
+
         return dossierHtml;
       })()}
 
@@ -444,17 +472,25 @@ export default function PrescriptionDetailPage() {
         <tbody>${itemsHtml}</tbody>
       </table>
 
-      ${prescription.treatmentPlan ? `
+      ${
+        prescription.treatmentPlan
+          ? `
         <div class="dossier-box full-width" style="margin-bottom: 20px; width: 100%;">
           <div class="dossier-title">TREATMENT PLAN</div>
           <div class="dossier-content">${prescription.treatmentPlan}</div>
-        </div>` : ""}
+        </div>`
+          : ""
+      }
 
-      ${prescription.notes ? `
+      ${
+        prescription.notes
+          ? `
         <div class="notes-section">
           <h3>Extra Administrative Notes & Instructions</h3>
           <div class="notes-content">${prescription.notes}</div>
-        </div>` : ""}
+        </div>`
+          : ""
+      }
 
       <div class="signature-row">
         <div class="sig-box">
@@ -548,11 +584,16 @@ export default function PrescriptionDetailPage() {
             <IoArrowBackOutline className="w-4 h-4" />
           </button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary leading-tight`}>
+            <h1
+              className={`${title({ size: "lg" })} text-primary leading-tight`}
+            >
               Prescription Details
             </h1>
             <p className="text-[13px] font-medium text-text-muted mt-0.5">
-              Ref: <span className="text-text-main tracking-wider">{prescription.prescriptionNo}</span>
+              Ref:{" "}
+              <span className="text-text-main tracking-wider">
+                {prescription.prescriptionNo}
+              </span>
             </p>
           </div>
         </div>
@@ -586,10 +627,8 @@ export default function PrescriptionDetailPage() {
 
       {/* ── Main Layout Grid ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-
         {/* Left Column: Dossier Content */}
         <div className="lg:col-span-3 space-y-4">
-
           {/* Patient & Doctor Information (Combined Dossier Section) */}
           <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-border-base bg-surface-2/30">
@@ -606,17 +645,30 @@ export default function PrescriptionDetailPage() {
                   </h4>
                   <div className="space-y-2.5">
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-semibold text-text-muted">Legal Name</span>
-                      <span className="text-[13.5px] font-medium text-text-main">{prescription.patientName}</span>
+                      <span className="text-[10px] font-semibold text-text-muted">
+                        Legal Name
+                      </span>
+                      <span className="text-[13.5px] font-medium text-text-main">
+                        {prescription.patientName}
+                      </span>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-semibold text-text-muted">Age / Gender</span>
-                        <span className="text-[13px] font-medium text-text-main">{prescription.patientAge || "—"} / {prescription.patientGender || "—"}</span>
+                        <span className="text-[10px] font-semibold text-text-muted">
+                          Age / Gender
+                        </span>
+                        <span className="text-[13px] font-medium text-text-main">
+                          {prescription.patientAge || "—"} /{" "}
+                          {prescription.patientGender || "—"}
+                        </span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-semibold text-text-muted">Contact</span>
-                        <span className="text-[13px] font-medium text-text-main">{prescription.patientPhone || "—"}</span>
+                        <span className="text-[10px] font-semibold text-text-muted">
+                          Contact
+                        </span>
+                        <span className="text-[13px] font-medium text-text-main">
+                          {prescription.patientPhone || "—"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -629,12 +681,20 @@ export default function PrescriptionDetailPage() {
                   </h4>
                   <div className="space-y-2.5">
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-semibold text-text-muted">Prescribing Doctor</span>
-                      <span className="text-[13.5px] font-medium text-text-main">{prescription.doctorName}</span>
+                      <span className="text-[10px] font-semibold text-text-muted">
+                        Prescribing Doctor
+                      </span>
+                      <span className="text-[13.5px] font-medium text-text-main">
+                        {prescription.doctorName}
+                      </span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-semibold text-text-muted">Speciality</span>
-                      <span className="text-[13px] font-medium text-text-main">{prescription.doctorSpeciality || "Dermatologist"}</span>
+                      <span className="text-[10px] font-semibold text-text-muted">
+                        Speciality
+                      </span>
+                      <span className="text-[13px] font-medium text-text-main">
+                        {prescription.doctorSpeciality || "Dermatologist"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -647,11 +707,19 @@ export default function PrescriptionDetailPage() {
                     </h4>
                     <div className="space-y-2.5">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-semibold text-text-muted">Visit Date</span>
-                        <span className="text-[13px] font-medium text-text-main">{formatDate(prescription.appointmentInfo.appointmentDate)}</span>
+                        <span className="text-[10px] font-semibold text-text-muted">
+                          Visit Date
+                        </span>
+                        <span className="text-[13px] font-medium text-text-main">
+                          {formatDate(
+                            prescription.appointmentInfo.appointmentDate,
+                          )}
+                        </span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-semibold text-text-muted">Encounter Type</span>
+                        <span className="text-[10px] font-semibold text-text-muted">
+                          Encounter Type
+                        </span>
                         <span className="text-[13px] font-medium text-text-main capitalize">
                           {prescription.appointmentTypeName || "Clinical Visit"}
                         </span>
@@ -668,9 +736,12 @@ export default function PrescriptionDetailPage() {
               </div>
             </div>
           </div>
-          
+
           {/* Clinical Assessment Case Folder (History, Examination, Investigation, Diagnosis) */}
-          {(prescription.history || prescription.examination || prescription.investigation || prescription.diagnosis) && (
+          {(prescription.history ||
+            prescription.examination ||
+            prescription.investigation ||
+            prescription.diagnosis) && (
             <div className="space-y-4">
               {/* History Card */}
               {prescription.history && (
@@ -772,7 +843,10 @@ export default function PrescriptionDetailPage() {
                 </thead>
                 <tbody className="divide-y divide-border-base/50">
                   {prescription.items?.map((item) => (
-                    <tr key={item.id} className="hover:bg-primary/5 transition-colors group">
+                    <tr
+                      key={item.id}
+                      className="hover:bg-primary/5 transition-colors group"
+                    >
                       <td className="px-5 py-3">
                         <div className="font-medium text-[13px] text-text-main group-hover:text-primary transition-colors">
                           {item.medicineName}
@@ -794,7 +868,10 @@ export default function PrescriptionDetailPage() {
                   ))}
                   {(!prescription.items || prescription.items.length === 0) && (
                     <tr>
-                      <td colSpan={5} className="px-5 py-8 text-center text-[12px] text-text-muted italic">
+                      <td
+                        className="px-5 py-8 text-center text-[12px] text-text-muted italic"
+                        colSpan={5}
+                      >
                         No medicines prescribed in this record.
                       </td>
                     </tr>
@@ -849,30 +926,52 @@ export default function PrescriptionDetailPage() {
             </div>
             <div className="p-5 space-y-3.5">
               <div className="flex justify-between items-center text-[12px]">
-                <span className="text-text-muted font-semibold">Prescription ID</span>
-                <span className="font-medium text-text-main tracking-wider">#{prescription.prescriptionNo}</span>
+                <span className="text-text-muted font-semibold">
+                  Prescription ID
+                </span>
+                <span className="font-medium text-text-main tracking-wider">
+                  #{prescription.prescriptionNo}
+                </span>
               </div>
               <div className="flex justify-between items-center text-[12px] pt-3 border-t border-border-base/50">
                 <span className="text-text-muted font-semibold">Status</span>
-                <span className={`inline-flex px-2 py-0.5 border rounded-[6px] text-[10px] font-semibold uppercase tracking-wider ${statusColors[prescription.status] || statusColors.completed}`}>
+                <span
+                  className={`inline-flex px-2 py-0.5 border rounded-[6px] text-[10px] font-semibold uppercase tracking-wider ${statusColors[prescription.status] || statusColors.completed}`}
+                >
                   {prescription.status}
                 </span>
               </div>
               <div className="flex justify-between items-center text-[12px] pt-3 border-t border-border-base/50">
-                <span className="text-text-muted font-semibold">Record Date</span>
-                <span className="font-medium text-text-main">{formatDate(prescription.prescriptionDate)}</span>
+                <span className="text-text-muted font-semibold">
+                  Record Date
+                </span>
+                <span className="font-medium text-text-main">
+                  {formatDate(prescription.prescriptionDate)}
+                </span>
               </div>
               <div className="flex justify-between items-center text-[12px] pt-3 border-t border-border-base/50">
-                <span className="text-text-muted font-semibold">Medications</span>
-                <span className="font-medium text-text-main">{prescription.items?.length || 0} Items</span>
+                <span className="text-text-muted font-semibold">
+                  Medications
+                </span>
+                <span className="font-medium text-text-main">
+                  {prescription.items?.length || 0} Items
+                </span>
               </div>
               <div className="flex justify-between items-center text-[12px] pt-3 border-t border-border-base/50">
-                <span className="text-text-muted font-semibold">Created On</span>
-                <span className="font-medium text-text-main">{formatDate(prescription.createdAt)}</span>
+                <span className="text-text-muted font-semibold">
+                  Created On
+                </span>
+                <span className="font-medium text-text-main">
+                  {formatDate(prescription.createdAt)}
+                </span>
               </div>
               <div className="flex justify-between items-center text-[12px] pt-3 border-t border-border-base/50">
-                <span className="text-text-muted font-semibold">Last Activity</span>
-                <span className="font-medium text-text-main">{formatDate(prescription.updatedAt)}</span>
+                <span className="text-text-muted font-semibold">
+                  Last Activity
+                </span>
+                <span className="font-medium text-text-main">
+                  {formatDate(prescription.updatedAt)}
+                </span>
               </div>
             </div>
 
@@ -881,8 +980,10 @@ export default function PrescriptionDetailPage() {
                 Verification
               </p>
               <div className="flex justify-center">
-                <div className="h-1.5 w-1.5 rounded-full bg-health-500 animate-pulse mr-2"></div>
-                <span className="text-[11px] font-medium text-text-muted">Digital Signature Verified</span>
+                <div className="h-1.5 w-1.5 rounded-full bg-health-500 animate-pulse mr-2" />
+                <span className="text-[11px] font-medium text-text-muted">
+                  Digital Signature Verified
+                </span>
               </div>
             </div>
           </div>
@@ -891,5 +992,3 @@ export default function PrescriptionDetailPage() {
     </div>
   );
 }
-
-

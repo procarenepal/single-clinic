@@ -1,5 +1,30 @@
 import React, { useState, useEffect } from "react";
 import {
+  PlusIcon,
+  EditIcon,
+  UserIcon,
+  ShieldIcon,
+  MoreVerticalIcon,
+  SearchIcon,
+} from "lucide-react";
+
+import { Role, UserRole, Doctor, Expert } from "../../types/models";
+import { rbacService } from "../../services/rbacService";
+import { userService } from "../../services/userService";
+import { doctorService } from "../../services/doctorService";
+import { expertService } from "../../services/expertService";
+import { useAuth } from "../../hooks/useAuth";
+
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+} from "@/components/ui/modal";
+import { addToast } from "@/components/ui/toast";
+import {
   Card,
   CardBody,
   CardHeader,
@@ -24,23 +49,6 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@/components/ui";
-import {
-  PlusIcon,
-  EditIcon,
-  UserIcon,
-  ShieldIcon,
-  MoreVerticalIcon,
-} from "lucide-react";
-import { addToast } from "@/components/ui/toast";
-
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@/components/ui/modal";
-
-import { Role, UserRole, Doctor, Expert } from "../../types/models";
-import { rbacService } from "../../services/rbacService";
-import { userService } from "../../services/userService";
-import { doctorService } from "../../services/doctorService";
-import { expertService } from "../../services/expertService";
-import { useAuth } from "../../hooks/useAuth";
 
 interface UserManagementProps {
   clinicId: string;
@@ -55,6 +63,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
 
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
@@ -65,14 +75,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
 
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
 
-  // Form state
   const [formData, setFormData] = useState({
     email: "",
     displayName: "",
     password: "",
     adminPassword: "",
     selectedRoles: [] as string[],
-    selectedDoctor: "", // New field for doctor selection
+    linkedProfileId: "", // New field for doctor/expert selection
   });
 
   useEffect(() => {
@@ -86,12 +95,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       const userFilterOptions: any = {};
       const roleFilterOptions: any = {};
 
-      const [usersData, rolesData, doctorsData, expertsData] = await Promise.all([
-        rbacService.getClinicUsersWithRoles(clinicId, userFilterOptions),
-        rbacService.getClinicRoles(clinicId, roleFilterOptions),
-        doctorService.getDoctorsByClinic(clinicId),
-        expertService.getExpertsByClinic(clinicId),
-      ]);
+      const [usersData, rolesData, doctorsData, expertsData] =
+        await Promise.all([
+          rbacService.getClinicUsersWithRoles(clinicId, userFilterOptions),
+          rbacService.getClinicRoles(clinicId, roleFilterOptions),
+          doctorService.getDoctorsByClinic(clinicId),
+          expertService.getExpertsByClinic(clinicId),
+        ]);
 
       setUsers(usersData);
       setRoles(rolesData);
@@ -118,7 +128,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       password: "",
       adminPassword: "",
       selectedRoles: [],
-      selectedDoctor: "",
+      linkedProfileId: "",
     });
     onOpen();
   };
@@ -132,7 +142,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       password: "", // Don't pre-fill password for editing
       adminPassword: "", // Not needed for editing
       selectedRoles: user.roles.map((role: Role) => role.id),
-      selectedDoctor: "",
+      linkedProfileId: "",
     });
     onOpen();
   };
@@ -152,7 +162,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
     if (selectedDoctor) {
       setFormData((prev) => ({
         ...prev,
-        selectedDoctor: doctorId,
+        linkedProfileId: doctorId,
         // Only update email if the selected doctor has an email, otherwise preserve existing email
         email: selectedDoctor.email ? selectedDoctor.email : prev.email,
         displayName: selectedDoctor.name,
@@ -166,7 +176,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
     if (selectedExpert) {
       setFormData((prev) => ({
         ...prev,
-        selectedDoctor: expertId, // reuse selectedDoctor field for expert ID
+        linkedProfileId: expertId,
         email: selectedExpert.email ? selectedExpert.email : prev.email,
         displayName: selectedExpert.name,
       }));
@@ -182,12 +192,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
     });
   };
 
-  // Check if the linked role is specifically an Expert role (vs Doctor)
-  const isLinkedRoleExpert = () => {
+  // Check if the linked role is an Expert role (with fallback for legacy roles)
+  const isRoleLinkedToExpert = () => {
     return formData.selectedRoles.some((roleId) => {
       const role = roles.find((r) => r.id === roleId);
 
-      return role?.linkedToDoctor && role.name.toLowerCase().includes("expert");
+      return (
+        role?.linkedToExpert ||
+        (role?.linkedToDoctor && role?.name.toLowerCase().includes("expert")) ||
+        false
+      );
     });
   };
 
@@ -443,12 +457,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
         }
 
         // Sync doctor/expert profile email if linked
-        if (formData.selectedDoctor && isRoleLinkedToDoctor()) {
+        if (formData.linkedProfileId) {
           try {
-            if (isLinkedRoleExpert()) {
-              await expertService.updateExpert(formData.selectedDoctor, { email: formData.email });
-            } else {
-              await doctorService.updateDoctor(formData.selectedDoctor, { email: formData.email });
+            if (isRoleLinkedToExpert()) {
+              await expertService.updateExpert(formData.linkedProfileId, {
+                email: formData.email,
+              });
+            } else if (isRoleLinkedToDoctor()) {
+              await doctorService.updateDoctor(formData.linkedProfileId, {
+                email: formData.email,
+              });
             }
           } catch (syncError) {
             console.error("Error syncing profile email:", syncError);
@@ -568,12 +586,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
         }
 
         // Sync doctor/expert profile email if linked
-        if (formData.selectedDoctor && isRoleLinkedToDoctor()) {
+        if (formData.linkedProfileId) {
           try {
-            if (isLinkedRoleExpert()) {
-              await expertService.updateExpert(formData.selectedDoctor, { email: selectedUser!.email });
-            } else {
-              await doctorService.updateDoctor(formData.selectedDoctor, { email: selectedUser!.email });
+            if (isRoleLinkedToExpert()) {
+              await expertService.updateExpert(formData.linkedProfileId, {
+                email: selectedUser!.email,
+              });
+            } else if (isRoleLinkedToDoctor()) {
+              await doctorService.updateDoctor(formData.linkedProfileId, {
+                email: selectedUser!.email,
+              });
             }
           } catch (syncError) {
             console.error("Error syncing profile email:", syncError);
@@ -681,24 +703,63 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
     );
   }
 
+  const filteredUsers = users.filter((user) => {
+    // Search filter
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch =
+      user.displayName?.toLowerCase().includes(searchLower) ||
+      user.email?.toLowerCase().includes(searchLower);
+
+    // Role filter
+    const matchesRole =
+      roleFilter === "all" || user.roles.some((r: any) => r.id === roleFilter);
+
+    return matchesSearch && matchesRole;
+  });
+
   return (
     <div className="space-y-6">
-
       <Card className="shadow-none border border-divider">
-        <CardHeader className="flex justify-between items-center">
+        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h3 className="text-xl font-semibold">User Management</h3>
             <p className="text-sm text-gray-600">
               Create and manage clinic staff with role-based permissions
             </p>
           </div>
-          <Button
-            color="primary"
-            startContent={<PlusIcon size={16} />}
-            onPress={handleCreateUser}
-          >
-            Create User
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <Input
+              className="w-full sm:w-64"
+              placeholder="Search users..."
+              startContent={<SearchIcon className="text-gray-400" size={16} />}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <Select
+              className="w-full sm:w-48"
+              placeholder="Filter by role"
+              selectedKeys={[roleFilter]}
+              onSelectionChange={(keys) =>
+                setRoleFilter(Array.from(keys)[0] as string)
+              }
+            >
+              <SelectItem key="all" value="all">
+                All Roles
+              </SelectItem>
+              {roles.map((role) => (
+                <SelectItem key={role.id} value={role.id}>
+                  {role.name}
+                </SelectItem>
+              ))}
+            </Select>
+            <Button
+              color="primary"
+              startContent={<PlusIcon size={16} />}
+              onPress={handleCreateUser}
+            >
+              Create User
+            </Button>
+          </div>
         </CardHeader>
         <CardBody>
           <Table aria-label="Users table">
@@ -711,8 +772,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                 <TableColumn style={{ width: 80 }}>ACTIONS</TableColumn>
               </TableRow>
             </TableHeader>
-            <TableBody emptyContent="No users found">
-              {users.map((user) => (
+            <TableBody emptyContent="No users found matching your filters.">
+              {filteredUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -807,8 +868,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
               <div className="bg-green-50 p-3 rounded-lg border border-green-200 mb-4">
                 <p className="text-sm text-green-800">
                   <strong>User Permissions:</strong> Select roles that control
-                  which pages and features this user can access.
-                  You can assign multiple roles for combined permissions. At least one role is required.
+                  which pages and features this user can access. You can assign
+                  multiple roles for combined permissions. At least one role is
+                  required.
                 </p>
               </div>
 
@@ -819,7 +881,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                   setFormData((prev) => ({
                     ...prev,
                     selectedRoles: values,
-                    selectedDoctor: "", // Reset doctor selection when roles change
+                    linkedProfileId: "", // Reset profile selection when roles change
                   }));
                 }}
               >
@@ -832,9 +894,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{role.name}</span>
-                        {role.linkedToDoctor && (
+                        {(role.linkedToDoctor || role.linkedToExpert) && (
                           <Chip color="secondary" size="sm" variant="flat">
-                            {role.name.toLowerCase().includes("expert") ? "Expert Linked" : "Doctor Linked"}
+                            {role.linkedToExpert ||
+                            (role.linkedToDoctor &&
+                              role.name.toLowerCase().includes("expert"))
+                              ? "Expert Linked"
+                              : "Doctor Linked"}
                           </Chip>
                         )}
                       </div>
@@ -848,53 +914,56 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
             </div>
 
             {/* Doctor/Expert Selection for roles linked to doctors/experts */}
-            {modalMode === "create" && isRoleLinkedToDoctor() && (
-              <div>
-                {isLinkedRoleExpert() ? (
-                  <Select
-                    description="Selecting an expert will automatically fill email and display name"
-                    label="Select Expert (Auto-fill Details)"
-                    placeholder="Choose an expert to auto-fill user details"
-                    selectedKeys={
-                      formData.selectedDoctor ? [formData.selectedDoctor] : []
-                    }
-                    onSelectionChange={(keys) => {
-                      const expertId = Array.from(keys)[0] as string;
+            {modalMode === "create" &&
+              (isRoleLinkedToDoctor() || isRoleLinkedToExpert()) && (
+                <div>
+                  {isRoleLinkedToExpert() ? (
+                    <Select
+                      description="Selecting an expert will automatically fill email and display name"
+                      label="Select Expert (Auto-fill Details)"
+                      placeholder="Choose an expert to auto-fill user details"
+                      selectedKeys={
+                        formData.linkedProfileId
+                          ? [formData.linkedProfileId]
+                          : []
+                      }
+                      onSelectionChange={(keys) => {
+                        const expertId = Array.from(keys)[0] as string;
 
-                      handleExpertSelection(expertId);
-                    }}
-                  >
-                    {experts
-                      .map((expert) => (
+                        handleExpertSelection(expertId);
+                      }}
+                    >
+                      {experts.map((expert) => (
                         <SelectItem key={expert.id}>
                           {expert.name} ({expert.speciality})
                         </SelectItem>
                       ))}
-                  </Select>
-                ) : (
-                  <Select
-                    description="Selecting a doctor will automatically fill email and display name"
-                    label="Select Doctor (Auto-fill Details)"
-                    placeholder="Choose a doctor to auto-fill user details"
-                    selectedKeys={
-                      formData.selectedDoctor ? [formData.selectedDoctor] : []
-                    }
-                    onSelectionChange={(keys) => {
-                      const doctorId = Array.from(keys)[0] as string;
+                    </Select>
+                  ) : (
+                    <Select
+                      description="Selecting a doctor will automatically fill email and display name"
+                      label="Select Doctor (Auto-fill Details)"
+                      placeholder="Choose a doctor to auto-fill user details"
+                      selectedKeys={
+                        formData.linkedProfileId
+                          ? [formData.linkedProfileId]
+                          : []
+                      }
+                      onSelectionChange={(keys) => {
+                        const doctorId = Array.from(keys)[0] as string;
 
-                      handleDoctorSelection(doctorId);
-                    }}
-                  >
-                    {doctors
-                      .map((doctor) => (
+                        handleDoctorSelection(doctorId);
+                      }}
+                    >
+                      {doctors.map((doctor) => (
                         <SelectItem key={doctor.id}>
                           {doctor.name} ({doctor.speciality})
                         </SelectItem>
                       ))}
-                  </Select>
-                )}
-              </div>
-            )}
+                    </Select>
+                  )}
+                </div>
+              )}
 
             <Divider />
 
@@ -984,8 +1053,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
               <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 mb-4">
                 <p className="text-sm text-amber-800">
                   <strong>Role Assignments:</strong> Select roles that control
-                  which pages and features this user can access.
-                  Multiple roles can be assigned for combined permissions.
+                  which pages and features this user can access. Multiple roles
+                  can be assigned for combined permissions.
                 </p>
               </div>
 
@@ -1008,9 +1077,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{role.name}</span>
-                        {role.linkedToDoctor && (
+                        {(role.linkedToDoctor || role.linkedToExpert) && (
                           <Chip color="secondary" size="sm" variant="flat">
-                            {role.name.toLowerCase().includes("expert") ? "Expert Linked" : "Doctor Linked"}
+                            {role.linkedToExpert ||
+                            (role.linkedToDoctor &&
+                              role.name.toLowerCase().includes("expert"))
+                              ? "Expert Linked"
+                              : "Doctor Linked"}
                           </Chip>
                         )}
                       </div>

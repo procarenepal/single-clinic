@@ -26,6 +26,7 @@ const safeToDate = (field: any): Date | undefined => {
   if (field instanceof Date) return field;
   if (field.seconds !== undefined) return new Date(field.seconds * 1000);
   const d = new Date(field);
+
   return isNaN(d.getTime()) ? undefined : d;
 };
 
@@ -211,6 +212,7 @@ export const prescriptionService = {
 
       return querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
+
         return {
           id: docSnap.id,
           ...data,
@@ -236,11 +238,15 @@ export const prescriptionService = {
     try {
       if (!clinicId) return [];
       const prescriptionsCollection = collection(db, "prescriptions");
-      const q = query(prescriptionsCollection, where("clinicId", "==", clinicId));
+      const q = query(
+        prescriptionsCollection,
+        where("clinicId", "==", clinicId),
+      );
       const querySnapshot = await getDocs(q);
 
       const list = querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
+
         return {
           id: docSnap.id,
           ...data,
@@ -255,12 +261,14 @@ export const prescriptionService = {
       list.sort((a, b) => {
         const timeA = a.createdAt ? a.createdAt.getTime() : 0;
         const timeB = b.createdAt ? b.createdAt.getTime() : 0;
+
         return timeB - timeA;
       });
 
       if (branchId) {
         return list.filter((p) => p.branchId === branchId);
       }
+
       return list;
     } catch (error) {
       console.error("Error fetching prescriptions by clinic:", error);
@@ -285,6 +293,7 @@ export const prescriptionService = {
 
       return querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
+
         return {
           id: docSnap.id,
           ...data,
@@ -315,6 +324,7 @@ export const prescriptionService = {
 
       return querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
+
         return {
           id: docSnap.id,
           ...data,
@@ -380,6 +390,7 @@ export const prescriptionService = {
 
       return querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
+
         return {
           id: docSnap.id,
           ...data,
@@ -561,13 +572,16 @@ export const prescriptionService = {
   /**
    * Save a commonly used prescription as a template
    */
-  async createTemplate(template: Omit<PrescriptionTemplate, "id" | "createdAt">): Promise<string> {
+  async createTemplate(
+    template: Omit<PrescriptionTemplate, "id" | "createdAt">,
+  ): Promise<string> {
     try {
       const templatesCollection = collection(db, "prescription_templates");
       const docRef = await addDoc(templatesCollection, {
         ...template,
         createdAt: Timestamp.now(),
       });
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating prescription template:", error);
@@ -578,17 +592,22 @@ export const prescriptionService = {
   /**
    * Get all templates created by or visible to a specific doctor
    */
-  async getTemplatesByDoctor(clinicId: string, doctorId: string): Promise<PrescriptionTemplate[]> {
+  async getTemplatesByDoctor(
+    clinicId: string,
+    doctorId: string,
+  ): Promise<PrescriptionTemplate[]> {
     try {
       const templatesCollection = collection(db, "prescription_templates");
       const q = query(
         templatesCollection,
         where("clinicId", "==", clinicId),
-        where("doctorId", "==", doctorId)
+        where("doctorId", "==", doctorId),
       );
       const snapshot = await getDocs(q);
+
       return snapshot.docs.map((docVal) => {
         const data = docVal.data();
+
         return {
           id: docVal.id,
           name: data.name,
@@ -602,6 +621,7 @@ export const prescriptionService = {
       });
     } catch (error) {
       console.error("Error fetching templates by doctor:", error);
+
       return [];
     }
   },

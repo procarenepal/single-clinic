@@ -66,6 +66,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
       if (userDoc.exists()) {
         const data = userDoc.data();
+
         return { ...data, id: userDoc.id } as User;
       }
 
@@ -80,8 +81,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
   // Check if the user has admin permissions for a clinic
   const isClinicAdmin = useCallback((): boolean => {
     return (
-      userData?.role === "clinic-admin" ||
-      userData?.role === "system-owner"
+      userData?.role === "clinic-admin" || userData?.role === "system-owner"
     );
   }, [userData?.role]);
 
@@ -318,7 +318,8 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
    * @param {string} currentPassword - Current password for re-authentication
    */
   const updateEmailInfo = async (newEmail: string, currentPassword: string) => {
-    if (!currentUser || !currentUser.email) throw new Error("No user logged in");
+    if (!currentUser || !currentUser.email)
+      throw new Error("No user logged in");
 
     try {
       // 1. Re-authenticate first (required for security-sensitive operations)
@@ -331,7 +332,10 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
         await reauthenticateWithCredential(currentUser, credential);
       } catch (reauthError: any) {
         console.error("Re-authentication failed:", reauthError);
-        if (reauthError.code === "auth/wrong-password" || reauthError.code === "auth/invalid-credential") {
+        if (
+          reauthError.code === "auth/wrong-password" ||
+          reauthError.code === "auth/invalid-credential"
+        ) {
           throw new Error("The current password you entered is incorrect.");
         }
         throw reauthError;
@@ -342,24 +346,32 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
       // Some Firebase projects mandate this and throw auth/operation-not-allowed for updateEmail
       try {
         await verifyBeforeUpdateEmail(currentUser, newEmail);
-        
+
         // Return success but with a pending flag
         // We DON'T update Firestore yet because the email hasn't actually changed in Auth
         // The user must click the link in their email first.
         return { success: true, pendingVerification: true };
       } catch (emailError: any) {
-        console.error("verifyBeforeUpdateEmail failed, trying updateEmail fallback:", emailError);
+        console.error(
+          "verifyBeforeUpdateEmail failed, trying updateEmail fallback:",
+          emailError,
+        );
         // Fallback for older configurations if verifyBeforeUpdateEmail isn't supported/allowed
         await updateEmail(currentUser, newEmail);
-        
+
         // 3. Update email in Firestore User Document (only for instant updates)
         await userService.updateUser(currentUser.uid, { email: newEmail });
 
         // 4. Update local state
         const updatedUserData = { ...userData, email: newEmail } as User;
+
         setUserData(updatedUserData);
-        
-        const updatedCurrentUser = { ...currentUser, email: newEmail } as ExtendedUser;
+
+        const updatedCurrentUser = {
+          ...currentUser,
+          email: newEmail,
+        } as ExtendedUser;
+
         updatedCurrentUser.userData = updatedUserData;
         setCurrentUser(updatedCurrentUser);
 
@@ -414,10 +426,16 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
             extendedUser.isActive = userDataFromFirestore.isActive;
             extendedUser.userData = userDataFromFirestore;
             // Set user data and preload permissions
-            const userDataWithId = { ...userDataFromFirestore, id: firebaseUser.uid };
+            const userDataWithId = {
+              ...userDataFromFirestore,
+              id: firebaseUser.uid,
+            };
+
             setCurrentUser(extendedUser);
             setUserData(userDataWithId);
-            const effectiveClinicId = userDataFromFirestore.clinicId || "default";
+            const effectiveClinicId =
+              userDataFromFirestore.clinicId || "default";
+
             setClinicId(effectiveClinicId);
 
             // STANDALONE MODE: Simplified permission preloading

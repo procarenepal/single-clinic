@@ -35,11 +35,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModalState } from "@/hooks/useModalState";
 import { adToBS } from "@/utils/dateConverter";
 import {
-  getPrintBrandingCSS,
-  getPrintHeaderHTML,
-  getPrintFooterHTML,
-} from "@/utils/printBranding";
-import { generateAppointmentInvoiceHTML, PrintFormat } from "@/utils/invoicePrinting";
+  generateAppointmentInvoiceHTML,
+  PrintFormat,
+} from "@/utils/invoicePrinting";
 import { Select, SelectItem } from "@/components/ui/select";
 
 // ── UI Helpers (spec: flat, compact, border-based) ─────────────────────────
@@ -56,7 +54,8 @@ function StatusBadge({
     partial: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     unpaid: "bg-rose-500/10 text-rose-400 border-rose-500/20",
     cancelled: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-    default: "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))]",
+    default:
+      "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))]",
   };
   const color = S_COLORS[status] || S_COLORS.default;
 
@@ -119,7 +118,11 @@ function FlatInput({
           onChange={(e) => onChange?.(e.target.value)}
         />
       </div>
-      {hint && <p className="text-[10.5px] text-[rgb(var(--color-text-muted))]">{hint}</p>}
+      {hint && (
+        <p className="text-[10.5px] text-[rgb(var(--color-text-muted))]">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -204,8 +207,7 @@ export default function InvoiceDetailPage() {
   const { currentUser, clinicId, userData, isLoading: authLoading } = useAuth();
   const paymentModal = useModalState(false);
   const branchId = userData?.branchId ?? null;
-  const isClinicAdmin =
-    userData?.role === "system-owner";
+  const isClinicAdmin = userData?.role === "system-owner";
 
   const [invoice, setInvoice] = useState<AppointmentBilling | null>(null);
   const [loading, setLoading] = useState(true);
@@ -287,6 +289,7 @@ export default function InvoiceDetailPage() {
         if (layoutConfigData) {
           setLayoutConfig(layoutConfigData);
           const formatParam = searchParams.get("format") as PrintFormat;
+
           if (formatParam) {
             setPrintFormat(formatParam);
           } else if (layoutConfigData.defaultPrintFormat) {
@@ -298,6 +301,7 @@ export default function InvoiceDetailPage() {
           const patientData = await patientService.getPatientById(
             invoiceData.patientId,
           );
+
           if (patientData) setPatient(patientData);
         } catch (error) {
           console.error("Error loading patient data:", error);
@@ -305,25 +309,44 @@ export default function InvoiceDetailPage() {
 
         try {
           let docIdToFetch = invoiceData.doctorId;
-          
-          if ((!docIdToFetch || docIdToFetch === "unassigned") && invoiceData.patientId) {
-            const patientAppts = await appointmentService.getAppointmentsByPatient(invoiceData.patientId);
+
+          if (
+            (!docIdToFetch || docIdToFetch === "unassigned") &&
+            invoiceData.patientId
+          ) {
+            const patientAppts =
+              await appointmentService.getAppointmentsByPatient(
+                invoiceData.patientId,
+              );
             const matchingAppt = patientAppts.find(
-              (a) => a.billingId === invoiceId || a.consultationBillingId === invoiceId
+              (a) =>
+                a.billingId === invoiceId ||
+                a.consultationBillingId === invoiceId,
             );
-            if (matchingAppt && matchingAppt.assignedExpertId && matchingAppt.assignedExpertId !== "unassigned") {
+
+            if (
+              matchingAppt &&
+              matchingAppt.assignedExpertId &&
+              matchingAppt.assignedExpertId !== "unassigned"
+            ) {
               docIdToFetch = matchingAppt.assignedExpertId;
-            } else if (matchingAppt && matchingAppt.doctorId && matchingAppt.doctorId !== "unassigned") {
+            } else if (
+              matchingAppt &&
+              matchingAppt.doctorId &&
+              matchingAppt.doctorId !== "unassigned"
+            ) {
               docIdToFetch = matchingAppt.doctorId;
             }
           }
 
           if (docIdToFetch && docIdToFetch !== "unassigned") {
             const docData = await doctorService.getDoctorById(docIdToFetch);
+
             if (docData) {
               setDoctor(docData);
             } else {
               const expData = await expertService.getExpertById(docIdToFetch);
+
               if (expData) setDoctor(expData);
             }
           }
@@ -349,7 +372,15 @@ export default function InvoiceDetailPage() {
   useEffect(() => {
     if (!loading && invoice && searchParams.get("print") === "true") {
       // Overwrite current window with the generated invoice HTML
-      const html = generateAppointmentInvoiceHTML(invoice, clinic, layoutConfig, patient, printFormat, doctor);
+      const html = generateAppointmentInvoiceHTML(
+        invoice,
+        clinic,
+        layoutConfig,
+        patient,
+        printFormat,
+        doctor,
+      );
+
       document.open();
       document.write(html);
       document.close();
@@ -523,7 +554,14 @@ export default function InvoiceDetailPage() {
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     if (printWindow) {
-      const printContent = generateAppointmentInvoiceHTML(invoice, clinic, layoutConfig, patient, printFormat);
+      const printContent = generateAppointmentInvoiceHTML(
+        invoice,
+        clinic,
+        layoutConfig,
+        patient,
+        printFormat,
+      );
+
       printWindow.document.write(printContent);
       printWindow.document.close();
     } else {
@@ -632,10 +670,10 @@ export default function InvoiceDetailPage() {
               <IoArrowBackOutline className="w-5 h-5" />
             </button>
             <div>
-            <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
-              Invoice Details
-            </h1>
-            <div className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5 space-y-0.5">
+              <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
+                Invoice Details
+              </h1>
+              <div className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5 space-y-0.5">
                 <p>
                   {invoice.invoiceNumber} •{" "}
                   {formatDateWithBS(invoice.invoiceDate).ad}
@@ -655,6 +693,7 @@ export default function InvoiceDetailPage() {
                 size="sm"
                 onSelectionChange={(keys) => {
                   const format = Array.from(keys)[0] as PrintFormat;
+
                   setPrintFormat(format);
                 }}
               >
@@ -911,24 +950,42 @@ export default function InvoiceDetailPage() {
                     return docs.map((doc, idx) => {
                       const resolvedName = (() => {
                         // 1. If we have a resolved doctor/expert state matching doc.id, use its name
-                        if (doctor && (doc.id === doctor.id || (doc.id === "unassigned" && doctor.id !== "unassigned"))) {
-                          if (doctor.name && doctor.name !== "Unknown Doctor" && doctor.name !== "Expert Cabin") {
+                        if (
+                          doctor &&
+                          (doc.id === doctor.id ||
+                            (doc.id === "unassigned" &&
+                              doctor.id !== "unassigned"))
+                        ) {
+                          if (
+                            doctor.name &&
+                            doctor.name !== "Unknown Doctor" &&
+                            doctor.name !== "Expert Cabin"
+                          ) {
                             return doctor.name;
                           }
                         }
-                        
+
                         // 2. If the stored doc.name is valid (not "Unknown Doctor" and not "Expert Cabin"), use it
-                        if (doc.name && doc.name !== "Unknown Doctor" && doc.name !== "Expert Cabin") {
+                        if (
+                          doc.name &&
+                          doc.name !== "Unknown Doctor" &&
+                          doc.name !== "Expert Cabin"
+                        ) {
                           return doc.name;
                         }
-                        
+
                         // 3. Fallback to doctor state if available
-                        if (doctor?.name && doctor.name !== "Unknown Doctor" && doctor.name !== "Expert Cabin") {
+                        if (
+                          doctor?.name &&
+                          doctor.name !== "Unknown Doctor" &&
+                          doctor.name !== "Expert Cabin"
+                        ) {
                           return doctor.name;
                         }
-                        
+
                         // 4. Default fallbacks
                         if (doc.id === "unassigned") return "Expert Cabin";
+
                         return doc.name || "Unknown Doctor";
                       })();
 
@@ -938,21 +995,22 @@ export default function InvoiceDetailPage() {
                           className="space-y-0.5 text-[rgb(var(--color-text))] border-l-2 border-primary/30 pl-2"
                         >
                           <p className="flex items-center gap-2">
-                            <span className="font-medium">Name:</span> {resolvedName}
-                          {doc.isPrimary && docs.length > 1 && (
-                            <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 border border-primary/20 rounded">
-                              Primary
-                            </span>
-                          )}
-                        </p>
-                        {doc.isPrimary && (
-                          <p>
-                            <span className="font-medium text-mountain-500">
-                              Type:
-                            </span>{" "}
-                            {invoice.doctorType}
+                            <span className="font-medium">Name:</span>{" "}
+                            {resolvedName}
+                            {doc.isPrimary && docs.length > 1 && (
+                              <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 border border-primary/20 rounded">
+                                Primary
+                              </span>
+                            )}
                           </p>
-                        )}
+                          {doc.isPrimary && (
+                            <p>
+                              <span className="font-medium text-mountain-500">
+                                Type:
+                              </span>{" "}
+                              {invoice.doctorType}
+                            </p>
+                          )}
                         </div>
                       );
                     });
@@ -1143,14 +1201,14 @@ export default function InvoiceDetailPage() {
                     className={
                       invoice.balanceAmount -
                         (parseFloat(paymentForm.amount) || 0) <=
-                        0
+                      0
                         ? "text-health-600"
                         : "text-red-600"
                     }
                   >
                     {formatCurrency(
                       invoice.balanceAmount -
-                      (parseFloat(paymentForm.amount) || 0),
+                        (parseFloat(paymentForm.amount) || 0),
                     )}
                   </span>
                 </div>
@@ -1160,14 +1218,14 @@ export default function InvoiceDetailPage() {
                     className={
                       invoice.balanceAmount -
                         (parseFloat(paymentForm.amount) || 0) <=
-                        0
+                      0
                         ? "text-health-600 font-semibold"
                         : "text-saffron-600 font-semibold"
                     }
                   >
                     {invoice.balanceAmount -
                       (parseFloat(paymentForm.amount) || 0) <=
-                      0
+                    0
                       ? "Fully Paid"
                       : "Partially Paid"}
                   </span>

@@ -8,7 +8,6 @@ import {
   setDoc,
   query,
   where,
-  orderBy,
   limit,
   serverTimestamp,
   increment,
@@ -66,7 +65,13 @@ export interface SMSTemplate {
   clinicId: string;
   name: string;
   message: string;
-  type: "patient" | "doctor" | "general" | "appointment" | "reminder" | "referral";
+  type:
+    | "patient"
+    | "doctor"
+    | "general"
+    | "appointment"
+    | "reminder"
+    | "referral";
   language?: "en" | "ne";
   isActive: boolean;
   usageCount?: number;
@@ -128,19 +133,36 @@ export const smsService = {
 
       // Use provided settings or environment variables
       const apiKey = settings?.apiKey || import.meta.env.VITE_SMS_API_KEY || "";
-      const senderId = settings?.senderId || settings?.defaultSenderId || import.meta.env.VITE_SMS_SENDER_ID || "";
-      const apiUrl = settings?.apiUrl || settings?.customApiUrl || import.meta.env.VITE_SMS_API_URL || "";
+      const senderId =
+        settings?.senderId ||
+        settings?.defaultSenderId ||
+        import.meta.env.VITE_SMS_SENDER_ID ||
+        "";
+      const apiUrl =
+        settings?.apiUrl ||
+        settings?.customApiUrl ||
+        import.meta.env.VITE_SMS_API_URL ||
+        "";
 
       // Clean and validate phone number
       // Clean and validate phone number
       let cleanPhoneNumber = phoneNumber.replace(/\D/g, "");
 
       // Normalize Nepalese phone numbers (strip country code 977 or leading 0 to match 10-digit mobile carrier pattern)
-      if (cleanPhoneNumber.startsWith("00977") && cleanPhoneNumber.length === 15) {
+      if (
+        cleanPhoneNumber.startsWith("00977") &&
+        cleanPhoneNumber.length === 15
+      ) {
         cleanPhoneNumber = cleanPhoneNumber.slice(5);
-      } else if (cleanPhoneNumber.startsWith("977") && cleanPhoneNumber.length === 13) {
+      } else if (
+        cleanPhoneNumber.startsWith("977") &&
+        cleanPhoneNumber.length === 13
+      ) {
         cleanPhoneNumber = cleanPhoneNumber.slice(3);
-      } else if (cleanPhoneNumber.startsWith("0") && cleanPhoneNumber.length === 11) {
+      } else if (
+        cleanPhoneNumber.startsWith("0") &&
+        cleanPhoneNumber.length === 11
+      ) {
         cleanPhoneNumber = cleanPhoneNumber.slice(1);
       }
 
@@ -152,8 +174,11 @@ export const smsService = {
         apiUrl,
         contacts: cleanPhoneNumber,
         senderId,
-        apiKeyObfuscated: apiKey ? `${apiKey.slice(0, 4)}***${apiKey.slice(-3)}` : "empty",
-        messageSnippet: message.slice(0, 30) + (message.length > 30 ? "..." : "")
+        apiKeyObfuscated: apiKey
+          ? `${apiKey.slice(0, 4)}***${apiKey.slice(-3)}`
+          : "empty",
+        messageSnippet:
+          message.slice(0, 30) + (message.length > 30 ? "..." : ""),
       });
 
       // Prepare form data
@@ -177,15 +202,18 @@ export const smsService = {
       console.log("📡 Direct SMS Gateway: Response received", {
         type: response.type,
         status: response.status,
-        ok: response.ok
+        ok: response.ok,
       });
 
       let responseText = "";
+
       try {
         responseText = await response.text();
       } catch (e) {
         // If response is opaque, reading text will fail, which is expected for no-cors fetches
-        console.log("Reading response text skipped due to no-cors restriction (standard web security behavior)");
+        console.log(
+          "Reading response text skipped due to no-cors restriction (standard web security behavior)",
+        );
       }
 
       // Parse response
@@ -199,7 +227,7 @@ export const smsService = {
           response: responseText,
           isRawText: true,
           success:
-            responseText.includes("success") || 
+            responseText.includes("success") ||
             responseText.includes("sent") ||
             response.type === "opaque" ||
             response.status === 0,
@@ -216,7 +244,10 @@ export const smsService = {
   /**
    * Get live SMS credit balance from provider
    */
-  async getSMSBalance(apiKey?: string, apiUrl?: string): Promise<number | null> {
+  async getSMSBalance(
+    apiKey?: string,
+    apiUrl?: string,
+  ): Promise<number | null> {
     try {
       const key = apiKey || import.meta.env.VITE_SMS_API_KEY;
       const url = apiUrl || import.meta.env.VITE_SMS_API_URL;
@@ -226,12 +257,12 @@ export const smsService = {
       // Expanded list of common credit check endpoints for various providers
       const endpoints = [
         url.replace(/\/smsapi\/?$/, "/smsapi/index.php"), // Samaya SMS potential pattern
-        url.replace(/\/sms\/?$/, "/credit/"),     // Sparrow SMS pattern
-        url.replace(/\/sms\/?$/, "/balance/"),    // Alternative Sparrow/Generic
+        url.replace(/\/sms\/?$/, "/credit/"), // Sparrow SMS pattern
+        url.replace(/\/sms\/?$/, "/balance/"), // Alternative Sparrow/Generic
         url.replace(/\/v2\/sms\/?$/, "/v2/balance"), // Aakash SMS v2/v3 pattern
         "https://api.sparrowsms.com/v2/credit/",
         "https://v3.aakashsms.com/api/v2/balance",
-        "https://your-sms-api.com/smsapi/index.php"
+        "https://your-sms-api.com/smsapi/index.php",
       ];
 
       for (const creditUrl of endpoints) {
@@ -242,15 +273,19 @@ export const smsService = {
           const attemptFetch = async (url: string, timeout = 10000) => {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeout);
+
             try {
               const res = await fetch(url, {
                 signal: controller.signal,
-                headers: { "Accept": "application/json" }
+                headers: { Accept: "application/json" },
               });
+
               clearTimeout(id);
+
               return res;
             } catch (e) {
               clearTimeout(id);
+
               return null;
             }
           };
@@ -261,17 +296,27 @@ export const smsService = {
           if (!response || !response.ok) {
             const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
             const proxyResponse = await attemptFetch(proxyUrl);
+
             if (proxyResponse && proxyResponse.ok) {
               const proxyData = await proxyResponse.json();
+
               // AllOrigins wraps the response in a 'contents' field
               if (proxyData.contents) {
                 try {
                   const data = JSON.parse(proxyData.contents);
-                  const balance = data.credits ?? data.credit ?? data.balance ?? data.amount ?? data.available_balance;
-                  if (balance !== undefined && balance !== null) return Number(balance);
+                  const balance =
+                    data.credits ??
+                    data.credit ??
+                    data.balance ??
+                    data.amount ??
+                    data.available_balance;
+
+                  if (balance !== undefined && balance !== null)
+                    return Number(balance);
                 } catch (e) {
                   // If content isn't JSON, it might be raw text balance
                   const rawVal = parseFloat(proxyData.contents);
+
                   if (!isNaN(rawVal)) return rawVal;
                 }
               }
@@ -280,8 +325,15 @@ export const smsService = {
 
           if (response && response.ok) {
             const data = await response.json();
-            const balance = data.credits ?? data.credit ?? data.balance ?? data.amount ?? data.available_balance;
-            if (balance !== undefined && balance !== null) return Number(balance);
+            const balance =
+              data.credits ??
+              data.credit ??
+              data.balance ??
+              data.amount ??
+              data.available_balance;
+
+            if (balance !== undefined && balance !== null)
+              return Number(balance);
           }
         } catch (e) {
           continue;
@@ -291,6 +343,7 @@ export const smsService = {
       return null;
     } catch (error) {
       console.error("Error fetching SMS balance:", error);
+
       return null;
     }
   },
@@ -590,14 +643,19 @@ export const smsService = {
 
       // 2. If status is 'sent', increment the daily counter in settings
       if (cleanLogData.status === "sent") {
-        const settingsRef = doc(db, SMS_SETTINGS_COLLECTION, cleanLogData.clinicId);
+        const settingsRef = doc(
+          db,
+          SMS_SETTINGS_COLLECTION,
+          cleanLogData.clinicId,
+        );
         const settingsSnap = await getDoc(settingsRef);
 
         if (settingsSnap.exists()) {
           const currentCount = settingsSnap.data().currentDailySMS || 0;
+
           await updateDoc(settingsRef, {
             currentDailySMS: currentCount + 1,
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
           });
         }
       }
@@ -619,16 +677,16 @@ export const smsService = {
     try {
       const q = branchId
         ? query(
-          collection(db, SMS_TEMPLATES_COLLECTION),
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        )
+            collection(db, SMS_TEMPLATES_COLLECTION),
+            where("clinicId", "==", clinicId),
+            where("branchId", "==", branchId),
+            where("isActive", "==", true),
+          )
         : query(
-          collection(db, SMS_TEMPLATES_COLLECTION),
-          where("clinicId", "==", clinicId),
-          where("isActive", "==", true),
-        );
+            collection(db, SMS_TEMPLATES_COLLECTION),
+            where("clinicId", "==", clinicId),
+            where("isActive", "==", true),
+          );
 
       const querySnapshot = await getDocs(q);
 
@@ -644,8 +702,9 @@ export const smsService = {
       }) as SMSTemplate[];
 
       // Sort in-memory to avoid index requirement
-      return templates.sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return templates.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
     } catch (error) {
       console.error("Error fetching SMS templates:", error);
@@ -981,7 +1040,7 @@ export const smsService = {
         remainingToday: Math.max(
           0,
           (smsSettings?.maxDailySMS || 100) -
-          (smsSettings?.currentDailySMS || 0),
+            (smsSettings?.currentDailySMS || 0),
         ),
         templatesCount: templates.length,
         activeTemplatesCount: templates.filter((template) => template.isActive)
@@ -1765,21 +1824,28 @@ export const smsService = {
     branchId?: string;
   }): Promise<boolean> {
     try {
-      const clinicDoc = await getDoc(doc(db, CLINICS_COLLECTION, patient.clinicId));
+      const clinicDoc = await getDoc(
+        doc(db, CLINICS_COLLECTION, patient.clinicId),
+      );
+
       if (!clinicDoc.exists()) return false;
       const clinic = clinicDoc.data();
 
       // Check if welcome SMS is enabled in settings
       const settings = await this.getSMSSettings(patient.clinicId);
+
       if (!settings || !settings.isActive) return false;
 
       const message = `Dear ${patient.name}, thank you for choosing ${clinic.name}. We are honored to serve your healthcare needs. For appointments, call ${clinic.phone || ""}.`;
 
       // Try to use a template if available
       let finalMessage = message;
+
       try {
         const templates = await this.getSMSTemplates(patient.clinicId);
-        const welcomeTemplate = templates.find(t => t.name.includes("Welcome Message") && t.language === "en");
+        const welcomeTemplate = templates.find(
+          (t) => t.name.includes("Welcome Message") && t.language === "en",
+        );
 
         if (welcomeTemplate) {
           finalMessage = welcomeTemplate.message
@@ -1792,10 +1858,15 @@ export const smsService = {
       }
 
       const phoneNumber = patient.mobile || patient.phone;
+
       if (!phoneNumber) return false;
 
       // Send the SMS with settings
-      const response = await this.sendMessage(phoneNumber, finalMessage, settings);
+      const response = await this.sendMessage(
+        phoneNumber,
+        finalMessage,
+        settings,
+      );
       const isSuccess = response.success || response.isRawText;
 
       // Log the SMS (Success or Failure)
@@ -1815,6 +1886,7 @@ export const smsService = {
       return isSuccess;
     } catch (error) {
       console.error("Error sending welcome SMS:", error);
+
       return false;
     }
   },
@@ -1822,17 +1894,56 @@ export const smsService = {
   /**
    * Seed default SMS templates for a clinic
    */
-  async seedTemplates(clinicId: string, userId: string): Promise<{ count: number; skipped: number }> {
+  async seedTemplates(
+    clinicId: string,
+    userId: string,
+  ): Promise<{ count: number; skipped: number }> {
     const defaultTemplates = [
       // English Templates
-      { name: "Appointment Reminder (EN)", type: "patient", language: "en", message: "Dear {patientName}, your appointment with Dr. {doctorName} is on {date} at {time}. Please arrive 15 minutes early." },
-      { name: "Welcome Message (EN)", type: "general", language: "en", message: "Welcome to {clinicName}! We are honored to serve your healthcare needs. Call us at {clinicPhone} for any queries." },
-      { name: "Lab Report Ready (EN)", type: "patient", language: "en", message: "Dear {patientName}, your lab report is ready. Please visit our clinic or call {clinicPhone} to discuss with your doctor." },
+      {
+        name: "Appointment Reminder (EN)",
+        type: "patient",
+        language: "en",
+        message:
+          "Dear {patientName}, your appointment with Dr. {doctorName} is on {date} at {time}. Please arrive 15 minutes early.",
+      },
+      {
+        name: "Welcome Message (EN)",
+        type: "general",
+        language: "en",
+        message:
+          "Welcome to {clinicName}! We are honored to serve your healthcare needs. Call us at {clinicPhone} for any queries.",
+      },
+      {
+        name: "Lab Report Ready (EN)",
+        type: "patient",
+        language: "en",
+        message:
+          "Dear {patientName}, your lab report is ready. Please visit our clinic or call {clinicPhone} to discuss with your doctor.",
+      },
 
       // Nepali Templates
-      { name: "अपोइन्टमेन्ट रिमाइन्डर (NE)", type: "patient", language: "ne", message: "नमस्ते {patientName}, डा. {doctorName} सँगको तपाईंको अपोइन्टमेन्ट {date} मा {time} बजे छ। कृपया समयमै आउनुहोला।" },
-      { name: "स्वागत सन्देश (NE)", type: "general", language: "ne", message: "हाम्रो क्लिनिकमा स्वागत छ! तपाईंको स्वास्थ्य सेवा गर्न पाउँदा हामी खुसी छौं। जिज्ञासाको लागि {clinicPhone} मा सम्पर्क गर्नुहोस्।" },
-      { name: "रिपोर्ट तयार छ (NE)", type: "patient", language: "ne", message: "नमस्ते {patientName}, तपाईंको ल्याब रिपोर्ट तयार भएको छ। कृपया क्लिनिकमा आएर बुझ्नुहोला।" }
+      {
+        name: "अपोइन्टमेन्ट रिमाइन्डर (NE)",
+        type: "patient",
+        language: "ne",
+        message:
+          "नमस्ते {patientName}, डा. {doctorName} सँगको तपाईंको अपोइन्टमेन्ट {date} मा {time} बजे छ। कृपया समयमै आउनुहोला।",
+      },
+      {
+        name: "स्वागत सन्देश (NE)",
+        type: "general",
+        language: "ne",
+        message:
+          "हाम्रो क्लिनिकमा स्वागत छ! तपाईंको स्वास्थ्य सेवा गर्न पाउँदा हामी खुसी छौं। जिज्ञासाको लागि {clinicPhone} मा सम्पर्क गर्नुहोस्।",
+      },
+      {
+        name: "रिपोर्ट तयार छ (NE)",
+        type: "patient",
+        language: "ne",
+        message:
+          "नमस्ते {patientName}, तपाईंको ल्याब रिपोर्ट तयार भएको छ। कृपया क्लिनिकमा आएर बुझ्नुहोला।",
+      },
     ];
 
     let count = 0;
@@ -1841,7 +1952,9 @@ export const smsService = {
     try {
       // Get existing templates to avoid duplicates
       const existingTemplates = await this.getSMSTemplates(clinicId);
-      const existingNames = new Set(existingTemplates.map(t => t.name.toLowerCase()));
+      const existingNames = new Set(
+        existingTemplates.map((t) => t.name.toLowerCase()),
+      );
 
       for (const t of defaultTemplates) {
         if (existingNames.has(t.name.toLowerCase())) {
@@ -1860,7 +1973,7 @@ export const smsService = {
           isActive: true,
           usageCount: 0,
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         });
         count++;
       }

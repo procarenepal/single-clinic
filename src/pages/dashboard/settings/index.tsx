@@ -105,7 +105,8 @@ const settingsSections: SettingsSection[] = [
   {
     id: "security-account",
     title: "Security & Account",
-    description: "Manage your admin username, password, and security preferences",
+    description:
+      "Manage your admin username, password, and security preferences",
     icon: <IoLockClosedOutline className="w-6 h-6" />,
     href: "/dashboard/profile",
     category: "security",
@@ -123,8 +124,8 @@ export default function SettingsPage() {
     selectedCategory === "all"
       ? settingsSections
       : settingsSections.filter(
-        (section) => section.category === selectedCategory,
-      );
+          (section) => section.category === selectedCategory,
+        );
 
   return (
     <div className="flex flex-col gap-4">
@@ -138,7 +139,6 @@ export default function SettingsPage() {
         </div>
         <div className="flex gap-2" />
       </div>
-
 
       {/* Settings Sections */}
       <div className="space-y-6">

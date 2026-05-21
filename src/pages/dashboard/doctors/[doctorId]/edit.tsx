@@ -102,7 +102,11 @@ function CustomSelect({
           </option>
         )}
         {options.map((opt: any) => (
-          <option key={opt.value} value={opt.value} className="bg-surface text-text-main">
+          <option
+            key={opt.value}
+            className="bg-surface text-text-main"
+            value={opt.value}
+          >
             {opt.label}
           </option>
         ))}

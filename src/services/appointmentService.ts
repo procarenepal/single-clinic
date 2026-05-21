@@ -35,8 +35,10 @@ const mapAppointmentDoc = (
 
   const parseDate = (val: any) => {
     if (!val) return undefined;
-    if (typeof val.toDate === 'function') return val.toDate();
-    if (typeof val === 'string' || typeof val === 'number') return new Date(val);
+    if (typeof val.toDate === "function") return val.toDate();
+    if (typeof val === "string" || typeof val === "number")
+      return new Date(val);
+
     return undefined;
   };
 
@@ -200,7 +202,9 @@ export const appointmentService = {
       });
 
       // Sort by date descending in memory to avoid index error
-      return appointments.sort((a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime());
+      return appointments.sort(
+        (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching patient appointments:", error);
       throw new Error("Failed to fetch patient appointments");
@@ -229,7 +233,9 @@ export const appointmentService = {
       });
 
       // Sort by date descending in memory to avoid index error
-      return appointments.sort((a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime());
+      return appointments.sort(
+        (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching doctor appointments:", error);
       throw new Error("Failed to fetch doctor appointments");
@@ -424,13 +430,16 @@ export const appointmentService = {
       });
 
       // Filter by date range in memory
-      const filtered = appointments.filter(app => {
+      const filtered = appointments.filter((app) => {
         const date = app.appointmentDate;
+
         return date >= startDate && date <= endDate;
       });
 
       // Sort by date in memory
-      return filtered.sort((a, b) => a.appointmentDate.getTime() - b.appointmentDate.getTime());
+      return filtered.sort(
+        (a, b) => a.appointmentDate.getTime() - b.appointmentDate.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching appointments by date range:", error);
       throw new Error("Failed to fetch appointments by date range");
@@ -560,14 +569,14 @@ export const appointmentService = {
       q,
       (snapshot) => {
         const nextAppointments: Appointment[] = [];
+
         snapshot.forEach((docSnap) => {
           nextAppointments.push(mapAppointmentDoc(docSnap));
         });
         // Sort by date descending in memory
         onData(
           nextAppointments.sort(
-            (a, b) =>
-              b.appointmentDate.getTime() - a.appointmentDate.getTime(),
+            (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
           ),
         );
       },
@@ -596,14 +605,14 @@ export const appointmentService = {
       q,
       (snapshot) => {
         const nextAppointments: Appointment[] = [];
+
         snapshot.forEach((docSnap) => {
           nextAppointments.push(mapAppointmentDoc(docSnap));
         });
         // Sort by date descending in memory
         onData(
           nextAppointments.sort(
-            (a, b) =>
-              b.appointmentDate.getTime() - a.appointmentDate.getTime(),
+            (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
           ),
         );
       },

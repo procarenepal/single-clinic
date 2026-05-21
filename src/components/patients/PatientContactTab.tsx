@@ -62,9 +62,7 @@ function InfoCard({
       <div className="flex items-center justify-between px-3 py-2.5 bg-surface-2 border-b border-border-base/50">
         <div className="flex items-center gap-2">
           <span className="text-primary">{icon}</span>
-          <h3 className="text-[13px] font-semibold text-text-main">
-            {title}
-          </h3>
+          <h3 className="text-[13px] font-semibold text-text-main">{title}</h3>
         </div>
         {action}
       </div>
@@ -449,7 +447,9 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
                         )}
                         {c.address && (
                           <p className="text-[11.5px] text-text-muted">
-                            <span className="text-text-muted/60">Address: </span>
+                            <span className="text-text-muted/60">
+                              Address:{" "}
+                            </span>
                             {c.address}
                           </p>
                         )}
@@ -509,9 +509,7 @@ export default function PatientContactTab({ patient }: PatientContactTabProps) {
                 <p className="text-[10.5px] text-text-muted uppercase tracking-wider">
                   {l}
                 </p>
-                <p className="text-[12.5px] font-medium text-text-main">
-                  {v}
-                </p>
+                <p className="text-[12.5px] font-medium text-text-main">{v}</p>
               </div>
             ))}
           </div>

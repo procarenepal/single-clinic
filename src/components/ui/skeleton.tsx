@@ -1,4 +1,5 @@
 import React from "react";
+
 import { cn } from "@/lib/utils";
 
 export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -21,7 +22,7 @@ export function Skeleton({
         "animate-pulse bg-zinc-100/80 dark:bg-zinc-800/50 rounded-xl overflow-hidden relative",
         variant === "circle" && "rounded-full",
         variant === "text" && "h-3 w-full rounded-md",
-        className
+        className,
       )}
       {...props}
     >
@@ -35,7 +36,13 @@ export function Skeleton({
  * Common Loading Presets
  */
 
-export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+export function TableSkeleton({
+  rows = 5,
+  cols = 4,
+}: {
+  rows?: number;
+  cols?: number;
+}) {
   return (
     <div className="w-full space-y-4">
       <div className="flex gap-4">
@@ -54,10 +61,10 @@ export function CardSkeleton() {
   return (
     <div className="p-4 border border-border-base rounded-2xl space-y-3 bg-surface">
       <div className="flex items-center gap-3">
-        <Skeleton variant="circle" className="w-10 h-10" />
+        <Skeleton className="w-10 h-10" variant="circle" />
         <div className="space-y-2 flex-1">
-          <Skeleton variant="text" className="w-1/3 h-4" />
-          <Skeleton variant="text" className="w-1/4 h-3" />
+          <Skeleton className="w-1/3 h-4" variant="text" />
+          <Skeleton className="w-1/4 h-3" variant="text" />
         </div>
       </div>
       <Skeleton className="h-32 w-full" />
@@ -74,10 +81,10 @@ export function ListSkeleton({ items = 4 }: { items?: number }) {
     <div className="space-y-3">
       {[...Array(items)].map((_, i) => (
         <div key={i} className="flex items-center gap-3 p-3">
-          <Skeleton variant="circle" className="w-8 h-8" />
+          <Skeleton className="w-8 h-8" variant="circle" />
           <div className="flex-1 space-y-2">
-            <Skeleton variant="text" className="h-3 w-1/2" />
-            <Skeleton variant="text" className="h-2 w-1/3" />
+            <Skeleton className="h-3 w-1/2" variant="text" />
+            <Skeleton className="h-2 w-1/3" variant="text" />
           </div>
         </div>
       ))}

@@ -52,8 +52,7 @@ class SMSTestService {
    */
   async healthCheck(): Promise<SMSTestResponse> {
     const hasDirectGateway = !!(
-      import.meta.env.VITE_SMS_API_KEY &&
-      import.meta.env.VITE_SMS_API_URL
+      import.meta.env.VITE_SMS_API_KEY && import.meta.env.VITE_SMS_API_URL
     );
 
     const forceDirect = import.meta.env.VITE_SMS_FORCE_DIRECT === "true";
@@ -61,10 +60,11 @@ class SMSTestService {
     // If Appwrite was already flagged offline or forceDirect is active, bypass instantly to keep console perfectly clean!
     if ((this.isAppwriteOffline || forceDirect) && hasDirectGateway) {
       this.isAppwriteOffline = true; // Sync state
+
       return {
         success: true,
         message: "Direct Gateway Mode (Bypassed Appwrite Check)",
-        data: { mode: "direct" }
+        data: { mode: "direct" },
       };
     }
 
@@ -96,8 +96,11 @@ class SMSTestService {
         );
       }
     } catch (error) {
-      console.warn("Appwrite health check failed, checking direct gateway fallback...", error);
-      
+      console.warn(
+        "Appwrite health check failed, checking direct gateway fallback...",
+        error,
+      );
+
       // Cache the offline status so subsequent checks bypass Appwrite
       this.isAppwriteOffline = true;
 
@@ -105,7 +108,7 @@ class SMSTestService {
         return {
           success: true,
           message: "Direct Gateway Mode (Appwrite Function Offline)",
-          data: { mode: "direct" }
+          data: { mode: "direct" },
         };
       }
 
@@ -129,8 +132,7 @@ class SMSTestService {
       }
 
       const hasDirectGateway = !!(
-        import.meta.env.VITE_SMS_API_KEY &&
-        import.meta.env.VITE_SMS_API_URL
+        import.meta.env.VITE_SMS_API_KEY && import.meta.env.VITE_SMS_API_URL
       );
 
       // Skip Appwrite instantly if we already flagged it as offline
@@ -140,8 +142,10 @@ class SMSTestService {
 
         return {
           success: response.success || false,
-          message: response.success ? "SMS sent successfully via Direct Gateway" : "Direct Gateway failed",
-          data: response
+          message: response.success
+            ? "SMS sent successfully via Direct Gateway"
+            : "Direct Gateway failed",
+          data: response,
         };
       }
 
@@ -165,8 +169,11 @@ class SMSTestService {
           throw new Error(`Function execution failed: ${response.status}`);
         }
       } catch (appwriteError) {
-        console.warn("Appwrite SMS tester execution failed, trying direct gateway fallback...", appwriteError);
-        
+        console.warn(
+          "Appwrite SMS tester execution failed, trying direct gateway fallback...",
+          appwriteError,
+        );
+
         this.isAppwriteOffline = true; // Mark as offline for future calls
 
         const { smsService } = await import("./sendMessageService");
@@ -174,8 +181,10 @@ class SMSTestService {
 
         return {
           success: response.success || false,
-          message: response.success ? "SMS sent successfully via Direct Gateway" : "Direct Gateway failed",
-          data: response
+          message: response.success
+            ? "SMS sent successfully via Direct Gateway"
+            : "Direct Gateway failed",
+          data: response,
         };
       }
     } catch (error) {
@@ -200,8 +209,7 @@ class SMSTestService {
       }
 
       const hasDirectGateway = !!(
-        import.meta.env.VITE_SMS_API_KEY &&
-        import.meta.env.VITE_SMS_API_URL
+        import.meta.env.VITE_SMS_API_KEY && import.meta.env.VITE_SMS_API_URL
       );
 
       // Skip Appwrite instantly if flagged offline
@@ -212,18 +220,22 @@ class SMSTestService {
 
         for (const recipient of recipients) {
           try {
-            const res = await smsService.sendMessage(recipient.phoneNumber, recipient.message);
+            const res = await smsService.sendMessage(
+              recipient.phoneNumber,
+              recipient.message,
+            );
+
             if (res.success) successCount++;
             results.push({
               phoneNumber: recipient.phoneNumber,
               success: res.success || false,
-              response: res
+              response: res,
             });
           } catch (e) {
             results.push({
               phoneNumber: recipient.phoneNumber,
               success: false,
-              error: e instanceof Error ? e.message : "Unknown error"
+              error: e instanceof Error ? e.message : "Unknown error",
             });
           }
         }
@@ -235,8 +247,8 @@ class SMSTestService {
             total: recipients.length,
             successful: successCount,
             failed: recipients.length - successCount,
-            results
-          }
+            results,
+          },
         };
       }
 
@@ -259,8 +271,11 @@ class SMSTestService {
           throw new Error(`Function execution failed: ${response.status}`);
         }
       } catch (appwriteError) {
-        console.warn("Appwrite SMS batch execution failed, trying direct gateway fallback...", appwriteError);
-        
+        console.warn(
+          "Appwrite SMS batch execution failed, trying direct gateway fallback...",
+          appwriteError,
+        );
+
         this.isAppwriteOffline = true;
 
         const { smsService } = await import("./sendMessageService");
@@ -269,18 +284,22 @@ class SMSTestService {
 
         for (const recipient of recipients) {
           try {
-            const res = await smsService.sendMessage(recipient.phoneNumber, recipient.message);
+            const res = await smsService.sendMessage(
+              recipient.phoneNumber,
+              recipient.message,
+            );
+
             if (res.success) successCount++;
             results.push({
               phoneNumber: recipient.phoneNumber,
               success: res.success || false,
-              response: res
+              response: res,
             });
           } catch (e) {
             results.push({
               phoneNumber: recipient.phoneNumber,
               success: false,
-              error: e instanceof Error ? e.message : "Unknown error"
+              error: e instanceof Error ? e.message : "Unknown error",
             });
           }
         }
@@ -292,8 +311,8 @@ class SMSTestService {
             total: recipients.length,
             successful: successCount,
             failed: recipients.length - successCount,
-            results
-          }
+            results,
+          },
         };
       }
     } catch (error) {
@@ -322,22 +341,22 @@ class SMSTestService {
       }
 
       const hasDirectGateway = !!(
-        import.meta.env.VITE_SMS_API_KEY &&
-        import.meta.env.VITE_SMS_API_URL
+        import.meta.env.VITE_SMS_API_KEY && import.meta.env.VITE_SMS_API_URL
       );
 
       // Skip Appwrite instantly if flagged offline
       if (this.isAppwriteOffline && hasDirectGateway) {
         return {
           success: true,
-          message: "SMS scheduled successfully (Local fallback: stored in scheduling database)",
+          message:
+            "SMS scheduled successfully (Local fallback: stored in scheduling database)",
           data: {
             phoneNumber,
             message,
             scheduledTime,
             status: "scheduled",
-            note: "Stored in scheduling database for processing"
-          }
+            note: "Stored in scheduling database for processing",
+          },
         };
       }
 
@@ -362,20 +381,24 @@ class SMSTestService {
           throw new Error(`Function execution failed: ${response.status}`);
         }
       } catch (appwriteError) {
-        console.warn("Appwrite SMS scheduling execution failed, using local/Firestore scheduler fallback...", appwriteError);
-        
+        console.warn(
+          "Appwrite SMS scheduling execution failed, using local/Firestore scheduler fallback...",
+          appwriteError,
+        );
+
         this.isAppwriteOffline = true;
 
         return {
           success: true,
-          message: "SMS scheduled successfully (Local fallback: stored in scheduling database)",
+          message:
+            "SMS scheduled successfully (Local fallback: stored in scheduling database)",
           data: {
             phoneNumber,
             message,
             scheduledTime,
             status: "scheduled",
-            note: "Stored in scheduling database for processing"
-          }
+            note: "Stored in scheduling database for processing",
+          },
         };
       }
     } catch (error) {
@@ -397,7 +420,7 @@ class SMSTestService {
       return {
         success: true,
         message: "Fetched local logs successfully",
-        data: []
+        data: [],
       };
     }
 
@@ -419,14 +442,17 @@ class SMSTestService {
         throw new Error(`Function execution failed: ${response.status}`);
       }
     } catch (appwriteError) {
-      console.warn("Appwrite getTestLogs failed, fetching direct logs from local/Firestore...", appwriteError);
-      
+      console.warn(
+        "Appwrite getTestLogs failed, fetching direct logs from local/Firestore...",
+        appwriteError,
+      );
+
       this.isAppwriteOffline = true;
 
       return {
         success: true,
         message: "Fetched local logs successfully",
-        data: []
+        data: [],
       };
     }
   }

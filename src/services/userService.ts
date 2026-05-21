@@ -18,7 +18,7 @@ import {
 } from "firebase/auth";
 
 import { db, auth } from "../config/firebase";
-import { User, UserRole } from "../types/models";
+import { User } from "../types/models";
 
 const USERS_COLLECTION = "users";
 
@@ -299,7 +299,6 @@ export const userService = {
       throw error;
     }
   },
-
 
   /**
    * Update a user's information

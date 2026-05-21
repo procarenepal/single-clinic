@@ -144,11 +144,13 @@ export function adToBS(adDate: Date): {
   formatted: string;
 } {
   const startAd = new Date(START_ENGLISH_DATE);
-  let diff = Math.floor((adDate.getTime() - startAd.getTime()) / (1000 * 60 * 60 * 24));
+  let diff = Math.floor(
+    (adDate.getTime() - startAd.getTime()) / (1000 * 60 * 60 * 24),
+  );
 
   if (diff < 0) {
-     // Default fallback for extremely old dates
-     return { year: 1978, month: 1, day: 1, formatted: "1978/01/01" };
+    // Default fallback for extremely old dates
+    return { year: 1978, month: 1, day: 1, formatted: "1978/01/01" };
   }
 
   let nepYear = START_NEPALI_DATE_YEAR;
@@ -157,6 +159,7 @@ export function adToBS(adDate: Date): {
 
   while (true) {
     const daysInYear = bsData[nepYear].reduce((a, b) => a + b, 0);
+
     if (diff < daysInYear) break;
     diff -= daysInYear;
     nepYear++;
@@ -166,6 +169,7 @@ export function adToBS(adDate: Date): {
   if (bsData[nepYear]) {
     for (let i = 0; i < 12; i++) {
       const daysInMonth = bsData[nepYear][i];
+
       if (diff < daysInMonth) {
         nepMonth = i + 1;
         nepDay = diff + 1;
@@ -192,6 +196,7 @@ export function bsToAD(bsDateString: string): Date {
   const bsDay = parseInt(parts[2]);
 
   let totalDays = 0;
+
   for (let y = START_NEPALI_DATE_YEAR; y < bsYear; y++) {
     totalDays += bsData[y].reduce((a, b) => a + b, 0);
   }
@@ -203,29 +208,39 @@ export function bsToAD(bsDateString: string): Date {
   totalDays += bsDay - 1;
 
   const startAd = new Date(START_ENGLISH_DATE);
+
   return new Date(startAd.getTime() + totalDays * 24 * 60 * 60 * 1000);
 }
 
-export function isValidBSDate(year: number, month: number, day: number): boolean {
+export function isValidBSDate(
+  year: number,
+  month: number,
+  day: number,
+): boolean {
   if (year < 1978 || year > 2099) return false;
   if (month < 1 || month > 12) return false;
   const daysInMonth = bsData[year][month - 1];
+
   return day >= 1 && day <= daysInMonth;
 }
 
 export function calculateAgeFromDOB(dateOfBirth: Date | string): number {
-  const birthDate = typeof dateOfBirth === "string" ? new Date(dateOfBirth) : dateOfBirth;
+  const birthDate =
+    typeof dateOfBirth === "string" ? new Date(dateOfBirth) : dateOfBirth;
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const m = today.getMonth() - birthDate.getMonth();
+
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
+
   return age;
 }
 
 export function getDetailedAge(dateOfBirth: Date | string): string {
-  const birthDate = typeof dateOfBirth === "string" ? new Date(dateOfBirth) : dateOfBirth;
+  const birthDate =
+    typeof dateOfBirth === "string" ? new Date(dateOfBirth) : dateOfBirth;
   const today = new Date();
   let years = today.getFullYear() - birthDate.getFullYear();
   let months = today.getMonth() - birthDate.getMonth();
@@ -233,7 +248,12 @@ export function getDetailedAge(dateOfBirth: Date | string): string {
 
   if (days < 0) {
     months--;
-    const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
+    const prevMonth = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      0,
+    ).getDate();
+
     days += prevMonth;
   }
   if (months < 0) {
@@ -242,9 +262,11 @@ export function getDetailedAge(dateOfBirth: Date | string): string {
   }
 
   const parts = [];
+
   if (years > 0) parts.push(`${years} year${years !== 1 ? "s" : ""}`);
   if (months > 0) parts.push(`${months} month${months !== 1 ? "s" : ""}`);
-  if (years === 0 && months === 0 && days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
+  if (years === 0 && months === 0 && days > 0)
+    parts.push(`${days} day${days !== 1 ? "s" : ""}`);
 
   return parts.length > 0 ? parts.join(", ") : "Less than 1 month";
 }

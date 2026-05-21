@@ -226,9 +226,7 @@ export default function PathologyDailyReportTab({
                             {test.labTechnicianName}
                           </span>
                         ) : (
-                          <span className="text-text-muted text-[13px]">
-                            —
-                          </span>
+                          <span className="text-text-muted text-[13px]">—</span>
                         )}
                       </td>
                       <td className="px-4 py-2 text-[13px] text-text-main">
@@ -250,9 +248,7 @@ export default function PathologyDailyReportTab({
       {/* Billings Table */}
       <div className="bg-surface border border-border-base rounded">
         <div className="px-4 py-3 border-b border-border-base/50 bg-surface-2">
-          <h3 className="text-[14px] font-semibold text-text-main">
-            Invoices
-          </h3>
+          <h3 className="text-[14px] font-semibold text-text-main">Invoices</h3>
         </div>
         <div className="p-0">
           {dailyReportData.dailyBillings.length > 0 ? (

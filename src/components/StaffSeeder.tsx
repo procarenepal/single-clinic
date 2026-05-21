@@ -1,27 +1,47 @@
 import React, { useState } from "react";
 import { collection, writeBatch, doc } from "firebase/firestore";
+
 import { db } from "@/config/firebase";
 import { useAuthContext } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 
 const DOCTOR_NAMES = [
-  "Dr. Sarah Jenkins", "Dr. Marcus Chen", "Dr. Emily Roberts", "Dr. David Kumar",
-  "Dr. Michael Chang", "Dr. Olivia Bennett", "Dr. James Wilson", "Dr. Sophia Patel",
-  "Dr. William Hayes", "Dr. Emma Thompson"
+  "Dr. Sarah Jenkins",
+  "Dr. Marcus Chen",
+  "Dr. Emily Roberts",
+  "Dr. David Kumar",
+  "Dr. Michael Chang",
+  "Dr. Olivia Bennett",
+  "Dr. James Wilson",
+  "Dr. Sophia Patel",
+  "Dr. William Hayes",
+  "Dr. Emma Thompson",
 ];
 
 const EXPERT_NAMES = [
-  "Dr. Robert Fox (Dermatologist)", "Dr. Alice Cooper (Cardiologist)", 
-  "Dr. John Watson (Neurologist)", "Dr. Mary Jane (Pediatrician)",
-  "Dr. Peter Parker (Orthopedic)", "Dr. Bruce Wayne (Surgeon)",
-  "Dr. Clark Kent (Optometrist)", "Dr. Diana Prince (Gynecologist)",
-  "Dr. Barry Allen (Physiotherapist)", "Dr. Arthur Curry (ENT)"
+  "Dr. Robert Fox (Dermatologist)",
+  "Dr. Alice Cooper (Cardiologist)",
+  "Dr. John Watson (Neurologist)",
+  "Dr. Mary Jane (Pediatrician)",
+  "Dr. Peter Parker (Orthopedic)",
+  "Dr. Bruce Wayne (Surgeon)",
+  "Dr. Clark Kent (Optometrist)",
+  "Dr. Diana Prince (Gynecologist)",
+  "Dr. Barry Allen (Physiotherapist)",
+  "Dr. Arthur Curry (ENT)",
 ];
 
 const SUPPLIER_NAMES = [
-  "MediLife Distributors", "PharmaCorp Global", "HealthPrime Supplies",
-  "CureAll Logistics", "BioGenics Wholesale", "Apex Medical Suppliers",
-  "NovaCare Pharma", "Sunrise Healthcare", "Pioneer Medical", "Guardian Health"
+  "MediLife Distributors",
+  "PharmaCorp Global",
+  "HealthPrime Supplies",
+  "CureAll Logistics",
+  "BioGenics Wholesale",
+  "Apex Medical Suppliers",
+  "NovaCare Pharma",
+  "Sunrise Healthcare",
+  "Pioneer Medical",
+  "Guardian Health",
 ];
 
 export default function StaffSeeder() {
@@ -31,7 +51,10 @@ export default function StaffSeeder() {
 
   const seedStaff = async () => {
     if (!clinicId || !currentUser) return;
-    const confirmSeed = window.confirm("Seed 10 Doctors, 10 Experts, and 10 Suppliers?");
+    const confirmSeed = window.confirm(
+      "Seed 10 Doctors, 10 Experts, and 10 Suppliers?",
+    );
+
     if (!confirmSeed) return;
 
     setLoading(true);
@@ -42,8 +65,10 @@ export default function StaffSeeder() {
 
       // Seed 10 Doctors
       const doctorsCol = collection(db, "doctors");
+
       for (let i = 0; i < 10; i++) {
         const docRef = doc(doctorsCol);
+
         batch.set(docRef, {
           id: docRef.id,
           name: DOCTOR_NAMES[i],
@@ -65,8 +90,10 @@ export default function StaffSeeder() {
 
       // Seed 10 Experts
       const expertsCol = collection(db, "experts");
+
       for (let i = 0; i < 10; i++) {
         const docRef = doc(expertsCol);
+
         batch.set(docRef, {
           id: docRef.id,
           name: EXPERT_NAMES[i],
@@ -87,8 +114,10 @@ export default function StaffSeeder() {
 
       // Seed 10 Suppliers
       const suppliersCol = collection(db, "suppliers");
+
       for (let i = 0; i < 10; i++) {
         const docRef = doc(suppliersCol);
+
         batch.set(docRef, {
           id: docRef.id,
           name: SUPPLIER_NAMES[i],
@@ -107,14 +136,16 @@ export default function StaffSeeder() {
       }
 
       await batch.commit();
-      
+
       // Clear cache so the newly seeded data shows up immediately
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(`procaresoft-cache:doctors:${clinicId}`);
         window.localStorage.removeItem(`procaresoft-cache:doctors:standalone`);
       }
-      
-      setMessage("✅ Successfully seeded 10 Doctors, 10 Experts, and 10 Suppliers!");
+
+      setMessage(
+        "✅ Successfully seeded 10 Doctors, 10 Experts, and 10 Suppliers!",
+      );
     } catch (error) {
       console.error("Error seeding staff:", error);
       setMessage("❌ Error seeding data. Check console.");
@@ -128,16 +159,15 @@ export default function StaffSeeder() {
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center justify-between">
       <div>
-        <h3 className="text-blue-800 font-bold text-sm">DEVELOPER TOOL: Staff & Supplier Seeder</h3>
+        <h3 className="text-blue-800 font-bold text-sm">
+          DEVELOPER TOOL: Staff & Supplier Seeder
+        </h3>
         <p className="text-blue-600 text-xs mt-1">
-          {message || "Seed 10 Doctors, 10 Experts, and 10 Medicine Suppliers for testing."}
+          {message ||
+            "Seed 10 Doctors, 10 Experts, and 10 Medicine Suppliers for testing."}
         </p>
       </div>
-      <Button 
-        color="primary" 
-        onClick={seedStaff} 
-        disabled={loading}
-      >
+      <Button color="primary" disabled={loading} onClick={seedStaff}>
         {loading ? "Seeding..." : "Seed Staff & Suppliers"}
       </Button>
     </div>

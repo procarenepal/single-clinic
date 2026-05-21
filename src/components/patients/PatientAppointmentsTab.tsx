@@ -33,8 +33,10 @@ interface PatientAppointmentsTabProps {
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_STYLE: Record<string, string> = {
   scheduled: "bg-primary/10 text-primary border-primary/20",
-  confirmed: "bg-health-500/10 text-health-600 dark:text-health-400 border-health-500/20",
-  "in-progress": "bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 border-saffron-500/20",
+  confirmed:
+    "bg-health-500/10 text-health-600 dark:text-health-400 border-health-500/20",
+  "in-progress":
+    "bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 border-saffron-500/20",
   completed: "bg-surface-2 text-text-muted border-border-base",
   cancelled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
   "no-show": "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",

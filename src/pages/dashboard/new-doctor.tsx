@@ -4,7 +4,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import { IoArrowBackOutline, IoSaveOutline, IoAddOutline, IoRefreshOutline } from "react-icons/io5";
+import {
+  IoArrowBackOutline,
+  IoSaveOutline,
+  IoAddOutline,
+  IoRefreshOutline,
+} from "react-icons/io5";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
@@ -41,10 +46,11 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${isInvalid
-          ? "border-error focus-within:ring-error/20"
-          : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
-          } focus-within:ring-1 ${disabled ? "bg-surface-2" : ""}`}
+        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${
+          isInvalid
+            ? "border-error focus-within:ring-error/20"
+            : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
+        } focus-within:ring-1 ${disabled ? "bg-surface-2" : ""}`}
       >
         <input
           className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/60 disabled:text-text-muted"
@@ -174,8 +180,8 @@ export default function NewDoctorPage() {
       .then((multi) =>
         multi
           ? branchService
-            .getMainBranch(clinicId)
-            .then((b) => b && setDefaultBranchId(b.id))
+              .getMainBranch(clinicId)
+              .then((b) => b && setDefaultBranchId(b.id))
           : setDefaultBranchId(clinicId),
       )
       .catch(() => setDefaultBranchId(clinicId));
@@ -199,7 +205,7 @@ export default function NewDoctorPage() {
         if (userData.email) emails.push(userData.email.toLowerCase());
       });
       setAdminEmails(emails);
-    } catch (error) { }
+    } catch (error) {}
   };
 
   const validateEmail = (email: string): string => {
@@ -329,7 +335,9 @@ export default function NewDoctorPage() {
           <IoArrowBackOutline className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className={`${title({ size: "lg" })} text-primary`}>Add New Doctor</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
+            Add New Doctor
+          </h1>
           <p className="text-[14px] text-text-muted mt-1">
             Enter the doctor information below
           </p>
@@ -418,19 +426,19 @@ export default function NewDoctorPage() {
                 {isAddingNewSpeciality ? (
                   <div className="flex items-center border border-border-base rounded min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-colors">
                     <input
+                      required
                       className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/60"
                       name="speciality"
                       placeholder="Enter new speciality name"
-                      required
                       value={doctorProfile.speciality}
                       onChange={handleDoctorProfileChange}
                     />
                   </div>
                 ) : (
                   <select
+                    required
                     className="w-full min-h-[38px] bg-surface border border-border-base text-text-main text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow"
                     name="speciality"
-                    required
                     value={doctorProfile.speciality}
                     onChange={handleDoctorProfileChange}
                   >

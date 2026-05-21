@@ -53,16 +53,28 @@ function createGradient(
     0,
     chartArea.bottom,
   );
+
   // Derive the transparent version; color is expected to be an HSL/HEX/RGB string
-  gradient.addColorStop(0, color.replace(")", ", 0.25)").replace("rgb", "rgba").replace("hsl", "hsla"));
-  gradient.addColorStop(0.7, color.replace(")", ", 0.05)").replace("rgb", "rgba").replace("hsl", "hsla"));
-  gradient.addColorStop(1, color.replace(")", ", 0)").replace("rgb", "rgba").replace("hsl", "hsla"));
+  gradient.addColorStop(
+    0,
+    color.replace(")", ", 0.25)").replace("rgb", "rgba").replace("hsl", "hsla"),
+  );
+  gradient.addColorStop(
+    0.7,
+    color.replace(")", ", 0.05)").replace("rgb", "rgba").replace("hsl", "hsla"),
+  );
+  gradient.addColorStop(
+    1,
+    color.replace(")", ", 0)").replace("rgb", "rgba").replace("hsl", "hsla"),
+  );
+
   return gradient;
 }
 
 export function PatientVisitsChart({ data, options }: LineChartProps) {
   const memoData = useMemo(() => {
     if (!data) return data;
+
     return {
       ...data,
       datasets: data.datasets?.map((dataset: any) => ({
@@ -72,18 +84,22 @@ export function PatientVisitsChart({ data, options }: LineChartProps) {
         backgroundColor: (context: any) => {
           const chart = context.chart;
           const { ctx, chartArea } = chart;
+
           if (!chartArea) return "transparent";
           const color = dataset.borderColor ?? "#0356a1";
+
           return createGradient(ctx, chartArea, color);
         },
         borderWidth: 2.5,
         tension: 0.45,
         pointRadius: 3,
         pointHoverRadius: 6,
-        pointBackgroundColor: (context: any) => context.dataset.borderColor ?? "#0356a1",
+        pointBackgroundColor: (context: any) =>
+          context.dataset.borderColor ?? "#0356a1",
         pointBorderColor: "#fff",
         pointBorderWidth: 2,
-        pointHoverBackgroundColor: (context: any) => context.dataset.borderColor ?? "#0356a1",
+        pointHoverBackgroundColor: (context: any) =>
+          context.dataset.borderColor ?? "#0356a1",
         pointHoverBorderColor: "#fff",
         pointHoverBorderWidth: 2,
       })),

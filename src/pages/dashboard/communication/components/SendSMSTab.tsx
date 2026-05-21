@@ -173,7 +173,13 @@ const SendSMSTab: React.FC = () => {
     if (!clinicId) return;
     setLoadingData(true);
     try {
-      const [patientsData, doctorsData, referralsData, templatesData, clinicDoc] = await Promise.all([
+      const [
+        patientsData,
+        doctorsData,
+        referralsData,
+        templatesData,
+        clinicDoc,
+      ] = await Promise.all([
         patientService.getPatientsByClinic(clinicId),
         doctorService.getDoctorsByClinic(clinicId),
         referralPartnerService.getReferralPartnersByClinic(clinicId),
@@ -216,8 +222,10 @@ const SendSMSTab: React.FC = () => {
         // If a template is already selected, re-process it with the new recipient
         if (selectedTemplateId) {
           const template = templates.find((t) => t.id === selectedTemplateId);
+
           if (template) {
             const doctor = doctors.find((d) => d.id === associatedDoctorId);
+
             setMessage(
               processTemplatePlaceholders(template.message, patient, doctor),
             );
@@ -234,6 +242,7 @@ const SendSMSTab: React.FC = () => {
         // If a template is already selected, re-process it with the new recipient
         if (selectedTemplateId) {
           const template = templates.find((t) => t.id === selectedTemplateId);
+
           if (template) {
             setMessage(processTemplatePlaceholders(template.message, doctor));
           }
@@ -249,6 +258,7 @@ const SendSMSTab: React.FC = () => {
         // If a template is already selected, re-process it with the new recipient
         if (selectedTemplateId) {
           const template = templates.find((t) => t.id === selectedTemplateId);
+
           if (template) {
             setMessage(processTemplatePlaceholders(template.message, referral));
           }
@@ -259,14 +269,18 @@ const SendSMSTab: React.FC = () => {
 
   const handleAssociatedDoctorChange = (doctorId: string) => {
     setAssociatedDoctorId(doctorId);
-    
+
     if (selectedTemplateId) {
-      const template = templates.find(t => t.id === selectedTemplateId);
+      const template = templates.find((t) => t.id === selectedTemplateId);
+
       if (template) {
-        const patient = patients.find(p => p.id === selectedRecipient);
-        const doctor = doctors.find(d => d.id === doctorId);
+        const patient = patients.find((p) => p.id === selectedRecipient);
+        const doctor = doctors.find((d) => d.id === doctorId);
+
         // Process with both entities
-        setMessage(processTemplatePlaceholders(template.message, patient, doctor));
+        setMessage(
+          processTemplatePlaceholders(template.message, patient, doctor),
+        );
       }
     }
   };
@@ -284,10 +298,12 @@ const SendSMSTab: React.FC = () => {
     setSelectedTemplateId(templateId);
     if (!templateId) {
       setMessage("");
+
       return;
     }
 
     const template = templates.find((t) => t.id === templateId);
+
     if (template) {
       // Find current recipient object to process placeholders
       let recipient: any = null;
@@ -302,24 +318,40 @@ const SendSMSTab: React.FC = () => {
         recipient = referrals.find((r) => r.id === selectedRecipient);
       }
 
-      const processedMessage = processTemplatePlaceholders(template.message, recipient, associatedDoctor);
+      const processedMessage = processTemplatePlaceholders(
+        template.message,
+        recipient,
+        associatedDoctor,
+      );
+
       setMessage(processedMessage);
     }
   };
 
-  const processTemplatePlaceholders = (text: string, recipient?: any, associatedDoctor?: any) => {
+  const processTemplatePlaceholders = (
+    text: string,
+    recipient?: any,
+    associatedDoctor?: any,
+  ) => {
     let processed = text;
 
     // Clinic data from database
-    processed = processed.replace(/{clinicName}/g, clinicData?.hospitalName || clinicData?.name || "Our Clinic");
-    processed = processed.replace(/{clinicPhone}/g, clinicData?.phone || "the clinic");
+    processed = processed.replace(
+      /{clinicName}/g,
+      clinicData?.hospitalName || clinicData?.name || "Our Clinic",
+    );
+    processed = processed.replace(
+      /{clinicPhone}/g,
+      clinicData?.phone || "the clinic",
+    );
 
     // Date/Time
     const now = new Date();
+
     processed = processed.replace(/{date}/g, now.toLocaleDateString());
     processed = processed.replace(
       /{time}/g,
-      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     );
 
     if (recipient) {
@@ -335,7 +367,10 @@ const SendSMSTab: React.FC = () => {
 
     // Handle associated doctor if present (when sending to patient)
     if (associatedDoctor) {
-      processed = processed.replace(/{doctorName}/g, associatedDoctor.name || "");
+      processed = processed.replace(
+        /{doctorName}/g,
+        associatedDoctor.name || "",
+      );
     }
 
     return processed;
@@ -397,16 +432,16 @@ const SendSMSTab: React.FC = () => {
             patientPhone: phoneNumber,
           }
         : selectedRecipientType === "doctor"
-        ? {
-            doctorId: selectedRecipient,
-            doctorName: recipientName,
-            doctorPhone: phoneNumber,
-          }
-        : {
-            referralId: selectedRecipient,
-            referralName: recipientName,
-            referralPhone: phoneNumber,
-          }),
+          ? {
+              doctorId: selectedRecipient,
+              doctorName: recipientName,
+              doctorPhone: phoneNumber,
+            }
+          : {
+              referralId: selectedRecipient,
+              referralName: recipientName,
+              referralPhone: phoneNumber,
+            }),
     };
 
     try {
@@ -482,7 +517,7 @@ const SendSMSTab: React.FC = () => {
   const availablePatients = patients.filter((p) => p.mobile || p.phone);
   const availableDoctors = doctors.filter((d) => d.phone);
   const availableReferrals = referrals.filter((r) => r.phone);
-  
+
   const recipientSearchItems =
     selectedRecipientType === "patient"
       ? availablePatients.map((p) => ({
@@ -491,18 +526,18 @@ const SendSMSTab: React.FC = () => {
           secondary: p.mobile || p.phone || "No phone",
         }))
       : selectedRecipientType === "doctor"
-      ? availableDoctors.map((d) => ({
-          id: d.id,
-          primary: d.name,
-          secondary:
-            `${d.phone || ""}${d.speciality ? ` • ${d.speciality}` : ""}`.trim() ||
-            undefined,
-        }))
-      : availableReferrals.map((r) => ({
-          id: r.id,
-          primary: r.name,
-          secondary: r.phone || "No phone",
-        }));
+        ? availableDoctors.map((d) => ({
+            id: d.id,
+            primary: d.name,
+            secondary:
+              `${d.phone || ""}${d.speciality ? ` • ${d.speciality}` : ""}`.trim() ||
+              undefined,
+          }))
+        : availableReferrals.map((r) => ({
+            id: r.id,
+            primary: r.name,
+            secondary: r.phone || "No phone",
+          }));
 
   return (
     <div className="space-y-4">
@@ -595,15 +630,15 @@ const SendSMSTab: React.FC = () => {
             selectedRecipientType === "patient"
               ? "Select Patient"
               : selectedRecipientType === "doctor"
-              ? "Select Doctor"
-              : "Select Partner"
+                ? "Select Doctor"
+                : "Select Partner"
           }
           placeholder={
             selectedRecipientType === "patient"
               ? "Search patients…"
               : selectedRecipientType === "doctor"
-              ? "Search doctors…"
-              : "Search partners…"
+                ? "Search doctors…"
+                : "Search partners…"
           }
           value={selectedRecipient}
           onChange={handleRecipientChange}
@@ -645,7 +680,9 @@ const SendSMSTab: React.FC = () => {
         >
           <option value="">Custom message (no template)</option>
           {templates
-            .filter((t) => t.type === selectedRecipientType || t.type === "general")
+            .filter(
+              (t) => t.type === selectedRecipientType || t.type === "general",
+            )
             .map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}

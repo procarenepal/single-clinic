@@ -24,7 +24,7 @@ import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { title } from "@/components/primitives";
-import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
+import { Skeleton } from "@/components/ui";
 import { Checkbox } from "@/components/ui/checkbox";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
@@ -127,8 +127,7 @@ export default function ReportsPage() {
   const branchId = userData?.branchId ?? null;
 
   const isClinicAdmin =
-    userData?.role === "clinic-admin" ||
-    userData?.role === "system-owner";
+    userData?.role === "clinic-admin" || userData?.role === "system-owner";
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -289,6 +288,7 @@ export default function ReportsPage() {
               reportBranchId,
             ),
           ]);
+
           if (settings && settings.enabledByAdmin && settings.isActive) {
             billings = data;
           }
@@ -300,11 +300,16 @@ export default function ReportsPage() {
         // Load pathology billing data
         let pathologyBillings: PathologyBilling[] = [];
         let pathologyBillingSettings: PathologyBillingSettings | null = null;
+
         try {
           const [pSettings, pData] = await Promise.all([
             pathologyBillingService.getBillingSettings(clinicId),
-            pathologyBillingService.getBillingByClinic(clinicId, reportBranchId),
+            pathologyBillingService.getBillingByClinic(
+              clinicId,
+              reportBranchId,
+            ),
           ]);
+
           if (pSettings && pSettings.enabledByAdmin && pSettings.isActive) {
             pathologyBillings = pData;
           }
@@ -315,6 +320,7 @@ export default function ReportsPage() {
 
         // Load referral partners
         let referralPartners: ReferralPartner[] = [];
+
         try {
           referralPartners =
             await referralPartnerService.getReferralPartnersByClinic(clinicId);
@@ -534,10 +540,7 @@ export default function ReportsPage() {
     }
 
     return billings;
-  }, [
-    allDates,
-    selectedDoctor,
-  ]);
+  }, [allDates, selectedDoctor]);
 
   // Filter pathology billings by date range and doctor
   const filteredPathologyBillings = useMemo(() => {
@@ -553,13 +556,17 @@ export default function ReportsPage() {
     // Apply date range filter if not showing all dates
     if (!allDates && dateRange.start && dateRange.end) {
       const start = new Date(dateRange.start);
+
       start.setHours(0, 0, 0, 0);
       const end = new Date(dateRange.end);
+
       end.setHours(23, 59, 59, 999);
 
       billings = billings.filter((b) => {
         const d = b.invoiceDate ? new Date(b.invoiceDate) : null;
+
         if (!d || Number.isNaN(d.getTime())) return false;
+
         return d >= start && d <= end;
       });
     }
@@ -571,6 +578,7 @@ export default function ReportsPage() {
         const isReferrer = b.referringDoctors?.some(
           (rd) => rd.doctorId === selectedDoctor,
         );
+
         return isReferrer;
       });
     }
@@ -783,6 +791,7 @@ export default function ReportsPage() {
         description: "No pathology billing data available for export.",
         color: "warning",
       });
+
       return;
     }
 
@@ -795,10 +804,12 @@ export default function ReportsPage() {
 
         // For pathology, we attribute based on referral records
         let attributedRevenue = billing.totalAmount;
+
         if (selectedDoctor !== "all") {
           const referral = billing.referringDoctors?.find(
             (rd) => rd.doctorId === selectedDoctor,
           );
+
           if (referral) {
             attributedRevenue = referral.calculatedAmount;
           } else {
@@ -1060,7 +1071,9 @@ export default function ReportsPage() {
       {/* Page Header — spec: clarity-page-header, clarity-page-title, clarity-page-subtitle */}
       <div className="clarity-page-header flex-col sm:flex-row gap-4 !items-start sm:!items-center">
         <div>
-          <h1 className={title({ size: "lg", color: "primary" })}>Reports & Analytics</h1>
+          <h1 className={title({ size: "lg", color: "primary" })}>
+            Reports & Analytics
+          </h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Generate comprehensive reports and analyze clinic performance
           </p>
@@ -1247,7 +1260,9 @@ export default function ReportsPage() {
                       className="justify-start h-10 px-3 bg-primary-50/50 dark:bg-primary-900/10 border border-primary-100/50 dark:border-primary-800/30 text-primary-700 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={<IoCalendarOutline className="w-4 h-4 opacity-80" />}
+                      startContent={
+                        <IoCalendarOutline className="w-4 h-4 opacity-80" />
+                      }
                       variant="flat"
                       onPress={exportAppointmentsReport}
                     >
@@ -1258,7 +1273,9 @@ export default function ReportsPage() {
                       className="justify-start h-10 px-3 bg-secondary-50/50 dark:bg-secondary-900/10 border border-secondary-100/50 dark:border-secondary-800/30 text-secondary-700 dark:text-secondary-400 hover:bg-secondary-100 dark:hover:bg-secondary-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={<IoPeopleOutline className="w-4 h-4 opacity-80" />}
+                      startContent={
+                        <IoPeopleOutline className="w-4 h-4 opacity-80" />
+                      }
                       variant="flat"
                       onPress={exportPatientsReport}
                     >
@@ -1269,7 +1286,9 @@ export default function ReportsPage() {
                       className="justify-start h-10 px-3 bg-success-50/50 dark:bg-success-900/10 border border-success-100/50 dark:border-success-800/30 text-success-700 dark:text-success-400 hover:bg-success-100 dark:hover:bg-success-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={<IoMedicalOutline className="w-4 h-4 opacity-80" />}
+                      startContent={
+                        <IoMedicalOutline className="w-4 h-4 opacity-80" />
+                      }
                       variant="flat"
                       onPress={exportDoctorsReport}
                     >
@@ -1280,7 +1299,9 @@ export default function ReportsPage() {
                       className="justify-start h-10 px-3 bg-warning-50/50 dark:bg-warning-900/10 border border-warning-100/50 dark:border-warning-800/30 text-warning-700 dark:text-warning-400 hover:bg-warning-100 dark:hover:bg-warning-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={<IoMedkitOutline className="w-4 h-4 opacity-80" />}
+                      startContent={
+                        <IoMedkitOutline className="w-4 h-4 opacity-80" />
+                      }
                       variant="flat"
                       onPress={exportMedicinesReport}
                     >
@@ -1291,7 +1312,9 @@ export default function ReportsPage() {
                       className="justify-start h-10 px-3 bg-secondary-50/50 dark:bg-secondary-900/10 border border-secondary-100/50 dark:border-secondary-800/30 text-secondary-700 dark:text-secondary-400 hover:bg-secondary-100 dark:hover:bg-secondary-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={<IoStorefrontOutline className="w-4 h-4 opacity-80" />}
+                      startContent={
+                        <IoStorefrontOutline className="w-4 h-4 opacity-80" />
+                      }
                       variant="flat"
                       onPress={exportPharmacyReport}
                     >
@@ -1302,7 +1325,9 @@ export default function ReportsPage() {
                       className="justify-start h-10 px-3 bg-mountain-50/50 dark:bg-mountain-900/10 border border-mountain-200/50 dark:border-mountain-800/30 text-mountain-700 dark:text-mountain-400 hover:bg-mountain-100 dark:hover:bg-mountain-800/20 transition-all font-medium text-[13px]"
                       isLoading={isGenerating}
                       size="sm"
-                      startContent={<IoLayersOutline className="w-4 h-4 opacity-80" />}
+                      startContent={
+                        <IoLayersOutline className="w-4 h-4 opacity-80" />
+                      }
                       variant="flat"
                       onPress={exportInventoryReport}
                     >
@@ -1484,12 +1509,12 @@ export default function ReportsPage() {
                               <Chip
                                 color={
                                   statusColor as
-                                  | "success"
-                                  | "primary"
-                                  | "warning"
-                                  | "danger"
-                                  | "default"
-                                  | "secondary"
+                                    | "success"
+                                    | "primary"
+                                    | "warning"
+                                    | "danger"
+                                    | "default"
+                                    | "secondary"
                                 }
                                 size="sm"
                                 variant="flat"
@@ -1665,8 +1690,8 @@ export default function ReportsPage() {
                           <td className="whitespace-nowrap">
                             {patient.createdAt
                               ? new Date(
-                                patient.createdAt as any,
-                              ).toLocaleDateString()
+                                  patient.createdAt as any,
+                                ).toLocaleDateString()
                               : ""}
                           </td>
                         </tr>
@@ -2071,6 +2096,7 @@ export default function ReportsPage() {
                                   b.subtotal ||
                                   1;
                                 const scale = b.totalAmount / itemsTotal;
+
                                 b.items.forEach((item) => {
                                   if (
                                     (item.doctorId || b.doctorId) ===
@@ -2127,6 +2153,7 @@ export default function ReportsPage() {
                                   b.subtotal ||
                                   1;
                                 const scale = (b.paidAmount || 0) / itemsTotal;
+
                                 b.items.forEach((item) => {
                                   if (
                                     (item.doctorId || b.doctorId) ===
@@ -2154,6 +2181,7 @@ export default function ReportsPage() {
                                   // Pro-rate the paid amount based on revenue share
                                   const share =
                                     referral.calculatedAmount / b.totalAmount;
+
                                   totalPaid += (b.paidAmount || 0) * share;
                                 }
                               });
@@ -2256,32 +2284,55 @@ export default function ReportsPage() {
                     <h4 className="clarity-section-header">Doctor Analysis</h4>
                     {(() => {
                       // Build per-doctor revenue and invoice sets
-                      const doctorStats = new Map<string, { name: string; invoices: Set<string>; revenue: number }>();
-                      filteredBillings.forEach(b => {
-                        const itemsTotal = b.items.reduce((s, i) => s + (i.amount || 0), 0) || b.subtotal || 1;
-                        const scaleFactor = itemsTotal > 0 ? b.totalAmount / itemsTotal : 1;
+                      const doctorStats = new Map<
+                        string,
+                        { name: string; invoices: Set<string>; revenue: number }
+                      >();
 
-                        b.items.forEach(item => {
+                      filteredBillings.forEach((b) => {
+                        const itemsTotal =
+                          b.items.reduce((s, i) => s + (i.amount || 0), 0) ||
+                          b.subtotal ||
+                          1;
+                        const scaleFactor =
+                          itemsTotal > 0 ? b.totalAmount / itemsTotal : 1;
+
+                        b.items.forEach((item) => {
                           const dId = item.doctorId || b.doctorId;
-                          const dName = item.doctorName || b.doctorName || "Unknown";
+                          const dName =
+                            item.doctorName || b.doctorName || "Unknown";
+
                           if (!dId) return;
                           if (!doctorStats.has(dId)) {
-                            doctorStats.set(dId, { name: dName, invoices: new Set(), revenue: 0 });
+                            doctorStats.set(dId, {
+                              name: dName,
+                              invoices: new Set(),
+                              revenue: 0,
+                            });
                           }
                           const stats = doctorStats.get(dId)!;
+
                           stats.revenue += (item.amount || 0) * scaleFactor;
                           stats.invoices.add(b.id);
                         });
                       });
 
-                      filteredPathologyBillings.forEach(b => {
+                      filteredPathologyBillings.forEach((b) => {
                         // For pathology, we use the referringDoctors array
-                        if (b.referringDoctors && b.referringDoctors.length > 0) {
-                          b.referringDoctors.forEach(rd => {
+                        if (
+                          b.referringDoctors &&
+                          b.referringDoctors.length > 0
+                        ) {
+                          b.referringDoctors.forEach((rd) => {
                             if (!doctorStats.has(rd.doctorId)) {
-                              doctorStats.set(rd.doctorId, { name: rd.doctorName, invoices: new Set(), revenue: 0 });
+                              doctorStats.set(rd.doctorId, {
+                                name: rd.doctorName,
+                                invoices: new Set(),
+                                revenue: 0,
+                              });
                             }
                             const stats = doctorStats.get(rd.doctorId)!;
+
                             stats.revenue += rd.calculatedAmount;
                             stats.invoices.add(b.id);
                           });
@@ -2295,14 +2346,20 @@ export default function ReportsPage() {
                       return (
                         <>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {doctorList.slice(0, 6).map(doc => (
-                              <div key={doc.id} className="clarity-stat text-center">
+                            {doctorList.slice(0, 6).map((doc) => (
+                              <div
+                                key={doc.id}
+                                className="clarity-stat text-center"
+                              >
                                 <p className="clarity-stat-value text-mountain-900">
                                   NPR {Math.round(doc.revenue).toLocaleString()}
                                 </p>
-                                <p className="text-xs text-mountain-600">{doc.name}</p>
+                                <p className="text-xs text-mountain-600">
+                                  {doc.name}
+                                </p>
                                 <p className="text-[11px] text-mountain-500">
-                                  {doc.invoices.size} invoice{doc.invoices.size !== 1 ? "s" : ""}
+                                  {doc.invoices.size} invoice
+                                  {doc.invoices.size !== 1 ? "s" : ""}
                                 </p>
                               </div>
                             ))}

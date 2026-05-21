@@ -1,12 +1,18 @@
-import { PathologyBilling, AppointmentBilling } from "@/types/models";
-import { PrintLayoutConfig } from "@/types/printLayout";
 import {
   getPrintBrandingCSS,
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "./printBranding";
 
-export type PrintFormat = "A4" | "A4_HALF" | "THERMAL_80MM" | "THERMAL_58MM" | "THERMAL_4INCH";
+import { PathologyBilling, AppointmentBilling } from "@/types/models";
+import { PrintLayoutConfig } from "@/types/printLayout";
+
+export type PrintFormat =
+  | "A4"
+  | "A4_HALF"
+  | "THERMAL_80MM"
+  | "THERMAL_58MM"
+  | "THERMAL_4INCH";
 
 /**
  * Generates HTML content for printing an invoice
@@ -17,10 +23,14 @@ export const generateInvoiceHTML = (
   clinic: any,
   layoutConfig: any,
 ): string => {
-  const isThermal = format === "THERMAL_80MM" || format === "THERMAL_58MM" || format === "THERMAL_4INCH";
+  const isThermal =
+    format === "THERMAL_80MM" ||
+    format === "THERMAL_58MM" ||
+    format === "THERMAL_4INCH";
 
   // Use config-defined width if available and format is thermal
   let thermalWidth = "80mm";
+
   if (format === "THERMAL_80MM") thermalWidth = "80mm";
   else if (format === "THERMAL_58MM") thermalWidth = "58mm";
   else if (format === "THERMAL_4INCH") thermalWidth = "104mm";
@@ -28,8 +38,12 @@ export const generateInvoiceHTML = (
     thermalWidth = `${layoutConfig.thermalPaperWidthMm}mm`;
   }
 
-  const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig, isThermal) : "";
-  const headerHTML = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic, isThermal) : "";
+  const brandingCSS = layoutConfig
+    ? getPrintBrandingCSS(layoutConfig, isThermal)
+    : "";
+  const headerHTML = layoutConfig
+    ? getPrintHeaderHTML(layoutConfig, clinic, isThermal)
+    : "";
   const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
   const itemsHtml = billing.items
@@ -64,7 +78,7 @@ export const generateInvoiceHTML = (
     body {
       font-family: ${layoutConfig?.fontFamily || "Arial, sans-serif"};
       color: ${layoutConfig?.textColor || "#333"};
-      font-size: ${isThermal ? "9px" : format === "A4_HALF" ? "10px" : (layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "11px")};
+      font-size: ${isThermal ? "9px" : format === "A4_HALF" ? "10px" : layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "11px"};
     }
     
     ${!isThermal ? brandingCSS : ""}
@@ -234,12 +248,15 @@ export const generateInvoiceHTML = (
       </div>
     </div>
     
-    ${footerHTML || `
+    ${
+      footerHTML ||
+      `
     <div class="footer">
       <p>Thank you for choosing us</p>
       <p>${new Date().toLocaleString()}</p>
     </div>
-    `}
+    `
+    }
   </div>
   
   <script>
@@ -262,10 +279,14 @@ export const generateAppointmentInvoiceHTML = (
   format: PrintFormat = "A4",
   doctor?: any,
 ): string => {
-  const isThermal = format === "THERMAL_80MM" || format === "THERMAL_58MM" || format === "THERMAL_4INCH";
+  const isThermal =
+    format === "THERMAL_80MM" ||
+    format === "THERMAL_58MM" ||
+    format === "THERMAL_4INCH";
 
   // Use config-defined width if available and format is thermal
   let thermalWidth = "80mm";
+
   if (format === "THERMAL_80MM") thermalWidth = "80mm";
   else if (format === "THERMAL_58MM") thermalWidth = "58mm";
   else if (format === "THERMAL_4INCH") thermalWidth = "104mm";
@@ -273,8 +294,12 @@ export const generateAppointmentInvoiceHTML = (
     thermalWidth = `${layoutConfig.thermalPaperWidthMm}mm`;
   }
 
-  const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig, isThermal) : "";
-  const headerHTML = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic, isThermal) : "";
+  const brandingCSS = layoutConfig
+    ? getPrintBrandingCSS(layoutConfig, isThermal)
+    : "";
+  const headerHTML = layoutConfig
+    ? getPrintHeaderHTML(layoutConfig, clinic, isThermal)
+    : "";
   const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
   // Helper to format currency
@@ -283,7 +308,12 @@ export const generateAppointmentInvoiceHTML = (
   // Helper for BS date (minimal version for utility)
   const formatDate = (date: Date | string) => {
     const d = typeof date === "string" ? new Date(date) : date;
-    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    return d.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
 
   const itemsHtml = invoice.items
@@ -301,38 +331,59 @@ export const generateAppointmentInvoiceHTML = (
 
   // Get involved clinicians
   const cliniciansMap = new Map();
-  const primaryDocId = invoice.doctorId && invoice.doctorId !== "unassigned" ? invoice.doctorId : (doctor?.id || "unassigned");
-  
+  const primaryDocId =
+    invoice.doctorId && invoice.doctorId !== "unassigned"
+      ? invoice.doctorId
+      : doctor?.id || "unassigned";
+
   // Safe resolution of primary doctor name
   const primaryDocName = (() => {
-    if (doctor?.name && doctor.name !== "Unknown Doctor" && doctor.name !== "Expert Cabin") {
+    if (
+      doctor?.name &&
+      doctor.name !== "Unknown Doctor" &&
+      doctor.name !== "Expert Cabin"
+    ) {
       return doctor.name;
     }
-    if (invoice.doctorName && invoice.doctorName !== "Unknown Doctor" && invoice.doctorName !== "Expert Cabin") {
+    if (
+      invoice.doctorName &&
+      invoice.doctorName !== "Unknown Doctor" &&
+      invoice.doctorName !== "Expert Cabin"
+    ) {
       return invoice.doctorName;
     }
+
     return primaryDocId !== "unassigned" ? "Unknown Doctor" : "Expert Cabin";
   })();
-    
+
   if (primaryDocName && primaryDocName !== "Unknown Doctor") {
     cliniciansMap.set(primaryDocId, { name: primaryDocName, isPrimary: true });
   }
-  
+
   invoice.items.forEach((item) => {
-    if (item.doctorId && item.doctorId !== "unassigned" && !cliniciansMap.has(item.doctorId)) {
-      const name = item.doctorName && item.doctorName !== "Unknown Doctor" && item.doctorName !== "Expert Cabin"
-        ? item.doctorName
-        : "Expert Cabin";
+    if (
+      item.doctorId &&
+      item.doctorId !== "unassigned" &&
+      !cliniciansMap.has(item.doctorId)
+    ) {
+      const name =
+        item.doctorName &&
+        item.doctorName !== "Unknown Doctor" &&
+        item.doctorName !== "Expert Cabin"
+          ? item.doctorName
+          : "Expert Cabin";
+
       cliniciansMap.set(item.doctorId, { name, isPrimary: false });
     }
   });
   const cliniciansList = Array.from(cliniciansMap.values());
-  const cliniciansHtml = cliniciansList.length > 0
-    ? `<div>
+  const cliniciansHtml =
+    cliniciansList.length > 0
+      ? `<div>
         <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #333;">${cliniciansList.length > 1 ? "Clinicians" : "Clinician"}:</h3>
         ${cliniciansList.map((c) => `<p style="margin: 2px 0; font-size: 12px; font-weight: 500;">${c.name}${c.isPrimary && cliniciansList.length > 1 ? " (Primary)" : ""}</p>`).join("")}
       </div>`
-    : "";
+      : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -353,7 +404,7 @@ export const generateAppointmentInvoiceHTML = (
     body {
       font-family: ${layoutConfig?.fontFamily || "'Nunito', 'Plus Jakarta Sans', 'Inter', system-ui, Arial, sans-serif"};
       color: ${layoutConfig?.textColor || "#333"};
-      font-size: ${isThermal ? "9px" : (layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "11px")};
+      font-size: ${isThermal ? "9px" : layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "11px"};
       line-height: 1.3;
     }
     .print-container {
@@ -550,12 +601,16 @@ export const generateAppointmentInvoiceHTML = (
       ${isThermal ? cliniciansHtml : ""}
     </div>
     
-    ${!isThermal && footerHTML ? footerHTML : `
+    ${
+      !isThermal && footerHTML
+        ? footerHTML
+        : `
     <div style="margin-top: 15px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 5px;">
       <p>Thank you for choosing us</p>
       ${isThermal ? `<p>${new Date().toLocaleString()}</p>` : ""}
     </div>
-    `}
+    `
+    }
   </div>
   
   <script>
@@ -576,10 +631,14 @@ export const generatePatientSlipHTML = (
   format: PrintFormat,
   layoutConfig: PrintLayoutConfig | null,
 ): string => {
-  const isThermal = format === "THERMAL_80MM" || format === "THERMAL_58MM" || format === "THERMAL_4INCH";
+  const isThermal =
+    format === "THERMAL_80MM" ||
+    format === "THERMAL_58MM" ||
+    format === "THERMAL_4INCH";
 
   // Use config-defined width if available and format is thermal
   let thermalWidth = "80mm";
+
   if (format === "THERMAL_80MM") thermalWidth = "80mm";
   else if (format === "THERMAL_58MM") thermalWidth = "58mm";
   else if (format === "THERMAL_4INCH") thermalWidth = "104mm";
@@ -587,28 +646,41 @@ export const generatePatientSlipHTML = (
     thermalWidth = `${layoutConfig.thermalPaperWidthMm}mm`;
   }
 
-  const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig, isThermal) : "";
+  const brandingCSS = layoutConfig
+    ? getPrintBrandingCSS(layoutConfig, isThermal)
+    : "";
 
   // Helper for date formatting
   const formatDate = (date: Date | string) => {
     const d = typeof date === "string" ? new Date(date) : date;
-    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    return d.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
 
   const calculateAge = (dob: Date | string): number => {
     const today = new Date();
     const b = typeof dob === "string" ? new Date(dob) : dob;
     let a = today.getFullYear() - b.getFullYear();
+
     if (
       today.getMonth() < b.getMonth() ||
       (today.getMonth() === b.getMonth() && today.getDate() < b.getDate())
     )
       a--;
+
     return a;
   };
 
   const ageGender = [
-    patient.dob ? calculateAge(patient.dob) + " yrs" : (patient.age ? patient.age + " yrs" : ""),
+    patient.dob
+      ? calculateAge(patient.dob) + " yrs"
+      : patient.age
+        ? patient.age + " yrs"
+        : "",
     patient.gender || "",
   ]
     .filter(Boolean)

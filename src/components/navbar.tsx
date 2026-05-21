@@ -31,6 +31,7 @@ export const Navbar = () => {
     if (logo.startsWith("http")) return logo;
     try {
       const url = storage.getFileView(APPWRITE_BUCKET_ID, logo);
+
       return `${url.toString()}&t=${Date.now()}`;
     } catch {
       return null;
@@ -47,13 +48,20 @@ export const Navbar = () => {
     if (!clinicId) return;
     let cancelled = false;
 
-    clinicService.getClinicById(clinicId).then((clinic) => {
-      if (cancelled || !clinic) return;
-      setClinicName(clinic.name);
-      if (clinic.logo) setClinicLogo(getLogoUrl(clinic.logo));
-    }).catch(() => {/* silently fall back to defaults */ });
+    clinicService
+      .getClinicById(clinicId)
+      .then((clinic) => {
+        if (cancelled || !clinic) return;
+        setClinicName(clinic.name);
+        if (clinic.logo) setClinicLogo(getLogoUrl(clinic.logo));
+      })
+      .catch(() => {
+        /* silently fall back to defaults */
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [clinicId]);
 
   const handleLogout = async () => {
@@ -91,6 +99,7 @@ export const Navbar = () => {
                   src={clinicLogo}
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
+
                     target.onerror = null; // Prevent infinite loop if fallback also fails
                     target.src = "/logo.png";
                   }}
@@ -277,7 +286,9 @@ export const Navbar = () => {
       <div
         className={clsx(
           "lg:hidden absolute top-[100%] left-0 w-full bg-[rgb(var(--color-surface))] overflow-hidden transition-all duration-300",
-          isMenuOpen ? "max-h-[500px] border-b border-[rgb(var(--color-border))]" : "max-h-0",
+          isMenuOpen
+            ? "max-h-[500px] border-b border-[rgb(var(--color-border))]"
+            : "max-h-0",
         )}
       >
         <div className="px-4 py-4 flex flex-col gap-2">

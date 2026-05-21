@@ -165,9 +165,7 @@ const DoctorSpecialityPage: React.FC = () => {
         isActive: formData.isActive,
         clinicId,
         createdBy: currentUser.uid,
-        ...(editingSpeciality
-          ? {}
-          : { branchId: userData?.branchId || "" }),
+        ...(editingSpeciality ? {} : { branchId: userData?.branchId || "" }),
       };
 
       if (editingSpeciality) {
@@ -416,10 +414,11 @@ const DoctorSpecialityPage: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span
-                          className={`clarity-badge inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border ${speciality.isActive
-                            ? "bg-teal-100 text-teal-700 border-teal-200"
-                            : "bg-red-100 text-red-700 border-red-200"
-                            }`}
+                          className={`clarity-badge inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border ${
+                            speciality.isActive
+                              ? "bg-teal-100 text-teal-700 border-teal-200"
+                              : "bg-red-100 text-red-700 border-red-200"
+                          }`}
                         >
                           {speciality.isActive ? (
                             <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />

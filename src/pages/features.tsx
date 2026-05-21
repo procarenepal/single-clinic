@@ -1,7 +1,5 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useTheme } from "@/context/ThemeContext";
-import { Button } from "@/components/ui/button";
 import {
   Sparkles,
   ShieldCheck,
@@ -15,10 +13,11 @@ import {
   FlaskConical,
   Clock,
   MapPin,
-  ArrowRight,
   Sun,
-  Wind,
 } from "lucide-react";
+
+import { useTheme } from "@/context/ThemeContext";
+import { Button } from "@/components/ui/button";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -75,15 +74,18 @@ export default function FeaturesPage() {
                 variants={itemVariants}
               >
                 HSC Laser Hospital <br />{" "}
-                <span className="text-[rgb(var(--color-primary))]">Medical Excellence</span>
+                <span className="text-[rgb(var(--color-primary))]">
+                  Medical Excellence
+                </span>
               </motion.h1>
 
               <motion.p
                 className="text-base lg:text-lg text-[rgb(var(--color-text-muted))] mb-8 max-w-xl mx-auto lg:mx-0 font-medium leading-relaxed"
                 variants={itemVariants}
               >
-                Explore our full suite of precision-engineered protocols, fusing 
-                world-leading K-Beauty innovation with Himalayan environmental science.
+                Explore our full suite of precision-engineered protocols, fusing
+                world-leading K-Beauty innovation with Himalayan environmental
+                science.
               </motion.p>
 
               <motion.div
@@ -91,7 +93,10 @@ export default function FeaturesPage() {
                 variants={itemVariants}
               >
                 <Link className="no-underline" to="/login">
-                  <Button className="px-10 py-6 text-sm font-bold rounded-xl bg-[rgb(var(--color-primary))] hover:bg-[rgb(var(--color-primary)/0.9)] text-white border-none shadow-lg shadow-[rgb(var(--color-primary)/0.2)]" size="lg">
+                  <Button
+                    className="px-10 py-6 text-sm font-bold rounded-xl bg-[rgb(var(--color-primary))] hover:bg-[rgb(var(--color-primary)/0.9)] text-white border-none shadow-lg shadow-[rgb(var(--color-primary)/0.2)]"
+                    size="lg"
+                  >
                     Schedule Consultation
                   </Button>
                 </Link>
@@ -110,10 +115,10 @@ export default function FeaturesPage() {
           </div>
 
           {/* Proper Clinical Hero Image */}
-          <motion.div 
+          <motion.div
+            animate={{ opacity: 1, x: 0 }}
             className="flex-1 w-full relative"
             initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
             <div className="relative group">
@@ -145,11 +150,15 @@ export default function FeaturesPage() {
               Laser Precision
             </div>
             <h2 className="text-2xl lg:text-4xl font-bold text-[rgb(var(--color-text))] mb-6 tracking-tight">
-              Advanced <span className="text-[rgb(var(--color-primary))]">K-Laser Technology</span>
+              Advanced{" "}
+              <span className="text-[rgb(var(--color-primary))]">
+                K-Laser Technology
+              </span>
             </h2>
             <p className="text-lg text-[rgb(var(--color-text-muted))] max-w-2xl mx-auto leading-relaxed">
-              We utilize state-of-the-art Korean laser systems specifically calibrated 
-              to treat the unique skin profiles of the Himalayan region.
+              We utilize state-of-the-art Korean laser systems specifically
+              calibrated to treat the unique skin profiles of the Himalayan
+              region.
             </p>
           </div>
 
@@ -228,10 +237,13 @@ export default function FeaturesPage() {
               Signature Protocols
             </div>
             <h2 className="text-2xl lg:text-4xl font-bold text-[rgb(var(--color-text))] mb-6 tracking-tight">
-              The HSC <span className="text-[rgb(var(--color-primary))]">Glass Skin Journey</span>
+              The HSC{" "}
+              <span className="text-[rgb(var(--color-primary))]">
+                Glass Skin Journey
+              </span>
             </h2>
             <p className="text-lg text-[rgb(var(--color-text-muted))] max-w-2xl mx-auto leading-relaxed">
-              Experience our legendary 10-step hydration and radiance protocol, 
+              Experience our legendary 10-step hydration and radiance protocol,
               meticulously adapted for the high-altitude environment of Nepal.
             </p>
           </div>
@@ -306,11 +318,15 @@ export default function FeaturesPage() {
               Medical Authority
             </div>
             <h2 className="text-2xl lg:text-4xl font-bold text-[rgb(var(--color-text))] mb-6 tracking-tight">
-              Clinical <span className="text-[rgb(var(--color-primary))]">Excellence Pillars</span>
+              Clinical{" "}
+              <span className="text-[rgb(var(--color-primary))]">
+                Excellence Pillars
+              </span>
             </h2>
             <p className="text-lg text-[rgb(var(--color-text-muted))] max-w-2xl mx-auto leading-relaxed">
-              Every procedure at HSC Laser Hospital is performed under the highest medical 
-              oversight to ensure safety, precision, and stunning results.
+              Every procedure at HSC Laser Hospital is performed under the
+              highest medical oversight to ensure safety, precision, and
+              stunning results.
             </p>
           </div>
 
@@ -384,8 +400,9 @@ export default function FeaturesPage() {
               </h3>
             </div>
             <p className="text-[rgb(var(--color-text-muted))] mb-8 leading-relaxed text-lg font-medium">
-              Kathmandu's altitude and UV levels require a unique dermatological 
-              approach. We have optimized every Korean protocol for local conditions.
+              Kathmandu's altitude and UV levels require a unique dermatological
+              approach. We have optimized every Korean protocol for local
+              conditions.
             </p>
             <ul className="space-y-4">
               {[
@@ -418,8 +435,9 @@ export default function FeaturesPage() {
               </h3>
             </div>
             <p className="text-[rgb(var(--color-text-muted))] mb-8 leading-relaxed text-lg font-medium">
-              Our team consists of board-certified dermatologists and aesthetic 
-              nurses trained in Seoul, ensuring the highest surgical-grade precision.
+              Our team consists of board-certified dermatologists and aesthetic
+              nurses trained in Seoul, ensuring the highest surgical-grade
+              precision.
             </p>
             <ul className="space-y-4">
               {[
@@ -455,21 +473,29 @@ export default function FeaturesPage() {
             className="text-3xl md:text-5xl font-bold mb-6 text-[rgb(var(--color-text))] tracking-tight leading-tight"
             variants={itemVariants}
           >
-            Begin Your <br /> <span className="text-[rgb(var(--color-primary))]">Glow Journey</span> Today
+            Begin Your <br />{" "}
+            <span className="text-[rgb(var(--color-primary))]">
+              Glow Journey
+            </span>{" "}
+            Today
           </motion.h2>
           <motion.p
             className="text-[rgb(var(--color-text-muted))] text-xl mb-12 max-w-2xl font-medium leading-relaxed"
             variants={itemVariants}
           >
-            Join over 5,000 patients who have transformed their skin at HSC Laser Hospital. 
-            Schedule your digital skin analysis and medical consultation today.
+            Join over 5,000 patients who have transformed their skin at HSC
+            Laser Hospital. Schedule your digital skin analysis and medical
+            consultation today.
           </motion.p>
           <motion.div
             className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto"
             variants={itemVariants}
           >
             <Link className="no-underline w-full sm:w-auto" to="/login">
-              <Button className="w-full sm:w-auto px-12 py-7 text-base font-bold rounded-xl shadow-xl bg-[rgb(var(--color-primary))] hover:bg-[rgb(var(--color-primary)/0.9)] text-white border-none" size="lg">
+              <Button
+                className="w-full sm:w-auto px-12 py-7 text-base font-bold rounded-xl shadow-xl bg-[rgb(var(--color-primary))] hover:bg-[rgb(var(--color-primary)/0.9)] text-white border-none"
+                size="lg"
+              >
                 Schedule Consultation
               </Button>
             </Link>

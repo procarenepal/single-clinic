@@ -22,18 +22,8 @@ import {
   ModalBody,
   ModalFooter,
 } from "@/components/ui/modal";
-import {
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
-} from "@/components/ui/table";
-import { Chip } from "@/components/ui/chip";
 import { Card, CardBody } from "@/components/ui/card";
 import { Tabs, Tab } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { medicineService } from "@/services/medicineService";
@@ -183,11 +173,16 @@ export default function StockTab({
       setCurrentStockItem(stockItem);
 
       let expStr = "";
+
       if (stockItem.expiryDate) {
         const dateVal = stockItem.expiryDate as any;
-        const d = dateVal && typeof dateVal.toDate === "function"
-          ? dateVal.toDate()
-          : (dateVal instanceof Date ? dateVal : new Date(dateVal));
+        const d =
+          dateVal && typeof dateVal.toDate === "function"
+            ? dateVal.toDate()
+            : dateVal instanceof Date
+              ? dateVal
+              : new Date(dateVal);
+
         if (!isNaN(d.getTime())) {
           expStr = d.toISOString().split("T")[0];
         }
@@ -265,7 +260,9 @@ export default function StockTab({
         clinicId,
         updatedBy: userData.id,
         batchNumber: stockFormData.batchNumber || "DEFAULT",
-        expiryDate: stockFormData.expiryDate ? new Date(stockFormData.expiryDate) : null,
+        expiryDate: stockFormData.expiryDate
+          ? new Date(stockFormData.expiryDate)
+          : null,
       };
 
       if (currentStockItem) {
@@ -517,19 +514,33 @@ export default function StockTab({
                   <table className="clarity-table w-full text-left border-collapse min-w-[900px]">
                     <thead>
                       <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
-                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">MEDICINE</th>
-                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">CURRENT STOCK</th>
-                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">STOCK LEVEL</th>
-                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">REORDER LEVEL</th>
-                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">LOCATION</th>
-                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">STATUS</th>
-                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-24">ACTIONS</th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                          MEDICINE
+                        </th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                          CURRENT STOCK
+                        </th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                          STOCK LEVEL
+                        </th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                          REORDER LEVEL
+                        </th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                          LOCATION
+                        </th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                          STATUS
+                        </th>
+                        <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-24">
+                          ACTIONS
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
                       {isLoading ? (
                         <tr>
-                          <td colSpan={7} className="px-5 py-10 text-center">
+                          <td className="px-5 py-10 text-center" colSpan={7}>
                             <div className="flex flex-col items-center gap-2 text-[rgb(var(--color-text-muted)/0.7)] text-[12.5px]">
                               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                               <span>Loading stock...</span>
@@ -538,7 +549,10 @@ export default function StockTab({
                         </tr>
                       ) : filteredStockItems.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-5 py-10 text-center text-[rgb(var(--color-text-muted))]">
+                          <td
+                            className="px-5 py-10 text-center text-[rgb(var(--color-text-muted))]"
+                            colSpan={7}
+                          >
                             No stock items found
                           </td>
                         </tr>
@@ -548,7 +562,10 @@ export default function StockTab({
                           const percentage = getStockPercentage(item);
 
                           return (
-                            <tr key={item.id} className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors">
+                            <tr
+                              key={item.id}
+                              className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors"
+                            >
                               <td className="px-5 py-3">
                                 <div>
                                   <p className="font-semibold text-[13.5px] text-[rgb(var(--color-text))]">
@@ -560,17 +577,35 @@ export default function StockTab({
                                     </p>
                                   )}
                                   <p className="text-[11px] text-[rgb(var(--color-text-muted)/0.8)] mt-0.5">
-                                    <span className="font-semibold text-primary/80">Batch:</span> {item.batchNumber || "DEFAULT"}
-                                    <span className="mx-1 text-[rgb(var(--color-text-muted)/0.4)]">|</span>
-                                    <span className="font-semibold text-rose-500/80">Expires:</span> {(() => {
+                                    <span className="font-semibold text-primary/80">
+                                      Batch:
+                                    </span>{" "}
+                                    {item.batchNumber || "DEFAULT"}
+                                    <span className="mx-1 text-[rgb(var(--color-text-muted)/0.4)]">
+                                      |
+                                    </span>
+                                    <span className="font-semibold text-rose-500/80">
+                                      Expires:
+                                    </span>{" "}
+                                    {(() => {
                                       const dateVal = item.expiryDate as any;
+
                                       if (!dateVal) return "N/A";
-                                      const d = dateVal && typeof dateVal.toDate === "function"
-                                        ? dateVal.toDate()
-                                        : (dateVal instanceof Date ? dateVal : new Date(dateVal));
+                                      const d =
+                                        dateVal &&
+                                        typeof dateVal.toDate === "function"
+                                          ? dateVal.toDate()
+                                          : dateVal instanceof Date
+                                            ? dateVal
+                                            : new Date(dateVal);
+
                                       return isNaN(d.getTime())
                                         ? "N/A"
-                                        : d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+                                        : d.toLocaleDateString("en-US", {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                          });
                                     })()}
                                   </p>
                                 </div>
@@ -578,12 +613,18 @@ export default function StockTab({
                               <td className="px-5 py-3">
                                 <div className="space-y-1">
                                   <p className="text-[13px] text-[rgb(var(--color-text))]">
-                                    <span className="font-medium text-[rgb(var(--color-text-muted))]">Regular:</span> {item.currentStock}{" "}
-                                    {item.medicine.unit}
+                                    <span className="font-medium text-[rgb(var(--color-text-muted))]">
+                                      Regular:
+                                    </span>{" "}
+                                    {item.currentStock} {item.medicine.unit}
                                     {item.schemeStock > 0 && (
                                       <span className="text-[rgb(var(--color-text-muted)/0.6)]">
                                         {" "}
-                                        | <span className="font-medium">Scheme:</span> {item.schemeStock}
+                                        |{" "}
+                                        <span className="font-medium">
+                                          Scheme:
+                                        </span>{" "}
+                                        {item.schemeStock}
                                       </span>
                                     )}
                                   </p>
@@ -600,8 +641,9 @@ export default function StockTab({
                               <td className="px-5 py-3">
                                 {item.maximumStock ? (
                                   <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
-                                    {item.currentStock + (item.schemeStock || 0)} /{" "}
-                                    {item.maximumStock}
+                                    {item.currentStock +
+                                      (item.schemeStock || 0)}{" "}
+                                    / {item.maximumStock}
                                   </span>
                                 ) : (
                                   <span className="text-[12px] text-[rgb(var(--color-text-muted)/0.4)] italic">
@@ -627,12 +669,13 @@ export default function StockTab({
                               </td>
                               <td className="px-5 py-3">
                                 <span
-                                  className={`inline-flex px-2 py-0.5 rounded text-[10.5px] font-bold border ${status.color === "danger"
-                                    ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                                    : status.color === "warning"
-                                      ? "bg-saffron-500/10 text-saffron-500 border-saffron-500/20"
-                                      : "bg-health-500/10 text-health-500 border-health-500/20"
-                                    }`}
+                                  className={`inline-flex px-2 py-0.5 rounded text-[10.5px] font-bold border ${
+                                    status.color === "danger"
+                                      ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                      : status.color === "warning"
+                                        ? "bg-saffron-500/10 text-saffron-500 border-saffron-500/20"
+                                        : "bg-health-500/10 text-health-500 border-health-500/20"
+                                  }`}
                                 >
                                   {status.label}
                                 </span>
@@ -679,7 +722,8 @@ export default function StockTab({
                       All Good!
                     </h3>
                     <p className="text-[13px] text-[rgb(var(--color-text-muted))] mt-1 max-w-xs">
-                      No items are currently running low on stock. Your inventory levels are adequate.
+                      No items are currently running low on stock. Your
+                      inventory levels are adequate.
                     </p>
                   </div>
                 ) : (
@@ -687,16 +731,29 @@ export default function StockTab({
                     <table className="clarity-table w-full text-left border-collapse min-w-[700px]">
                       <thead>
                         <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">MEDICINE</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">CURRENT STOCK</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">REORDER LEVEL</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">SHORTAGE</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-24">ACTIONS</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            MEDICINE
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            CURRENT STOCK
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            REORDER LEVEL
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            SHORTAGE
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase w-24">
+                            ACTIONS
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
                         {lowStockItems.map((item) => (
-                          <tr key={item.id} className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors">
+                          <tr
+                            key={item.id}
+                            className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors"
+                          >
                             <td className="px-5 py-3">
                               <div className="flex items-center gap-2">
                                 <IoWarningOutline className="text-saffron-500 w-4 h-4" />
@@ -714,7 +771,8 @@ export default function StockTab({
                             </td>
                             <td className="px-5 py-3">
                               <span className="text-[13px] font-medium text-saffron-500">
-                                Regular: {item.currentStock} {item.medicine.unit}
+                                Regular: {item.currentStock}{" "}
+                                {item.medicine.unit}
                                 {item.schemeStock > 0 && (
                                   <span className="text-[rgb(var(--color-text-muted)/0.6)]">
                                     {" "}
@@ -733,7 +791,8 @@ export default function StockTab({
                                 {Math.max(
                                   0,
                                   item.reorderLevel -
-                                  (item.currentStock + (item.schemeStock || 0)),
+                                    (item.currentStock +
+                                      (item.schemeStock || 0)),
                                 )}{" "}
                                 {item.medicine.unit}
                               </span>
@@ -774,17 +833,32 @@ export default function StockTab({
                     <table className="clarity-table w-full text-left border-collapse min-w-[800px]">
                       <thead>
                         <tr className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">DATE</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">TYPE</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">QUANTITY</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">STOCK CHANGE</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">AMOUNT</th>
-                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">REFERENCE</th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            DATE
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            TYPE
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            QUANTITY
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            STOCK CHANGE
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            AMOUNT
+                          </th>
+                          <th className="px-5 py-3 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.06em] uppercase">
+                            REFERENCE
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
                         {stockTransactions.map((transaction) => (
-                          <tr key={transaction.id} className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors">
+                          <tr
+                            key={transaction.id}
+                            className="hover:bg-[rgb(var(--color-surface-2))/0.5] transition-colors"
+                          >
                             <td className="px-5 py-3">
                               <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
                                 {transaction.createdAt
@@ -794,14 +868,15 @@ export default function StockTab({
                             </td>
                             <td className="px-5 py-3">
                               <span
-                                className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${transaction.type === "purchase"
-                                  ? "bg-health-500/10 text-health-500 border-health-500/20"
-                                  : transaction.type === "sale"
-                                    ? "bg-primary/10 text-primary border-primary/20"
-                                    : transaction.type === "adjustment"
-                                      ? "bg-saffron-500/10 text-saffron-500 border-saffron-500/20"
-                                      : "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                                  }`}
+                                className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                  transaction.type === "purchase"
+                                    ? "bg-health-500/10 text-health-500 border-health-500/20"
+                                    : transaction.type === "sale"
+                                      ? "bg-primary/10 text-primary border-primary/20"
+                                      : transaction.type === "adjustment"
+                                        ? "bg-saffron-500/10 text-saffron-500 border-saffron-500/20"
+                                        : "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                }`}
                               >
                                 {transaction.type}
                               </span>
@@ -820,20 +895,34 @@ export default function StockTab({
                                 )}
                                 <span className="text-[12.5px] text-[rgb(var(--color-text-muted))]">
                                   {transaction.previousStock} →{" "}
-                                  <span className="font-medium text-[rgb(var(--color-text))]">{transaction.newStock}</span>
+                                  <span className="font-medium text-[rgb(var(--color-text))]">
+                                    {transaction.newStock}
+                                  </span>
                                 </span>
                               </div>
                             </td>
                             <td className="px-5 py-3">
                               {transaction.totalAmount ? (
-                                <span className="text-[13px] font-semibold text-[rgb(var(--color-text))]">NPR {transaction.totalAmount}</span>
+                                <span className="text-[13px] font-semibold text-[rgb(var(--color-text))]">
+                                  NPR {transaction.totalAmount}
+                                </span>
                               ) : (
-                                <span className="text-[12px] text-[rgb(var(--color-text-muted)/0.4)]">N/A</span>
+                                <span className="text-[12px] text-[rgb(var(--color-text-muted)/0.4)]">
+                                  N/A
+                                </span>
                               )}
                             </td>
                             <td className="px-5 py-3">
-                              <span className="text-[12.5px] text-[rgb(var(--color-text-muted))] line-clamp-1 max-w-[150px]" title={transaction.invoiceNumber || transaction.reason}>
-                                {transaction.invoiceNumber || transaction.reason || "—"}
+                              <span
+                                className="text-[12.5px] text-[rgb(var(--color-text-muted))] line-clamp-1 max-w-[150px]"
+                                title={
+                                  transaction.invoiceNumber ||
+                                  transaction.reason
+                                }
+                              >
+                                {transaction.invoiceNumber ||
+                                  transaction.reason ||
+                                  "—"}
                               </span>
                             </td>
                           </tr>

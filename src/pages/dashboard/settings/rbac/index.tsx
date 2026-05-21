@@ -1,16 +1,34 @@
 import React, { useState } from "react";
-import { Card, CardBody, Tabs, Tab, Button } from "@heroui/react";
-import { ShieldIcon, UsersIcon, ArrowLeftIcon } from "lucide-react";
+import { Card, CardBody, Tabs, Tab, Button, Spinner } from "@heroui/react";
+import {
+  ShieldIcon,
+  UsersIcon,
+  ArrowLeftIcon,
+  ActivityIcon,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { title } from "@/components/primitives";
 
-import { RoleManagement, UserManagement } from "../../../../components/rbac";
+import {
+  RoleManagement,
+  UserManagement,
+  AuditLogViewer,
+} from "../../../../components/rbac";
 import { useAuth } from "../../../../hooks/useAuth";
 
+import { title } from "@/components/primitives";
+
 export default function RBACManagementPage() {
-  const { clinicId, isClinicAdmin } = useAuth();
+  const { clinicId, isClinicAdmin, isLoading } = useAuth();
   const [selectedTab, setSelectedTab] = useState("roles");
   const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
 
   // Only clinic admins can access RBAC management
   if (!isClinicAdmin() || !clinicId) {
@@ -34,7 +52,9 @@ export default function RBACManagementPage() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className={`${title({ size: "lg" })} text-primary`}>Staff & User Management</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
+            Staff & User Management
+          </h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Manage roles, permissions, and user assignments for your clinic
           </p>
@@ -90,6 +110,19 @@ export default function RBACManagementPage() {
             >
               <div className="py-6">
                 <UserManagement clinicId={clinicId} />
+              </div>
+            </Tab>
+            <Tab
+              key="audit"
+              title={
+                <div className="flex items-center space-x-2">
+                  <ActivityIcon size={16} />
+                  <span>Audit Logs</span>
+                </div>
+              }
+            >
+              <div className="py-6">
+                <AuditLogViewer clinicId={clinicId} />
               </div>
             </Tab>
           </Tabs>

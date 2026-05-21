@@ -1,33 +1,155 @@
 import React, { useState } from "react";
 import { collection, writeBatch, doc } from "firebase/firestore";
+
 import { db } from "@/config/firebase";
 import { useAuthContext } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 
 const MEDICINE_BASES = [
-  { name: "Paracetamol", type: "Tablet", unit: "tablet", strength: "500mg", rx: false },
-  { name: "Ibuprofen", type: "Tablet", unit: "tablet", strength: "400mg", rx: false },
-  { name: "Amoxicillin", type: "Capsule", unit: "capsule", strength: "500mg", rx: true },
-  { name: "Cetirizine", type: "Tablet", unit: "tablet", strength: "10mg", rx: false },
-  { name: "Omeprazole", type: "Capsule", unit: "capsule", strength: "20mg", rx: true },
-  { name: "Azithromycin", type: "Tablet", unit: "tablet", strength: "250mg", rx: true },
+  {
+    name: "Paracetamol",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "500mg",
+    rx: false,
+  },
+  {
+    name: "Ibuprofen",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "400mg",
+    rx: false,
+  },
+  {
+    name: "Amoxicillin",
+    type: "Capsule",
+    unit: "capsule",
+    strength: "500mg",
+    rx: true,
+  },
+  {
+    name: "Cetirizine",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "10mg",
+    rx: false,
+  },
+  {
+    name: "Omeprazole",
+    type: "Capsule",
+    unit: "capsule",
+    strength: "20mg",
+    rx: true,
+  },
+  {
+    name: "Azithromycin",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "250mg",
+    rx: true,
+  },
   { name: "Diclofenac", type: "Gel", unit: "tube", strength: "1%", rx: false },
-  { name: "Amlodipine", type: "Tablet", unit: "tablet", strength: "5mg", rx: true },
-  { name: "Metformin", type: "Tablet", unit: "tablet", strength: "500mg", rx: true },
-  { name: "Pantoprazole", type: "Tablet", unit: "tablet", strength: "40mg", rx: true },
-  { name: "Ciprofloxacin", type: "Tablet", unit: "tablet", strength: "500mg", rx: true },
-  { name: "Loratadine", type: "Tablet", unit: "tablet", strength: "10mg", rx: false },
-  { name: "Salbutamol", type: "Inhaler", unit: "piece", strength: "100mcg", rx: true },
-  { name: "Aspirin", type: "Tablet", unit: "tablet", strength: "75mg", rx: false },
-  { name: "Atorvastatin", type: "Tablet", unit: "tablet", strength: "20mg", rx: true },
-  { name: "Dexamethasone", type: "Injection", unit: "vial", strength: "4mg/ml", rx: true },
-  { name: "Ondansetron", type: "Tablet", unit: "tablet", strength: "4mg", rx: true },
-  { name: "Ranitidine", type: "Tablet", unit: "tablet", strength: "150mg", rx: false },
-  { name: "Fluconazole", type: "Capsule", unit: "capsule", strength: "150mg", rx: true },
-  { name: "Levothyroxine", type: "Tablet", unit: "tablet", strength: "50mcg", rx: true },
+  {
+    name: "Amlodipine",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "5mg",
+    rx: true,
+  },
+  {
+    name: "Metformin",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "500mg",
+    rx: true,
+  },
+  {
+    name: "Pantoprazole",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "40mg",
+    rx: true,
+  },
+  {
+    name: "Ciprofloxacin",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "500mg",
+    rx: true,
+  },
+  {
+    name: "Loratadine",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "10mg",
+    rx: false,
+  },
+  {
+    name: "Salbutamol",
+    type: "Inhaler",
+    unit: "piece",
+    strength: "100mcg",
+    rx: true,
+  },
+  {
+    name: "Aspirin",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "75mg",
+    rx: false,
+  },
+  {
+    name: "Atorvastatin",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "20mg",
+    rx: true,
+  },
+  {
+    name: "Dexamethasone",
+    type: "Injection",
+    unit: "vial",
+    strength: "4mg/ml",
+    rx: true,
+  },
+  {
+    name: "Ondansetron",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "4mg",
+    rx: true,
+  },
+  {
+    name: "Ranitidine",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "150mg",
+    rx: false,
+  },
+  {
+    name: "Fluconazole",
+    type: "Capsule",
+    unit: "capsule",
+    strength: "150mg",
+    rx: true,
+  },
+  {
+    name: "Levothyroxine",
+    type: "Tablet",
+    unit: "tablet",
+    strength: "50mcg",
+    rx: true,
+  },
 ];
 
-const MANUFACTURERS = ["PharmaCorp", "MediLife Labs", "Global Health", "CureAll Inc.", "BioGenics", "HealthPrime"];
+const MANUFACTURERS = [
+  "PharmaCorp",
+  "MediLife Labs",
+  "Global Health",
+  "CureAll Inc.",
+  "BioGenics",
+  "HealthPrime",
+];
 
 export default function MedicineSeeder() {
   const { clinicId, currentUser } = useAuthContext();
@@ -36,7 +158,10 @@ export default function MedicineSeeder() {
 
   const seedMedicines = async () => {
     if (!clinicId || !currentUser) return;
-    const confirmSeed = window.confirm("Seed 100 realistic medicines into the clinic?");
+    const confirmSeed = window.confirm(
+      "Seed 100 realistic medicines into the clinic?",
+    );
+
     if (!confirmSeed) return;
 
     setLoading(true);
@@ -44,26 +169,31 @@ export default function MedicineSeeder() {
 
     try {
       const medicinesCol = collection(db, "medicines");
-      
+
       // Firestore batches can handle up to 500 operations
       const batch = writeBatch(db);
 
       for (let i = 0; i < 100; i++) {
         const base = MEDICINE_BASES[i % MEDICINE_BASES.length];
-        const manufacturer = MANUFACTURERS[Math.floor(Math.random() * MANUFACTURERS.length)];
-        
+        const manufacturer =
+          MANUFACTURERS[Math.floor(Math.random() * MANUFACTURERS.length)];
+
         // Add variations to make 100 unique medicines
         const variation = Math.floor(i / MEDICINE_BASES.length) + 1;
-        const medicineName = variation > 1 ? `${base.name} (Var ${variation})` : base.name;
-        
+        const medicineName =
+          variation > 1 ? `${base.name} (Var ${variation})` : base.name;
+
         const costPrice = Math.floor(Math.random() * 50) + 5; // 5 to 55
         const price = costPrice + Math.floor(Math.random() * 20) + 5; // Markup of 5 to 25
 
         const expiryDate = new Date();
-        expiryDate.setFullYear(expiryDate.getFullYear() + Math.floor(Math.random() * 3) + 1); // 1-3 years from now
+
+        expiryDate.setFullYear(
+          expiryDate.getFullYear() + Math.floor(Math.random() * 3) + 1,
+        ); // 1-3 years from now
 
         const docRef = doc(medicinesCol); // Auto-generate ID
-        
+
         batch.set(docRef, {
           id: docRef.id,
           name: medicineName,
@@ -92,7 +222,9 @@ export default function MedicineSeeder() {
 
       await batch.commit();
 
-      setMessage("✅ Successfully seeded 100 medicines! Please refresh the page.");
+      setMessage(
+        "✅ Successfully seeded 100 medicines! Please refresh the page.",
+      );
     } catch (error) {
       console.error("Error seeding medicines:", error);
       setMessage("❌ Error seeding medicines. Check console.");
@@ -106,16 +238,15 @@ export default function MedicineSeeder() {
   return (
     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6 flex items-center justify-between">
       <div>
-        <h3 className="text-emerald-800 font-bold text-sm">DEVELOPER TOOL: Medicine Seeder</h3>
+        <h3 className="text-emerald-800 font-bold text-sm">
+          DEVELOPER TOOL: Medicine Seeder
+        </h3>
         <p className="text-emerald-600 text-xs mt-1">
-          {message || "Seed 100 realistic medicines into the catalog for testing."}
+          {message ||
+            "Seed 100 realistic medicines into the catalog for testing."}
         </p>
       </div>
-      <Button 
-        color="success" 
-        onClick={seedMedicines} 
-        disabled={loading}
-      >
+      <Button color="success" disabled={loading} onClick={seedMedicines}>
         {loading ? "Seeding..." : "Seed 100 Medicines"}
       </Button>
     </div>

@@ -58,9 +58,7 @@ export default function EditTextDocumentPage() {
         userData?.branchId &&
         doc.branchId !== userData.branchId
       ) {
-        if (
-          userData.role !== "system-owner"
-        ) {
+        if (userData.role !== "system-owner") {
           addToast({
             title: "Access Denied",
             description:

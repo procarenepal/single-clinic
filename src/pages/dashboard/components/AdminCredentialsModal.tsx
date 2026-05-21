@@ -13,7 +13,6 @@ import {
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter,
 } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,13 +51,14 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
 
     if (newEmail === currentUser.email) {
       setError("New email is the same as the current one.");
+
       return;
     }
 
     setLoading(true);
     try {
       const result = await updateEmailInfo(newEmail, emailConfirmPassword);
-      
+
       if (result.pendingVerification) {
         addToast({
           title: "Verification Email Sent",
@@ -68,7 +68,8 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
       } else {
         addToast({
           title: "Email Updated",
-          description: "Your login email has been updated successfully. Use it for your next login.",
+          description:
+            "Your login email has been updated successfully. Use it for your next login.",
           color: "success",
         });
       }
@@ -76,7 +77,9 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error("Email update failed:", err);
-      setError(err.message || "Failed to update email. Please check your password.");
+      setError(
+        err.message || "Failed to update email. Please check your password.",
+      );
     } finally {
       setLoading(false);
     }
@@ -89,11 +92,13 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
 
     if (newPassword !== confirmPassword) {
       setError("New passwords do not match.");
+
       return;
     }
 
     if (newPassword.length < 8) {
       setError("Password must be at least 8 characters long.");
+
       return;
     }
 
@@ -111,7 +116,10 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error("Password update failed:", err);
-      setError(err.message || "Failed to update password. Please check your current password.");
+      setError(
+        err.message ||
+          "Failed to update password. Please check your current password.",
+      );
     } finally {
       setLoading(false);
     }
@@ -126,7 +134,14 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} size="md" onClose={() => { resetForm(); onClose(); }}>
+    <Modal
+      isOpen={isOpen}
+      size="md"
+      onClose={() => {
+        resetForm();
+        onClose();
+      }}
+    >
       <ModalContent>
         <ModalHeader>
           <div className="flex items-center gap-2">
@@ -143,7 +158,10 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
                   ? "border-primary text-primary"
                   : "border-transparent text-text-muted hover:text-text-main"
               }`}
-              onClick={() => { setActiveTab("email"); setError(null); }}
+              onClick={() => {
+                setActiveTab("email");
+                setError(null);
+              }}
             >
               Change Username (Email)
             </button>
@@ -153,7 +171,10 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
                   ? "border-primary text-primary"
                   : "border-transparent text-text-muted hover:text-text-main"
               }`}
-              onClick={() => { setActiveTab("password"); setError(null); }}
+              onClick={() => {
+                setActiveTab("password");
+                setError(null);
+              }}
             >
               Change Password
             </button>
@@ -169,7 +190,9 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
             <form className="space-y-4" onSubmit={handleEmailSubmit}>
               <div className="p-4 bg-mountain-50 dark:bg-zinc-900/50 rounded-lg mb-2">
                 <p className="text-xs text-mountain-600 dark:text-zinc-400">
-                  Changing your email address will update your login username. You will need to verify the new email address before the change is finalized.
+                  Changing your email address will update your login username.
+                  You will need to verify the new email address before the
+                  change is finalized.
                 </p>
               </div>
               <Input
@@ -196,7 +219,9 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
                 }
                 label="Confirm with Password"
                 placeholder="Enter your current password"
-                startContent={<IoLockClosedOutline className="text-mountain-400" />}
+                startContent={
+                  <IoLockClosedOutline className="text-mountain-400" />
+                }
                 type={showPasswords ? "text" : "password"}
                 value={emailConfirmPassword}
                 onValueChange={setEmailConfirmPassword}
@@ -219,7 +244,9 @@ export const AdminCredentialsModal: React.FC<AdminCredentialsModalProps> = ({
                 isRequired
                 label="Current Password"
                 placeholder="Enter current password"
-                startContent={<IoLockClosedOutline className="text-mountain-400" />}
+                startContent={
+                  <IoLockClosedOutline className="text-mountain-400" />
+                }
                 type={showPasswords ? "text" : "password"}
                 value={currentPassword}
                 onValueChange={setCurrentPassword}

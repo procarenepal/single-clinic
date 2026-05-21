@@ -10,6 +10,7 @@ import {
   IoWarningOutline,
   IoCloseOutline,
 } from "react-icons/io5";
+import { useCallback } from "react";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,6 @@ import {
   validateBSDateFormat,
   debounce,
 } from "@/utils/dateConverterApi";
-import { useCallback } from "react";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
 function CustomInput({
@@ -117,7 +117,11 @@ function CustomSelect({
           Select an option
         </option>
         {options.map((opt: any) => (
-          <option key={opt.value} className="bg-content1 text-foreground" value={opt.value}>
+          <option
+            key={opt.value}
+            className="bg-content1 text-foreground"
+            value={opt.value}
+          >
             {opt.label}
           </option>
         ))}
@@ -143,7 +147,11 @@ function ReferralSourceSelect({
     rawType: "doctor" | "partner" | "expert";
   }[];
   value: string;
-  onChange: (id: string, name: string, type: "doctor" | "partner" | "expert" | "") => void;
+  onChange: (
+    id: string,
+    name: string,
+    type: "doctor" | "partner" | "expert" | "",
+  ) => void;
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -386,6 +394,7 @@ export default function PatientEditPage() {
     try {
       setLoading(true);
       const patientData = await patientService.getPatientById(patientId);
+
       if (!patientData || patientData.clinicId !== clinicId) {
         addToast({
           title: "Error",
@@ -398,17 +407,22 @@ export default function PatientEditPage() {
       }
 
       // Authorization Check: Doctors should only edit patients assigned to them
-      const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
+      const isAdmin =
+        userData?.role === "clinic-admin" || userData?.role === "system-owner";
+
       if (!isAdmin && userData?.email) {
         try {
           const docInfo = await doctorService.getDoctorByEmail(userData.email);
+
           if (docInfo && patientData.doctorId !== docInfo.id) {
             addToast({
               title: "Access Denied",
-              description: "You are only authorized to edit patients assigned to you.",
+              description:
+                "You are only authorized to edit patients assigned to you.",
               color: "danger",
             });
             navigate("/dashboard/patients");
+
             return;
           }
         } catch (e) {
@@ -418,19 +432,28 @@ export default function PatientEditPage() {
 
       setPatient(patientData);
 
-      const dobStr = (patientData.dob instanceof Date && !isNaN(patientData.dob.getTime()))
-        ? patientData.dob.toISOString().split("T")[0]
-        : "";
+      const dobStr =
+        patientData.dob instanceof Date && !isNaN(patientData.dob.getTime())
+          ? patientData.dob.toISOString().split("T")[0]
+          : "";
 
       let bsDateStr = "";
+
       if (patientData.bsDate) {
         if (typeof patientData.bsDate === "string") {
           bsDateStr = patientData.bsDate;
-        } else if (patientData.bsDate instanceof Date && !isNaN(patientData.bsDate.getTime())) {
-          bsDateStr = patientData.bsDate.toISOString().split("T")[0].replace(/-/g, "/");
+        } else if (
+          patientData.bsDate instanceof Date &&
+          !isNaN(patientData.bsDate.getTime())
+        ) {
+          bsDateStr = patientData.bsDate
+            .toISOString()
+            .split("T")[0]
+            .replace(/-/g, "/");
         } else if (typeof (patientData.bsDate as any).toDate === "function") {
           // Handle Firestore Timestamp
           const d = (patientData.bsDate as any).toDate();
+
           if (!isNaN(d.getTime())) {
             bsDateStr = d.toISOString().split("T")[0].replace(/-/g, "/");
           }
@@ -447,14 +470,18 @@ export default function PatientEditPage() {
         dob: dobStr,
         bsDate: bsDateStr,
         bloodGroup: patientData.bloodGroup || "",
-        age: patientData.dob ? calculateAge(dobStr) : (patientData.age?.toString() || ""),
+        age: patientData.dob
+          ? calculateAge(dobStr)
+          : patientData.age?.toString() || "",
         referralPartnerId: patientData.referralPartnerId || "",
         referredBy: patientData.referredBy || "",
         referralType: patientData.referralPartnerId
           ? "partner"
-          : (patientData.referredBy && doctors.some(d => d.name === patientData.referredBy))
+          : patientData.referredBy &&
+              doctors.some((d) => d.name === patientData.referredBy)
             ? "doctor"
-            : (patientData.referredBy && experts.some(e => e.name === patientData.referredBy))
+            : patientData.referredBy &&
+                experts.some((e) => e.name === patientData.referredBy)
               ? "expert"
               : "",
         phone: patientData.phone || "",
@@ -517,20 +544,21 @@ export default function PatientEditPage() {
   // Resolve referral type once sources are loaded
   useEffect(() => {
     if (patient && doctors.length > 0 && experts.length > 0) {
-      setFormData(prev => {
+      setFormData((prev) => {
         if (prev.referralType) return prev; // Already resolved or changed by user
-        
+
         let type: "doctor" | "partner" | "expert" | "" = "";
+
         if (patient.referralPartnerId) {
           type = "partner";
         } else if (patient.referredBy) {
-          if (doctors.some(d => d.name === patient.referredBy)) {
+          if (doctors.some((d) => d.name === patient.referredBy)) {
             type = "doctor";
-          } else if (experts.some(e => e.name === patient.referredBy)) {
+          } else if (experts.some((e) => e.name === patient.referredBy)) {
             type = "expert";
           }
         }
-        
+
         return { ...prev, referralType: type };
       });
     }
@@ -563,6 +591,7 @@ export default function PatientEditPage() {
     if (days < 0) {
       months--;
       const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+
       days += prevMonth;
     }
     if (months < 0) {
@@ -573,30 +602,39 @@ export default function PatientEditPage() {
     if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
     if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
     if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+
     return "0 Days";
   };
 
   const debouncedConvert = useCallback(
     debounce(
-      async (value: string, field: "dob" | "bsDate", type: "ad-to-bs" | "bs-to-ad") => {
+      async (
+        value: string,
+        field: "dob" | "bsDate",
+        type: "ad-to-bs" | "bs-to-ad",
+      ) => {
         if (!value.trim()) return;
         setConvertingDate(true);
         try {
           if (type === "ad-to-bs") {
             const d = new Date(value);
             const v = validateADDate(d);
+
             if (!v.isValid) return;
             const res = await adToBSApi(d);
-            setFormData(prev => ({ ...prev, bsDate: res.formatted }));
+
+            setFormData((prev) => ({ ...prev, bsDate: res.formatted }));
           } else {
             const v = validateBSDateFormat(value);
+
             if (!v.isValid) return;
             const res = await bsToADApi(value);
             const dobStr = res.toISOString().split("T")[0];
-            setFormData(prev => ({
+
+            setFormData((prev) => ({
               ...prev,
               dob: dobStr,
-              age: calculateAge(dobStr)
+              age: calculateAge(dobStr),
             }));
           }
         } catch (error) {
@@ -605,9 +643,9 @@ export default function PatientEditPage() {
           setConvertingDate(false);
         }
       },
-      500
+      500,
     ),
-    []
+    [],
   );
 
   const handleFormChange = (
@@ -634,6 +672,7 @@ export default function PatientEditPage() {
 
     if (name === "dob" && value) {
       const age = calculateAge(value);
+
       updatedFormData.age = age;
       debouncedConvert(value, "dob", "ad-to-bs");
     } else if (name === "bsDate" && value) {
@@ -707,16 +746,20 @@ export default function PatientEditPage() {
       // ── Uniqueness Checks ──────────────────────────────────────────────────
       const [mobileExists, emailExists] = await Promise.all([
         patientService.checkMobileExists(formData.mobile, clinicId, patientId),
-        formData.email ? patientService.checkEmailExists(formData.email, clinicId, patientId) : Promise.resolve(false),
+        formData.email
+          ? patientService.checkEmailExists(formData.email, clinicId, patientId)
+          : Promise.resolve(false),
       ]);
 
       if (mobileExists) {
         addToast({
           title: "Duplicate Mobile",
-          description: "Another patient with this mobile number already exists.",
+          description:
+            "Another patient with this mobile number already exists.",
           color: "danger",
         });
         setSaving(false);
+
         return;
       }
 
@@ -727,6 +770,7 @@ export default function PatientEditPage() {
           color: "danger",
         });
         setSaving(false);
+
         return;
       }
 
@@ -743,7 +787,12 @@ export default function PatientEditPage() {
         medicalConditions: formData.medicalConditions,
       };
 
-      if (formData.referralPartnerId && (formData.referralType === "partner" || formData.referralType === "expert" || formData.referralType === "doctor")) {
+      if (
+        formData.referralPartnerId &&
+        (formData.referralType === "partner" ||
+          formData.referralType === "expert" ||
+          formData.referralType === "doctor")
+      ) {
         // If it's a doctor or expert from our system, we might still store their ID in referralPartnerId
         // but the current model seems to use referralPartnerId mostly for 'partner' type.
         // Let's check how it's handled in create.
@@ -764,8 +813,7 @@ export default function PatientEditPage() {
         updatedPatientData.bloodGroup = formData.bloodGroup;
       if (formData.dob) updatedPatientData.dob = new Date(formData.dob);
       if (formData.bsDate) updatedPatientData.bsDate = formData.bsDate; // Store as string
-      if (formData.dob && formData.age)
-        updatedPatientData.age = formData.age;
+      if (formData.dob && formData.age) updatedPatientData.age = formData.age;
 
       await patientService.updatePatient(patientId, updatedPatientData);
       addToast({
@@ -790,7 +838,9 @@ export default function PatientEditPage() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Patient</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
+            Edit Patient
+          </h1>
         </div>
         <div className="bg-content1 border border-default-200 rounded p-12 flex items-center justify-center shadow-sm">
           <Spinner size="md" />
@@ -832,7 +882,9 @@ export default function PatientEditPage() {
             Back
           </Button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Edit Patient</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Edit Patient
+            </h1>
             <p className="text-[13.5px] text-foreground-500 mt-1">
               Update patient information
             </p>
@@ -1088,7 +1140,9 @@ export default function PatientEditPage() {
                         <button
                           className="hover:text-primary-900 transition-colors"
                           type="button"
-                          onClick={() => handleRemoveMedicalCondition(condition)}
+                          onClick={() =>
+                            handleRemoveMedicalCondition(condition)
+                          }
                         >
                           <IoCloseOutline className="text-base" />
                         </button>

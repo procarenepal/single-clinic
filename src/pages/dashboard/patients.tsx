@@ -28,10 +28,22 @@ import { clinicService } from "@/services/clinicService";
 // Types
 import { Patient, Branch } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
-import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "@/utils/printBranding";
+import {
+  getPrintBrandingCSS,
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+} from "@/utils/printBranding";
 // Custom UI
 import { title } from "@/components/primitives";
-import { Button, TableSkeleton, Spinner, Avatar, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@/components/ui";
+import {
+  Button,
+  TableSkeleton,
+  Avatar,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@/components/ui";
 import { addToast } from "@/components/ui/toast";
 // Icons
 
@@ -149,7 +161,9 @@ function Modal({
           </button>
         </div>
         {/* Body */}
-        <div className="px-4 py-3 overflow-y-auto flex-1 text-text-main">{children}</div>
+        <div className="px-4 py-3 overflow-y-auto flex-1 text-text-main">
+          {children}
+        </div>
         {/* Footer */}
         {footer && (
           <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border-base">
@@ -193,10 +207,11 @@ function Pagination({
       {pages.map((p) => (
         <button
           key={p}
-          className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${p === page
-            ? "bg-primary text-white border-primary shadow-sm"
-            : "border-border-base text-text-muted hover:border-primary hover:text-primary hover:bg-surface-2"
-            }`}
+          className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${
+            p === page
+              ? "bg-primary text-white border-primary shadow-sm"
+              : "border-border-base text-text-muted hover:border-primary hover:text-primary hover:bg-surface-2"
+          }`}
           onClick={() => onChange(p)}
         >
           {p}
@@ -226,7 +241,12 @@ const debug = (msg: string, data?: object) => {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PatientsPage() {
-  const { clinicId, userData, isSystemOwner: checkOwner, isClinicAdmin: checkAdmin } = useAuth();
+  const {
+    clinicId,
+    userData,
+    isSystemOwner: checkOwner,
+    isClinicAdmin: checkAdmin,
+  } = useAuth();
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -276,7 +296,12 @@ export default function PatientsPage() {
 
   // Bypass server-side pagination (and Firebase composite index errors) if a doctor is logged in
   const useServerPagination =
-    !search.trim() && !ageMin && !ageMax && !regStart && !regEnd && !currentDoctorId;
+    !search.trim() &&
+    !ageMin &&
+    !ageMax &&
+    !regStart &&
+    !regEnd &&
+    !currentDoctorId;
 
   const fetchPatientsPaginated = useCallback(
     async (
@@ -285,10 +310,10 @@ export default function PatientsPage() {
       doctorIdOverride?: string | null,
     ): Promise<
       | {
-        patients: Patient[];
-        lastDoc: QueryDocumentSnapshot | null;
-        totalCount?: number;
-      }
+          patients: Patient[];
+          lastDoc: QueryDocumentSnapshot | null;
+          totalCount?: number;
+        }
       | undefined
     > => {
       const searchPrefix = search.trim() || undefined;
@@ -363,7 +388,9 @@ export default function PatientsPage() {
     ],
   );
 
-  const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(null);
+  const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(
+    null,
+  );
   const [clinic, setClinic] = useState<any>(null);
 
   // ── Data load ───────────────────────────────────────────────────────────────
@@ -372,10 +399,12 @@ export default function PatientsPage() {
     Promise.all([
       clinicService.getClinicById(clinicId),
       clinicService.getPrintLayoutConfig(clinicId),
-    ]).then(([c, lc]) => {
-      if (c) setClinic(c);
-      if (lc) setLayoutConfig(lc);
-    }).catch(console.error);
+    ])
+      .then(([c, lc]) => {
+        if (c) setClinic(c);
+        if (lc) setLayoutConfig(lc);
+      })
+      .catch(console.error);
   }, [clinicId]);
 
   useEffect(() => {
@@ -400,30 +429,55 @@ export default function PatientsPage() {
 
   // Resolve the logged-in user's doctorId once
   useEffect(() => {
-    if (!clinicId || !userData?.email) return;
-    const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
-    if (isAdmin) {
+    console.log("isDoctorResolved effect triggered", {
+      clinicId,
+      hasUserData: !!userData,
+      userRole: userData?.role,
+      email: userData?.email,
+    });
+    if (!clinicId || !userData) return;
+
+    const isAdmin =
+      userData.role === "clinic-admin" || userData.role === "system-owner";
+
+    if (isAdmin || !userData.email) {
+      console.log("isDoctorResolved: resolved instantly", {
+        isAdmin,
+        hasEmail: !!userData.email,
+      });
       setIsDoctorResolved(true);
+
       return;
     }
 
     (async () => {
       try {
-        const doc = await doctorService.getDoctorByEmail(
-          userData.email!,
+        console.log(
+          "isDoctorResolved: fetching doctor by email",
+          userData.email,
         );
+        const doc = await doctorService.getDoctorByEmail(userData.email);
+
+        console.log("isDoctorResolved: fetched doctor", !!doc);
 
         if (doc) setCurrentDoctorId(doc.id);
-      } catch {
-        /* non-critical */
+      } catch (err) {
+        console.log("isDoctorResolved: error", err);
       } finally {
+        console.log("isDoctorResolved: setting true in finally");
         setIsDoctorResolved(true);
       }
     })();
-  }, [clinicId, userData?.email, userData?.role]);
+  }, [clinicId, userData]);
 
   // Client-side path: fetch ALL patients once, let `filtered` handle search/filters in render
   useEffect(() => {
+    console.log("client-side effect triggered", {
+      isDoctorResolved,
+      useServerPagination,
+      clinicId,
+      hasUserData: !!userData,
+    });
     if (!isDoctorResolved) return;
     if (useServerPagination) return;
     let cancelled = false;
@@ -436,9 +490,7 @@ export default function PatientsPage() {
     (async () => {
       try {
         const data = currentDoctorId
-          ? await patientService.getPatientsByDoctor(
-            currentDoctorId,
-          )
+          ? await patientService.getPatientsByDoctor(currentDoctorId)
           : await patientService.getPatients();
 
         if (!cancelled) {
@@ -465,29 +517,37 @@ export default function PatientsPage() {
     useServerPagination,
     currentDoctorId,
     effectiveBranchId,
+    isDoctorResolved,
   ]);
 
   // Server-side paginated path: re-fetch on filter/search changes
   useEffect(() => {
+    console.log("server-side effect triggered", {
+      isDoctorResolved,
+      useServerPagination,
+      clinicId,
+      hasUserData: !!userData,
+    });
     if (!isDoctorResolved) return;
     if (!useServerPagination) return;
     let cancelled = false;
 
     if (!clinicId || !userData) return;
-    debug("server effect run", { search, genderFilter, criticalFilter });
+    console.log("server effect run", { search, genderFilter, criticalFilter });
     setLoading(true);
     setPage(1);
     setCursorByPage({});
 
     (async () => {
       try {
+        console.log("server effect: calling fetchPatientsPaginated");
         const result = await fetchPatientsPaginated(
           1,
           undefined,
           currentDoctorId,
         );
 
-        debug("server effect got result", {
+        console.log("server effect got result", {
           cancelled,
           hasResult: !!result,
           resultLen: result?.patients?.length,
@@ -497,10 +557,6 @@ export default function PatientsPage() {
           setLastDoc(result.lastDoc);
           if (result.totalCount !== undefined) setTotalCount(result.totalCount);
           setCursorByPage((prev) => ({ ...prev, [2]: result.lastDoc }));
-          debug("server effect applied result", {
-            count: result.patients.length,
-            totalCount: result.totalCount,
-          });
         }
       } catch {
         addToast({
@@ -524,6 +580,7 @@ export default function PatientsPage() {
     criticalFilter,
     fetchPatientsPaginated,
     currentDoctorId,
+    isDoctorResolved,
   ]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -541,6 +598,7 @@ export default function PatientsPage() {
       if (days < 0) {
         months--;
         const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+
         days += prevMonth;
       }
       if (months < 0) {
@@ -551,6 +609,7 @@ export default function PatientsPage() {
       if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
       if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
       if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+
       return "0 Days";
     }
 
@@ -661,10 +720,10 @@ export default function PatientsPage() {
           prev.map((p) =>
             p.id === selectedForCritical.id
               ? {
-                ...p,
-                isCritical: true,
-                criticalReason: criticalReason.trim(),
-              }
+                  ...p,
+                  isCritical: true,
+                  criticalReason: criticalReason.trim(),
+                }
               : p,
           ),
         );
@@ -791,7 +850,9 @@ export default function PatientsPage() {
     }
 
     const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
-    const headerHtml = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic) : "";
+    const headerHtml = layoutConfig
+      ? getPrintHeaderHTML(layoutConfig, clinic)
+      : "";
     const footerHtml = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
     w.document.write(`<!DOCTYPE html><html><head><title>Patients</title>
@@ -833,7 +894,9 @@ export default function PatientsPage() {
         {/* ── Page header ──────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary flex items-center gap-2`}>
+            <h1
+              className={`${title({ size: "lg" })} text-primary flex items-center gap-2`}
+            >
               Patients
               {currentDoctorId && <Badge variant="primary">Doctor View</Badge>}
             </h1>
@@ -980,52 +1043,52 @@ export default function PatientsPage() {
             ageMax ||
             regStart ||
             regEnd) && (
-              <div className="flex flex-wrap gap-1.5 px-3 py-1.5 border-b border-border-base bg-surface-2">
-                {search && (
-                  <FilterChip
-                    label={`Search: "${search}"`}
-                    onRemove={() => setSearch("")}
-                  />
-                )}
-                {genderFilter !== "all" && (
-                  <FilterChip
-                    label={`Gender: ${genderFilter}`}
-                    onRemove={() => setGenderFilter("all")}
-                  />
-                )}
-                {criticalFilter !== "all" && (
-                  <FilterChip
-                    label={`Status: ${criticalFilter}`}
-                    onRemove={() => setCriticalFilter("all")}
-                  />
-                )}
-                {(ageMin || ageMax) && (
-                  <FilterChip
-                    label={`Age: ${ageMin || "0"}–${ageMax || "∞"}`}
-                    onRemove={() => {
-                      setAgeMin("");
-                      setAgeMax("");
-                    }}
-                  />
-                )}
-                {(regStart || regEnd) && (
-                  <FilterChip
-                    label={`Reg: ${regStart || "…"} – ${regEnd || "…"}`}
-                    onRemove={() => {
-                      setRegStart("");
-                      setRegEnd("");
-                    }}
-                  />
-                )}
-                <button
-                  className="text-[11px] text-text-muted hover:text-red-500 ml-1"
-                  type="button"
-                  onClick={clearFilters}
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-1.5 px-3 py-1.5 border-b border-border-base bg-surface-2">
+              {search && (
+                <FilterChip
+                  label={`Search: "${search}"`}
+                  onRemove={() => setSearch("")}
+                />
+              )}
+              {genderFilter !== "all" && (
+                <FilterChip
+                  label={`Gender: ${genderFilter}`}
+                  onRemove={() => setGenderFilter("all")}
+                />
+              )}
+              {criticalFilter !== "all" && (
+                <FilterChip
+                  label={`Status: ${criticalFilter}`}
+                  onRemove={() => setCriticalFilter("all")}
+                />
+              )}
+              {(ageMin || ageMax) && (
+                <FilterChip
+                  label={`Age: ${ageMin || "0"}–${ageMax || "∞"}`}
+                  onRemove={() => {
+                    setAgeMin("");
+                    setAgeMax("");
+                  }}
+                />
+              )}
+              {(regStart || regEnd) && (
+                <FilterChip
+                  label={`Reg: ${regStart || "…"} – ${regEnd || "…"}`}
+                  onRemove={() => {
+                    setRegStart("");
+                    setRegEnd("");
+                  }}
+                />
+              )}
+              <button
+                className="text-[11px] text-text-muted hover:text-red-500 ml-1"
+                type="button"
+                onClick={clearFilters}
+              >
+                Clear all
+              </button>
+            </div>
+          )}
 
           {/* ── Table ───────────────────────────────────────────────────── */}
           {loading ? (
@@ -1183,23 +1246,23 @@ export default function PatientsPage() {
                                   New Appointment
                                 </Link>
                               </DropdownItem>
-                                {patient.isCritical ? (
-                                  <DropdownItem
-                                    key="remove-critical"
-                                    className="text-success"
-                                    onClick={() => removeCritical(patient)}
-                                  >
-                                    ✓ Remove Critical Status
-                                  </DropdownItem>
-                                ) : (
-                                  <DropdownItem
-                                    key="mark-critical"
-                                    className="text-error"
-                                    onClick={() => openMarkCritical(patient)}
-                                  >
-                                    ⚠ Mark as Critical
-                                  </DropdownItem>
-                                )}
+                              {patient.isCritical ? (
+                                <DropdownItem
+                                  key="remove-critical"
+                                  className="text-success"
+                                  onClick={() => removeCritical(patient)}
+                                >
+                                  ✓ Remove Critical Status
+                                </DropdownItem>
+                              ) : (
+                                <DropdownItem
+                                  key="mark-critical"
+                                  className="text-error"
+                                  onClick={() => openMarkCritical(patient)}
+                                >
+                                  ⚠ Mark as Critical
+                                </DropdownItem>
+                              )}
                             </DropdownMenu>
                           </Dropdown>
                         </td>
@@ -1365,9 +1428,7 @@ export default function PatientsPage() {
                 <p className={`text-stat-sm leading-none ${s.cls}`}>
                   {s.value}
                 </p>
-                <p className="text-[10px] text-text-muted mt-0.5">
-                  {s.label}
-                </p>
+                <p className="text-[10px] text-text-muted mt-0.5">{s.label}</p>
               </div>
             ))}
           </div>
@@ -1385,9 +1446,7 @@ export default function PatientsPage() {
                 value={ageMin}
                 onChange={(e) => setAgeMin(e.target.value)}
               />
-              <span className="text-text-muted self-center text-[12px]">
-                –
-              </span>
+              <span className="text-text-muted self-center text-[12px]">–</span>
               <input
                 className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
                 placeholder="Max"
@@ -1410,9 +1469,7 @@ export default function PatientsPage() {
                 value={regStart}
                 onChange={(e) => setRegStart(e.target.value)}
               />
-              <span className="text-text-muted self-center text-[12px]">
-                –
-              </span>
+              <span className="text-text-muted self-center text-[12px]">–</span>
               <input
                 className="flex-1 h-8 px-2.5 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary"
                 type="date"

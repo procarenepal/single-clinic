@@ -17,8 +17,8 @@ import {
   IoPersonAddOutline,
   IoShieldOutline,
 } from "react-icons/io5";
-import { title } from "@/components/primitives";
 
+import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
 import { useAuth } from "@/hooks/useAuth";
 import { branchService } from "@/services/branchService";
@@ -52,8 +52,7 @@ export default function BranchManagementPage() {
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
 
   const isSystemOwner =
-    userData?.role === "system-owner" ||
-    userData?.role === "clinic-admin";
+    userData?.role === "system-owner" || userData?.role === "clinic-admin";
 
   useEffect(() => {
     loadData();
@@ -222,7 +221,9 @@ export default function BranchManagementPage() {
     <div className="space-y-6">
       <div className="clarity-page-header">
         <div>
-          <h1 className={`${title({ size: "lg" })} text-primary`}>Branch Management</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
+            Branch Management
+          </h1>
           <p className="text-[13.5px] text-text-muted mt-1">
             Manage your clinic branches and locations
           </p>

@@ -89,14 +89,15 @@ export const appointmentTypeService = {
     try {
       const cacheKey = clinicId || "standalone";
       const cached = cacheService.getClinicAppointmentTypes(cacheKey);
+
       if (cached) return cached as AppointmentType[];
 
       const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
       // For single clinic, we fetch all if clinicId is not provided or if we want to be inclusive
-      const q = clinicId 
+      const q = clinicId
         ? query(appointmentTypesRef, where("clinicId", "==", clinicId))
         : query(appointmentTypesRef);
-        
+
       const querySnapshot = await getDocs(q);
 
       const appointmentTypes: AppointmentType[] = [];
@@ -119,6 +120,7 @@ export const appointmentTypeService = {
       });
 
       cacheService.setClinicAppointmentTypes(cacheKey, appointmentTypes);
+
       return appointmentTypes;
     } catch (error) {
       console.error("Error getting appointment types:", error);
@@ -134,9 +136,11 @@ export const appointmentTypeService = {
     branchId?: string,
   ): Promise<AppointmentType[]> {
     const types = await this.getAppointmentTypes(clinicId);
+
     if (branchId) {
       return types.filter((t) => t.branchId === branchId);
     }
+
     return types;
   },
 
@@ -155,6 +159,7 @@ export const appointmentTypeService = {
    */
   async getActiveAppointmentTypes(): Promise<AppointmentType[]> {
     const types = await this.getAppointmentTypes();
+
     return types.filter((t) => t.isActive);
   },
 
@@ -166,9 +171,11 @@ export const appointmentTypeService = {
     branchId?: string,
   ): Promise<AppointmentType[]> {
     const types = await this.getActiveAppointmentTypes();
+
     if (branchId) {
       return types.filter((t) => t.branchId === branchId);
     }
+
     return types;
   },
 

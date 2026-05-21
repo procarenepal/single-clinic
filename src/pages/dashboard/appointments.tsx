@@ -31,7 +31,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { Skeleton, TableSkeleton, ListSkeleton, Spinner } from "@/components/ui";
+import { TableSkeleton, Spinner } from "@/components/ui";
 import {
   Dropdown,
   DropdownTrigger,
@@ -182,7 +182,13 @@ function CustomModal({
 
 export default function AppointmentsPage() {
   const navigate = useNavigate();
-  const { clinicId, userData, branchId, isClinicAdmin: checkAdmin, isSystemOwner: checkOwner } = useAuthContext();
+  const {
+    clinicId,
+    userData,
+    branchId,
+    isClinicAdmin: checkAdmin,
+    isSystemOwner: checkOwner,
+  } = useAuthContext();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -266,15 +272,14 @@ export default function AppointmentsPage() {
       try {
         const userRole = userData.role;
         const isAdmin =
-          userRole === "clinic-admin" ||
-          userRole === "system-owner";
+          userRole === "clinic-admin" || userRole === "system-owner";
         let doctorId: string | null = null;
 
         if (!isAdmin && userData.email) {
           try {
             const [matchingDoctor, matchingExpert] = await Promise.all([
               doctorService.getDoctorByEmail(userData.email),
-              expertService.getExpertByEmail(userData.email)
+              expertService.getExpertByEmail(userData.email),
             ]);
 
             const matchingProvider = matchingDoctor || matchingExpert;
@@ -293,10 +298,7 @@ export default function AppointmentsPage() {
         const [patientsData, doctorsData, appointmentTypesData] =
           await Promise.all([
             doctorId
-              ? patientService.getPatientsByDoctor(
-                doctorId,
-                clinicId,
-              )
+              ? patientService.getPatientsByDoctor(doctorId, clinicId)
               : patientService.getPatients(clinicId),
             doctorService.getDoctors(clinicId),
             appointmentTypeService.getAppointmentTypesByClinic(
@@ -346,17 +348,17 @@ export default function AppointmentsPage() {
 
     const unsubscribe = currentDoctorId
       ? appointmentService.subscribeToDoctorAppointments(
-        currentDoctorId,
-        effectiveBranchId,
-        handleSnapshot,
-        handleError,
-      )
+          currentDoctorId,
+          effectiveBranchId,
+          handleSnapshot,
+          handleError,
+        )
       : appointmentService.subscribeToClinicAppointments(
-        undefined, // clinicId
-        effectiveBranchId,
-        handleSnapshot,
-        handleError,
-      );
+          undefined, // clinicId
+          effectiveBranchId,
+          handleSnapshot,
+          handleError,
+        );
 
     return () => {
       isActive = false;
@@ -495,7 +497,7 @@ export default function AppointmentsPage() {
       layoutType === "tabbed" ||
       !selectedDate ||
       format(appt.appointmentDate, "yyyy-MM-dd") ===
-      format(selectedDate, "yyyy-MM-dd");
+        format(selectedDate, "yyyy-MM-dd");
 
     return matchesSearch && matchesStatus && matchesDoctor && matchesDate;
   });
@@ -696,7 +698,7 @@ export default function AppointmentsPage() {
                         </span>
                       </DropdownItem>
                       {appointment.status.toLowerCase() !== "cancelled" &&
-                        appointment.status.toLowerCase() !== "completed" ? (
+                      appointment.status.toLowerCase() !== "completed" ? (
                         <DropdownItem
                           key="edit"
                           onClick={() =>
@@ -725,7 +727,7 @@ export default function AppointmentsPage() {
                         </span>
                       </DropdownItem>
                       {appointment.status.toLowerCase() !== "cancelled" &&
-                        appointment.status.toLowerCase() !== "completed" ? (
+                      appointment.status.toLowerCase() !== "completed" ? (
                         <DropdownItem
                           key="cancel"
                           onClick={() => {
@@ -907,7 +909,10 @@ export default function AppointmentsPage() {
         <div className="p-4">
           {loading ? (
             <div className="py-8">
-              <TableSkeleton cols={layoutType === "table" ? 6 : 4} rows={itemsPerPage} />
+              <TableSkeleton
+                cols={layoutType === "table" ? 6 : 4}
+                rows={itemsPerPage}
+              />
             </div>
           ) : error ? (
             <div className="py-12 text-center flex flex-col items-center">
@@ -1071,11 +1076,13 @@ export default function AppointmentsPage() {
                                 View Details
                               </DropdownItem>
                               {app.status.toLowerCase() !== "cancelled" &&
-                                app.status.toLowerCase() !== "completed" ? (
+                              app.status.toLowerCase() !== "completed" ? (
                                 <DropdownItem
                                   key="edit"
                                   onClick={() =>
-                                    navigate(`/dashboard/appointments/${app.id}/edit`)
+                                    navigate(
+                                      `/dashboard/appointments/${app.id}/edit`,
+                                    )
                                   }
                                 >
                                   Edit

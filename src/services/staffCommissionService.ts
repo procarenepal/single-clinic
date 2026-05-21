@@ -6,17 +6,13 @@ import {
   updateDoc,
   query,
   where,
-  orderBy,
   Timestamp,
   getDoc,
   increment,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
-import {
-  StaffCommission,
-  AppointmentBilling,
-} from "@/types/models";
+import { StaffCommission } from "@/types/models";
 
 class StaffCommissionService {
   private collectionName = "staffCommissions";
@@ -100,6 +96,7 @@ class StaffCommissionService {
 
       const commissions = querySnapshot.docs.map((doc) => {
         const data = doc.data();
+
         return {
           id: doc.id,
           ...data,
@@ -110,9 +107,12 @@ class StaffCommissionService {
         };
       }) as StaffCommission[];
 
-      return commissions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return commissions.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     } catch (error) {
       console.error("Error getting commissions by staff:", error);
+
       return [];
     }
   }
@@ -136,9 +136,12 @@ class StaffCommissionService {
         paidDate: doc.data().paidDate?.toDate(),
       })) as StaffCommission[];
 
-      return commissions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return commissions.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     } catch (error) {
       console.error("Error getting commissions by clinic:", error);
+
       return [];
     }
   }
@@ -173,12 +176,13 @@ class StaffCommissionService {
         updatedAt: Timestamp.fromDate(new Date()),
         status:
           (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
+          currentCommission.commissionAmount
             ? "paid"
             : "pending",
       };
 
-      if (paymentReference !== undefined) updateData.paymentReference = paymentReference;
+      if (paymentReference !== undefined)
+        updateData.paymentReference = paymentReference;
       if (paymentNotes !== undefined) updateData.paymentNotes = paymentNotes;
       if (paidBy !== undefined) updateData.paidBy = paidBy;
 

@@ -8,6 +8,7 @@ import {
   IoMedicalOutline,
   IoReceiptOutline,
   IoStatsChartOutline,
+  IoWalletOutline,
 } from "react-icons/io5";
 
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -89,8 +90,7 @@ export default function DailyReportPage() {
   const [isMultiBranch, setIsMultiBranch] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const isClinicAdmin =
-    userData?.role === "system-owner" ||
-    userData?.role === "clinic-admin";
+    userData?.role === "system-owner" || userData?.role === "clinic-admin";
   const effectiveBranchId = userBranchId ?? selectedBranchId ?? undefined;
   const currentBranchName = effectiveBranchId
     ? branches.find((b) => b.id === effectiveBranchId)?.name
@@ -98,6 +98,7 @@ export default function DailyReportPage() {
 
   // Resolve current doctor ID if the user is a doctor
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!clinicId || !userData?.email) return;
     if (isClinicAdmin) return;
@@ -105,6 +106,7 @@ export default function DailyReportPage() {
     (async () => {
       try {
         const doc = await doctorService.getDoctorByEmail(userData.email!);
+
         if (doc) setCurrentDoctorId(doc.id);
       } catch {
         // non-critical
@@ -179,12 +181,18 @@ export default function DailyReportPage() {
 
         // Filter data if the user is a doctor
         if (!isClinicAdmin && currentDoctorId) {
-          data.appointments = data.appointments.filter(a => a.doctorId === currentDoctorId);
-          data.patients = data.patients.filter(p => p.doctorId === currentDoctorId);
+          data.appointments = data.appointments.filter(
+            (a) => a.doctorId === currentDoctorId,
+          );
+          data.patients = data.patients.filter(
+            (p) => p.doctorId === currentDoctorId,
+          );
           // Only show appointment billing for this doctor
-          data.billing = data.billing.filter(b => 
-            b.type === 'appointment' && 
-            doctors.find(d => d.name === b.doctorName)?.id === currentDoctorId
+          data.billing = data.billing.filter(
+            (b) =>
+              b.type === "appointment" &&
+              doctors.find((d) => d.name === b.doctorName)?.id ===
+                currentDoctorId,
           );
         }
 
@@ -202,7 +210,14 @@ export default function DailyReportPage() {
     };
 
     loadReportData();
-  }, [clinicId, selectedDate, effectiveBranchId, isClinicAdmin, currentDoctorId, doctors]);
+  }, [
+    clinicId,
+    selectedDate,
+    effectiveBranchId,
+    isClinicAdmin,
+    currentDoctorId,
+    doctors,
+  ]);
 
   // Helper functions to get names
   const getPatientNameById = (patientId: string): string => {
@@ -239,35 +254,47 @@ export default function DailyReportPage() {
       (a) => a.status === "cancelled",
     ).length,
     totalInvoices: reportData.billing.length,
+    paidInvoices: reportData.billing.filter((b) => b.paymentStatus === "paid").length,
+    partialInvoices: reportData.billing.filter((b) => b.paymentStatus === "partial").length,
+    unpaidInvoices: reportData.billing.filter((b) => b.paymentStatus === "unpaid").length,
     totalRevenue: reportData.billing.reduce(
       (sum, b) => sum + (b.totalAmount || 0),
       0,
     ),
+    paidRevenue: reportData.billing
+      .filter((b) => b.paymentStatus === "paid")
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+    partialRevenue: reportData.billing
+      .filter((b) => b.paymentStatus === "partial")
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+    unpaidRevenue: reportData.billing
+      .filter((b) => b.paymentStatus === "unpaid")
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
   };
 
   // Branch-wise revenue breakdown: only when viewing all branches (no single branch selected)
   const branchRevenueBreakdown =
     isMultiBranch && isClinicAdmin && branches.length > 0 && !effectiveBranchId
       ? branches
-        .map((branch) => {
-          // DailyBillingSummary does not carry branchId; use total billing for the overview
-          const branchBilling = reportData.billing;
-          const revenue = branchBilling.reduce(
-            (sum, b) => sum + (b.totalAmount || 0),
-            0,
-          );
-          const invoiceCount = branchBilling.length;
+          .map((branch) => {
+            // DailyBillingSummary does not carry branchId; use total billing for the overview
+            const branchBilling = reportData.billing;
+            const revenue = branchBilling.reduce(
+              (sum, b) => sum + (b.totalAmount || 0),
+              0,
+            );
+            const invoiceCount = branchBilling.length;
 
-          return {
-            branchId: branch.id,
-            branchName: branch.name,
-            branchCode: branch.code,
-            isMainBranch: branch.isMainBranch,
-            revenue,
-            invoiceCount,
-          };
-        })
-        .filter((b) => b.revenue > 0 || b.invoiceCount > 0)
+            return {
+              branchId: branch.id,
+              branchName: branch.name,
+              branchCode: branch.code,
+              isMainBranch: branch.isMainBranch,
+              revenue,
+              invoiceCount,
+            };
+          })
+          .filter((b) => b.revenue > 0 || b.invoiceCount > 0)
       : [];
 
   // Handle export (pass branchName when report is branch-scoped)
@@ -432,14 +459,14 @@ export default function DailyReportPage() {
         ) : (
           <>
             {/* Summary Statistics — clarity-card, no shadow, KPI 22px per spec */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <Card
                 isPressable
                 className="clarity-card cursor-pointer border border-mountain-200"
                 onPress={() => navigate("/dashboard/patients")}
               >
-                <CardBody className="p-3">
-                  <div className="flex items-center justify-between">
+                <CardBody className="p-4">
+                  <div className="flex items-start justify-between">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
                         New Patients
@@ -462,18 +489,17 @@ export default function DailyReportPage() {
                   navigate(`/dashboard/appointments?date=${selectedDate}`)
                 }
               >
-                <CardBody className="p-3">
-                  <div className="flex items-center justify-between">
+                <CardBody className="p-4">
+                  <div className="flex items-start justify-between">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
-                        Total Appointments
+                        Appointments
                       </p>
                       <p className="text-stat-sm text-mountain-900 leading-none">
                         {summaryStats.totalAppointments}
                       </p>
-                      <p className="text-[11px] text-mountain-400 mt-1">
-                        {summaryStats.completedAppointments} completed,{" "}
-                        {summaryStats.cancelledAppointments} cancelled
+                      <p className="text-[11px] text-mountain-500 font-medium mt-2">
+                        <span className="text-health-600">{summaryStats.completedAppointments} completed</span> &bull; {summaryStats.cancelledAppointments} cancelled
                       </p>
                     </div>
                     <div className="p-2 rounded bg-health-100 text-health-700">
@@ -492,9 +518,9 @@ export default function DailyReportPage() {
                   )
                 }
               >
-                <CardBody className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
+                <CardBody className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 pr-2">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
                         Total Revenue
                       </p>
@@ -502,9 +528,33 @@ export default function DailyReportPage() {
                         {formatCurrency(summaryStats.totalRevenue)}
                       </p>
                     </div>
-                    <div className="p-2 rounded bg-saffron-100 text-saffron-700">
+                    <div className="p-2 rounded bg-saffron-100 text-saffron-700 shrink-0">
                       <IoReceiptOutline size={22} />
                     </div>
+                  </div>
+                  
+                  <div className="space-y-1.5 text-[10px]">
+                    {summaryStats.paidRevenue > 0 && (
+                      <div className="flex justify-between text-green-700 bg-green-50 px-2 py-1 rounded border border-green-100">
+                        <span>Paid</span>
+                        <span className="font-semibold">{formatCurrency(summaryStats.paidRevenue)}</span>
+                      </div>
+                    )}
+                    {summaryStats.partialRevenue > 0 && (
+                      <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                        <span>Partial</span>
+                        <span className="font-semibold">{formatCurrency(summaryStats.partialRevenue)}</span>
+                      </div>
+                    )}
+                    {summaryStats.unpaidRevenue > 0 && (
+                      <div className="flex justify-between text-red-700 bg-red-50 px-2 py-1 rounded border border-red-100">
+                        <span>Unpaid</span>
+                        <span className="font-semibold">{formatCurrency(summaryStats.unpaidRevenue)}</span>
+                      </div>
+                    )}
+                    {summaryStats.paidRevenue === 0 && summaryStats.partialRevenue === 0 && summaryStats.unpaidRevenue === 0 && (
+                      <span className="text-[10px] text-mountain-400 italic block">No revenue data</span>
+                    )}
                   </div>
                 </CardBody>
               </Card>
@@ -518,9 +568,9 @@ export default function DailyReportPage() {
                   )
                 }
               >
-                <CardBody className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
+                <CardBody className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 pr-2">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-mountain-400 mb-1">
                         Total Invoices
                       </p>
@@ -528,9 +578,66 @@ export default function DailyReportPage() {
                         {summaryStats.totalInvoices}
                       </p>
                     </div>
-                    <div className="p-2 rounded bg-mountain-100 text-mountain-700">
+                    <div className="p-2 rounded bg-mountain-100 text-mountain-700 shrink-0">
                       <IoStatsChartOutline size={22} />
                     </div>
+                  </div>
+                  
+                  <div className="space-y-1.5 text-[10px]">
+                    {summaryStats.paidInvoices > 0 && (
+                      <div className="flex justify-between text-green-700 bg-green-50 px-2 py-1 rounded border border-green-100">
+                        <span>Paid</span>
+                        <span className="font-semibold">{summaryStats.paidInvoices}</span>
+                      </div>
+                    )}
+                    {summaryStats.partialInvoices > 0 && (
+                      <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                        <span>Partial</span>
+                        <span className="font-semibold">{summaryStats.partialInvoices}</span>
+                      </div>
+                    )}
+                    {summaryStats.unpaidInvoices > 0 && (
+                      <div className="flex justify-between text-red-700 bg-red-50 px-2 py-1 rounded border border-red-100">
+                        <span>Unpaid</span>
+                        <span className="font-semibold">{summaryStats.unpaidInvoices}</span>
+                      </div>
+                    )}
+                    {summaryStats.totalInvoices === 0 && (
+                      <span className="text-[10px] text-mountain-400 italic block">No invoices</span>
+                    )}
+                  </div>
+                </CardBody>
+              </Card>
+
+              {/* Cash Collection Widget */}
+              <Card
+                isPressable
+                className="clarity-card cursor-pointer border border-green-200 bg-green-50"
+                onPress={() =>
+                  navigate(
+                    `/dashboard/appointments-billing?date=${selectedDate}`,
+                  )
+                }
+              >
+                <CardBody className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 pr-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-green-700 mb-1">
+                        Cash Collection
+                      </p>
+                      <p className="text-stat-sm text-green-900 leading-none">
+                        {formatCurrency(summaryStats.paidRevenue)}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded bg-green-200 text-green-800 shrink-0">
+                      <IoWalletOutline size={22} />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <span className="inline-block text-[9px] font-semibold text-green-800 bg-green-100 px-2 py-1 rounded border border-green-300 uppercase tracking-wider">
+                      From Paid Invoices
+                    </span>
                   </div>
                 </CardBody>
               </Card>

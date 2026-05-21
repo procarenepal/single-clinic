@@ -260,7 +260,7 @@ export default function ExpertsPage() {
     const matchesSpeciality =
       selectedSpeciality === "all" ||
       expert.speciality.toLowerCase().replace(/\s+/g, "-") ===
-      selectedSpeciality;
+        selectedSpeciality;
 
     const matchesStatus =
       selectedStatus === "all" ||
@@ -391,9 +391,7 @@ export default function ExpertsPage() {
                 <Button
                   color="primary"
                   startContent={<IoAddOutline />}
-                  onClick={() =>
-                    navigate("/dashboard/experts/new")
-                  }
+                  onClick={() => navigate("/dashboard/experts/new")}
                 >
                   Add First Expert
                 </Button>
@@ -467,7 +465,11 @@ export default function ExpertsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <Chip
-                        color={expert.expertType === "regular" ? "primary" : "secondary"}
+                        color={
+                          expert.expertType === "regular"
+                            ? "primary"
+                            : "secondary"
+                        }
                         size="sm"
                         variant="flat"
                       >

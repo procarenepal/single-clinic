@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { 
-  IoArrowBackOutline, 
-  IoSaveOutline, 
+import {
+  IoArrowBackOutline,
+  IoSaveOutline,
   IoImageOutline,
   IoEyeOutline,
-  IoInformationCircleOutline
+  IoInformationCircleOutline,
 } from "react-icons/io5";
 import { Link } from "react-router-dom";
 import { Sparkles } from "lucide-react";
@@ -17,7 +17,10 @@ import { Divider } from "@/components/ui/divider";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
-import { landingPageService, LandingPageContent } from "@/services/landingPageService";
+import {
+  landingPageService,
+  LandingPageContent,
+} from "@/services/landingPageService";
 
 export default function HomepageSettingsPage() {
   const { clinicId } = useAuthContext();
@@ -30,6 +33,7 @@ export default function HomepageSettingsPage() {
       if (!clinicId) return;
       try {
         const data = await landingPageService.getHomepageContent(clinicId);
+
         setContent(data);
       } catch (error) {
         addToast({
@@ -41,6 +45,7 @@ export default function HomepageSettingsPage() {
         setLoading(false);
       }
     };
+
     loadContent();
   }, [clinicId]);
 
@@ -91,11 +96,11 @@ export default function HomepageSettingsPage() {
               Back
             </Button>
           </Link>
-          <Button 
-            color="primary" 
+          <Button
+            color="primary"
             isLoading={saving}
-            onClick={handleSave}
             startContent={<IoSaveOutline />}
+            onClick={handleSave}
           >
             Save Changes
           </Button>
@@ -111,7 +116,9 @@ export default function HomepageSettingsPage() {
             </div>
             <div className="flex flex-col">
               <p className="text-md font-bold">Hero Section</p>
-              <p className="text-small text-default-500">The first thing clients see</p>
+              <p className="text-small text-default-500">
+                The first thing clients see
+              </p>
             </div>
           </CardHeader>
           <Divider />
@@ -120,45 +127,55 @@ export default function HomepageSettingsPage() {
               label="Main Title"
               placeholder="e.g. Radiant Skin, Timeless Korean Beauty"
               value={content.hero.title}
-              onChange={(e) => setContent({
-                ...content,
-                hero: { ...content.hero, title: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  hero: { ...content.hero, title: e.target.value },
+                })
+              }
             />
             <Textarea
               label="Subtitle / Description"
               placeholder="Briefly describe your skincare clinic..."
               value={content.hero.subtitle}
-              onChange={(e) => setContent({
-                ...content,
-                hero: { ...content.hero, subtitle: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  hero: { ...content.hero, subtitle: e.target.value },
+                })
+              }
             />
             <div className="grid grid-cols-2 gap-4">
               <Input
                 label="CTA Button Text"
                 value={content.hero.ctaText}
-                onChange={(e) => setContent({
-                  ...content,
-                  hero: { ...content.hero, ctaText: e.target.value }
-                })}
+                onChange={(e) =>
+                  setContent({
+                    ...content,
+                    hero: { ...content.hero, ctaText: e.target.value },
+                  })
+                }
               />
               <Input
                 label="CTA Link"
                 value={content.hero.ctaLink}
-                onChange={(e) => setContent({
-                  ...content,
-                  hero: { ...content.hero, ctaLink: e.target.value }
-                })}
+                onChange={(e) =>
+                  setContent({
+                    ...content,
+                    hero: { ...content.hero, ctaLink: e.target.value },
+                  })
+                }
               />
             </div>
             <Input
               label="Hero Image URL"
               value={content.hero.imageUrl}
-              onChange={(e) => setContent({
-                ...content,
-                hero: { ...content.hero, imageUrl: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  hero: { ...content.hero, imageUrl: e.target.value },
+                })
+              }
             />
           </CardBody>
         </Card>
@@ -171,18 +188,24 @@ export default function HomepageSettingsPage() {
             </div>
             <div className="flex flex-col">
               <p className="text-md font-bold">Trust Indicators (Stats)</p>
-              <p className="text-small text-default-500">Key achievements of your clinic</p>
+              <p className="text-small text-default-500">
+                Key achievements of your clinic
+              </p>
             </div>
           </CardHeader>
           <Divider />
           <CardBody className="gap-6 py-6">
             {content.stats.map((stat, index) => (
-              <div key={index} className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+              <div
+                key={index}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end"
+              >
                 <Input
                   label={`Stat ${index + 1} Number`}
                   value={stat.number}
                   onChange={(e) => {
                     const newStats = [...content.stats];
+
                     newStats[index].number = e.target.value;
                     setContent({ ...content, stats: newStats });
                   }}
@@ -192,6 +215,7 @@ export default function HomepageSettingsPage() {
                   value={stat.label}
                   onChange={(e) => {
                     const newStats = [...content.stats];
+
                     newStats[index].label = e.target.value;
                     setContent({ ...content, stats: newStats });
                   }}
@@ -209,7 +233,9 @@ export default function HomepageSettingsPage() {
             </div>
             <div className="flex flex-col">
               <p className="text-md font-bold">Aesthetic Precision Section</p>
-              <p className="text-small text-default-500">Highlight your technology and expertise</p>
+              <p className="text-small text-default-500">
+                Highlight your technology and expertise
+              </p>
             </div>
           </CardHeader>
           <Divider />
@@ -217,26 +243,41 @@ export default function HomepageSettingsPage() {
             <Input
               label="Section Title"
               value={content.precisionSection.title}
-              onChange={(e) => setContent({
-                ...content,
-                precisionSection: { ...content.precisionSection, title: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  precisionSection: {
+                    ...content.precisionSection,
+                    title: e.target.value,
+                  },
+                })
+              }
             />
             <Textarea
               label="Section Description"
               value={content.precisionSection.description}
-              onChange={(e) => setContent({
-                ...content,
-                precisionSection: { ...content.precisionSection, description: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  precisionSection: {
+                    ...content.precisionSection,
+                    description: e.target.value,
+                  },
+                })
+              }
             />
             <Input
               label="Section Image URL"
               value={content.precisionSection.imageUrl}
-              onChange={(e) => setContent({
-                ...content,
-                precisionSection: { ...content.precisionSection, imageUrl: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  precisionSection: {
+                    ...content.precisionSection,
+                    imageUrl: e.target.value,
+                  },
+                })
+              }
             />
           </CardBody>
         </Card>
@@ -249,7 +290,9 @@ export default function HomepageSettingsPage() {
             </div>
             <div className="flex flex-col">
               <p className="text-md font-bold">Contact & Footer</p>
-              <p className="text-small text-default-500">How clients can find you</p>
+              <p className="text-small text-default-500">
+                How clients can find you
+              </p>
             </div>
           </CardHeader>
           <Divider />
@@ -257,35 +300,43 @@ export default function HomepageSettingsPage() {
             <Input
               label="Clinic Location"
               value={content.contact.location}
-              onChange={(e) => setContent({
-                ...content,
-                contact: { ...content.contact, location: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  contact: { ...content.contact, location: e.target.value },
+                })
+              }
             />
             <Input
               label="Opening Hours"
               value={content.contact.hours}
-              onChange={(e) => setContent({
-                ...content,
-                contact: { ...content.contact, hours: e.target.value }
-              })}
+              onChange={(e) =>
+                setContent({
+                  ...content,
+                  contact: { ...content.contact, hours: e.target.value },
+                })
+              }
             />
             <div className="grid grid-cols-2 gap-4">
               <Input
                 label="Phone Number"
                 value={content.contact.phone}
-                onChange={(e) => setContent({
-                  ...content,
-                  contact: { ...content.contact, phone: e.target.value }
-                })}
+                onChange={(e) =>
+                  setContent({
+                    ...content,
+                    contact: { ...content.contact, phone: e.target.value },
+                  })
+                }
               />
               <Input
                 label="Email Address"
                 value={content.contact.email}
-                onChange={(e) => setContent({
-                  ...content,
-                  contact: { ...content.contact, email: e.target.value }
-                })}
+                onChange={(e) =>
+                  setContent({
+                    ...content,
+                    contact: { ...content.contact, email: e.target.value },
+                  })
+                }
               />
             </div>
           </CardBody>

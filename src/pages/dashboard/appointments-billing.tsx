@@ -29,9 +29,6 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@/components/ui/dropdown";
-
-import DashboardNotFoundPage from "./not-found";
-
 import { useAuth } from "@/hooks/useAuth";
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
@@ -80,8 +77,10 @@ function StatusBadge({
 }) {
   const S_COLORS: Record<string, string> = {
     paid: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-    finalized: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
-    partial: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    finalized:
+      "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
+    partial:
+      "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
     unpaid: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
     cancelled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
     default: "bg-surface-2 text-text-muted border-border-base",
@@ -379,8 +378,7 @@ export default function AppointmentBillingPage() {
 
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin =
-    userData?.role === "clinic-admin" ||
-    userData?.role === "system-owner";
+    userData?.role === "clinic-admin" || userData?.role === "system-owner";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
@@ -864,9 +862,13 @@ export default function AppointmentBillingPage() {
 
   const filteredBillings = searchQuery.trim()
     ? billings.filter((b) => {
-        const patientName = b.patientName === "Unknown Patient" || !b.patientName
-          ? (patients.find((p) => p.id === b.patientId)?.name || b.patientName || "Unknown Patient")
-          : b.patientName;
+        const patientName =
+          b.patientName === "Unknown Patient" || !b.patientName
+            ? patients.find((p) => p.id === b.patientId)?.name ||
+              b.patientName ||
+              "Unknown Patient"
+            : b.patientName;
+
         return (
           patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1079,7 +1081,6 @@ export default function AppointmentBillingPage() {
     return (
       <div className="p-8 text-center text-text-muted">Loading billing…</div>
     );
-
 
   return (
     <div className="flex flex-col gap-5 px-4 pb-12">
@@ -1384,9 +1385,7 @@ export default function AppointmentBillingPage() {
                     />
                   </div>
                   <div className="bg-surface-2 border border-border-base rounded p-4 text-[13px] space-y-2 text-text-muted">
-                    <h4 className="font-semibold text-primary mb-2">
-                      Summary
-                    </h4>
+                    <h4 className="font-semibold text-primary mb-2">Summary</h4>
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
                       <span>{fmtCur(calculations.subtotal)}</span>
@@ -1538,36 +1537,74 @@ export default function AppointmentBillingPage() {
                             {b.invoiceNumber}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px] text-text-main">
-                            {b.patientName === "Unknown Patient" || !b.patientName
-                              ? (patients.find((p) => p.id === b.patientId)?.name || b.patientName || "Unknown Patient")
+                            {b.patientName === "Unknown Patient" ||
+                            !b.patientName
+                              ? patients.find((p) => p.id === b.patientId)
+                                  ?.name ||
+                                b.patientName ||
+                                "Unknown Patient"
                               : b.patientName}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px]">
                             <p className="text-text-main">
                               {(() => {
                                 // 1. Try to find a valid doctor/expert name using doctorId
-                                const docId = (b.doctorId && b.doctorId !== "unassigned")
-                                  ? b.doctorId
-                                  : (b.items?.find((i) => i.doctorId && i.doctorId !== "unassigned")?.doctorId);
-                                  
+                                const docId =
+                                  b.doctorId && b.doctorId !== "unassigned"
+                                    ? b.doctorId
+                                    : b.items?.find(
+                                        (i) =>
+                                          i.doctorId &&
+                                          i.doctorId !== "unassigned",
+                                      )?.doctorId;
+
                                 if (docId) {
-                                  const foundDoc = doctors.find((d) => d.id === docId);
-                                  if (foundDoc && foundDoc.name !== "Unknown Doctor" && foundDoc.name !== "Expert Cabin") return foundDoc.name;
-                                  const foundExp = experts.find((e) => e.id === docId);
-                                  if (foundExp && foundExp.name !== "Unknown Doctor" && foundExp.name !== "Expert Cabin") return foundExp.name;
+                                  const foundDoc = doctors.find(
+                                    (d) => d.id === docId,
+                                  );
+
+                                  if (
+                                    foundDoc &&
+                                    foundDoc.name !== "Unknown Doctor" &&
+                                    foundDoc.name !== "Expert Cabin"
+                                  )
+                                    return foundDoc.name;
+                                  const foundExp = experts.find(
+                                    (e) => e.id === docId,
+                                  );
+
+                                  if (
+                                    foundExp &&
+                                    foundExp.name !== "Unknown Doctor" &&
+                                    foundExp.name !== "Expert Cabin"
+                                  )
+                                    return foundExp.name;
                                 }
-                                
+
                                 // 2. If the stored b.doctorName is valid (not "Unknown Doctor" and not "Expert Cabin"), use it
-                                if (b.doctorName && b.doctorName !== "Unknown Doctor" && b.doctorName !== "Expert Cabin") {
+                                if (
+                                  b.doctorName &&
+                                  b.doctorName !== "Unknown Doctor" &&
+                                  b.doctorName !== "Expert Cabin"
+                                ) {
                                   return b.doctorName;
                                 }
-                                
+
                                 // 3. Try to find in items
-                                const itemName = b.items?.find((i) => i.doctorName && i.doctorName !== "Unknown Doctor" && i.doctorName !== "Expert Cabin")?.doctorName;
+                                const itemName = b.items?.find(
+                                  (i) =>
+                                    i.doctorName &&
+                                    i.doctorName !== "Unknown Doctor" &&
+                                    i.doctorName !== "Expert Cabin",
+                                )?.doctorName;
+
                                 if (itemName) return itemName;
-                                
+
                                 // 4. Default fallback
-                                return b.doctorName === "Unknown Doctor" || !b.doctorName ? "Expert Cabin" : b.doctorName;
+                                return b.doctorName === "Unknown Doctor" ||
+                                  !b.doctorName
+                                  ? "Expert Cabin"
+                                  : b.doctorName;
                               })()}
                             </p>
                             {(() => {
@@ -1575,12 +1612,12 @@ export default function AppointmentBillingPage() {
                                 new Set(
                                   b.items
                                     ? b.items
-                                      .filter(
-                                        (i) =>
-                                          i.doctorId &&
-                                          i.doctorId !== b.doctorId,
-                                      )
-                                      .map((i) => i.doctorName)
+                                        .filter(
+                                          (i) =>
+                                            i.doctorId &&
+                                            i.doctorId !== b.doctorId,
+                                        )
+                                        .map((i) => i.doctorName)
                                     : [],
                                 ),
                               );
@@ -1626,9 +1663,9 @@ export default function AppointmentBillingPage() {
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1.5">
                               <button
-                                type="button"
                                 className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                 title="View"
+                                type="button"
                                 onClick={() =>
                                   navigate(
                                     `/dashboard/appointments-billing/${b.id}`,
@@ -1640,9 +1677,9 @@ export default function AppointmentBillingPage() {
                               <Dropdown>
                                 <DropdownTrigger>
                                   <button
-                                    type="button"
                                     className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded flex items-center gap-0.5"
                                     title="Print"
+                                    type="button"
                                   >
                                     <IoPrintOutline />
                                     <IoChevronDown className="w-2.5 h-2.5 opacity-50" />
@@ -1712,9 +1749,9 @@ export default function AppointmentBillingPage() {
                                 </DropdownMenu>
                               </Dropdown>
                               <button
-                                type="button"
                                 className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                 title="Edit"
+                                type="button"
                                 onClick={() =>
                                   navigate(
                                     `/dashboard/appointments-billing/${b.id}/edit`,
@@ -1725,9 +1762,9 @@ export default function AppointmentBillingPage() {
                               </button>
                               {b.paymentStatus !== "paid" && (
                                 <button
-                                  type="button"
                                   className="p-1.5 text-text-muted hover:text-green-600 hover:bg-green-500/10 rounded"
                                   title="Pay"
+                                  type="button"
                                   onClick={() => {
                                     setSelectedBillingForPayment(b);
                                     setPaymentForm((p) => ({
@@ -1741,9 +1778,9 @@ export default function AppointmentBillingPage() {
                                 </button>
                               )}
                               <button
-                                type="button"
                                 className="p-1.5 text-text-muted hover:text-red-600 hover:bg-red-500/10 rounded"
                                 title="Delete"
+                                type="button"
                                 onClick={() => {
                                   setDeletingBilling(b);
                                   setShowDeleteModal(true);
@@ -1772,17 +1809,17 @@ export default function AppointmentBillingPage() {
                     </span>
                     <div className="flex gap-1">
                       <button
-                        type="button"
                         className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                         disabled={currentPage === 1}
+                        type="button"
                         onClick={() => setCurrentPage((p) => p - 1)}
                       >
                         Prev
                       </button>
                       <button
-                        type="button"
                         className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                         disabled={currentPage === totalPages}
+                        type="button"
                         onClick={() => setCurrentPage((p) => p + 1)}
                       >
                         Next
@@ -1941,8 +1978,8 @@ export default function AppointmentBillingPage() {
                         />
                         {m.isCustom && (
                           <button
-                            type="button"
                             className="p-1 hover:bg-red-500/10 hover:text-red-500 rounded text-text-muted"
+                            type="button"
                             onClick={() => handleDeleteMethod(m.id)}
                           >
                             <IoTrashOutline />
@@ -1956,7 +1993,13 @@ export default function AppointmentBillingPage() {
             </div>
 
             <div className="border-t border-border-base pt-8 mt-8">
-              <h3 className={title({ size: "md", color: "primary", fullWidth: true })}>
+              <h3
+                className={title({
+                  size: "md",
+                  color: "primary",
+                  fullWidth: true,
+                })}
+              >
                 Treatment Categories
               </h3>
               <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -2043,294 +2086,288 @@ export default function AppointmentBillingPage() {
       {/* ── Modals ──────────────────────────────────────────────────────────── */}
 
       {/* View Modal */}
-      {
-        showInvoiceModal && selectedBilling && (
-          <ModalShell
-            footer={
-              <>
-                <Button
-                  color="default"
-                  size="sm"
-                  variant="bordered"
-                  onClick={() => setShowInvoiceModal(false)}
-                >
-                  Close
-                </Button>
-                {selectedBilling.paymentStatus !== "paid" && (
-                  <Button
-                    color="primary"
-                    size="sm"
-                    onClick={() => {
-                      setShowInvoiceModal(false);
-                      setSelectedBillingForPayment(selectedBilling);
-                      setPaymentForm((p) => ({
-                        ...p,
-                        amount: selectedBilling.balanceAmount.toString(),
-                      }));
-                      setShowPaymentModal(true);
-                    }}
-                  >
-                    Record Payment
-                  </Button>
-                )}
+      {showInvoiceModal && selectedBilling && (
+        <ModalShell
+          footer={
+            <>
+              <Button
+                color="default"
+                size="sm"
+                variant="bordered"
+                onClick={() => setShowInvoiceModal(false)}
+              >
+                Close
+              </Button>
+              {selectedBilling.paymentStatus !== "paid" && (
                 <Button
                   color="primary"
                   size="sm"
-                  variant="bordered"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.open(
-                      `/dashboard/appointments-billing/${selectedBilling.id}?print=true`,
-                      "_blank",
-                    );
+                  onClick={() => {
+                    setShowInvoiceModal(false);
+                    setSelectedBillingForPayment(selectedBilling);
+                    setPaymentForm((p) => ({
+                      ...p,
+                      amount: selectedBilling.balanceAmount.toString(),
+                    }));
+                    setShowPaymentModal(true);
                   }}
-                >
-                  Print
-                </Button>
-              </>
-            }
-            size="xl"
-            subtitle={
-              <span className="text-text-muted/60 font-mono text-[11.5px]">
-                {selectedBilling.invoiceNumber}
-              </span>
-            }
-            title="Invoice Details"
-            onClose={() => setShowInvoiceModal(false)}
-          >
-            <div className="space-y-4 text-[13px] text-text-main">
-              <div className="grid grid-cols-2 gap-3 bg-surface-2 p-3 rounded border border-border-base">
-                <div>
-                  <p className="text-[11px] text-text-muted">Patient</p>
-                  <p className="font-semibold">{selectedBilling.patientName}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-text-muted">Doctor</p>
-                  <p className="font-semibold">
-                    {selectedBilling.doctorName} ({selectedBilling.doctorType})
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-text-muted">Date</p>
-                  <p>{fmtDate(selectedBilling.invoiceDate)}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-text-muted">Status</p>
-                  <StatusBadge status={selectedBilling.status} />
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-2 text-text-main border-b border-border-base pb-1">
-                  Items
-                </h4>
-                <div className="space-y-1">
-                  {selectedBilling.items.map((i, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center bg-surface border border-border-base p-2 rounded"
-                    >
-                      <div>
-                        <p className="font-medium">{i.appointmentTypeName}</p>
-                        <p className="text-[11.5px] text-text-muted">
-                          {fmtCur(i.price)} × {i.quantity}
-                        </p>
-                      </div>
-                      <span>{fmtCur(i.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1.5 flex flex-col items-end border-t border-border-base pt-3">
-                <p className="w-48 flex justify-between text-text-muted">
-                  <span>Subtotal:</span>
-                  <span>{fmtCur(selectedBilling.subtotal)}</span>
-                </p>
-                <p className="w-48 flex justify-between text-text-muted">
-                  <span>Discount:</span>
-                  <span className="text-red-500">
-                    - {fmtCur(selectedBilling.discountAmount)}
-                  </span>
-                </p>
-                {selectedBilling.taxAmount > 0 && (
-                  <p className="w-48 flex justify-between text-text-muted">
-                    <span>Tax:</span>
-                    <span>{fmtCur(selectedBilling.taxAmount)}</span>
-                  </p>
-                )}
-                <p className="w-48 flex justify-between font-bold text-text-main mt-1 border-t border-border-base pt-1">
-                  <span>Total:</span>
-                  <span>{fmtCur(selectedBilling.totalAmount)}</span>
-                </p>
-              </div>
-
-              {selectedBilling.paidAmount > 0 && (
-                <div className="bg-green-500/5 p-3 rounded border border-green-500/10 space-y-1 mt-4">
-                  <h4 className="font-semibold text-green-600 border-b border-green-500/10 pb-1 mb-2">
-                    Payment Recieved
-                  </h4>
-                  <p className="flex justify-between text-text-muted">
-                    <span>Total:</span>
-                    <span>{fmtCur(selectedBilling.totalAmount)}</span>
-                  </p>
-                  <p className="flex justify-between font-bold text-green-600">
-                    <span>Paid:</span>
-                    <span>{fmtCur(selectedBilling.paidAmount)}</span>
-                  </p>
-                  {selectedBilling.balanceAmount > 0 && (
-                    <p className="flex justify-between text-red-600 font-semibold mt-1">
-                      <span>Due:</span>
-                      <span>{fmtCur(selectedBilling.balanceAmount)}</span>
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </ModalShell>
-        )
-      }
-
-      {/* Payment Modal */}
-      {
-        showPaymentModal && selectedBillingForPayment && (
-          <ModalShell
-            disabled={paymentProcessing}
-            footer={
-              <>
-                <Button
-                  color="default"
-                  disabled={paymentProcessing}
-                  size="sm"
-                  variant="bordered"
-                  onClick={() => setShowPaymentModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  color="primary"
-                  disabled={!paymentForm.amount}
-                  isLoading={paymentProcessing}
-                  size="sm"
-                  onClick={handlePaymentSubmit}
                 >
                   Record Payment
                 </Button>
-              </>
-            }
-            size="md"
-            subtitle={
-              <span className="text-text-muted/60 text-[11.5px]">
-                Invoice: {selectedBillingForPayment.invoiceNumber} — Bal:{" "}
-                {fmtCur(selectedBillingForPayment.balanceAmount)}
-              </span>
-            }
-            title="Record Payment"
-            onClose={() => setShowPaymentModal(false)}
-          >
-            <div className="space-y-4">
+              )}
+              <Button
+                color="primary"
+                size="sm"
+                variant="bordered"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.open(
+                    `/dashboard/appointments-billing/${selectedBilling.id}?print=true`,
+                    "_blank",
+                  );
+                }}
+              >
+                Print
+              </Button>
+            </>
+          }
+          size="xl"
+          subtitle={
+            <span className="text-text-muted/60 font-mono text-[11.5px]">
+              {selectedBilling.invoiceNumber}
+            </span>
+          }
+          title="Invoice Details"
+          onClose={() => setShowInvoiceModal(false)}
+        >
+          <div className="space-y-4 text-[13px] text-text-main">
+            <div className="grid grid-cols-2 gap-3 bg-surface-2 p-3 rounded border border-border-base">
+              <div>
+                <p className="text-[11px] text-text-muted">Patient</p>
+                <p className="font-semibold">{selectedBilling.patientName}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-text-muted">Doctor</p>
+                <p className="font-semibold">
+                  {selectedBilling.doctorName} ({selectedBilling.doctorType})
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-text-muted">Date</p>
+                <p>{fmtDate(selectedBilling.invoiceDate)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-text-muted">Status</p>
+                <StatusBadge status={selectedBilling.status} />
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-2 text-text-main border-b border-border-base pb-1">
+                Items
+              </h4>
+              <div className="space-y-1">
+                {selectedBilling.items.map((i, idx) => (
+                  <div
+                    key={idx}
+                    className="flex justify-between items-center bg-surface border border-border-base p-2 rounded"
+                  >
+                    <div>
+                      <p className="font-medium">{i.appointmentTypeName}</p>
+                      <p className="text-[11.5px] text-text-muted">
+                        {fmtCur(i.price)} × {i.quantity}
+                      </p>
+                    </div>
+                    <span>{fmtCur(i.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5 flex flex-col items-end border-t border-border-base pt-3">
+              <p className="w-48 flex justify-between text-text-muted">
+                <span>Subtotal:</span>
+                <span>{fmtCur(selectedBilling.subtotal)}</span>
+              </p>
+              <p className="w-48 flex justify-between text-text-muted">
+                <span>Discount:</span>
+                <span className="text-red-500">
+                  - {fmtCur(selectedBilling.discountAmount)}
+                </span>
+              </p>
+              {selectedBilling.taxAmount > 0 && (
+                <p className="w-48 flex justify-between text-text-muted">
+                  <span>Tax:</span>
+                  <span>{fmtCur(selectedBilling.taxAmount)}</span>
+                </p>
+              )}
+              <p className="w-48 flex justify-between font-bold text-text-main mt-1 border-t border-border-base pt-1">
+                <span>Total:</span>
+                <span>{fmtCur(selectedBilling.totalAmount)}</span>
+              </p>
+            </div>
+
+            {selectedBilling.paidAmount > 0 && (
+              <div className="bg-green-500/5 p-3 rounded border border-green-500/10 space-y-1 mt-4">
+                <h4 className="font-semibold text-green-600 border-b border-green-500/10 pb-1 mb-2">
+                  Payment Recieved
+                </h4>
+                <p className="flex justify-between text-text-muted">
+                  <span>Total:</span>
+                  <span>{fmtCur(selectedBilling.totalAmount)}</span>
+                </p>
+                <p className="flex justify-between font-bold text-green-600">
+                  <span>Paid:</span>
+                  <span>{fmtCur(selectedBilling.paidAmount)}</span>
+                </p>
+                {selectedBilling.balanceAmount > 0 && (
+                  <p className="flex justify-between text-red-600 font-semibold mt-1">
+                    <span>Due:</span>
+                    <span>{fmtCur(selectedBilling.balanceAmount)}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedBillingForPayment && (
+        <ModalShell
+          disabled={paymentProcessing}
+          footer={
+            <>
+              <Button
+                color="default"
+                disabled={paymentProcessing}
+                size="sm"
+                variant="bordered"
+                onClick={() => setShowPaymentModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                color="primary"
+                disabled={!paymentForm.amount}
+                isLoading={paymentProcessing}
+                size="sm"
+                onClick={handlePaymentSubmit}
+              >
+                Record Payment
+              </Button>
+            </>
+          }
+          size="md"
+          subtitle={
+            <span className="text-text-muted/60 text-[11.5px]">
+              Invoice: {selectedBillingForPayment.invoiceNumber} — Bal:{" "}
+              {fmtCur(selectedBillingForPayment.balanceAmount)}
+            </span>
+          }
+          title="Record Payment"
+          onClose={() => setShowPaymentModal(false)}
+        >
+          <div className="space-y-4">
+            <FlatInput
+              required
+              hint={`Max: ${fmtCur(selectedBillingForPayment.balanceAmount)}`}
+              label="Amount (NPR)"
+              type="number"
+              value={paymentForm.amount}
+              onChange={(v) => setPaymentForm((p) => ({ ...p, amount: v }))}
+            />
+            <div className="flex flex-col gap-1">
+              <label className="text-[12px] font-medium text-text-muted">
+                Payment Method <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+                value={paymentForm.method}
+                onChange={(e) =>
+                  setPaymentForm((p) => ({
+                    ...p,
+                    method: e.target.value,
+                    reference: "",
+                  }))
+                }
+              >
+                {availableMethods.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {availableMethods.find((m) => m.key === paymentForm.method)
+              ?.requiresReference && (
               <FlatInput
                 required
-                hint={`Max: ${fmtCur(selectedBillingForPayment.balanceAmount)}`}
-                label="Amount (NPR)"
-                type="number"
-                value={paymentForm.amount}
-                onChange={(v) => setPaymentForm((p) => ({ ...p, amount: v }))}
+                label="Reference ID"
+                value={paymentForm.reference}
+                onChange={(v) =>
+                  setPaymentForm((p) => ({ ...p, reference: v }))
+                }
               />
-              <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-medium text-text-muted">
-                  Payment Method <span className="text-red-500">*</span>
-                </label>
-                <select
-                  className="h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface text-text-main focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
-                  value={paymentForm.method}
-                  onChange={(e) =>
-                    setPaymentForm((p) => ({
-                      ...p,
-                      method: e.target.value,
-                      reference: "",
-                    }))
-                  }
-                >
-                  {availableMethods.map((m) => (
-                    <option key={m.key} value={m.key}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {availableMethods.find((m) => m.key === paymentForm.method)
-                ?.requiresReference && (
-                  <FlatInput
-                    required
-                    label="Reference ID"
-                    value={paymentForm.reference}
-                    onChange={(v) =>
-                      setPaymentForm((p) => ({ ...p, reference: v }))
-                    }
-                  />
-                )}
-              <FlatInput
-                label="Notes"
-                value={paymentForm.notes}
-                onChange={(v) => setPaymentForm((p) => ({ ...p, notes: v }))}
-              />
-            </div>
-          </ModalShell>
-        )
-      }
+            )}
+            <FlatInput
+              label="Notes"
+              value={paymentForm.notes}
+              onChange={(v) => setPaymentForm((p) => ({ ...p, notes: v }))}
+            />
+          </div>
+        </ModalShell>
+      )}
 
       {/* Delete Modal */}
-      {
-        showDeleteModal && deletingBilling && (
-          <ModalShell
-            disabled={isDeleting}
-            footer={
-              <>
-                <Button
-                  color="default"
-                  disabled={isDeleting}
-                  size="sm"
-                  variant="bordered"
-                  onClick={() => setShowDeleteModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  color="danger"
-                  isLoading={isDeleting}
-                  size="sm"
-                  onClick={handleDelete}
-                >
-                  Delete Invoice
-                </Button>
-              </>
-            }
-            size="md"
-            title="Delete Invoice"
-            onClose={() => setShowDeleteModal(false)}
-          >
-            <div className="text-[13px] text-text-muted">
-              <p>
-                Are you sure you want to delete invoice{" "}
-                <strong className="font-mono text-text-main">
-                  {deletingBilling.invoiceNumber}
-                </strong>
-                ?
+      {showDeleteModal && deletingBilling && (
+        <ModalShell
+          disabled={isDeleting}
+          footer={
+            <>
+              <Button
+                color="default"
+                disabled={isDeleting}
+                size="sm"
+                variant="bordered"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                color="danger"
+                isLoading={isDeleting}
+                size="sm"
+                onClick={handleDelete}
+              >
+                Delete Invoice
+              </Button>
+            </>
+          }
+          size="md"
+          title="Delete Invoice"
+          onClose={() => setShowDeleteModal(false)}
+        >
+          <div className="text-[13px] text-text-muted">
+            <p>
+              Are you sure you want to delete invoice{" "}
+              <strong className="font-mono text-text-main">
+                {deletingBilling.invoiceNumber}
+              </strong>
+              ?
+            </p>
+            <div className="mt-3 p-3 bg-red-500/5 border border-red-500/10 rounded text-red-500">
+              <p className="font-semibold flex items-center gap-1">
+                <IoTrashOutline /> This action cannot be undone.
               </p>
-              <div className="mt-3 p-3 bg-red-500/5 border border-red-500/10 rounded text-red-500">
-                <p className="font-semibold flex items-center gap-1">
-                  <IoTrashOutline /> This action cannot be undone.
-                </p>
-                <p className="text-[12px] mt-1">
-                  This will permanently remove the invoice and any associated
-                  ledger records.
-                </p>
-              </div>
+              <p className="text-[12px] mt-1">
+                This will permanently remove the invoice and any associated
+                ledger records.
+              </p>
             </div>
-          </ModalShell>
-        )
-      }
-    </div >
+          </div>
+        </ModalShell>
+      )}
+    </div>
   );
 }

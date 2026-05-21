@@ -69,21 +69,25 @@ export const itemService = {
       const itemsRef = collection(db, ITEMS_COLLECTION);
 
       const now = Timestamp.now();
-      
+
       // Sanitize undefined fields
       const sanitize = (obj: any) => {
         const cleaned: any = {};
-        Object.keys(obj).forEach(key => {
+
+        Object.keys(obj).forEach((key) => {
           if (obj[key] !== undefined) cleaned[key] = obj[key];
         });
+
         return cleaned;
       };
 
       const data = sanitize({
         ...itemData,
-        purchaseDate: itemData.purchaseDate ? 
-          (itemData.purchaseDate instanceof Timestamp ? itemData.purchaseDate : 
-           Timestamp.fromDate(new Date(itemData.purchaseDate))) : null,
+        purchaseDate: itemData.purchaseDate
+          ? itemData.purchaseDate instanceof Timestamp
+            ? itemData.purchaseDate
+            : Timestamp.fromDate(new Date(itemData.purchaseDate))
+          : null,
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -141,19 +145,26 @@ export const itemService = {
       // Sanitize undefined fields
       const sanitize = (obj: any) => {
         const cleaned: any = {};
-        Object.keys(obj).forEach(key => {
+
+        Object.keys(obj).forEach((key) => {
           if (obj[key] !== undefined) cleaned[key] = obj[key];
         });
+
         return cleaned;
       };
 
-      await updateDoc(docRef, sanitize({
-        ...updates,
-        purchaseDate: updates.purchaseDate ? 
-          (updates.purchaseDate instanceof Timestamp ? updates.purchaseDate : 
-           Timestamp.fromDate(new Date(updates.purchaseDate as any))) : undefined,
-        updatedAt: now,
-      }));
+      await updateDoc(
+        docRef,
+        sanitize({
+          ...updates,
+          purchaseDate: updates.purchaseDate
+            ? updates.purchaseDate instanceof Timestamp
+              ? updates.purchaseDate
+              : Timestamp.fromDate(new Date(updates.purchaseDate as any))
+            : undefined,
+          updatedAt: now,
+        }),
+      );
 
       console.log("Item updated successfully");
     } catch (error) {

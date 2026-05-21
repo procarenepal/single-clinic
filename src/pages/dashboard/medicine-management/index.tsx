@@ -16,7 +16,7 @@ import MedicinesTab from "./tabs/MedicinesTab";
 
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
-import { Skeleton, TableSkeleton, CardSkeleton, Spinner } from "@/components/ui";
+import { Skeleton } from "@/components/ui";
 import { useAuthContext } from "@/context/AuthContext";
 import { medicineService } from "@/services/medicineService";
 import { clinicSettingsService } from "@/services/clinicSettingsService";
@@ -34,8 +34,7 @@ import SettingsTab from "@/pages/dashboard/medicine-management/tabs/SettingsTab"
 export default function MedicineManagementPage() {
   const { userData, clinicId, branchId } = useAuthContext();
   const isClinicAdmin =
-    userData?.role === "system-owner" ||
-    userData?.role === "clinic-admin";
+    userData?.role === "system-owner" || userData?.role === "clinic-admin";
   const [selectedTab, setSelectedTab] = useState("medicines");
   const [isLoading, setIsLoading] = useState(true);
   const [clinicSettings, setClinicSettings] = useState<ClinicSettings | null>(
@@ -59,9 +58,9 @@ export default function MedicineManagementPage() {
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
     !isMultiBranch ||
-      (isClinicAdmin &&
-        (selectedBranchId === null ||
-          (mainBranchId && selectedBranchId === mainBranchId)))
+    (isClinicAdmin &&
+      (selectedBranchId === null ||
+        (mainBranchId && selectedBranchId === mainBranchId)))
       ? undefined
       : (userData?.branchId ?? (selectedBranchId || undefined));
 
@@ -146,10 +145,14 @@ export default function MedicineManagementPage() {
           effectiveBranchId || undefined,
         );
         const medicineStocks: Record<string, number> = {};
-        const aggregatedStocks: Record<string, { currentStock: number; schemeStock: number; reorderLevel: number }> = {};
+        const aggregatedStocks: Record<
+          string,
+          { currentStock: number; schemeStock: number; reorderLevel: number }
+        > = {};
 
         stockData.forEach((stock) => {
-          medicineStocks[stock.medicineId] = (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
+          medicineStocks[stock.medicineId] =
+            (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
           if (!aggregatedStocks[stock.medicineId]) {
             aggregatedStocks[stock.medicineId] = {
               currentStock: 0,
@@ -158,7 +161,8 @@ export default function MedicineManagementPage() {
             };
           }
           aggregatedStocks[stock.medicineId].currentStock += stock.currentStock;
-          aggregatedStocks[stock.medicineId].schemeStock += stock.schemeStock || 0;
+          aggregatedStocks[stock.medicineId].schemeStock +=
+            stock.schemeStock || 0;
         });
 
         const settings = settingsOverride ?? clinicSettings;
@@ -167,6 +171,7 @@ export default function MedicineManagementPage() {
 
         const lowStockItems = Object.values(aggregatedStocks).filter((s) => {
           const totalStock = s.currentStock + s.schemeStock;
+
           return totalStock <= s.reorderLevel;
         });
 
@@ -248,10 +253,14 @@ export default function MedicineManagementPage() {
         );
 
         const medicineStocks: Record<string, number> = {};
-        const aggregatedStocks: Record<string, { currentStock: number; schemeStock: number; reorderLevel: number }> = {};
+        const aggregatedStocks: Record<
+          string,
+          { currentStock: number; schemeStock: number; reorderLevel: number }
+        > = {};
 
         stockData.forEach((stock) => {
-          medicineStocks[stock.medicineId] = (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
+          medicineStocks[stock.medicineId] =
+            (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
           if (!aggregatedStocks[stock.medicineId]) {
             aggregatedStocks[stock.medicineId] = {
               currentStock: 0,
@@ -260,13 +269,15 @@ export default function MedicineManagementPage() {
             };
           }
           aggregatedStocks[stock.medicineId].currentStock += stock.currentStock;
-          aggregatedStocks[stock.medicineId].schemeStock += stock.schemeStock || 0;
+          aggregatedStocks[stock.medicineId].schemeStock +=
+            stock.schemeStock || 0;
         });
 
         const lowStockThreshold = settings?.lowStockThreshold || 10;
         const expiryAlertDays = settings?.expiryAlertDays || 30;
         const lowStockItems = Object.values(aggregatedStocks).filter((s) => {
           const totalStock = s.currentStock + s.schemeStock;
+
           return totalStock <= s.reorderLevel;
         });
         const alertDate = new Date();
@@ -363,6 +374,7 @@ export default function MedicineManagementPage() {
       setFilterType(null);
     }
   }, []);
+
   // Main Loading State
   if (isLoading) {
     return (
@@ -409,7 +421,9 @@ export default function MedicineManagementPage() {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className={title({ size: "lg", color: "primary" })}>Medicine Management</h1>
+              <h1 className={title({ size: "lg", color: "primary" })}>
+                Medicine Management
+              </h1>
               <p className="text-[13.5px] text-text-muted mt-1">
                 Manage medicines, inventory, brands, and supplier information
               </p>
@@ -417,7 +431,9 @@ export default function MedicineManagementPage() {
             <div className="flex items-center gap-3 flex-wrap">
               {!branchId && isClinicAdmin && branches.length > 0 && (
                 <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[rgb(var(--color-text-muted))]">Branch</span>
+                  <span className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                    Branch
+                  </span>
                   <select
                     className="h-8 px-2.5 py-0 text-[12px] border border-[rgb(var(--color-border))] rounded bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text))] focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary)/0.2)]"
                     value={selectedBranchId ?? ""}
@@ -435,10 +451,11 @@ export default function MedicineManagementPage() {
                 </div>
               )}
               <span
-                className={`text-xs font-semibold px-2.5 py-1 rounded-sm border ${clinicSettings?.sellsMedicines
-                  ? "bg-health-100 text-health-700 border-health-200"
-                  : "text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-3))]"
-                  } flex items-center gap-1.5`}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-sm border ${
+                  clinicSettings?.sellsMedicines
+                    ? "bg-health-100 text-health-700 border-health-200"
+                    : "text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-3))]"
+                } flex items-center gap-1.5`}
               >
                 <IoMedicalOutline />
                 {clinicSettings?.sellsMedicines
@@ -500,7 +517,9 @@ export default function MedicineManagementPage() {
                   <div className="w-32 h-1 bg-border-base overflow-hidden rounded-full">
                     <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2" />
                   </div>
-                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Updating Stats</span>
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
+                    Updating Stats
+                  </span>
                 </div>
               </div>
             )}
@@ -515,7 +534,9 @@ export default function MedicineManagementPage() {
                   <div className="p-1 bg-primary/10 rounded">
                     <IoMedkitOutline className="text-primary" size={14} />
                   </div>
-                  <span className="text-[11.5px] font-semibold text-text-muted">Total Medicines</span>
+                  <span className="text-[11.5px] font-semibold text-text-muted">
+                    Total Medicines
+                  </span>
                 </div>
                 <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.totalMedicines}
@@ -540,7 +561,9 @@ export default function MedicineManagementPage() {
                   <div className="p-1 bg-warning/10 rounded">
                     <IoWarningOutline className="text-warning" size={14} />
                   </div>
-                  <span className="text-[11.5px] font-semibold text-text-muted">Low Stock</span>
+                  <span className="text-[11.5px] font-semibold text-text-muted">
+                    Low Stock
+                  </span>
                 </div>
                 <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.lowStockItems}
@@ -570,7 +593,9 @@ export default function MedicineManagementPage() {
                   <div className="p-1 bg-danger/10 rounded">
                     <IoAlertCircleOutline className="text-danger" size={14} />
                   </div>
-                  <span className="text-[11.5px] font-semibold text-text-muted">Expiring Soon</span>
+                  <span className="text-[11.5px] font-semibold text-text-muted">
+                    Expiring Soon
+                  </span>
                 </div>
                 <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.expiringItems}
@@ -593,7 +618,9 @@ export default function MedicineManagementPage() {
                   <div className="p-1 bg-primary/10 rounded">
                     <IoBusinessOutline className="text-primary" size={14} />
                   </div>
-                  <span className="text-[11.5px] font-semibold text-text-muted">Brands</span>
+                  <span className="text-[11.5px] font-semibold text-text-muted">
+                    Brands
+                  </span>
                 </div>
                 <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.totalBrands}
@@ -611,7 +638,9 @@ export default function MedicineManagementPage() {
                   <div className="p-1 bg-primary/10 rounded">
                     <IoFlaskOutline className="text-primary" size={14} />
                   </div>
-                  <span className="text-[11.5px] font-semibold text-text-muted">Categories</span>
+                  <span className="text-[11.5px] font-semibold text-text-muted">
+                    Categories
+                  </span>
                 </div>
                 <p className="text-[18px] font-bold text-[rgb(var(--color-text))] leading-none">
                   {dashboardStats.totalCategories}
@@ -682,10 +711,11 @@ export default function MedicineManagementPage() {
                       tab && (
                         <button
                           key={tab.key}
-                          className={`flex items-center gap-2 px-4 h-11 text-[13px] font-semibold transition-colors whitespace-nowrap ${selectedTab === tab.key
-                            ? "text-primary border-b-2 border-primary bg-primary/5 relative top-[1px]"
-                            : "text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-3))]"
-                            }`}
+                          className={`flex items-center gap-2 px-4 h-11 text-[13px] font-semibold transition-colors whitespace-nowrap ${
+                            selectedTab === tab.key
+                              ? "text-primary border-b-2 border-primary bg-primary/5 relative top-[1px]"
+                              : "text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-3))]"
+                          }`}
                           onClick={() => handleTabChange(tab.key)}
                         >
                           {tab.icon}

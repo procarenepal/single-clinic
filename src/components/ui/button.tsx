@@ -50,12 +50,9 @@ const SOLID: Record<BtnColor, string> = {
   default:
     "bg-surface-2 text-text-main hover:bg-surface-3 border border-border-base",
   primary: "bg-primary text-white hover:opacity-90 border border-primary",
-  secondary:
-    "bg-success text-white hover:opacity-90 border border-success",
-  success:
-    "bg-success text-white hover:opacity-90 border border-success",
-  warning:
-    "bg-warning text-white hover:opacity-90 border border-warning",
+  secondary: "bg-success text-white hover:opacity-90 border border-success",
+  success: "bg-success text-white hover:opacity-90 border border-success",
+  warning: "bg-warning text-white hover:opacity-90 border border-warning",
   danger: "bg-danger text-white hover:opacity-90 border border-danger",
 };
 
@@ -71,7 +68,8 @@ const FLAT: Record<BtnColor, string> = {
     "bg-success/10 text-success hover:bg-success/20 border border-transparent",
   warning:
     "bg-warning/10 text-warning hover:bg-warning/20 border border-transparent",
-  danger: "bg-danger/10 text-danger hover:bg-danger/20 border border-transparent",
+  danger:
+    "bg-danger/10 text-danger hover:bg-danger/20 border border-transparent",
 };
 
 // Bordered: transparent bg, colored border
@@ -147,8 +145,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <motion.button
         ref={ref as any}
-        whileHover={!isDisabled && !isLoading ? { scale: 1.01 } : {}}
-        whileTap={!isDisabled && !isLoading ? { scale: 0.98 } : {}}
         className={clsx(
           // base
           "inline-flex items-center justify-center font-medium whitespace-nowrap",
@@ -175,14 +171,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         disabled={isDisabled || isLoading || rest.disabled}
         type={type}
+        whileHover={!isDisabled && !isLoading ? { scale: 1.01 } : {}}
+        whileTap={!isDisabled && !isLoading ? { scale: 0.98 } : {}}
         onClick={handleClick}
-        {...rest as any}
+        {...(rest as any)}
       >
         {startContent && (
           <motion.span
-            initial={{ opacity: 0, x: -2 }}
             animate={{ opacity: 1, x: 0 }}
             className="shrink-0 inline-flex items-center"
+            initial={{ opacity: 0, x: -2 }}
           >
             {startContent}
           </motion.span>
@@ -194,9 +192,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {endContent && (
           <motion.span
-            initial={{ opacity: 0, x: 2 }}
             animate={{ opacity: 1, x: 0 }}
             className="shrink-0 inline-flex items-center"
+            initial={{ opacity: 0, x: 2 }}
           >
             {endContent}
           </motion.span>

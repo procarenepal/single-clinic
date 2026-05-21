@@ -235,7 +235,7 @@ export function SubscriptionBanner() {
                   }}
                 >
                   {clinic?.subscriptionStatus === "suspended" ||
-                    clinic?.subscriptionStatus === "cancelled"
+                  clinic?.subscriptionStatus === "cancelled"
                     ? "Contact Support"
                     : "Manage Subscription"}
                 </Button>

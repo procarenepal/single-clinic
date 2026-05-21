@@ -1,8 +1,6 @@
 // src/services/navigationService.tsx
 // Updated with Accounts and HR
-import {
-  IoGridOutline,
-} from "react-icons/io5";
+
 import * as Icons from "react-icons/io5";
 import React from "react";
 
@@ -83,8 +81,7 @@ class NavigationService {
     const resolvedIconName =
       iconName && iconMapping[iconName] ? iconMapping[iconName] : iconName;
 
-    if (!resolvedIconName)
-      return <Icons.IoAppsOutline className={className} />;
+    if (!resolvedIconName) return <Icons.IoAppsOutline className={className} />;
 
     // Resolve icon component dynamically from Ionicons by key
     const iconsRegistry = Icons as unknown as Record<
@@ -153,12 +150,9 @@ class NavigationService {
       // Filter and add parent pages
       availablePages.forEach((page) => {
         // Prevent duplicates for core modules
-        if (items.some(item => item.title === page.name)) return;
+        if (items.some((item) => item.title === page.name)) return;
 
-        if (
-          page.path !== "/dashboard" &&
-          !page.parentId
-        ) {
+        if (page.path !== "/dashboard" && !page.parentId) {
           // Filter children
           const accessibleChildren = availablePages
             .filter(
@@ -289,6 +283,7 @@ class NavigationService {
           // Otherwise, since every page starts with /dashboard/, it would never be hidden.
           return page.path === "/dashboard";
         }
+
         return page.path === item.href || page.path.startsWith(item.href + "/");
       });
     });
@@ -317,12 +312,9 @@ class NavigationService {
       // Filter and add parent pages that the user has access to
       userAccessiblePages.forEach((page) => {
         // Prevent duplicates for core modules
-        if (items.some(item => item.title === page.name)) return;
+        if (items.some((item) => item.title === page.name)) return;
 
-        if (
-          page.path !== "/dashboard" &&
-          !page.parentId
-        ) {
+        if (page.path !== "/dashboard" && !page.parentId) {
           // Filter out billing-related pages if billing is disabled
           if (!isBillingEnabled && this.isBillingRelatedPage(page.path)) {
             return;
@@ -421,7 +413,7 @@ class NavigationService {
   /**
    * Get navigation items with ETag caching
    */
-  
+
   async getNavigationItems(
     userId: string,
     clinicId: string,
@@ -450,6 +442,7 @@ class NavigationService {
       try {
         if (clinicId && clinicId !== "default") {
           const clinic = await clinicService.getClinicById(clinicId);
+
           isMultiBranchEnabled = clinic?.isMultiBranchEnabled || false;
         }
       } catch (error) {
@@ -478,8 +471,6 @@ class NavigationService {
           navItems = await this.buildRegularUserNavigation(userId, clinicId);
           break;
       }
-
-
     } catch (error) {
       console.error("Error building navigation:", error);
       navItems = [

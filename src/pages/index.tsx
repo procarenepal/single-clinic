@@ -7,7 +7,6 @@ import {
   Calendar,
   ClipboardList,
   Stethoscope,
-  Pill,
   Building,
   Sparkles,
   ShieldCheck,
@@ -15,7 +14,10 @@ import {
 } from "lucide-react";
 
 import { Carousel } from "@/components/ui/Carousel";
-import { landingPageService, LandingPageContent } from "@/services/landingPageService";
+import {
+  landingPageService,
+  LandingPageContent,
+} from "@/services/landingPageService";
 
 export default function IndexPage() {
   const [content, setContent] = useState<LandingPageContent | null>(null);
@@ -28,6 +30,7 @@ export default function IndexPage() {
     const fetchContent = async () => {
       try {
         const data = await landingPageService.getHomepageContent(CLINIC_ID);
+
         setContent(data);
       } catch (error) {
         console.error("Failed to fetch landing page content:", error);
@@ -35,6 +38,7 @@ export default function IndexPage() {
         setLoading(false);
       }
     };
+
     fetchContent();
   }, []);
 
@@ -43,14 +47,16 @@ export default function IndexPage() {
       name: "Ji-Su Park",
       role: "Patient",
       text: "The glass skin facial here is incredible. My skin has never looked this radiant. The clinicians are so professional and the products they use are clearly premium.",
-      image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80"
+      image:
+        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
     },
     {
       name: "Sarah Jenkins",
       role: "Patient",
       text: "I was struggling with pigmentation for years. After just three sessions of their laser therapy, I see a massive difference. Highly recommend this clinic!",
-      image: "https://images.unsplash.com/photo-1554151228-14d9def656e4?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80"
-    }
+      image:
+        "https://images.unsplash.com/photo-1554151228-14d9def656e4?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
+    },
   ];
 
   if (loading || !content) {
@@ -81,7 +87,10 @@ export default function IndexPage() {
             </div>
 
             <h1 className="text-4xl lg:text-5xl font-bold mb-6 text-[rgb(var(--color-text))] leading-[1.2] tracking-tight">
-              {content.hero.title.split(' ').slice(0, -1).join(' ')} <span className="text-[rgb(var(--color-primary))]">{content.hero.title.split(' ').pop()}</span>
+              {content.hero.title.split(" ").slice(0, -1).join(" ")}{" "}
+              <span className="text-[rgb(var(--color-primary))]">
+                {content.hero.title.split(" ").pop()}
+              </span>
             </h1>
 
             <p className="mb-8 text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed max-w-xl mx-auto lg:mx-0">
@@ -106,11 +115,14 @@ export default function IndexPage() {
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-8">
               <div className="flex -space-x-3">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="w-10 h-10 rounded-full border-2 border-[rgb(var(--color-bg))] overflow-hidden bg-[rgb(var(--color-surface-2))] shadow-sm transition-transform hover:scale-110 hover:z-10 duration-300">
+                  <div
+                    key={i}
+                    className="w-10 h-10 rounded-full border-2 border-[rgb(var(--color-bg))] overflow-hidden bg-[rgb(var(--color-surface-2))] shadow-sm transition-transform hover:scale-110 hover:z-10 duration-300"
+                  >
                     <img
-                      src={`https://i.pravatar.cc/100?u=skin-doc${i}`}
                       alt="Specialist"
                       className="w-full h-full object-cover"
+                      src={`https://i.pravatar.cc/100?u=skin-doc${i}`}
                     />
                   </div>
                 ))}
@@ -124,7 +136,9 @@ export default function IndexPage() {
                     <ShieldCheck className="w-2.5 h-2.5" />
                   </div>
                 </div>
-                <p className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">Certified Aesthetic Specialists</p>
+                <p className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">
+                  Certified Aesthetic Specialists
+                </p>
               </div>
             </div>
           </div>
@@ -136,43 +150,71 @@ export default function IndexPage() {
                   autoPlayInterval={5000}
                   items={[
                     <div className="w-full h-full relative group">
-                      <img src="/images/banner_1.png" alt="Glass Skin" className="w-full h-full object-cover rounded-xl" />
+                      <img
+                        alt="Glass Skin"
+                        className="w-full h-full object-cover rounded-xl"
+                        src="/images/banner_1.png"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                       <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                        <p className="text-[10px] font-bold uppercase tracking-widest">Natural Glow</p>
-                        <p className="text-lg font-bold">The Signature Glass Skin</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest">
+                          Natural Glow
+                        </p>
+                        <p className="text-lg font-bold">
+                          The Signature Glass Skin
+                        </p>
                       </div>
                     </div>,
                     <div className="w-full h-full relative group">
-                      <img src="/images/banner_2.png" alt="Advanced Tech" className="w-full h-full object-cover rounded-xl" />
+                      <img
+                        alt="Advanced Tech"
+                        className="w-full h-full object-cover rounded-xl"
+                        src="/images/banner_2.png"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                       <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                        <p className="text-[10px] font-bold uppercase tracking-widest">Medical Grade</p>
-                        <p className="text-lg font-bold">Advanced K-Laser Therapy</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest">
+                          Medical Grade
+                        </p>
+                        <p className="text-lg font-bold">
+                          Advanced K-Laser Therapy
+                        </p>
                       </div>
                     </div>,
                     <div className="w-full h-full relative group">
-                      <img src="/images/banner_3.png" alt="Clinic Interior" className="w-full h-full object-cover rounded-xl" />
+                      <img
+                        alt="Clinic Interior"
+                        className="w-full h-full object-cover rounded-xl"
+                        src="/images/banner_3.png"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                       <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                        <p className="text-[10px] font-bold uppercase tracking-widest">Serene Wellness</p>
-                        <p className="text-lg font-bold">Premium Aesthetic Sanctuary</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest">
+                          Serene Wellness
+                        </p>
+                        <p className="text-lg font-bold">
+                          Premium Aesthetic Sanctuary
+                        </p>
                       </div>
-                    </div>
+                    </div>,
                   ]}
                 />
               </div>
             </div>
             <div className="absolute -bottom-4 -left-4 bg-[rgb(var(--color-surface))] px-5 py-4 pr-8 rounded-xl border border-[rgb(var(--color-border))] shadow-md hidden lg:block z-20">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-md bg-[rgb(var(--color-primary)/0.1)] flex items-center justify-center text-[rgb(var(--color-primary))]">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase">Next Available</p>
-                    <p className="text-sm font-bold text-[rgb(var(--color-text))]">Consult Today</p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-md bg-[rgb(var(--color-primary)/0.1)] flex items-center justify-center text-[rgb(var(--color-primary))]">
+                  <Sparkles className="w-4 h-4" />
                 </div>
+                <div>
+                  <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase">
+                    Next Available
+                  </p>
+                  <p className="text-sm font-bold text-[rgb(var(--color-text))]">
+                    Consult Today
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -182,16 +224,20 @@ export default function IndexPage() {
       <div className="max-w-7xl mx-auto px-4 relative z-20 -mt-10 lg:-mt-12">
         <div className="grid grid-cols-2 lg:grid-cols-4 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl shadow-sm overflow-hidden divide-x divide-y lg:divide-y-0 divide-[rgb(var(--color-border))]">
           {content.stats.map((stat, index) => {
-            const IconComponent = stat.icon === "Users" ? Users :
-              stat.icon === "ClipboardList" ? ClipboardList :
-                stat.icon === "Building2" ? Building2 :
-                  Stethoscope;
-            
+            const IconComponent =
+              stat.icon === "Users"
+                ? Users
+                : stat.icon === "ClipboardList"
+                  ? ClipboardList
+                  : stat.icon === "Building2"
+                    ? Building2
+                    : Stethoscope;
+
             const statImages = [
               "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // Happy Clients
               "https://images.unsplash.com/photo-1579684385127-1ef15d508118?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // Years Expertise
               "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // K-Certified Products
-              "https://images.unsplash.com/photo-1516533075015-a3838414c3ca?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80"  // Patient Rating
+              "https://images.unsplash.com/photo-1516533075015-a3838414c3ca?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // Patient Rating
             ];
 
             return (
@@ -201,7 +247,11 @@ export default function IndexPage() {
               >
                 {/* Individual Background Image */}
                 <div className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity duration-700 pointer-events-none">
-                  <img src={statImages[index]} alt="" className="w-full h-full object-cover" />
+                  <img
+                    alt=""
+                    className="w-full h-full object-cover"
+                    src={statImages[index]}
+                  />
                 </div>
                 <div className="absolute inset-0 bg-white/60 z-[1] pointer-events-none" />
 
@@ -239,19 +289,25 @@ export default function IndexPage() {
               Medical Aesthetic Services
             </h2>
             <p className="text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed font-medium">
-              Precision-engineered protocols fusing high-altitude environmental science 
-              with world-leading Korean dermatological innovation.
+              Precision-engineered protocols fusing high-altitude environmental
+              science with world-leading Korean dermatological innovation.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             {content.services.map((service, index) => {
-              const IconComponent = service.icon === "Users" ? Users :
-                service.icon === "Stethoscope" ? Stethoscope :
-                  service.icon === "Building" ? Building :
-                    service.icon === "ClipboardList" ? ClipboardList :
-                      service.icon === "Calendar" ? Calendar :
-                        MapPin;
+              const IconComponent =
+                service.icon === "Users"
+                  ? Users
+                  : service.icon === "Stethoscope"
+                    ? Stethoscope
+                    : service.icon === "Building"
+                      ? Building
+                      : service.icon === "ClipboardList"
+                        ? ClipboardList
+                        : service.icon === "Calendar"
+                          ? Calendar
+                          : MapPin;
 
               return (
                 <div
@@ -261,12 +317,12 @@ export default function IndexPage() {
                   {/* Service Image Container */}
                   <div className="aspect-[16/11] w-full overflow-hidden relative">
                     <img
-                      src={`/images/service_${index + 1}.png`}
                       alt={service.title}
                       className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                      src={`/images/service_${index + 1}.png`}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[rgb(var(--color-surface))] via-transparent to-transparent opacity-60" />
-                    
+
                     {/* Floating Icon Badge */}
                     <div className="absolute -bottom-6 left-8 w-14 h-14 rounded-2xl bg-white flex items-center justify-center border border-[rgb(var(--color-border))] shadow-xl group-hover:rotate-6 transition-transform duration-500 z-10">
                       <div className="w-10 h-10 rounded-xl bg-[rgb(var(--color-primary)/0.05)] flex items-center justify-center text-[rgb(var(--color-primary))]">
@@ -284,9 +340,9 @@ export default function IndexPage() {
                     </p>
 
                     <div className="pt-6 border-t border-[rgb(var(--color-border))] flex items-center justify-between">
-                      <Link 
-                        to="/features" 
+                      <Link
                         className="text-[11px] font-black uppercase tracking-widest text-[rgb(var(--color-primary))] flex items-center gap-2 group/link"
+                        to="/features"
                       >
                         Explore Treatment
                         <ArrowRight className="w-3 h-3 transition-transform group-hover/link:translate-x-1" />
@@ -307,9 +363,9 @@ export default function IndexPage() {
       <section className="py-12 px-4 max-w-7xl mx-auto">
         <div className="relative h-[300px] lg:h-[400px] rounded-2xl overflow-hidden shadow-sm border border-[rgb(var(--color-border))] group">
           <img
-            src="/images/promo_banner.png"
             alt="Glass Skin Promotion"
             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+            src="/images/promo_banner.png"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/20 to-transparent" />
 
@@ -319,11 +375,18 @@ export default function IndexPage() {
                 Exclusive Treatment Offer
               </div>
               <h2 className="text-3xl lg:text-5xl font-bold mb-6 tracking-tight leading-tight">
-                Signature <span className="text-[rgb(var(--color-primary-light))]">Glass Skin</span> Protocol
+                Signature{" "}
+                <span className="text-[rgb(var(--color-primary-light))]">
+                  Glass Skin
+                </span>{" "}
+                Protocol
               </h2>
               <p className="text-white/80 text-sm lg:text-lg mb-10 font-medium leading-relaxed">
-                Unlock your natural radiance with our medical-grade facial series.
-                <span className="block mt-2 text-white font-bold">First-time clients: Save 20% this month.</span>
+                Unlock your natural radiance with our medical-grade facial
+                series.
+                <span className="block mt-2 text-white font-bold">
+                  First-time clients: Save 20% this month.
+                </span>
               </p>
               <Link
                 className="inline-flex items-center justify-center px-10 py-4 bg-white text-[rgb(var(--color-text))] font-bold text-[10px] uppercase tracking-widest rounded-md hover:bg-[rgb(var(--color-surface-2))] transition-all shadow-xl hover:-translate-y-1 active:translate-y-0"
@@ -340,26 +403,37 @@ export default function IndexPage() {
       <section className="py-24 bg-[rgb(var(--color-surface-2))] border-y border-[rgb(var(--color-border))]">
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-2xl lg:text-3xl font-bold text-[rgb(var(--color-primary))] mb-2 tracking-tight">Your Glow Journey</h2>
-            <p className="text-base text-[rgb(var(--color-text-muted))]">Experience the clinical standard of Seoul's skincare excellence.</p>
+            <h2 className="text-2xl lg:text-3xl font-bold text-[rgb(var(--color-primary))] mb-2 tracking-tight">
+              Your Glow Journey
+            </h2>
+            <p className="text-base text-[rgb(var(--color-text-muted))]">
+              Experience the clinical standard of Seoul's skincare excellence.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             {content.process.map((item, i) => (
-              <div key={i} className="bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] overflow-hidden group hover:shadow-md transition-all duration-300">
+              <div
+                key={i}
+                className="bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] overflow-hidden group hover:shadow-md transition-all duration-300"
+              >
                 <div className="aspect-[16/10] w-full overflow-hidden relative">
                   <img
-                    src={`/images/step_${i + 1}.png`}
                     alt={item.title}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    src={`/images/step_${i + 1}.png`}
                   />
                   <div className="absolute top-4 left-4 w-8 h-8 rounded-full bg-[rgb(var(--color-primary))] text-white flex items-center justify-center font-bold text-sm shadow-lg">
                     {item.step}
                   </div>
                 </div>
                 <div className="p-8">
-                  <h4 className="text-lg font-bold text-[rgb(var(--color-primary))] mb-3 tracking-tight">{item.title}</h4>
-                  <p className="text-[rgb(var(--color-text-muted))] text-sm leading-relaxed">{item.desc}</p>
+                  <h4 className="text-lg font-bold text-[rgb(var(--color-primary))] mb-3 tracking-tight">
+                    {item.title}
+                  </h4>
+                  <p className="text-[rgb(var(--color-text-muted))] text-sm leading-relaxed">
+                    {item.desc}
+                  </p>
                 </div>
               </div>
             ))}
@@ -417,7 +491,9 @@ export default function IndexPage() {
                     <h4 className="font-bold text-[rgb(var(--color-text))] mb-1 tracking-tight">
                       {item.title}
                     </h4>
-                    <p className="text-sm text-[rgb(var(--color-text-muted))]">{item.desc}</p>
+                    <p className="text-sm text-[rgb(var(--color-text-muted))]">
+                      {item.desc}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -452,13 +528,22 @@ export default function IndexPage() {
                 <div className="h-full p-10 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl shadow-[0_4px_20px_-4px_rgba(var(--color-primary)/0.05)] flex flex-col justify-center items-center text-center relative overflow-hidden group">
                   {/* Quote Icon */}
                   <div className="absolute top-6 left-10 text-[rgb(var(--color-primary)/0.1)] group-hover:text-[rgb(var(--color-primary)/0.2)] transition-colors duration-500">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                    <svg
+                      fill="currentColor"
+                      height="40"
+                      viewBox="0 0 24 24"
+                      width="40"
+                    >
                       <path d="M14.017 21L14.017 18C14.017 16.8954 14.9124 16 16.017 16H19.017C19.5693 16 20.017 15.5523 20.017 15V9C20.017 8.44772 19.5693 8 19.017 8H16.017C15.4647 8 15.017 8.44772 15.017 9V12C15.017 12.5523 14.5693 13 14.017 13H12.017V9C12.017 6.79086 13.8079 5 16.017 5H19.017C21.2261 5 23.017 6.79086 23.017 9V15C23.017 18.3137 20.3307 21 17.017 21H14.017ZM2.01697 21L2.01697 18C2.01697 16.8954 2.9124 16 4.01697 16H7.01697C7.56925 16 8.01697 15.5523 8.01697 15V9C8.01697 8.44772 7.56925 8 7.01697 8H4.01697C3.46469 8 3.01697 8.44772 3.01697 9V12C3.01697 12.5523 2.56925 13 2.01697 13H0.0169678V9C0.0169678 6.79086 1.80783 5 4.01697 5H7.01697C9.22611 5 11.017 6.79086 11.017 9V15C11.017 18.3137 8.33068 21 5.01697 21H2.01697Z" />
                     </svg>
                   </div>
 
                   <div className="w-20 h-20 rounded-full overflow-hidden mb-6 border-2 border-[rgb(var(--color-primary)/0.1)] p-1 bg-white">
-                    <img src={t.image} alt={t.name} className="w-full h-full object-cover rounded-full" />
+                    <img
+                      alt={t.name}
+                      className="w-full h-full object-cover rounded-full"
+                      src={t.image}
+                    />
                   </div>
 
                   <p className="text-lg lg:text-xl font-medium text-[rgb(var(--color-text))] mb-8 leading-relaxed max-w-2xl">
@@ -467,13 +552,17 @@ export default function IndexPage() {
 
                   <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-bold text-[rgb(var(--color-text))] uppercase tracking-widest text-xs">{t.name}</h4>
+                      <h4 className="font-bold text-[rgb(var(--color-text))] uppercase tracking-widest text-xs">
+                        {t.name}
+                      </h4>
                       <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 text-green-600 text-[8px] font-bold uppercase tracking-tighter border border-green-100">
                         <ShieldCheck className="w-2.5 h-2.5" />
                         Verified
                       </div>
                     </div>
-                    <p className="text-[10px] text-[rgb(var(--color-primary))] font-bold uppercase tracking-widest">{t.role}</p>
+                    <p className="text-[10px] text-[rgb(var(--color-primary))] font-bold uppercase tracking-widest">
+                      {t.role}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -492,17 +581,33 @@ export default function IndexPage() {
 
             <div className="space-y-6">
               {[
-                { icon: <MapPin className="w-5 h-5" />, title: "Clinic Location", content: content.contact.location },
-                { icon: <Building2 className="w-5 h-5" />, title: "Opening Hours", content: content.contact.hours },
-                { icon: <Stethoscope className="w-5 h-5" />, title: "Concierge Desk", content: `Phone: ${content.contact.phone} • ${content.contact.email}` },
+                {
+                  icon: <MapPin className="w-5 h-5" />,
+                  title: "Clinic Location",
+                  content: content.contact.location,
+                },
+                {
+                  icon: <Building2 className="w-5 h-5" />,
+                  title: "Opening Hours",
+                  content: content.contact.hours,
+                },
+                {
+                  icon: <Stethoscope className="w-5 h-5" />,
+                  title: "Concierge Desk",
+                  content: `Phone: ${content.contact.phone} • ${content.contact.email}`,
+                },
               ].map((item, i) => (
                 <div key={i} className="flex gap-4">
                   <div className="w-10 h-10 rounded-md bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center shrink-0 text-[rgb(var(--color-primary))]">
                     {item.icon}
                   </div>
                   <div>
-                    <h4 className="font-bold text-[rgb(var(--color-text))] mb-1">{item.title}</h4>
-                    <p className="text-sm text-[rgb(var(--color-text-muted))]">{item.content}</p>
+                    <h4 className="font-bold text-[rgb(var(--color-text))] mb-1">
+                      {item.title}
+                    </h4>
+                    <p className="text-sm text-[rgb(var(--color-text-muted))]">
+                      {item.content}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -512,10 +617,10 @@ export default function IndexPage() {
           <div className="w-full h-[400px] bg-[rgb(var(--color-surface))] rounded-2xl border border-[rgb(var(--color-border))] overflow-hidden relative shadow-sm flex flex-col group">
             {/* Background Image Layer */}
             <div className="absolute inset-0">
-              <img 
-                src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
-                alt="Clinic Interior" 
-                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+              <img
+                alt="Clinic Interior"
+                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
               />
               <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] group-hover:bg-white/70 transition-colors duration-500" />
             </div>
@@ -525,7 +630,9 @@ export default function IndexPage() {
                 <MapPin className="w-7 h-7 text-white" />
               </div>
 
-              <h3 className="font-bold text-lg text-[rgb(var(--color-text))] mb-2">Location Map</h3>
+              <h3 className="font-bold text-lg text-[rgb(var(--color-text))] mb-2">
+                Location Map
+              </h3>
               <p className="text-xs text-[rgb(var(--color-text-muted))] max-w-xs mx-auto mb-6">
                 {content.contact.location}
               </p>
@@ -544,9 +651,9 @@ export default function IndexPage() {
           {/* Background Image with Overlay */}
           <div className="absolute inset-0 z-0">
             <img
-              src="/images/cta_bg.png"
               alt="Glowing Skin Background"
               className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+              src="/images/cta_bg.png"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[rgb(var(--color-primary)/0.9)] to-[rgb(var(--color-primary)/0.6)] mix-blend-multiply" />
             <div className="absolute inset-0 bg-black/20" />
@@ -562,10 +669,14 @@ export default function IndexPage() {
               Start Your Journey
             </div>
             <h2 className="text-3xl lg:text-5xl font-bold mb-6 tracking-tight leading-tight">
-              Begin your journey to <span className="text-[rgb(var(--color-surface))] underline decoration-white/30 underline-offset-8">glowing skin.</span>
+              Begin your journey to{" "}
+              <span className="text-[rgb(var(--color-surface))] underline decoration-white/30 underline-offset-8">
+                glowing skin.
+              </span>
             </h2>
             <p className="text-white/90 text-lg mb-10 max-w-2xl mx-auto font-medium leading-relaxed">
-              Join thousands of clients who have achieved their skin goals with our signature Korean aesthetic protocols.
+              Join thousands of clients who have achieved their skin goals with
+              our signature Korean aesthetic protocols.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link

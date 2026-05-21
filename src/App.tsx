@@ -735,7 +735,10 @@ export default function App() {
                           {/* Core Settings Routes - No RBAC needed for basic settings */}
                           <Route element={<SettingsPage />} path="settings" />
                           <Route element={<ProfilePage />} path="profile" />
-                          <Route element={<ActivityLogPage />} path="activity-log" />
+                          <Route
+                            element={<ActivityLogPage />}
+                            path="activity-log"
+                          />
                           <Route
                             element={<ClinicSettingsPage />}
                             path="settings/clinic"

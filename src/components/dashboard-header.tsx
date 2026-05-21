@@ -8,7 +8,6 @@ import {
 import { useNavigate, Link } from "react-router-dom";
 import {
   IoMenuOutline,
-  IoGridOutline,
   IoSearchOutline,
   IoPersonOutline,
   IoMedicalOutline,
@@ -21,9 +20,9 @@ import {
   IoNotificationsOutline,
 } from "react-icons/io5";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
+
 import { db } from "@/config/firebase";
 import { NotificationService } from "@/services/notificationService";
-
 import { useAuthContext } from "@/context/AuthContext";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { patientService } from "@/services/patientService";
@@ -88,10 +87,13 @@ export const DashboardHeader = ({
   // Fetch current user's matching doctor/expert ID if applicable
   useEffect(() => {
     if (!clinicId || !currentUser?.email) return;
-    
+
     // Resolve doctor ID
     doctorService.getDoctorsByClinic(clinicId).then((docs) => {
-      const docMatch = docs.find(d => d.email?.toLowerCase() === currentUser.email?.toLowerCase());
+      const docMatch = docs.find(
+        (d) => d.email?.toLowerCase() === currentUser.email?.toLowerCase(),
+      );
+
       if (docMatch) {
         setCurrentDoctorId(docMatch.id);
       }
@@ -99,7 +101,10 @@ export const DashboardHeader = ({
 
     // Resolve expert ID
     expertService.getExpertsByClinic(clinicId).then((exps) => {
-      const expMatch = exps.find(e => e.email?.toLowerCase() === currentUser.email?.toLowerCase());
+      const expMatch = exps.find(
+        (e) => e.email?.toLowerCase() === currentUser.email?.toLowerCase(),
+      );
+
       if (expMatch) {
         setCurrentExpertId(expMatch.id);
       }
@@ -110,17 +115,14 @@ export const DashboardHeader = ({
     if (!clinicId) return;
 
     const notificationsCollection = collection(db, "notifications");
-    const q = query(
-      notificationsCollection,
-      where("clinicId", "==", clinicId)
-    );
+    const q = query(notificationsCollection, where("clinicId", "==", clinicId));
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         const list: any[] = [];
         let unread = 0;
-        
+
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           const notif: any = {
@@ -146,23 +148,30 @@ export const DashboardHeader = ({
         });
 
         // Sort descending by createdAt in memory
-        const sorted = list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        const sorted = list.sort(
+          (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+        );
 
         // Check if unread count increased — do side effects OUTSIDE the setter
         setNotifications((prev) => {
           const prevUnread = prev.filter((n) => !n.read).length;
           const currentUnread = sorted.filter((n) => !n.read).length;
+
           if (currentUnread > prevUnread) {
             // Schedule side effects after state update completes
             setTimeout(() => {
               try {
-                const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-120.wav");
+                const audio = new Audio(
+                  "https://assets.mixkit.co/active_storage/sfx/2869/2869-120.wav",
+                );
+
                 audio.volume = 0.5;
                 audio.play();
               } catch (e) {
                 console.log("Audio play blocked by browser:", e);
               }
               const latest = sorted[0];
+
               if (latest) {
                 addToast({
                   title: latest.title,
@@ -172,6 +181,7 @@ export const DashboardHeader = ({
               }
             }, 0);
           }
+
           return sorted;
         });
 
@@ -179,11 +189,17 @@ export const DashboardHeader = ({
       },
       (err) => {
         console.error("Notifications subscription error:", err);
-      }
+      },
     );
 
     return () => unsubscribe();
-  }, [clinicId, userData?.role, currentUser?.uid, currentDoctorId, currentExpertId]);
+  }, [
+    clinicId,
+    userData?.role,
+    currentUser?.uid,
+    currentDoctorId,
+    currentExpertId,
+  ]);
 
   // Click outside to close notifications dropdown
   useEffect(() => {
@@ -342,7 +358,11 @@ export const DashboardHeader = ({
           if (aIndex !== bIndex) return aIndex - bIndex;
 
           const typeOrder = { patient: 0, doctor: 1, enquiry: 2 };
-          return (typeOrder[a.type as keyof typeof typeOrder] ?? 99) - (typeOrder[b.type as keyof typeof typeOrder] ?? 99);
+
+          return (
+            (typeOrder[a.type as keyof typeof typeOrder] ?? 99) -
+            (typeOrder[b.type as keyof typeof typeOrder] ?? 99)
+          );
         });
 
         setSearchResults(results.slice(0, 10));
@@ -426,9 +446,14 @@ export const DashboardHeader = ({
             <img
               alt="Clinic Logo"
               className="w-full h-full object-contain"
-              src={clinicData?.logo ? getLogoUrl(clinicData.logo) || "/logo.png" : "/logo.png"}
+              src={
+                clinicData?.logo
+                  ? getLogoUrl(clinicData.logo) || "/logo.png"
+                  : "/logo.png"
+              }
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
+
                 target.onerror = null;
                 target.src = "/logo.png";
               }}
@@ -455,15 +480,14 @@ export const DashboardHeader = ({
       </div>
 
       {/* ── Center: search ─────────────────────────────────────────────── */}
-      <div
-        className="hidden md:block absolute left-1/2 -translate-x-1/2 w-full max-w-[440px] transition-all"
-      >
+      <div className="hidden md:block absolute left-1/2 -translate-x-1/2 w-full max-w-[440px] transition-all">
         <Input
           ref={searchInputRef}
           fullWidth
           classNames={{
-            inputWrapper: "rounded-xl bg-surface-2/50 border border-border-base/50 hover:bg-surface-2/80 focus-within:!bg-surface focus-within:shadow-md focus-within:shadow-primary/5 focus-within:!border-primary/50 h-9 px-3 transition-all duration-300",
-            input: "text-[13px] text-text-main placeholder:text-text-muted/60"
+            inputWrapper:
+              "rounded-xl bg-surface-2/50 border border-border-base/50 hover:bg-surface-2/80 focus-within:!bg-surface focus-within:shadow-md focus-within:shadow-primary/5 focus-within:!border-primary/50 h-9 px-3 transition-all duration-300",
+            input: "text-[13px] text-text-main placeholder:text-text-muted/60",
           }}
           endContent={
             <div className="flex items-center gap-1.5 ml-1">
@@ -524,12 +548,13 @@ export const DashboardHeader = ({
                       >
                         {/* Icon */}
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${result.type === "patient"
-                            ? "bg-primary/10 text-primary"
-                            : result.type === "doctor"
-                              ? "bg-success/10 text-success"
-                              : "bg-amber-500/10 text-amber-600"
-                            }`}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                            result.type === "patient"
+                              ? "bg-primary/10 text-primary"
+                              : result.type === "doctor"
+                                ? "bg-success/10 text-success"
+                                : "bg-amber-500/10 text-amber-600"
+                          }`}
                         >
                           {result.type === "patient" ? (
                             <IoPersonOutline className="w-3.5 h-3.5" />
@@ -622,14 +647,21 @@ export const DashboardHeader = ({
                       }}
                     >
                       <div className="flex justify-between items-start gap-2">
-                        <span className={`font-semibold text-text-main ${!notif.read ? "text-primary" : ""}`}>
+                        <span
+                          className={`font-semibold text-text-main ${!notif.read ? "text-primary" : ""}`}
+                        >
                           {notif.title}
                         </span>
                         <span className="text-[9px] text-text-muted whitespace-nowrap">
-                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(notif.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       </div>
-                      <p className="text-text-muted leading-snug">{notif.message}</p>
+                      <p className="text-text-muted leading-snug">
+                        {notif.message}
+                      </p>
                     </div>
                   ))
                 )}

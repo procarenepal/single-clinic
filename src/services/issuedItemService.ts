@@ -8,7 +8,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 } from "firebase/firestore";
 
@@ -56,7 +55,8 @@ export const issuedItemService = {
 
       // Sort in memory by issuedDate (descending)
       return issuedItems.sort(
-        (a, b) => (b.issuedDate?.getTime() || 0) - (a.issuedDate?.getTime() || 0),
+        (a, b) =>
+          (b.issuedDate?.getTime() || 0) - (a.issuedDate?.getTime() || 0),
       );
     } catch (error) {
       console.error("Error getting issued items by clinic:", error);
@@ -103,7 +103,8 @@ export const issuedItemService = {
 
       // Sort in memory by issuedDate (descending)
       return issuedItems.sort(
-        (a, b) => (b.issuedDate?.getTime() || 0) - (a.issuedDate?.getTime() || 0),
+        (a, b) =>
+          (b.issuedDate?.getTime() || 0) - (a.issuedDate?.getTime() || 0),
       );
     } catch (error) {
       console.error("Error getting issued items by status:", error);
@@ -154,25 +155,31 @@ export const issuedItemService = {
       const toTimestamp = (date: any) => {
         if (!date) return null;
         if (date instanceof Timestamp) return date;
+
         return Timestamp.fromDate(new Date(date));
       };
 
       // Sanitize undefined fields
       const sanitize = (obj: any) => {
         const cleaned: any = {};
-        Object.keys(obj).forEach(key => {
+
+        Object.keys(obj).forEach((key) => {
           if (obj[key] !== undefined) cleaned[key] = obj[key];
         });
+
         return cleaned;
       };
 
-      const docRef = await addDoc(issuedItemsRef, sanitize({
-        ...issuedItemData,
-        issuedDate: toTimestamp(issuedItemData.issuedDate),
-        expectedReturnDate: toTimestamp(issuedItemData.expectedReturnDate),
-        createdAt: now,
-        updatedAt: now,
-      }));
+      const docRef = await addDoc(
+        issuedItemsRef,
+        sanitize({
+          ...issuedItemData,
+          issuedDate: toTimestamp(issuedItemData.issuedDate),
+          expectedReturnDate: toTimestamp(issuedItemData.expectedReturnDate),
+          createdAt: now,
+          updatedAt: now,
+        }),
+      );
 
       return docRef.id;
     } catch (error) {
@@ -195,26 +202,34 @@ export const issuedItemService = {
       const toTimestamp = (date: any) => {
         if (!date) return null;
         if (date instanceof Timestamp) return date;
+
         return Timestamp.fromDate(new Date(date));
       };
 
       // Sanitize undefined fields
       const sanitize = (obj: any) => {
         const cleaned: any = {};
-        Object.keys(obj).forEach(key => {
+
+        Object.keys(obj).forEach((key) => {
           if (obj[key] !== undefined) cleaned[key] = obj[key];
         });
+
         return cleaned;
       };
 
-      const docRef = await addDoc(issuedItemsRef, sanitize({
-        ...dataToSave,
-        issuedDate: toTimestamp(issuedItemData.issuedDate),
-        returnDate: toTimestamp(issuedItemData.returnDate),
-        expectedReturnDate: toTimestamp(issuedItemData.expectedReturnDate),
-        createdAt: issuedItemData.createdAt ? toTimestamp(issuedItemData.createdAt) : now,
-        updatedAt: now,
-      }));
+      const docRef = await addDoc(
+        issuedItemsRef,
+        sanitize({
+          ...dataToSave,
+          issuedDate: toTimestamp(issuedItemData.issuedDate),
+          returnDate: toTimestamp(issuedItemData.returnDate),
+          expectedReturnDate: toTimestamp(issuedItemData.expectedReturnDate),
+          createdAt: issuedItemData.createdAt
+            ? toTimestamp(issuedItemData.createdAt)
+            : now,
+          updatedAt: now,
+        }),
+      );
 
       return docRef.id;
     } catch (error) {
@@ -255,19 +270,22 @@ export const issuedItemService = {
   ): Promise<void> {
     try {
       const issuedItemRef = doc(db, ISSUED_ITEMS_COLLECTION, issuedItemId);
-      
+
       const toTimestamp = (date: any) => {
         if (!date) return null;
         if (date instanceof Timestamp) return date;
+
         return Timestamp.fromDate(new Date(date));
       };
 
       // Sanitize undefined fields
       const sanitize = (obj: any) => {
         const cleaned: any = {};
-        Object.keys(obj).forEach(key => {
+
+        Object.keys(obj).forEach((key) => {
           if (obj[key] !== undefined) cleaned[key] = obj[key];
         });
+
         return cleaned;
       };
 
@@ -284,7 +302,9 @@ export const issuedItemService = {
         updateData.returnDate = toTimestamp(issuedItemData.returnDate);
       }
       if (issuedItemData.expectedReturnDate) {
-        updateData.expectedReturnDate = toTimestamp(issuedItemData.expectedReturnDate);
+        updateData.expectedReturnDate = toTimestamp(
+          issuedItemData.expectedReturnDate,
+        );
       }
 
       await updateDoc(issuedItemRef, sanitize(updateData));

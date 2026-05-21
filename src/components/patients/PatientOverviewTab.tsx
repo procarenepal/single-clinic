@@ -21,14 +21,16 @@ import { clinicService } from "@/services/clinicService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
+import { prescriptionService } from "@/services/prescriptionService";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui";
+import { generatePatientSlipHTML, PrintFormat } from "@/utils/invoicePrinting";
 import {
-  generatePatientSlipHTML,
-  PrintFormat,
-} from "@/utils/invoicePrinting";
-import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "@/utils/printBranding";
+  getPrintBrandingCSS,
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+} from "@/utils/printBranding";
 
 interface PatientOverviewTabProps {
   patient: Patient;
@@ -149,6 +151,7 @@ export default function PatientOverviewTab({
   const [clinic, setClinic] = useState<any>(null);
   const [assignedDoctor, setAssignedDoctor] = useState<any>(null);
   const [assignedExpert, setAssignedExpert] = useState<any>(null);
+  const [latestAssessment, setLatestAssessment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -164,19 +167,41 @@ export default function PatientOverviewTab({
         : Promise.resolve(null),
       patient.assignedExpertId
         ? expertService
-          .getExpertById(patient.assignedExpertId)
-          .catch(() => null)
+            .getExpertById(patient.assignedExpertId)
+            .catch(() => null)
         : Promise.resolve(null),
+      prescriptionService.getPrescriptionsByPatient(patient.id).catch(() => []),
     ])
-      .then(([c, lc, d, e]) => {
+      .then(([c, lc, d, e, prescriptions]) => {
         setClinic(c);
         setLayoutConfig(lc);
         setAssignedDoctor(d);
         setAssignedExpert(e);
+
+        // Find latest prescription with clinical assessment data
+        const withAssessment = prescriptions.filter(
+          (p: any) =>
+            p.history ||
+            p.examination ||
+            p.investigation ||
+            p.diagnosis ||
+            p.treatmentPlan,
+        );
+
+        if (withAssessment.length > 0) {
+          // Sort by creation date descending
+          withAssessment.sort((a: any, b: any) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+            return timeB - timeA;
+          });
+          setLatestAssessment(withAssessment[0]);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [clinicId, patient.doctorId, patient.assignedExpertId]);
+  }, [clinicId, patient.doctorId, patient.assignedExpertId, patient.id]);
 
   useEffect(() => {
     if (layoutConfig?.defaultPrintFormat) {
@@ -197,6 +222,7 @@ export default function PatientOverviewTab({
     if (days < 0) {
       months--;
       const prevMonth = new Date(t.getFullYear(), t.getMonth(), 0).getDate();
+
       days += prevMonth;
     }
     if (months < 0) {
@@ -207,6 +233,7 @@ export default function PatientOverviewTab({
     if (years > 0) return `${years} Year${years > 1 ? "s" : ""}`;
     if (months > 0) return `${months} Month${months > 1 ? "s" : ""}`;
     if (days > 0) return `${days} Day${days > 1 ? "s" : ""}`;
+
     return "0 Days";
   };
 
@@ -246,6 +273,7 @@ export default function PatientOverviewTab({
           printFormat,
           layoutConfig,
         );
+
         w.document.write(content);
       } else {
         w.document.write(generatePrint(patient, type));
@@ -262,10 +290,7 @@ export default function PatientOverviewTab({
   const generatePrint = (patient: Patient, type: "slip" | "rx") => {
     const row = (l: string, v: string, l2 = "", v2 = "") =>
       `<tr><td class="label">${l}</td><td class="value">${v}</td><td class="label">${l2}</td><td class="value">${v2}</td></tr>`;
-    const ageGender = [
-      getAge(patient),
-      patient.gender || "",
-    ]
+    const ageGender = [getAge(patient), patient.gender || ""]
       .filter(Boolean)
       .join(" / ");
     const table = `<table class="pt"><tbody>
@@ -276,7 +301,9 @@ export default function PatientOverviewTab({
     </tbody></table>`;
 
     const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
-    const headerHTML = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic) : "";
+    const headerHTML = layoutConfig
+      ? getPrintHeaderHTML(layoutConfig, clinic)
+      : "";
     const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
 
     if (type === "slip")
@@ -337,6 +364,7 @@ export default function PatientOverviewTab({
               size="sm"
               onSelectionChange={(keys) => {
                 const format = Array.from(keys)[0] as PrintFormat;
+
                 if (format) setPrintFormat(format);
               }}
             >
@@ -379,10 +407,7 @@ export default function PatientOverviewTab({
           <div className="grid grid-cols-2 gap-3">
             <InfoRow label="Full Name" value={patient.name} />
             <InfoRow label="Registration #" value={patient.regNumber} />
-            <InfoRow
-              label="Age"
-              value={getAge(patient) || undefined}
-            />
+            <InfoRow label="Age" value={getAge(patient) || undefined} />
             <InfoRow label="Gender" value={patient.gender} />
             <InfoRow label="Blood Group" value={patient.bloodGroup} />
             <InfoRow
@@ -462,6 +487,105 @@ export default function PatientOverviewTab({
           </div>
         </InfoCard>
       </div>
+
+      {/* Latest Clinical Assessment */}
+      {latestAssessment && (
+        <div className="bg-surface border border-border-base rounded-[10px] shadow-sm overflow-hidden mt-2">
+          <div className="px-5 py-4 border-b border-border-base/50 bg-gradient-to-r from-primary/10 to-primary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <IoDocumentTextOutline className="w-5 h-5 text-primary" />
+              <div>
+                <h4 className="font-bold text-[15px] text-text-main leading-tight">
+                  Latest Clinical Assessment
+                </h4>
+                <p className="text-[11.5px] text-text-muted mt-0.5">
+                  Extracted from the most recent clinical prescription dossier
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-text-muted">
+                RX:{" "}
+                <strong className="text-text-main">
+                  {latestAssessment.prescriptionNo}
+                </strong>
+              </span>
+              <span className="text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20 uppercase tracking-wider whitespace-nowrap">
+                {latestAssessment.prescriptionDate
+                  ? fmtDate(latestAssessment.prescriptionDate)
+                  : "Recent"}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {latestAssessment.history && (
+              <div className="p-4 bg-surface-2/30 rounded-[10px] border border-border-base/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-primary">
+                    History
+                  </span>
+                </div>
+                <p className="text-[13px] text-text-main leading-relaxed whitespace-pre-wrap">
+                  {latestAssessment.history}
+                </p>
+              </div>
+            )}
+
+            {latestAssessment.examination && (
+              <div className="p-4 bg-surface-2/30 rounded-[10px] border border-border-base/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-primary">
+                    Examination
+                  </span>
+                </div>
+                <p className="text-[13px] text-text-main leading-relaxed whitespace-pre-wrap">
+                  {latestAssessment.examination}
+                </p>
+              </div>
+            )}
+
+            {latestAssessment.investigation && (
+              <div className="p-4 bg-surface-2/30 rounded-[10px] border border-border-base/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-primary">
+                    Investigation & Pathology
+                  </span>
+                </div>
+                <p className="text-[13px] text-text-main leading-relaxed whitespace-pre-wrap">
+                  {latestAssessment.investigation}
+                </p>
+              </div>
+            )}
+
+            {latestAssessment.diagnosis && (
+              <div className="p-4 bg-surface-2/30 rounded-[10px] border border-border-base/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-primary">
+                    Diagnosis
+                  </span>
+                </div>
+                <p className="text-[13px] text-text-main leading-relaxed whitespace-pre-wrap">
+                  {latestAssessment.diagnosis}
+                </p>
+              </div>
+            )}
+
+            {latestAssessment.treatmentPlan && (
+              <div className="col-span-1 md:col-span-2 p-4 bg-primary/5 rounded-[10px] border border-primary/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-primary">
+                    Treatment Plan
+                  </span>
+                </div>
+                <p className="text-[13px] text-text-main leading-relaxed whitespace-pre-wrap">
+                  {latestAssessment.treatmentPlan}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Danger zone */}
       <div className="bg-surface dark:bg-surface-2 border border-red-200 dark:border-red-500/20 rounded overflow-hidden">

@@ -144,10 +144,10 @@ function SearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-        (i.primary + " " + (i.secondary || ""))
-          .toLowerCase()
-          .includes(q.toLowerCase()),
-      )
+          (i.primary + " " + (i.secondary || ""))
+            .toLowerCase()
+            .includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -258,7 +258,9 @@ export default function NewPrescriptionPage() {
   const [patients, setPatients] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
-  const [availablePathologyTests, setAvailablePathologyTests] = useState<any[]>([]);
+  const [availablePathologyTests, setAvailablePathologyTests] = useState<any[]>(
+    [],
+  );
   const [appointments, setAppointments] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -279,7 +281,9 @@ export default function NewPrescriptionPage() {
   const [items, setItems] = useState<PrescriptionItem[]>([]);
 
   // Pathology Tests
-  const [selectedPathologyTests, setSelectedPathologyTests] = useState<PathologyTestSelection[]>([]);
+  const [selectedPathologyTests, setSelectedPathologyTests] = useState<
+    PathologyTestSelection[]
+  >([]);
   const [pathologyTestId, setPathologyTestId] = useState("");
 
   const [diagnosis, setDiagnosis] = useState("");
@@ -297,11 +301,12 @@ export default function NewPrescriptionPage() {
     try {
       if (!aptDate) return false;
       let dObj = null;
+
       if (aptDate.seconds) dObj = new Date(aptDate.seconds * 1000);
       else if (aptDate instanceof Date) dObj = aptDate;
       else if (typeof aptDate === "string") dObj = new Date(aptDate);
       else if (aptDate.toDate) dObj = aptDate.toDate();
-      
+
       return dObj && !isNaN(dObj.getTime()) && dObj.toDateString() === todayStr;
     } catch {
       return false;
@@ -310,30 +315,40 @@ export default function NewPrescriptionPage() {
 
   // Resolve logged-in doctor's own ID by matching email (null = admin/non-doctor sees all)
   const loggedInDoctorId = React.useMemo(() => {
-    const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
+    const isAdmin =
+      userData?.role === "clinic-admin" || userData?.role === "system-owner";
+
     if (isAdmin) return null;
-    const matched = doctors.find((d: any) => d.email?.toLowerCase() === userData?.email?.toLowerCase());
+    const matched = doctors.find(
+      (d: any) => d.email?.toLowerCase() === userData?.email?.toLowerCase(),
+    );
+
     return matched?.id ?? null;
   }, [doctors, userData]);
 
   const activeQueue = appointments.filter((apt) => {
     if (!getIsToday(apt.appointmentDate)) return false;
-    if (apt.status !== "in-progress" && apt.status !== "confirmed") return false;
+    if (apt.status !== "in-progress" && apt.status !== "confirmed")
+      return false;
 
     // If logged-in user is a doctor, only show their assigned patients
     if (loggedInDoctorId && apt.doctorId !== loggedInDoctorId) return false;
 
     const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
+
     if (hasDoctor) {
       const hasConsBill = apt.billingId || apt.consultationBillingStatus;
+
       if (hasConsBill) {
         const isPaid =
           apt.consultationBillingStatus === "paid" ||
           apt.billingStatus === "paid" ||
           apt.paymentStatus === "paid";
+
         if (!isPaid) return false;
       }
     }
+
     return true;
   });
 
@@ -345,7 +360,10 @@ export default function NewPrescriptionPage() {
     // If appointment is confirmed (Lobby/Triage), automatically mark as in-progress (Sent to Cabin)
     if (appt.status === "confirmed") {
       try {
-        await appointmentService.updateAppointmentStatus(appt.id, "in-progress");
+        await appointmentService.updateAppointmentStatus(
+          appt.id,
+          "in-progress",
+        );
         addToast({
           title: "Session Started",
           description: "Patient status updated to In Cabin Consultation.",
@@ -359,38 +377,48 @@ export default function NewPrescriptionPage() {
     // Attempt to auto-import triage vitals if available
     try {
       if (!clinicId || !appt.patientId) return;
-      const notesList = await PatientNoteEntriesService.getPatientNoteEntries(clinicId, appt.patientId);
+      const notesList = await PatientNoteEntriesService.getPatientNoteEntries(
+        clinicId,
+        appt.patientId,
+      );
       const triageNote = notesList?.find(
-        (n: any) => n.sectionKey === "triage-vitals" || n.sectionLabel === "Triage Vitals"
+        (n: any) =>
+          n.sectionKey === "triage-vitals" ||
+          n.sectionLabel === "Triage Vitals",
       );
 
       if (triageNote) {
         const parsed = parseTriageVitals(triageNote.content);
-        
+
         // Populate History with chief complaints
         if (parsed.complaints && parsed.complaints !== "None reported") {
           setHistory((prev) => {
             const prefix = prev ? `${prev}\n` : "";
+
             return `${prefix}Chief Complaints: ${parsed.complaints}`;
           });
         }
 
         // Populate Examination with vitals
         const vitalsStr = `Physical Vitals — BP: ${parsed.bp}, Temp: ${parsed.temp}, Pulse: ${parsed.pulse}, Weight: ${parsed.weight}, SpO2: ${parsed.spo2}`;
+
         setExamination((prev) => {
           const prefix = prev ? `${prev}\n` : "";
+
           return `${prefix}${vitalsStr}`;
         });
 
         addToast({
           title: "SOAP Auto-Populated",
-          description: "Triage vitals and complaints loaded into SOAP record successfully.",
+          description:
+            "Triage vitals and complaints loaded into SOAP record successfully.",
           color: "success",
         });
       } else {
         addToast({
           title: "SOAP Loaded",
-          description: "Consultation opened. No triage vitals found for this patient.",
+          description:
+            "Consultation opened. No triage vitals found for this patient.",
           color: "primary",
         });
       }
@@ -401,7 +429,12 @@ export default function NewPrescriptionPage() {
 
   // Quick Presets
   const frequencyPresets = ["OD", "BD", "TDS", "QID", "SOS"];
-  const timePresets = ["Before Meal", "After Meal", "Empty Stomach", "At Bedtime"];
+  const timePresets = [
+    "Before Meal",
+    "After Meal",
+    "Empty Stomach",
+    "At Bedtime",
+  ];
 
   const handleFrequencyChange = (val: string) => {
     setIntervalValue(val);
@@ -451,15 +484,21 @@ export default function NewPrescriptionPage() {
     const loadTemplates = async () => {
       if (!clinicId || !doctorId) {
         setTemplates([]);
+
         return;
       }
       try {
-        const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+        const list = await prescriptionService.getTemplatesByDoctor(
+          clinicId,
+          doctorId,
+        );
+
         setTemplates(list || []);
       } catch (err) {
         console.error("Failed to load templates:", err);
       }
     };
+
     loadTemplates();
   }, [clinicId, doctorId]);
 
@@ -470,11 +509,16 @@ export default function NewPrescriptionPage() {
     const fetchPatientNotes = async () => {
       if (!clinicId || !patientId) {
         setPatientNotes([]);
+
         return;
       }
       setLoadingNotes(true);
       try {
-        const notesList = await PatientNoteEntriesService.getPatientNoteEntries(clinicId, patientId);
+        const notesList = await PatientNoteEntriesService.getPatientNoteEntries(
+          clinicId,
+          patientId,
+        );
+
         setPatientNotes(notesList || []);
       } catch (err) {
         console.error("Failed to fetch patient note entries:", err);
@@ -482,6 +526,7 @@ export default function NewPrescriptionPage() {
         setLoadingNotes(false);
       }
     };
+
     fetchPatientNotes();
   }, [clinicId, patientId]);
 
@@ -492,7 +537,7 @@ export default function NewPrescriptionPage() {
       pulse: "Not recorded",
       weight: "Not recorded",
       spo2: "Not recorded",
-      complaints: "None reported"
+      complaints: "None reported",
     };
 
     if (!content) return result;
@@ -503,15 +548,20 @@ export default function NewPrescriptionPage() {
       const complaintsLine = parts[1] || "";
 
       if (complaintsLine.includes("Chief Complaints:")) {
-        result.complaints = complaintsLine.replace("Chief Complaints:", "").trim();
+        result.complaints = complaintsLine
+          .replace("Chief Complaints:", "")
+          .trim();
       }
 
       const vitalsParts = vitalsLine.split("|");
-      vitalsParts.forEach(part => {
+
+      vitalsParts.forEach((part) => {
         const [label, val] = part.split(":");
+
         if (label && val) {
           const cleanLabel = label.trim().toLowerCase();
           const cleanVal = val.trim();
+
           if (cleanLabel === "bp") result.bp = cleanVal;
           if (cleanLabel === "temp") result.temp = cleanVal;
           if (cleanLabel === "pulse") result.pulse = cleanVal;
@@ -528,32 +578,37 @@ export default function NewPrescriptionPage() {
 
   // Find the most recent logged triage vitals note
   const todayVitalsNote = patientNotes.find(
-    (n) => n.sectionKey === "triage-vitals" || n.sectionLabel === "Triage Vitals"
+    (n) =>
+      n.sectionKey === "triage-vitals" || n.sectionLabel === "Triage Vitals",
   );
 
   const handleImportTriage = () => {
     if (!todayVitalsNote) return;
 
     const parsed = parseTriageVitals(todayVitalsNote.content);
-    
+
     // 1. Append complaints to History if present
     if (parsed.complaints && parsed.complaints !== "None reported") {
       setHistory((prev) => {
         const prefix = prev ? `${prev}\n` : "";
+
         return `${prefix}Chief Complaints: ${parsed.complaints}`;
       });
     }
 
     // 2. Append formatted vitals to Examination
     const vitalsStr = `Physical Vitals — BP: ${parsed.bp}, Temp: ${parsed.temp}, Pulse: ${parsed.pulse}, Weight: ${parsed.weight}, SpO2: ${parsed.spo2}`;
+
     setExamination((prev) => {
       const prefix = prev ? `${prev}\n` : "";
+
       return `${prefix}${vitalsStr}`;
     });
 
     addToast({
       title: "Vitals & Complaints Imported",
-      description: "Successfully imported triage records into clinical SOAP record.",
+      description:
+        "Successfully imported triage records into clinical SOAP record.",
       color: "success",
     });
   };
@@ -565,6 +620,7 @@ export default function NewPrescriptionPage() {
         description: "Please select both doctor and patient to save templates.",
         color: "warning",
       });
+
       return;
     }
     if (!templateName.trim()) {
@@ -573,6 +629,7 @@ export default function NewPrescriptionPage() {
         description: "Please enter a template name.",
         color: "warning",
       });
+
       return;
     }
     if (items.length === 0) {
@@ -581,6 +638,7 @@ export default function NewPrescriptionPage() {
         description: "Please add at least one medicine to save as a template.",
         color: "warning",
       });
+
       return;
     }
 
@@ -611,7 +669,11 @@ export default function NewPrescriptionPage() {
       });
 
       setTemplateName("");
-      const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+      const list = await prescriptionService.getTemplatesByDoctor(
+        clinicId,
+        doctorId,
+      );
+
       setTemplates(list || []);
     } catch (err) {
       addToast({
@@ -626,6 +688,7 @@ export default function NewPrescriptionPage() {
 
   const handleApplyTemplate = (templateId: string) => {
     const selectedTpl = templates.find((t) => t.id === templateId);
+
     if (!selectedTpl) return;
 
     const mappedItems = selectedTpl.items.map((it: any) => ({
@@ -650,7 +713,10 @@ export default function NewPrescriptionPage() {
     });
   };
 
-  const handleDeleteTemplate = async (templateId: string, e: React.MouseEvent) => {
+  const handleDeleteTemplate = async (
+    templateId: string,
+    e: React.MouseEvent,
+  ) => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to delete this template?")) return;
     try {
@@ -660,7 +726,11 @@ export default function NewPrescriptionPage() {
         description: "Template deleted successfully.",
         color: "success",
       });
-      const list = await prescriptionService.getTemplatesByDoctor(clinicId, doctorId);
+      const list = await prescriptionService.getTemplatesByDoctor(
+        clinicId,
+        doctorId,
+      );
+
       setTemplates(list || []);
     } catch (err) {
       addToast({
@@ -705,43 +775,56 @@ export default function NewPrescriptionPage() {
       pathologyService.getTestTypesByClinic(clinicId, branchIdForData),
       appointmentService.getAppointmentsByClinic(clinicId, branchIdForData),
     ])
-      .then(([patientsData, doctorsData, medicinesData, pathologyData, testTypesData, appointmentsData]) => {
-        setPatients(patientsData);
-        setDoctors(doctorsData);
-        setMedicines(medicinesData);
-        
-        // Map prices to pathology tests
-        const testsWithPrices = pathologyData.map((cat: any) => {
-          const matchingPrice = testTypesData.find((tt: any) => tt.targetId === cat.id);
-          return {
-            ...cat,
-            price: matchingPrice ? matchingPrice.price : 0
-          };
-        });
-        setAvailablePathologyTests(testsWithPrices);
-        const relevantAppointments = (appointmentsData as any[]).filter(
-          (apt: any) =>
-            apt.status === "completed" ||
-            apt.status === "in-progress" ||
-            apt.status === "confirmed",
-        );
+      .then(
+        ([
+          patientsData,
+          doctorsData,
+          medicinesData,
+          pathologyData,
+          testTypesData,
+          appointmentsData,
+        ]) => {
+          setPatients(patientsData);
+          setDoctors(doctorsData);
+          setMedicines(medicinesData);
 
-        setAppointments(relevantAppointments);
+          // Map prices to pathology tests
+          const testsWithPrices = pathologyData.map((cat: any) => {
+            const matchingPrice = testTypesData.find(
+              (tt: any) => tt.targetId === cat.id,
+            );
 
-        const appointmentIdFromUrl = searchParams.get("appointmentId");
+            return {
+              ...cat,
+              price: matchingPrice ? matchingPrice.price : 0,
+            };
+          });
 
-        if (appointmentIdFromUrl) {
-          const matchedApt = (appointmentsData as any[]).find(
-            (a: any) => a.id === appointmentIdFromUrl,
+          setAvailablePathologyTests(testsWithPrices);
+          const relevantAppointments = (appointmentsData as any[]).filter(
+            (apt: any) =>
+              apt.status === "completed" ||
+              apt.status === "in-progress" ||
+              apt.status === "confirmed",
           );
 
-          if (matchedApt) {
-            setAppointmentId(appointmentIdFromUrl);
-            setPatientId(matchedApt.patientId);
-            setDoctorId(matchedApt.doctorId);
+          setAppointments(relevantAppointments);
+
+          const appointmentIdFromUrl = searchParams.get("appointmentId");
+
+          if (appointmentIdFromUrl) {
+            const matchedApt = (appointmentsData as any[]).find(
+              (a: any) => a.id === appointmentIdFromUrl,
+            );
+
+            if (matchedApt) {
+              setAppointmentId(appointmentIdFromUrl);
+              setPatientId(matchedApt.patientId);
+              setDoctorId(matchedApt.doctorId);
+            }
           }
-        }
-      })
+        },
+      )
       .catch((err) => {
         console.error("Error loading data:", err);
         addToast({
@@ -784,7 +867,7 @@ export default function NewPrescriptionPage() {
       if (dObj && !isNaN(dObj.getTime())) {
         return `${dObj.getFullYear()}/${String(dObj.getMonth() + 1).padStart(2, "0")}/${String(dObj.getDate()).padStart(2, "0")}`;
       }
-    } catch (e) { }
+    } catch (e) {}
 
     return "Invalid Date";
   };
@@ -842,14 +925,25 @@ export default function NewPrescriptionPage() {
 
   const addPathologyTest = () => {
     if (!pathologyTestId) {
-      addToast({ title: "Error", description: "Please select a pathology test.", color: "warning" });
+      addToast({
+        title: "Error",
+        description: "Please select a pathology test.",
+        color: "warning",
+      });
+
       return;
     }
     if (selectedPathologyTests.some((t) => t.testId === pathologyTestId)) {
-      addToast({ title: "Error", description: "Test already added.", color: "warning" });
+      addToast({
+        title: "Error",
+        description: "Test already added.",
+        color: "warning",
+      });
+
       return;
     }
     const test = availablePathologyTests.find((t) => t.id === pathologyTestId);
+
     if (!test) return;
 
     setSelectedPathologyTests((prev) => [
@@ -859,10 +953,14 @@ export default function NewPrescriptionPage() {
         testId: test.id,
         testName: test.name,
         price: test.price || 0,
-      }
+      },
     ]);
     setPathologyTestId("");
-    addToast({ title: "Success", description: "Pathology test added.", color: "success" });
+    addToast({
+      title: "Success",
+      description: "Pathology test added.",
+      color: "success",
+    });
   };
 
   const removePathologyTest = (id: string) => {
@@ -879,11 +977,14 @@ export default function NewPrescriptionPage() {
 
       try {
         const apt = appointments.find((a) => a.id === appointmentId);
+
         if (apt) {
           const pat = patients.find((p) => p.id === patientId);
           const docInfo = doctors.find((d) => d.id === doctorId);
           const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
-          const hasExpert = apt.assignedExpertId && apt.assignedExpertId !== "unassigned";
+          const hasExpert =
+            apt.assignedExpertId && apt.assignedExpertId !== "unassigned";
+
           if (hasDoctor && hasExpert && !apt.doctorConsultationCompleted) {
             isDualRoute = true;
           }
@@ -892,7 +993,11 @@ export default function NewPrescriptionPage() {
           let appointmentTypeName = "General Consultation";
 
           if (apt.appointmentTypeId) {
-            const apptType = await appointmentTypeService.getAppointmentTypeById(apt.appointmentTypeId);
+            const apptType =
+              await appointmentTypeService.getAppointmentTypeById(
+                apt.appointmentTypeId,
+              );
+
             if (apptType) {
               price = Number(apptType.price) || 500;
               appointmentTypeName = apptType.name || "General Consultation";
@@ -908,10 +1013,15 @@ export default function NewPrescriptionPage() {
             commissionAmount: number;
           }> = [];
 
-          if (pat?.referrals && Array.isArray(pat.referrals) && pat.referrals.length > 0) {
+          if (
+            pat?.referrals &&
+            Array.isArray(pat.referrals) &&
+            pat.referrals.length > 0
+          ) {
             for (const ref of pat.referrals) {
               const pct = ref.commissionPercentage || 0;
               const amt = (price * pct) / 100;
+
               processedReferrals.push({
                 type: ref.type,
                 id: ref.id,
@@ -923,10 +1033,15 @@ export default function NewPrescriptionPage() {
           } else if (pat?.referralPartnerId) {
             // Backward compatibility fallback: single referral partner ID
             try {
-              const partner = await referralPartnerService.getReferralPartnerById(pat.referralPartnerId);
+              const partner =
+                await referralPartnerService.getReferralPartnerById(
+                  pat.referralPartnerId,
+                );
+
               if (partner) {
                 const pct = partner.defaultCommission || 0;
                 const amt = (price * pct) / 100;
+
                 processedReferrals.push({
                   type: "referral-partner",
                   id: partner.id,
@@ -936,16 +1051,26 @@ export default function NewPrescriptionPage() {
                 });
               }
             } catch (err) {
-              console.error("Error fetching fallback referral partner for automated billing:", err);
+              console.error(
+                "Error fetching fallback referral partner for automated billing:",
+                err,
+              );
             }
           }
 
           // Keep primary partner values for legacy schema columns
-          const primaryPartner = processedReferrals.find(r => r.type === "referral-partner");
-          const refPartnerId = primaryPartner ? primaryPartner.id : (pat?.referralPartnerId || undefined);
-          const refCommissionAmt = primaryPartner ? primaryPartner.commissionAmount : undefined;
+          const primaryPartner = processedReferrals.find(
+            (r) => r.type === "referral-partner",
+          );
+          const refPartnerId = primaryPartner
+            ? primaryPartner.id
+            : pat?.referralPartnerId || undefined;
+          const refCommissionAmt = primaryPartner
+            ? primaryPartner.commissionAmount
+            : undefined;
 
-          const invoiceNo = await appointmentBillingService.generateInvoiceNumber(clinicId!);
+          const invoiceNo =
+            await appointmentBillingService.generateInvoiceNumber(clinicId!);
 
           const billingItem = {
             id: crypto.randomUUID(),
@@ -967,9 +1092,14 @@ export default function NewPrescriptionPage() {
             patientName: pat?.name || "Unknown Patient",
             doctorId: doctorId,
             doctorName: docInfo?.name || "Unknown Doctor",
-            doctorType: (docInfo?.doctorType || "regular") as "regular" | "visitor",
+            doctorType: (docInfo?.doctorType || "regular") as
+              | "regular"
+              | "visitor",
             referralPartnerId: refPartnerId,
-            referralCommissionAmount: refCommissionAmt && refCommissionAmt > 0 ? refCommissionAmt : undefined,
+            referralCommissionAmount:
+              refCommissionAmt && refCommissionAmt > 0
+                ? refCommissionAmt
+                : undefined,
             referrals: processedReferrals,
             invoiceDate: new Date(),
             items: [billingItem],
@@ -989,7 +1119,8 @@ export default function NewPrescriptionPage() {
             createdBy: currentUser,
           };
 
-          billingId = await appointmentBillingService.createBilling(billingData);
+          billingId =
+            await appointmentBillingService.createBilling(billingData);
 
           // 1) Log Consulting Doctor Commission
           if (docInfo?.defaultCommission && docInfo.defaultCommission > 0) {
@@ -1002,19 +1133,28 @@ export default function NewPrescriptionPage() {
                   updatedAt: new Date(),
                 } as any,
                 docInfo.defaultCommission,
-                currentUser
+                currentUser,
               );
             } catch (docCommErr) {
-              console.error("Error creating consulting doctor commission:", docCommErr);
+              console.error(
+                "Error creating consulting doctor commission:",
+                docCommErr,
+              );
             }
           }
 
           // 1.5) Log Assigned Expert Commission
           const expertId = apt.assignedExpertId || pat?.assignedExpertId;
+
           if (expertId) {
             try {
               const expertInfo = await expertService.getExpertById(expertId);
-              if (expertInfo && expertInfo.defaultCommission && expertInfo.defaultCommission > 0) {
+
+              if (
+                expertInfo &&
+                expertInfo.defaultCommission &&
+                expertInfo.defaultCommission > 0
+              ) {
                 await expertCommissionService.createCommission(
                   expertInfo.id,
                   expertInfo.name,
@@ -1023,13 +1163,16 @@ export default function NewPrescriptionPage() {
                     ...billingData,
                     createdAt: new Date(),
                     updatedAt: new Date(),
-                    } as any,
-                    expertInfo.defaultCommission,
-                    currentUser
+                  } as any,
+                  expertInfo.defaultCommission,
+                  currentUser,
                 );
               }
             } catch (expCommErr) {
-              console.error("Error creating assigned expert commission:", expCommErr);
+              console.error(
+                "Error creating assigned expert commission:",
+                expCommErr,
+              );
             }
           }
 
@@ -1054,7 +1197,7 @@ export default function NewPrescriptionPage() {
                     defaultCommission: r.commissionPercentage,
                   } as any,
                   r.commissionAmount,
-                  currentUser
+                  currentUser,
                 );
               } else if (r.type === "doctor") {
                 const refBillingRecord = {
@@ -1062,10 +1205,11 @@ export default function NewPrescriptionPage() {
                   doctorId: r.id,
                   doctorName: r.name,
                 };
+
                 await doctorCommissionService.createCommission(
                   refBillingRecord,
                   r.commissionPercentage,
-                  currentUser
+                  currentUser,
                 );
               } else if (r.type === "expert") {
                 await expertCommissionService.createCommission(
@@ -1073,7 +1217,7 @@ export default function NewPrescriptionPage() {
                   r.name,
                   billingRecord,
                   r.commissionPercentage,
-                  currentUser
+                  currentUser,
                 );
               } else if (r.type === "staff") {
                 await staffCommissionService.createRegistrationCommission(
@@ -1087,16 +1231,22 @@ export default function NewPrescriptionPage() {
                   price,
                   r.commissionAmount,
                   r.commissionPercentage,
-                  currentUser
+                  currentUser,
                 );
               }
             } catch (commErr) {
-              console.error(`Error logging polymorphic commission for ${r.name} (${r.type}):`, commErr);
+              console.error(
+                `Error logging polymorphic commission for ${r.name} (${r.type}):`,
+                commErr,
+              );
             }
           }
         }
       } catch (billingErr) {
-        console.error("Error auto-generating billing draft for appointment type:", billingErr);
+        console.error(
+          "Error auto-generating billing draft for appointment type:",
+          billingErr,
+        );
       }
 
       // Mark appointment as completed (or route to expert)
@@ -1110,8 +1260,10 @@ export default function NewPrescriptionPage() {
       } as any);
 
       addToast({
-        title: isDualRoute ? "Consultation Handed Over" : "Consultation Completed",
-        description: isDualRoute 
+        title: isDualRoute
+          ? "Consultation Handed Over"
+          : "Consultation Completed",
+        description: isDualRoute
           ? "Doctor consultation completed. Patient routed to Expert Cabin."
           : "Patient consultation completed. Appointment type fee invoice created successfully.",
         color: "success",
@@ -1186,7 +1338,8 @@ export default function NewPrescriptionPage() {
         sendToPathology,
       };
 
-      const newPrescriptionId = await prescriptionService.createPrescription(prescriptionData);
+      const newPrescriptionId =
+        await prescriptionService.createPrescription(prescriptionData);
 
       // =================== PATHOLOGY AUTO-BILLING DRAFT ===================
       if (sendToPathology && selectedPathologyTests.length > 0) {
@@ -1194,9 +1347,13 @@ export default function NewPrescriptionPage() {
           const pat = patients.find((p) => p.id === patientId);
           const docInfo = doctors.find((d) => d.id === doctorId);
 
-          const pathologyInvoiceNo = await pathologyBillingService.generateInvoiceNumber(clinicId!);
+          const pathologyInvoiceNo =
+            await pathologyBillingService.generateInvoiceNumber(clinicId!);
 
-          const subtotal = selectedPathologyTests.reduce((sum, t) => sum + t.price, 0);
+          const subtotal = selectedPathologyTests.reduce(
+            (sum, t) => sum + t.price,
+            0,
+          );
 
           const draftPathologyBilling = {
             invoiceNumber: pathologyInvoiceNo,
@@ -1208,7 +1365,9 @@ export default function NewPrescriptionPage() {
             patientGender: pat?.gender || "",
             doctorId,
             doctorName: docInfo?.name || "Unknown Doctor",
-            doctorType: (docInfo?.doctorType || "regular") as "regular" | "visitor",
+            doctorType: (docInfo?.doctorType || "regular") as
+              | "regular"
+              | "visitor",
             invoiceDate: new Date(),
             items: selectedPathologyTests.map((t) => ({
               id: crypto.randomUUID(),
@@ -1235,9 +1394,14 @@ export default function NewPrescriptionPage() {
             notes: "Prescribed via Clinical Consultation",
           };
 
-          await pathologyBillingService.createBilling(draftPathologyBilling as any);
+          await pathologyBillingService.createBilling(
+            draftPathologyBilling as any,
+          );
         } catch (pathErr) {
-          console.error("Error auto-generating pathology billing draft:", pathErr);
+          console.error(
+            "Error auto-generating pathology billing draft:",
+            pathErr,
+          );
         }
       }
 
@@ -1246,7 +1410,9 @@ export default function NewPrescriptionPage() {
         try {
           const apt = appointments.find((a) => a.id === appointmentId);
           const hasDoctor = apt?.doctorId && apt.doctorId !== "unassigned";
-          const hasExpert = apt?.assignedExpertId && apt.assignedExpertId !== "unassigned";
+          const hasExpert =
+            apt?.assignedExpertId && apt.assignedExpertId !== "unassigned";
+
           if (hasDoctor && hasExpert && !apt?.doctorConsultationCompleted) {
             isDualRoute = true;
           }
@@ -1256,12 +1422,16 @@ export default function NewPrescriptionPage() {
             updatedAt: new Date(),
           } as any);
         } catch (apptErr) {
-          console.error("Error updating appointment status on prescription save:", apptErr);
+          console.error(
+            "Error updating appointment status on prescription save:",
+            apptErr,
+          );
         }
       }
       if (appointmentId) {
         try {
           const apt = appointments.find((a) => a.id === appointmentId);
+
           if (apt) {
             const pat = patients.find((p) => p.id === patientId);
             const docInfo = doctors.find((d) => d.id === doctorId);
@@ -1270,7 +1440,11 @@ export default function NewPrescriptionPage() {
             let appointmentTypeName = "General Consultation";
 
             if (apt.appointmentTypeId) {
-              const apptType = await appointmentTypeService.getAppointmentTypeById(apt.appointmentTypeId);
+              const apptType =
+                await appointmentTypeService.getAppointmentTypeById(
+                  apt.appointmentTypeId,
+                );
+
               if (apptType) {
                 price = Number(apptType.price) || 500;
                 appointmentTypeName = apptType.name || "General Consultation";
@@ -1286,10 +1460,15 @@ export default function NewPrescriptionPage() {
               commissionAmount: number;
             }> = [];
 
-            if (pat?.referrals && Array.isArray(pat.referrals) && pat.referrals.length > 0) {
+            if (
+              pat?.referrals &&
+              Array.isArray(pat.referrals) &&
+              pat.referrals.length > 0
+            ) {
               for (const ref of pat.referrals) {
                 const pct = ref.commissionPercentage || 0;
                 const amt = (price * pct) / 100;
+
                 processedReferrals.push({
                   type: ref.type,
                   id: ref.id,
@@ -1301,10 +1480,15 @@ export default function NewPrescriptionPage() {
             } else if (pat?.referralPartnerId) {
               // Backward compatibility fallback: single referral partner ID
               try {
-                const partner = await referralPartnerService.getReferralPartnerById(pat.referralPartnerId);
+                const partner =
+                  await referralPartnerService.getReferralPartnerById(
+                    pat.referralPartnerId,
+                  );
+
                 if (partner) {
                   const pct = partner.defaultCommission || 0;
                   const amt = (price * pct) / 100;
+
                   processedReferrals.push({
                     type: "referral-partner",
                     id: partner.id,
@@ -1314,16 +1498,26 @@ export default function NewPrescriptionPage() {
                   });
                 }
               } catch (err) {
-                console.error("Error fetching fallback referral partner for automated billing:", err);
+                console.error(
+                  "Error fetching fallback referral partner for automated billing:",
+                  err,
+                );
               }
             }
 
             // Keep primary partner values for legacy schema columns
-            const primaryPartner = processedReferrals.find(r => r.type === "referral-partner");
-            const refPartnerId = primaryPartner ? primaryPartner.id : (pat?.referralPartnerId || undefined);
-            const refCommissionAmt = primaryPartner ? primaryPartner.commissionAmount : undefined;
+            const primaryPartner = processedReferrals.find(
+              (r) => r.type === "referral-partner",
+            );
+            const refPartnerId = primaryPartner
+              ? primaryPartner.id
+              : pat?.referralPartnerId || undefined;
+            const refCommissionAmt = primaryPartner
+              ? primaryPartner.commissionAmount
+              : undefined;
 
-            const invoiceNo = await appointmentBillingService.generateInvoiceNumber(clinicId!);
+            const invoiceNo =
+              await appointmentBillingService.generateInvoiceNumber(clinicId!);
 
             const billingItem = {
               id: crypto.randomUUID(),
@@ -1345,9 +1539,14 @@ export default function NewPrescriptionPage() {
               patientName: pat?.name || "Unknown Patient",
               doctorId: doctorId,
               doctorName: docInfo?.name || "Unknown Doctor",
-              doctorType: (docInfo?.doctorType || "regular") as "regular" | "visitor",
+              doctorType: (docInfo?.doctorType || "regular") as
+                | "regular"
+                | "visitor",
               referralPartnerId: refPartnerId,
-              referralCommissionAmount: refCommissionAmt && refCommissionAmt > 0 ? refCommissionAmt : undefined,
+              referralCommissionAmount:
+                refCommissionAmt && refCommissionAmt > 0
+                  ? refCommissionAmt
+                  : undefined,
               referrals: processedReferrals, // Save complete polymorph referral ledger on invoice
               invoiceDate: new Date(),
               items: [billingItem],
@@ -1367,7 +1566,8 @@ export default function NewPrescriptionPage() {
               createdBy: currentUser,
             };
 
-            const billingId = await appointmentBillingService.createBilling(billingData);
+            const billingId =
+              await appointmentBillingService.createBilling(billingData);
 
             // 1) Log Consulting Doctor Commission
             if (docInfo?.defaultCommission && docInfo.defaultCommission > 0) {
@@ -1380,19 +1580,28 @@ export default function NewPrescriptionPage() {
                     updatedAt: new Date(),
                   } as any,
                   docInfo.defaultCommission,
-                  currentUser
+                  currentUser,
                 );
               } catch (docCommErr) {
-                console.error("Error creating consulting doctor commission:", docCommErr);
+                console.error(
+                  "Error creating consulting doctor commission:",
+                  docCommErr,
+                );
               }
             }
 
             // 1.5) Log Assigned Expert Commission
             const expertId = apt.assignedExpertId || pat?.assignedExpertId;
+
             if (expertId) {
               try {
                 const expertInfo = await expertService.getExpertById(expertId);
-                if (expertInfo && expertInfo.defaultCommission && expertInfo.defaultCommission > 0) {
+
+                if (
+                  expertInfo &&
+                  expertInfo.defaultCommission &&
+                  expertInfo.defaultCommission > 0
+                ) {
                   await expertCommissionService.createCommission(
                     expertInfo.id,
                     expertInfo.name,
@@ -1403,12 +1612,17 @@ export default function NewPrescriptionPage() {
                       updatedAt: new Date(),
                     } as any,
                     expertInfo.defaultCommission,
-                    currentUser
+                    currentUser,
                   );
-                  console.log(`Successfully logged Assigned Expert commission record for ${expertInfo.name}`);
+                  console.log(
+                    `Successfully logged Assigned Expert commission record for ${expertInfo.name}`,
+                  );
                 }
               } catch (expCommErr) {
-                console.error("Error creating assigned expert commission:", expCommErr);
+                console.error(
+                  "Error creating assigned expert commission:",
+                  expCommErr,
+                );
               }
             }
 
@@ -1434,9 +1648,11 @@ export default function NewPrescriptionPage() {
                       defaultCommission: r.commissionPercentage,
                     } as any,
                     r.commissionAmount,
-                    currentUser
+                    currentUser,
                   );
-                  console.log(`Polymorphic: Logged partner commission record successfully for ${r.name}`);
+                  console.log(
+                    `Polymorphic: Logged partner commission record successfully for ${r.name}`,
+                  );
                 } else if (r.type === "doctor") {
                   // Internal Referring Doctor (different from the consulting doctor)
                   const refBillingRecord = {
@@ -1444,12 +1660,15 @@ export default function NewPrescriptionPage() {
                     doctorId: r.id,
                     doctorName: r.name,
                   };
+
                   await doctorCommissionService.createCommission(
                     refBillingRecord,
                     r.commissionPercentage,
-                    currentUser
+                    currentUser,
                   );
-                  console.log(`Polymorphic: Logged referring doctor commission record successfully for Dr. ${r.name}`);
+                  console.log(
+                    `Polymorphic: Logged referring doctor commission record successfully for Dr. ${r.name}`,
+                  );
                 } else if (r.type === "expert") {
                   // External Expert
                   await expertCommissionService.createCommission(
@@ -1457,9 +1676,11 @@ export default function NewPrescriptionPage() {
                     r.name,
                     billingRecord,
                     r.commissionPercentage,
-                    currentUser
+                    currentUser,
                   );
-                  console.log(`Polymorphic: Logged expert commission record successfully for ${r.name}`);
+                  console.log(
+                    `Polymorphic: Logged expert commission record successfully for ${r.name}`,
+                  );
                 } else if (r.type === "staff") {
                   // Internal Staff Member
                   await staffCommissionService.createRegistrationCommission(
@@ -1473,12 +1694,17 @@ export default function NewPrescriptionPage() {
                     price,
                     r.commissionAmount,
                     r.commissionPercentage,
-                    currentUser
+                    currentUser,
                   );
-                  console.log(`Polymorphic: Logged referring staff commission record successfully for ${r.name}`);
+                  console.log(
+                    `Polymorphic: Logged referring staff commission record successfully for ${r.name}`,
+                  );
                 }
               } catch (commErr) {
-                console.error(`Error logging polymorphic commission for ${r.name} (${r.type}):`, commErr);
+                console.error(
+                  `Error logging polymorphic commission for ${r.name} (${r.type}):`,
+                  commErr,
+                );
               }
             }
 
@@ -1490,17 +1716,25 @@ export default function NewPrescriptionPage() {
               updatedAt: new Date(),
             } as any);
 
-            console.log("Phase 4: Smart billing draft created successfully.", billingId);
+            console.log(
+              "Phase 4: Smart billing draft created successfully.",
+              billingId,
+            );
           }
         } catch (billingErr) {
-          console.error("Phase 4: Error auto-generating billing draft:", billingErr);
+          console.error(
+            "Phase 4: Error auto-generating billing draft:",
+            billingErr,
+          );
         }
       }
 
       addToast({
         title: "Success",
         description: appointmentId
-          ? (isDualRoute ? "Prescription saved. Patient routed to Expert Cabin." : "Prescription saved and appointment completed successfully.")
+          ? isDualRoute
+            ? "Prescription saved. Patient routed to Expert Cabin."
+            : "Prescription saved and appointment completed successfully."
           : "Prescription saved successfully.",
         color: "success",
       });
@@ -1537,7 +1771,9 @@ export default function NewPrescriptionPage() {
             Back
           </Button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>New Prescription</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              New Prescription
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               Create a new prescription for your patient
             </p>
@@ -1558,7 +1794,8 @@ export default function NewPrescriptionPage() {
                   👨‍⚕️ Doctor's Live Consultation Waitlist
                 </h4>
                 <p className="text-xs text-text-muted mt-0.5">
-                  Patients currently waiting in lobby or active in cabin for today.
+                  Patients currently waiting in lobby or active in cabin for
+                  today.
                 </p>
               </div>
             </div>
@@ -1573,9 +1810,12 @@ export default function NewPrescriptionPage() {
                 <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center text-green-600 mb-3 border border-green-500/20">
                   <IoSparklesOutline className="w-6 h-6 animate-bounce" />
                 </div>
-                <p className="text-[14px] font-bold text-text-main">🎉 Your Queue is Clear!</p>
+                <p className="text-[14px] font-bold text-text-main">
+                  🎉 Your Queue is Clear!
+                </p>
                 <p className="text-xs text-text-muted mt-1 max-w-sm">
-                  There are no checked-in patients waiting in the lobby or active in any consulting cabins right now.
+                  There are no checked-in patients waiting in the lobby or
+                  active in any consulting cabins right now.
                 </p>
               </div>
             ) : (
@@ -1583,15 +1823,19 @@ export default function NewPrescriptionPage() {
                 {activeQueue.map((appt) => {
                   const pat = patients.find((p) => p.id === appt.patientId);
                   const doc = doctors.find((d) => d.id === appt.doctorId);
-                  const timeStr = appt.startTime ? `${appt.startTime}` : "No time";
+                  const timeStr = appt.startTime
+                    ? `${appt.startTime}`
+                    : "No time";
 
                   // Format 12hr time
                   let formattedTime = timeStr;
+
                   try {
                     const [hours, minutes] = timeStr.split(":");
                     const hr = parseInt(hours, 10);
                     const ampm = hr >= 12 ? "PM" : "AM";
                     const hr12 = hr % 12 || 12;
+
                     formattedTime = `${hr12}:${minutes} ${ampm}`;
                   } catch {}
 
@@ -1617,12 +1861,16 @@ export default function NewPrescriptionPage() {
                             </span>
                           </div>
                           <span className="text-[11px] text-text-muted block mt-0.5">
-                            Appt Time: <strong className="text-text-main">{formattedTime}</strong>
+                            Appt Time:{" "}
+                            <strong className="text-text-main">
+                              {formattedTime}
+                            </strong>
                           </span>
                         </div>
                         {appt.status === "in-progress" ? (
                           <span className="text-[9.5px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded border border-rose-500/20 flex items-center gap-1 animate-pulse">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" /> In Cabin
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />{" "}
+                            In Cabin
                           </span>
                         ) : (
                           <span className="text-[9.5px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
@@ -1650,8 +1898,8 @@ export default function NewPrescriptionPage() {
                           </span>
                         ) : (
                           <button
-                            type="button"
                             className="px-3 py-1.5 text-[11px] font-bold bg-primary text-white hover:bg-primary/95 rounded-[8px] flex items-center gap-1 shadow-sm transition-all"
+                            type="button"
                             onClick={() => handleStartConsultation(appt)}
                           >
                             <IoSparklesOutline className="w-3.5 h-3.5" />
@@ -1743,7 +1991,9 @@ export default function NewPrescriptionPage() {
                       }
                     }}
                   >
-                    <option value="">-- Click to choose a saved clinical set --</option>
+                    <option value="">
+                      -- Click to choose a saved clinical set --
+                    </option>
                     {templates.map((tpl) => (
                       <option key={tpl.id} value={tpl.id}>
                         {tpl.name} ({tpl.items.length} meds)
@@ -1755,7 +2005,6 @@ export default function NewPrescriptionPage() {
             )}
           </div>
         </div>
-
 
         {/* Latest Patient Notes & Triage Records */}
         {patientId && patientNotes.length > 0 && (
@@ -1774,19 +2023,26 @@ export default function NewPrescriptionPage() {
 
             <div className="p-6">
               <p className="text-[12.5px] text-text-muted mb-4 leading-relaxed">
-                Nurses or junior clinical staff have documented the following observations for this patient. Click **"Import"** to instantly populate the matching assessment field below without retyping.
+                Nurses or junior clinical staff have documented the following
+                observations for this patient. Click **"Import"** to instantly
+                populate the matching assessment field below without retyping.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-2">
                 {patientNotes.slice(0, 6).map((note) => (
-                  <div key={note.id} className="p-4 bg-surface rounded-[12px] border border-border-base/60 hover:border-teal-500/30 transition-all flex flex-col justify-between shadow-sm">
+                  <div
+                    key={note.id}
+                    className="p-4 bg-surface rounded-[12px] border border-border-base/60 hover:border-teal-500/30 transition-all flex flex-col justify-between shadow-sm"
+                  >
                     <div>
                       <div className="flex justify-between items-center gap-2 pb-2 border-b border-border-base/40 mb-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100">
                           {note.sectionLabel || "Note"}
                         </span>
                         <span className="text-[11px] text-text-muted">
-                          {note.createdAt instanceof Date ? note.createdAt.toLocaleDateString() : "Just now"}
+                          {note.createdAt instanceof Date
+                            ? note.createdAt.toLocaleDateString()
+                            : "Just now"}
                         </span>
                       </div>
                       <p className="text-[13px] text-text-main line-clamp-4 italic">
@@ -1796,33 +2052,50 @@ export default function NewPrescriptionPage() {
 
                     <div className="mt-4 pt-3 border-t border-border-base/40">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[9.5px] font-bold text-text-muted mr-1">IMPORT INTO:</span>
+                        <span className="text-[9.5px] font-bold text-text-muted mr-1">
+                          IMPORT INTO:
+                        </span>
                         <button
-                          type="button"
                           className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          type="button"
                           onClick={() => {
-                            setHistory((prev) => prev ? `${prev}\n${note.content}` : note.content);
-                            addToast({ title: "Imported into History", color: "success" });
+                            setHistory((prev) =>
+                              prev ? `${prev}\n${note.content}` : note.content,
+                            );
+                            addToast({
+                              title: "Imported into History",
+                              color: "success",
+                            });
                           }}
                         >
                           History
                         </button>
                         <button
-                          type="button"
                           className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          type="button"
                           onClick={() => {
-                            setExamination((prev) => prev ? `${prev}\n${note.content}` : note.content);
-                            addToast({ title: "Imported into Examination", color: "success" });
+                            setExamination((prev) =>
+                              prev ? `${prev}\n${note.content}` : note.content,
+                            );
+                            addToast({
+                              title: "Imported into Examination",
+                              color: "success",
+                            });
                           }}
                         >
                           Examination
                         </button>
                         <button
-                          type="button"
                           className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 rounded-[6px] hover:bg-primary hover:text-white transition-all"
+                          type="button"
                           onClick={() => {
-                            setDiagnosis((prev) => prev ? `${prev}\n${note.content}` : note.content);
-                            addToast({ title: "Imported into Diagnosis", color: "success" });
+                            setDiagnosis((prev) =>
+                              prev ? `${prev}\n${note.content}` : note.content,
+                            );
+                            addToast({
+                              title: "Imported into Diagnosis",
+                              color: "success",
+                            });
                           }}
                         >
                           Diagnosis
@@ -1847,92 +2120,119 @@ export default function NewPrescriptionPage() {
 
           <div className="p-6 space-y-6">
             {/* Today's Triage Vitals loaded card */}
-            {todayVitalsNote && (() => {
-              const parsed = parseTriageVitals(todayVitalsNote.content);
-              return (
-                <div className="p-4 bg-gradient-to-r from-teal-500/10 to-teal-500/5 border border-teal-500/30 rounded-[12px] shadow-sm animate-in fade-in duration-200">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-teal-500/15">
-                    <div className="flex items-center gap-2">
-                      <IoPulseOutline className="w-5 h-5 text-teal-600 animate-pulse" />
-                      <div>
-                        <h5 className="text-[13.5px] font-bold text-teal-950 dark:text-teal-200 leading-none">
-                          🩺 Today's Lobby Triage Vitals Active
-                        </h5>
-                        <p className="text-[11px] text-teal-800 dark:text-teal-300 mt-1">
-                          Recorded today by Front Office Desk
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      className="px-3 py-1.5 text-[11.5px] font-bold bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800 rounded-[8px] flex items-center gap-1.5 shadow-sm transition-all outline-none"
-                      type="button"
-                      onClick={handleImportTriage}
-                    >
-                      <IoSparklesOutline className="w-3.5 h-3.5" />
-                      Auto-Import Vitals to SOAP
-                    </button>
-                  </div>
+            {todayVitalsNote &&
+              (() => {
+                const parsed = parseTriageVitals(todayVitalsNote.content);
 
-                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-                    {/* BP */}
-                    <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
-                      <IoHeartOutline className="text-red-500 w-4 h-4 shrink-0" />
-                      <div>
-                        <span className="block text-[9.5px] text-text-muted font-semibold uppercase">BP</span>
-                        <span className="text-[12.5px] font-bold text-text-main leading-tight">{parsed.bp}</span>
+                return (
+                  <div className="p-4 bg-gradient-to-r from-teal-500/10 to-teal-500/5 border border-teal-500/30 rounded-[12px] shadow-sm animate-in fade-in duration-200">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-teal-500/15">
+                      <div className="flex items-center gap-2">
+                        <IoPulseOutline className="w-5 h-5 text-teal-600 animate-pulse" />
+                        <div>
+                          <h5 className="text-[13.5px] font-bold text-teal-950 dark:text-teal-200 leading-none">
+                            🩺 Today's Lobby Triage Vitals Active
+                          </h5>
+                          <p className="text-[11px] text-teal-800 dark:text-teal-300 mt-1">
+                            Recorded today by Front Office Desk
+                          </p>
+                        </div>
                       </div>
+                      <button
+                        className="px-3 py-1.5 text-[11.5px] font-bold bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800 rounded-[8px] flex items-center gap-1.5 shadow-sm transition-all outline-none"
+                        type="button"
+                        onClick={handleImportTriage}
+                      >
+                        <IoSparklesOutline className="w-3.5 h-3.5" />
+                        Auto-Import Vitals to SOAP
+                      </button>
                     </div>
-                    {/* Temp */}
-                    <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
-                      <IoThermometerOutline className="text-saffron-500 w-4 h-4 shrink-0" />
-                      <div>
-                        <span className="block text-[9.5px] text-text-muted font-semibold uppercase">Temp</span>
-                        <span className="text-[12.5px] font-bold text-text-main leading-tight">{parsed.temp}</span>
-                      </div>
-                    </div>
-                    {/* Pulse */}
-                    <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
-                      <IoPulseOutline className="text-teal-500 w-4 h-4 shrink-0" />
-                      <div>
-                        <span className="block text-[9.5px] text-text-muted font-semibold uppercase">Pulse</span>
-                        <span className="text-[12.5px] font-bold text-text-main leading-tight">{parsed.pulse}</span>
-                      </div>
-                    </div>
-                    {/* Weight */}
-                    <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
-                      <IoBodyOutline className="text-sky-500 w-4 h-4 shrink-0" />
-                      <div>
-                        <span className="block text-[9.5px] text-text-muted font-semibold uppercase">Weight</span>
-                        <span className="text-[12.5px] font-bold text-text-main leading-tight">{parsed.weight}</span>
-                      </div>
-                    </div>
-                    {/* SpO2 */}
-                    <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2 col-span-2 sm:col-span-1">
-                      <IoSpeedometerOutline className="text-indigo-500 w-4 h-4 shrink-0" />
-                      <div>
-                        <span className="block text-[9.5px] text-text-muted font-semibold uppercase">SpO2</span>
-                        <span className="text-[12.5px] font-bold text-text-main leading-tight">{parsed.spo2}</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {parsed.complaints && parsed.complaints !== "None reported" && (
-                    <div className="mt-3 p-2.5 bg-surface/50 rounded-[8px] border border-teal-500/10">
-                      <span className="block text-[9.5px] text-text-muted font-semibold uppercase mb-1">Chief Complaints</span>
-                      <p className="text-[12.5px] text-text-main font-medium italic">
-                        "{parsed.complaints}"
-                      </p>
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+                      {/* BP */}
+                      <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
+                        <IoHeartOutline className="text-red-500 w-4 h-4 shrink-0" />
+                        <div>
+                          <span className="block text-[9.5px] text-text-muted font-semibold uppercase">
+                            BP
+                          </span>
+                          <span className="text-[12.5px] font-bold text-text-main leading-tight">
+                            {parsed.bp}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Temp */}
+                      <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
+                        <IoThermometerOutline className="text-saffron-500 w-4 h-4 shrink-0" />
+                        <div>
+                          <span className="block text-[9.5px] text-text-muted font-semibold uppercase">
+                            Temp
+                          </span>
+                          <span className="text-[12.5px] font-bold text-text-main leading-tight">
+                            {parsed.temp}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Pulse */}
+                      <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
+                        <IoPulseOutline className="text-teal-500 w-4 h-4 shrink-0" />
+                        <div>
+                          <span className="block text-[9.5px] text-text-muted font-semibold uppercase">
+                            Pulse
+                          </span>
+                          <span className="text-[12.5px] font-bold text-text-main leading-tight">
+                            {parsed.pulse}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Weight */}
+                      <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2">
+                        <IoBodyOutline className="text-sky-500 w-4 h-4 shrink-0" />
+                        <div>
+                          <span className="block text-[9.5px] text-text-muted font-semibold uppercase">
+                            Weight
+                          </span>
+                          <span className="text-[12.5px] font-bold text-text-main leading-tight">
+                            {parsed.weight}
+                          </span>
+                        </div>
+                      </div>
+                      {/* SpO2 */}
+                      <div className="p-2.5 bg-surface rounded-[8px] border border-teal-500/10 flex items-center gap-2 col-span-2 sm:col-span-1">
+                        <IoSpeedometerOutline className="text-indigo-500 w-4 h-4 shrink-0" />
+                        <div>
+                          <span className="block text-[9.5px] text-text-muted font-semibold uppercase">
+                            SpO2
+                          </span>
+                          <span className="text-[12.5px] font-bold text-text-main leading-tight">
+                            {parsed.spo2}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              );
-            })()}
+
+                    {parsed.complaints &&
+                      parsed.complaints !== "None reported" && (
+                        <div className="mt-3 p-2.5 bg-surface/50 rounded-[8px] border border-teal-500/10">
+                          <span className="block text-[9.5px] text-text-muted font-semibold uppercase mb-1">
+                            Chief Complaints
+                          </span>
+                          <p className="text-[12.5px] text-text-main font-medium italic">
+                            "{parsed.complaints}"
+                          </p>
+                        </div>
+                      )}
+                  </div>
+                );
+              })()}
 
             {/* 1. History */}
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoDocumentTextOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">HISTORY</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  HISTORY
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
@@ -1946,7 +2246,9 @@ export default function NewPrescriptionPage() {
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoPulseOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">EXAMINATION</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  EXAMINATION
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
@@ -1961,7 +2263,9 @@ export default function NewPrescriptionPage() {
               <div className="flex items-center justify-between pb-2 border-b border-border-base/50">
                 <div className="flex items-center gap-2">
                   <IoFlaskOutline className="text-primary w-4.5 h-4.5" />
-                  <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">INVESTIGATION & PATHOLOGY</span>
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                    INVESTIGATION & PATHOLOGY
+                  </span>
                 </div>
               </div>
 
@@ -1969,12 +2273,12 @@ export default function NewPrescriptionPage() {
                 <div className="flex flex-col sm:flex-row gap-3 items-end">
                   <div className="flex-1 w-full relative z-[50]">
                     <SearchSelect
-                      label="Search and Assign Pathology Test"
                       items={availablePathologyTests.map((t) => ({
                         id: t.id,
                         primary: t.name,
                         secondary: `NPR ${t.price || 0}`,
                       }))}
+                      label="Search and Assign Pathology Test"
                       placeholder="e.g. Complete Blood Count (CBC)..."
                       value={pathologyTestId}
                       onChange={setPathologyTestId}
@@ -1995,16 +2299,27 @@ export default function NewPrescriptionPage() {
                       <table className="w-full text-left text-[13px]">
                         <thead className="bg-surface-2/60 border-b border-border-base">
                           <tr>
-                            <th className="px-4 py-3 font-semibold text-text-muted">Test Name</th>
-                            <th className="px-4 py-3 font-semibold text-text-muted text-right">Standard Charge</th>
-                            <th className="px-4 py-3 w-[60px]"></th>
+                            <th className="px-4 py-3 font-semibold text-text-muted">
+                              Test Name
+                            </th>
+                            <th className="px-4 py-3 font-semibold text-text-muted text-right">
+                              Standard Charge
+                            </th>
+                            <th className="px-4 py-3 w-[60px]" />
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-base/50">
                           {selectedPathologyTests.map((test) => (
-                            <tr key={test.id} className="hover:bg-primary/5 transition-colors group">
-                              <td className="px-4 py-3.5 font-medium text-text-main">{test.testName}</td>
-                              <td className="px-4 py-3.5 text-text-muted text-right">NPR {test.price}</td>
+                            <tr
+                              key={test.id}
+                              className="hover:bg-primary/5 transition-colors group"
+                            >
+                              <td className="px-4 py-3.5 font-medium text-text-main">
+                                {test.testName}
+                              </td>
+                              <td className="px-4 py-3.5 text-text-muted text-right">
+                                NPR {test.price}
+                              </td>
                               <td className="px-4 py-3.5 text-right">
                                 <button
                                   className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -2020,7 +2335,7 @@ export default function NewPrescriptionPage() {
                         </tbody>
                       </table>
                     </div>
-                    
+
                     <div className="p-3.5 bg-primary/5 border-t border-border-base flex justify-between items-center">
                       <span className="text-[12px] text-primary font-medium px-2">
                         Total Tests: {selectedPathologyTests.length}
@@ -2052,7 +2367,9 @@ export default function NewPrescriptionPage() {
               </div>
 
               <div className="mt-2">
-                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider mb-2 block">Clinical Notes</span>
+                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider mb-2 block">
+                  Clinical Notes
+                </span>
                 <textarea
                   className="w-full text-[13.5px] px-3 py-2 bg-transparent border border-border-base rounded-[8px] outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y focus:border-primary/50 transition-colors shadow-sm"
                   placeholder="Enter additional laboratory investigations, diagnostic imaging, or free-text notes..."
@@ -2066,7 +2383,9 @@ export default function NewPrescriptionPage() {
             <div className="flex flex-col gap-2 p-4 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoMedicalOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">DIAGNOSIS</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  DIAGNOSIS
+                </span>
               </div>
               <textarea
                 className="w-full text-[13.5px] px-3 py-2 bg-transparent border-0 outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y"
@@ -2080,16 +2399,20 @@ export default function NewPrescriptionPage() {
             <div className="flex flex-col gap-4 p-5 bg-surface rounded-[12px] border border-border-base hover:border-primary/40 transition-colors relative z-[50]">
               <div className="flex items-center gap-2 pb-2 border-b border-border-base/50">
                 <IoClipboardOutline className="text-primary w-4.5 h-4.5" />
-                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">PRESCRIPTION DETAILS (PLAN)</span>
+                <span className="text-[12px] font-bold uppercase tracking-wider text-text-main">
+                  PRESCRIPTION DETAILS (PLAN)
+                </span>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
                 <SearchSelect
                   required
                   items={medicines.map((m) => ({
                     id: m.id,
                     primary: m.name,
-                    secondary: m.genericName ? `${m.genericName} (${m.manufacturer || 'Unknown'})` : m.manufacturer,
+                    secondary: m.genericName
+                      ? `${m.genericName} (${m.manufacturer || "Unknown"})`
+                      : m.manufacturer,
                   }))}
                   label="Medicine"
                   placeholder="Search medicine..."
@@ -2104,7 +2427,15 @@ export default function NewPrescriptionPage() {
                     onChange={(e: any) => setDosage(e.target.value)}
                   />
                   <div className="flex flex-wrap gap-1">
-                    {["1 tab", "2 tabs", "5ml", "10ml", "1 drop", "2 drops", "Apply thinly"].map((preset) => (
+                    {[
+                      "1 tab",
+                      "2 tabs",
+                      "5ml",
+                      "10ml",
+                      "1 drop",
+                      "2 drops",
+                      "Apply thinly",
+                    ].map((preset) => (
                       <button
                         key={preset}
                         className={`px-2 py-0.5 text-[10px] font-semibold border rounded-[6px] transition-colors ${dosage === preset ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
@@ -2125,7 +2456,15 @@ export default function NewPrescriptionPage() {
                     onChange={(e: any) => setDuration(e.target.value)}
                   />
                   <div className="flex flex-wrap gap-1">
-                    {["3 days", "5 days", "7 days", "10 days", "14 days", "1 month", "Continuous"].map((preset) => (
+                    {[
+                      "3 days",
+                      "5 days",
+                      "7 days",
+                      "10 days",
+                      "14 days",
+                      "1 month",
+                      "Continuous",
+                    ].map((preset) => (
                       <button
                         key={preset}
                         className={`px-2 py-0.5 text-[10px] font-semibold border rounded-[6px] transition-colors ${duration === preset ? "bg-primary text-white border-primary" : "bg-surface-2 text-text-muted border-border-base hover:border-primary hover:text-primary"}`}
@@ -2192,29 +2531,55 @@ export default function NewPrescriptionPage() {
                 <div className="mt-4 border border-border-base rounded-[10px] overflow-hidden shadow-sm">
                   <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
                     <h5 className="font-semibold text-[13px] text-text-main leading-none">
-                      Prescription Summary ({items.length} {items.length === 1 ? "medicine" : "medicines"})
+                      Prescription Summary ({items.length}{" "}
+                      {items.length === 1 ? "medicine" : "medicines"})
                     </h5>
                   </div>
                   <div className="w-full overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-surface-2 border-b border-border-base">
-                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/4">Medicine</th>
-                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">Dosage</th>
-                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">Duration</th>
-                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">Time</th>
-                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">Frequency</th>
-                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-24">Action</th>
+                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/4">
+                            Medicine
+                          </th>
+                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">
+                            Dosage
+                          </th>
+                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">
+                            Duration
+                          </th>
+                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">
+                            Time
+                          </th>
+                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-1/6">
+                            Frequency
+                          </th>
+                          <th className="px-4 py-2.5 text-[12px] font-semibold text-text-main w-24">
+                            Action
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border-base">
                         {items.map((item) => (
-                          <tr key={item.id} className="hover:bg-surface-2/30 transition-colors">
-                            <td className="px-4 py-2.5 text-[13px] font-medium text-text-main">{item.medicineName}</td>
-                            <td className="px-4 py-2.5 text-[13px] text-text-main">{item.dosage || "-"}</td>
-                            <td className="px-4 py-2.5 text-[13px] text-text-main">{item.duration || "-"}</td>
-                            <td className="px-4 py-2.5 text-[13px] text-text-main capitalize">{item.time || "-"}</td>
-                            <td className="px-4 py-2.5 text-[13px] text-text-main capitalize">{item.interval || "-"}</td>
+                          <tr
+                            key={item.id}
+                            className="hover:bg-surface-2/30 transition-colors"
+                          >
+                            <td className="px-4 py-2.5 text-[13px] font-medium text-text-main">
+                              {item.medicineName}
+                            </td>
+                            <td className="px-4 py-2.5 text-[13px] text-text-main">
+                              {item.dosage || "-"}
+                            </td>
+                            <td className="px-4 py-2.5 text-[13px] text-text-main">
+                              {item.duration || "-"}
+                            </td>
+                            <td className="px-4 py-2.5 text-[13px] text-text-main capitalize">
+                              {item.time || "-"}
+                            </td>
+                            <td className="px-4 py-2.5 text-[13px] text-text-main capitalize">
+                              {item.interval || "-"}
+                            </td>
                             <td className="px-4 py-2.5">
                               <Button
                                 isIconOnly
@@ -2231,11 +2596,13 @@ export default function NewPrescriptionPage() {
                       </tbody>
                     </table>
                   </div>
-                  
+
                   {/* Save as Rx Template Section */}
                   <div className="px-4 py-3 border-t border-border-base/50 bg-surface-2/30 flex flex-col sm:flex-row gap-3 items-end justify-between">
                     <div className="flex flex-col gap-1 w-full max-w-xs">
-                      <span className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider">Save these medicines as a template</span>
+                      <span className="text-[9.5px] font-bold text-text-muted uppercase tracking-wider">
+                        Save these medicines as a template
+                      </span>
                       <input
                         className="w-full text-[12.5px] px-3 py-1.5 bg-surface border border-border-base rounded-[8px] outline-none text-text-main placeholder:text-text-muted/60 focus:border-primary"
                         placeholder="e.g. Acute Tonsillitis Pack"
@@ -2274,9 +2641,17 @@ export default function NewPrescriptionPage() {
                   type="checkbox"
                   onChange={(e) => setSendToPharmacy(e.target.checked)}
                 />
-                <label className="flex flex-col cursor-pointer" htmlFor="sendToPharmacy">
-                  <span className="text-[13.5px] font-semibold text-primary">Send to Pharmacy</span>
-                  <span className="text-[11.5px] text-text-muted">The pharmacy will receive this prescription instantly for fulfillment.</span>
+                <label
+                  className="flex flex-col cursor-pointer"
+                  htmlFor="sendToPharmacy"
+                >
+                  <span className="text-[13.5px] font-semibold text-primary">
+                    Send to Pharmacy
+                  </span>
+                  <span className="text-[11.5px] text-text-muted">
+                    The pharmacy will receive this prescription instantly for
+                    fulfillment.
+                  </span>
                 </label>
               </div>
             </div>
@@ -2294,8 +2669,8 @@ export default function NewPrescriptionPage() {
           {appointmentId && (
             <Button
               color="success"
-              variant="flat"
               disabled={saving}
+              variant="flat"
               onClick={handleCompleteNoPrescription}
             >
               Complete Consultation (No Rx)

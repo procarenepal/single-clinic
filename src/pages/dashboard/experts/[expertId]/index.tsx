@@ -10,7 +10,6 @@ import {
   IoIdCardOutline,
   IoCreateOutline,
   IoStatsChartOutline,
-  IoCloseOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
@@ -30,8 +29,6 @@ import {
   ModalHeader,
 } from "@/components/ui/modal";
 import { Chip } from "@/components/ui/chip";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-
 
 export default function ExpertProfilePage() {
   const { expertId } = useParams<{ expertId: string }>();
@@ -144,9 +141,7 @@ export default function ExpertProfilePage() {
     );
   if (!expert)
     return (
-      <div className="p-12 text-center text-text-muted">
-        Expert not found.
-      </div>
+      <div className="p-12 text-center text-text-muted">Expert not found.</div>
     );
 
   return (
@@ -157,7 +152,9 @@ export default function ExpertProfilePage() {
             <IoArrowBackOutline />
           </Button>
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Expert Profile</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Expert Profile
+            </h1>
             <p className="text-[13.5px] text-text-muted mt-1">
               View and manage expert information
             </p>
@@ -179,7 +176,9 @@ export default function ExpertProfilePage() {
           {expert.name.charAt(0)}
         </div>
         <div className="flex-1">
-          <h2 className="text-page-title font-bold text-text-main">{expert.name}</h2>
+          <h2 className="text-page-title font-bold text-text-main">
+            {expert.name}
+          </h2>
           <p className="text-text-muted font-medium capitalize text-[14px]">
             {expert.speciality} • {expert.expertType}
           </p>
@@ -225,7 +224,9 @@ export default function ExpertProfilePage() {
                 </h3>
                 <div className="flex justify-between">
                   <span className="text-text-muted">Speciality</span>
-                  <span className="font-semibold text-text-main">{expert.speciality}</span>
+                  <span className="font-semibold text-text-main">
+                    {expert.speciality}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-text-muted">Type</span>
@@ -235,7 +236,9 @@ export default function ExpertProfilePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-text-muted">License</span>
-                  <span className="font-semibold text-text-main">{expert.licenseNumber}</span>
+                  <span className="font-semibold text-text-main">
+                    {expert.licenseNumber}
+                  </span>
                 </div>
               </div>
               <div className="space-y-3">
@@ -280,14 +283,21 @@ export default function ExpertProfilePage() {
                       {commissions.map((c) => (
                         <tr key={c.id}>
                           <td className="p-3">#{c.invoiceNumber}</td>
-                          <td className="p-3 font-medium text-text-main">{c.patientName}</td>
-                          <td className="p-3 text-text-muted">{(c.serviceNames || []).join(", ") || "Expert Consultation"}</td>
+                          <td className="p-3 font-medium text-text-main">
+                            {c.patientName}
+                          </td>
+                          <td className="p-3 text-text-muted">
+                            {(c.serviceNames || []).join(", ") ||
+                              "Expert Consultation"}
+                          </td>
                           <td className="p-3 font-semibold">
                             NPR {c.commissionAmount}
                           </td>
                           <td className="p-3">
                             <Chip
-                              color={c.status === "paid" ? "success" : "warning"}
+                              color={
+                                c.status === "paid" ? "success" : "warning"
+                              }
                               size="sm"
                               variant="flat"
                             >
@@ -318,13 +328,13 @@ export default function ExpertProfilePage() {
                         </tr>
                       ))}
                     </tbody>
-                      </table>
-                    </div>
-                  )}
+                  </table>
                 </div>
               )}
             </div>
-          </div>
+          )}
+        </div>
+      </div>
 
       <Modal
         isOpen={isPaymentModalOpen}
@@ -337,7 +347,11 @@ export default function ExpertProfilePage() {
               fullWidth
               label="Amount to Pay"
               placeholder="0.00"
-              startContent={<span className="text-text-muted text-[12px] font-semibold">NPR</span>}
+              startContent={
+                <span className="text-text-muted text-[12px] font-semibold">
+                  NPR
+                </span>
+              }
               type="number"
               value={paymentForm.amount}
               variant="bordered"

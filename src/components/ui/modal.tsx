@@ -40,7 +40,7 @@ interface ModalCtx {
 }
 
 const ModalContext = React.createContext<ModalCtx>({
-  onClose: () => { },
+  onClose: () => {},
   isDismissable: true,
   hideCloseButton: false,
   scrollBehavior: "inside",
@@ -233,4 +233,3 @@ export function ModalFooter({ children, className }: ModalFooterProps) {
     </div>
   );
 }
-

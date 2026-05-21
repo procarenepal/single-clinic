@@ -5,9 +5,7 @@ import {
   IoSearchOutline,
   IoTrashOutline,
   IoArrowBackOutline,
-  IoArrowUpOutline,
   IoCloseOutline,
-  IoMedkitOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
@@ -83,10 +81,10 @@ function PathologySearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-        (i.primary + (i.secondary || ""))
-          .toLowerCase()
-          .includes(q.toLowerCase()),
-      )
+          (i.primary + (i.secondary || ""))
+            .toLowerCase()
+            .includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -143,7 +141,7 @@ function PathologySearchSelect({
                 e.stopPropagation();
                 setOpen(false);
               }}
-            ></div>
+            />
             <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded shadow-lg max-h-64 overflow-y-auto">
               {filtered.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
@@ -421,28 +419,37 @@ export default function PathologyPage() {
         let hasChanges = false;
         const newParameters = prev.parameters.map((p) => {
           const op = parameters.find((param) => param.id === p.parameterId);
+
           if (!op) return p;
 
-          const refRange = (isMale && op.referenceRangeMale)
-            ? op.referenceRangeMale
-            : (isFemale && op.referenceRangeFemale)
-              ? op.referenceRangeFemale
-              : op.referenceRange;
+          const refRange =
+            isMale && op.referenceRangeMale
+              ? op.referenceRangeMale
+              : isFemale && op.referenceRangeFemale
+                ? op.referenceRangeFemale
+                : op.referenceRange;
 
-          const minVal = (isMale && op.minValueMale !== undefined)
-            ? op.minValueMale
-            : (isFemale && op.minValueFemale !== undefined)
-              ? op.minValueFemale
-              : op.minValue;
+          const minVal =
+            isMale && op.minValueMale !== undefined
+              ? op.minValueMale
+              : isFemale && op.minValueFemale !== undefined
+                ? op.minValueFemale
+                : op.minValue;
 
-          const maxVal = (isMale && op.maxValueMale !== undefined)
-            ? op.maxValueMale
-            : (isFemale && op.maxValueFemale !== undefined)
-              ? op.maxValueFemale
-              : op.maxValue;
+          const maxVal =
+            isMale && op.maxValueMale !== undefined
+              ? op.maxValueMale
+              : isFemale && op.maxValueFemale !== undefined
+                ? op.maxValueFemale
+                : op.maxValue;
 
-          if (p.referenceRange !== refRange || p.minValue !== minVal || p.maxValue !== maxVal) {
+          if (
+            p.referenceRange !== refRange ||
+            p.minValue !== minVal ||
+            p.maxValue !== maxVal
+          ) {
             hasChanges = true;
+
             return {
               ...p,
               referenceRange: refRange,
@@ -450,12 +457,14 @@ export default function PathologyPage() {
               maxValue: maxVal,
             };
           }
+
           return p;
         });
 
         if (hasChanges) {
           return { ...prev, parameters: newParameters };
         }
+
         return prev;
       });
     }
@@ -668,26 +677,29 @@ export default function PathologyPage() {
           const isFemale = testForm.patientGender === "female";
 
           updated[index].parameterName = selectedParam.name;
-          updated[index].referenceRange = (isMale && selectedParam.referenceRangeMale)
-            ? selectedParam.referenceRangeMale
-            : (isFemale && selectedParam.referenceRangeFemale)
-              ? selectedParam.referenceRangeFemale
-              : selectedParam.referenceRange;
+          updated[index].referenceRange =
+            isMale && selectedParam.referenceRangeMale
+              ? selectedParam.referenceRangeMale
+              : isFemale && selectedParam.referenceRangeFemale
+                ? selectedParam.referenceRangeFemale
+                : selectedParam.referenceRange;
 
           updated[index].resultType = selectedParam.resultType;
           updated[index].options = selectedParam.options;
 
-          updated[index].minValue = (isMale && selectedParam.minValueMale !== undefined)
-            ? selectedParam.minValueMale
-            : (isFemale && selectedParam.minValueFemale !== undefined)
-              ? selectedParam.minValueFemale
-              : selectedParam.minValue;
+          updated[index].minValue =
+            isMale && selectedParam.minValueMale !== undefined
+              ? selectedParam.minValueMale
+              : isFemale && selectedParam.minValueFemale !== undefined
+                ? selectedParam.minValueFemale
+                : selectedParam.minValue;
 
-          updated[index].maxValue = (isMale && selectedParam.maxValueMale !== undefined)
-            ? selectedParam.maxValueMale
-            : (isFemale && selectedParam.maxValueFemale !== undefined)
-              ? selectedParam.maxValueFemale
-              : selectedParam.maxValue;
+          updated[index].maxValue =
+            isMale && selectedParam.maxValueMale !== undefined
+              ? selectedParam.maxValueMale
+              : isFemale && selectedParam.maxValueFemale !== undefined
+                ? selectedParam.maxValueFemale
+                : selectedParam.maxValue;
 
           updated[index].criticalLow = selectedParam.criticalLow;
           updated[index].criticalHigh = selectedParam.criticalHigh;
@@ -725,6 +737,7 @@ export default function PathologyPage() {
   const getResultFlag = (param: any, result: string) => {
     if (!result || param.resultType !== "numeric") return null;
     const val = parseFloat(result);
+
     if (isNaN(val)) return null;
 
     if (param.criticalLow !== undefined && val <= param.criticalLow)
@@ -743,7 +756,9 @@ export default function PathologyPage() {
   const normalizeAge = (age: string): string => {
     if (!age) return "";
     const trimmed = age.trim();
+
     if (/^\d+$/.test(trimmed)) return `${trimmed} Years`;
+
     return trimmed;
   };
 
@@ -764,13 +779,18 @@ export default function PathologyPage() {
         patientService.checkMobileExists(quickPatientForm.mobile, clinicId!),
       ]);
 
-      if (mobileExists && quickPatientForm.mobile && quickPatientForm.mobile !== "N/A") {
+      if (
+        mobileExists &&
+        quickPatientForm.mobile &&
+        quickPatientForm.mobile !== "N/A"
+      ) {
         addToast({
           title: "Duplicate Mobile",
           description: "A patient with this mobile number already exists.",
           color: "danger",
         });
         setLoading(false);
+
         return;
       }
 
@@ -852,12 +872,17 @@ export default function PathologyPage() {
           patientService.checkMobileExists(testForm.walkInPhone, clinicId!),
         ]);
 
-        if (mobileExists && testForm.walkInPhone && testForm.walkInPhone !== "N/A") {
+        if (
+          mobileExists &&
+          testForm.walkInPhone &&
+          testForm.walkInPhone !== "N/A"
+        ) {
           addToast({
             title: "Duplicate Mobile",
             description: "A patient with this mobile number already exists.",
             color: "danger",
           });
+
           return;
         }
 
@@ -914,9 +939,13 @@ export default function PathologyPage() {
         sampleNumber: testForm.sampleNumber,
         testName: testForm.testType || testForm.shortName || "Unknown Test",
         categoryName: testForm.categoryId
-          ? testForm.categoryId.split(", ").map(id =>
-            categories.find(c => c.id === id.trim())?.name || id.trim()
-          ).join(", ")
+          ? testForm.categoryId
+              .split(", ")
+              .map(
+                (id) =>
+                  categories.find((c) => c.id === id.trim())?.name || id.trim(),
+              )
+              .join(", ")
           : "Unknown Category",
         shortName: testForm.shortName,
         testType: testForm.testType,
@@ -932,7 +961,9 @@ export default function PathologyPage() {
           ? parseFloat(testForm.standardCharge)
           : 0,
         labTechnicianId: testForm.labTechnicianId,
-        labTechnicianName: labTechnicians.find((lt) => lt.id === testForm.labTechnicianId)?.name || "",
+        labTechnicianName:
+          labTechnicians.find((lt) => lt.id === testForm.labTechnicianId)
+            ?.name || "",
         parameters: testForm.parameters
           .filter((p) => p.parameterId)
           .map((p) => ({
@@ -1011,15 +1042,15 @@ export default function PathologyPage() {
       labTechnicianId: test.labTechnicianId || "",
       parameters: test.parameters
         ? test.parameters.map((p) => {
-          // If unit is an ID, try to resolve it to a name
-          let displayUnit = p.unit;
+            // If unit is an ID, try to resolve it to a name
+            let displayUnit = p.unit;
 
-          if (p.unit && units.find((u) => u.id === p.unit)) {
-            displayUnit = units.find((u) => u.id === p.unit)?.name || p.unit;
-          }
+            if (p.unit && units.find((u) => u.id === p.unit)) {
+              displayUnit = units.find((u) => u.id === p.unit)?.name || p.unit;
+            }
 
-          return { ...p, unit: displayUnit, categoryId: p.categoryId || "" };
-        })
+            return { ...p, unit: displayUnit, categoryId: p.categoryId || "" };
+          })
         : [],
     });
     setIsEditing(true);
@@ -1033,7 +1064,7 @@ export default function PathologyPage() {
     let finalPatientId = billing.patientId || "";
 
     // Safety: If the patientId is not in our current patients list, treat as walk-in to ensure name shows
-    const isPatientInList = patients.some(p => p.id === finalPatientId);
+    const isPatientInList = patients.some((p) => p.id === finalPatientId);
     let finalIsWalkIn = !finalPatientId || !isPatientInList;
 
     if (!finalPatientId || !isPatientInList) {
@@ -1041,7 +1072,8 @@ export default function PathologyPage() {
       const match = patients.find(
         (p) =>
           p.name.toLowerCase() === billing.patientName.toLowerCase() &&
-          (p.mobile === billing.patientPhone || p.phone === billing.patientPhone),
+          (p.mobile === billing.patientPhone ||
+            p.phone === billing.patientPhone),
       );
 
       if (match) {
@@ -1077,23 +1109,26 @@ export default function PathologyPage() {
               const isMale = billing.patientGender === "male";
               const isFemale = billing.patientGender === "female";
 
-              const refRange = (isMale && p.referenceRangeMale)
-                ? p.referenceRangeMale
-                : (isFemale && p.referenceRangeFemale)
-                  ? p.referenceRangeFemale
-                  : p.referenceRange;
+              const refRange =
+                isMale && p.referenceRangeMale
+                  ? p.referenceRangeMale
+                  : isFemale && p.referenceRangeFemale
+                    ? p.referenceRangeFemale
+                    : p.referenceRange;
 
-              const minVal = (isMale && p.minValueMale !== undefined)
-                ? p.minValueMale
-                : (isFemale && p.minValueFemale !== undefined)
-                  ? p.minValueFemale
-                  : p.minValue;
+              const minVal =
+                isMale && p.minValueMale !== undefined
+                  ? p.minValueMale
+                  : isFemale && p.minValueFemale !== undefined
+                    ? p.minValueFemale
+                    : p.minValue;
 
-              const maxVal = (isMale && p.maxValueMale !== undefined)
-                ? p.maxValueMale
-                : (isFemale && p.maxValueFemale !== undefined)
-                  ? p.maxValueFemale
-                  : p.maxValue;
+              const maxVal =
+                isMale && p.maxValueMale !== undefined
+                  ? p.maxValueMale
+                  : isFemale && p.maxValueFemale !== undefined
+                    ? p.maxValueFemale
+                    : p.maxValue;
 
               return {
                 parameterId: p.id,
@@ -1125,7 +1160,10 @@ export default function PathologyPage() {
       patientAge: billing.patientAge?.toString() || "",
       patientGender: billing.patientGender || "",
       testName: testNames.join(", "),
-      testType: testTypeNames.length > 0 ? testTypeNames.join(", ") : testNames.join(", "),
+      testType:
+        testTypeNames.length > 0
+          ? testTypeNames.join(", ")
+          : testNames.join(", "),
       parameters: allParameters,
       standardCharge: totalCharge.toString(),
       // Join category names for display in the SearchSelect
@@ -1144,32 +1182,39 @@ export default function PathologyPage() {
   };
 
   const addCategoryParameter = () => {
-    setCategoryForm(prev => ({
+    setCategoryForm((prev) => ({
       ...prev,
-      parameters: [...prev.parameters, {
-        name: "",
-        referenceRange: "",
-        unit: "",
-        resultType: "numeric",
-        options: "",
-        minValue: "",
-        maxValue: "",
-        criticalLow: "",
-        criticalHigh: "",
-        defaultValue: ""
-      }]
+      parameters: [
+        ...prev.parameters,
+        {
+          name: "",
+          referenceRange: "",
+          unit: "",
+          resultType: "numeric",
+          options: "",
+          minValue: "",
+          maxValue: "",
+          criticalLow: "",
+          criticalHigh: "",
+          defaultValue: "",
+        },
+      ],
     }));
   };
 
   const removeCategoryParameter = (index: number) => {
-    setCategoryForm(prev => ({
+    setCategoryForm((prev) => ({
       ...prev,
-      parameters: prev.parameters.filter((_, i) => i !== index)
+      parameters: prev.parameters.filter((_, i) => i !== index),
     }));
   };
 
-  const updateCategoryParameter = (index: number, field: string, value: any) => {
-    setCategoryForm(prev => {
+  const updateCategoryParameter = (
+    index: number,
+    field: string,
+    value: any,
+  ) => {
+    setCategoryForm((prev) => {
       const updated = [...prev.parameters];
       let newValues = { [field]: value };
 
@@ -1177,16 +1222,18 @@ export default function PathologyPage() {
       if (field === "referenceRange" && value) {
         const regex = /([\d.]+)\s*(?:-|to)\s*([\d.]+)/i;
         const match = value.match(regex);
+
         if (match) {
           newValues = {
             ...newValues,
             minValue: match[1],
-            maxValue: match[2]
+            maxValue: match[2],
           };
         }
       }
 
       updated[index] = { ...updated[index], ...newValues };
+
       return { ...prev, parameters: updated };
     });
   };
@@ -1226,26 +1273,42 @@ export default function PathologyPage() {
 
         // Create parameters if any
         if (categoryForm.parameters.length > 0) {
-          await Promise.all(categoryForm.parameters.map(param => {
-            const parameterData: Omit<PathologyParameter, "id" | "createdAt" | "updatedAt"> = {
-              name: param.name.trim(),
-              categoryId: categoryId,
-              referenceRange: param.referenceRange.trim(),
-              unit: param.unit,
-              resultType: param.resultType,
-              options: param.options ? param.options.split(",").map((o: string) => o.trim()) : undefined,
-              minValue: param.minValue ? parseFloat(param.minValue) : undefined,
-              maxValue: param.maxValue ? parseFloat(param.maxValue) : undefined,
-              criticalLow: param.criticalLow ? parseFloat(param.criticalLow) : undefined,
-              criticalHigh: param.criticalHigh ? parseFloat(param.criticalHigh) : undefined,
-              defaultValue: param.defaultValue || undefined,
-              clinicId: clinicId!,
-              branchId: branchId!,
-              isActive: true,
-              createdBy: currentUser?.uid || "",
-            };
-            return pathologyService.createParameter(parameterData);
-          }));
+          await Promise.all(
+            categoryForm.parameters.map((param) => {
+              const parameterData: Omit<
+                PathologyParameter,
+                "id" | "createdAt" | "updatedAt"
+              > = {
+                name: param.name.trim(),
+                categoryId: categoryId,
+                referenceRange: param.referenceRange.trim(),
+                unit: param.unit,
+                resultType: param.resultType,
+                options: param.options
+                  ? param.options.split(",").map((o: string) => o.trim())
+                  : undefined,
+                minValue: param.minValue
+                  ? parseFloat(param.minValue)
+                  : undefined,
+                maxValue: param.maxValue
+                  ? parseFloat(param.maxValue)
+                  : undefined,
+                criticalLow: param.criticalLow
+                  ? parseFloat(param.criticalLow)
+                  : undefined,
+                criticalHigh: param.criticalHigh
+                  ? parseFloat(param.criticalHigh)
+                  : undefined,
+                defaultValue: param.defaultValue || undefined,
+                clinicId: clinicId!,
+                branchId: branchId!,
+                isActive: true,
+                createdBy: currentUser?.uid || "",
+              };
+
+              return pathologyService.createParameter(parameterData);
+            }),
+          );
         }
 
         addToast({
@@ -1258,7 +1321,7 @@ export default function PathologyPage() {
       // Refresh both
       const [categoriesData, parametersData] = await Promise.all([
         pathologyService.getCategoriesByClinic(clinicId!, branchId!),
-        pathologyService.getParametersByClinic(clinicId!, branchId!)
+        pathologyService.getParametersByClinic(clinicId!, branchId!),
       ]);
 
       setCategories(categoriesData);
@@ -1355,13 +1418,14 @@ export default function PathologyPage() {
     try {
       // Check if a unit with the same name already exists (case-insensitive)
       const existing = units.find(
-        (u) => u.name.toLowerCase().trim() === quickUnitName.toLowerCase().trim()
+        (u) =>
+          u.name.toLowerCase().trim() === quickUnitName.toLowerCase().trim(),
       );
 
       if (existing) {
         // Reuse the existing unit instead of creating a duplicate
         if (parameterModalState.isOpen) {
-          setParameterForm(prev => ({ ...prev, unit: existing.id }));
+          setParameterForm((prev) => ({ ...prev, unit: existing.id }));
         }
         setQuickUnitName("");
         setShowQuickUnit(false);
@@ -1370,6 +1434,7 @@ export default function PathologyPage() {
           description: `"${existing.name}" has been selected`,
           color: "default",
         });
+
         return existing.id;
       }
 
@@ -1387,11 +1452,12 @@ export default function PathologyPage() {
         clinicId!,
         branchId!,
       );
+
       setUnits(unitsData);
 
       // Auto-select the new unit in the parameter form if that's what's open
       if (parameterModalState.isOpen) {
-        setParameterForm(prev => ({ ...prev, unit: newUnitId }));
+        setParameterForm((prev) => ({ ...prev, unit: newUnitId }));
       }
 
       setQuickUnitName("");
@@ -1411,6 +1477,7 @@ export default function PathologyPage() {
         description: "Failed to add unit",
         color: "danger",
       });
+
       return null;
     }
   };
@@ -1461,17 +1528,37 @@ export default function PathologyPage() {
         referenceRange: parameterForm.referenceRange.trim(),
         unit: parameterForm.unit,
         resultType: parameterForm.resultType,
-        options: parameterForm.options ? parameterForm.options.split(",").map(o => o.trim()) : undefined,
-        minValue: parameterForm.minValue ? parseFloat(parameterForm.minValue) : undefined,
-        maxValue: parameterForm.maxValue ? parseFloat(parameterForm.maxValue) : undefined,
-        minValueMale: parameterForm.minValueMale ? parseFloat(parameterForm.minValueMale) : undefined,
-        maxValueMale: parameterForm.maxValueMale ? parseFloat(parameterForm.maxValueMale) : undefined,
-        minValueFemale: parameterForm.minValueFemale ? parseFloat(parameterForm.minValueFemale) : undefined,
-        maxValueFemale: parameterForm.maxValueFemale ? parseFloat(parameterForm.maxValueFemale) : undefined,
-        referenceRangeMale: parameterForm.referenceRangeMale?.trim() || undefined,
-        referenceRangeFemale: parameterForm.referenceRangeFemale?.trim() || undefined,
-        criticalLow: parameterForm.criticalLow ? parseFloat(parameterForm.criticalLow) : undefined,
-        criticalHigh: parameterForm.criticalHigh ? parseFloat(parameterForm.criticalHigh) : undefined,
+        options: parameterForm.options
+          ? parameterForm.options.split(",").map((o) => o.trim())
+          : undefined,
+        minValue: parameterForm.minValue
+          ? parseFloat(parameterForm.minValue)
+          : undefined,
+        maxValue: parameterForm.maxValue
+          ? parseFloat(parameterForm.maxValue)
+          : undefined,
+        minValueMale: parameterForm.minValueMale
+          ? parseFloat(parameterForm.minValueMale)
+          : undefined,
+        maxValueMale: parameterForm.maxValueMale
+          ? parseFloat(parameterForm.maxValueMale)
+          : undefined,
+        minValueFemale: parameterForm.minValueFemale
+          ? parseFloat(parameterForm.minValueFemale)
+          : undefined,
+        maxValueFemale: parameterForm.maxValueFemale
+          ? parseFloat(parameterForm.maxValueFemale)
+          : undefined,
+        referenceRangeMale:
+          parameterForm.referenceRangeMale?.trim() || undefined,
+        referenceRangeFemale:
+          parameterForm.referenceRangeFemale?.trim() || undefined,
+        criticalLow: parameterForm.criticalLow
+          ? parseFloat(parameterForm.criticalLow)
+          : undefined,
+        criticalHigh: parameterForm.criticalHigh
+          ? parseFloat(parameterForm.criticalHigh)
+          : undefined,
         defaultValue: parameterForm.defaultValue || undefined,
         clinicId: clinicId!,
         branchId: branchId!,
@@ -1754,7 +1841,7 @@ export default function PathologyPage() {
     test: PathologyTest,
     clinic?: any,
     layoutConfig?: PrintLayoutConfig | null,
-    options?: { hideLetterhead?: boolean, categories?: PathologyCategory[] },
+    options?: { hideLetterhead?: boolean; categories?: PathologyCategory[] },
   ) => {
     const hideLetterhead = options?.hideLetterhead ?? false;
 
@@ -1768,14 +1855,23 @@ export default function PathologyPage() {
       : 10;
 
     // Group parameters by category
-    const groupedParameters: { [key: string]: { name: string, params: PathologyTestParameter[] } } = {};
-    test.parameters?.forEach(param => {
+    const groupedParameters: {
+      [key: string]: { name: string; params: PathologyTestParameter[] };
+    } = {};
+
+    test.parameters?.forEach((param) => {
       const catId = param.categoryId || "general";
+
       if (!groupedParameters[catId]) {
-        const cat = options?.categories?.find(c => c.id === catId);
+        const cat = options?.categories?.find((c) => c.id === catId);
+
         groupedParameters[catId] = {
-          name: cat?.name || (catId === "general" ? "General Parameters" : "Other Investigation"),
-          params: []
+          name:
+            cat?.name ||
+            (catId === "general"
+              ? "General Parameters"
+              : "Other Investigation"),
+          params: [],
         };
       }
       groupedParameters[catId].params.push(param);
@@ -1784,6 +1880,7 @@ export default function PathologyPage() {
     const isValid = (val: any) => {
       if (!val) return false;
       const s = String(val).toLowerCase();
+
       return (
         s !== "—" &&
         s !== "unknown" &&
@@ -1795,91 +1892,148 @@ export default function PathologyPage() {
     const infofields = [
       { label: "Patient Name", value: test.patientName },
       { label: "Patient ID", value: test.patientId || "WALK-IN" },
-      { label: "Age / Gender", value: `${test.patientAge ? test.patientAge : ""} / ${test.patientGender ? test.patientGender.charAt(0).toUpperCase() + test.patientGender.slice(1) : ""}` },
+      {
+        label: "Age / Gender",
+        value: `${test.patientAge ? test.patientAge : ""} / ${test.patientGender ? test.patientGender.charAt(0).toUpperCase() + test.patientGender.slice(1) : ""}`,
+      },
       { label: "Patient Type", value: test.patientType || "OPD" },
       { label: "Investigation", value: test.testName },
       { label: "Sample Number", value: test.sampleNumber },
-      { label: "Sample Date", value: test.createdAt ? new Date(test.createdAt).toLocaleDateString() : "" },
+      {
+        label: "Sample Date",
+        value: test.createdAt
+          ? new Date(test.createdAt).toLocaleDateString()
+          : "",
+      },
       { label: "Report Date", value: new Date().toLocaleDateString() },
     ].filter((f) => isValid(f.value));
 
-    const infoGridHtml = infofields.map((f) => `
+    const infoGridHtml = infofields
+      .map(
+        (f) => `
       <div class="info-item">
         <span class="info-label">${f.label}:</span>
         <span class="info-value">${f.value}</span>
       </div>
-    `).join("");
+    `,
+      )
+      .join("");
 
-    const reportsHtml = Object.values(groupedParameters).map((group, index, arr) => {
-      const rows = group.params.map(param => {
-        let flagLabel = "";
-        let flagClass = "";
-        let flagIcon = "";
+    const reportsHtml = Object.values(groupedParameters)
+      .map((group, index, arr) => {
+        const rows = group.params
+          .map((param) => {
+            let flagLabel = "";
+            let flagClass = "";
+            let flagIcon = "";
 
-        // Robust Value Parsing (Handle commas in numbers like 1,000)
-        const resultVal = param.patientResult ? parseFloat(param.patientResult.toString().replace(/,/g, '').replace(/[^0-9.]/g, '')) : NaN;
+            // Robust Value Parsing (Handle commas in numbers like 1,000)
+            const resultVal = param.patientResult
+              ? parseFloat(
+                  param.patientResult
+                    .toString()
+                    .replace(/,/g, "")
+                    .replace(/[^0-9.]/g, ""),
+                )
+              : NaN;
 
-        if (!isNaN(resultVal)) {
-          // Attempt to get bounds from explicit fields or parse from referenceRange string
-          let min = (param.minValue !== undefined && param.minValue !== null) ? Number(param.minValue) : NaN;
-          let max = (param.maxValue !== undefined && param.maxValue !== null) ? Number(param.maxValue) : NaN;
+            if (!isNaN(resultVal)) {
+              // Attempt to get bounds from explicit fields or parse from referenceRange string
+              let min =
+                param.minValue !== undefined && param.minValue !== null
+                  ? Number(param.minValue)
+                  : NaN;
+              let max =
+                param.maxValue !== undefined && param.maxValue !== null
+                  ? Number(param.maxValue)
+                  : NaN;
 
-          // Fail-safe: Smart Contextual Parsing from referenceRange text
-          if (isNaN(min) || isNaN(max)) {
-            const rangeText = (param.referenceRange || "").replace(/,/g, '');
+              // Fail-safe: Smart Contextual Parsing from referenceRange text
+              if (isNaN(min) || isNaN(max)) {
+                const rangeText = (param.referenceRange || "").replace(
+                  /,/g,
+                  "",
+                );
 
-            // 1. Check for explicit Label-based thresholds (e.g., "Low: < 40", "High: > 60")
-            const lowMatch = rangeText.match(/low:?\s*(?:<|>)?\s*([\d.]+)/i);
-            const highMatch = rangeText.match(/high:?\s*(?:<|>)?\s*([\d.]+)/i);
+                // 1. Check for explicit Label-based thresholds (e.g., "Low: < 40", "High: > 60")
+                const lowMatch = rangeText.match(
+                  /low:?\s*(?:<|>)?\s*([\d.]+)/i,
+                );
+                const highMatch = rangeText.match(
+                  /high:?\s*(?:<|>)?\s*([\d.]+)/i,
+                );
 
-            if (lowMatch && isNaN(min)) min = parseFloat(lowMatch[1]);
-            if (highMatch && isNaN(max)) max = parseFloat(highMatch[1]);
+                if (lowMatch && isNaN(min)) min = parseFloat(lowMatch[1]);
+                if (highMatch && isNaN(max)) max = parseFloat(highMatch[1]);
 
-            // 2. Fallback to standard range parsing if still missing
-            if (isNaN(min) || isNaN(max)) {
-              // Standard "X - Y"
-              const rangeMatch = rangeText.match(/([\d.]+)\s*(?:-|to)\s*([\d.]+)/);
-              if (rangeMatch) {
-                if (isNaN(min)) min = parseFloat(rangeMatch[1]);
-                if (isNaN(max)) max = parseFloat(rangeMatch[2]);
+                // 2. Fallback to standard range parsing if still missing
+                if (isNaN(min) || isNaN(max)) {
+                  // Standard "X - Y"
+                  const rangeMatch = rangeText.match(
+                    /([\d.]+)\s*(?:-|to)\s*([\d.]+)/,
+                  );
+
+                  if (rangeMatch) {
+                    if (isNaN(min)) min = parseFloat(rangeMatch[1]);
+                    if (isNaN(max)) max = parseFloat(rangeMatch[2]);
+                  }
+
+                  // Only apply general < or > if we didn't find specific labels
+                  if (isNaN(max) && !highMatch) {
+                    const maxOnly = rangeText.match(/<\s*([\d.]+)/);
+
+                    if (maxOnly) max = parseFloat(maxOnly[1]);
+                  }
+                  if (isNaN(min) && !lowMatch) {
+                    const minOnly = rangeText.match(/>\s*([\d.]+)/);
+
+                    if (minOnly) min = parseFloat(minOnly[1]);
+                  }
+                }
               }
 
-              // Only apply general < or > if we didn't find specific labels
-              if (isNaN(max) && !highMatch) {
-                const maxOnly = rangeText.match(/<\s*([\d.]+)/);
-                if (maxOnly) max = parseFloat(maxOnly[1]);
-              }
-              if (isNaN(min) && !lowMatch) {
-                const minOnly = rangeText.match(/>\s*([\d.]+)/);
-                if (minOnly) min = parseFloat(minOnly[1]);
+              // Flagging Logic
+              const cLow =
+                param.criticalLow !== undefined && param.criticalLow !== null
+                  ? Number(param.criticalLow)
+                  : NaN;
+              const cHigh =
+                param.criticalHigh !== undefined && param.criticalHigh !== null
+                  ? Number(param.criticalHigh)
+                  : NaN;
+
+              if (!isNaN(cLow) && resultVal <= cLow) {
+                flagLabel = "CRITICAL LOW";
+                flagClass = "flag-critical";
+                flagIcon = "!!";
+              } else if (!isNaN(cHigh) && resultVal >= cHigh) {
+                flagLabel = "CRITICAL HIGH";
+                flagClass = "flag-critical";
+                flagIcon = "!!";
+              } else if (!isNaN(min) && resultVal < min) {
+                flagLabel = "LOW";
+                flagClass = "flag-low";
+                flagIcon = "↓";
+              } else if (!isNaN(max) && resultVal > max) {
+                flagLabel = "HIGH";
+                flagClass = "flag-high";
+                flagIcon = "↑";
+              } else {
+                flagLabel = "NORMAL";
+                flagClass = "flag-normal";
+                flagIcon = "✓";
               }
             }
-          }
 
-          // Flagging Logic
-          const cLow = (param.criticalLow !== undefined && param.criticalLow !== null) ? Number(param.criticalLow) : NaN;
-          const cHigh = (param.criticalHigh !== undefined && param.criticalHigh !== null) ? Number(param.criticalHigh) : NaN;
+            const flagHtml = flagLabel
+              ? `<span class="flag ${flagClass}">${flagIcon} ${flagLabel}</span>`
+              : "";
+            const isAbnormal = flagLabel && flagLabel !== "NORMAL";
 
-          if (!isNaN(cLow) && resultVal <= cLow) {
-            flagLabel = "CRITICAL LOW"; flagClass = "flag-critical"; flagIcon = "!!";
-          } else if (!isNaN(cHigh) && resultVal >= cHigh) {
-            flagLabel = "CRITICAL HIGH"; flagClass = "flag-critical"; flagIcon = "!!";
-          } else if (!isNaN(min) && resultVal < min) {
-            flagLabel = "LOW"; flagClass = "flag-low"; flagIcon = "↓";
-          } else if (!isNaN(max) && resultVal > max) {
-            flagLabel = "HIGH"; flagClass = "flag-high"; flagIcon = "↑";
-          } else {
-            flagLabel = "NORMAL"; flagClass = "flag-normal"; flagIcon = "✓";
-          }
-        }
-
-        const flagHtml = flagLabel ? `<span class="flag ${flagClass}">${flagIcon} ${flagLabel}</span>` : "";
-        const isAbnormal = flagLabel && flagLabel !== "NORMAL";
-
-        return `
-          <tr class="parameter-row ${isAbnormal ? 'row-abnormal' : ''}">
+            return `
+          <tr class="parameter-row ${isAbnormal ? "row-abnormal" : ""}">
             <td style="font-weight: 500;">${param.parameterName}</td>
-            <td class="result-cell" style="font-weight: ${isAbnormal ? '700' : '400'};">
+            <td class="result-cell" style="font-weight: ${isAbnormal ? "700" : "400"};">
               ${param.patientResult}
             </td>
             <td style="text-align: center;">${flagHtml}</td>
@@ -1887,12 +2041,13 @@ export default function PathologyPage() {
             <td class="unit-cell">${param.unit}</td>
           </tr>
         `;
-      }).join("");
+          })
+          .join("");
 
-      const isLast = index === arr.length - 1;
+        const isLast = index === arr.length - 1;
 
-      return `
-        <div class="report-page" style="${!isLast ? 'page-break-after: always;' : ''}">
+        return `
+        <div class="report-page" style="${!isLast ? "page-break-after: always;" : ""}">
           <div class="print-container">
             <div class="document-title">
               <h2>Clinical Investigation Report</h2>
@@ -1942,12 +2097,26 @@ export default function PathologyPage() {
           </div>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
 
     const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig) : "";
-    const headerHtml = hideLetterhead ? "" : (clinic && layoutConfig) ? getPrintHeaderHTML(layoutConfig, clinic) : "";
-    const footerHtml = hideLetterhead ? "" : layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
-    const headerHeight = layoutConfig?.headerHeight === "compact" ? 140 : layoutConfig?.headerHeight === "expanded" ? 220 : 180;
+    const headerHtml = hideLetterhead
+      ? ""
+      : clinic && layoutConfig
+        ? getPrintHeaderHTML(layoutConfig, clinic)
+        : "";
+    const footerHtml = hideLetterhead
+      ? ""
+      : layoutConfig
+        ? getPrintFooterHTML(layoutConfig)
+        : "";
+    const headerHeight =
+      layoutConfig?.headerHeight === "compact"
+        ? 140
+        : layoutConfig?.headerHeight === "expanded"
+          ? 220
+          : 180;
 
     return `<!DOCTYPE html>
   <html>
@@ -2178,19 +2347,19 @@ export default function PathologyPage() {
               </thead>
               <tbody>
                 ${reportData.dailyTests
-        .map(
-          (test) => `
+                  .map(
+                    (test) => `
                   <tr>
                     <td class="font-bold">${test.testName}</td>
                     <td>${test.patientName}${test.patientAge ? ` (${test.patientAge}${test.patientGender ? `, ${test.patientGender}` : ""})` : ""}</td>
                     <td>${test.testType || "—"}</td>
                     <td>${test.categoryName}</td>
                     <td>${test.labTechnicianName || "—"}</td>
-                    <td class="text-right">${new Date(test.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td class="text-right">${new Date(test.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
                 `,
-        )
-        .join("")}
+                  )
+                  .join("")}
               </tbody>
             </table>
 
@@ -2208,19 +2377,19 @@ export default function PathologyPage() {
               </thead>
               <tbody>
                 ${reportData.dailyBillings
-        .map(
-          (billing) => `
+                  .map(
+                    (billing) => `
                   <tr>
                     <td class="font-bold">${billing.invoiceNumber}</td>
                     <td>${billing.patientName}</td>
                     <td>${billing.items.length} tests</td>
                     <td class="text-right font-bold">${billing.totalAmount.toLocaleString()}</td>
                     <td class="text-right">${billing.status.toUpperCase()}</td>
-                    <td class="text-right">${new Date(billing.invoiceDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td class="text-right">${new Date(billing.invoiceDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
                 `,
-        )
-        .join("")}
+                  )
+                  .join("")}
               </tbody>
             </table>
           </div>
@@ -2289,7 +2458,9 @@ export default function PathologyPage() {
     setSeeding(true);
     try {
       // 1. Check if category already exists
-      let categoryId = categories.find(c => c.name.toLowerCase() === "hiv screening")?.id;
+      let categoryId = categories.find(
+        (c) => c.name.toLowerCase() === "hiv screening",
+      )?.id;
 
       if (!categoryId) {
         categoryId = await pathologyService.createCategory({
@@ -2366,8 +2537,9 @@ export default function PathologyPage() {
       ];
 
       // Find or create the unit "cells/μL"
-      let cellUnit = units.find(u => u.name.toLowerCase() === "cells/μl");
+      let cellUnit = units.find((u) => u.name.toLowerCase() === "cells/μl");
       let cellUnitId = cellUnit?.id;
+
       if (!cellUnitId) {
         cellUnitId = await pathologyService.createUnit({
           name: "cells/μL",
@@ -2378,8 +2550,9 @@ export default function PathologyPage() {
         });
       }
 
-      let copiesUnit = units.find(u => u.name.toLowerCase() === "copies/ml");
+      let copiesUnit = units.find((u) => u.name.toLowerCase() === "copies/ml");
       let copiesUnitId = copiesUnit?.id;
+
       if (!copiesUnitId) {
         copiesUnitId = await pathologyService.createUnit({
           name: "copies/mL",
@@ -2390,29 +2563,41 @@ export default function PathologyPage() {
         });
       }
 
-      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+      const existingParams = parameters.filter(
+        (p) => p.categoryId === categoryId,
+      );
 
-      await Promise.all(params.map(p => {
-        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
-        if (alreadyExists) return Promise.resolve();
+      await Promise.all(
+        params.map((p) => {
+          const alreadyExists = existingParams.some(
+            (ep) => ep.name.toLowerCase() === p.name.toLowerCase(),
+          );
 
-        return pathologyService.createParameter({
-          name: p.name,
-          categoryId: categoryId!,
-          referenceRange: p.referenceRange,
-          resultType: p.resultType,
-          options: (p as any).options,
-          unit: p.unit === "cells/μL" ? cellUnitId! : p.unit === "copies/mL" ? copiesUnitId! : "",
-          minValue: p.minValue,
-          maxValue: p.maxValue,
-          criticalLow: p.criticalLow,
-          criticalHigh: p.criticalHigh,
-          clinicId: clinicId!,
-          branchId: branchId!,
-          isActive: true,
-          createdBy: currentUser?.uid || "",
-        });
-      }));
+          if (alreadyExists) return Promise.resolve();
+
+          return pathologyService.createParameter({
+            name: p.name,
+            categoryId: categoryId!,
+            referenceRange: p.referenceRange,
+            resultType: p.resultType,
+            options: (p as any).options,
+            unit:
+              p.unit === "cells/μL"
+                ? cellUnitId!
+                : p.unit === "copies/mL"
+                  ? copiesUnitId!
+                  : "",
+            minValue: p.minValue,
+            maxValue: p.maxValue,
+            criticalLow: p.criticalLow,
+            criticalHigh: p.criticalHigh,
+            clinicId: clinicId!,
+            branchId: branchId!,
+            isActive: true,
+            createdBy: currentUser?.uid || "",
+          });
+        }),
+      );
 
       // Refresh
       const [cats, params2, units2] = await Promise.all([
@@ -2420,15 +2605,24 @@ export default function PathologyPage() {
         pathologyService.getParametersByClinic(clinicId!, branchId!),
         pathologyService.getUnitsByClinic(clinicId!, branchId!),
       ]);
+
       setCategories(cats);
       setParameters(params2);
       setUnits(units2);
 
       setSeeded(true);
-      addToast({ title: "HIV Screening seeded", description: "Category and 6 parameters created successfully.", color: "success" });
+      addToast({
+        title: "HIV Screening seeded",
+        description: "Category and 6 parameters created successfully.",
+        color: "success",
+      });
     } catch (e) {
       console.error(e);
-      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+      addToast({
+        title: "Seed failed",
+        description: String(e),
+        color: "danger",
+      });
     } finally {
       setSeeding(false);
     }
@@ -2438,7 +2632,9 @@ export default function PathologyPage() {
     if (!clinicId || !branchId) return;
     setSeeding(true);
     try {
-      let categoryId = categories.find(c => c.name.toLowerCase() === "sugar & diabetes")?.id;
+      let categoryId = categories.find(
+        (c) => c.name.toLowerCase() === "sugar & diabetes",
+      )?.id;
 
       if (!categoryId) {
         categoryId = await pathologyService.createCategory({
@@ -2494,8 +2690,9 @@ export default function PathologyPage() {
       ];
 
       // Units
-      let mgDlUnit = units.find(u => u.name.toLowerCase() === "mg/dl");
+      let mgDlUnit = units.find((u) => u.name.toLowerCase() === "mg/dl");
       let mgDlUnitId = mgDlUnit?.id;
+
       if (!mgDlUnitId) {
         mgDlUnitId = await pathologyService.createUnit({
           name: "mg/dL",
@@ -2506,8 +2703,9 @@ export default function PathologyPage() {
         });
       }
 
-      let percentUnit = units.find(u => u.name === "%");
+      let percentUnit = units.find((u) => u.name === "%");
       let percentUnitId = percentUnit?.id;
+
       if (!percentUnitId) {
         percentUnitId = await pathologyService.createUnit({
           name: "%",
@@ -2518,42 +2716,58 @@ export default function PathologyPage() {
         });
       }
 
-      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+      const existingParams = parameters.filter(
+        (p) => p.categoryId === categoryId,
+      );
 
-      await Promise.all(params.map(p => {
-        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
-        if (alreadyExists) return Promise.resolve();
+      await Promise.all(
+        params.map((p) => {
+          const alreadyExists = existingParams.some(
+            (ep) => ep.name.toLowerCase() === p.name.toLowerCase(),
+          );
 
-        return pathologyService.createParameter({
-          name: p.name,
-          categoryId: categoryId!,
-          referenceRange: p.referenceRange,
-          resultType: p.resultType,
-          unit: p.unit === "mg/dL" ? mgDlUnitId! : percentUnitId!,
-          minValue: p.minValue,
-          maxValue: p.maxValue,
-          criticalLow: p.criticalLow,
-          criticalHigh: p.criticalHigh,
-          clinicId: clinicId!,
-          branchId: branchId!,
-          isActive: true,
-          createdBy: currentUser?.uid || "",
-        });
-      }));
+          if (alreadyExists) return Promise.resolve();
+
+          return pathologyService.createParameter({
+            name: p.name,
+            categoryId: categoryId!,
+            referenceRange: p.referenceRange,
+            resultType: p.resultType,
+            unit: p.unit === "mg/dL" ? mgDlUnitId! : percentUnitId!,
+            minValue: p.minValue,
+            maxValue: p.maxValue,
+            criticalLow: p.criticalLow,
+            criticalHigh: p.criticalHigh,
+            clinicId: clinicId!,
+            branchId: branchId!,
+            isActive: true,
+            createdBy: currentUser?.uid || "",
+          });
+        }),
+      );
 
       const [cats, params2, units2] = await Promise.all([
         pathologyService.getCategoriesByClinic(clinicId!, branchId!),
         pathologyService.getParametersByClinic(clinicId!, branchId!),
         pathologyService.getUnitsByClinic(clinicId!, branchId!),
       ]);
+
       setCategories(cats);
       setParameters(params2);
       setUnits(units2);
 
-      addToast({ title: "Sugar Test seeded", description: "Category and 4 parameters created successfully.", color: "success" });
+      addToast({
+        title: "Sugar Test seeded",
+        description: "Category and 4 parameters created successfully.",
+        color: "success",
+      });
     } catch (e) {
       console.error(e);
-      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+      addToast({
+        title: "Seed failed",
+        description: String(e),
+        color: "danger",
+      });
     } finally {
       setSeeding(false);
     }
@@ -2563,7 +2777,11 @@ export default function PathologyPage() {
     if (!clinicId || !branchId) return;
     setSeeding(true);
     try {
-      let categoryId = categories.find(c => c.name.toLowerCase().includes("cbc") || c.name.toLowerCase().includes("complete blood count"))?.id;
+      let categoryId = categories.find(
+        (c) =>
+          c.name.toLowerCase().includes("cbc") ||
+          c.name.toLowerCase().includes("complete blood count"),
+      )?.id;
 
       if (!categoryId) {
         categoryId = await pathologyService.createCategory({
@@ -2580,7 +2798,8 @@ export default function PathologyPage() {
       const unitMap: Record<string, string> = {};
 
       for (const uName of requiredUnits) {
-        let u = units.find(unit => unit.name === uName);
+        let u = units.find((unit) => unit.name === uName);
+
         if (u) {
           unitMap[uName] = u.id;
         } else {
@@ -2591,6 +2810,7 @@ export default function PathologyPage() {
             isActive: true,
             createdBy: currentUser?.uid || "",
           });
+
           unitMap[uName] = id;
         }
       }
@@ -2726,25 +2946,39 @@ export default function PathologyPage() {
         },
       ];
 
-      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+      const existingParams = parameters.filter(
+        (p) => p.categoryId === categoryId,
+      );
 
-      await Promise.all(params.map(p => {
-        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
-        if (alreadyExists) return Promise.resolve();
+      await Promise.all(
+        params.map((p) => {
+          const alreadyExists = existingParams.some(
+            (ep) => ep.name.toLowerCase() === p.name.toLowerCase(),
+          );
 
-        return pathologyService.createParameter({
-          ...p,
-          categoryId: categoryId!,
-          clinicId: clinicId!,
-          branchId: branchId!,
-          isActive: true,
-          createdBy: currentUser?.uid || "",
-        });
-      }));
+          if (alreadyExists) return Promise.resolve();
+
+          return pathologyService.createParameter({
+            ...p,
+            categoryId: categoryId!,
+            clinicId: clinicId!,
+            branchId: branchId!,
+            isActive: true,
+            createdBy: currentUser?.uid || "",
+          });
+        }),
+      );
 
       // Create Test Price configuration for CBC
-      const existingTestTypes = await pathologyService.getTestTypesByClinic(clinicId!, branchId!);
-      const testTypeExists = existingTestTypes.some(tt => tt.name.toLowerCase().includes("cbc") || tt.name.toLowerCase().includes("complete blood count"));
+      const existingTestTypes = await pathologyService.getTestTypesByClinic(
+        clinicId!,
+        branchId!,
+      );
+      const testTypeExists = existingTestTypes.some(
+        (tt) =>
+          tt.name.toLowerCase().includes("cbc") ||
+          tt.name.toLowerCase().includes("complete blood count"),
+      );
 
       if (!testTypeExists) {
         await pathologyService.createTestType({
@@ -2765,15 +2999,25 @@ export default function PathologyPage() {
         pathologyService.getUnitsByClinic(clinicId!, branchId!),
         pathologyService.getTestTypesByClinic(clinicId!, branchId!),
       ]);
+
       setCategories(cats);
       setParameters(params2);
       setUnits(units2);
       setTestTypes(tt2);
 
-      addToast({ title: "CBC Test seeded", description: "Category, parameters, units and price configuration created successfully.", color: "success" });
+      addToast({
+        title: "CBC Test seeded",
+        description:
+          "Category, parameters, units and price configuration created successfully.",
+        color: "success",
+      });
     } catch (e) {
       console.error(e);
-      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+      addToast({
+        title: "Seed failed",
+        description: String(e),
+        color: "danger",
+      });
     } finally {
       setSeeding(false);
     }
@@ -2783,7 +3027,9 @@ export default function PathologyPage() {
     if (!clinicId || !branchId) return;
     setSeeding(true);
     try {
-      let categoryId = categories.find(c => c.name.toLowerCase() === "lipid profile")?.id;
+      let categoryId = categories.find(
+        (c) => c.name.toLowerCase() === "lipid profile",
+      )?.id;
 
       if (!categoryId) {
         categoryId = await pathologyService.createCategory({
@@ -2798,7 +3044,8 @@ export default function PathologyPage() {
       const params = [
         {
           name: "Triglycerides",
-          referenceRange: "Normal: <150, Borderline high: 150-199, High: 200-499, Very high: >= 500",
+          referenceRange:
+            "Normal: <150, Borderline high: 150-199, High: 200-499, Very high: >= 500",
           resultType: "numeric" as const,
           unit: "mg/dl",
           minValue: 0,
@@ -2808,7 +3055,8 @@ export default function PathologyPage() {
         },
         {
           name: "Total Cholesterol",
-          referenceRange: "Desirable: <200, Borderline High: 200-239, High: >240",
+          referenceRange:
+            "Desirable: <200, Borderline High: 200-239, High: >240",
           resultType: "numeric" as const,
           unit: "mg/dl",
           minValue: 0,
@@ -2828,7 +3076,8 @@ export default function PathologyPage() {
         },
         {
           name: "LDL Cholesterol (Direct)",
-          referenceRange: "Optimal: <100, Near optimal: 100-129, Borderline high: 130-159, High: 160-189, Very high: >190",
+          referenceRange:
+            "Optimal: <100, Near optimal: 100-129, Borderline high: 130-159, High: 160-189, Very high: >190",
           resultType: "numeric" as const,
           unit: "mg/dl",
           minValue: 0,
@@ -2839,8 +3088,9 @@ export default function PathologyPage() {
       ];
 
       // Units
-      let mgDlUnit = units.find(u => u.name.toLowerCase() === "mg/dl");
+      let mgDlUnit = units.find((u) => u.name.toLowerCase() === "mg/dl");
       let mgDlUnitId = mgDlUnit?.id;
+
       if (!mgDlUnitId) {
         mgDlUnitId = await pathologyService.createUnit({
           name: "mg/dl",
@@ -2851,42 +3101,58 @@ export default function PathologyPage() {
         });
       }
 
-      const existingParams = parameters.filter(p => p.categoryId === categoryId);
+      const existingParams = parameters.filter(
+        (p) => p.categoryId === categoryId,
+      );
 
-      await Promise.all(params.map(p => {
-        const alreadyExists = existingParams.some(ep => ep.name.toLowerCase() === p.name.toLowerCase());
-        if (alreadyExists) return Promise.resolve();
+      await Promise.all(
+        params.map((p) => {
+          const alreadyExists = existingParams.some(
+            (ep) => ep.name.toLowerCase() === p.name.toLowerCase(),
+          );
 
-        return pathologyService.createParameter({
-          name: p.name,
-          categoryId: categoryId!,
-          referenceRange: p.referenceRange,
-          resultType: p.resultType,
-          unit: mgDlUnitId!,
-          minValue: p.minValue,
-          maxValue: p.maxValue,
-          criticalLow: p.criticalLow,
-          criticalHigh: p.criticalHigh,
-          clinicId: clinicId!,
-          branchId: branchId!,
-          isActive: true,
-          createdBy: currentUser?.uid || "",
-        });
-      }));
+          if (alreadyExists) return Promise.resolve();
+
+          return pathologyService.createParameter({
+            name: p.name,
+            categoryId: categoryId!,
+            referenceRange: p.referenceRange,
+            resultType: p.resultType,
+            unit: mgDlUnitId!,
+            minValue: p.minValue,
+            maxValue: p.maxValue,
+            criticalLow: p.criticalLow,
+            criticalHigh: p.criticalHigh,
+            clinicId: clinicId!,
+            branchId: branchId!,
+            isActive: true,
+            createdBy: currentUser?.uid || "",
+          });
+        }),
+      );
 
       const [cats, params2, units2] = await Promise.all([
         pathologyService.getCategoriesByClinic(clinicId!, branchId!),
         pathologyService.getParametersByClinic(clinicId!, branchId!),
         pathologyService.getUnitsByClinic(clinicId!, branchId!),
       ]);
+
       setCategories(cats);
       setParameters(params2);
       setUnits(units2);
 
-      addToast({ title: "Lipid Profile seeded", description: "Category and 4 parameters created successfully.", color: "success" });
+      addToast({
+        title: "Lipid Profile seeded",
+        description: "Category and 4 parameters created successfully.",
+        color: "success",
+      });
     } catch (e) {
       console.error(e);
-      addToast({ title: "Seed failed", description: String(e), color: "danger" });
+      addToast({
+        title: "Seed failed",
+        description: String(e),
+        color: "danger",
+      });
     } finally {
       setSeeding(false);
     }
@@ -2898,7 +3164,9 @@ export default function PathologyPage() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className={`${title({ size: "lg" })} text-primary`}>Pathology</h1>
+            <h1 className={`${title({ size: "lg" })} text-primary`}>
+              Pathology
+            </h1>
             <p className="text-text-muted mt-2 text-[13.5px]">
               Manage pathology tests, categories, units, and parameters
             </p>
@@ -2953,10 +3221,11 @@ export default function PathologyPage() {
               {TAB_KEYS.map((key) => (
                 <button
                   key={key}
-                  className={`px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeTab === key
-                    ? "border-primary text-primary"
-                    : "border-transparent text-text-muted hover:text-text-main hover:border-border-base"
-                    }`}
+                  className={`px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                    activeTab === key
+                      ? "border-primary text-primary"
+                      : "border-transparent text-text-muted hover:text-text-main hover:border-border-base"
+                  }`}
                   type="button"
                   onClick={() => setActiveTab(key)}
                 >
@@ -2998,10 +3267,14 @@ export default function PathologyPage() {
                   setParameterForm((prev) => ({ ...prev, categoryId: cat.id }));
                   parameterModalState.open();
                 }}
-                onDelete={(cat) => openDeleteModal("category", cat.id, cat.name)}
+                onDelete={(cat) =>
+                  openDeleteModal("category", cat.id, cat.name)
+                }
+                onDeleteParameter={(p) =>
+                  openDeleteModal("parameter", p.id, p.name)
+                }
                 onEdit={editCategory}
                 onEditParameter={editParameter}
-                onDeleteParameter={(p) => openDeleteModal("parameter", p.id, p.name)}
                 onSearchChange={setCategoriesSearchQuery}
               />
             )}
@@ -3095,18 +3368,19 @@ export default function PathologyPage() {
         </div>
 
         {/* Test Form Modal - custom overlay */}
-        {
-          testModalState.isOpen &&
+        {testModalState.isOpen &&
           createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center">
               <div
                 className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
                 onClick={testModalState.close}
-              ></div>
+              />
               <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col shadow-2xl">
                 <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2 flex items-center justify-between shrink-0">
                   <h2 className="text-[14px] font-semibold text-text-main">
-                    {isEditing ? "Edit Pathology Test" : "Create Pathology Tests"}
+                    {isEditing
+                      ? "Edit Pathology Test"
+                      : "Create Pathology Tests"}
                   </h2>
                   <button
                     className="text-text-muted hover:text-text-main"
@@ -3200,7 +3474,10 @@ export default function PathologyPage() {
                             placeholder="Walk-In Name"
                             value={testForm.patientName}
                             onValueChange={(v) =>
-                              setTestForm((prev) => ({ ...prev, patientName: v }))
+                              setTestForm((prev) => ({
+                                ...prev,
+                                patientName: v,
+                              }))
                             }
                           />
                           <Input
@@ -3208,7 +3485,10 @@ export default function PathologyPage() {
                             placeholder="Phone Number"
                             value={testForm.walkInPhone}
                             onValueChange={(v) =>
-                              setTestForm((prev) => ({ ...prev, walkInPhone: v }))
+                              setTestForm((prev) => ({
+                                ...prev,
+                                walkInPhone: v,
+                              }))
                             }
                           />
                         </>
@@ -3334,11 +3614,27 @@ export default function PathologyPage() {
                             // Auto-load parameters when category is selected
                             parameters: catParams.map((p) => {
                               const isMale = testForm.patientGender === "male";
-                              const isFemale = testForm.patientGender === "female";
+                              const isFemale =
+                                testForm.patientGender === "female";
 
-                              const refRange = (isMale && p.referenceRangeMale) ? p.referenceRangeMale : (isFemale && p.referenceRangeFemale) ? p.referenceRangeFemale : p.referenceRange;
-                              const minVal = (isMale && p.minValueMale !== undefined) ? p.minValueMale : (isFemale && p.minValueFemale !== undefined) ? p.minValueFemale : p.minValue;
-                              const maxVal = (isMale && p.maxValueMale !== undefined) ? p.maxValueMale : (isFemale && p.maxValueFemale !== undefined) ? p.maxValueFemale : p.maxValue;
+                              const refRange =
+                                isMale && p.referenceRangeMale
+                                  ? p.referenceRangeMale
+                                  : isFemale && p.referenceRangeFemale
+                                    ? p.referenceRangeFemale
+                                    : p.referenceRange;
+                              const minVal =
+                                isMale && p.minValueMale !== undefined
+                                  ? p.minValueMale
+                                  : isFemale && p.minValueFemale !== undefined
+                                    ? p.minValueFemale
+                                    : p.minValue;
+                              const maxVal =
+                                isMale && p.maxValueMale !== undefined
+                                  ? p.maxValueMale
+                                  : isFemale && p.maxValueFemale !== undefined
+                                    ? p.maxValueFemale
+                                    : p.maxValue;
 
                               return {
                                 parameterId: p.id,
@@ -3422,7 +3718,10 @@ export default function PathologyPage() {
                         type="number"
                         value={testForm.standardCharge}
                         onValueChange={(v) =>
-                          setTestForm((prev) => ({ ...prev, standardCharge: v }))
+                          setTestForm((prev) => ({
+                            ...prev,
+                            standardCharge: v,
+                          }))
                         }
                       />
 
@@ -3450,7 +3749,7 @@ export default function PathologyPage() {
                     <div className="mt-8 border-t border-border-base/30 pt-6">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-bold text-text-main flex items-center gap-2">
-                          <div className="w-1.5 h-6 bg-primary rounded-full"></div>
+                          <div className="w-1.5 h-6 bg-primary rounded-full" />
                           Parameter Fields
                         </h3>
                         <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-1 rounded uppercase tracking-wider">
@@ -3461,23 +3760,43 @@ export default function PathologyPage() {
                       <div className="space-y-4">
                         {testForm.parameters.map((param, index) => {
                           // Show a heading if this is the first parameter of a category
-                          const prevParam = index > 0 ? testForm.parameters[index - 1] : null;
-                          const showHeading = index === 0 || prevParam?.categoryId !== param.categoryId;
+                          const prevParam =
+                            index > 0 ? testForm.parameters[index - 1] : null;
+                          const showHeading =
+                            index === 0 ||
+                            prevParam?.categoryId !== param.categoryId;
 
-                          const category = categories.find(c => c.id === param.categoryId);
-                          const categoryName = category?.name || param.categoryId || "General Parameters";
+                          const category = categories.find(
+                            (c) => c.id === param.categoryId,
+                          );
+                          const categoryName =
+                            category?.name ||
+                            param.categoryId ||
+                            "General Parameters";
 
-                          const flag = getResultFlag(param, param.patientResult);
+                          const flag = getResultFlag(
+                            param,
+                            param.patientResult,
+                          );
                           const isAbnormal = flag && flag.label !== "NORMAL";
-                          const rowBg = flag?.color === 'danger' ? 'bg-danger-50/40' : flag?.color === 'warning' ? 'bg-warning-50/40' : 'bg-surface';
-                          const rowBorder = isAbnormal ? (flag?.color === 'danger' ? 'border-danger-200' : 'border-warning-200') : 'border-border-base/50';
+                          const rowBg =
+                            flag?.color === "danger"
+                              ? "bg-danger-50/40"
+                              : flag?.color === "warning"
+                                ? "bg-warning-50/40"
+                                : "bg-surface";
+                          const rowBorder = isAbnormal
+                            ? flag?.color === "danger"
+                              ? "border-danger-200"
+                              : "border-warning-200"
+                            : "border-border-base/50";
 
                           return (
                             <div key={index} className="space-y-3">
                               {showHeading && (
                                 <div className="bg-surface-2 px-3 py-2 rounded-lg border border-border-base/50 flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-primary/40"></div>
+                                    <div className="w-2 h-2 rounded-full bg-primary/40" />
                                     <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider">
                                       {categoryName}
                                     </h4>
@@ -3487,7 +3806,9 @@ export default function PathologyPage() {
                                   </span>
                                 </div>
                               )}
-                              <div className={`grid grid-cols-12 gap-3 p-3 ${rowBg} border ${rowBorder} rounded-xl transition-all hover:border-primary/30 group`}>
+                              <div
+                                className={`grid grid-cols-12 gap-3 p-3 ${rowBg} border ${rowBorder} rounded-xl transition-all hover:border-primary/30 group`}
+                              >
                                 <div className="col-span-2">
                                   <PathologySearchSelect
                                     items={categories.map((c) => ({
@@ -3498,8 +3819,16 @@ export default function PathologyPage() {
                                     placeholder="Select category"
                                     value={param.categoryId}
                                     onChange={(id) => {
-                                      updateTestParameter(index, "categoryId", id);
-                                      updateTestParameter(index, "parameterId", "");
+                                      updateTestParameter(
+                                        index,
+                                        "categoryId",
+                                        id,
+                                      );
+                                      updateTestParameter(
+                                        index,
+                                        "parameterId",
+                                        "",
+                                      );
                                     }}
                                   />
                                 </div>
@@ -3507,7 +3836,11 @@ export default function PathologyPage() {
                                   <PathologySearchSelect
                                     required
                                     items={parameters
-                                      .filter((p) => !param.categoryId || p.categoryId === param.categoryId)
+                                      .filter(
+                                        (p) =>
+                                          !param.categoryId ||
+                                          p.categoryId === param.categoryId,
+                                      )
                                       .map((p) => ({
                                         id: p.id,
                                         primary: p.name,
@@ -3517,23 +3850,50 @@ export default function PathologyPage() {
                                     placeholder="Select parameter"
                                     value={param.parameterId}
                                     onChange={(id, primary) => {
-                                      const p = parameters.find((p) => p.id === id);
-                                      if (p) {
-                                        const isMale = testForm.patientGender === "male";
-                                        const isFemale = testForm.patientGender === "female";
+                                      const p = parameters.find(
+                                        (p) => p.id === id,
+                                      );
 
-                                        const refRange = (isMale && p.referenceRangeMale) ? p.referenceRangeMale : (isFemale && p.referenceRangeFemale) ? p.referenceRangeFemale : p.referenceRange;
-                                        const minVal = (isMale && p.minValueMale !== undefined) ? p.minValueMale : (isFemale && p.minValueFemale !== undefined) ? p.minValueFemale : p.minValue;
-                                        const maxVal = (isMale && p.maxValueMale !== undefined) ? p.maxValueMale : (isFemale && p.maxValueFemale !== undefined) ? p.maxValueFemale : p.maxValue;
+                                      if (p) {
+                                        const isMale =
+                                          testForm.patientGender === "male";
+                                        const isFemale =
+                                          testForm.patientGender === "female";
+
+                                        const refRange =
+                                          isMale && p.referenceRangeMale
+                                            ? p.referenceRangeMale
+                                            : isFemale && p.referenceRangeFemale
+                                              ? p.referenceRangeFemale
+                                              : p.referenceRange;
+                                        const minVal =
+                                          isMale && p.minValueMale !== undefined
+                                            ? p.minValueMale
+                                            : isFemale &&
+                                                p.minValueFemale !== undefined
+                                              ? p.minValueFemale
+                                              : p.minValue;
+                                        const maxVal =
+                                          isMale && p.maxValueMale !== undefined
+                                            ? p.maxValueMale
+                                            : isFemale &&
+                                                p.maxValueFemale !== undefined
+                                              ? p.maxValueFemale
+                                              : p.maxValue;
 
                                         setTestForm((prev) => {
                                           const updated = [...prev.parameters];
+
                                           updated[index] = {
                                             ...updated[index],
                                             parameterId: id,
                                             parameterName: primary,
                                             referenceRange: refRange,
-                                            unit: units.find((u) => u.id === p.unit)?.name || p.unit || "",
+                                            unit:
+                                              units.find((u) => u.id === p.unit)
+                                                ?.name ||
+                                              p.unit ||
+                                              "",
                                             resultType: p.resultType,
                                             options: p.options,
                                             minValue: minVal,
@@ -3541,7 +3901,11 @@ export default function PathologyPage() {
                                             criticalLow: p.criticalLow,
                                             criticalHigh: p.criticalHigh,
                                           };
-                                          return { ...prev, parameters: updated };
+
+                                          return {
+                                            ...prev,
+                                            parameters: updated,
+                                          };
                                         });
                                       }
                                     }}
@@ -3556,11 +3920,20 @@ export default function PathologyPage() {
                                       <select
                                         className="h-9 border border-border-base rounded px-2 text-[13.5px] bg-surface focus:ring-2 focus:ring-primary/20 focus:border-primary"
                                         value={param.patientResult}
-                                        onChange={(e) => updateTestParameter(index, "patientResult", e.target.value)}
+                                        onChange={(e) =>
+                                          updateTestParameter(
+                                            index,
+                                            "patientResult",
+                                            e.target.value,
+                                          )
+                                        }
                                       >
                                         <option value="">Select</option>
                                         {param.options?.map((opt) => (
-                                          <option key={opt.trim()} value={opt.trim()}>
+                                          <option
+                                            key={opt.trim()}
+                                            value={opt.trim()}
+                                          >
                                             {opt.trim()}
                                           </option>
                                         ))}
@@ -3574,23 +3947,39 @@ export default function PathologyPage() {
                                       <select
                                         className="h-9 border border-border-base rounded px-2 text-[13.5px] bg-surface focus:ring-2 focus:ring-primary/20 focus:border-primary"
                                         value={param.patientResult}
-                                        onChange={(e) => updateTestParameter(index, "patientResult", e.target.value)}
+                                        onChange={(e) =>
+                                          updateTestParameter(
+                                            index,
+                                            "patientResult",
+                                            e.target.value,
+                                          )
+                                        }
                                       >
                                         <option value="">Select</option>
-                                        <option value="Positive">Positive</option>
-                                        <option value="Negative">Negative</option>
-                                        <option value="Reactive">Reactive</option>
-                                        <option value="Non-Reactive">Non-Reactive</option>
+                                        <option value="Positive">
+                                          Positive
+                                        </option>
+                                        <option value="Negative">
+                                          Negative
+                                        </option>
+                                        <option value="Reactive">
+                                          Reactive
+                                        </option>
+                                        <option value="Non-Reactive">
+                                          Non-Reactive
+                                        </option>
                                       </select>
                                     </div>
                                   ) : (
                                     <div className="flex flex-col gap-1.5">
-                                      <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Result *</label>
+                                      <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                                        Result *
+                                      </label>
                                       <input
                                         className="w-full h-9 border border-border-base rounded px-3 text-[14px] font-bold text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all text-center"
+                                        data-index={index}
                                         placeholder="Enter Result"
                                         value={param.patientResult}
-                                        data-index={index}
                                         onChange={(e) =>
                                           updateTestParameter(
                                             index,
@@ -3601,7 +3990,11 @@ export default function PathologyPage() {
                                         onKeyDown={(e) => {
                                           if (e.key === "Enter") {
                                             e.preventDefault();
-                                            const nextInput = document.querySelector(`input[data-index="${index + 1}"]`) as HTMLInputElement;
+                                            const nextInput =
+                                              document.querySelector(
+                                                `input[data-index="${index + 1}"]`,
+                                              ) as HTMLInputElement;
+
                                             if (nextInput) {
                                               nextInput.focus();
                                               nextInput.select();
@@ -3616,31 +4009,49 @@ export default function PathologyPage() {
                                   <Input
                                     label="Ref. Range"
                                     value={param.referenceRange}
-                                    onValueChange={(v) => updateTestParameter(index, "referenceRange", v)}
+                                    onValueChange={(v) =>
+                                      updateTestParameter(
+                                        index,
+                                        "referenceRange",
+                                        v,
+                                      )
+                                    }
                                   />
                                 </div>
                                 <div className="col-span-2">
                                   <Input
                                     label="Unit"
                                     value={param.unit}
-                                    onValueChange={(v) => updateTestParameter(index, "unit", v)}
+                                    onValueChange={(v) =>
+                                      updateTestParameter(index, "unit", v)
+                                    }
                                   />
                                 </div>
                                 <div className="col-span-1 flex items-center justify-center">
-                                  {param.resultType === "numeric" && param.patientResult && (
+                                  {param.resultType === "numeric" &&
+                                    param.patientResult &&
                                     (() => {
-                                      const flag = getResultFlag(param, param.patientResult);
+                                      const flag = getResultFlag(
+                                        param,
+                                        param.patientResult,
+                                      );
+
                                       if (!flag) return null;
+
                                       return (
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${flag.color === 'danger' ? 'bg-danger-50 text-danger-700 border-danger-200' :
-                                          flag.color === 'warning' ? 'bg-warning-50 text-warning-700 border-warning-200' :
-                                            'bg-success-50 text-success-700 border-success-200'
-                                          }`}>
+                                        <span
+                                          className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
+                                            flag.color === "danger"
+                                              ? "bg-danger-50 text-danger-700 border-danger-200"
+                                              : flag.color === "warning"
+                                                ? "bg-warning-50 text-warning-700 border-warning-200"
+                                                : "bg-success-50 text-success-700 border-success-200"
+                                          }`}
+                                        >
                                           {flag.icon} {flag.label}
                                         </span>
                                       );
-                                    })()
-                                  )}
+                                    })()}
                                 </div>
                                 <div className="col-span-1 flex items-center justify-end">
                                   <Button
@@ -3668,7 +4079,9 @@ export default function PathologyPage() {
                           variant="flat"
                           onClick={addTestParameter}
                         >
-                          <span className="font-bold text-primary">Add Another Parameter</span>
+                          <span className="font-bold text-primary">
+                            Add Another Parameter
+                          </span>
                         </Button>
                       </div>
                     </div>
@@ -3693,16 +4106,15 @@ export default function PathologyPage() {
               </div>
             </div>,
             document.body,
-          )
-        }
+          )}
 
-        {
-          categoryModalState.isOpen && createPortal(
+        {categoryModalState.isOpen &&
+          createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
               <div
                 className="absolute inset-0 bg-mountain-900/60 backdrop-blur-md"
                 onClick={categoryModalState.close}
-              ></div>
+              />
               <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-6xl mx-4 max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
                 <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2 flex items-center justify-between shrink-0">
                   <h2 className="text-[14px] font-bold text-text-main">
@@ -3781,16 +4193,26 @@ export default function PathologyPage() {
                                     placeholder="e.g. Hemoglobin"
                                     size="sm"
                                     value={param.name}
-                                    onValueChange={(v) => updateCategoryParameter(index, "name", v)}
+                                    onValueChange={(v) =>
+                                      updateCategoryParameter(index, "name", v)
+                                    }
                                   />
                                 </div>
 
                                 <div className="space-y-1">
-                                  <label className="text-[11px] font-bold text-text-muted uppercase">Type</label>
+                                  <label className="text-[11px] font-bold text-text-muted uppercase">
+                                    Type
+                                  </label>
                                   <select
                                     className="w-full h-8 border border-border-base rounded px-2 text-[12px] bg-surface focus:outline-none focus:border-primary"
                                     value={param.resultType}
-                                    onChange={(e) => updateCategoryParameter(index, "resultType", e.target.value)}
+                                    onChange={(e) =>
+                                      updateCategoryParameter(
+                                        index,
+                                        "resultType",
+                                        e.target.value,
+                                      )
+                                    }
                                   >
                                     <option value="numeric">Numeric</option>
                                     <option value="boolean">Pos/Neg</option>
@@ -3802,11 +4224,15 @@ export default function PathologyPage() {
 
                                 <div className="space-y-1">
                                   <div className="flex justify-between items-center">
-                                    <label className="text-[11px] font-bold text-text-muted uppercase">Unit</label>
+                                    <label className="text-[11px] font-bold text-text-muted uppercase">
+                                      Unit
+                                    </label>
                                     <button
                                       className="text-[10px] text-primary hover:underline font-bold"
                                       type="button"
-                                      onClick={() => setShowQuickUnit(!showQuickUnit)}
+                                      onClick={() =>
+                                        setShowQuickUnit(!showQuickUnit)
+                                      }
                                     >
                                       + NEW
                                     </button>
@@ -3819,12 +4245,19 @@ export default function PathologyPage() {
                                         className="flex-1 h-8 border border-border-base rounded px-2 text-[12px] bg-surface focus:outline-none focus:border-primary"
                                         placeholder="Unit"
                                         value={quickUnitName}
-                                        onChange={(e) => setQuickUnitName(e.target.value)}
+                                        onChange={(e) =>
+                                          setQuickUnitName(e.target.value)
+                                        }
                                         onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
+                                          if (e.key === "Enter") {
                                             e.preventDefault();
                                             handleQuickUnitSave().then((id) => {
-                                              if (id) updateCategoryParameter(index, "unit", id);
+                                              if (id)
+                                                updateCategoryParameter(
+                                                  index,
+                                                  "unit",
+                                                  id,
+                                                );
                                             });
                                           }
                                         }}
@@ -3834,10 +4267,20 @@ export default function PathologyPage() {
                                     <select
                                       className="w-full h-8 border border-border-base rounded px-2 text-[12px] bg-surface focus:outline-none focus:border-primary"
                                       value={param.unit}
-                                      onChange={(e) => updateCategoryParameter(index, "unit", e.target.value)}
+                                      onChange={(e) =>
+                                        updateCategoryParameter(
+                                          index,
+                                          "unit",
+                                          e.target.value,
+                                        )
+                                      }
                                     >
                                       <option value="">No Unit</option>
-                                      {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                      {units.map((u) => (
+                                        <option key={u.id} value={u.id}>
+                                          {u.name}
+                                        </option>
+                                      ))}
                                     </select>
                                   )}
                                 </div>
@@ -3849,11 +4292,17 @@ export default function PathologyPage() {
                                     placeholder="e.g. 13.5 - 17.5"
                                     size="sm"
                                     value={param.referenceRange}
-                                    onValueChange={(v) => updateCategoryParameter(index, "referenceRange", v)}
+                                    onValueChange={(v) =>
+                                      updateCategoryParameter(
+                                        index,
+                                        "referenceRange",
+                                        v,
+                                      )
+                                    }
                                   />
                                 </div>
 
-                                {param.resultType === 'numeric' && (
+                                {param.resultType === "numeric" && (
                                   <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-surface p-3 rounded-md border border-border-base/50">
                                     <Input
                                       label="Lower Range (Min)"
@@ -3861,7 +4310,13 @@ export default function PathologyPage() {
                                       size="sm"
                                       type="number"
                                       value={param.minValue}
-                                      onValueChange={(v) => updateCategoryParameter(index, "minValue", v)}
+                                      onValueChange={(v) =>
+                                        updateCategoryParameter(
+                                          index,
+                                          "minValue",
+                                          v,
+                                        )
+                                      }
                                     />
                                     <Input
                                       label="Upper Range (Max)"
@@ -3869,7 +4324,13 @@ export default function PathologyPage() {
                                       size="sm"
                                       type="number"
                                       value={param.maxValue}
-                                      onValueChange={(v) => updateCategoryParameter(index, "maxValue", v)}
+                                      onValueChange={(v) =>
+                                        updateCategoryParameter(
+                                          index,
+                                          "maxValue",
+                                          v,
+                                        )
+                                      }
                                     />
                                     <Input
                                       label="Critical Low"
@@ -3877,7 +4338,13 @@ export default function PathologyPage() {
                                       size="sm"
                                       type="number"
                                       value={param.criticalLow}
-                                      onValueChange={(v) => updateCategoryParameter(index, "criticalLow", v)}
+                                      onValueChange={(v) =>
+                                        updateCategoryParameter(
+                                          index,
+                                          "criticalLow",
+                                          v,
+                                        )
+                                      }
                                     />
                                     <Input
                                       label="Critical High"
@@ -3885,19 +4352,31 @@ export default function PathologyPage() {
                                       size="sm"
                                       type="number"
                                       value={param.criticalHigh}
-                                      onValueChange={(v) => updateCategoryParameter(index, "criticalHigh", v)}
+                                      onValueChange={(v) =>
+                                        updateCategoryParameter(
+                                          index,
+                                          "criticalHigh",
+                                          v,
+                                        )
+                                      }
                                     />
                                   </div>
                                 )}
 
-                                {param.resultType === 'select' && (
+                                {param.resultType === "select" && (
                                   <div className="col-span-2">
                                     <Input
                                       label="Dropdown Options (comma separated)"
                                       placeholder="Nil, Trace, 1+, 2+"
                                       size="sm"
                                       value={param.options}
-                                      onValueChange={(v) => updateCategoryParameter(index, "options", v)}
+                                      onValueChange={(v) =>
+                                        updateCategoryParameter(
+                                          index,
+                                          "options",
+                                          v,
+                                        )
+                                      }
                                     />
                                   </div>
                                 )}
@@ -3908,7 +4387,9 @@ export default function PathologyPage() {
 
                         {categoryForm.parameters.length === 0 && (
                           <div className="py-8 border-2 border-dashed border-border-base rounded-lg flex flex-col items-center justify-center text-text-muted">
-                            <p className="text-[13px]">No parameters added yet</p>
+                            <p className="text-[13px]">
+                              No parameters added yet
+                            </p>
                             <button
                               className="text-[12px] text-primary font-bold mt-1 hover:underline"
                               onClick={addCategoryParameter}
@@ -3926,23 +4407,24 @@ export default function PathologyPage() {
                     Cancel
                   </Button>
                   <Button color="primary" onClick={handleSaveCategory}>
-                    {isEditing ? "Update Category" : "Save Category & Parameters"}
+                    {isEditing
+                      ? "Update Category"
+                      : "Save Category & Parameters"}
                   </Button>
                 </div>
               </div>
             </div>,
-            document.body
-          )
-        }
+            document.body,
+          )}
 
         {/* Unit Form Modal */}
-        {
-          unitModalState.isOpen && createPortal(
+        {unitModalState.isOpen &&
+          createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center">
               <div
                 className="absolute inset-0 bg-mountain-900/60 backdrop-blur-md"
                 onClick={unitModalState.close}
-              ></div>
+              />
               <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
                 <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
                   <h2 className="text-[14px] font-semibold text-text-main">
@@ -3970,17 +4452,16 @@ export default function PathologyPage() {
                 </div>
               </div>
             </div>,
-            document.body
-          )
-        }
+            document.body,
+          )}
 
-        {
-          parameterModalState.isOpen && createPortal(
+        {parameterModalState.isOpen &&
+          createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
               <div
                 className="absolute inset-0 bg-mountain-900/60 backdrop-blur-md"
                 onClick={parameterModalState.close}
-              ></div>
+              />
               <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-xl shadow-2xl overflow-hidden flex flex-col">
                 <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2 flex items-center justify-between shrink-0">
                   <h2 className="text-[14px] font-bold text-text-main">
@@ -4074,7 +4555,10 @@ export default function PathologyPage() {
                           placeholder="Nil, Trace, 1+, 2+"
                           value={parameterForm.options}
                           onValueChange={(v) =>
-                            setParameterForm((prev) => ({ ...prev, options: v }))
+                            setParameterForm((prev) => ({
+                              ...prev,
+                              options: v,
+                            }))
                           }
                         />
                       </div>
@@ -4090,6 +4574,7 @@ export default function PathologyPage() {
                         const newForm = { ...parameterForm, referenceRange: v };
                         const regex = /([\d.]+)\s*(?:-|to)\s*([\d.]+)/i;
                         const match = v.match(regex);
+
                         if (match) {
                           newForm.minValue = match[1];
                           newForm.maxValue = match[2];
@@ -4103,11 +4588,11 @@ export default function PathologyPage() {
                           Unit
                         </label>
                         <button
+                          className={`text-[10px] font-bold uppercase transition-colors ${showQuickUnit ? "text-danger hover:text-danger-600" : "text-primary hover:text-primary-600"}`}
                           type="button"
-                          className={`text-[10px] font-bold uppercase transition-colors ${showQuickUnit ? 'text-danger hover:text-danger-600' : 'text-primary hover:text-primary-600'}`}
                           onClick={() => setShowQuickUnit(!showQuickUnit)}
                         >
-                          {showQuickUnit ? 'Cancel' : '+ Quick Add'}
+                          {showQuickUnit ? "Cancel" : "+ Quick Add"}
                         </button>
                       </div>
 
@@ -4120,7 +4605,7 @@ export default function PathologyPage() {
                             value={quickUnitName}
                             onChange={(e) => setQuickUnitName(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
+                              if (e.key === "Enter") {
                                 e.preventDefault();
                                 handleQuickUnitSave();
                               }
@@ -4165,7 +4650,10 @@ export default function PathologyPage() {
                           type="number"
                           value={parameterForm.minValue}
                           onValueChange={(v) =>
-                            setParameterForm((prev) => ({ ...prev, minValue: v }))
+                            setParameterForm((prev) => ({
+                              ...prev,
+                              minValue: v,
+                            }))
                           }
                         />
                         <Input
@@ -4174,7 +4662,10 @@ export default function PathologyPage() {
                           type="number"
                           value={parameterForm.maxValue}
                           onValueChange={(v) =>
-                            setParameterForm((prev) => ({ ...prev, maxValue: v }))
+                            setParameterForm((prev) => ({
+                              ...prev,
+                              maxValue: v,
+                            }))
                           }
                         />
 
@@ -4206,7 +4697,7 @@ export default function PathologyPage() {
                         {/* Gender Specific Sections - Toned down version */}
                         <div className="col-span-full mt-6 border-t border-border-base/50 pt-6">
                           <h3 className="text-[13px] font-bold text-text-main mb-6 flex items-center gap-2">
-                            <div className="w-1 h-4 bg-primary/40 rounded-full"></div>
+                            <div className="w-1 h-4 bg-primary/40 rounded-full" />
                             Gender Specific Standards
                           </h3>
 
@@ -4221,7 +4712,10 @@ export default function PathologyPage() {
                                 placeholder="e.g. 13.5 - 17.5"
                                 value={parameterForm.referenceRangeMale}
                                 onValueChange={(v) =>
-                                  setParameterForm((prev) => ({ ...prev, referenceRangeMale: v }))
+                                  setParameterForm((prev) => ({
+                                    ...prev,
+                                    referenceRangeMale: v,
+                                  }))
                                 }
                               />
                               <div className="grid grid-cols-2 gap-4">
@@ -4231,7 +4725,10 @@ export default function PathologyPage() {
                                   type="number"
                                   value={parameterForm.minValueMale}
                                   onValueChange={(v) =>
-                                    setParameterForm((prev) => ({ ...prev, minValueMale: v }))
+                                    setParameterForm((prev) => ({
+                                      ...prev,
+                                      minValueMale: v,
+                                    }))
                                   }
                                 />
                                 <Input
@@ -4240,7 +4737,10 @@ export default function PathologyPage() {
                                   type="number"
                                   value={parameterForm.maxValueMale}
                                   onValueChange={(v) =>
-                                    setParameterForm((prev) => ({ ...prev, maxValueMale: v }))
+                                    setParameterForm((prev) => ({
+                                      ...prev,
+                                      maxValueMale: v,
+                                    }))
                                   }
                                 />
                               </div>
@@ -4256,7 +4756,10 @@ export default function PathologyPage() {
                                 placeholder="e.g. 12.0 - 15.5"
                                 value={parameterForm.referenceRangeFemale}
                                 onValueChange={(v) =>
-                                  setParameterForm((prev) => ({ ...prev, referenceRangeFemale: v }))
+                                  setParameterForm((prev) => ({
+                                    ...prev,
+                                    referenceRangeFemale: v,
+                                  }))
                                 }
                               />
                               <div className="grid grid-cols-2 gap-4">
@@ -4266,7 +4769,10 @@ export default function PathologyPage() {
                                   type="number"
                                   value={parameterForm.minValueFemale}
                                   onValueChange={(v) =>
-                                    setParameterForm((prev) => ({ ...prev, minValueFemale: v }))
+                                    setParameterForm((prev) => ({
+                                      ...prev,
+                                      minValueFemale: v,
+                                    }))
                                   }
                                 />
                                 <Input
@@ -4275,14 +4781,19 @@ export default function PathologyPage() {
                                   type="number"
                                   value={parameterForm.maxValueFemale}
                                   onValueChange={(v) =>
-                                    setParameterForm((prev) => ({ ...prev, maxValueFemale: v }))
+                                    setParameterForm((prev) => ({
+                                      ...prev,
+                                      maxValueFemale: v,
+                                    }))
                                   }
                                 />
                               </div>
                             </div>
                           </div>
                           <p className="mt-6 text-[11px] text-text-muted italic border-l-2 border-border-base pl-3">
-                            Note: If these specific ranges are left blank, the system will default to the general reference range defined above.
+                            Note: If these specific ranges are left blank, the
+                            system will default to the general reference range
+                            defined above.
                           </p>
                         </div>
                       </>
@@ -4299,182 +4810,179 @@ export default function PathologyPage() {
                 </div>
               </div>
             </div>,
-            document.body
-          )
-        }
+            document.body,
+          )}
 
         {/* Test Type Form Modal */}
-        {
-          testTypeModalState.isOpen && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-              <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                onClick={testTypeModalState.close}
-              ></div>
-              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4 overflow-visible">
-                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
-                  <h2 className="text-[14px] font-semibold text-text-main">
-                    {isEditing
-                      ? "Edit Price Configuration"
-                      : "New Price Configuration"}
-                  </h2>
+        {testTypeModalState.isOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={testTypeModalState.close}
+            />
+            <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4 overflow-visible">
+              <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
+                <h2 className="text-[14px] font-semibold text-text-main">
+                  {isEditing
+                    ? "Edit Price Configuration"
+                    : "New Price Configuration"}
+                </h2>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-medium text-text-muted">
+                    Setting Price For *
+                  </label>
+                  <select
+                    className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                    value={testTypeForm.targetType}
+                    onChange={(e) =>
+                      setTestTypeForm((prev) => ({
+                        ...prev,
+                        targetType: e.target.value as "category" | "parameter",
+                        categoryId: "",
+                        parameterId: "",
+                      }))
+                    }
+                  >
+                    <option value="category">Full Category Package</option>
+                    <option value="parameter">
+                      Individual Sub-Category (Parameter)
+                    </option>
+                  </select>
                 </div>
-                <div className="p-5 space-y-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-medium text-text-muted">
-                      Setting Price For *
-                    </label>
-                    <select
-                      className="h-[32px] border border-border-base rounded px-3 text-[13.5px] text-text-main bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                      value={testTypeForm.targetType}
-                      onChange={(e) =>
-                        setTestTypeForm((prev) => ({
-                          ...prev,
-                          targetType: e.target.value as "category" | "parameter",
-                          categoryId: "",
-                          parameterId: "",
-                        }))
-                      }
-                    >
-                      <option value="category">Full Category Package</option>
-                      <option value="parameter">
-                        Individual Sub-Category (Parameter)
-                      </option>
-                    </select>
-                  </div>
 
-                  {testTypeForm.targetType === "category" ? (
-                    <div className="z-50 relative">
+                {testTypeForm.targetType === "category" ? (
+                  <div className="z-50 relative">
+                    <PathologySearchSelect
+                      required
+                      items={categories.map((c) => ({
+                        id: c.id,
+                        primary: c.name,
+                      }))}
+                      label="Category (e.g. CBC) *"
+                      placeholder="Search and select category"
+                      value={testTypeForm.categoryId}
+                      onChange={(id) =>
+                        setTestTypeForm((prev) => ({ ...prev, categoryId: id }))
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="z-40 relative">
                       <PathologySearchSelect
-                        required
                         items={categories.map((c) => ({
                           id: c.id,
                           primary: c.name,
                         }))}
-                        label="Category (e.g. CBC) *"
-                        placeholder="Search and select category"
+                        label="Category (Optional)"
+                        placeholder="Filter parameters by category"
                         value={testTypeForm.categoryId}
                         onChange={(id) =>
-                          setTestTypeForm((prev) => ({ ...prev, categoryId: id }))
+                          setTestTypeForm((prev) => ({
+                            ...prev,
+                            categoryId: id,
+                            parameterId: "",
+                          }))
                         }
                       />
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="z-40 relative">
-                        <PathologySearchSelect
-                          items={categories.map((c) => ({
-                            id: c.id,
-                            primary: c.name,
+                    <div className="z-50 relative">
+                      <PathologySearchSelect
+                        required
+                        items={parameters
+                          .filter(
+                            (p) =>
+                              !testTypeForm.categoryId ||
+                              p.categoryId === testTypeForm.categoryId,
+                          )
+                          .map((p) => ({
+                            id: p.id,
+                            primary: p.name,
+                            secondary: p.referenceRange
+                              ? `Range: ${p.referenceRange} `
+                              : undefined,
                           }))}
-                          label="Category (Optional)"
-                          placeholder="Filter parameters by category"
-                          value={testTypeForm.categoryId}
-                          onChange={(id) =>
-                            setTestTypeForm((prev) => ({
-                              ...prev,
-                              categoryId: id,
-                              parameterId: "",
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="z-50 relative">
-                        <PathologySearchSelect
-                          required
-                          items={parameters
-                            .filter(
-                              (p) =>
-                                !testTypeForm.categoryId ||
-                                p.categoryId === testTypeForm.categoryId,
-                            )
-                            .map((p) => ({
-                              id: p.id,
-                              primary: p.name,
-                              secondary: p.referenceRange
-                                ? `Range: ${p.referenceRange} `
-                                : undefined,
-                            }))}
-                          label="Sub Category (Parameter) *"
-                          placeholder="Search and select sub category"
-                          value={testTypeForm.parameterId}
-                          onChange={(id) =>
-                            setTestTypeForm((prev) => ({
-                              ...prev,
-                              parameterId: id,
-                            }))
-                          }
-                        />
-                      </div>
+                        label="Sub Category (Parameter) *"
+                        placeholder="Search and select sub category"
+                        value={testTypeForm.parameterId}
+                        onChange={(id) =>
+                          setTestTypeForm((prev) => ({
+                            ...prev,
+                            parameterId: id,
+                          }))
+                        }
+                      />
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  <Input
-                    isRequired
-                    label="Price (NPR) *"
-                    placeholder="0.00"
-                    type="number"
-                    value={testTypeForm.price}
-                    onValueChange={(v) =>
-                      setTestTypeForm((prev) => ({ ...prev, price: v }))
-                    }
-                  />
-                </div>
-                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
-                  <Button variant="light" onClick={testTypeModalState.close}>
-                    Cancel
-                  </Button>
-                  <Button color="primary" onClick={handleSaveTestType}>
-                    {isEditing ? "Update" : "Create"}
-                  </Button>
-                </div>
+                <Input
+                  isRequired
+                  label="Price (NPR) *"
+                  placeholder="0.00"
+                  type="number"
+                  value={testTypeForm.price}
+                  onValueChange={(v) =>
+                    setTestTypeForm((prev) => ({ ...prev, price: v }))
+                  }
+                />
+              </div>
+              <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
+                <Button variant="light" onClick={testTypeModalState.close}>
+                  Cancel
+                </Button>
+                <Button color="primary" onClick={handleSaveTestType}>
+                  {isEditing ? "Update" : "Create"}
+                </Button>
               </div>
             </div>
-          )
-        }
+          </div>
+        )}
 
         {/* Delete Confirmation Modal */}
-        {
-          deleteConfirmModalState.isOpen && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-              <div
-                className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
-                onClick={deleteConfirmModalState.close}
-              ></div>
-              <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
-                <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
-                  <h2 className="text-[14px] font-semibold text-text-main">
-                    Confirm Delete
-                  </h2>
-                </div>
-                <div className="p-5">
-                  <p className="text-[13.5px] text-text-main">
-                    Are you sure you want to delete{" "}
-                    <strong>{itemToDelete?.name}</strong>? This action cannot be
-                    undone.
-                  </p>
-                </div>
-                <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
-                  <Button variant="light" onClick={deleteConfirmModalState.close}>
-                    Cancel
-                  </Button>
-                  <Button className="bg-danger text-white hover:bg-danger/90" onClick={handleDelete}>
-                    Delete
-                  </Button>
-                </div>
+        {deleteConfirmModalState.isOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
+              onClick={deleteConfirmModalState.close}
+            />
+            <div className="relative z-10 bg-surface border border-border-base rounded-md w-full max-w-md mx-4">
+              <div className="px-5 py-3 border-b border-border-base/50 bg-surface-2">
+                <h2 className="text-[14px] font-semibold text-text-main">
+                  Confirm Delete
+                </h2>
+              </div>
+              <div className="p-5">
+                <p className="text-[13.5px] text-text-main">
+                  Are you sure you want to delete{" "}
+                  <strong>{itemToDelete?.name}</strong>? This action cannot be
+                  undone.
+                </p>
+              </div>
+              <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
+                <Button variant="light" onClick={deleteConfirmModalState.close}>
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-danger text-white hover:bg-danger/90"
+                  onClick={handleDelete}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
-          )
-        }
+          </div>
+        )}
         {/* Quick Patient Creation Modal */}
-        {
-          quickPatientModalState.isOpen &&
+        {quickPatientModalState.isOpen &&
           createPortal(
             <div className="fixed inset-0 z-[10000] flex items-center justify-center">
               <div
                 className="absolute inset-0 bg-mountain-900/40 backdrop-blur-sm"
                 onClick={quickPatientModalState.close}
-              ></div>
+              />
               <div className="relative z-10 bg-surface border border-border-base rounded-lg w-full max-w-lg mx-4 shadow-2xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-border-base/50 bg-surface-2 flex items-center justify-between">
                   <div>
@@ -4558,10 +5066,8 @@ export default function PathologyPage() {
               </div>
             </div>,
             document.body,
-          )
-        }
+          )}
       </div>
     </>
   );
 }
-

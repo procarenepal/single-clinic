@@ -1,16 +1,4 @@
 import React, { useState } from "react";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import {
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-} from "@/components/ui/modal";
-import { addToast } from "@/components/ui/toast";
 import { useNavigate } from "react-router-dom";
 import {
   IoStorefrontOutline,
@@ -27,6 +15,18 @@ import {
   IoKeyOutline,
 } from "react-icons/io5";
 
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
+import { addToast } from "@/components/ui/toast";
 import { title } from "@/components/primitives";
 import { useAuth } from "@/hooks/useAuth";
 import { branchService } from "@/services/branchService";
@@ -64,8 +64,7 @@ export default function NewBranchPage() {
   });
 
   const isSystemOwner =
-    userData?.role === "system-owner" ||
-    userData?.role === "clinic-admin";
+    userData?.role === "system-owner" || userData?.role === "clinic-admin";
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({
@@ -363,7 +362,9 @@ export default function NewBranchPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className={`${title({ size: "lg" })} text-primary`}>Create New Branch</h1>
+          <h1 className={`${title({ size: "lg" })} text-primary`}>
+            Create New Branch
+          </h1>
           <p className="text-text-muted mt-1">
             Add a new branch location to your clinic
           </p>
@@ -512,43 +513,43 @@ export default function NewBranchPage() {
                 {formData.operatingHours[
                   day as keyof typeof formData.operatingHours
                 ]?.isOpen && (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        className="w-32"
-                        size="sm"
-                        type="time"
-                        value={
-                          formData.operatingHours[
-                            day as keyof typeof formData.operatingHours
-                          ]?.open || "09:00"
-                        }
-                        variant="bordered"
-                        onChange={(e) =>
-                          handleOperatingHoursChange(day, "open", e.target.value)
-                        }
-                      />
-                      <span className="text-text-muted">to</span>
-                      <Input
-                        className="w-32"
-                        size="sm"
-                        type="time"
-                        value={
-                          formData.operatingHours[
-                            day as keyof typeof formData.operatingHours
-                          ]?.close || "17:00"
-                        }
-                        variant="bordered"
-                        onChange={(e) =>
-                          handleOperatingHoursChange(day, "close", e.target.value)
-                        }
-                      />
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="w-32"
+                      size="sm"
+                      type="time"
+                      value={
+                        formData.operatingHours[
+                          day as keyof typeof formData.operatingHours
+                        ]?.open || "09:00"
+                      }
+                      variant="bordered"
+                      onChange={(e) =>
+                        handleOperatingHoursChange(day, "open", e.target.value)
+                      }
+                    />
+                    <span className="text-text-muted">to</span>
+                    <Input
+                      className="w-32"
+                      size="sm"
+                      type="time"
+                      value={
+                        formData.operatingHours[
+                          day as keyof typeof formData.operatingHours
+                        ]?.close || "17:00"
+                      }
+                      variant="bordered"
+                      onChange={(e) =>
+                        handleOperatingHoursChange(day, "close", e.target.value)
+                      }
+                    />
+                  </div>
+                )}
                 {!formData.operatingHours[
                   day as keyof typeof formData.operatingHours
                 ]?.isOpen && (
-                    <span className="text-text-muted/50 text-sm">Closed</span>
-                  )}
+                  <span className="text-text-muted/50 text-sm">Closed</span>
+                )}
               </div>
             ))}
           </CardBody>
@@ -589,7 +590,9 @@ export default function NewBranchPage() {
                 isRequired
                 label="Admin Name"
                 placeholder="Enter branch admin name"
-                startContent={<IoPersonOutline className="text-text-muted/60" />}
+                startContent={
+                  <IoPersonOutline className="text-text-muted/60" />
+                }
                 value={formData.adminName}
                 variant="bordered"
                 onChange={(e) => handleInputChange("adminName", e.target.value)}

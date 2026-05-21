@@ -39,8 +39,7 @@ export default function NewBranchPage() {
   });
 
   const isSystemOwner =
-    userData?.role === "system-owner" ||
-    userData?.role === "clinic-admin";
+    userData?.role === "system-owner" || userData?.role === "clinic-admin";
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({

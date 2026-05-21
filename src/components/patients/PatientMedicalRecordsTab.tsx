@@ -171,9 +171,7 @@ export default function PatientMedicalRecordsTab({
     <div className="flex flex-col gap-4">
       {/* Header */}
       <div>
-        <h2 className="text-section-title text-text-main">
-          Medical Records
-        </h2>
+        <h2 className="text-section-title text-text-main">Medical Records</h2>
         <p className="text-[12.5px] text-text-muted">
           Documents and X-ray imaging records
         </p>

@@ -4,16 +4,28 @@ import { PrintLayoutConfig } from "@/types/printLayout";
  * Generates the CSS styles for the centralized clinical branding.
  * Uses the Slate-600 palette and centered-stack layout model.
  */
-export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolean = false) => {
+export const getPrintBrandingCSS = (
+  config: PrintLayoutConfig,
+  isThermal: boolean = false,
+) => {
   const primaryColor = config.primaryColor || "#0ea5e9";
   const fontSize = config.fontSize || "medium";
-  const headerHeight = config.headerHeight === "compact" ? 140 : config.headerHeight === "expanded" ? 220 : 180;
+  const headerHeight =
+    config.headerHeight === "compact"
+      ? 140
+      : config.headerHeight === "expanded"
+        ? 220
+        : 180;
 
-  const effectiveLogoPosition = isThermal ? "center" : (config.logoPosition || "center");
+  const effectiveLogoPosition = isThermal
+    ? "center"
+    : config.logoPosition || "center";
   const fontFamily = config.fontFamily || "'Inter', sans-serif";
   const titleColor = config.titleColor || "#1e293b";
   const textColor = config.textColor || "#475569";
-  const contentFontSize = config.contentFontSize || (fontSize === "small" ? 10 : fontSize === "large" ? 14 : 12);
+  const contentFontSize =
+    config.contentFontSize ||
+    (fontSize === "small" ? 10 : fontSize === "large" ? 14 : 12);
 
   return `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Nunito:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Roboto:wght@400;500;700&family=Outfit:wght@400;600;700&display=swap');
@@ -147,7 +159,7 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
       position: absolute;
       top: 20px;
       transform: ${isThermal ? "none" : `translate(${config.logoPos?.x || 0}px, ${config.logoPos?.y || 0}px)`};
-      left: ${effectiveLogoPosition === "left" ? "40px" : (effectiveLogoPosition === "right" ? "auto" : "50%")};
+      left: ${effectiveLogoPosition === "left" ? "40px" : effectiveLogoPosition === "right" ? "auto" : "50%"};
       right: ${effectiveLogoPosition === "right" ? "40px" : "auto"};
       margin-left: ${effectiveLogoPosition === "center" ? `-${(config.logoWidth || 80) / 2}px` : "0px"};
       z-index: 100;
@@ -179,58 +191,86 @@ export const getPrintBrandingCSS = (config: PrintLayoutConfig, isThermal: boolea
 /**
  * Generates the HTML for the clinical branding header.
  */
-export const getPrintHeaderHTML = (config: PrintLayoutConfig, clinic: any, isThermal: boolean = false) => {
+export const getPrintHeaderHTML = (
+  config: PrintLayoutConfig,
+  clinic: any,
+  isThermal: boolean = false,
+) => {
   const logoUrl = config.logoUrl || clinic?.logoUrl;
   const logoWidth = config.logoWidth || 80;
 
   return `
     <div class="header">
-      ${logoUrl ? `
+      ${
+        logoUrl
+          ? `
         <div class="pos-logo logo-container">
           <img src="${logoUrl}" style="width: ${logoWidth}px;" alt="Logo" />
         </div>
-      ` : ""}
+      `
+          : ""
+      }
 
       <div class="identity-stack">
         <h1 class="clinic-name pos-clinicName">${config.clinicName || clinic?.name || "Clinic Name"}</h1>
         
-        ${config.showTagline !== false ? `
+        ${
+          config.showTagline !== false
+            ? `
           <div class="pos-tagline">
             <p class="tagline">${config.tagline || clinic?.tagline || ""}</p>
           </div>
-        ` : ""}
+        `
+            : ""
+        }
 
-        ${config.showAddress !== false ? `
+        ${
+          config.showAddress !== false
+            ? `
           <div class="pos-address">
             <div class="address">${config.address || clinic?.address || ""}</div>
           </div>
-        ` : ""}
+        `
+            : ""
+        }
 
         <div class="pos-contacts">
           <div class="contact-row">
-            ${config.showPhone !== false ? `
+            ${
+              config.showPhone !== false
+                ? `
               <div class="contact-item">
                 <span class="contact-label" style="text-transform: lowercase;">phone:</span>
                 <span class="contact-value">${config.phone || clinic?.phone || ""}</span>
               </div>
-            ` : ""}
-            ${config.showEmail !== false ? `
+            `
+                : ""
+            }
+            ${
+              config.showEmail !== false
+                ? `
               <div class="contact-item">
                 <span class="contact-label" style="text-transform: lowercase;">email:</span>
                 <span class="contact-value">${config.email || clinic?.email || ""}</span>
               </div>
-            ` : ""}
+            `
+                : ""
+            }
           </div>
         </div>
 
-        ${config.showWebsite !== false && (config.website || clinic?.website) ? `
+        ${
+          config.showWebsite !== false && (config.website || clinic?.website)
+            ? `
           <div class="pos-website">
             <div class="contact-item">
               <span class="contact-label" style="text-transform: lowercase;">website:</span>
               <span class="contact-value">${config.website || clinic?.website}</span>
             </div>
           </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     </div>
   `;

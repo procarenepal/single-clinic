@@ -1,7 +1,13 @@
+import { format } from "date-fns";
+
+import {
+  getPrintBrandingCSS,
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+} from "./printBranding";
+
 import { AccountBill, Clinic } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
-import { format } from "date-fns";
-import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "./printBranding";
 
 /**
  * Generates and prints a professional expense/purchase bill.
@@ -9,15 +15,20 @@ import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "./p
 export const printAccountBill = (
   bill: AccountBill,
   clinic: Clinic,
-  config: PrintLayoutConfig
+  config: PrintLayoutConfig,
 ) => {
   const printWindow = window.open("", "_blank");
+
   if (!printWindow) {
     alert("Please allow popups to print the bill.");
+
     return;
   }
 
-  const billDate = bill.billDate instanceof Date ? bill.billDate : new Date((bill.billDate as any)?.seconds * 1000 || bill.billDate);
+  const billDate =
+    bill.billDate instanceof Date
+      ? bill.billDate
+      : new Date((bill.billDate as any)?.seconds * 1000 || bill.billDate);
   const primaryColor = config.primaryColor || "#7c3aed";
 
   const html = `
@@ -233,7 +244,7 @@ export const printAccountBill = (
             </div>
             <div class="info-item">
               <span class="info-label">Expense Category</span>
-              <span class="info-value" style="text-transform: capitalize;">${bill.category.replace('_', ' ')}</span>
+              <span class="info-value" style="text-transform: capitalize;">${bill.category.replace("_", " ")}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Billing Date</span>
@@ -259,16 +270,20 @@ export const printAccountBill = (
             <tbody>
               <tr>
                 <td style="line-height: 1.6;">
-                  ${bill.description || `Payment for ${bill.category.replace('_', ' ')} services.`}
+                  ${bill.description || `Payment for ${bill.category.replace("_", " ")} services.`}
                 </td>
                 <td style="text-align: right; font-weight: 700;">Rs. ${bill.totalAmount.toLocaleString()}</td>
               </tr>
-              ${bill.dueAmount > 0 ? `
+              ${
+                bill.dueAmount > 0
+                  ? `
               <tr style="color: #e11d48; font-weight: 600;">
                 <td style="text-align: right;">Outstanding Balance</td>
                 <td style="text-align: right;">Rs. ${bill.dueAmount.toLocaleString()}</td>
               </tr>
-              ` : ''}
+              `
+                  : ""
+              }
             </tbody>
           </table>
 
