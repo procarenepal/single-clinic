@@ -3884,8 +3884,18 @@ export default function FrontOfficeDesk() {
       ? consBill.status === "paid" || consBill.paymentStatus === "paid"
       : false;
     const isConsBillPending = consBill && !isConsBillPaid;
+    const isExpertOnly = currentExpertId && !currentDoctorId;
 
-    if (isConsBillPending) {
+    if (isConsBillPending && stage !== "expert") {
+      if (isExpertOnly) {
+        return {
+          label: "Consultation Fee Pending",
+          icon: <IoTimeOutline className="w-4 h-4" />,
+          colorClass:
+            "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
+          onClick: () => {},
+        };
+      }
       const isCons = consBill.items?.some(
         (item: any) =>
           item.appointmentTypeId === "consultation-fee" ||
@@ -4017,6 +4027,15 @@ export default function FrontOfficeDesk() {
         };
       }
       case "billing":
+        if (isExpertOnly) {
+          return {
+            label: "Billing Pending",
+            icon: <IoTimeOutline className="w-4 h-4" />,
+            colorClass:
+              "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
+            onClick: () => {},
+          };
+        }
         return {
           label: "Settle Billing Invoice",
           icon: <IoCardOutline className="w-4 h-4" />,
@@ -4024,6 +4043,15 @@ export default function FrontOfficeDesk() {
           onClick: () => handleSettleBilling(appt),
         };
       case "pharmacy":
+        if (isExpertOnly) {
+          return {
+            label: "Pharmacy Pending",
+            icon: <IoTimeOutline className="w-4 h-4" />,
+            colorClass:
+              "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
+            onClick: () => {},
+          };
+        }
         return {
           label: "Fulfill Prescription",
           icon: <IoReceiptOutline className="w-4 h-4" />,

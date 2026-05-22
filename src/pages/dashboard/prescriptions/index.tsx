@@ -41,6 +41,7 @@ import { addToast } from "@/components/ui/toast";
 import { prescriptionService } from "@/services/prescriptionService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { branchService } from "@/services/branchService";
 import { Prescription } from "@/types/medical-records";
 import { Branch, Doctor } from "@/types/models";
@@ -269,9 +270,21 @@ export default function PrescriptionsPage() {
     if (!clinicId) return;
     (async () => {
       try {
-        const doctorsData = await doctorService.getDoctors();
+        const [doctorsData, expertsData] = await Promise.all([
+          doctorService.getDoctorsByClinic(clinicId),
+          expertService.getExpertsByClinic(clinicId),
+        ]);
 
-        setAllDoctors(doctorsData);
+        const formattedDoctors = (doctorsData || []).map((d: any) => ({
+          ...d,
+          name: `Dr. ${d.name}`,
+        }));
+        const formattedExperts = (expertsData || []).map((e: any) => ({
+          ...e,
+          name: `${e.name} (Expert)`,
+        }));
+
+        setAllDoctors([...formattedDoctors, ...formattedExperts]);
       } catch (err) {
         console.error("Error fetching doctors:", err);
       }
@@ -292,12 +305,15 @@ export default function PrescriptionsPage() {
 
         const extendedPrescriptions = await Promise.all(
           prescriptionsData.map(async (prescription) => {
-            const [patient, doctor] = await Promise.all([
+            const [patient, doctor, expert] = await Promise.all([
               patientService
                 .getPatientById(prescription.patientId)
                 .catch(() => null),
               doctorService
                 .getDoctorById(prescription.doctorId)
+                .catch(() => null),
+              expertService
+                .getExpertById(prescription.doctorId)
                 .catch(() => null),
             ]);
             let itemsCount = 0;
@@ -310,10 +326,16 @@ export default function PrescriptionsPage() {
               itemsCount = items.length;
             } catch (e) {}
 
+            const resolvedDoctor = doctor || expert;
+
             return {
               ...prescription,
               patientName: patient ? patient.name : "Unknown Patient",
-              doctorName: doctor ? `Dr. ${doctor.name}` : "Unknown Doctor",
+              doctorName: resolvedDoctor
+                ? doctor
+                  ? `Dr. ${resolvedDoctor.name}`
+                  : `${resolvedDoctor.name} (Expert)`
+                : "Unknown Doctor",
               itemsCount,
             } as ExtendedPrescription;
           }),

@@ -294,6 +294,8 @@ export default function NewPrescriptionPage() {
   const [notes, setNotes] = useState("");
   const [sendToPharmacy, setSendToPharmacy] = useState(true);
   const [sendToPathology, setSendToPathology] = useState(true);
+  const [sendToExpert, setSendToExpert] = useState(false);
+  const [selectedExpertId, setSelectedExpertId] = useState("");
 
   // Live Consultation Queue & Triage Auto-Import
   const todayStr = new Date().toDateString();
@@ -770,6 +772,7 @@ export default function NewPrescriptionPage() {
     Promise.all([
       patientService.getPatientsByClinic(clinicId, branchIdForData),
       doctorService.getDoctorsByClinic(clinicId, branchIdForData),
+      expertService.getExpertsByClinic(clinicId, branchIdForData),
       medicineService.getMedicinesByClinic(clinicId),
       pathologyService.getCategoriesByClinic(clinicId, branchIdForData),
       pathologyService.getTestTypesByClinic(clinicId, branchIdForData),
@@ -778,14 +781,28 @@ export default function NewPrescriptionPage() {
       .then(
         ([
           patientsData,
-          doctorsData,
+          doctorsDataRaw,
+          expertsDataRaw,
           medicinesData,
           pathologyData,
           testTypesData,
           appointmentsData,
         ]) => {
           setPatients(patientsData);
-          setDoctors(doctorsData);
+
+          const formattedDoctors = (doctorsDataRaw || []).map((d: any) => ({
+            ...d,
+            label: `Dr. ${d.name}`,
+            isExpert: false,
+          }));
+          const formattedExperts = (expertsDataRaw || []).map((e: any) => ({
+            ...e,
+            label: `${e.name} (Expert)`,
+            isExpert: true,
+          }));
+
+          setDoctors([...formattedDoctors, ...formattedExperts]);
+
           setMedicines(medicinesData);
 
           // Map prices to pathology tests
@@ -843,6 +860,13 @@ export default function NewPrescriptionPage() {
       if (selected) {
         setPatientId(selected.patientId);
         setDoctorId(selected.doctorId);
+        if (selected.assignedExpertId && selected.assignedExpertId !== "unassigned") {
+          setSendToExpert(true);
+          setSelectedExpertId(selected.assignedExpertId);
+        } else {
+          setSendToExpert(false);
+          setSelectedExpertId("");
+        }
       }
     } else {
       const paramAptId = searchParams.get("appointmentId");
@@ -850,6 +874,8 @@ export default function NewPrescriptionPage() {
       if (!paramAptId) {
         setPatientId("");
         setDoctorId("");
+        setSendToExpert(false);
+        setSelectedExpertId("");
       }
     }
   }, [appointmentId, appointments, searchParams]);
@@ -983,7 +1009,8 @@ export default function NewPrescriptionPage() {
           const docInfo = doctors.find((d) => d.id === doctorId);
           const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
           const hasExpert =
-            apt.assignedExpertId && apt.assignedExpertId !== "unassigned";
+            (apt.assignedExpertId && apt.assignedExpertId !== "unassigned") ||
+            (sendToExpert && selectedExpertId);
 
           if (hasDoctor && hasExpert && !apt.doctorConsultationCompleted) {
             isDualRoute = true;
@@ -1144,7 +1171,7 @@ export default function NewPrescriptionPage() {
           }
 
           // 1.5) Log Assigned Expert Commission
-          const expertId = apt.assignedExpertId || pat?.assignedExpertId;
+          const expertId = (sendToExpert && selectedExpertId) ? selectedExpertId : (apt.assignedExpertId || pat?.assignedExpertId);
 
           if (expertId) {
             try {
@@ -1253,6 +1280,7 @@ export default function NewPrescriptionPage() {
       await appointmentService.updateAppointment(appointmentId, {
         status: isDualRoute ? "in-progress" : "completed",
         ...(isDualRoute ? { doctorConsultationCompleted: true } : {}),
+        ...((sendToExpert && selectedExpertId) ? { assignedExpertId: selectedExpertId } : {}),
         billingId: billingId || null,
         billingStatus: billingId ? "unpaid" : "paid",
         paymentStatus: billingId ? "unpaid" : "paid",
@@ -1411,7 +1439,8 @@ export default function NewPrescriptionPage() {
           const apt = appointments.find((a) => a.id === appointmentId);
           const hasDoctor = apt?.doctorId && apt.doctorId !== "unassigned";
           const hasExpert =
-            apt?.assignedExpertId && apt.assignedExpertId !== "unassigned";
+            (apt?.assignedExpertId && apt.assignedExpertId !== "unassigned") ||
+            (sendToExpert && selectedExpertId);
 
           if (hasDoctor && hasExpert && !apt?.doctorConsultationCompleted) {
             isDualRoute = true;
@@ -1419,6 +1448,7 @@ export default function NewPrescriptionPage() {
           await appointmentService.updateAppointment(appointmentId, {
             status: isDualRoute ? "in-progress" : "completed",
             ...(isDualRoute ? { doctorConsultationCompleted: true } : {}),
+            ...((sendToExpert && selectedExpertId) ? { assignedExpertId: selectedExpertId } : {}),
             updatedAt: new Date(),
           } as any);
         } catch (apptErr) {
@@ -2653,6 +2683,45 @@ export default function NewPrescriptionPage() {
                     fulfillment.
                   </span>
                 </label>
+              </div>
+              
+              <div className="flex items-center gap-3 bg-secondary/5 p-4 rounded-[12px] border border-secondary/20 mt-4">
+                <input
+                  checked={sendToExpert}
+                  className="w-4 h-4 accent-secondary cursor-pointer"
+                  id="sendToExpert"
+                  type="checkbox"
+                  onChange={(e) => {
+                     setSendToExpert(e.target.checked);
+                     if (!e.target.checked) setSelectedExpertId("");
+                  }}
+                />
+                <label
+                  className="flex flex-col cursor-pointer flex-1"
+                  htmlFor="sendToExpert"
+                >
+                  <span className="text-[13.5px] font-semibold text-secondary">
+                    Send to Expert Cabin
+                  </span>
+                  <span className="text-[11.5px] text-text-muted">
+                    Patient will be routed to the Expert consultation queue.
+                  </span>
+                </label>
+                {sendToExpert && (
+                  <div className="w-[300px]">
+                    <SearchSelect
+                      items={doctors.filter(d => d.isExpert).map(d => ({
+                        id: d.id,
+                        primary: d.name,
+                        secondary: d.speciality || "Expert"
+                      }))}
+                      label=""
+                      placeholder="Select Expert..."
+                      value={selectedExpertId}
+                      onChange={setSelectedExpertId}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>

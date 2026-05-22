@@ -9,6 +9,7 @@ import {
   IoArrowBackOutline,
   IoPrintOutline,
   IoCloseOutline,
+  IoCreateOutline,
 } from "react-icons/io5";
 import {
   IoReceiptOutline,
@@ -713,6 +714,17 @@ export default function InvoiceDetailPage() {
             >
               Print Invoice
             </Button>
+            {invoice.balanceAmount > 0 && invoice.paidAmount === 0 && (
+              <Button
+                color="secondary"
+                size="sm"
+                startContent={<IoCreateOutline className="w-4 h-4" />}
+                onClick={() => navigate(`/dashboard/appointments-billing/${invoice.id}/edit`)}
+                variant="flat"
+              >
+                Edit Invoice
+              </Button>
+            )}
             {invoice.balanceAmount > 0 && (
               <Button
                 color="primary"
@@ -849,12 +861,32 @@ export default function InvoiceDetailPage() {
                 <span>Subtotal:</span>
                 <span>{formatCurrency(invoice.subtotal)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Discount ({invoice.discountType}):</span>
-                <span className="text-rose-400">
-                  - {formatCurrency(invoice.discountAmount)}
-                </span>
-              </div>
+              {(invoice.itemDiscountAmount || 0) > 0 && (
+                <div className="flex justify-between">
+                  <span>Service Discounts:</span>
+                  <span className="text-rose-400">
+                    - {formatCurrency(invoice.itemDiscountAmount || 0)}
+                  </span>
+                </div>
+              )}
+              {(invoice.mainDiscountAmount || 0) > 0 && (
+                <div className="flex justify-between">
+                  <span>Invoice Discount ({invoice.discountType}):</span>
+                  <span className="text-rose-400">
+                    - {formatCurrency(invoice.mainDiscountAmount || 0)}
+                  </span>
+                </div>
+              )}
+              {(invoice.itemDiscountAmount || 0) === 0 &&
+                (invoice.mainDiscountAmount || 0) === 0 &&
+                invoice.discountAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Discount ({invoice.discountType}):</span>
+                    <span className="text-rose-400">
+                      - {formatCurrency(invoice.discountAmount)}
+                    </span>
+                  </div>
+                )}
               {invoice.taxAmount > 0 && (
                 <div className="flex justify-between">
                   <span>Tax ({invoice.taxPercentage}%):</span>

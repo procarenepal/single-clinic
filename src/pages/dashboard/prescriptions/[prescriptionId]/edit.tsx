@@ -24,6 +24,7 @@ import { addToast } from "@/components/ui/toast";
 import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { medicineService } from "@/services/medicineService";
 import { appointmentService } from "@/services/appointmentService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
@@ -600,13 +601,15 @@ export default function EditPrescriptionPage() {
           : undefined;
         const [
           patientsData,
-          doctorsData,
+          doctorsDataRaw,
+          expertsDataRaw,
           medicinesData,
           appointmentsData,
           appointmentTypesData,
         ] = await Promise.all([
           patientService.getPatientsByClinic(clinicId, branchIdArg),
           doctorService.getDoctorsByClinic(clinicId, branchIdArg),
+          expertService.getExpertsByClinic(clinicId, branchIdArg),
           medicineService.getMedicinesByClinic(clinicId),
           appointmentService.getAppointmentsByClinic(clinicId, branchIdArg),
           appointmentTypeService.getAppointmentTypesByClinic(
@@ -616,7 +619,21 @@ export default function EditPrescriptionPage() {
         ]);
 
         setPatients(patientsData || []);
-        setDoctors(doctorsData || []);
+
+        const formattedDoctors = (doctorsDataRaw || []).map((d: any) => ({
+          ...d,
+          label: `Dr. ${d.name}`,
+          isExpert: false,
+        }));
+        const formattedExperts = (expertsDataRaw || []).map((e: any) => ({
+          ...e,
+          label: `${e.name} (Expert)`,
+          isExpert: true,
+        }));
+
+        const combinedDoctors = [...formattedDoctors, ...formattedExperts];
+        setDoctors(combinedDoctors);
+
         setMedicines(medicinesData || []);
 
         const enrichedAppointments = (appointmentsData || []).map(
@@ -624,7 +641,7 @@ export default function EditPrescriptionPage() {
             const patient = patientsData?.find(
               (p) => p.id === appointment.patientId,
             );
-            const doctor = doctorsData?.find(
+            const doctor = combinedDoctors.find(
               (d) => d.id === appointment.doctorId,
             );
             const appointmentType = appointmentTypesData?.find(

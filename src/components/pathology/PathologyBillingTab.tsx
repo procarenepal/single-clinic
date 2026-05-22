@@ -1159,182 +1159,102 @@ export default function PathologyBillingTab({
 
                   {formData.items.length > 0 ? (
                     <div className="space-y-2">
+                      <datalist id="test-catalog-list">
+                        {testCatalog.map((t) => (
+                          <option key={t.id} value={t.name}>{t.type}</option>
+                        ))}
+                      </datalist>
+                      <datalist id="test-types-list">
+                        {testTypes.map((t) => (
+                          <option key={t.id} value={t.name} />
+                        ))}
+                      </datalist>
+
                       {/* Header row */}
-                      <div className="hidden md:grid grid-cols-12 gap-2 px-2 pb-1">
-                        <div className="col-span-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Test Name</div>
-                        <div className="col-span-2 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Test Type</div>
-                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Sample</div>
-                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Urgent</div>
-                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Price</div>
-                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Qty</div>
-                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Disc. Type</div>
-                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Disc. Val</div>
-                        <div className="col-span-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Amount</div>
+                      <div className="hidden md:grid grid-cols-[2.5fr_1.5fr_1fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 px-3 pb-2 items-center">
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Test Name</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Test Type</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Sample</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider text-center">Urgent</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Price</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Qty</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Disc. Type</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Disc. Val</div>
+                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Amount</div>
+                        <div className="w-[32px]"></div>
                       </div>
+
                       {formData.items.map((item, index) => (
                         <div
                           key={item.id}
-                          className="grid grid-cols-12 gap-2 items-end p-2 border border-border-base rounded-lg bg-surface-2/20"
+                          className="grid grid-cols-1 md:grid-cols-[2.5fr_1.5fr_1fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
                         >
-                          <div className="col-span-3">
-                            <Autocomplete
-                              allowsCustomValue
-                              isRequired
-                              defaultItems={testCatalog}
-                              inputValue={item.testName}
-                              label="Test Name *"
-                              placeholder="Select"
-                              popoverProps={{
-                                shouldCloseOnBlur: false,
-                                classNames: {
-                                  content: "max-h-60 overflow-auto z-[1001]",
-                                },
-                              }}
-                              size="sm"
-                              variant="flat"
-                              onInputChange={(value) => {
-                                updateInvoiceItem(index, "testName", value);
-                              }}
-                              onOpenChange={
-                                invoiceModal.handleDropdownInteraction
-                              }
-                              onSelectionChange={(key) => {
-                                const selected = testCatalog.find(
-                                  (t) => t.id === key,
-                                );
-
-                                if (selected) {
-                                  updateInvoiceItem(
-                                    index,
-                                    "testName",
-                                    selected.name,
-                                  );
-                                }
-                              }}
-                            >
-                              {(test) => (
-                                <AutocompleteItem
-                                  key={test.id}
-                                  textValue={test.name}
-                                >
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-[13px]">
-                                      {test.name}
-                                    </span>
-                                    <span className="text-[10px] text-text-muted px-1.5 py-0.5 bg-surface-3 rounded uppercase tracking-wider font-bold">
-                                      {test.type}
-                                    </span>
-                                  </div>
-                                </AutocompleteItem>
-                              )}
-                            </Autocomplete>
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Test Name</label>
+                            <input
+                              className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                              list="test-catalog-list"
+                              placeholder="Test Name"
+                              value={item.testName}
+                              onChange={(e) => updateInvoiceItem(index, "testName", e.target.value)}
+                            />
                           </div>
-                          <div className="col-span-2">
-                            <Autocomplete
-                              defaultItems={testTypes}
-                              label="Test Type"
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Test Type</label>
+                            <input
+                              className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                              list="test-types-list"
                               placeholder="Type"
-                              popoverProps={{
-                                shouldCloseOnBlur: false,
-                                classNames: {
-                                  content: "max-h-60 overflow-auto z-[1001]",
-                                },
-                              }}
-                              selectedKey={item.testType || null}
-                              size="sm"
-                              variant="flat"
-                              onOpenChange={
-                                invoiceModal.handleDropdownInteraction
-                              }
-                              onSelectionChange={(key) => {
-                                const selectedName = key ? key.toString() : "";
-                                updateInvoiceItem(
-                                  index,
-                                  "testType",
-                                  selectedName || "",
-                                );
-                              }}
+                              value={item.testType || ""}
+                              onChange={(e) => updateInvoiceItem(index, "testType", e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Sample</label>
+                            <select className="w-full h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" value={item.sampleType || ""} onChange={(e) => updateInvoiceItem(index, "sampleType", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="Blood">Blood</option>
+                              <option value="Urine">Urine</option>
+                              <option value="Stool">Stool</option>
+                              <option value="Swab">Swab</option>
+                              <option value="Sputum">Sputum</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div className="flex flex-col items-start md:items-center">
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Urgent</label>
+                            <input type="checkbox" className="w-4 h-4 cursor-pointer accent-primary" checked={item.isUrgent} onChange={(e) => updateInvoiceItem(index, "isUrgent", e.target.checked)} />
+                          </div>
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Price</label>
+                            <input className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" placeholder="0" type="number" value={item.price} onChange={(e) => updateInvoiceItem(index, "price", parseFloat(e.target.value) || 0)} />
+                          </div>
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Qty</label>
+                            <input className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={1} placeholder="1" type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(index, "quantity", parseInt(e.target.value, 10) || 1)} />
+                          </div>
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Disc. Type</label>
+                            <select
+                              className="w-full h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                              value={item.discountType || "percent"}
+                              onChange={(e) => updateInvoiceItem(index, "discountType", e.target.value)}
                             >
-                              {(testType) => (
-                                <AutocompleteItem
-                                  key={testType.name}
-                                  textValue={`${testType.name} - NPR ${testType.price.toFixed(2)} `}
-                                >
-                                  <div className="flex flex-col">
-                                    <span className="text-small">
-                                      {testType.name}
-                                    </span>
-                                    <span className="text-tiny text-default-400">
-                                      NPR {testType.price.toFixed(2)}
-                                    </span>
-                                  </div>
-                                </AutocompleteItem>
-                              )}
-                            </Autocomplete>
+                              <option value="percent">%</option>
+                              <option value="flat">Flat</option>
+                            </select>
                           </div>
-                          <div className="col-span-1">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[12px] font-medium text-text-muted">Sample</label>
-                              <select className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" value={item.sampleType || ""} onChange={(e) => updateInvoiceItem(index, "sampleType", e.target.value)}>
-                                <option value="">Select</option>
-                                <option value="Blood">Blood</option>
-                                <option value="Urine">Urine</option>
-                                <option value="Stool">Stool</option>
-                                <option value="Swab">Swab</option>
-                                <option value="Sputum">Sputum</option>
-                                <option value="Other">Other</option>
-                              </select>
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Disc. Val</label>
+                            <input className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={0} placeholder="0" type="number" value={item.discountValue || ""} onChange={(e) => updateInvoiceItem(index, "discountValue", parseFloat(e.target.value) || 0)} />
+                          </div>
+                          <div>
+                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Amount</label>
+                            <div className="w-full h-9 flex items-center px-2.5 border border-border-base/50 rounded bg-surface-2 text-[12.5px] font-semibold text-text-main">
+                              {item.amount.toFixed(0)}
                             </div>
                           </div>
-                          <div className="col-span-1 flex flex-col items-center gap-1">
-                            <label className="text-[12px] font-medium text-text-muted">Urgent</label>
-                            <input type="checkbox" className="w-4 h-4 mt-1.5 cursor-pointer accent-primary" checked={item.isUrgent} onChange={(e) => updateInvoiceItem(index, "isUrgent", e.target.checked)} />
-                          </div>
-                          <div className="col-span-1">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[12px] font-medium text-text-muted">Price</label>
-                              <input className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" placeholder="0" type="number" value={item.price} onChange={(e) => updateInvoiceItem(index, "price", parseFloat(e.target.value) || 0)} />
-                            </div>
-                          </div>
-                          <div className="col-span-1">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[12px] font-medium text-text-muted">Qty</label>
-                              <input className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={1} placeholder="1" type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(index, "quantity", parseInt(e.target.value, 10) || 1)} />
-                            </div>
-                          </div>
-                          {/* Per-item Discount Type */}
-                          <div className="col-span-1">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[12px] font-medium text-text-muted">Disc. Type</label>
-                              <select
-                                className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
-                                value={item.discountType || "percent"}
-                                onChange={(e) =>
-                                  updateInvoiceItem(index, "discountType", e.target.value)
-                                }
-                              >
-                                <option value="percent">%</option>
-                                <option value="flat">Flat</option>
-                              </select>
-                            </div>
-                          </div>
-                          {/* Per-item Discount Value */}
-                          <div className="col-span-1">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[12px] font-medium text-text-muted">Disc. Val</label>
-                              <input className="h-9 px-1 text-[11.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={0} placeholder="0" type="number" value={item.discountValue || ""} onChange={(e) => updateInvoiceItem(index, "discountValue", parseFloat(e.target.value) || 0)} />
-                            </div>
-                          </div>
-                          {/* Final Amount */}
-                          <div className="col-span-1">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[12px] font-medium text-text-muted">Amount</label>
-                              <div className="h-9 flex items-center px-2.5 border border-border-base/50 rounded bg-surface-2 text-[12.5px] font-semibold text-text-main">
-                                {item.amount.toFixed(0)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-span-12 md:col-span-1 flex justify-end items-end">
+                          <div className="flex justify-end md:justify-center items-center">
                             <Button
                               isIconOnly
                               color="danger"
@@ -1342,7 +1262,7 @@ export default function PathologyBillingTab({
                               variant="light"
                               onPress={() => removeInvoiceItem(index)}
                             >
-                              <IoTrashOutline className="text-lg" />
+                              <IoTrashOutline className="text-[16px]" />
                             </Button>
                           </div>
                         </div>
@@ -2042,6 +1962,27 @@ export default function PathologyBillingTab({
                     </div>
                   </div>
                 </div>
+
+                {selectedBilling.paymentHistory && selectedBilling.paymentHistory.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-success/20 bg-success-50/50 p-3 rounded-lg">
+                    <h5 className="text-[11px] font-semibold text-success-700 mb-2 uppercase tracking-wider">
+                      Payment History
+                    </h5>
+                    <div className="space-y-2">
+                      {selectedBilling.paymentHistory.map((p, idx) => (
+                        <div key={p.id || idx} className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-success/10">
+                          <div>
+                            <p className="font-semibold text-success-800">{formatCurrency(p.amount)}</p>
+                            <p className="text-default-500 mt-0.5">
+                              {p.method.charAt(0).toUpperCase() + p.method.slice(1)} • {new Date(p.date).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                            {p.reference && <p className="text-default-400 mt-0.5">Ref: {p.reference}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {selectedBilling.notes && (
                   <div>

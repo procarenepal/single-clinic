@@ -413,7 +413,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/patients/new">
+                              <RbacProtectedRoute pagePath="/dashboard/patients">
                                 <NewPatientPage />
                               </RbacProtectedRoute>
                             }
@@ -421,7 +421,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/patients/:patientId">
+                              <RbacProtectedRoute pagePath="/dashboard/patients">
                                 <PatientDetailPage />
                               </RbacProtectedRoute>
                             }
@@ -429,7 +429,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/patients/:patientId/edit">
+                              <RbacProtectedRoute pagePath="/dashboard/patients">
                                 <PatientEditPage />
                               </RbacProtectedRoute>
                             }
@@ -445,7 +445,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/doctors/new">
+                              <RbacProtectedRoute pagePath="/dashboard/doctors">
                                 <NewDoctorPage />
                               </RbacProtectedRoute>
                             }
@@ -453,7 +453,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/doctors/:doctorId">
+                              <RbacProtectedRoute pagePath="/dashboard/doctors">
                                 <DoctorProfilePage />
                               </RbacProtectedRoute>
                             }
@@ -461,7 +461,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/doctors/:doctorId/edit">
+                              <RbacProtectedRoute pagePath="/dashboard/doctors">
                                 <EditDoctorPage />
                               </RbacProtectedRoute>
                             }
@@ -477,7 +477,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/experts/new">
+                              <RbacProtectedRoute pagePath="/dashboard/experts">
                                 <NewExpertPage />
                               </RbacProtectedRoute>
                             }
@@ -485,7 +485,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/experts/:expertId">
+                              <RbacProtectedRoute pagePath="/dashboard/experts">
                                 <ExpertProfilePage />
                               </RbacProtectedRoute>
                             }
@@ -493,7 +493,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/experts/:expertId/edit">
+                              <RbacProtectedRoute pagePath="/dashboard/experts">
                                 <EditExpertPage />
                               </RbacProtectedRoute>
                             }
@@ -509,7 +509,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/appointments/new">
+                              <RbacProtectedRoute pagePath="/dashboard/appointments">
                                 <NewAppointmentPage />
                               </RbacProtectedRoute>
                             }
@@ -566,7 +566,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/appointments/:id">
+                              <RbacProtectedRoute pagePath="/dashboard/appointments">
                                 <AppointmentDetailsPage />
                               </RbacProtectedRoute>
                             }
@@ -574,7 +574,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/appointments/:id/edit">
+                              <RbacProtectedRoute pagePath="/dashboard/appointments">
                                 <EditAppointmentPage />
                               </RbacProtectedRoute>
                             }
@@ -686,7 +686,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/prescriptions/new">
+                              <RbacProtectedRoute pagePath="/dashboard/prescriptions">
                                 <NewPrescriptionPage />
                               </RbacProtectedRoute>
                             }
@@ -694,7 +694,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/prescriptions/:prescriptionId">
+                              <RbacProtectedRoute pagePath="/dashboard/prescriptions">
                                 <PrescriptionDetailPage />
                               </RbacProtectedRoute>
                             }
@@ -702,7 +702,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/prescriptions/:prescriptionId/edit">
+                              <RbacProtectedRoute pagePath="/dashboard/prescriptions">
                                 <EditPrescriptionPage />
                               </RbacProtectedRoute>
                             }
@@ -718,7 +718,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/front-office/manage-visitors">
+                              <RbacProtectedRoute pagePath="/dashboard/front-office">
                                 <ManageVisitorsPage />
                               </RbacProtectedRoute>
                             }
@@ -726,7 +726,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/front-office/manage-call-logs">
+                              <RbacProtectedRoute pagePath="/dashboard/front-office">
                                 <ManageCallLogsPage />
                               </RbacProtectedRoute>
                             }
@@ -813,7 +813,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/settings/referral-partners/new">
+                              <RbacProtectedRoute pagePath="/dashboard/settings/referral-partners">
                                 <NewReferralPartnerPage />
                               </RbacProtectedRoute>
                             }
@@ -821,7 +821,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/settings/referral-partners/:partnerId/edit">
+                              <RbacProtectedRoute pagePath="/dashboard/settings/referral-partners">
                                 <NewReferralPartnerPage />
                               </RbacProtectedRoute>
                             }
@@ -829,7 +829,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/settings/referral-partners/:partnerId">
+                              <RbacProtectedRoute pagePath="/dashboard/settings/referral-partners">
                                 <ReferralPartnerProfilePage />
                               </RbacProtectedRoute>
                             }

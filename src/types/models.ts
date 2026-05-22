@@ -816,6 +816,7 @@ export interface MedicinePurchase {
    * calculations without scanning the returns array on every render.
    */
   totalReturnedAmount?: number;
+  paymentHistory?: PaymentEvent[]; // Array of all payments made
 }
 
 // Supplier Purchase Record model for tracking purchases from suppliers
@@ -1374,6 +1375,7 @@ export interface AppointmentBilling {
   paymentReference?: string; // Payment reference/transaction ID
   paymentDate?: Date; // Date of payment
   paymentNotes?: string; // Payment related notes
+  paymentHistory?: PaymentEvent[]; // Array of all payments made
 
   // Metadata
   notes?: string; // General notes about the invoice

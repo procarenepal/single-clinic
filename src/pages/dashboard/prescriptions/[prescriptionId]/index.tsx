@@ -17,6 +17,7 @@ import { addToast } from "@/components/ui/toast";
 import { prescriptionService } from "@/services/prescriptionService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { appointmentService } from "@/services/appointmentService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { clinicService } from "@/services/clinicService";
@@ -115,13 +116,21 @@ export default function PrescriptionDetailPage() {
           );
         } catch (e) {}
 
-        let doctorData: Doctor | null = null;
+        let doctorData: Doctor | any | null = null;
 
         try {
           doctorData = await doctorService.getDoctorById(
             prescriptionData.doctorId,
           );
         } catch (e) {}
+
+        if (!doctorData) {
+          try {
+            doctorData = await expertService.getExpertById(
+              prescriptionData.doctorId,
+            );
+          } catch (e) {}
+        }
 
         let appointmentData: Appointment | null = null;
         let appointmentTypeName: string | undefined;

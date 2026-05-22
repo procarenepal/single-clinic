@@ -707,15 +707,26 @@ export const appointmentBillingService = {
         status: paymentStatus === "paid" ? "paid" : billing.status,
       };
 
-      // Only include paymentReference if it's not empty
+      const newPaymentEvent: any = {
+        id: crypto.randomUUID(),
+        amount: paymentAmount,
+        method: paymentMethod,
+        date: new Date(),
+        recordedBy: auth.currentUser?.uid || "system",
+      };
+
       if (paymentReference && paymentReference.trim() !== "") {
+        newPaymentEvent.reference = paymentReference.trim();
         updateData.paymentReference = paymentReference.trim();
       }
 
       // Only include paymentNotes if it's not empty
       if (paymentNotes && paymentNotes.trim() !== "") {
+        newPaymentEvent.notes = paymentNotes.trim();
         updateData.paymentNotes = paymentNotes.trim();
       }
+
+      updateData.paymentHistory = [...(billing.paymentHistory || []), newPaymentEvent];
 
       await this.updateBilling(id, updateData);
 

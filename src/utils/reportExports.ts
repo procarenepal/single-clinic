@@ -111,6 +111,18 @@ export const exportDailyReportToExcel = (
         reportData.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
       ),
     ]);
+    addRow([
+      "Cash Collected",
+      formatCurrency(
+        reportData.billing.reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+      ),
+    ]);
+    addRow([
+      "Total Due",
+      formatCurrency(
+        reportData.billing.reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
+      ),
+    ]);
     addEmptyRow(2);
 
     // Patients Section
@@ -283,6 +295,18 @@ export const exportDailyReportToPDF = (
         "Total Revenue",
         formatCurrency(
           reportData.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+        ),
+      ],
+      [
+        "Cash Collected",
+        formatCurrency(
+          reportData.billing.reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+        ),
+      ],
+      [
+        "Total Due",
+        formatCurrency(
+          reportData.billing.reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
         ),
       ],
     ];

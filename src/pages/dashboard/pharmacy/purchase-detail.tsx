@@ -639,13 +639,25 @@ export default function PurchaseDetailPage() {
 
         setPurchase(purchaseData);
 
-        if (purchaseData.paymentStatus === "paid") {
+        if (purchaseData.paymentHistory && purchaseData.paymentHistory.length > 0) {
+          setPayments(
+            purchaseData.paymentHistory.map((p) => ({
+              id: p.id || crypto.randomUUID(),
+              amount: p.amount,
+              paymentDate: p.date ? new Date(p.date) : new Date(),
+              paymentMethod: p.method || "cash",
+              reference: p.reference,
+              notes: p.notes,
+              recordedBy: p.recordedBy || purchaseData.createdBy,
+            }))
+          );
+        } else if (purchaseData.paymentStatus === "paid") {
           setPayments([
             {
               id: "1",
               amount: purchaseData.netAmount,
-              paymentDate: purchaseData.purchaseDate,
-              paymentMethod: purchaseData.paymentType,
+              paymentDate: new Date(purchaseData.purchaseDate),
+              paymentMethod: purchaseData.paymentType || "cash",
               notes: "Full payment on purchase",
               recordedBy: purchaseData.createdBy,
             },
@@ -655,12 +667,14 @@ export default function PurchaseDetailPage() {
             {
               id: "1",
               amount: purchaseData.netAmount * 0.6,
-              paymentDate: purchaseData.purchaseDate,
-              paymentMethod: purchaseData.paymentType,
+              paymentDate: new Date(purchaseData.purchaseDate),
+              paymentMethod: purchaseData.paymentType || "cash",
               notes: "Partial payment",
               recordedBy: purchaseData.createdBy,
             },
           ]);
+        } else {
+          setPayments([]);
         }
 
         // Set clinic and layout data
@@ -883,18 +897,30 @@ export default function PurchaseDetailPage() {
     try {
       setIsSubmitting(true);
 
-      // Create new payment record
-      const newPayment: PaymentRecord = {
+      // Create new payment event
+      const newPaymentEvent = {
         id: crypto.randomUUID(),
         amount: paymentForm.amount,
-        paymentDate: new Date(),
-        paymentMethod: paymentForm.paymentMethod,
-        reference: paymentForm.reference || undefined,
-        notes: paymentForm.notes || undefined,
+        date: new Date(),
+        method: paymentForm.paymentMethod,
+        reference: paymentForm.reference || "",
+        notes: paymentForm.notes || "",
         recordedBy: currentUser.uid,
       };
 
-      // Add to local state (in a real app, this would be saved to database)
+      const updatedHistory = [...(purchase.paymentHistory || []), newPaymentEvent];
+
+      // Add to local state
+      const newPayment: PaymentRecord = {
+        id: newPaymentEvent.id,
+        amount: newPaymentEvent.amount,
+        paymentDate: new Date(newPaymentEvent.date),
+        paymentMethod: newPaymentEvent.method,
+        reference: newPaymentEvent.reference,
+        notes: newPaymentEvent.notes,
+        recordedBy: newPaymentEvent.recordedBy,
+      };
+      
       const updatedPayments = [...payments, newPayment];
 
       setPayments(updatedPayments);
@@ -911,9 +937,10 @@ export default function PurchaseDetailPage() {
             ? "partial"
             : "pending";
 
-      // Update purchase record with new payment status
+      // Update purchase record with new payment status and history
       await pharmacyService.updateMedicinePurchase(purchase.id, {
         paymentStatus: newStatus,
+        paymentHistory: updatedHistory,
       });
 
       // Update local purchase state

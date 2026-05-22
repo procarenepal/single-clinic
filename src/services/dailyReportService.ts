@@ -7,11 +7,13 @@ import { Patient, Appointment } from "@/types/models";
 
 export interface DailyBillingSummary {
   id: string;
-  type: "appointment" | "pharmacy";
+  type: "appointment" | "pharmacy" | "pathology";
   invoiceNumber: string;
   patientName: string;
   totalAmount: number;
-  date: Date;
+  paidAmount: number; // Amount paid ON the selected date
+  balanceAmount: number;
+  date: Date; // Date of the invoice or payment
   paymentStatus: string;
   doctorName?: string;
 }
@@ -115,7 +117,7 @@ export const dailyReportService = {
         date.getFullYear(),
         date.getMonth(),
         date.getDate(),
-      );
+      ).getTime();
       const endOfDay = new Date(
         date.getFullYear(),
         date.getMonth(),
@@ -123,59 +125,126 @@ export const dailyReportService = {
         23,
         59,
         59,
-      );
+      ).getTime();
 
-      const [allBilling, allPurchases] = await Promise.all([
+      // Include pathologyBillingService
+      const { pathologyBillingService } = await import("./pathologyBillingService");
+
+      const [allAppointmentBilling, allPurchases, allPathologyBilling] = await Promise.all([
         appointmentBillingService.getBillingByClinic(clinicId, branchId),
         pharmacyService.getMedicinePurchasesByClinic(clinicId, branchId),
+        pathologyBillingService.getBillingByClinic(clinicId, branchId),
       ]);
 
       const summaries: DailyBillingSummary[] = [];
 
-      allBilling.forEach((billing) => {
-        const invoiceDate = billing.invoiceDate
-          ? new Date(billing.invoiceDate)
-          : null;
+      const processInvoice = (
+        id: string,
+        type: "appointment" | "pharmacy" | "pathology",
+        invoiceNumber: string,
+        patientName: string,
+        totalAmount: number,
+        balanceAmount: number,
+        paymentStatus: string,
+        doctorName: string,
+        createdDate: Date | null,
+        paymentHistory: any[] | undefined
+      ) => {
+        let paidToday = 0;
+        let hasPaymentToday = false;
+        
+        // Sum payments made exactly on this date
+        if (paymentHistory && paymentHistory.length > 0) {
+          paymentHistory.forEach((p: any) => {
+            let pDate = p.date || p.paymentDate;
+            let pTime = 0;
+            if (pDate) {
+              if (typeof pDate.toDate === "function") {
+                pTime = pDate.toDate().getTime();
+              } else if (pDate.seconds !== undefined) {
+                pTime = pDate.seconds * 1000;
+              } else {
+                pTime = new Date(pDate).getTime();
+              }
+            }
 
-        if (
-          invoiceDate &&
-          invoiceDate >= startOfDay &&
-          invoiceDate <= endOfDay
-        ) {
+            if (pTime >= startOfDay && pTime <= endOfDay) {
+              paidToday += p.amount;
+              hasPaymentToday = true;
+            }
+          });
+        } else {
+          // Fallback if no paymentHistory but it was paid/created today
+          const cTime = createdDate ? createdDate.getTime() : 0;
+          if (cTime >= startOfDay && cTime <= endOfDay && paymentStatus === "paid") {
+             paidToday = totalAmount;
+          }
+        }
+
+        const createdTime = createdDate ? createdDate.getTime() : 0;
+        const isCreatedToday = createdTime >= startOfDay && createdTime <= endOfDay;
+
+        // Include if invoice was created today OR received a payment today
+        if (isCreatedToday || hasPaymentToday) {
           summaries.push({
-            id: billing.id,
-            type: "appointment",
-            invoiceNumber: billing.invoiceNumber,
-            patientName: billing.patientName || "Unknown Patient",
-            totalAmount: billing.totalAmount || 0,
-            date: invoiceDate,
-            paymentStatus: billing.paymentStatus || "unpaid",
-            doctorName: billing.doctorName,
+            id,
+            type,
+            invoiceNumber,
+            patientName: patientName || "Unknown",
+            totalAmount,
+            paidAmount: paidToday, // Cash collected today
+            balanceAmount,
+            date: createdDate || new Date(),
+            paymentStatus: paymentStatus || "unpaid",
+            doctorName,
           });
         }
+      };
+
+      allAppointmentBilling.forEach((billing) => {
+        processInvoice(
+          billing.id,
+          "appointment",
+          billing.invoiceNumber,
+          billing.patientName,
+          billing.totalAmount || 0,
+          billing.balanceAmount || 0,
+          billing.paymentStatus || "unpaid",
+          billing.doctorName || "",
+          billing.invoiceDate ? new Date(billing.invoiceDate) : null,
+          billing.paymentHistory
+        );
       });
 
       allPurchases.forEach((purchase) => {
-        const purchaseDate = purchase.purchaseDate
-          ? new Date(purchase.purchaseDate)
-          : null;
+        const bal = purchase.paymentStatus === "paid" ? 0 : ((purchase as any).balanceAmount || purchase.netAmount || 0);
+        processInvoice(
+          purchase.id,
+          "pharmacy",
+          purchase.purchaseNo,
+          purchase.patientName || "Walk-in Customer",
+          purchase.netAmount || 0,
+          bal,
+          purchase.paymentStatus || "unpaid",
+          "Pharmacy Counter",
+          purchase.purchaseDate ? new Date(purchase.purchaseDate) : null,
+          purchase.paymentHistory
+        );
+      });
 
-        if (
-          purchaseDate &&
-          purchaseDate >= startOfDay &&
-          purchaseDate <= endOfDay
-        ) {
-          summaries.push({
-            id: purchase.id,
-            type: "pharmacy",
-            invoiceNumber: purchase.purchaseNo,
-            patientName: purchase.patientName || "Walk-in Customer",
-            totalAmount: purchase.netAmount || 0,
-            date: purchaseDate,
-            paymentStatus: purchase.paymentStatus || "unpaid",
-            doctorName: "Pharmacy Counter",
-          });
-        }
+      allPathologyBilling.forEach((billing) => {
+        processInvoice(
+          billing.id,
+          "pathology",
+          billing.invoiceNumber,
+          billing.patientName,
+          billing.totalAmount || 0,
+          billing.balanceAmount || 0,
+          billing.paymentStatus || "unpaid",
+          "Pathology Lab",
+          billing.invoiceDate ? new Date(billing.invoiceDate) : null,
+          billing.paymentHistory
+        );
       });
 
       return summaries.sort((a, b) => b.date.getTime() - a.date.getTime());

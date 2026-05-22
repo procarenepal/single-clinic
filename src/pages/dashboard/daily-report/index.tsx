@@ -45,8 +45,13 @@ const formatDate = (date: Date | string): string => {
 };
 
 // Helper function to format time
-const formatTime = (time: string | undefined): string => {
-  if (!time) return "N/A";
+const formatTime = (time: string | undefined, dateObj?: Date): string => {
+  if (!time) {
+    if (dateObj) {
+      return dateObj.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    }
+    return "N/A";
+  }
   const [hours, minutes] = time.split(":");
 
   if (!hours || !minutes) return time;
@@ -261,15 +266,14 @@ export default function DailyReportPage() {
       (sum, b) => sum + (b.totalAmount || 0),
       0,
     ),
-    paidRevenue: reportData.billing
-      .filter((b) => b.paymentStatus === "paid")
-      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    partialRevenue: reportData.billing
-      .filter((b) => b.paymentStatus === "partial")
-      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    unpaidRevenue: reportData.billing
-      .filter((b) => b.paymentStatus === "unpaid")
-      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+    totalCashCollected: reportData.billing.reduce(
+      (sum, b) => sum + (b.paidAmount || 0),
+      0,
+    ),
+    totalDue: reportData.billing.reduce(
+      (sum, b) => sum + (b.balanceAmount || 0),
+      0,
+    ),
   };
 
   // Branch-wise revenue breakdown: only when viewing all branches (no single branch selected)
@@ -534,25 +538,19 @@ export default function DailyReportPage() {
                   </div>
                   
                   <div className="space-y-1.5 text-[10px]">
-                    {summaryStats.paidRevenue > 0 && (
+                    {summaryStats.totalCashCollected > 0 && (
                       <div className="flex justify-between text-green-700 bg-green-50 px-2 py-1 rounded border border-green-100">
-                        <span>Paid</span>
-                        <span className="font-semibold">{formatCurrency(summaryStats.paidRevenue)}</span>
+                        <span>Collected</span>
+                        <span className="font-semibold">{formatCurrency(summaryStats.totalCashCollected)}</span>
                       </div>
                     )}
-                    {summaryStats.partialRevenue > 0 && (
-                      <div className="flex justify-between text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                        <span>Partial</span>
-                        <span className="font-semibold">{formatCurrency(summaryStats.partialRevenue)}</span>
-                      </div>
-                    )}
-                    {summaryStats.unpaidRevenue > 0 && (
+                    {summaryStats.totalDue > 0 && (
                       <div className="flex justify-between text-red-700 bg-red-50 px-2 py-1 rounded border border-red-100">
-                        <span>Unpaid</span>
-                        <span className="font-semibold">{formatCurrency(summaryStats.unpaidRevenue)}</span>
+                        <span>Due</span>
+                        <span className="font-semibold">{formatCurrency(summaryStats.totalDue)}</span>
                       </div>
                     )}
-                    {summaryStats.paidRevenue === 0 && summaryStats.partialRevenue === 0 && summaryStats.unpaidRevenue === 0 && (
+                    {summaryStats.totalCashCollected === 0 && summaryStats.totalDue === 0 && (
                       <span className="text-[10px] text-mountain-400 italic block">No revenue data</span>
                     )}
                   </div>
@@ -626,7 +624,7 @@ export default function DailyReportPage() {
                         Cash Collection
                       </p>
                       <p className="text-stat-sm text-green-900 leading-none">
-                        {formatCurrency(summaryStats.paidRevenue)}
+                        {formatCurrency(summaryStats.totalCashCollected)}
                       </p>
                     </div>
                     <div className="p-2 rounded bg-green-200 text-green-800 shrink-0">
@@ -636,7 +634,7 @@ export default function DailyReportPage() {
                   
                   <div>
                     <span className="inline-block text-[9px] font-semibold text-green-800 bg-green-100 px-2 py-1 rounded border border-green-300 uppercase tracking-wider">
-                      From Paid Invoices
+                      Actual Received
                     </span>
                   </div>
                 </CardBody>
@@ -842,7 +840,7 @@ export default function DailyReportPage() {
                             className="border-b border-mountain-100 hover:bg-slate-50"
                           >
                             <td className="py-1.5 px-3 text-[13px] text-mountain-900">
-                              {formatTime(appointment.startTime)}
+                              {formatTime(appointment.startTime, appointment.appointmentDate)}
                             </td>
                             <td className="py-1.5 px-3 text-[13px] text-mountain-700">
                               {getPatientNameById(appointment.patientId)}

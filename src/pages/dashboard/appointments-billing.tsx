@@ -2210,7 +2210,7 @@ export default function AppointmentBillingPage() {
             {selectedBilling.paidAmount > 0 && (
               <div className="bg-green-500/5 p-3 rounded border border-green-500/10 space-y-1 mt-4">
                 <h4 className="font-semibold text-green-600 border-b border-green-500/10 pb-1 mb-2">
-                  Payment Recieved
+                  Payment Summary
                 </h4>
                 <p className="flex justify-between text-text-muted">
                   <span>Total:</span>
@@ -2221,10 +2221,31 @@ export default function AppointmentBillingPage() {
                   <span>{fmtCur(selectedBilling.paidAmount)}</span>
                 </p>
                 {selectedBilling.balanceAmount > 0 && (
-                  <p className="flex justify-between text-red-600 font-semibold mt-1">
+                  <p className="flex justify-between text-red-600 font-semibold mt-1 border-t border-border-base pt-1">
                     <span>Due:</span>
                     <span>{fmtCur(selectedBilling.balanceAmount)}</span>
                   </p>
+                )}
+
+                {selectedBilling.paymentHistory && selectedBilling.paymentHistory.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-green-500/20">
+                    <h5 className="text-[11px] font-semibold text-green-700 mb-2 uppercase tracking-wider">
+                      Payment History
+                    </h5>
+                    <div className="space-y-2">
+                      {selectedBilling.paymentHistory.map((p, idx) => (
+                        <div key={p.id || idx} className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-green-500/10">
+                          <div>
+                            <p className="font-semibold text-green-800">{fmtCur(p.amount)}</p>
+                            <p className="text-text-muted/80 mt-0.5">
+                              {p.method.charAt(0).toUpperCase() + p.method.slice(1)} • {new Date(p.date).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                            {p.reference && <p className="text-text-muted/60 mt-0.5">Ref: {p.reference}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
