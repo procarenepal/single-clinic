@@ -14,13 +14,9 @@ import {
 } from "firebase/firestore";
 
 import { db, auth } from "../config/firebase";
-import {
-  AppointmentBilling,
-  AppointmentBillingSettings,
-  AppointmentBillingItem,
-  PaymentMethod,
-} from "../types/models";
-
+import { AppointmentBilling, AppointmentBillingSettings, AppointmentBillingItem, PaymentMethod } from "../types/models";
+import { patientService } from "./patientService";
+import { walletService } from "./walletService";
 import { navigationService } from "./navigationService";
 
 const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
@@ -695,6 +691,23 @@ export const appointmentBillingService = {
         paymentStatus = "paid";
       } else if (newPaidAmount > 0) {
         paymentStatus = "partial";
+      }
+
+      // If paying via wallet, verify balance and deduct funds
+      if (paymentMethod === "wallet") {
+        const patient = await patientService.getPatientById(billing.patientId);
+        if (!patient || (patient.walletBalance || 0) < paymentAmount) {
+          throw new Error("Insufficient wallet balance");
+        }
+        await walletService.deductFunds(
+          billing.patientId,
+          billing.clinicId,
+          billing.branchId || "",
+          paymentAmount,
+          id,
+          paymentNotes || `Paid Invoice ${billing.invoiceNumber || "Draft"}`,
+          auth.currentUser?.uid || "system"
+        );
       }
 
       // Prepare update data, only including non-empty optional fields

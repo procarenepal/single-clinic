@@ -54,6 +54,14 @@ const settingsSections: SettingsSection[] = [
     category: "clinic",
   },
   {
+    id: "treatment-packages",
+    title: "Treatment Packages",
+    description: "Manage bulk session packages that fund patient wallets",
+    icon: <IoStarOutline className="w-6 h-6" />,
+    href: "/dashboard/settings/packages",
+    category: "clinic",
+  },
+  {
     id: "medical-report-fields",
     title: "Medical Report Fields",
     description: "Configure custom fields for patient medical reports",

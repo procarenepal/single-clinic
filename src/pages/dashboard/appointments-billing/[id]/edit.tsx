@@ -647,7 +647,7 @@ export default function EditInvoicePage() {
         description: "Invoice updated successfully!",
         color: "success",
       });
-      navigate("/dashboard/appointments-billing");
+      navigate(`/dashboard/appointments-billing/${invoice.id}`);
     } catch (error) {
       console.error("Error updating invoice:", error);
       addToast({
@@ -699,9 +699,9 @@ export default function EditInvoicePage() {
         <div className="flex justify-center gap-3">
           <Button
             variant="bordered"
-            onClick={() => navigate("/dashboard/appointments-billing")}
+            onClick={() => navigate(`/dashboard/appointments-billing/${invoiceId}`)}
           >
-            Back to Invoices
+            Back to Invoice
           </Button>
           <Button color="primary" onClick={() => window.location.reload()}>
             Try Again
@@ -727,7 +727,7 @@ export default function EditInvoicePage() {
         <Button
           startContent={<IoArrowBackOutline />}
           variant="bordered"
-          onClick={() => navigate("/dashboard/appointments-billing")}
+          onClick={() => navigate(`/dashboard/appointments-billing/${invoice.id}`)}
         >
           Back
         </Button>

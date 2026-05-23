@@ -69,6 +69,11 @@ export default function DefaultLayout({
                     alt={`${clinicName} Logo`}
                     className="w-8 h-8 object-contain"
                     src={clinicLogo || "/logo.png"}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.src = "/logo.png";
+                    }}
                   />
                 </div>
                 <div>

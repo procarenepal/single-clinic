@@ -211,9 +211,25 @@ export interface Patient {
     referredById?: string; // Optional specific doctor/expert associated with this partner
     referredByName?: string; // Name of specific doctor/expert
   }>;
+  walletBalance?: number; // Total available advance deposit balance
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the patient record
+}
+
+// Wallet Transaction model for recording patient deposits and deductions
+export interface WalletTransaction {
+  id: string;
+  patientId: string;
+  clinicId: string;
+  branchId: string;
+  type: "deposit" | "deduction";
+  amount: number;
+  paymentMethod?: string; // e.g. "cash", "card" for deposits
+  referenceId?: string; // invoiceId if deduction, or external reference for deposit
+  notes?: string;
+  createdAt: Date;
+  createdBy: string;
 }
 
 // Treatment Category model for categorizing services/appointment types
@@ -224,6 +240,56 @@ export interface TreatmentCategory {
   clinicId: string;
   branchId?: string;
   isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+}
+
+// Treatment Package model for selling bulk sessions that fund the wallet
+export interface TreatmentPackage {
+  id: string;
+  name: string;
+  description?: string;
+  price: number; // The cost the patient pays
+  walletCreditAmount: number; // The amount credited to their wallet (usually same as price)
+  totalSessions?: number; // Visual tracking of sessions
+  validityDays?: number; // Expiration period from purchase date
+  clinicId: string;
+  branchId?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+}
+
+export interface PackageSessionTicket {
+  sessionNumber: number;
+  status: "pending" | "in-progress" | "completed";
+  appointmentId?: string;
+  clinicianId?: string;
+  clinicianName?: string;
+  consumedAt?: Date;
+}
+
+// Patient Package model for tracking purchased packages and their consumed sessions
+export interface PatientPackage {
+  id: string;
+  patientId: string;
+  packageId: string;
+  packageName: string;
+  clinicId: string;
+  branchId: string;
+  totalSessions: number;
+  usedSessions: number;
+  sessions?: PackageSessionTicket[]; // Explicit ticket tracking
+  sessionHistory?: {
+    consumedAt: Date;
+    appointmentId: string;
+    clinicianId?: string;
+    clinicianName?: string;
+  }[];
+  status: "active" | "completed" | "expired";
+  expiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -286,6 +352,7 @@ export interface Appointment {
   checkoutCompleted?: boolean;
   doctorConsultationCompleted?: boolean;
   cabinName?: string;
+  patientPackageId?: string; // Links this appointment to a specific active package session
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;

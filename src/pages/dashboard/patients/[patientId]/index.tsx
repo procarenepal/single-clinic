@@ -50,6 +50,7 @@ import { PatientMedicalReportTab } from "@/components/patients/PatientMedicalRep
 import PatientNotesTab from "@/components/patients/PatientNotesTab";
 import PatientBillingTab from "@/components/patients/PatientBillingTab";
 import PatientPrescriptionsTab from "@/components/patients/PatientPrescriptionsTab";
+import PatientWalletTab from "@/components/patients/PatientWalletTab";
 
 export default function PatientDetailPage() {
   const { patientId } = useParams();
@@ -735,8 +736,13 @@ export default function PatientDetailPage() {
       ? [
           {
             key: "billing",
-            icon: <IoWalletOutline className="w-4 h-4" />,
+            icon: <IoReceiptOutline className="w-4 h-4" />,
             label: "Billing",
+          },
+          {
+            key: "wallet",
+            icon: <IoWalletOutline className="w-4 h-4" />,
+            label: "Wallet & Deposits",
           },
         ]
       : []),
@@ -889,6 +895,10 @@ export default function PatientDetailPage() {
 
           {selectedTab === "billing" && isBillingEnabled && (
             <PatientBillingTab patientId={patientId!} />
+          )}
+
+          {selectedTab === "wallet" && isBillingEnabled && (
+            <PatientWalletTab patient={patient} />
           )}
         </div>
       </div>

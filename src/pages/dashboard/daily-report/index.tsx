@@ -245,7 +245,19 @@ export default function DailyReportPage() {
     return appointmentType ? appointmentType.name : "Unknown Type";
   };
 
+  // Helper to check if an invoice was created on the selected date
+  const isCreatedOnSelectedDate = (dateObj: Date | string) => {
+    const d = new Date(dateObj);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    
+    return `${yyyy}-${mm}-${dd}` === selectedDate;
+  };
+
   // Calculate summary statistics
+  const invoicesCreatedToday = reportData.billing.filter(b => isCreatedOnSelectedDate(b.date));
+
   const summaryStats = {
     totalPatients: reportData.patients.length,
     totalAppointments: reportData.appointments.length,
@@ -258,11 +270,11 @@ export default function DailyReportPage() {
     cancelledAppointments: reportData.appointments.filter(
       (a) => a.status === "cancelled",
     ).length,
-    totalInvoices: reportData.billing.length,
-    paidInvoices: reportData.billing.filter((b) => b.paymentStatus === "paid").length,
-    partialInvoices: reportData.billing.filter((b) => b.paymentStatus === "partial").length,
-    unpaidInvoices: reportData.billing.filter((b) => b.paymentStatus === "unpaid").length,
-    totalRevenue: reportData.billing.reduce(
+    totalInvoices: invoicesCreatedToday.length,
+    paidInvoices: invoicesCreatedToday.filter((b) => b.paymentStatus === "paid").length,
+    partialInvoices: invoicesCreatedToday.filter((b) => b.paymentStatus === "partial").length,
+    unpaidInvoices: invoicesCreatedToday.filter((b) => b.paymentStatus === "unpaid").length,
+    totalRevenue: invoicesCreatedToday.reduce(
       (sum, b) => sum + (b.totalAmount || 0),
       0,
     ),
@@ -270,7 +282,7 @@ export default function DailyReportPage() {
       (sum, b) => sum + (b.paidAmount || 0),
       0,
     ),
-    totalDue: reportData.billing.reduce(
+    totalDue: invoicesCreatedToday.reduce(
       (sum, b) => sum + (b.balanceAmount || 0),
       0,
     ),
@@ -282,7 +294,7 @@ export default function DailyReportPage() {
       ? branches
           .map((branch) => {
             // DailyBillingSummary does not carry branchId; use total billing for the overview
-            const branchBilling = reportData.billing;
+            const branchBilling = reportData.billing.filter(b => isCreatedOnSelectedDate(b.date));
             const revenue = branchBilling.reduce(
               (sum, b) => sum + (b.totalAmount || 0),
               0,

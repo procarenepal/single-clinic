@@ -37,6 +37,9 @@ import { staffCommissionService } from "@/services/staffCommissionService";
 import { expertService } from "@/services/expertService";
 import { hrService } from "@/services/hrService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { packageService } from "@/services/packageService";
+import { walletService } from "@/services/walletService";
+import { patientPackageService } from "@/services/patientPackageService";
 import {
   Appointment,
   Patient,
@@ -45,10 +48,13 @@ import {
   ReferralPartner,
   Expert,
   StaffMember,
+  TreatmentPackage,
+  PatientPackage,
 } from "@/types/models";
 import { Spinner } from "@/components/ui";
 import { db } from "@/config/firebase";
 import { NotificationService } from "@/services/notificationService";
+import SellPackageModal from "@/components/packages/SellPackageModal";
 
 export default function FrontOfficeDesk() {
   const navigate = useNavigate();
@@ -62,6 +68,7 @@ export default function FrontOfficeDesk() {
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
     [],
   );
+  const [packages, setPackages] = useState<TreatmentPackage[]>([]);
   const [referralPartners, setReferralPartners] = useState<ReferralPartner[]>(
     [],
   );
@@ -231,6 +238,21 @@ export default function FrontOfficeDesk() {
   const [selectedExistingPatient, setSelectedExistingPatient] =
     useState<Patient | null>(null);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [isSellPackageModalOpen, setIsSellPackageModalOpen] = useState(false);
+  const [activePatientPackages, setActivePatientPackages] = useState<PatientPackage[]>([]);
+
+  // Fetch active patient packages when existing patient is selected
+  useEffect(() => {
+    if (intakeMode === "existing" && selectedExistingPatient && clinicId) {
+      patientPackageService.getPatientPackages(selectedExistingPatient.id, clinicId)
+        .then(data => {
+          setActivePatientPackages(data.filter(p => p.status !== "expired" && p.status !== "completed"));
+        })
+        .catch(console.error);
+    } else {
+      setActivePatientPackages([]);
+    }
+  }, [intakeMode, selectedExistingPatient, clinicId]);
 
   // Date filter for the queue
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -253,6 +275,10 @@ export default function FrontOfficeDesk() {
       referredById?: string;
       referredByName?: string;
     }>,
+    paymentMethod: "cash",
+    paymentReference: "",
+    generateConsultationBill: true,
+    startSessionInstantly: false,
   });
 
   // Mobile duplicate state
@@ -294,6 +320,7 @@ export default function FrontOfficeDesk() {
           patientsData,
           doctorsData,
           apptTypesData,
+          pkgsData,
           referralPartnersData,
           expertsData,
           staffData,
@@ -304,6 +331,7 @@ export default function FrontOfficeDesk() {
             clinicId,
             branchId || undefined,
           ),
+          packageService.getPackagesByClinic(clinicId, branchId || undefined),
           referralPartnerService.getReferralPartnersByClinic(
             clinicId,
             branchId || undefined,
@@ -319,6 +347,7 @@ export default function FrontOfficeDesk() {
           setPatients(patientsData);
           setDoctors(doctorsData);
           setAppointmentTypes(apptTypesData);
+          setPackages(pkgsData);
           setReferralPartners(referralPartnersData);
           setExperts(expertsData || []);
           setStaff(staffData || []);
@@ -674,8 +703,8 @@ export default function FrontOfficeDesk() {
         taxPercentage: 0,
         taxAmount: 0,
         totalAmount: price,
-        status: "draft" as const,
-        paymentStatus: "unpaid" as const,
+        status: price === 0 ? ("paid" as const) : ("draft" as const),
+        paymentStatus: price === 0 ? ("paid" as const) : ("unpaid" as const),
         paidAmount: 0,
         balanceAmount: price,
         createdBy: currentUser?.uid || "system",
@@ -687,10 +716,10 @@ export default function FrontOfficeDesk() {
       // Link billing record to the appointment in Firestore
       await appointmentService.updateAppointment(appointmentId, {
         consultationBillingId: billingId,
-        consultationBillingStatus: "unpaid",
+        consultationBillingStatus: price === 0 ? "paid" : "unpaid",
         billingId: null,
         billingStatus: "unpaid",
-        paymentStatus: "unpaid",
+        paymentStatus: price === 0 ? "paid" : "unpaid",
         updatedAt: new Date(),
       } as any);
 
@@ -1013,7 +1042,7 @@ export default function FrontOfficeDesk() {
     }
   };
 
-  const handleCompleteConsultation = async (appointmentId: string) => {
+  const handleCompleteConsultation = async (appointmentId: string, forceComplete: boolean = false) => {
     try {
       const appt = appointments.find((a) => a.id === appointmentId);
 
@@ -1022,7 +1051,7 @@ export default function FrontOfficeDesk() {
       const hasExpert =
         appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
 
-      if (hasDoctor && hasExpert && !appt.doctorConsultationCompleted) {
+      if (hasDoctor && hasExpert && !appt.doctorConsultationCompleted && !forceComplete) {
         // Complete the Doctor part and route to Expert
         await appointmentService.updateAppointment(appointmentId, {
           doctorConsultationCompleted: true,
@@ -1068,6 +1097,23 @@ export default function FrontOfficeDesk() {
           paymentStatus,
           updatedAt: new Date(),
         } as any);
+
+        if (appt.patientPackageId && clinicId) {
+          try {
+            await patientPackageService.consumeSession(appt.patientPackageId, {
+              appointmentId: appt.id,
+              clinicianId: currentUser?.uid,
+              clinicianName: (userData as any)?.name || currentUser?.displayName || "Unknown Clinician",
+            });
+            addToast({
+              title: "Session Consumed",
+              description: "1 package session was automatically deducted.",
+              color: "success"
+            });
+          } catch (err) {
+            console.error("Error consuming session", err);
+          }
+        }
 
         if (clinicId) {
           const patObj = patients.find((p) => p.id === appt.patientId);
@@ -1235,8 +1281,8 @@ export default function FrontOfficeDesk() {
     }
   };
 
-  const handleSaveProcedure = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveProcedure = async (e: React.FormEvent | null, target: "doctor" | "billing" = "billing") => {
+    if (e) e.preventDefault();
     if (!selectedAppointment || !clinicId) return;
 
     setProcedureSaving(true);
@@ -1408,33 +1454,76 @@ export default function FrontOfficeDesk() {
         }
       }
 
-      // Mark appointment expert consultation completed (routing to billing / completed)
+      // Mark appointment status based on target route
+      let newStatus = target === "billing" ? "completed" : "in-progress";
+      let updatedNotes = selectedAppointment.notes || "";
+      let doctorConsultationCompleted = selectedAppointment.doctorConsultationCompleted;
+      
+      if (target === "doctor") {
+        updatedNotes = updatedNotes.replace("[Routed to: Expert]", "").trim();
+        if (!updatedNotes.includes("[Routed to: Doctor]")) {
+           updatedNotes = (updatedNotes + " [Routed to: Doctor]").trim();
+        }
+        doctorConsultationCompleted = false;
+      }
+
       await appointmentService.updateAppointment(selectedAppointment.id, {
-        status: "completed",
+        status: newStatus,
+        notes: updatedNotes,
+        doctorConsultationCompleted: doctorConsultationCompleted,
         billingStatus: newPaymentStatus,
         paymentStatus: newPaymentStatus,
         updatedAt: new Date(),
       } as any);
 
-      // Trigger notification for Front Office / Billing Counter that procedure is done and billing is pending
+      if (selectedAppointment.patientPackageId && clinicId) {
+        try {
+          await patientPackageService.consumeSession(selectedAppointment.patientPackageId, {
+            appointmentId: selectedAppointment.id,
+            clinicianId: currentUser?.uid,
+            clinicianName: (userData as any)?.name || currentUser?.displayName || "Unknown Clinician",
+          });
+          addToast({
+            title: "Session Consumed",
+            description: "1 package session was automatically deducted.",
+            color: "success"
+          });
+        } catch (err) {
+          console.error("Error consuming session", err);
+        }
+      }
+
+      // Trigger notification based on routing target
       if (clinicId) {
         const patObj = patients.find(
           (p) => p.id === selectedAppointment.patientId,
         );
         const patName = patObj ? patObj.name : "Patient";
 
-        NotificationService.sendNotification(clinicId, {
-          title: "Procedure Log Recorded",
-          message: `Procedure log for patient ${patName} has been recorded. Ready for billing settlement.`,
-          type: "billing_queue",
-          targetRole: "front-office",
-        });
+        if (target === "billing") {
+          NotificationService.sendNotification(clinicId, {
+            title: "Procedure Log Recorded",
+            message: `Procedure log for patient ${patName} has been recorded. Ready for billing settlement.`,
+            type: "billing_queue",
+            targetRole: "front-office",
+          });
+        } else {
+          NotificationService.sendNotification(clinicId, {
+            title: "Patient Returned from Expert",
+            message: `Patient ${patName} has finished their procedure and returned to the doctor's cabin.`,
+            type: "doctor_queue",
+            targetRole: "doctor",
+            targetUserId: selectedAppointment.doctorId,
+          });
+        }
       }
 
       addToast({
         title: "Procedure Log Saved",
         description:
-          "Laser & Procedure details logged successfully. Patient is routed to Billing Counter.",
+          target === "billing" 
+            ? "Laser & Procedure details logged successfully. Patient is routed to Billing Counter."
+            : "Procedure logged successfully. Patient routed back to the Doctor.",
         color: "success",
       });
 
@@ -2043,7 +2132,7 @@ export default function FrontOfficeDesk() {
             {/* Left side: Log Form */}
             <form
               className="col-span-3 flex flex-col justify-between border-r border-border-base max-h-[75vh]"
-              onSubmit={handleSaveProcedure}
+              onSubmit={(e) => e.preventDefault()}
             >
               <div className="p-5 space-y-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-3">
@@ -2217,11 +2306,20 @@ export default function FrontOfficeDesk() {
                   Cancel
                 </button>
                 <button
+                  className="h-9 px-4 rounded text-[13px] font-semibold bg-mountain-600 text-white hover:bg-mountain-700 transition-colors outline-none disabled:opacity-50"
+                  disabled={procedureSaving}
+                  onClick={(e) => handleSaveProcedure(e as any, "doctor")}
+                  type="button"
+                >
+                  {procedureSaving ? "Saving..." : "Save & Send to Doctor"}
+                </button>
+                <button
                   className="h-9 px-4 rounded text-[13px] font-semibold bg-primary text-white hover:bg-primary/95 transition-colors outline-none disabled:opacity-50"
                   disabled={procedureSaving}
-                  type="submit"
+                  onClick={(e) => handleSaveProcedure(e as any, "billing")}
+                  type="button"
                 >
-                  {procedureSaving ? "Saving Log..." : "Save Log & Complete"}
+                  {procedureSaving ? "Saving..." : "Save & Send to Billing"}
                 </button>
               </div>
             </form>
@@ -2451,7 +2549,16 @@ export default function FrontOfficeDesk() {
       }
     }
 
-    if (!hasDoctor && !hasExpert && !hasReferral) {
+    const isPackageSale = quickIntakeForm.appointmentTypeId.startsWith("pkg_");
+    const packageId = isPackageSale ? quickIntakeForm.appointmentTypeId.replace("pkg_", "") : null;
+    const pkg = packages.find(p => p.id === packageId);
+
+    if (isPackageSale && !pkg) {
+      addToast({ title: "Validation Error", description: "Selected package not found.", color: "danger" });
+      return;
+    }
+
+    if (!hasDoctor && !hasExpert && !hasReferral && !isPackageSale) {
       addToast({
         title: "Validation Error",
         description:
@@ -2466,6 +2573,7 @@ export default function FrontOfficeDesk() {
     try {
       let patientIdToUse = "";
       let regNumberToUse = "";
+      let patientNameToUse = "";
 
       if (intakeMode === "new") {
         // Check uniqueness of mobile first
@@ -2518,6 +2626,7 @@ export default function FrontOfficeDesk() {
         });
 
         patientIdToUse = newPatientId;
+        patientNameToUse = quickIntakeForm.name.trim();
         const newPatient = {
           id: newPatientId,
           name: quickIntakeForm.name.trim(),
@@ -2541,6 +2650,7 @@ export default function FrontOfficeDesk() {
         // Use the existing patient
         patientIdToUse = selectedExistingPatient.id;
         regNumberToUse = selectedExistingPatient.regNumber || "N/A";
+        patientNameToUse = selectedExistingPatient.name;
 
         // Optionally update existing patient's doctor, referrals or expert in background if changed
         const updateData: any = {};
@@ -2566,110 +2676,258 @@ export default function FrontOfficeDesk() {
         }
       }
 
-      // 3) Create Checked-In appointment (status: confirmed)
-      const now = new Date();
-      let appointmentDate = now;
+      if (isPackageSale && pkg) {
+        // 1. Generate Invoice Number
+        const invoiceNo = await appointmentBillingService.generateInvoiceNumber(clinicId!);
 
-      if (quickIntakeForm.appointmentDate) {
-        appointmentDate = new Date(quickIntakeForm.appointmentDate);
-        // keep current time if it's today, otherwise time is midnight.
-        if (appointmentDate.toDateString() === now.toDateString()) {
-          appointmentDate = now;
+        // 2. Create the Billing record
+        const billingItem = {
+          id: crypto.randomUUID(),
+          appointmentTypeId: "package-sale",
+          appointmentTypeName: `Package: ${pkg.name}`,
+          price: pkg.price,
+          quantity: 1,
+          commission: 0,
+          doctorId: "unassigned",
+          doctorName: "Clinic",
+          amount: pkg.price,
+        };
+
+        const billingData = {
+          invoiceNumber: invoiceNo,
+          clinicId: clinicId!,
+          branchId: branchId || clinicId!,
+          patientId: patientIdToUse,
+          patientName: patientNameToUse,
+          doctorId: "unassigned",
+          doctorName: "Clinic",
+          doctorType: "regular" as const,
+          invoiceDate: new Date(),
+          items: [billingItem],
+          subtotal: pkg.price,
+          itemDiscountAmount: 0,
+          mainDiscountAmount: 0,
+          discountType: "percent" as const,
+          discountValue: 0,
+          discountAmount: 0,
+          taxPercentage: 0,
+          taxAmount: 0,
+          totalAmount: pkg.price,
+          status: "draft" as const,
+          paymentStatus: "unpaid" as const,
+          paidAmount: 0,
+          balanceAmount: pkg.price,
+          createdBy: currentUser?.uid || "system",
+        };
+
+        const billingId = await appointmentBillingService.createBilling(billingData);
+
+        // 3. Record Payment (if price > 0)
+        if (pkg.price > 0) {
+          await appointmentBillingService.recordPayment(
+            billingId,
+            pkg.price,
+            quickIntakeForm.paymentMethod,
+            quickIntakeForm.paymentReference,
+            `Purchased ${pkg.name}`
+          );
         }
-      }
 
-      const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-      const isTodayAppt = appointmentDate.toDateString() === now.toDateString();
-
-      const apptData = {
-        patientId: patientIdToUse,
-        doctorId: quickIntakeForm.doctorId || "unassigned",
-        assignedExpertId: quickIntakeForm.assignedExpertId || undefined,
-        appointmentTypeId:
-          quickIntakeForm.appointmentTypeId ||
-          appointmentTypes[0]?.id ||
-          "default",
-        appointmentDate: appointmentDate,
-        startTime: isTodayAppt ? startTime24 : undefined,
-        endTime: undefined,
-        // Only mark as "confirmed" (checked-in) if the appointment is TODAY.
-        // Future appointments stay "scheduled" and won't appear in today's lobby queue.
-        status: isTodayAppt ? ("confirmed" as const) : ("scheduled" as const),
-        reason: quickIntakeForm.reason.trim() || "Walk-in General Checkup",
-        clinicId: clinicId || "standalone",
-        branchId: branchId || clinicId || "standalone",
-        createdBy: currentUser?.uid || "",
-      };
-
-      const newApptId = await appointmentService.createAppointment(apptData);
-
-      // Generate consultation bill if doctor is assigned
-      if (
-        quickIntakeForm.doctorId &&
-        quickIntakeForm.doctorId !== "unassigned"
-      ) {
-        try {
-          await createConsultationBill(
+        // 4. Add Funds to Wallet
+        if (pkg.walletCreditAmount > 0) {
+          await walletService.addFunds(
             patientIdToUse,
-            quickIntakeForm.doctorId,
-            newApptId,
-            quickIntakeForm.reason.trim() || "Walk-in General Checkup",
-          );
-        } catch (billErr) {
-          console.error(
-            "Error generating quick intake consultation bill:",
-            billErr,
+            clinicId!,
+            branchId || clinicId!,
+            pkg.walletCreditAmount,
+            quickIntakeForm.paymentMethod,
+            `Package Credit: ${pkg.name}`,
+            currentUser?.uid || "system"
           );
         }
-      }
 
-      const patientDisplayName =
-        intakeMode === "new"
-          ? quickIntakeForm.name
-          : selectedExistingPatient.name;
+        // 5. Create visual session tracker if it has total sessions
+        let patientPkgId: string | undefined = undefined;
+        if (pkg.totalSessions && pkg.totalSessions > 0) {
+          let expiresAt: Date | undefined = undefined;
+          if (pkg.validityDays && pkg.validityDays > 0) {
+            const expirationDate = new Date();
+            expirationDate.setDate(expirationDate.getDate() + pkg.validityDays);
+            expiresAt = expirationDate;
+          }
 
-      // Trigger real-time notifications for the assigned Doctor and Expert
-      if (clinicId) {
+          patientPkgId = await patientPackageService.createPatientPackage({
+            patientId: patientIdToUse,
+            packageId: pkg.id,
+            packageName: pkg.name,
+            clinicId: clinicId!,
+            branchId: branchId || clinicId!,
+            totalSessions: pkg.totalSessions,
+            usedSessions: 0,
+            status: "active",
+            expiresAt: expiresAt,
+            createdBy: currentUser?.uid || "system",
+          });
+        }
+        
+        if (quickIntakeForm.startSessionInstantly) {
+          const now = new Date();
+          const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+          const sessionReason = quickIntakeForm.reason.trim() || `Session 1 of ${pkg.name}`;
+          
+          const newApptId = await appointmentService.createAppointment({
+            patientId: patientIdToUse,
+            doctorId: quickIntakeForm.doctorId || "unassigned",
+            assignedExpertId: quickIntakeForm.assignedExpertId || undefined,
+            appointmentTypeId: "package-session",
+            patientPackageId: patientPkgId,
+            appointmentDate: now,
+            startTime: startTime24,
+            status: "confirmed", // Puts patient directly in the Lobby Queue
+            reason: sessionReason,
+            clinicId: clinicId!,
+            branchId: branchId || clinicId!,
+            createdBy: currentUser?.uid || "system",
+            billingId: billingId,
+            billingStatus: "paid",
+            paymentStatus: "paid",
+          } as any);
+          
+          if (patientPkgId) {
+            await patientPackageService.startSession(patientPkgId, newApptId);
+          }
+
+          // Generate consultation bill if doctor is assigned and option is checked
+          if (
+            quickIntakeForm.generateConsultationBill &&
+            quickIntakeForm.doctorId &&
+            quickIntakeForm.doctorId !== "unassigned"
+          ) {
+            try {
+              await createConsultationBill(
+                patientIdToUse,
+                quickIntakeForm.doctorId,
+                newApptId,
+                sessionReason,
+              );
+            } catch (billErr) {
+              console.error(
+                "Error generating consultation bill for package session:",
+                billErr,
+              );
+            }
+          }
+        }
+
+        addToast({
+          title: "Package Sold!",
+          description: `Successfully sold ${pkg.name} to ${patientNameToUse} and credited wallet.`,
+          color: "success"
+        });
+      } else {
+        // Create Appointment
+        const now = new Date();
+        let appointmentDate = now;
+
+        if (quickIntakeForm.appointmentDate) {
+          appointmentDate = new Date(quickIntakeForm.appointmentDate);
+          if (appointmentDate.toDateString() === now.toDateString()) {
+            appointmentDate = now;
+          }
+        }
+
+        const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+        const isTodayAppt = appointmentDate.toDateString() === now.toDateString();
+
+        const apptData = {
+          patientId: patientIdToUse,
+          doctorId: quickIntakeForm.doctorId || "unassigned",
+          assignedExpertId: quickIntakeForm.assignedExpertId || undefined,
+          appointmentTypeId: quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") 
+            ? "package-session" 
+            : (quickIntakeForm.appointmentTypeId || appointmentTypes[0]?.id || "default"),
+          patientPackageId: quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") 
+            ? quickIntakeForm.appointmentTypeId.replace("consume_pkg_", "")
+            : undefined,
+          appointmentDate: appointmentDate,
+          startTime: isTodayAppt ? startTime24 : undefined,
+          status: isTodayAppt ? ("confirmed" as const) : ("scheduled" as const),
+          reason: quickIntakeForm.reason.trim() || "Walk-in General Checkup",
+          clinicId: clinicId || "standalone",
+          branchId: branchId || clinicId || "standalone",
+          createdBy: currentUser?.uid || "",
+        };
+
+        const newApptId = await appointmentService.createAppointment(apptData);
+
+        // Generate consultation bill if doctor is assigned and option is checked
         if (
+          quickIntakeForm.generateConsultationBill &&
           quickIntakeForm.doctorId &&
           quickIntakeForm.doctorId !== "unassigned"
         ) {
-          const docObj = doctors.find((d) => d.id === quickIntakeForm.doctorId);
-          const docName = docObj ? docObj.name : "Clinician";
-
-          NotificationService.sendNotification(clinicId, {
-            title: "New Patient Checked In",
-            message: `Patient ${patientDisplayName} is checked in for consultation with Dr. ${docName}.`,
-            type: "triage",
-            targetRole: "doctor",
-            targetUserId: quickIntakeForm.doctorId,
-          });
+          try {
+            await createConsultationBill(
+              patientIdToUse,
+              quickIntakeForm.doctorId,
+              newApptId,
+              quickIntakeForm.reason.trim() || "Walk-in General Checkup",
+            );
+          } catch (billErr) {
+            console.error(
+              "Error generating quick intake consultation bill:",
+              billErr,
+            );
+          }
         }
-        if (
-          quickIntakeForm.assignedExpertId &&
-          quickIntakeForm.assignedExpertId !== "unassigned"
-        ) {
-          const expObj = experts.find(
-            (e) => e.id === quickIntakeForm.assignedExpertId,
-          );
-          const expName = expObj ? expObj.name : "Expert";
 
-          NotificationService.sendNotification(clinicId, {
-            title: "New Patient Checked In",
-            message: `Patient ${patientDisplayName} is checked in directly for procedure with Expert ${expName}.`,
-            type: "triage",
-            targetRole: "expert",
-            targetUserId: quickIntakeForm.assignedExpertId,
-          });
+        const patientDisplayName =
+          intakeMode === "new"
+            ? quickIntakeForm.name
+            : selectedExistingPatient.name;
+
+        // Trigger real-time notifications for the assigned Doctor and Expert
+        if (clinicId) {
+          if (
+            quickIntakeForm.doctorId &&
+            quickIntakeForm.doctorId !== "unassigned"
+          ) {
+            const docObj = doctors.find((d) => d.id === quickIntakeForm.doctorId);
+            const docName = docObj ? docObj.name : "Clinician";
+
+            NotificationService.sendNotification(clinicId, {
+              title: "New Patient Checked In",
+              message: `Patient ${patientDisplayName} is checked in for consultation with Dr. ${docName}.`,
+              type: "triage",
+              targetRole: "doctor",
+              targetUserId: quickIntakeForm.doctorId,
+            });
+          }
+          if (
+            quickIntakeForm.assignedExpertId &&
+            quickIntakeForm.assignedExpertId !== "unassigned"
+          ) {
+            const expObj = experts.find(
+              (e) => e.id === quickIntakeForm.assignedExpertId,
+            );
+            const expName = expObj ? expObj.name : "Expert";
+
+            NotificationService.sendNotification(clinicId, {
+              title: "New Patient Checked In",
+              message: `Patient ${patientDisplayName} is checked in directly for procedure with Expert ${expName}.`,
+              type: "triage",
+              targetRole: "expert",
+              targetUserId: quickIntakeForm.assignedExpertId,
+            });
+          }
         }
+
+        addToast({
+          title: "Quick Check-In Successful",
+          description: `${patientDisplayName} is checked in successfully (Reg# ${regNumberToUse}).`,
+          color: "success",
+        });
       }
-
-      addToast({
-        title: "Quick Check-In Successful",
-        description: `${patientDisplayName} is checked in successfully (Reg# ${regNumberToUse}).`,
-        color: "success",
-      });
 
       // Fetch fresh patient list so local names resolve immediately
       const updatedPatients = await patientService.getPatients(clinicId);
@@ -2694,6 +2952,10 @@ export default function FrontOfficeDesk() {
         reason: "",
         referralPartnerId: "",
         referrals: [],
+        paymentMethod: "cash",
+        paymentReference: "",
+        generateConsultationBill: true,
+        startSessionInstantly: false,
       });
     } catch (err) {
       console.error("Error creating walk-in intake:", err);
@@ -2917,11 +3179,22 @@ export default function FrontOfficeDesk() {
                                 }))
                               }
                             >
-                              {appointmentTypes.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}
-                                </option>
-                              ))}
+                              <optgroup label="Appointments">
+                                {appointmentTypes.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                              {packages.length > 0 && (
+                                <optgroup label="Treatment Packages">
+                                  {packages.map((pkg) => (
+                                    <option key={`pkg_${pkg.id}`} value={`pkg_${pkg.id}`}>
+                                      📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
                             </select>
                           </div>
                         </div>
@@ -3111,11 +3384,29 @@ export default function FrontOfficeDesk() {
                             </div>
                           )}
 
-                          {/* Appointment Category for Existing Patient */}
-                          <div>
-                            <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                              Appointment Category
-                            </label>
+                          {/* Appointment Date & Category for Existing Patient */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                                Appointment Date
+                              </label>
+                              <input
+                                required
+                                className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
+                                type="date"
+                                value={quickIntakeForm.appointmentDate}
+                                onChange={(e) =>
+                                  setQuickIntakeForm((prev) => ({
+                                    ...prev,
+                                    appointmentDate: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                                Appointment Category
+                              </label>
                             <select
                               className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
                               value={quickIntakeForm.appointmentTypeId}
@@ -3126,13 +3417,34 @@ export default function FrontOfficeDesk() {
                                 }))
                               }
                             >
-                              {appointmentTypes.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}
-                                </option>
-                              ))}
+                              <optgroup label="Appointments">
+                                {appointmentTypes.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                              {activePatientPackages.length > 0 && (
+                                <optgroup label="Active Packages (Consume Session)">
+                                  {activePatientPackages.map((pkg) => (
+                                    <option key={`consume_${pkg.id}`} value={`consume_${pkg.id}`}>
+                                      ⭐ Consume Session: {pkg.packageName} ({pkg.usedSessions}/{pkg.totalSessions} used)
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {packages.length > 0 && (
+                                <optgroup label="Treatment Packages">
+                                  {packages.map((pkg) => (
+                                    <option key={`pkg_${pkg.id}`} value={`pkg_${pkg.id}`}>
+                                      📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
                             </select>
                           </div>
+                        </div>
                         </div>
                       </>
                     )}
@@ -3160,6 +3472,20 @@ export default function FrontOfficeDesk() {
                             </option>
                           ))}
                         </select>
+                        {quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned" && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input 
+                              type="checkbox" 
+                              id="generateConsultationBill"
+                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                              checked={quickIntakeForm.generateConsultationBill}
+                              onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, generateConsultationBill: e.target.checked }))}
+                            />
+                            <label htmlFor="generateConsultationBill" className="text-[11px] text-text-muted font-medium cursor-pointer select-none">
+                              Charge Consultation Fee
+                            </label>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
@@ -3184,6 +3510,60 @@ export default function FrontOfficeDesk() {
                         </select>
                       </div>
                     </div>
+
+                    {/* Payment details for Package Sales */}
+                    {quickIntakeForm.appointmentTypeId.startsWith("pkg_") && (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                          <div>
+                          <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                            Payment Method
+                          </label>
+                          <select
+                            className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                            value={quickIntakeForm.paymentMethod}
+                            onChange={(e) =>
+                              setQuickIntakeForm((prev) => ({ ...prev, paymentMethod: e.target.value }))
+                            }
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="card">Card</option>
+                            <option value="esewa">eSewa</option>
+                            <option value="khalti">Khalti</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                            Payment Reference (Optional)
+                          </label>
+                          <input
+                            className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
+                            placeholder="e.g. Trx ID"
+                            type="text"
+                            value={quickIntakeForm.paymentReference}
+                            onChange={(e) =>
+                              setQuickIntakeForm((prev) => ({ ...prev, paymentReference: e.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      
+                        {/* Checkbox for package sale: start session instantly */}
+                        <div className="mt-3 flex items-center gap-2 p-2 bg-primary/5 rounded border border-primary/10">
+                          <input 
+                            type="checkbox" 
+                            id="intakeStartSession"
+                            className="w-4 h-4 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                            checked={quickIntakeForm.startSessionInstantly}
+                            onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, startSessionInstantly: e.target.checked }))}
+                          />
+                          <label htmlFor="intakeStartSession" className="text-[12px] font-medium text-text-main cursor-pointer select-none">
+                            Start first session instantly (Add to Lobby Queue)
+                          </label>
+                        </div>
+                      </>
+                    )}
 
                     {/* Complaints / Reason */}
                     <div>
@@ -3869,17 +4249,7 @@ export default function FrontOfficeDesk() {
     const pendingBillId = appt.billingId || (appt as any).consultationBillingId;
     const consBill = pendingBillId
       ? billings.find((b) => b.id === pendingBillId)
-      : hasAnyClinician
-        ? billings.find(
-            (b) =>
-              b.patientId === appt.patientId &&
-              b.items?.some(
-                (item: any) =>
-                  item.appointmentTypeId === "consultation-fee" ||
-                  item.appointmentTypeName?.includes("Consultation Fee"),
-              ),
-          )
-        : null;
+      : null;
     const isConsBillPaid = consBill
       ? consBill.status === "paid" || consBill.paymentStatus === "paid"
       : false;
@@ -4075,17 +4445,7 @@ export default function FrontOfficeDesk() {
       const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
       const consBill = (appt as any).consultationBillingId
         ? billings.find((b) => b.id === (appt as any).consultationBillingId)
-        : hasDoctor
-          ? billings.find(
-              (b) =>
-                b.patientId === appt.patientId &&
-                b.items?.some(
-                  (item: any) =>
-                    item.appointmentTypeId === "consultation-fee" ||
-                    item.appointmentTypeName?.includes("Consultation Fee"),
-                ),
-            )
-          : null;
+        : null;
       const isConsBillPaid = consBill
         ? consBill.status === "paid" || consBill.paymentStatus === "paid"
         : false;
@@ -4172,6 +4532,14 @@ export default function FrontOfficeDesk() {
           >
             <IoAddOutline className="w-4 h-4" />
             New Intake Check-In
+          </button>
+          <button
+            className="clarity-btn flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white border-transparent shadow-sm"
+            type="button"
+            onClick={() => setIsSellPackageModalOpen(true)}
+          >
+            <IoReceiptOutline className="w-4 h-4" />
+            Sell Package
           </button>
           <button
             className="clarity-btn clarity-btn-ghost flex items-center gap-1.5"
@@ -4831,18 +5199,29 @@ export default function FrontOfficeDesk() {
                         (!currentExpertId || currentDoctorId)) ||
                         (stage === "expert" &&
                           (!currentDoctorId || currentExpertId))) && (
-                        <button
-                          className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                          type="button"
-                          onClick={() => handleCompleteConsultation(appt.id)}
-                        >
-                          {stage === "doctor"
-                            ? appt.assignedExpertId &&
-                              appt.assignedExpertId !== "unassigned"
-                              ? "Send to Expert Cabin"
-                              : "Complete Consultation"
-                            : "Complete (No Log)"}
-                        </button>
+                        <>
+                          <button
+                            className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                            type="button"
+                            onClick={() => handleCompleteConsultation(appt.id)}
+                          >
+                            {stage === "doctor"
+                              ? appt.assignedExpertId &&
+                                appt.assignedExpertId !== "unassigned"
+                                ? "Send to Expert Cabin"
+                                : "Complete Consultation"
+                              : "Complete (No Log)"}
+                          </button>
+                          {stage === "doctor" && appt.assignedExpertId && appt.assignedExpertId !== "unassigned" && (
+                            <button
+                              className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                              type="button"
+                              onClick={() => handleCompleteConsultation(appt.id, true)}
+                            >
+                              Send to Billing
+                            </button>
+                          )}
+                        </>
                       )}
                       {stage === "billing" && (
                         <button
@@ -4880,7 +5259,13 @@ export default function FrontOfficeDesk() {
       {renderProcedureModal()}
 
       {/* Render the quick intake walk-in modal */}
-      {renderQuickIntakeModal()}
+      {isQuickIntakeOpen && renderQuickIntakeModal()}
+
+      <SellPackageModal
+        isOpen={isSellPackageModalOpen}
+        onClose={() => setIsSellPackageModalOpen(false)}
+        patients={patients}
+      />
     </div>
   );
 }
