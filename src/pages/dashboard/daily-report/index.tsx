@@ -64,10 +64,7 @@ const formatTime = (time: string | undefined, dateObj?: Date): string => {
 
 // Helper function to format currency
 const formatCurrency = (amount: number): string => {
-  return `NPR ${amount.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `NPR ${Math.round(amount).toLocaleString("en-US")}`;
 };
 
 export default function DailyReportPage() {

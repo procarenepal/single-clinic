@@ -212,12 +212,14 @@ export default function FrontOfficeDesk() {
   const [routingTarget, setRoutingTarget] = useState<
     "doctor" | "expert" | "default"
   >("default");
+  const [routingAddCommission, setRoutingAddCommission] = useState(true);
 
   // Procedure log modal state
   const [isProcedureModalOpen, setIsProcedureModalOpen] = useState(false);
   const [procedureSaving, setProcedureSaving] = useState(false);
   const [historicalProcedures, setHistoricalProcedures] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [modalActivePackages, setModalActivePackages] = useState<PatientPackage[]>([]);
 
   const [procedure, setProcedure] = useState({
     procedureType: "CO2 Laser Resurfacing",
@@ -279,6 +281,9 @@ export default function FrontOfficeDesk() {
     paymentReference: "",
     generateConsultationBill: true,
     startSessionInstantly: false,
+    sendDirectlyToCabin: false,
+    addDoctorCommission: true,
+    addExpertCommission: true,
   });
 
   // Mobile duplicate state
@@ -566,6 +571,7 @@ export default function FrontOfficeDesk() {
     doctorId: string,
     appointmentId: string,
     reason: string,
+    addClinicianCommission: boolean = true,
   ) => {
     if (!clinicId) return;
 
@@ -581,20 +587,29 @@ export default function FrontOfficeDesk() {
       }
 
       let docInfo = doctors.find((d) => d.id === doctorId);
+      let expInfo = experts.find((e) => e.id === doctorId);
+      let isExpert = false;
 
-      if (!docInfo && doctorId && doctorId !== "unassigned") {
+      if (!docInfo && !expInfo && doctorId && doctorId !== "unassigned") {
         try {
           docInfo = (await doctorService.getDoctorById(doctorId)) || undefined;
+          if (!docInfo) {
+             expInfo = (await expertService.getExpertById(doctorId)) || undefined;
+          }
         } catch (err) {
-          console.error("Error loading doctor for consultation billing:", err);
+          console.error("Error loading clinician for consultation billing:", err);
         }
       }
 
-      // 1. Get consultation charge from doctor info (with a fallback to 500 NPR)
+      if (expInfo) isExpert = true;
+
+      // 1. Get consultation charge from clinician info (with a fallback to 500 NPR)
       let price = 500;
 
       if (docInfo && docInfo.consultationCharge !== undefined) {
         price = Number(docInfo.consultationCharge) || 0;
+      } else if (expInfo && (expInfo as any).consultationCharge !== undefined) {
+        price = Number((expInfo as any).consultationCharge) || 0;
       }
 
       // 2. Resolve all referrers (polymorphic and multiple)
@@ -665,15 +680,18 @@ export default function FrontOfficeDesk() {
         clinicId!,
       );
 
+      const clinicianName = isExpert ? expInfo?.name : docInfo?.name;
+      const defaultComm = isExpert ? expInfo?.defaultCommission : docInfo?.defaultCommission;
+
       const billingItem = {
         id: crypto.randomUUID(),
         appointmentTypeId: "consultation-fee",
-        appointmentTypeName: `Doctor Consultation Fee - Dr. ${docInfo?.name || "GP"}`,
+        appointmentTypeName: `${isExpert ? "Expert" : "Doctor"} Consultation Fee - ${isExpert ? "" : "Dr. "}${clinicianName || "GP"}`,
         price: price,
         quantity: 1,
-        commission: docInfo?.defaultCommission || 0,
+        commission: addClinicianCommission ? (defaultComm || 0) : 0,
         doctorId: doctorId,
-        doctorName: docInfo?.name || "Unknown Doctor",
+        doctorName: clinicianName || "Unknown Clinician",
         amount: price,
       };
 
@@ -726,24 +744,36 @@ export default function FrontOfficeDesk() {
       // Log commissions
       const creatorUserId = currentUser?.uid || "system";
 
-      // 1) Log Consulting Doctor Commission
-      if (docInfo?.defaultCommission && docInfo.defaultCommission > 0) {
+      // 1) Log Consulting Clinician Commission
+      if (addClinicianCommission && defaultComm && defaultComm > 0) {
         try {
-          await doctorCommissionService.createCommission(
-            {
-              id: billingId,
-              ...billingData,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            } as any,
-            docInfo.defaultCommission,
-            creatorUserId,
-          );
-        } catch (docCommErr) {
-          console.error(
-            "Error creating consulting doctor commission:",
-            docCommErr,
-          );
+          if (isExpert && expInfo) {
+            await expertCommissionService.createCommission(
+              expInfo.id,
+              expInfo.name,
+              {
+                id: billingId,
+                ...billingData,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              } as any,
+              defaultComm,
+              creatorUserId
+            );
+          } else if (docInfo) {
+            await doctorCommissionService.createCommission(
+              {
+                id: billingId,
+                ...billingData,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              } as any,
+              defaultComm,
+              creatorUserId,
+            );
+          }
+        } catch (commErr) {
+          console.error("Error creating consulting clinician commission:", commErr);
         }
       }
 
@@ -846,6 +876,7 @@ export default function FrontOfficeDesk() {
           appt.doctorId,
           appointmentId,
           appt.reason || "General consultation",
+          true,
         );
       }
 
@@ -1093,6 +1124,7 @@ export default function FrontOfficeDesk() {
 
         await appointmentService.updateAppointment(appointmentId, {
           status: "completed",
+          doctorConsultationCompleted: true,
           billingStatus,
           paymentStatus,
           updatedAt: new Date(),
@@ -1145,10 +1177,23 @@ export default function FrontOfficeDesk() {
 
   const handleCompleteCheckout = async (appointmentId: string) => {
     try {
+      const appt = appointments.find((a) => a.id === appointmentId);
       await appointmentService.updateAppointment(appointmentId, {
         checkoutCompleted: true,
         updatedAt: new Date(),
       } as any);
+
+      if (appt?.patientPackageId && clinicId) {
+        try {
+          await patientPackageService.consumeSession(appt.patientPackageId, {
+            appointmentId: appt.id,
+            clinicianId: currentUser?.uid,
+            clinicianName: (userData as any)?.name || currentUser?.displayName || "System/Front Desk",
+          });
+        } catch (err) {
+          console.error("Error consuming session during checkout:", err);
+        }
+      }
       addToast({
         title: "Checkout Completed",
         description: "Patient checkout finalized successfully.",
@@ -1289,9 +1334,18 @@ export default function FrontOfficeDesk() {
     try {
       const currentUserId = currentUser?.uid || "expert";
 
+      let packageIdToConsume = selectedAppointment.patientPackageId;
+      let actualProcedureName = procedure.procedureType;
+
+      if (procedure.procedureType.startsWith("consume_pkg_")) {
+        packageIdToConsume = procedure.procedureType.replace("consume_pkg_", "");
+        const pkg = modalActivePackages.find(p => p.id === packageIdToConsume);
+        actualProcedureName = pkg ? pkg.packageName : "Package Session";
+      }
+
       // Build descriptive note content
       const settingsStr = `Energy: ${procedure.energy || "N/A"} J/cm² | Spot: ${procedure.spotSize || "N/A"} mm | Pulse: ${procedure.pulseWidth || "N/A"} ms | Passes: ${procedure.passes || "N/A"}`;
-      const procedureNoteContent = `Procedure: ${procedure.procedureType}\nArea: ${procedure.area || "N/A"}\nLaser Settings: ${settingsStr}\nClinical Notes: ${procedure.notes || "None"}\nCharge: ${procedure.fee ? `${procedure.fee} NPR` : "Free/Included"}`;
+      const procedureNoteContent = `Procedure: ${actualProcedureName}\nArea: ${procedure.area || "N/A"}\nLaser Settings: ${settingsStr}\nClinical Notes: ${procedure.notes || "None"}\nCharge: ${procedure.fee ? `${procedure.fee} NPR` : "Free/Included"}`;
 
       // Save directly into patient Note Entries (sectionKey = "laser-procedure")
       await PatientNoteEntriesService.saveNoteEntry(
@@ -1321,7 +1375,7 @@ export default function FrontOfficeDesk() {
               id: crypto.randomUUID(),
               appointmentTypeId:
                 selectedAppointment.appointmentTypeId || "procedure-fee",
-              appointmentTypeName: `${procedure.procedureType} (Procedure Fee)`,
+              appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
               price: feeNum,
               quantity: 1,
               commission: 0,
@@ -1394,7 +1448,7 @@ export default function FrontOfficeDesk() {
               id: crypto.randomUUID(),
               appointmentTypeId:
                 selectedAppointment.appointmentTypeId || "procedure-fee",
-              appointmentTypeName: `${procedure.procedureType} (Procedure Fee)`,
+              appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
               price: feeNum,
               quantity: 1,
               commission: (docInfo as any)?.defaultCommission || 0,
@@ -1457,7 +1511,7 @@ export default function FrontOfficeDesk() {
       // Mark appointment status based on target route
       let newStatus = target === "billing" ? "completed" : "in-progress";
       let updatedNotes = selectedAppointment.notes || "";
-      let doctorConsultationCompleted = selectedAppointment.doctorConsultationCompleted;
+      let doctorConsultationCompleted = target === "billing" ? true : selectedAppointment.doctorConsultationCompleted;
       
       if (target === "doctor") {
         updatedNotes = updatedNotes.replace("[Routed to: Expert]", "").trim();
@@ -1468,17 +1522,18 @@ export default function FrontOfficeDesk() {
       }
 
       await appointmentService.updateAppointment(selectedAppointment.id, {
-        status: newStatus,
+        status: newStatus as any,
         notes: updatedNotes,
         doctorConsultationCompleted: doctorConsultationCompleted,
         billingStatus: newPaymentStatus,
         paymentStatus: newPaymentStatus,
+        patientPackageId: packageIdToConsume,
         updatedAt: new Date(),
       } as any);
 
-      if (selectedAppointment.patientPackageId && clinicId) {
+      if (packageIdToConsume && clinicId) {
         try {
-          await patientPackageService.consumeSession(selectedAppointment.patientPackageId, {
+          await patientPackageService.consumeSession(packageIdToConsume, {
             appointmentId: selectedAppointment.id,
             clinicianId: currentUser?.uid,
             clinicianName: (userData as any)?.name || currentUser?.displayName || "Unknown Clinician",
@@ -1530,6 +1585,7 @@ export default function FrontOfficeDesk() {
       setIsProcedureModalOpen(false);
       setSelectedAppointment(null);
       setHistoricalProcedures([]);
+      setModalActivePackages([]);
       setProcedure({
         procedureType: "CO2 Laser Resurfacing",
         energy: "",
@@ -1710,8 +1766,7 @@ export default function FrontOfficeDesk() {
   const renderRoutingModal = () => {
     if (!isRoutingModalOpen || !routingAppointment) return null;
 
-    const modalRoot =
-      document.getElementById("dashboard-scroll-container") || document.body;
+    const modalRoot = document.body;
     const hasDoc =
       routingAppointment.doctorId &&
       routingAppointment.doctorId !== "unassigned";
@@ -1781,7 +1836,20 @@ export default function FrontOfficeDesk() {
             </p>
           </div>
 
-          <div className="px-5 py-3.5 border-t border-border-base bg-surface-2 flex justify-end gap-3 rounded-b-lg">
+          <div className="mt-4 pt-4 border-t border-border-base flex gap-2 justify-end px-5 pb-5">
+            <div className="flex-1 flex items-center mt-2 px-2">
+                 {(routingTarget === "doctor" || routingTarget === "expert") && routingCabin && routingCabin !== "unassigned" && (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-text-main font-medium">
+                      <input 
+                        type="checkbox" 
+                        className="w-3.5 h-3.5 text-primary rounded focus:ring-primary border-border-base"
+                        checked={routingAddCommission}
+                        onChange={(e) => setRoutingAddCommission(e.target.checked)}
+                      />
+                      Add commission for clinician
+                    </label>
+                 )}
+              </div>
             <button
               className="h-9 px-4 rounded border border-border-base text-[12.5px] font-medium text-text-muted hover:bg-surface-3 transition-colors"
               type="button"
@@ -1806,8 +1874,7 @@ export default function FrontOfficeDesk() {
   const renderTriageModal = () => {
     if (!isTriageModalOpen || !selectedAppointment) return null;
 
-    const modalRoot =
-      document.getElementById("dashboard-scroll-container") || document.body;
+    const modalRoot = document.body;
 
     const handleTriageKeyDown = (
       e: React.KeyboardEvent<HTMLInputElement>,
@@ -2071,24 +2138,15 @@ export default function FrontOfficeDesk() {
   const renderProcedureModal = () => {
     if (!isProcedureModalOpen || !selectedAppointment) return null;
 
-    const modalRoot =
-      document.getElementById("dashboard-scroll-container") || document.body;
+    const modalRoot = document.body;
 
     const getBookedApptTypeOption = () => {
       const label = getApptTypeLabel(selectedAppointment.appointmentTypeId);
-      const standardOptions = [
-        "CO2 Laser Resurfacing",
-        "Q-Switched Nd:YAG Laser",
-        "Carbon Laser Peel",
-        "Chemical Peel",
-        "Hydrafacial",
-        "PRP Therapy",
-        "Botox / Fillers",
-        "Microdermabrasion",
-        "Other",
-      ];
-
-      if (!standardOptions.includes(label)) {
+      if (selectedAppointment.appointmentTypeId === "package-session") {
+         return null;
+      }
+      const isDynamicPresent = appointmentTypes.some((t) => t.name === label);
+      if (!isDynamicPresent) {
         return <option value={label}>{label} (Booked)</option>;
       }
 
@@ -2144,29 +2202,34 @@ export default function FrontOfficeDesk() {
                     <select
                       className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
                       value={procedure.procedureType}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        let newFee = procedure.fee;
+                        if (val.startsWith("consume_pkg_")) {
+                          newFee = "0";
+                        } else {
+                          const matchingType = appointmentTypes.find(t => t.name === val);
+                          if (matchingType) {
+                            newFee = String(matchingType.price || 0);
+                          }
+                        }
                         setProcedure((p) => ({
                           ...p,
-                          procedureType: e.target.value,
-                        }))
-                      }
+                          procedureType: val,
+                          fee: newFee,
+                        }));
+                      }}
                     >
-                      <option value="CO2 Laser Resurfacing">
-                        CO2 Laser Resurfacing
-                      </option>
-                      <option value="Q-Switched Nd:YAG Laser">
-                        Q-Switched Nd:YAG Laser
-                      </option>
-                      <option value="Carbon Laser Peel">
-                        Carbon Laser Peel
-                      </option>
-                      <option value="Chemical Peel">Chemical Peel</option>
-                      <option value="Hydrafacial">Hydrafacial</option>
-                      <option value="PRP Therapy">PRP Therapy</option>
-                      <option value="Botox / Fillers">Botox / Fillers</option>
-                      <option value="Microdermabrasion">
-                        Microdermabrasion
-                      </option>
+                      {modalActivePackages.map((pkg) => (
+                        <option key={`pkg_${pkg.id}`} value={`consume_pkg_${pkg.id}`}>
+                          Consume Session: {pkg.packageName} ({pkg.usedSessions}/{pkg.totalSessions} used)
+                        </option>
+                      ))}
+                      {appointmentTypes.map((type) => (
+                        <option key={type.id} value={type.name}>
+                          {type.name}
+                        </option>
+                      ))}
                       {getBookedApptTypeOption()}
                       <option value="Other">Other</option>
                     </select>
@@ -2797,18 +2860,21 @@ export default function FrontOfficeDesk() {
             await patientPackageService.startSession(patientPkgId, newApptId);
           }
 
-          // Generate consultation bill if doctor is assigned and option is checked
-          if (
-            quickIntakeForm.generateConsultationBill &&
-            quickIntakeForm.doctorId &&
-            quickIntakeForm.doctorId !== "unassigned"
-          ) {
+          // Generate consultation bill if a clinician is assigned and option is checked
+          const hasDoctor = quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
+          const hasExpert = quickIntakeForm.assignedExpertId && quickIntakeForm.assignedExpertId !== "unassigned";
+
+          if (quickIntakeForm.generateConsultationBill && (hasDoctor || hasExpert)) {
+            const clinicianIdToBill = hasDoctor ? quickIntakeForm.doctorId : quickIntakeForm.assignedExpertId;
+            const addCommissionFlag = hasDoctor ? quickIntakeForm.addDoctorCommission : quickIntakeForm.addExpertCommission;
+            
             try {
               await createConsultationBill(
                 patientIdToUse,
-                quickIntakeForm.doctorId,
+                clinicianIdToBill,
                 newApptId,
                 sessionReason,
+                addCommissionFlag,
               );
             } catch (billErr) {
               console.error(
@@ -2839,6 +2905,15 @@ export default function FrontOfficeDesk() {
         const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
         const isTodayAppt = appointmentDate.toDateString() === now.toDateString();
 
+        const hasAssignedDoctor = quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
+        const hasAssignedExpert = !!quickIntakeForm.assignedExpertId;
+        
+        let targetStatus: any = isTodayAppt ? "confirmed" : "scheduled";
+        if (isTodayAppt && quickIntakeForm.sendDirectlyToCabin) {
+           if (hasAssignedDoctor) targetStatus = "doctor";
+           else if (hasAssignedExpert) targetStatus = "expert";
+        }
+
         const apptData = {
           patientId: patientIdToUse,
           doctorId: quickIntakeForm.doctorId || "unassigned",
@@ -2851,27 +2926,39 @@ export default function FrontOfficeDesk() {
             : undefined,
           appointmentDate: appointmentDate,
           startTime: isTodayAppt ? startTime24 : undefined,
-          status: isTodayAppt ? ("confirmed" as const) : ("scheduled" as const),
+          status: targetStatus,
           reason: quickIntakeForm.reason.trim() || "Walk-in General Checkup",
           clinicId: clinicId || "standalone",
           branchId: branchId || clinicId || "standalone",
           createdBy: currentUser?.uid || "",
+          ...(quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") && {
+            billingStatus: "paid" as const,
+            paymentStatus: "paid" as const,
+          })
         };
 
         const newApptId = await appointmentService.createAppointment(apptData);
 
-        // Generate consultation bill if doctor is assigned and option is checked
-        if (
-          quickIntakeForm.generateConsultationBill &&
-          quickIntakeForm.doctorId &&
-          quickIntakeForm.doctorId !== "unassigned"
-        ) {
+        if (quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_")) {
+          const patientPkgId = quickIntakeForm.appointmentTypeId.replace("consume_pkg_", "");
+          await patientPackageService.startSession(patientPkgId, newApptId);
+        }
+
+        // Generate consultation bill if a clinician is assigned and option is checked
+        const hasDoctor = quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
+        const hasExpert = quickIntakeForm.assignedExpertId && quickIntakeForm.assignedExpertId !== "unassigned";
+
+        if (quickIntakeForm.generateConsultationBill && (hasDoctor || hasExpert)) {
+          const clinicianIdToBill = hasDoctor ? quickIntakeForm.doctorId : quickIntakeForm.assignedExpertId;
+          const addCommissionFlag = hasDoctor ? quickIntakeForm.addDoctorCommission : quickIntakeForm.addExpertCommission;
+
           try {
             await createConsultationBill(
               patientIdToUse,
-              quickIntakeForm.doctorId,
+              clinicianIdToBill,
               newApptId,
               quickIntakeForm.reason.trim() || "Walk-in General Checkup",
+              addCommissionFlag,
             );
           } catch (billErr) {
             console.error(
@@ -2955,7 +3042,10 @@ export default function FrontOfficeDesk() {
         paymentMethod: "cash",
         paymentReference: "",
         generateConsultationBill: true,
+        addDoctorCommission: true,
+        addExpertCommission: true,
         startSessionInstantly: false,
+        sendDirectlyToCabin: false,
       });
     } catch (err) {
       console.error("Error creating walk-in intake:", err);
@@ -2972,8 +3062,7 @@ export default function FrontOfficeDesk() {
   const renderQuickIntakeModal = () => {
     if (!isQuickIntakeOpen) return null;
 
-    const modalRoot =
-      document.getElementById("dashboard-scroll-container") || document.body;
+    const modalRoot = document.body;
 
     return createPortal(
       <>
@@ -3427,7 +3516,7 @@ export default function FrontOfficeDesk() {
                               {activePatientPackages.length > 0 && (
                                 <optgroup label="Active Packages (Consume Session)">
                                   {activePatientPackages.map((pkg) => (
-                                    <option key={`consume_${pkg.id}`} value={`consume_${pkg.id}`}>
+                                    <option key={`consume_${pkg.id}`} value={`consume_pkg_${pkg.id}`}>
                                       ⭐ Consume Session: {pkg.packageName} ({pkg.usedSessions}/{pkg.totalSessions} used)
                                     </option>
                                   ))}
@@ -3484,6 +3573,17 @@ export default function FrontOfficeDesk() {
                             <label htmlFor="generateConsultationBill" className="text-[11px] text-text-muted font-medium cursor-pointer select-none">
                               Charge Consultation Fee
                             </label>
+                            
+                            <input 
+                              type="checkbox" 
+                              id="addClinicianCommissionDoc"
+                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer ml-3"
+                              checked={quickIntakeForm.addDoctorCommission}
+                              onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, addDoctorCommission: e.target.checked }))}
+                            />
+                            <label htmlFor="addClinicianCommissionDoc" className="text-[11px] text-text-muted font-medium cursor-pointer select-none">
+                              Add commission
+                            </label>
                           </div>
                         )}
                       </div>
@@ -3508,6 +3608,20 @@ export default function FrontOfficeDesk() {
                             </option>
                           ))}
                         </select>
+                        {quickIntakeForm.assignedExpertId && quickIntakeForm.assignedExpertId !== "unassigned" && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input 
+                              type="checkbox" 
+                              id="addClinicianCommissionExp"
+                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                              checked={quickIntakeForm.addExpertCommission}
+                              onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, addExpertCommission: e.target.checked }))}
+                            />
+                            <label htmlFor="addClinicianCommissionExp" className="text-[11px] text-text-muted font-medium cursor-pointer select-none">
+                              Add commission
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -3582,6 +3696,22 @@ export default function FrontOfficeDesk() {
                         }
                       />
                     </div>
+                    
+                    {/* Checkbox for bypass workflow */}
+                    {quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") && (
+                      <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-500/10 rounded border border-indigo-500/20">
+                        <input 
+                          type="checkbox" 
+                          id="intakeSendDirect"
+                          className="w-4 h-4 rounded border-border-base text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                          checked={quickIntakeForm.sendDirectlyToCabin}
+                          onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, sendDirectlyToCabin: e.target.checked }))}
+                        />
+                        <label htmlFor="intakeSendDirect" className="text-[12px] font-medium text-text-main cursor-pointer select-none">
+                          Skip Lobby/Triage (Send directly to Doctor or Expert Cabin)
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Right Column: Polymorphic Referrals Panel */}
@@ -4329,12 +4459,10 @@ export default function FrontOfficeDesk() {
         }
 
         return {
-          label: "Write Prescription",
-          icon: <IoDocumentTextOutline className="w-4 h-4" />,
-          colorClass:
-            "bg-amber-500 text-white hover:bg-amber-600 animate-pulse",
-          onClick: () =>
-            navigate(`/dashboard/prescriptions/new?appointmentId=${appt.id}`),
+          label: hasExpert ? "Send to Expert Cabin" : "Complete (No Prescription)",
+          icon: <IoCheckmarkCircleOutline className="w-4 h-4" />,
+          colorClass: "bg-primary text-white hover:bg-primary/90",
+          onClick: () => handleCompleteConsultation(appt.id),
         };
       }
       case "expert": {
@@ -4392,6 +4520,12 @@ export default function FrontOfficeDesk() {
                 .finally(() => {
                   setLoadingHistory(false);
                 });
+                
+              patientPackageService.getPatientPackages(appt.patientId, clinicId)
+                .then(data => {
+                  setModalActivePackages(data.filter(p => p.status !== "expired" && p.status !== "completed"));
+                })
+                .catch(console.error);
             }
           },
         };
@@ -5200,18 +5334,24 @@ export default function FrontOfficeDesk() {
                         (stage === "expert" &&
                           (!currentDoctorId || currentExpertId))) && (
                         <>
-                          <button
-                            className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                            type="button"
-                            onClick={() => handleCompleteConsultation(appt.id)}
-                          >
-                            {stage === "doctor"
-                              ? appt.assignedExpertId &&
-                                appt.assignedExpertId !== "unassigned"
-                                ? "Send to Expert Cabin"
-                                : "Complete Consultation"
-                              : "Complete (No Log)"}
-                          </button>
+                          {stage === "doctor" ? (
+                            <button
+                              className="h-9 px-3 rounded text-[12.5px] font-medium border border-amber-500/50 text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-colors outline-none flex items-center gap-1.5"
+                              type="button"
+                              onClick={() => navigate(`/dashboard/prescriptions/new?appointmentId=${appt.id}`)}
+                            >
+                              <IoDocumentTextOutline className="w-4 h-4" />
+                              Write Prescription
+                            </button>
+                          ) : (
+                            <button
+                              className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                              type="button"
+                              onClick={() => handleCompleteConsultation(appt.id)}
+                            >
+                              Complete (No Log)
+                            </button>
+                          )}
                           {stage === "doctor" && appt.assignedExpertId && appt.assignedExpertId !== "unassigned" && (
                             <button
                               className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"

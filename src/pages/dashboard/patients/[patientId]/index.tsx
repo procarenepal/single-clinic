@@ -25,6 +25,7 @@ import { appointmentService } from "@/services/appointmentService";
 import { prescriptionService } from "@/services/prescriptionService";
 import { clinicService } from "@/services/clinicService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { MedicalRecordsService } from "@/services/medicalRecordsService";
 import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService";
 import { MedicalReportResponseService } from "@/services/medicalReportResponseService";
@@ -286,16 +287,19 @@ export default function PatientDetailPage() {
 
           return [];
         }),
-        isBillingEnabled
-          ? appointmentBillingService
-              .getBillingByPatient(patientId, clinicId)
-              .catch((err) => {
-                console.warn("Failed to fetch billing records:", err);
-
-                return [];
-              })
-          : Promise.resolve([]),
-      ]);
+          isBillingEnabled
+            ? appointmentBillingService
+                .getBillingByPatient(patientId, clinicId)
+                .catch((err) => {
+                  console.warn("Failed to fetch billing records:", err);
+                  return [];
+                })
+            : Promise.resolve([]),
+          expertService.getExpertsByClinic(clinicId).catch((err) => {
+            console.warn("Failed to fetch experts:", err);
+            return [];
+          }),
+        ]);
 
       // Extract data from results with proper fallbacks
       const clinicData =
@@ -314,10 +318,23 @@ export default function PatientDetailPage() {
         results[7].status === "fulfilled" ? results[7].value : [];
       const medicalReportResponses =
         results[8].status === "fulfilled" ? results[8].value : null;
-      const medicalReportFields =
+      const rawMedicalReportFields =
         results[9].status === "fulfilled" ? results[9].value : [];
+        
+      // Deduplicate medical report fields to prevent duplicate print rows
+      const medicalReportFields = [];
+      const seenKeys = new Set<string>();
+      for (const field of rawMedicalReportFields as any[]) {
+        if (!seenKeys.has(field.fieldKey)) {
+          seenKeys.add(field.fieldKey);
+          medicalReportFields.push(field);
+        }
+      }
+
       const billingRecords =
         results[10].status === "fulfilled" ? results[10].value : [];
+      const experts =
+        results[11].status === "fulfilled" ? results[11].value : [];
 
       // Generate and open print window
       const printContent = generateComprehensivePrintContent({
@@ -325,6 +342,7 @@ export default function PatientDetailPage() {
         clinic: clinicData,
         layoutConfig,
         doctors,
+        experts,
         appointments,
         prescriptions,
         documents,
@@ -368,6 +386,8 @@ export default function PatientDetailPage() {
       patient,
       clinic,
       layoutConfig,
+      doctors = [],
+      experts = [],
       prescriptions = [],
       noteEntries = [],
       medicalReportResponses = null,
@@ -387,7 +407,22 @@ export default function PatientDetailPage() {
         : layoutConfig?.headerHeight === "expanded"
           ? 220
           : 180;
+          
     const topMarginMm = layoutConfig?.contentTopMarginWithoutLetterheadMm || 10;
+
+    const primaryDoctor = doctors.find((d: any) => d.id === patient.doctorId);
+    const doctorName = primaryDoctor ? primaryDoctor.name : "—";
+    
+    const primaryExpert = experts.find((e: any) => e.id === patient.assignedExpertId);
+    const expertName = primaryExpert ? primaryExpert.name : null;
+    const consultantText = expertName && expertName !== "—" 
+      ? `${doctorName} / ${expertName}` 
+      : doctorName;
+
+    const patientAge = calculateAge(patient.dob) || patient.age || "—";
+    const patientBg = patient.bloodGroup || (medicalReportResponses?.fieldValues && medicalReportResponses.fieldValues["blood-group"]) || "—";
+    const regDate = patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : "—";
+    const displayAddress = patient.address && patient.address.toLowerCase() !== "walk-in" ? patient.address : "—";
 
     return `<!DOCTYPE html>
 <html>
@@ -423,38 +458,43 @@ export default function PatientDetailPage() {
       border-top: 1px solid #e2e8f0; 
       border-bottom: 1px solid #e2e8f0; 
       padding: 6px 0; 
+      background-color: #f8fafc;
     }
     .document-title h2 { 
       font-size: 15px; 
-      font-weight: 500; 
+      font-weight: 600; 
       margin: 0; 
       text-transform: uppercase; 
       letter-spacing: 0.1em; 
-      color: #1e293b; 
+      color: #0f172a; 
     }
-    .document-subtitle { font-size: 10px; color: #64748b; margin-top: 2px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.05em; }
+    .document-subtitle { font-size: 10px; color: #64748b; margin-top: 2px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
     
-    .patient-overview { 
-      background: #f8fafc; 
-      border-radius: 4px; 
-      padding: 10px 15px; 
-      margin-bottom: 15px; 
-      border: 1px solid #f1f5f9; 
+    .patient-id-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      border: 1px solid #cbd5e1;
     }
-    .patient-overview h3 { 
-      margin: 0 0 6px 0; 
-      color: #64748b; 
-      font-size: 9px; 
-      font-weight: 600; 
-      text-transform: uppercase; 
-      border-bottom: 1px solid #e2e8f0; 
-      padding-bottom: 3px; 
-      letter-spacing: 0.05em; 
+    .patient-id-table th, .patient-id-table td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      font-size: 10px;
     }
-    .patient-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 20px; }
-    .patient-field { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px; }
-    .patient-field .label { font-size: 9px; font-weight: 400; color: #64748b; text-transform: uppercase; }
-    .patient-field .value { font-size: 10.5px; color: #1e293b; font-weight: 500; }
+    .patient-id-table th {
+      background-color: #f1f5f9;
+      color: #475569;
+      font-weight: 600;
+      text-transform: uppercase;
+      text-align: left;
+      width: 15%;
+      letter-spacing: 0.02em;
+    }
+    .patient-id-table td {
+      color: #0f172a;
+      font-weight: 500;
+      width: 35%;
+    }
 
     .section { margin-bottom: 15px; page-break-inside: avoid; }
     .section-header { 
@@ -514,17 +554,34 @@ export default function PatientDetailPage() {
         <div class="document-subtitle">Clinical Summary for ${patient.name}</div>
       </div>
       
-      <div class="patient-overview">
-        <h3>Patient Identification</h3>
-        <div class="patient-grid">
-          <div class="patient-field"><span class="label">Name</span><span class="value">${patient.name}</span></div>
-          <div class="patient-field"><span class="label">Reg #</span><span class="value">${patient.regNumber || "—"}</span></div>
-          <div class="patient-field"><span class="label">Age / Gender</span><span class="value">${calculateAge(patient.dob)} / ${patient.gender || "—"}</span></div>
-          <div class="patient-field"><span class="label">Blood Group</span><span class="value">${patient.bloodGroup || "—"}</span></div>
-          <div class="patient-field"><span class="label">Contact</span><span class="value">${patient.mobile || "—"}</span></div>
-          <div class="patient-field"><span class="label">Email</span><span class="value">${patient.email || "—"}</span></div>
-        </div>
-      </div>
+      <table class="patient-id-table">
+        <tbody>
+          <tr>
+            <th>Patient Name</th>
+            <td style="font-size: 11.5px; font-weight: 700;">${patient.name}</td>
+            <th>Reg / UHID #</th>
+            <td style="font-weight: 600;">${patient.regNumber || "—"}</td>
+          </tr>
+          <tr>
+            <th>Age / Gender</th>
+            <td>${patientAge} / <span style="text-transform: capitalize;">${patient.gender || "—"}</span></td>
+            <th>Blood Group</th>
+            <td><strong style="color: #be123c;">${patientBg}</strong></td>
+          </tr>
+          <tr>
+            <th>Address</th>
+            <td>${displayAddress}</td>
+            <th>Contact</th>
+            <td>${patient.mobile || "—"}</td>
+          </tr>
+          <tr>
+            <th>Consultant</th>
+            <td style="font-weight: 600;">${consultantText}</td>
+            <th>Registered On</th>
+            <td>${regDate}</td>
+          </tr>
+        </tbody>
+      </table>
 
       ${
         medicalReportResponses && medicalReportFields.length > 0

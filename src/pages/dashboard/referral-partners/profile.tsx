@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   IoArrowBackOutline,
@@ -120,7 +121,9 @@ function ModalShell({
   };
   const maxWidth = sizeClasses[size] || "max-w-md";
 
-  return (
+  const modalRoot = document.body;
+
+  return createPortal(
     <>
       <div
         className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-sm"
@@ -146,7 +149,8 @@ function ModalShell({
           <div className="overflow-y-auto">{children}</div>
         </div>
       </div>
-    </>
+    </>,
+    modalRoot
   );
 }
 

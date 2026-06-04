@@ -393,6 +393,14 @@ export default function PathologyPage() {
     loadData();
   }, [clinicId, branchId]);
 
+  // Refresh billings and tests when switching to daily report tab
+  useEffect(() => {
+    if (activeTab === "dailyReport" && clinicId) {
+      pathologyBillingService.getBillingByClinic(clinicId, branchId).then(setBillings);
+      pathologyService.getTestsByClinic(clinicId, branchId).then(setTests);
+    }
+  }, [activeTab, clinicId, branchId]);
+
   // Filtered data
   const filteredTests = useMemo(() => {
     if (!testsSearchQuery.trim()) return tests;
@@ -526,18 +534,24 @@ export default function PathologyPage() {
     });
 
     // Calculate statistics
+    const validBillings = dailyBillings.filter(b => b.status !== "cancelled");
+    const revenueBillings = validBillings.filter(b => b.status !== "draft");
+
     const totalTests = dailyTests.length;
-    const totalBillings = dailyBillings.length;
-    const totalRevenue = dailyBillings.reduce(
+    const totalBillings = validBillings.length;
+    
+    const totalRevenue = revenueBillings.reduce(
       (sum, billing) => sum + (billing.totalAmount || 0),
       0,
     );
-    const totalPaid = dailyBillings
-      .filter((b) => b.status === "paid")
-      .reduce((sum, billing) => sum + (billing.totalAmount || 0), 0);
-    const totalPending = dailyBillings
-      .filter((b) => b.status === "draft" || b.status === "finalized")
-      .reduce((sum, billing) => sum + (billing.totalAmount || 0), 0);
+    const totalPaid = revenueBillings.reduce(
+      (sum, billing) => sum + (billing.paidAmount || 0), 
+      0
+    );
+    const totalPending = revenueBillings.reduce(
+      (sum, billing) => sum + (billing.balanceAmount || 0), 
+      0
+    );
 
     // Test types breakdown
     const testTypeBreakdown: Record<string, number> = {};
@@ -2037,7 +2051,7 @@ export default function PathologyPage() {
               ${param.patientResult}
             </td>
             <td style="text-align: center;">${flagHtml}</td>
-            <td style="font-size: 11px; color: #475569;">${param.referenceRange}</td>
+            <td style="font-size: 11px; color: #111827;">${param.referenceRange}</td>
             <td class="unit-cell">${param.unit}</td>
           </tr>
         `;
@@ -2089,7 +2103,7 @@ export default function PathologyPage() {
                   <p class="meta-text">Generated on: ${new Date().toLocaleString()}</p>
                 </div>
                 <div class="technician-info">
-                  ${test.labTechnicianName ? `<p style="margin:0; font-weight:700; font-size:13px; color:#1e293b;">${test.labTechnicianName}</p><p style="margin:0; font-size:11px; color:#64748b; margin-bottom:8px;">Lab Technician</p>` : ""}
+                  ${test.labTechnicianName ? `<p style="margin:0; font-weight:700; font-size:13px; color:#000000;">${test.labTechnicianName}</p><p style="margin:0; font-size:11px; color:#111827; margin-bottom:8px;">Lab Technician</p>` : ""}
                   <div class="sign-line">Authorized Signatory</div>
                 </div>
               </div>
@@ -2137,15 +2151,15 @@ export default function PathologyPage() {
         .content { padding: 0; width: 100%; }
         
         .document-title { text-align: center; margin: 4px 0 8px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 4px 0; }
-        .document-title h2 { font-size: 14px; font-weight: 500; margin: 0; text-transform: uppercase; letter-spacing: 0.12em; color: #1e293b; }
+        .document-title h2 { font-size: 14px; font-weight: 500; margin: 0; text-transform: uppercase; letter-spacing: 0.12em; color: #000000; }
         
         .section { margin-bottom: 10px; }
-        .section-header { font-size: 10px; font-weight: 500; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .section-header { font-size: 10px; font-weight: 500; color: #111827; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
         
         .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 30px; margin-bottom: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 4px; border: 1px solid #f1f5f9; }
         .info-item { display: flex; justify-content: space-between; font-size: 10.5px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px; }
-        .info-label { font-weight: 400; color: #64748b; }
-        .info-value { font-weight: 500; color: #1e293b; text-align: right; }
+        .info-label { font-weight: 400; color: #111827; }
+        .info-value { font-weight: 500; color: #000000; text-align: right; }
         
         .flag { 
           font-weight: 700; 
@@ -2156,15 +2170,15 @@ export default function PathologyPage() {
           vertical-align: middle; 
           text-transform: uppercase;
           border: 1px solid #cbd5e1;
-          color: #1e293b;
+          color: #000000;
           background: #ffffff;
         }
         .flag-high, .flag-low, .flag-critical, .flag-normal { 
-          color: #1e293b;
+          color: #000000;
         }
         .flag-normal { 
           border-color: #e2e8f0; 
-          color: #94a3b8; 
+          color: #374151; 
           font-weight: 600;
         }
         .flag-critical { border-width: 2px; }
@@ -2175,7 +2189,7 @@ export default function PathologyPage() {
         table.parameters-table { width: 100%; border-collapse: collapse; margin-top: 5px; border: 1px solid #cbd5e1; }
         th { 
           background: #f8fafc !important; 
-          color: #475569; 
+          color: #111827; 
           font-weight: 600; 
           text-align: left; 
           padding: 6px 10px; 
@@ -2188,19 +2202,19 @@ export default function PathologyPage() {
           padding: 6px 10px; 
           border: 1px solid #cbd5e1; 
           font-size: 11.5px; 
-          color: #1e293b; 
+          color: #000000; 
           vertical-align: middle;
         }
         .category-header-row th { background: #f1f5f9 !important; padding: 8px 10px !important; }
-        .category-title { font-weight: 700; color: #1e293b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+        .category-title { font-weight: 700; color: #000000; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
         .result-cell { font-size: 12.5px; }
-        .unit-cell { color: #475569; font-weight: 500; }
+        .unit-cell { color: #111827; font-weight: 500; }
         .font-bold { font-weight: 700; }
         .footer-section { margin-top: 20px; padding: 0; }
         .signature-block { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; break-inside: avoid; }
         .technician-info { text-align: right; }
-        .sign-line { width: 180px; border-top: 1px solid #1e293b; margin-top: 25px; padding-top: 6px; font-weight: 600; font-size: 11px; text-transform: uppercase; color: #475569; text-align: center; }
-        .meta-text { font-size: 10px; color: #94a3b8; margin: 2px 0; }
+        .sign-line { width: 180px; border-top: 1px solid #000000; margin-top: 25px; padding-top: 6px; font-weight: 600; font-size: 11px; text-transform: uppercase; color: #111827; text-align: center; }
+        .meta-text { font-size: 10px; color: #374151; margin: 2px 0; }
         @media print {
           body { -webkit-print-color-adjust: exact; }
           .print-container { padding: 0 4mm; width: 100%; }
@@ -2325,7 +2339,7 @@ export default function PathologyPage() {
               </div>
               <div class="summary-card">
                 <div class="card-label">Total Revenue</div>
-                <div class="card-value">NPR ${reportData.totalRevenue.toLocaleString()}</div>
+                <div class="card-value">NPR ${Math.round(reportData.totalRevenue).toLocaleString()}</div>
               </div>
               <div class="summary-card">
                 <div class="card-label">Total Invoices</div>
@@ -2383,7 +2397,7 @@ export default function PathologyPage() {
                     <td class="font-bold">${billing.invoiceNumber}</td>
                     <td>${billing.patientName}</td>
                     <td>${billing.items.length} tests</td>
-                    <td class="text-right font-bold">${billing.totalAmount.toLocaleString()}</td>
+                    <td class="text-right font-bold">${Math.round(billing.totalAmount).toLocaleString()}</td>
                     <td class="text-right">${billing.status.toUpperCase()}</td>
                     <td class="text-right">${new Date(billing.invoiceDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
@@ -2452,6 +2466,10 @@ export default function PathologyPage() {
     billing: "Billing",
     dailyReport: "Daily Report",
   };
+
+  const unpaidBillingsCount = billings.filter(
+    (b) => b.status === "draft" || (b.balanceAmount > 0 && b.status !== "cancelled" && b.status !== "paid")
+  ).length;
 
   const seedHIVTest = async () => {
     if (!clinicId || !branchId) return;
@@ -3221,7 +3239,7 @@ export default function PathologyPage() {
               {TAB_KEYS.map((key) => (
                 <button
                   key={key}
-                  className={`px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                  className={`px-4 py-3 flex items-center gap-2 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
                     activeTab === key
                       ? "border-primary text-primary"
                       : "border-transparent text-text-muted hover:text-text-main hover:border-border-base"
@@ -3230,6 +3248,11 @@ export default function PathologyPage() {
                   onClick={() => setActiveTab(key)}
                 >
                   {tabLabels[key]}
+                  {key === "billing" && unpaidBillingsCount > 0 && (
+                    <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 text-[10px] font-bold text-white bg-danger rounded-full">
+                      {unpaidBillingsCount}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

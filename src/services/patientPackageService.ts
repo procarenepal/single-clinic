@@ -48,7 +48,11 @@ export const patientPackageService = {
           expiresAt,
           sessionHistory: data.sessionHistory?.map((h: any) => ({
             ...h,
-            consumedAt: h.consumedAt?.toDate() || new Date(),
+            consumedAt: typeof h.consumedAt?.toDate === 'function' ? h.consumedAt.toDate() : (h.consumedAt ? new Date(h.consumedAt) : new Date()),
+          })),
+          sessions: data.sessions?.map((s: any) => ({
+            ...s,
+            consumedAt: s.consumedAt ? (typeof s.consumedAt?.toDate === 'function' ? s.consumedAt.toDate() : new Date(s.consumedAt)) : undefined,
           })),
         } as PatientPackage;
       });
@@ -147,8 +151,13 @@ export const patientPackageService = {
       };
 
       if (auditData) {
+        // Strip undefined values to prevent Firestore arrayUnion errors
+        const cleanAuditData = Object.fromEntries(
+          Object.entries(auditData).filter(([_, v]) => v !== undefined)
+        );
+
         updates.sessionHistory = arrayUnion({
-          ...auditData,
+          ...cleanAuditData,
           consumedAt: Timestamp.now(),
         });
         
@@ -178,6 +187,35 @@ export const patientPackageService = {
       }
 
       await updateDoc(docRef, updates);
+
+      // Automatically deduct proportional session value from the wallet
+      try {
+        if (data.packageId && totalSessions > 0) {
+          const pkgRef = doc(db, "treatmentPackages", data.packageId);
+          const pkgSnap = await getDoc(pkgRef);
+          if (pkgSnap.exists()) {
+             const pkgData = pkgSnap.data();
+             const walletCreditAmount = pkgData.walletCreditAmount || 0;
+             if (walletCreditAmount > 0) {
+                const sessionCost = Math.round(walletCreditAmount / totalSessions);
+                if (sessionCost > 0) {
+                   const { walletService } = await import("./walletService");
+                   await walletService.deductFunds(
+                     data.patientId,
+                     data.clinicId,
+                     data.branchId || data.clinicId,
+                     sessionCost,
+                     data.id, // using package ticket as reference
+                     `Consumed 1 session of ${data.packageName} (Ticket #${currentUsed + 1})`,
+                     auditData?.clinicianId || "system"
+                   );
+                }
+             }
+          }
+        }
+      } catch (walletErr) {
+        console.error("Error deducting session value from wallet:", walletErr);
+      }
     } catch (error) {
       console.error("Error consuming session:", error);
       throw error;

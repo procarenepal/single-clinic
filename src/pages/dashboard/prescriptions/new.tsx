@@ -1333,6 +1333,9 @@ export default function NewPrescriptionPage() {
     try {
       const currentUser = userData?.id || "unknown-user";
       let isDualRoute = false;
+      const finalSendToPharmacy = items.length > 0 ? sendToPharmacy : false;
+      const finalSendToPathology = selectedPathologyTests.length > 0 ? sendToPathology : false;
+
       const prescriptionItems = items.map((item) => ({
         medicineId: item.medicineId,
         medicineName: item.medicineName,
@@ -1344,7 +1347,7 @@ export default function NewPrescriptionPage() {
           notes ||
           `Take ${item.dosage} ${item.interval} ${item.time} for ${item.duration}`,
         quantity: 1,
-        sendToPharmacy,
+        sendToPharmacy: finalSendToPharmacy,
       }));
 
       const prescriptionData = {
@@ -1362,8 +1365,8 @@ export default function NewPrescriptionPage() {
         investigation,
         treatmentPlan,
         prescribedBy: currentUser,
-        sendToPharmacy,
-        sendToPathology,
+        sendToPharmacy: finalSendToPharmacy,
+        sendToPathology: finalSendToPathology,
       };
 
       const newPrescriptionId =
@@ -2436,7 +2439,6 @@ export default function NewPrescriptionPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
                 <SearchSelect
-                  required
                   items={medicines.map((m) => ({
                     id: m.id,
                     primary: m.name,
@@ -2747,7 +2749,7 @@ export default function NewPrescriptionPage() {
           )}
           <Button
             color="primary"
-            disabled={items.length === 0 || !patientId || !doctorId || saving}
+            disabled={(items.length === 0 && selectedPathologyTests.length === 0) || !patientId || !doctorId || saving}
             isLoading={saving}
             startContent={!saving && <IoSaveOutline className="w-4 h-4" />}
             onClick={handleSave}

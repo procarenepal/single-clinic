@@ -926,10 +926,10 @@ export default function PurchaseDetailPage() {
       setPayments(updatedPayments);
 
       // Calculate new totals
-      const newPaidAmount = updatedPayments.reduce(
+      const newPaidAmount = Math.round(updatedPayments.reduce(
         (sum, p) => sum + p.amount,
         0,
-      );
+      ));
       const newStatus =
         newPaidAmount >= totalAmount
           ? "paid"

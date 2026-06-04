@@ -3246,9 +3246,9 @@ export default function PharmacyPage() {
       <tr>
         <td style="padding: 8px; border-bottom: 1px solid #ddd;">${entry.billNumber || '<span style="color: #999; font-style: italic;">Payment</span>'}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd;">${entry.transactionDate.toLocaleDateString()}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; color: ${entry.debitAmount > 0 ? "#e53e3e" : "#999"};">${entry.debitAmount > 0 ? `NPR ${entry.debitAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; color: ${entry.creditAmount > 0 ? "#38a169" : "#999"};">${entry.creditAmount > 0 ? `NPR ${entry.creditAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold; color: ${entry.balanceAmount > 0 ? "#e53e3e" : entry.balanceAmount < 0 ? "#38a169" : "#666"};">NPR ${entry.balanceAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; color: ${entry.debitAmount > 0 ? "#e53e3e" : "#999"};">${entry.debitAmount > 0 ? `NPR ${Math.round(entry.debitAmount).toLocaleString()}` : "—"}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; color: ${entry.creditAmount > 0 ? "#38a169" : "#999"};">${entry.creditAmount > 0 ? `NPR ${Math.round(entry.creditAmount).toLocaleString()}` : "—"}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold; color: ${entry.balanceAmount > 0 ? "#e53e3e" : entry.balanceAmount < 0 ? "#38a169" : "#666"};">NPR ${Math.round(entry.balanceAmount).toLocaleString()}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd;">${entry.type === "purchase" ? "Purchase" : "Payment"}</td>
       </tr>
     `,
@@ -4227,10 +4227,7 @@ export default function PharmacyPage() {
                       <IoStorefrontOutline className="text-primary w-5 h-5 mb-2" />
                       <p className="text-stat-sm font-bold text-text-main">
                         NPR{" "}
-                        {supplierLedgerStats.totalPurchase.toLocaleString(
-                          undefined,
-                          { maximumFractionDigits: 2 },
-                        )}
+                        {Math.round(supplierLedgerStats.totalPurchase).toLocaleString()}
                       </p>
                       <p className="text-[11px] text-text-muted mt-0.5">
                         Total Purchase Amount
@@ -4241,10 +4238,7 @@ export default function PharmacyPage() {
                       <IoCheckmarkCircleOutline className="text-primary w-5 h-5 mb-2" />
                       <p className="text-stat-sm font-bold text-text-main">
                         NPR{" "}
-                        {supplierLedgerStats.totalPaid.toLocaleString(
-                          undefined,
-                          { maximumFractionDigits: 2 },
-                        )}
+                        {Math.round(supplierLedgerStats.totalPaid).toLocaleString()}
                       </p>
                       <p className="text-[11px] text-text-muted mt-0.5">
                         Total Paid Amount
@@ -4255,10 +4249,7 @@ export default function PharmacyPage() {
                       <IoCloseCircleOutline className="text-red-500 w-5 h-5 mb-2" />
                       <p className="text-stat-sm font-bold text-red-600">
                         NPR{" "}
-                        {supplierLedgerStats.remaining.toLocaleString(
-                          undefined,
-                          { maximumFractionDigits: 2 },
-                        )}
+                        {Math.round(supplierLedgerStats.remaining).toLocaleString()}
                       </p>
                       <p className="text-[11px] text-red-500 mt-0.5">
                         Remaining Amount
@@ -4347,10 +4338,7 @@ export default function PharmacyPage() {
                                         className={`text-[12.5px] ${currentBalance > 0 ? "text-red-600 font-semibold" : currentBalance < 0 ? "text-primary font-semibold" : "text-text-muted font-medium"}`}
                                       >
                                         NPR{" "}
-                                        {currentBalance.toLocaleString(
-                                          undefined,
-                                          { maximumFractionDigits: 2 },
-                                        )}
+                                        {Math.round(currentBalance).toLocaleString()}
                                       </span>
                                     </td>
                                     <td className="px-3 py-2.5">
@@ -4464,11 +4452,9 @@ export default function PharmacyPage() {
                               }`}
                             >
                               NPR{" "}
-                              {supplierLedgerEntries[
+                              {Math.round(supplierLedgerEntries[
                                 supplierLedgerEntries.length - 1
-                              ].balanceAmount.toLocaleString(undefined, {
-                                maximumFractionDigits: 2,
-                              })}
+                              ].balanceAmount).toLocaleString()}
                             </p>
                           </div>
                         </CardBody>
@@ -4534,10 +4520,7 @@ export default function PharmacyPage() {
                                       {entry.debitAmount > 0 ? (
                                         <span className="text-red-500 font-medium">
                                           NPR{" "}
-                                          {entry.debitAmount.toLocaleString(
-                                            undefined,
-                                            { maximumFractionDigits: 2 },
-                                          )}
+                                          {Math.round(entry.debitAmount).toLocaleString()}
                                         </span>
                                       ) : (
                                         <span className="text-text-muted/40">
@@ -4549,10 +4532,7 @@ export default function PharmacyPage() {
                                       {entry.creditAmount > 0 ? (
                                         <span className="text-primary font-medium">
                                           NPR{" "}
-                                          {entry.creditAmount.toLocaleString(
-                                            undefined,
-                                            { maximumFractionDigits: 2 },
-                                          )}
+                                          {Math.round(entry.creditAmount).toLocaleString()}
                                         </span>
                                       ) : (
                                         <span className="text-text-muted/40">
@@ -4571,10 +4551,7 @@ export default function PharmacyPage() {
                                         }`}
                                       >
                                         NPR{" "}
-                                        {entry.balanceAmount.toLocaleString(
-                                          undefined,
-                                          { maximumFractionDigits: 2 },
-                                        )}
+                                        {Math.round(entry.balanceAmount).toLocaleString()}
                                       </span>
                                     </td>
                                     <td className="px-3 py-2.5">
@@ -4765,9 +4742,19 @@ export default function PharmacyPage() {
                                       addToast({
                                         title: "No Items",
                                         description:
-                                          "This prescription has no items to fulfill.",
+                                          "This prescription has no items to fulfill. Removing from queue...",
                                         color: "warning",
                                       });
+
+                                      // Auto-hide empty prescriptions from the pharmacy queue
+                                      try {
+                                        await prescriptionService.updatePrescription(rx.id, {
+                                          sendToPharmacy: false,
+                                        });
+                                        setPrescriptions(prev => prev.filter(p => p.id !== rx.id));
+                                      } catch (e) {
+                                        console.error("Failed to auto-hide empty prescription", e);
+                                      }
 
                                       return;
                                     }
@@ -6061,13 +6048,7 @@ export default function PharmacyPage() {
                                     {transaction.amount > 0 ? (
                                       <span className="text-sm">
                                         NPR{" "}
-                                        {transaction.amount.toLocaleString(
-                                          undefined,
-                                          {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          },
-                                        )}
+                                        {Math.round(transaction.amount).toLocaleString()}
                                       </span>
                                     ) : (
                                       <span className="text-default-400">
@@ -6190,13 +6171,7 @@ export default function PharmacyPage() {
                                 </p>
                                 <p className="text-stat-sm font-semibold text-default-900 mt-1">
                                   NPR{" "}
-                                  {summary.totalSales.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    },
-                                  )}
+                                  {Math.round(summary.totalSales).toLocaleString()}
                                 </p>
                               </div>
                               <IoWalletOutline
@@ -6382,25 +6357,13 @@ export default function PharmacyPage() {
                                       </TableCell>
                                       <TableCell>
                                         NPR{" "}
-                                        {purchase.total.toLocaleString(
-                                          undefined,
-                                          {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          },
-                                        )}
+                                        {Math.round(purchase.total).toLocaleString()}
                                       </TableCell>
                                       <TableCell>
                                         {purchase.discount > 0 ? (
                                           <span className="text-default-600">
                                             NPR{" "}
-                                            {purchase.discount.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
+                                            {Math.round(purchase.discount).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -6412,13 +6375,7 @@ export default function PharmacyPage() {
                                         {purchase.taxAmount > 0 ? (
                                           <span className="text-default-600">
                                             NPR{" "}
-                                            {purchase.taxAmount.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
+                                            {Math.round(purchase.taxAmount).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -6429,13 +6386,7 @@ export default function PharmacyPage() {
                                       <TableCell>
                                         <span className="font-semibold text-default-900">
                                           NPR{" "}
-                                          {purchase.netAmount.toLocaleString(
-                                            undefined,
-                                            {
-                                              minimumFractionDigits: 2,
-                                              maximumFractionDigits: 2,
-                                            },
-                                          )}
+                                          {Math.round(purchase.netAmount).toLocaleString()}
                                         </span>
                                       </TableCell>
                                       <TableCell>
@@ -6591,13 +6542,7 @@ export default function PharmacyPage() {
                                 </p>
                                 <p className="text-stat font-semibold text-default-900 mt-1">
                                   NPR{" "}
-                                  {summary.totalPurchaseCost.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    },
-                                  )}
+                                  {Math.round(summary.totalPurchaseCost).toLocaleString()}
                                 </p>
                               </div>
                               <IoWalletOutline
@@ -6652,13 +6597,7 @@ export default function PharmacyPage() {
                                 </p>
                                 <p className="text-stat font-semibold text-default-900 mt-1">
                                   NPR{" "}
-                                  {summary.averageCostPerMedicine.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    },
-                                  )}
+                                  {Math.round(summary.averageCostPerMedicine).toLocaleString()}
                                 </p>
                               </div>
                               <IoReceiptOutline
@@ -6795,13 +6734,7 @@ export default function PharmacyPage() {
                                         {costPrice > 0 ? (
                                           <span className="text-default-600">
                                             NPR{" "}
-                                            {costPrice.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
+                                            {Math.round(costPrice).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -6813,13 +6746,7 @@ export default function PharmacyPage() {
                                         {costPrice > 0 ? (
                                           <span className="font-medium text-default-900">
                                             NPR{" "}
-                                            {totalCost.toLocaleString(
-                                              undefined,
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}
+                                            {Math.round(totalCost).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -7876,9 +7803,7 @@ export default function PharmacyPage() {
                               {entry.debitAmount > 0 ? (
                                 <span className="text-danger font-medium">
                                   NPR{" "}
-                                  {entry.debitAmount.toLocaleString(undefined, {
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  {Math.round(entry.debitAmount).toLocaleString()}
                                 </span>
                               ) : (
                                 <span className="text-default-400">—</span>
@@ -7888,10 +7813,7 @@ export default function PharmacyPage() {
                               {entry.creditAmount > 0 ? (
                                 <span className="text-success font-medium">
                                   NPR{" "}
-                                  {entry.creditAmount.toLocaleString(
-                                    undefined,
-                                    { maximumFractionDigits: 2 },
-                                  )}
+                                  {Math.round(entry.creditAmount).toLocaleString()}
                                 </span>
                               ) : (
                                 <span className="text-default-400">—</span>
@@ -7908,9 +7830,7 @@ export default function PharmacyPage() {
                                 }`}
                               >
                                 NPR{" "}
-                                {entry.balanceAmount.toLocaleString(undefined, {
-                                  maximumFractionDigits: 2,
-                                })}
+                                {Math.round(entry.balanceAmount).toLocaleString()}
                               </span>
                             </TableCell>
                             <TableCell>

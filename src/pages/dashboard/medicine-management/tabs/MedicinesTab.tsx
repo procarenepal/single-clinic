@@ -3014,13 +3014,11 @@ export default function MedicinesTab({
                           </p>
                           <p className="text-[18px] font-bold text-primary">
                             NPR{" "}
-                            {(
+                            {Math.round(
                               parseFloat(formDataList[0].costPrice) *
-                              (1 +
-                                parseFloat(formDataList[0].vatPercentage) / 100)
-                            ).toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                            })}
+                                (1 +
+                                  parseFloat(formDataList[0].vatPercentage) / 100)
+                            ).toLocaleString()}
                           </p>
                         </div>
                       )}
@@ -3508,10 +3506,7 @@ export default function MedicinesTab({
                     </span>
                     <span className="font-semibold">
                       NPR{" "}
-                      {purchaseSummary.subtotal.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {Math.round(purchaseSummary.subtotal).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[12px]">
@@ -3520,10 +3515,7 @@ export default function MedicinesTab({
                     </span>
                     <span className="text-[rgb(var(--color-text))]">
                       NPR{" "}
-                      {purchaseSummary.taxableAmount.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {Math.round(purchaseSummary.taxableAmount).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[12px]">
@@ -3532,10 +3524,7 @@ export default function MedicinesTab({
                     </span>
                     <span className="text-[rgb(var(--color-text))]">
                       NPR{" "}
-                      {purchaseSummary.nonTaxableAmount.toLocaleString(
-                        undefined,
-                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                      )}
+                      {Math.round(purchaseSummary.nonTaxableAmount).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[12px] pb-3 border-b border-[rgb(var(--color-border))]">
@@ -3544,10 +3533,7 @@ export default function MedicinesTab({
                     </span>
                     <span className="text-primary font-medium">
                       + NPR{" "}
-                      {purchaseSummary.totalVat.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {Math.round(purchaseSummary.totalVat).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[14px] pt-3 border-t border-[rgb(var(--color-border))]">
@@ -3556,10 +3542,7 @@ export default function MedicinesTab({
                     </span>
                     <span className="font-bold text-primary text-[16px]">
                       NPR{" "}
-                      {purchaseSummary.grandTotal.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {Math.round(purchaseSummary.grandTotal).toLocaleString()}
                     </span>
                   </div>
 
@@ -3609,14 +3592,10 @@ export default function MedicinesTab({
                         className={`font-bold ${purchaseSummary.grandTotal - (parseFloat(globalPurchaseDetails.paidAmount) || 0) > 0 ? "text-rose-500" : "text-teal-600"}`}
                       >
                         NPR{" "}
-                        {Math.max(
-                          0,
+                        {Math.round(
                           purchaseSummary.grandTotal -
                             (parseFloat(globalPurchaseDetails.paidAmount) || 0),
-                        ).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        ).toLocaleString()}
                       </span>
                     </div>
 

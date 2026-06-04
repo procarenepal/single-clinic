@@ -36,6 +36,7 @@ import {
   IoPrintOutline,
   IoPencilOutline,
   IoReceiptOutline,
+  IoCloseCircleOutline,
 } from "react-icons/io5";
 import { IoBusinessOutline, IoMedkitOutline } from "react-icons/io5";
 
@@ -490,27 +491,9 @@ export default function PathologyBillingTab({
         ...updatedItems[index],
         testName: value,
         testId: "", // Reset ID for free text
-        ...(matchingType
-          ? {
-              testType: matchingType.name,
-              price: matchingType.price,
-              amount: matchingType.price * updatedItems[index].quantity,
-            }
-          : {}),
-      };
-    } else if (field === "testType") {
-      const selectedTestType = testTypes.find((tt) => tt.name === value);
-
-      updatedItems[index] = {
-        ...updatedItems[index],
-        testType: value || "",
-        price: selectedTestType
-          ? selectedTestType.price
-          : updatedItems[index].price,
-        amount:
-          (selectedTestType
-            ? selectedTestType.price
-            : updatedItems[index].price) * updatedItems[index].quantity,
+        testType: matchingType ? matchingType.name : value,
+        price: matchingType ? matchingType.price : updatedItems[index].price,
+        amount: (matchingType ? matchingType.price : updatedItems[index].price) * updatedItems[index].quantity,
       };
     } else if (field === "quantity") {
       const qty = parseInt(value) || 1;
@@ -829,6 +812,38 @@ export default function PathologyBillingTab({
     setActiveTab("create");
   };
 
+  const handleCancelInvoice = async (billing: PathologyBilling) => {
+    if (confirm("Are you sure you want to cancel this invoice? This action cannot be undone.")) {
+      setSubmitting(true);
+      try {
+        await pathologyBillingService.updateBilling(billing.id!, {
+          status: "cancelled",
+          paymentStatus: "cancelled" as any,
+        });
+        setBillings((prev) =>
+          prev.map((b) =>
+            b.id === billing.id
+              ? { ...b, status: "cancelled", paymentStatus: "cancelled" as any }
+              : b,
+          ),
+        );
+        addToast({
+          title: "Success",
+          description: "Invoice cancelled successfully.",
+          color: "success",
+        });
+      } catch (err) {
+        addToast({
+          title: "Error",
+          description: "Failed to cancel invoice.",
+          color: "danger",
+        });
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
   const cancelEdit = () => {
     setEditingInvoiceId(null);
     setFormData({
@@ -857,7 +872,7 @@ export default function PathologyBillingTab({
   const handlePaymentOpen = (billing: PathologyBilling) => {
     setSelectedBillingForPayment(billing);
     setPaymentForm({
-      amount: billing.balanceAmount.toString(),
+      amount: Math.round(billing.balanceAmount).toString(),
       method: billingSettings?.defaultPaymentMethod || "cash",
       reference: "",
       notes: "",
@@ -883,7 +898,7 @@ export default function PathologyBillingTab({
     if (amount > selectedBillingForPayment.balanceAmount) {
       addToast({
         title: "Validation Error",
-        description: `Payment amount cannot exceed balance of ${selectedBillingForPayment.balanceAmount.toLocaleString()}`,
+        description: `Payment amount cannot exceed balance of ${Math.round(selectedBillingForPayment.balanceAmount).toLocaleString()}`,
         color: "warning",
       });
 
@@ -904,7 +919,7 @@ export default function PathologyBillingTab({
 
       addToast({
         title: "Payment Recorded",
-        description: `Payment of ${amount.toLocaleString()} has been recorded successfully.`,
+        description: `Payment of ${Math.round(amount).toLocaleString()} has been recorded successfully.`,
         color: "success",
       });
 
@@ -1002,7 +1017,7 @@ export default function PathologyBillingTab({
   }, [billings, searchQuery]);
 
   const formatCurrency = (amount: number) => {
-    return `NPR ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `NPR ${Math.round(amount).toLocaleString()}`;
   };
 
   const getAvailablePaymentMethods = () => {
@@ -1171,9 +1186,8 @@ export default function PathologyBillingTab({
                       </datalist>
 
                       {/* Header row */}
-                      <div className="hidden md:grid grid-cols-[2.5fr_1.5fr_1fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 px-3 pb-2 items-center">
+                      <div className="hidden md:grid grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 px-3 pb-2 items-center">
                         <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Test Name</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Test Type</div>
                         <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Sample</div>
                         <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider text-center">Urgent</div>
                         <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Price</div>
@@ -1187,26 +1201,16 @@ export default function PathologyBillingTab({
                       {formData.items.map((item, index) => (
                         <div
                           key={item.id}
-                          className="grid grid-cols-1 md:grid-cols-[2.5fr_1.5fr_1fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
+                          className="grid grid-cols-1 md:grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
                         >
                           <div>
                             <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Test Name</label>
                             <input
                               className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
-                              list="test-catalog-list"
-                              placeholder="Test Name"
+                              list="test-types-list"
+                              placeholder="Select Test"
                               value={item.testName}
                               onChange={(e) => updateInvoiceItem(index, "testName", e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Test Type</label>
-                            <input
-                              className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
-                              list="test-types-list"
-                              placeholder="Type"
-                              value={item.testType || ""}
-                              onChange={(e) => updateInvoiceItem(index, "testType", e.target.value)}
                             />
                           </div>
                           <div>
@@ -1426,8 +1430,7 @@ export default function PathologyBillingTab({
                                     Estimated Earned
                                   </span>
                                   <span className="text-md font-black text-primary">
-                                    NPR{" "}
-                                    {refDoc.calculatedAmount.toLocaleString()}
+                                    {Math.round(refDoc.calculatedAmount).toLocaleString()}
                                   </span>
                                 </div>
                               </div>
@@ -1670,6 +1673,19 @@ export default function PathologyBillingTab({
                                   <IoWalletOutline className="text-lg" />
                                 </Button>
                               )}
+                            {billing.status !== "cancelled" && billing.status !== "finalized" && billing.paymentStatus !== "paid" && (
+                              <Button
+                                isIconOnly
+                                color="danger"
+                                size="sm"
+                                title="Cancel Invoice"
+                                variant="light"
+                                isLoading={submitting}
+                                onPress={() => handleCancelInvoice(billing)}
+                              >
+                                <IoCloseCircleOutline className="text-lg" />
+                              </Button>
+                            )}
                             <Button
                               isIconOnly
                               size="sm"

@@ -30,6 +30,7 @@ import { clinicService } from "@/services/clinicService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
+import { patientPackageService } from "@/services/patientPackageService";
 import { AppointmentBilling, Patient } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -317,11 +318,11 @@ export default function InvoiceDetailPage() {
               invoiceData.patientId,
               clinicId
             );
-            const totalDue = allBilling.reduce((sum, b) => {
+            const totalDue = Math.round(allBilling.reduce((sum, b) => {
               if (b.id === invoiceId) return sum; // exclude current invoice
               if (b.createdAt.getTime() >= invoiceData.createdAt.getTime()) return sum; // exclude future invoices
               return sum + (b.balanceAmount || 0);
-            }, 0);
+            }, 0));
             setPreviousDue(totalDue);
           }
         } catch (error) {
@@ -511,7 +512,7 @@ export default function InvoiceDetailPage() {
       return;
     }
 
-    const totalPayment = validSplits.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+    const totalPayment = Math.round(validSplits.reduce((sum, s) => sum + parseFloat(s.amount), 0));
 
     if (totalPayment > invoice.balanceAmount) {
       addToast({
@@ -545,7 +546,9 @@ export default function InvoiceDetailPage() {
         invoiceId!,
       );
 
-      if (updatedInvoice) setInvoice(updatedInvoice);
+      if (updatedInvoice) {
+        setInvoice(updatedInvoice);
+      }
 
       // Close payment modal
       paymentModal.forceClose();
@@ -1269,7 +1272,7 @@ export default function InvoiceDetailPage() {
             </Button>
 
             {(() => {
-              const totalAmount = paymentSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+              const totalAmount = Math.round(paymentSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0));
               if (totalAmount > 0) {
                 const newBalance = invoice.balanceAmount - totalAmount;
                 return (

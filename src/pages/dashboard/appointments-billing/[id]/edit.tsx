@@ -661,7 +661,7 @@ export default function EditInvoicePage() {
   };
 
   const formatCurrency = (amount: number) =>
-    `NPR ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `NPR ${Math.round(amount).toLocaleString()}`;
 
   if (loading) {
     return (
@@ -964,7 +964,7 @@ export default function EditInvoicePage() {
                           Amount
                         </label>
                         <div className="h-[38px] flex items-center xl:justify-end px-3 bg-mountain-50 border border-mountain-100 rounded text-mountain-800 font-medium text-[13.5px]">
-                          NPR {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          NPR {Math.round(item.amount).toLocaleString()}
                         </div>
                       </div>
                     </div>

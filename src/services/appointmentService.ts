@@ -119,6 +119,33 @@ export const appointmentService = {
       if (appointmentData.assignedExpertId) {
         firestoreData.assignedExpertId = appointmentData.assignedExpertId;
       }
+      if (appointmentData.billingId) {
+        firestoreData.billingId = appointmentData.billingId;
+      }
+      if (appointmentData.billingStatus) {
+        firestoreData.billingStatus = appointmentData.billingStatus;
+      }
+      if (appointmentData.paymentStatus) {
+        firestoreData.paymentStatus = appointmentData.paymentStatus;
+      }
+      if (appointmentData.consultationBillingId) {
+        firestoreData.consultationBillingId = appointmentData.consultationBillingId;
+      }
+      if (appointmentData.consultationBillingStatus) {
+        firestoreData.consultationBillingStatus = appointmentData.consultationBillingStatus;
+      }
+      if (appointmentData.checkoutCompleted !== undefined) {
+        firestoreData.checkoutCompleted = appointmentData.checkoutCompleted;
+      }
+      if (appointmentData.doctorConsultationCompleted !== undefined) {
+        firestoreData.doctorConsultationCompleted = appointmentData.doctorConsultationCompleted;
+      }
+      if (appointmentData.cabinName) {
+        firestoreData.cabinName = appointmentData.cabinName;
+      }
+      if (appointmentData.patientPackageId) {
+        firestoreData.patientPackageId = appointmentData.patientPackageId;
+      }
 
       const docRef = await addDoc(appointmentsCollection, firestoreData);
 

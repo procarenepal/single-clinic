@@ -17,6 +17,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { MedicalReportField } from "@/types/models";
 import { medicalReportFieldService } from "@/services/medicalReportFieldService";
 import { MedicalReportResponseService } from "@/services/medicalReportResponseService";
+import { appointmentService } from "@/services/appointmentService";
+import { patientService } from "@/services/patientService";
 import { useAuth } from "@/hooks/useAuth";
 
 interface PatientMedicalReportTabProps {
@@ -115,9 +117,11 @@ export const PatientMedicalReportTab: React.FC<
   const loadFieldsAndResponses = async () => {
     setLoading(true);
     try {
-      const [flds, existing] = await Promise.all([
+      const [flds, existing, appointments, patient] = await Promise.all([
         medicalReportFieldService.getFields(clinicId),
         MedicalReportResponseService.getPatientResponses(clinicId, patientId),
+        appointmentService.getAppointmentsByPatient(patientId),
+        patientService.getPatientById(patientId),
       ]);
 
       // Deduplicate fields by fieldKey (in case seeder ran concurrently and created duplicates)
@@ -132,10 +136,50 @@ export const PatientMedicalReportTab: React.FC<
       }
 
       setFields(uniqueFields);
+      
+      let initialResponses = existing?.fieldValues || {};
+      
+      // Auto-populate from recent appointments if fields are empty
+      if (appointments && appointments.length > 0) {
+        // Sort to get the most recent appointment
+        const sortedAppts = [...appointments].sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        const recentAppt = sortedAppts[0];
+        
+        // Auto-populate Chief Complaint
+        if (!initialResponses["chief-complaint"]) {
+          const complaintFromVitals = (recentAppt as any).vitals?.complaints?.trim();
+          const reasonForVisit = recentAppt.reason?.trim();
+          
+          if (complaintFromVitals) {
+            initialResponses["chief-complaint"] = complaintFromVitals;
+            setHasChanges(true);
+          } else if (reasonForVisit && reasonForVisit !== "Walk-in General Checkup") {
+            initialResponses["chief-complaint"] = reasonForVisit;
+            setHasChanges(true);
+          }
+        }
+      }
+      
+      // Auto-populate from patient profile if fields are empty
+      if (patient) {
+        if (!initialResponses["blood-group"] && patient.bloodGroup) {
+          initialResponses["blood-group"] = patient.bloodGroup;
+          setHasChanges(true);
+        }
+        
+        if (!initialResponses["past-medical-history"] && patient.medicalConditions && patient.medicalConditions.length > 0) {
+          initialResponses["past-medical-history"] = patient.medicalConditions.join(", ");
+          setHasChanges(true);
+        }
+      }
+
       if (existing) {
-        setResponses(existing.fieldValues || {});
         setLastSaved(existing.updatedAt ? new Date(existing.updatedAt) : null);
       }
+      
+      setResponses(initialResponses);
     } catch {
       addToast({
         title: "Error",

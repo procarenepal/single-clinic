@@ -394,9 +394,9 @@ export default function PurchaseRecordsTab({
             <div style="font-weight: 500; color: #1e293b;">${item.name}</div>
           </td>
           <td style="padding: 12px 10px; font-size: 12px; text-align: center; color: #475569;">${item.qty}</td>
-          <td style="padding: 12px 10px; font-size: 12px; text-align: right; color: #475569;">${item.costPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 12px 10px; font-size: 12px; text-align: right; color: #475569;">${Math.round(item.costPrice).toLocaleString()}</td>
           <td style="padding: 12px 10px; font-size: 12px; text-align: center; color: #475569;">${item.vatPercentage}%</td>
-          <td style="padding: 12px 10px; font-size: 12px; text-align: right; font-weight: 500; color: #1e293b;">${item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 12px 10px; font-size: 12px; text-align: right; font-weight: 500; color: #1e293b;">${Math.round(item.total).toLocaleString()}</td>
         </tr>
       `,
           )
@@ -493,19 +493,19 @@ export default function PurchaseRecordsTab({
               <div class="summary-box">
                 <div class="summary-row">
                   <span>Subtotal</span>
-                  <span style="font-weight: 500;">NPR ${record.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="font-weight: 500;">NPR ${Math.round(record.totalAmount).toLocaleString()}</span>
                 </div>
                 <div class="summary-row">
                   <span>Paid Amount</span>
-                  <span style="color: #059669; font-weight: 500;">NPR ${record.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="color: #059669; font-weight: 500;">NPR ${Math.round(record.paidAmount).toLocaleString()}</span>
                 </div>
                 <div class="summary-row">
                   <span>Due Amount</span>
-                  <span style="color: ${record.dueAmount > 0 ? "#e11d48" : "#475569"}; font-weight: 500;">NPR ${record.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="color: ${record.dueAmount > 0 ? "#e11d48" : "#475569"}; font-weight: 500;">NPR ${Math.round(record.dueAmount).toLocaleString()}</span>
                 </div>
                 <div class="summary-row grand-total">
                   <span>Invoice Total</span>
-                  <span>NPR ${record.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span>NPR ${Math.round(record.totalAmount).toLocaleString()}</span>
                 </div>
               </div>
             </div>

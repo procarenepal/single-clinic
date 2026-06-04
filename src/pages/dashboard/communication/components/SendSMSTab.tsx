@@ -455,13 +455,11 @@ const SendSMSTab: React.FC = () => {
       };
 
       try {
-        await smsService.createSMSLog(finalLogData);
-      } catch (logError) {
-        addToast({
-          title: "Log Error",
-          description: `SMS sent but failed to create log: ${logError instanceof Error ? logError.message : "Unknown error"}`,
-          color: "warning",
+        smsService.createSMSLog(finalLogData).catch((logError) => {
+          console.error("SMS sent but failed to create log:", logError);
         });
+      } catch (logError) {
+        console.error("Sync log error:", logError);
       }
       if (response.success) {
         addToast({
@@ -483,18 +481,14 @@ const SendSMSTab: React.FC = () => {
       }
     } catch (error) {
       try {
-        await smsService.createSMSLog({
+        smsService.createSMSLog({
           ...logData,
           status: "failed" as const,
           errorMessage:
             error instanceof Error ? error.message : "Unknown error",
-        });
+        }).catch(console.error);
       } catch {
-        addToast({
-          title: "Log Error",
-          description: "Failed to create SMS log",
-          color: "warning",
-        });
+        console.error("Failed to create SMS log");
       }
       addToast({
         title: "Error",

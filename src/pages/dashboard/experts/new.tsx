@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { IoArrowBackOutline, IoSaveOutline } from "react-icons/io5";
+import { IoArrowBackOutline, IoSaveOutline, IoAddOutline, IoRefreshOutline } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ export default function NewExpertPage() {
     Array<{ value: string; label: string }>
   >([]);
   const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
+  const [isAddingNewSpeciality, setIsAddingNewSpeciality] = useState(false);
 
   const [expertProfile, setExpertProfile] = useState({
     name: "",
@@ -122,11 +123,38 @@ export default function NewExpertPage() {
 
     setLoading(true);
     try {
+      let finalSpecialityKey = expertProfile.speciality;
+
+      if (isAddingNewSpeciality && expertProfile.speciality) {
+        // Generate a URL-friendly key from the speciality name
+        const generatedKey = expertProfile.speciality
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/\s+/g, "-");
+
+        // Check if this speciality already exists by key
+        const exists = await specialityService.isKeyExists(generatedKey);
+
+        if (!exists) {
+          // Create the new speciality in Firestore
+          await specialityService.createSpeciality({
+            name: expertProfile.speciality,
+            key: generatedKey,
+            isActive: true,
+            clinicId,
+            branchId: defaultBranchId || clinicId,
+            createdBy: currentUser?.uid || "system",
+          });
+        }
+        finalSpecialityKey = generatedKey;
+      }
+
       const expertData = {
         name: expertProfile.name,
         expertType: expertProfile.expertType as "regular" | "visiting",
         defaultCommission: parseFloat(expertProfile.defaultCommission) || 0,
-        speciality: expertProfile.speciality,
+        speciality: finalSpecialityKey,
         phone: expertProfile.phone,
         email: expertProfile.email || "",
         licenseNumber: expertProfile.licenseNumber,
@@ -214,21 +242,62 @@ export default function NewExpertPage() {
                 variant="bordered"
                 onChange={handleExpertProfileChange}
               />
-              <Select
-                isRequired
-                label="Speciality"
-                name="speciality"
-                placeholder="Select speciality"
-                value={expertProfile.speciality}
-                variant="bordered"
-                onChange={handleExpertProfileChange}
-              >
-                {specialities.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </Select>
+              <div className="flex flex-col gap-1.5 w-full">
+                <div className="flex justify-between items-center px-0.5">
+                  <label className="text-[13px] font-medium text-text-main">
+                    Speciality<span className="text-danger ml-0.5">*</span>
+                  </label>
+                  <button
+                    className="text-[12px] text-primary hover:text-primary-hover font-medium flex items-center gap-1 hover:underline transition-all"
+                    type="button"
+                    onClick={() => {
+                      setIsAddingNewSpeciality(!isAddingNewSpeciality);
+                      setExpertProfile({ ...expertProfile, speciality: "" });
+                    }}
+                  >
+                    {isAddingNewSpeciality ? (
+                      <>
+                        <IoRefreshOutline className="w-3.5 h-3.5" />
+                        Select Existing
+                      </>
+                    ) : (
+                      <>
+                        <IoAddOutline className="w-3.5 h-3.5" />
+                        Add New
+                      </>
+                    )}
+                  </button>
+                </div>
+                {isAddingNewSpeciality ? (
+                  <div className="flex items-center border border-border-base rounded min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-colors">
+                    <input
+                      required
+                      className="flex-1 w-full text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/60"
+                      name="speciality"
+                      placeholder="Enter new speciality name"
+                      value={expertProfile.speciality}
+                      onChange={handleExpertProfileChange}
+                    />
+                  </div>
+                ) : (
+                  <select
+                    required
+                    className="w-full min-h-[38px] bg-surface border border-border-base text-text-main text-[13.5px] rounded px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow"
+                    name="speciality"
+                    value={expertProfile.speciality}
+                    onChange={handleExpertProfileChange}
+                  >
+                    <option disabled hidden value="">
+                      Select speciality
+                    </option>
+                    {specialities.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               <Input
                 isRequired
                 label="Phone Number"

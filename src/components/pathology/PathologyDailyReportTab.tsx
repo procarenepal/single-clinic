@@ -101,7 +101,7 @@ export default function PathologyDailyReportTab({
             <div>
               <p className="text-[12px] text-text-muted">Total Revenue</p>
               <p className="text-[22px] font-bold text-text-main">
-                NPR {dailyReportData.totalRevenue.toLocaleString()}
+                NPR {Math.round(dailyReportData.totalRevenue).toLocaleString()}
               </p>
             </div>
             <IoReceiptOutline className="text-3xl text-orange-500" />
@@ -125,13 +125,13 @@ export default function PathologyDailyReportTab({
         <div className="bg-surface border border-border-base rounded p-4">
           <p className="text-[12px] text-text-muted mb-2">Paid Amount</p>
           <p className="text-xl font-bold text-health-600">
-            NPR {dailyReportData.totalPaid.toLocaleString()}
+            NPR {Math.round(dailyReportData.totalPaid).toLocaleString()}
           </p>
         </div>
         <div className="bg-surface border border-border-base rounded p-4">
           <p className="text-[12px] text-text-muted mb-2">Pending Amount</p>
           <p className="text-xl font-bold text-orange-600">
-            NPR {dailyReportData.totalPending.toLocaleString()}
+            NPR {Math.round(dailyReportData.totalPending).toLocaleString()}
           </p>
         </div>
         <div className="bg-surface border border-border-base rounded p-4">
@@ -304,7 +304,7 @@ export default function PathologyDailyReportTab({
                       </td>
                       <td className="px-4 py-2">
                         <p className="text-[13.5px] font-medium text-text-main">
-                          NPR {billing.totalAmount.toLocaleString()}
+                          NPR {Math.round(billing.totalAmount).toLocaleString()}
                         </p>
                       </td>
                       <td className="px-4 py-2">

@@ -399,11 +399,14 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
           setUserClaims(idTokenResult.claims);
 
           // Fetch additional user data from Firestore
+          console.log("Fetching user data for UID:", firebaseUser.uid);
           const userDataFromFirestore = await getUserData(firebaseUser.uid);
+          console.log("User data from Firestore:", userDataFromFirestore);
 
           if (userDataFromFirestore) {
             // Check if user is active (but skip if in impersonation mode)
             if (!userDataFromFirestore.isActive && !isImpersonating) {
+              console.warn("User is inactive! Logging them out instantly.");
               // If user is inactive, sign them out (unless we're impersonating them)
               await signOut(auth);
               setCurrentUser(null);
