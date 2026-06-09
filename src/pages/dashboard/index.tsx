@@ -1087,7 +1087,12 @@ export default function DashboardIndexPage() {
                 <span className="text-[10.5px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                   NPR{" "}
                   {dailyReport?.billing
-                    ? Math.round(dailyReport.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0)).toLocaleString()
+                    ? Math.round(
+                        dailyReport.billing.reduce(
+                          (sum, b) => sum + (b.totalAmount || 0),
+                          0,
+                        ),
+                      ).toLocaleString()
                     : "0"}
                 </span>
               )}

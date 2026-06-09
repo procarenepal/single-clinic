@@ -12,10 +12,11 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
-import { StaffMember, StaffAttendance } from "@/types/models";
+import { StaffMember, StaffAttendance, ClinicHoliday } from "@/types/models";
 
 const STAFF_COLLECTION = "staff";
 const ATTENDANCE_COLLECTION = "staff_attendance";
+const HOLIDAY_COLLECTION = "clinic_holidays";
 
 export const hrService = {
   // --- Staff Operations ---
@@ -62,8 +63,8 @@ export const hrService = {
       const data = doc.data();
 
       return {
-        id: doc.id,
         ...data,
+        id: doc.id,
         joiningDate: data.joiningDate?.toDate
           ? data.joiningDate.toDate()
           : new Date(data.joiningDate),
@@ -177,8 +178,8 @@ export const hrService = {
       const data = doc.data();
 
       return {
-        id: doc.id,
         ...data,
+        id: doc.id,
         date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
         checkIn: data.checkIn?.toDate
           ? data.checkIn.toDate()
@@ -257,5 +258,42 @@ export const hrService = {
     }
 
     await updateDoc(docRef, updateData);
+  },
+
+  // --- Holiday Operations ---
+
+  async getHolidays(clinicId: string): Promise<ClinicHoliday[]> {
+    const q = query(
+      collection(db, HOLIDAY_COLLECTION),
+      where("clinicId", "==", clinicId)
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        clinicId: data.clinicId || clinicId,
+        name: data.name,
+        date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
+        type: data.type || "paid",
+      };
+    });
+  },
+
+  async addHoliday(clinicId: string, name: string, date: Date, type: "paid" | "unpaid" = "paid"): Promise<string> {
+    const docRef = await addDoc(collection(db, HOLIDAY_COLLECTION), {
+      clinicId,
+      name,
+      type,
+      date: Timestamp.fromDate(new Date(date)),
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  },
+
+  async deleteHoliday(id: string): Promise<void> {
+    const { deleteDoc } = await import("firebase/firestore");
+    const docRef = doc(db, HOLIDAY_COLLECTION, id);
+    await deleteDoc(docRef);
   },
 };

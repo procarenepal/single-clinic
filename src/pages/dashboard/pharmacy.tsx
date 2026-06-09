@@ -4227,7 +4227,9 @@ export default function PharmacyPage() {
                       <IoStorefrontOutline className="text-primary w-5 h-5 mb-2" />
                       <p className="text-stat-sm font-bold text-text-main">
                         NPR{" "}
-                        {Math.round(supplierLedgerStats.totalPurchase).toLocaleString()}
+                        {Math.round(
+                          supplierLedgerStats.totalPurchase,
+                        ).toLocaleString()}
                       </p>
                       <p className="text-[11px] text-text-muted mt-0.5">
                         Total Purchase Amount
@@ -4238,7 +4240,9 @@ export default function PharmacyPage() {
                       <IoCheckmarkCircleOutline className="text-primary w-5 h-5 mb-2" />
                       <p className="text-stat-sm font-bold text-text-main">
                         NPR{" "}
-                        {Math.round(supplierLedgerStats.totalPaid).toLocaleString()}
+                        {Math.round(
+                          supplierLedgerStats.totalPaid,
+                        ).toLocaleString()}
                       </p>
                       <p className="text-[11px] text-text-muted mt-0.5">
                         Total Paid Amount
@@ -4249,7 +4253,9 @@ export default function PharmacyPage() {
                       <IoCloseCircleOutline className="text-red-500 w-5 h-5 mb-2" />
                       <p className="text-stat-sm font-bold text-red-600">
                         NPR{" "}
-                        {Math.round(supplierLedgerStats.remaining).toLocaleString()}
+                        {Math.round(
+                          supplierLedgerStats.remaining,
+                        ).toLocaleString()}
                       </p>
                       <p className="text-[11px] text-red-500 mt-0.5">
                         Remaining Amount
@@ -4338,7 +4344,9 @@ export default function PharmacyPage() {
                                         className={`text-[12.5px] ${currentBalance > 0 ? "text-red-600 font-semibold" : currentBalance < 0 ? "text-primary font-semibold" : "text-text-muted font-medium"}`}
                                       >
                                         NPR{" "}
-                                        {Math.round(currentBalance).toLocaleString()}
+                                        {Math.round(
+                                          currentBalance,
+                                        ).toLocaleString()}
                                       </span>
                                     </td>
                                     <td className="px-3 py-2.5">
@@ -4452,9 +4460,11 @@ export default function PharmacyPage() {
                               }`}
                             >
                               NPR{" "}
-                              {Math.round(supplierLedgerEntries[
-                                supplierLedgerEntries.length - 1
-                              ].balanceAmount).toLocaleString()}
+                              {Math.round(
+                                supplierLedgerEntries[
+                                  supplierLedgerEntries.length - 1
+                                ].balanceAmount,
+                              ).toLocaleString()}
                             </p>
                           </div>
                         </CardBody>
@@ -4520,7 +4530,9 @@ export default function PharmacyPage() {
                                       {entry.debitAmount > 0 ? (
                                         <span className="text-red-500 font-medium">
                                           NPR{" "}
-                                          {Math.round(entry.debitAmount).toLocaleString()}
+                                          {Math.round(
+                                            entry.debitAmount,
+                                          ).toLocaleString()}
                                         </span>
                                       ) : (
                                         <span className="text-text-muted/40">
@@ -4532,7 +4544,9 @@ export default function PharmacyPage() {
                                       {entry.creditAmount > 0 ? (
                                         <span className="text-primary font-medium">
                                           NPR{" "}
-                                          {Math.round(entry.creditAmount).toLocaleString()}
+                                          {Math.round(
+                                            entry.creditAmount,
+                                          ).toLocaleString()}
                                         </span>
                                       ) : (
                                         <span className="text-text-muted/40">
@@ -4551,10 +4565,38 @@ export default function PharmacyPage() {
                                         }`}
                                       >
                                         NPR{" "}
-                                        {Math.round(entry.balanceAmount).toLocaleString()}
+                                        {Math.round(
+                                          entry.balanceAmount,
+                                        ).toLocaleString()}
                                       </span>
                                     </td>
-                                    <td className="px-3 py-2.5">
+                                    <td className="px-3 py-2.5 flex items-center gap-1">
+                                      {entry.balanceAmount > 0 &&
+                                        entry.type === "purchase" && (
+                                          <button
+                                            className="p-1.5 text-text-muted hover:text-success hover:bg-success/10 rounded"
+                                            title="Pay Bill"
+                                            type="button"
+                                            onClick={() => {
+                                              setSupplierPaymentForm({
+                                                supplierId: entry.supplierId,
+                                                amount:
+                                                  entry.balanceAmount.toString(),
+                                                date: new Date()
+                                                  .toISOString()
+                                                  .split("T")[0],
+                                                type: "payment",
+                                                referenceNumber:
+                                                  entry.billNumber || entry.id,
+                                                note: "",
+                                              });
+                                              setEditingSupplierPayment(null);
+                                              addSupplierPaymentModalState.open();
+                                            }}
+                                          >
+                                            <IoWalletOutline size={16} />
+                                          </button>
+                                        )}
                                       <button
                                         className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                         title="Edit Entry"
@@ -4748,12 +4790,20 @@ export default function PharmacyPage() {
 
                                       // Auto-hide empty prescriptions from the pharmacy queue
                                       try {
-                                        await prescriptionService.updatePrescription(rx.id, {
-                                          sendToPharmacy: false,
-                                        });
-                                        setPrescriptions(prev => prev.filter(p => p.id !== rx.id));
+                                        await prescriptionService.updatePrescription(
+                                          rx.id,
+                                          {
+                                            sendToPharmacy: false,
+                                          },
+                                        );
+                                        setPrescriptions((prev) =>
+                                          prev.filter((p) => p.id !== rx.id),
+                                        );
                                       } catch (e) {
-                                        console.error("Failed to auto-hide empty prescription", e);
+                                        console.error(
+                                          "Failed to auto-hide empty prescription",
+                                          e,
+                                        );
                                       }
 
                                       return;
@@ -6048,7 +6098,9 @@ export default function PharmacyPage() {
                                     {transaction.amount > 0 ? (
                                       <span className="text-sm">
                                         NPR{" "}
-                                        {Math.round(transaction.amount).toLocaleString()}
+                                        {Math.round(
+                                          transaction.amount,
+                                        ).toLocaleString()}
                                       </span>
                                     ) : (
                                       <span className="text-default-400">
@@ -6171,7 +6223,9 @@ export default function PharmacyPage() {
                                 </p>
                                 <p className="text-stat-sm font-semibold text-default-900 mt-1">
                                   NPR{" "}
-                                  {Math.round(summary.totalSales).toLocaleString()}
+                                  {Math.round(
+                                    summary.totalSales,
+                                  ).toLocaleString()}
                                 </p>
                               </div>
                               <IoWalletOutline
@@ -6357,13 +6411,17 @@ export default function PharmacyPage() {
                                       </TableCell>
                                       <TableCell>
                                         NPR{" "}
-                                        {Math.round(purchase.total).toLocaleString()}
+                                        {Math.round(
+                                          purchase.total,
+                                        ).toLocaleString()}
                                       </TableCell>
                                       <TableCell>
                                         {purchase.discount > 0 ? (
                                           <span className="text-default-600">
                                             NPR{" "}
-                                            {Math.round(purchase.discount).toLocaleString()}
+                                            {Math.round(
+                                              purchase.discount,
+                                            ).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -6375,7 +6433,9 @@ export default function PharmacyPage() {
                                         {purchase.taxAmount > 0 ? (
                                           <span className="text-default-600">
                                             NPR{" "}
-                                            {Math.round(purchase.taxAmount).toLocaleString()}
+                                            {Math.round(
+                                              purchase.taxAmount,
+                                            ).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -6386,7 +6446,9 @@ export default function PharmacyPage() {
                                       <TableCell>
                                         <span className="font-semibold text-default-900">
                                           NPR{" "}
-                                          {Math.round(purchase.netAmount).toLocaleString()}
+                                          {Math.round(
+                                            purchase.netAmount,
+                                          ).toLocaleString()}
                                         </span>
                                       </TableCell>
                                       <TableCell>
@@ -6542,7 +6604,9 @@ export default function PharmacyPage() {
                                 </p>
                                 <p className="text-stat font-semibold text-default-900 mt-1">
                                   NPR{" "}
-                                  {Math.round(summary.totalPurchaseCost).toLocaleString()}
+                                  {Math.round(
+                                    summary.totalPurchaseCost,
+                                  ).toLocaleString()}
                                 </p>
                               </div>
                               <IoWalletOutline
@@ -6597,7 +6661,9 @@ export default function PharmacyPage() {
                                 </p>
                                 <p className="text-stat font-semibold text-default-900 mt-1">
                                   NPR{" "}
-                                  {Math.round(summary.averageCostPerMedicine).toLocaleString()}
+                                  {Math.round(
+                                    summary.averageCostPerMedicine,
+                                  ).toLocaleString()}
                                 </p>
                               </div>
                               <IoReceiptOutline
@@ -6734,7 +6800,9 @@ export default function PharmacyPage() {
                                         {costPrice > 0 ? (
                                           <span className="text-default-600">
                                             NPR{" "}
-                                            {Math.round(costPrice).toLocaleString()}
+                                            {Math.round(
+                                              costPrice,
+                                            ).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -6746,7 +6814,9 @@ export default function PharmacyPage() {
                                         {costPrice > 0 ? (
                                           <span className="font-medium text-default-900">
                                             NPR{" "}
-                                            {Math.round(totalCost).toLocaleString()}
+                                            {Math.round(
+                                              totalCost,
+                                            ).toLocaleString()}
                                           </span>
                                         ) : (
                                           <span className="text-default-400">
@@ -7656,6 +7726,54 @@ export default function PharmacyPage() {
             )}
           </ModalHeader>
           <ModalBody>
+            <div className="space-y-4">
+              {supplierPaymentForm.type === "payment" &&
+                selectedSupplierForLedger && (
+                  <CustomSelect
+                    label="Select Bill to Pay (Optional)"
+                    options={[
+                      {
+                        value: "",
+                        label: "General Payment (No specific bill)",
+                      },
+                      ...supplierLedgerEntries
+                        .filter(
+                          (e) =>
+                            e.supplierId === selectedSupplierForLedger.id &&
+                            e.balanceAmount > 0 &&
+                            e.type === "purchase",
+                        )
+                        .map((e) => ({
+                          value: e.billNumber || e.id,
+                          label: `Bill: ${e.billNumber || "Unknown"} (Due: NPR ${Math.round(e.balanceAmount).toLocaleString()})`,
+                        })),
+                    ]}
+                    value={supplierPaymentForm.referenceNumber}
+                    onChange={(e: any) => {
+                      const selectedVal = e.target.value;
+                      const selectedEntry = supplierLedgerEntries.find(
+                        (entry) =>
+                          (entry.billNumber || entry.id) === selectedVal &&
+                          entry.supplierId === selectedSupplierForLedger.id,
+                      );
+
+                      if (selectedEntry) {
+                        setSupplierPaymentForm((prev) => ({
+                          ...prev,
+                          referenceNumber: selectedVal,
+                          amount: selectedEntry.balanceAmount.toString(),
+                        }));
+                      } else {
+                        setSupplierPaymentForm((prev) => ({
+                          ...prev,
+                          referenceNumber: selectedVal,
+                          amount: "",
+                        }));
+                      }
+                    }}
+                  />
+                )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 isRequired
@@ -7803,7 +7921,9 @@ export default function PharmacyPage() {
                               {entry.debitAmount > 0 ? (
                                 <span className="text-danger font-medium">
                                   NPR{" "}
-                                  {Math.round(entry.debitAmount).toLocaleString()}
+                                  {Math.round(
+                                    entry.debitAmount,
+                                  ).toLocaleString()}
                                 </span>
                               ) : (
                                 <span className="text-default-400">—</span>
@@ -7813,7 +7933,9 @@ export default function PharmacyPage() {
                               {entry.creditAmount > 0 ? (
                                 <span className="text-success font-medium">
                                   NPR{" "}
-                                  {Math.round(entry.creditAmount).toLocaleString()}
+                                  {Math.round(
+                                    entry.creditAmount,
+                                  ).toLocaleString()}
                                 </span>
                               ) : (
                                 <span className="text-default-400">—</span>
@@ -7830,7 +7952,9 @@ export default function PharmacyPage() {
                                 }`}
                               >
                                 NPR{" "}
-                                {Math.round(entry.balanceAmount).toLocaleString()}
+                                {Math.round(
+                                  entry.balanceAmount,
+                                ).toLocaleString()}
                               </span>
                             </TableCell>
                             <TableCell>

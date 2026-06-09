@@ -148,6 +148,7 @@ export default function AppointmentSettingsPage() {
           price: type.price,
           isActive: type.isActive,
           color: type.color,
+          billAtFrontDesk: type.billAtFrontDesk,
         });
         savedId = editingType.id;
       } else {
@@ -159,6 +160,7 @@ export default function AppointmentSettingsPage() {
           price: type.price!,
           isActive: type.isActive ?? true,
           color: type.color || "none",
+          billAtFrontDesk: type.billAtFrontDesk ?? false,
           clinicId,
           createdBy: currentUser.uid,
         };
@@ -742,6 +744,7 @@ function AppointmentTypeModal({
       price: 0,
       isActive: true,
       color: "none",
+      billAtFrontDesk: false,
     },
   );
 
@@ -752,6 +755,7 @@ function AppointmentTypeModal({
       price: 0,
       isActive: true,
       color: "none",
+      billAtFrontDesk: false,
     };
 
     setFormData(type || defaultFormData);
@@ -927,6 +931,26 @@ function AppointmentTypeModal({
                 ? "This appointment type will be available for scheduling"
                 : "This appointment type will be hidden from scheduling"}
             </span>
+          </div>
+
+          <div className="flex flex-col gap-1 p-3 rounded-lg border border-border-base bg-surface-2/30 mt-2">
+            <Checkbox
+              className="font-medium"
+              isSelected={formData.billAtFrontDesk ?? false}
+              onValueChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  billAtFrontDesk: value,
+                }))
+              }
+            >
+              Bill at Front Desk
+            </Checkbox>
+            <p className="text-xs text-text-muted ml-7 leading-relaxed">
+              Select if this service should be billed instantly at check-in
+              (e.g., Analyzers, Walk-in Services). Leave unselected for
+              procedures billed later.
+            </p>
           </div>
         </div>
       </ModalBody>

@@ -78,10 +78,10 @@ function SearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-        (i.primary + (i.secondary || ""))
-          .toLowerCase()
-          .includes(q.toLowerCase()),
-      )
+          (i.primary + (i.secondary || ""))
+            .toLowerCase()
+            .includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -89,7 +89,9 @@ function SearchSelect({
   return (
     <div className="flex flex-col gap-1.5 relative w-full">
       {label && (
-        <label className={`text-[13px] font-medium text-mountain-700 ${hideLabelDesktop ? 'xl:hidden' : ''}`}>
+        <label
+          className={`text-[13px] font-medium text-mountain-700 ${hideLabelDesktop ? "xl:hidden" : ""}`}
+        >
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
@@ -106,10 +108,21 @@ function SearchSelect({
             selected && !open
               ? selected.primary
               : allowCustom && value && value.startsWith("custom_")
-                ? items.find(i => i.id === value)?.primary || placeholder || "Custom Service"
+                ? items.find((i) => i.id === value)?.primary ||
+                  placeholder ||
+                  "Custom Service"
                 : placeholder || `Search…`
           }
-          value={open ? q : selected ? selected.primary : allowCustom && value && value.startsWith("custom_") ? items.find(i => i.id === value)?.primary || "Custom Service" : ""}
+          value={
+            open
+              ? q
+              : selected
+                ? selected.primary
+                : allowCustom && value && value.startsWith("custom_")
+                  ? items.find((i) => i.id === value)?.primary ||
+                    "Custom Service"
+                  : ""
+          }
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -169,22 +182,26 @@ function SearchSelect({
                     )}
                   </button>
                 ))}
-                {allowCustom && q && !items.find(i => i.primary.toLowerCase() === q.toLowerCase()) && (
-                  <button
-                    className="flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-t border-mountain-100"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onCustomAdd) onCustomAdd(q);
-                      setQ("");
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="text-[13.5px] font-medium text-teal-700 leading-tight">
-                      + Add custom service: "{q}"
-                    </span>
-                  </button>
-                )}
+                {allowCustom &&
+                  q &&
+                  !items.find(
+                    (i) => i.primary.toLowerCase() === q.toLowerCase(),
+                  ) && (
+                    <button
+                      className="flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-t border-mountain-100"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onCustomAdd) onCustomAdd(q);
+                        setQ("");
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="text-[13.5px] font-medium text-teal-700 leading-tight">
+                        + Add custom service: "{q}"
+                      </span>
+                    </button>
+                  )}
               </>
             )}
           </div>
@@ -215,7 +232,9 @@ function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 w-full relative ${className || ""}`}>
       {label && (
-        <label className={`text-[13px] font-medium text-mountain-700 ${hideLabelDesktop ? 'xl:hidden' : ''}`}>
+        <label
+          className={`text-[13px] font-medium text-mountain-700 ${hideLabelDesktop ? "xl:hidden" : ""}`}
+        >
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
@@ -494,7 +513,10 @@ export default function EditInvoicePage() {
           }
         } else {
           // Check if it's a custom item from another row
-          const customItem = prev.items.find(i => i.appointmentTypeId === updates.appointmentTypeId);
+          const customItem = prev.items.find(
+            (i) => i.appointmentTypeId === updates.appointmentTypeId,
+          );
+
           if (customItem && updates.appointmentTypeId) {
             item.appointmentTypeName = customItem.appointmentTypeName;
             // Optionally default to the same price as the other row
@@ -572,10 +594,7 @@ export default function EditInvoicePage() {
     }
 
     const hasValidItems = formData.items.every(
-      (item) =>
-        item.appointmentTypeId &&
-        item.quantity > 0 &&
-        item.price >= 0,
+      (item) => item.appointmentTypeId && item.quantity > 0 && item.price >= 0,
     );
 
     if (!hasValidItems) {
@@ -699,7 +718,9 @@ export default function EditInvoicePage() {
         <div className="flex justify-center gap-3">
           <Button
             variant="bordered"
-            onClick={() => navigate(`/dashboard/appointments-billing/${invoiceId}`)}
+            onClick={() =>
+              navigate(`/dashboard/appointments-billing/${invoiceId}`)
+            }
           >
             Back to Invoice
           </Button>
@@ -727,7 +748,9 @@ export default function EditInvoicePage() {
         <Button
           startContent={<IoArrowBackOutline />}
           variant="bordered"
-          onClick={() => navigate(`/dashboard/appointments-billing/${invoice.id}`)}
+          onClick={() =>
+            navigate(`/dashboard/appointments-billing/${invoice.id}`)
+          }
         >
           Back
         </Button>
@@ -791,7 +814,9 @@ export default function EditInvoicePage() {
               .filter(
                 (item) =>
                   item.appointmentTypeId &&
-                  !appointmentTypes.some((at) => at.id === item.appointmentTypeId)
+                  !appointmentTypes.some(
+                    (at) => at.id === item.appointmentTypeId,
+                  ),
               )
               .map((item) => ({
                 id: item.appointmentTypeId,
@@ -800,7 +825,9 @@ export default function EditInvoicePage() {
               }));
 
             const uniqueCustomItems = Array.from(
-              new Map(currentCustomItems.map((item) => [item.id, item])).values()
+              new Map(
+                currentCustomItems.map((item) => [item.id, item]),
+              ).values(),
             );
 
             const availableServiceOptions = appointmentTypes
@@ -816,14 +843,18 @@ export default function EditInvoicePage() {
                 {/* Table Header (Desktop) */}
                 <div className="hidden xl:flex items-center px-4 pb-2 text-[12px] font-semibold text-mountain-500 uppercase tracking-wider">
                   <div className="flex-1 min-w-[160px] px-1">Service</div>
-                  <div className="flex-1 min-w-[160px] px-1">Doctor (Optional)</div>
+                  <div className="flex-1 min-w-[160px] px-1">
+                    Doctor (Optional)
+                  </div>
                   <div className="w-[110px] shrink-0 px-1">Price (NPR)</div>
                   <div className="w-[80px] shrink-0 px-1">Qty</div>
                   <div className="w-[100px] shrink-0 px-1">Disc. Type</div>
                   <div className="w-[100px] shrink-0 px-1">Disc. Val</div>
                   <div className="w-[100px] shrink-0 px-1">Comm.</div>
-                  <div className="w-[120px] shrink-0 px-1 text-right">Amount</div>
-                  <div className="w-[38px] shrink-0 ml-4"></div>
+                  <div className="w-[120px] shrink-0 px-1 text-right">
+                    Amount
+                  </div>
+                  <div className="w-[38px] shrink-0 ml-4" />
                 </div>
 
                 {formData.items.map((item, index) => (
@@ -833,15 +864,15 @@ export default function EditInvoicePage() {
                   >
                     <div className="flex-1 min-w-[160px]">
                       <SearchSelect
+                        allowCustom={true}
+                        hideLabelDesktop={true}
                         items={availableServiceOptions}
                         label="Service"
-                        hideLabelDesktop={true}
                         placeholder="Select service"
                         value={item.appointmentTypeId}
                         onChange={(id) =>
                           updateInvoiceItem(index, { appointmentTypeId: id })
                         }
-                        allowCustom={true}
                         onCustomAdd={(val) => {
                           updateInvoiceItem(index, {
                             appointmentTypeId: `custom_${Date.now()}`,
@@ -853,13 +884,13 @@ export default function EditInvoicePage() {
 
                     <div className="flex-1 min-w-[160px]">
                       <SearchSelect
+                        hideLabelDesktop={true}
                         items={doctors.map((d) => ({
                           id: d.id,
                           primary: d.name,
                           secondary: d.speciality || d.doctorType,
                         }))}
                         label="Doctor (Optional)"
-                        hideLabelDesktop={true}
                         placeholder="Select doctor"
                         value={item.doctorId || ""}
                         onChange={(id) => {
@@ -880,8 +911,8 @@ export default function EditInvoicePage() {
                     <div className="grid grid-cols-2 lg:grid-cols-6 xl:flex gap-3 xl:w-auto">
                       <div className="w-full xl:w-[110px] xl:shrink-0">
                         <CustomInput
-                          label="Price"
                           hideLabelDesktop={true}
+                          label="Price"
                           min="0"
                           step="0.01"
                           type="number"
@@ -896,8 +927,8 @@ export default function EditInvoicePage() {
 
                       <div className="w-full xl:w-[80px] xl:shrink-0">
                         <CustomInput
-                          label="Qty"
                           hideLabelDesktop={true}
+                          label="Qty"
                           min="1"
                           type="number"
                           value={item.quantity.toString()}
@@ -931,8 +962,8 @@ export default function EditInvoicePage() {
 
                       <div className="w-full xl:w-[100px] xl:shrink-0">
                         <CustomInput
-                          label="Disc. Val"
                           hideLabelDesktop={true}
+                          label="Disc. Val"
                           min="0"
                           type="number"
                           value={(item.discountValue || 0).toString()}
@@ -947,8 +978,8 @@ export default function EditInvoicePage() {
                       <div className="w-full xl:w-[100px] xl:shrink-0">
                         <CustomInput
                           endContent="%"
-                          label="Comm."
                           hideLabelDesktop={true}
+                          label="Comm."
                           type="number"
                           value={item.commission.toString()}
                           onChange={(e: any) =>
@@ -1000,7 +1031,7 @@ export default function EditInvoicePage() {
                   Add Your First Item
                 </Button>
               </div>
-            )
+            );
           })()}
         </div>
 

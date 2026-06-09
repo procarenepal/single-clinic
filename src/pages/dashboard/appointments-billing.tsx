@@ -2227,26 +2227,45 @@ export default function AppointmentBillingPage() {
                   </p>
                 )}
 
-                {selectedBilling.paymentHistory && selectedBilling.paymentHistory.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-green-500/20">
-                    <h5 className="text-[11px] font-semibold text-green-700 mb-2 uppercase tracking-wider">
-                      Payment History
-                    </h5>
-                    <div className="space-y-2">
-                      {selectedBilling.paymentHistory.map((p, idx) => (
-                        <div key={p.id || idx} className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-green-500/10">
-                          <div>
-                            <p className="font-semibold text-green-800">{fmtCur(p.amount)}</p>
-                            <p className="text-text-muted/80 mt-0.5">
-                              {p.method.charAt(0).toUpperCase() + p.method.slice(1)} • {new Date(p.date).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                            {p.reference && <p className="text-text-muted/60 mt-0.5">Ref: {p.reference}</p>}
+                {selectedBilling.paymentHistory &&
+                  selectedBilling.paymentHistory.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-green-500/20">
+                      <h5 className="text-[11px] font-semibold text-green-700 mb-2 uppercase tracking-wider">
+                        Payment History
+                      </h5>
+                      <div className="space-y-2">
+                        {selectedBilling.paymentHistory.map((p, idx) => (
+                          <div
+                            key={p.id || idx}
+                            className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-green-500/10"
+                          >
+                            <div>
+                              <p className="font-semibold text-green-800">
+                                {fmtCur(p.amount)}
+                              </p>
+                              <p className="text-text-muted/80 mt-0.5">
+                                {p.method.charAt(0).toUpperCase() +
+                                  p.method.slice(1)}{" "}
+                                •{" "}
+                                {new Date(p.date).toLocaleString("en-US", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                              {p.reference && (
+                                <p className="text-text-muted/60 mt-0.5">
+                                  Ref: {p.reference}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             )}
           </div>

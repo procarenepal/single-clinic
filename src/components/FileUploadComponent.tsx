@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useId } from "react";
 import { Button } from "@heroui/button";
 import { Card, CardBody } from "@heroui/card";
 import { addToast } from "@heroui/toast";
@@ -42,6 +42,7 @@ export const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const inputId = useId();
 
   const getAcceptedTypes = () => {
     switch (uploadType) {
@@ -257,7 +258,7 @@ export const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
           <input
             accept={getAcceptedTypes()}
             className="hidden"
-            id="file-upload"
+            id={inputId}
             type="file"
             onChange={handleFileInput}
           />
@@ -265,7 +266,7 @@ export const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
             as="label"
             className="cursor-pointer h-7 px-3 text-[10px] font-bold"
             color="primary"
-            htmlFor="file-upload"
+            htmlFor={inputId}
             isLoading={isUploading}
             size="sm"
             variant="flat"

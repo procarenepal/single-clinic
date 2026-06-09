@@ -14,7 +14,13 @@ import {
 } from "firebase/firestore";
 
 import { db, auth } from "../config/firebase";
-import { AppointmentBilling, AppointmentBillingSettings, AppointmentBillingItem, PaymentMethod } from "../types/models";
+import {
+  AppointmentBilling,
+  AppointmentBillingSettings,
+  AppointmentBillingItem,
+  PaymentMethod,
+} from "../types/models";
+
 import { patientService } from "./patientService";
 import { walletService } from "./walletService";
 import { navigationService } from "./navigationService";
@@ -696,6 +702,7 @@ export const appointmentBillingService = {
       // If paying via wallet, verify balance and deduct funds
       if (paymentMethod === "wallet") {
         const patient = await patientService.getPatientById(billing.patientId);
+
         if (!patient || (patient.walletBalance || 0) < paymentAmount) {
           throw new Error("Insufficient wallet balance");
         }
@@ -706,7 +713,7 @@ export const appointmentBillingService = {
           paymentAmount,
           id,
           paymentNotes || `Paid Invoice ${billing.invoiceNumber || "Draft"}`,
-          auth.currentUser?.uid || "system"
+          auth.currentUser?.uid || "system",
         );
       }
 
@@ -739,7 +746,10 @@ export const appointmentBillingService = {
         updateData.paymentNotes = paymentNotes.trim();
       }
 
-      updateData.paymentHistory = [...(billing.paymentHistory || []), newPaymentEvent];
+      updateData.paymentHistory = [
+        ...(billing.paymentHistory || []),
+        newPaymentEvent,
+      ];
 
       await this.updateBilling(id, updateData);
 
@@ -778,6 +788,7 @@ export const appointmentBillingService = {
 
           const updatePromises = querySnapshot.docs.map((docSnap) => {
             const apptDocRef = doc(db, "appointments", docSnap.id);
+            const apptData = docSnap.data();
             const apptUpdates: any = {
               billingStatus: paymentStatus,
               paymentStatus: paymentStatus,
@@ -785,7 +796,7 @@ export const appointmentBillingService = {
               updatedAt: Timestamp.now(),
             };
 
-            if (!isConsultationOnly) {
+            if (!isConsultationOnly && apptData.status === "billing") {
               apptUpdates.status = "completed";
             }
 

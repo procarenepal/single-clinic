@@ -2,14 +2,13 @@ import {
   collection,
   doc,
   getDocs,
-  getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   Timestamp,
 } from "firebase/firestore";
+
 import { db } from "../config/firebase";
 import { TreatmentPackage } from "../types/models";
 
@@ -19,22 +18,26 @@ export const packageService = {
   /**
    * Get all active packages for a clinic
    */
-  async getPackagesByClinic(clinicId: string, branchId?: string): Promise<TreatmentPackage[]> {
+  async getPackagesByClinic(
+    clinicId: string,
+    branchId?: string,
+  ): Promise<TreatmentPackage[]> {
     try {
       const constraints = [
         where("clinicId", "==", clinicId),
-        where("isActive", "==", true)
+        where("isActive", "==", true),
       ];
-      
+
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
       }
 
       const q = query(collection(db, PACKAGES_COLLECTION), ...constraints);
       const snapshot = await getDocs(q);
-      
-      return snapshot.docs.map(doc => {
+
+      return snapshot.docs.map((doc) => {
         const data = doc.data();
+
         return {
           id: doc.id,
           ...data,
@@ -51,7 +54,9 @@ export const packageService = {
   /**
    * Create a new package
    */
-  async createPackage(pkgData: Omit<TreatmentPackage, "id" | "createdAt" | "updatedAt">): Promise<string> {
+  async createPackage(
+    pkgData: Omit<TreatmentPackage, "id" | "createdAt" | "updatedAt">,
+  ): Promise<string> {
     try {
       const now = new Date();
       const data = {
@@ -61,6 +66,7 @@ export const packageService = {
       };
 
       const docRef = await addDoc(collection(db, PACKAGES_COLLECTION), data);
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating package:", error);
@@ -71,16 +77,20 @@ export const packageService = {
   /**
    * Update an existing package
    */
-  async updatePackage(id: string, updates: Partial<TreatmentPackage>): Promise<void> {
+  async updatePackage(
+    id: string,
+    updates: Partial<TreatmentPackage>,
+  ): Promise<void> {
     try {
       const docRef = doc(db, PACKAGES_COLLECTION, id);
       const data = {
         ...updates,
         updatedAt: Timestamp.now(),
       };
+
       // Remove id if present to avoid storing it in the document
       delete (data as any).id;
-      
+
       await updateDoc(docRef, data);
     } catch (error) {
       console.error("Error updating package:", error);
@@ -94,6 +104,7 @@ export const packageService = {
   async deletePackage(id: string): Promise<void> {
     try {
       const docRef = doc(db, PACKAGES_COLLECTION, id);
+
       await updateDoc(docRef, {
         isActive: false,
         updatedAt: Timestamp.now(),
@@ -102,5 +113,5 @@ export const packageService = {
       console.error("Error deleting package:", error);
       throw error;
     }
-  }
+  },
 };

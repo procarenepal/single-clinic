@@ -37,3 +37,21 @@ bun.lockb
 
 
 procarenepalnew
+
+# Build artifacts & archives
+dist.zip
+upload.tar.gz
+*.tar.gz
+*.zip
+
+# Temp debug / one-off scripts (keep scripts/ directory but not root-level junk)
+fix-*.cjs
+fix-*.js
+check_*.py
+debug-*.cjs
+diagnostic.py
+final_count.py
+tag_lines.txt
+tsc_output.txt
+vite.config.ts.timestamp-*.mjs
+clean-db.js

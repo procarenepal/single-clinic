@@ -287,19 +287,21 @@ export default function PatientDetailPage() {
 
           return [];
         }),
-          isBillingEnabled
-            ? appointmentBillingService
-                .getBillingByPatient(patientId, clinicId)
-                .catch((err) => {
-                  console.warn("Failed to fetch billing records:", err);
-                  return [];
-                })
-            : Promise.resolve([]),
-          expertService.getExpertsByClinic(clinicId).catch((err) => {
-            console.warn("Failed to fetch experts:", err);
-            return [];
-          }),
-        ]);
+        isBillingEnabled
+          ? appointmentBillingService
+              .getBillingByPatient(patientId, clinicId)
+              .catch((err) => {
+                console.warn("Failed to fetch billing records:", err);
+
+                return [];
+              })
+          : Promise.resolve([]),
+        expertService.getExpertsByClinic(clinicId).catch((err) => {
+          console.warn("Failed to fetch experts:", err);
+
+          return [];
+        }),
+      ]);
 
       // Extract data from results with proper fallbacks
       const clinicData =
@@ -320,10 +322,11 @@ export default function PatientDetailPage() {
         results[8].status === "fulfilled" ? results[8].value : null;
       const rawMedicalReportFields =
         results[9].status === "fulfilled" ? results[9].value : [];
-        
+
       // Deduplicate medical report fields to prevent duplicate print rows
       const medicalReportFields = [];
       const seenKeys = new Set<string>();
+
       for (const field of rawMedicalReportFields as any[]) {
         if (!seenKeys.has(field.fieldKey)) {
           seenKeys.add(field.fieldKey);
@@ -407,22 +410,34 @@ export default function PatientDetailPage() {
         : layoutConfig?.headerHeight === "expanded"
           ? 220
           : 180;
-          
+
     const topMarginMm = layoutConfig?.contentTopMarginWithoutLetterheadMm || 10;
 
     const primaryDoctor = doctors.find((d: any) => d.id === patient.doctorId);
     const doctorName = primaryDoctor ? primaryDoctor.name : "—";
-    
-    const primaryExpert = experts.find((e: any) => e.id === patient.assignedExpertId);
+
+    const primaryExpert = experts.find(
+      (e: any) => e.id === patient.assignedExpertId,
+    );
     const expertName = primaryExpert ? primaryExpert.name : null;
-    const consultantText = expertName && expertName !== "—" 
-      ? `${doctorName} / ${expertName}` 
-      : doctorName;
+    const consultantText =
+      expertName && expertName !== "—"
+        ? `${doctorName} / ${expertName}`
+        : doctorName;
 
     const patientAge = calculateAge(patient.dob) || patient.age || "—";
-    const patientBg = patient.bloodGroup || (medicalReportResponses?.fieldValues && medicalReportResponses.fieldValues["blood-group"]) || "—";
-    const regDate = patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : "—";
-    const displayAddress = patient.address && patient.address.toLowerCase() !== "walk-in" ? patient.address : "—";
+    const patientBg =
+      patient.bloodGroup ||
+      (medicalReportResponses?.fieldValues &&
+        medicalReportResponses.fieldValues["blood-group"]) ||
+      "—";
+    const regDate = patient.createdAt
+      ? new Date(patient.createdAt).toLocaleDateString()
+      : "—";
+    const displayAddress =
+      patient.address && patient.address.toLowerCase() !== "walk-in"
+        ? patient.address
+        : "—";
 
     return `<!DOCTYPE html>
 <html>

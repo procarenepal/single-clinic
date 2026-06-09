@@ -481,12 +481,14 @@ const SendSMSTab: React.FC = () => {
       }
     } catch (error) {
       try {
-        smsService.createSMSLog({
-          ...logData,
-          status: "failed" as const,
-          errorMessage:
-            error instanceof Error ? error.message : "Unknown error",
-        }).catch(console.error);
+        smsService
+          .createSMSLog({
+            ...logData,
+            status: "failed" as const,
+            errorMessage:
+              error instanceof Error ? error.message : "Unknown error",
+          })
+          .catch(console.error);
       } catch {
         console.error("Failed to create SMS log");
       }

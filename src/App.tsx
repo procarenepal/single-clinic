@@ -322,21 +322,29 @@ export default function App() {
             />
             <Route
               element={
-                <DefaultLayout>
-                  <Suspense fallback={<LoadingSpinner />}>
-                    <SMSTesterPage />
-                  </Suspense>
-                </DefaultLayout>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <BasicProtectedRoute>
+                    <DashboardLayout>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <SMSTesterPage />
+                      </Suspense>
+                    </DashboardLayout>
+                  </BasicProtectedRoute>
+                </Suspense>
               }
               path="/sms-tester"
             />
             <Route
               element={
-                <DefaultLayout>
-                  <Suspense fallback={<LoadingSpinner />}>
-                    <SMSBackendTesterPage />
-                  </Suspense>
-                </DefaultLayout>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <BasicProtectedRoute>
+                    <DashboardLayout>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <SMSBackendTesterPage />
+                      </Suspense>
+                    </DashboardLayout>
+                  </BasicProtectedRoute>
+                </Suspense>
               }
               path="/sms-backend-tester"
             />

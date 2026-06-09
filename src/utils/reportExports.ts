@@ -108,19 +108,28 @@ export const exportDailyReportToExcel = (
     addRow([
       "Total Revenue",
       formatCurrency(
-        Math.round(reportData.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0)),
+        Math.round(
+          reportData.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+        ),
       ),
     ]);
     addRow([
       "Cash Collected",
       formatCurrency(
-        Math.round(reportData.billing.reduce((sum, b) => sum + (b.paidAmount || 0), 0)),
+        Math.round(
+          reportData.billing.reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+        ),
       ),
     ]);
     addRow([
       "Total Due",
       formatCurrency(
-        Math.round(reportData.billing.reduce((sum, b) => sum + (b.balanceAmount || 0), 0)),
+        Math.round(
+          reportData.billing.reduce(
+            (sum, b) => sum + (b.balanceAmount || 0),
+            0,
+          ),
+        ),
       ),
     ]);
     addEmptyRow(2);
@@ -294,19 +303,31 @@ export const exportDailyReportToPDF = (
       [
         "Total Revenue",
         formatCurrency(
-          Math.round(reportData.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0)),
+          Math.round(
+            reportData.billing.reduce(
+              (sum, b) => sum + (b.totalAmount || 0),
+              0,
+            ),
+          ),
         ),
       ],
       [
         "Cash Collected",
         formatCurrency(
-          Math.round(reportData.billing.reduce((sum, b) => sum + (b.paidAmount || 0), 0)),
+          Math.round(
+            reportData.billing.reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+          ),
         ),
       ],
       [
         "Total Due",
         formatCurrency(
-          Math.round(reportData.billing.reduce((sum, b) => sum + (b.balanceAmount || 0), 0)),
+          Math.round(
+            reportData.billing.reduce(
+              (sum, b) => sum + (b.balanceAmount || 0),
+              0,
+            ),
+          ),
         ),
       ],
     ];
@@ -503,10 +524,9 @@ export const exportPharmacyDailyReportToExcel = (
     addEmptyRow(2);
 
     // Calculate summary
-    const totalSales = Math.round(purchases.reduce(
-      (sum, p) => sum + (p.netAmount || 0),
-      0,
-    ));
+    const totalSales = Math.round(
+      purchases.reduce((sum, p) => sum + (p.netAmount || 0), 0),
+    );
     const totalItems = purchases.reduce(
       (sum, p) =>
         sum + p.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
@@ -676,10 +696,9 @@ export const exportPharmacyDailyReportToPDF = (
     yPosition += 4;
 
     // Calculate summary
-    const totalSales = Math.round(purchases.reduce(
-      (sum, p) => sum + (p.netAmount || 0),
-      0,
-    ));
+    const totalSales = Math.round(
+      purchases.reduce((sum, p) => sum + (p.netAmount || 0), 0),
+    );
     const totalItems = purchases.reduce(
       (sum, p) =>
         sum + p.items.reduce((itemSum, item) => itemSum + item.quantity, 0),

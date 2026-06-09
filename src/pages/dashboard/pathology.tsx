@@ -396,7 +396,9 @@ export default function PathologyPage() {
   // Refresh billings and tests when switching to daily report tab
   useEffect(() => {
     if (activeTab === "dailyReport" && clinicId) {
-      pathologyBillingService.getBillingByClinic(clinicId, branchId).then(setBillings);
+      pathologyBillingService
+        .getBillingByClinic(clinicId, branchId)
+        .then(setBillings);
       pathologyService.getTestsByClinic(clinicId, branchId).then(setTests);
     }
   }, [activeTab, clinicId, branchId]);
@@ -534,23 +536,23 @@ export default function PathologyPage() {
     });
 
     // Calculate statistics
-    const validBillings = dailyBillings.filter(b => b.status !== "cancelled");
-    const revenueBillings = validBillings.filter(b => b.status !== "draft");
+    const validBillings = dailyBillings.filter((b) => b.status !== "cancelled");
+    const revenueBillings = validBillings.filter((b) => b.status !== "draft");
 
     const totalTests = dailyTests.length;
     const totalBillings = validBillings.length;
-    
+
     const totalRevenue = revenueBillings.reduce(
       (sum, billing) => sum + (billing.totalAmount || 0),
       0,
     );
     const totalPaid = revenueBillings.reduce(
-      (sum, billing) => sum + (billing.paidAmount || 0), 
-      0
+      (sum, billing) => sum + (billing.paidAmount || 0),
+      0,
     );
     const totalPending = revenueBillings.reduce(
-      (sum, billing) => sum + (billing.balanceAmount || 0), 
-      0
+      (sum, billing) => sum + (billing.balanceAmount || 0),
+      0,
     );
 
     // Test types breakdown
@@ -2468,7 +2470,9 @@ export default function PathologyPage() {
   };
 
   const unpaidBillingsCount = billings.filter(
-    (b) => b.status === "draft" || (b.balanceAmount > 0 && b.status !== "cancelled" && b.status !== "paid")
+    (b) =>
+      b.status === "draft" ||
+      (b.balanceAmount > 0 && b.status !== "cancelled" && b.status !== "paid"),
   ).length;
 
   const seedHIVTest = async () => {

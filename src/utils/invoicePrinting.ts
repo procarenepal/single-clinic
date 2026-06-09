@@ -588,9 +588,10 @@ export const generateAppointmentInvoiceHTML = (
             <td>Total</td>
             <td class="text-right">${formatCurrency(invoice.totalAmount)}</td>
           </tr>
+          ${(invoice as any).previousDuePaidAmount > 0 ? `<tr><td>Previous Due Settled</td><td class="text-right">${formatCurrency((invoice as any).previousDuePaidAmount)}</td></tr>` : ""}
           <tr>
             <td>Paid</td>
-            <td class="text-right">${formatCurrency(invoice.paidAmount)}</td>
+            <td class="text-right">${formatCurrency(invoice.paidAmount + ((invoice as any).previousDuePaidAmount || 0))}</td>
           </tr>
           <tr class="font-bold">
             <td>Balance</td>

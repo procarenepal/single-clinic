@@ -215,7 +215,7 @@ export const getPrintHeaderHTML = (
         <h1 class="clinic-name pos-clinicName">${config.clinicName || clinic?.name || "Clinic Name"}</h1>
         
         ${
-          config.showTagline !== false
+          config.showTagline !== false && (config.tagline || clinic?.tagline)
             ? `
           <div class="pos-tagline">
             <p class="tagline">${config.tagline || clinic?.tagline || ""}</p>
@@ -225,7 +225,7 @@ export const getPrintHeaderHTML = (
         }
 
         ${
-          config.showAddress !== false
+          config.showAddress !== false && (config.address || clinic?.address)
             ? `
           <div class="pos-address">
             <div class="address">${config.address || clinic?.address || ""}</div>
@@ -234,30 +234,37 @@ export const getPrintHeaderHTML = (
             : ""
         }
 
-        <div class="pos-contacts">
-          <div class="contact-row">
-            ${
-              config.showPhone !== false
-                ? `
-              <div class="contact-item">
-                <span class="contact-label" style="text-transform: lowercase;">phone:</span>
-                <span class="contact-value">${config.phone || clinic?.phone || ""}</span>
-              </div>
-            `
-                : ""
-            }
-            ${
-              config.showEmail !== false
-                ? `
-              <div class="contact-item">
-                <span class="contact-label" style="text-transform: lowercase;">email:</span>
-                <span class="contact-value">${config.email || clinic?.email || ""}</span>
-              </div>
-            `
-                : ""
-            }
+        ${
+          (config.showPhone !== false && (config.phone || clinic?.phone)) ||
+          (config.showEmail !== false && (config.email || clinic?.email))
+            ? `
+          <div class="pos-contacts">
+            <div class="contact-row">
+              ${
+                config.showPhone !== false && (config.phone || clinic?.phone)
+                  ? `
+                <div class="contact-item">
+                  <span class="contact-label" style="text-transform: lowercase;">phone:</span>
+                  <span class="contact-value">${config.phone || clinic?.phone}</span>
+                </div>
+              `
+                  : ""
+              }
+              ${
+                config.showEmail !== false && (config.email || clinic?.email)
+                  ? `
+                <div class="contact-item">
+                  <span class="contact-label" style="text-transform: lowercase;">email:</span>
+                  <span class="contact-value">${config.email || clinic?.email}</span>
+                </div>
+              `
+                  : ""
+              }
+            </div>
           </div>
-        </div>
+        `
+            : ""
+        }
 
         ${
           config.showWebsite !== false && (config.website || clinic?.website)

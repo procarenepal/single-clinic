@@ -181,14 +181,15 @@ export const smsService = {
           message.slice(0, 30) + (message.length > 30 ? "..." : ""),
       });
 
-      // According to the SamayaSMS Developer API SDK screenshot, 
-      // these parameters are required. We MUST use POST because their 
+      // According to the SamayaSMS Developer API SDK screenshot,
+      // these parameters are required. We MUST use POST because their
       // PHP backend throws a 500 Error on GET requests from the browser.
       const formData = new URLSearchParams();
+
       formData.append("key", apiKey);
       formData.append("campaign", "9569");
       formData.append("routeid", "10255");
-      formData.append("type", "text"); 
+      formData.append("type", "text");
       formData.append("contacts", cleanPhoneNumber);
       formData.append("senderid", senderId || "Bit_Alert");
       formData.append("msg", message);

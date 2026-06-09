@@ -10,8 +10,11 @@ import { client } from "./lib/appwrite.ts";
 // Ping the Appwrite backend server to verify connection on application startup
 try {
   const pingPromise = (client as any).ping?.();
-  if (pingPromise && typeof pingPromise.catch === 'function') {
-    pingPromise.catch((e: any) => console.warn("Appwrite setup ping execution skipped:", e));
+
+  if (pingPromise && typeof pingPromise.catch === "function") {
+    pingPromise.catch((e: any) =>
+      console.warn("Appwrite setup ping execution skipped:", e),
+    );
   }
 } catch (e) {
   console.warn("Appwrite setup ping execution skipped:", e);

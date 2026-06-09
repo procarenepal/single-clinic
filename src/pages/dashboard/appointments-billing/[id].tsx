@@ -2,7 +2,12 @@
  * Invoice Detail Page — Clinic Clarity, zero HeroUI
  * Custom UI per src/design/spec.md. Invoice print layout unchanged.
  */
-import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
+import {
+  useParams,
+  useNavigate,
+  useSearchParams,
+  Link,
+} from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import {
@@ -30,7 +35,6 @@ import { clinicService } from "@/services/clinicService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
-import { patientPackageService } from "@/services/patientPackageService";
 import { AppointmentBilling, Patient } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -222,10 +226,14 @@ export default function InvoiceDetailPage() {
   const [previousDue, setPreviousDue] = useState<number>(0);
   const [doctor, setDoctor] = useState<any>(null);
   const [printFormat, setPrintFormat] = useState<PrintFormat>("A4");
+  const [unpaidPastInvoices, setUnpaidPastInvoices] = useState<
+    AppointmentBilling[]
+  >([]);
+  const [includePreviousDue, setIncludePreviousDue] = useState(false);
 
   // Payment form state
   const [paymentSplits, setPaymentSplits] = useState([
-    { id: "1", amount: "", method: "cash", reference: "", notes: "" }
+    { id: "1", amount: "", method: "cash", reference: "", notes: "" },
   ]);
 
   // Available payment methods (would come from billing settings in real app)
@@ -312,18 +320,29 @@ export default function InvoiceDetailPage() {
 
           if (patientData) {
             setPatient(patientData);
-            
+
             // Calculate previous due from appointment billing
-            const allBilling = await appointmentBillingService.getBillingByPatient(
-              invoiceData.patientId,
-              clinicId
+            const allBilling =
+              await appointmentBillingService.getBillingByPatient(
+                invoiceData.patientId,
+                clinicId,
+              );
+            const pastUnpaid = allBilling.filter(
+              (b) =>
+                b.id !== invoiceId &&
+                b.createdAt.getTime() < invoiceData.createdAt.getTime() &&
+                (b.balanceAmount || 0) > 0,
             );
-            const totalDue = Math.round(allBilling.reduce((sum, b) => {
-              if (b.id === invoiceId) return sum; // exclude current invoice
-              if (b.createdAt.getTime() >= invoiceData.createdAt.getTime()) return sum; // exclude future invoices
-              return sum + (b.balanceAmount || 0);
-            }, 0));
+            const totalDue = Math.round(
+              pastUnpaid.reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
+            );
+
             setPreviousDue(totalDue);
+            setUnpaidPastInvoices(
+              pastUnpaid.sort(
+                (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+              ),
+            );
           }
         } catch (error) {
           console.error("Error loading patient data:", error);
@@ -498,8 +517,9 @@ export default function InvoiceDetailPage() {
   const handlePaymentSubmit = async () => {
     if (!invoice || !currentUser) return;
 
-    const validSplits = paymentSplits.filter(s => {
+    const validSplits = paymentSplits.filter((s) => {
       const amt = parseFloat(s.amount);
+
       return !isNaN(amt) && amt > 0;
     });
 
@@ -509,31 +529,91 @@ export default function InvoiceDetailPage() {
         description: "Please enter a valid payment amount.",
         color: "warning",
       });
+
       return;
     }
 
-    const totalPayment = Math.round(validSplits.reduce((sum, s) => sum + parseFloat(s.amount), 0));
+    const totalPayment = Math.round(
+      validSplits.reduce((sum, s) => sum + parseFloat(s.amount), 0),
+    );
+    const maxAllowed = includePreviousDue
+      ? invoice.balanceAmount + previousDue
+      : invoice.balanceAmount;
 
-    if (totalPayment > invoice.balanceAmount) {
+    if (totalPayment > maxAllowed) {
       addToast({
         title: "Excessive Amount",
-        description: "Total payment cannot exceed the balance amount.",
+        description: `Total payment cannot exceed ${includePreviousDue ? "total balance including previous due" : "the balance amount"}.`,
         color: "warning",
       });
+
       return;
     }
 
     try {
       setIsSubmitting(true);
 
+      let currentInvoiceRemaining = invoice.balanceAmount;
+      const pastInvoicesQueue = unpaidPastInvoices.map((inv) => ({
+        id: inv.id,
+        remaining: inv.balanceAmount,
+        invoiceNumber: inv.invoiceNumber,
+      }));
+      let totalPaidToOldInvoices = 0;
+
       for (const split of validSplits) {
-        await appointmentBillingService.recordPayment(
-          invoice.id,
-          parseFloat(split.amount),
-          split.method,
-          split.reference || undefined,
-          split.notes || undefined,
-        );
+        let splitAmountRemaining = parseFloat(split.amount);
+
+        // 1. Pay current invoice first
+        if (currentInvoiceRemaining > 0 && splitAmountRemaining > 0) {
+          const applyAmount = Math.min(
+            splitAmountRemaining,
+            currentInvoiceRemaining,
+          );
+
+          await appointmentBillingService.recordPayment(
+            invoice.id,
+            applyAmount,
+            split.method,
+            split.reference || undefined,
+            split.notes || undefined,
+          );
+          splitAmountRemaining -= applyAmount;
+          currentInvoiceRemaining -= applyAmount;
+        }
+
+        // 2. Apply rest to previous invoices
+        if (includePreviousDue && splitAmountRemaining > 0) {
+          for (const oldInv of pastInvoicesQueue) {
+            if (splitAmountRemaining <= 0) break;
+            if (oldInv.remaining > 0) {
+              const applyOld = Math.min(splitAmountRemaining, oldInv.remaining);
+              const combinedNotes = split.notes
+                ? `${split.notes} (with ${invoice.invoiceNumber})`
+                : `Paid with ${invoice.invoiceNumber}`;
+
+              await appointmentBillingService.recordPayment(
+                oldInv.id,
+                applyOld,
+                split.method,
+                split.reference || undefined,
+                combinedNotes,
+              );
+
+              splitAmountRemaining -= applyOld;
+              oldInv.remaining -= applyOld;
+              totalPaidToOldInvoices += applyOld;
+            }
+          }
+        }
+      }
+
+      if (totalPaidToOldInvoices > 0) {
+        await appointmentBillingService.updateBilling(invoice.id, {
+          previousDuePaidAmount:
+            ((invoice as any).previousDuePaidAmount || 0) +
+            totalPaidToOldInvoices,
+        } as any);
       }
 
       addToast({
@@ -552,7 +632,15 @@ export default function InvoiceDetailPage() {
 
       // Close payment modal
       paymentModal.forceClose();
-      setPaymentSplits([{ id: Date.now().toString(), amount: "", method: "cash", reference: "", notes: "" }]);
+      setPaymentSplits([
+        {
+          id: Date.now().toString(),
+          amount: "",
+          method: "cash",
+          reference: "",
+          notes: "",
+        },
+      ]);
     } catch (error) {
       console.error("Error recording payment:", error);
       addToast({
@@ -567,13 +655,16 @@ export default function InvoiceDetailPage() {
 
   const handlePaymentOpen = () => {
     if (!invoice) return;
-    setPaymentSplits([{
-      id: Date.now().toString(),
-      amount: invoice.balanceAmount.toString(),
-      method: "cash",
-      reference: "",
-      notes: "",
-    }]);
+    setIncludePreviousDue(false);
+    setPaymentSplits([
+      {
+        id: Date.now().toString(),
+        amount: invoice.balanceAmount.toString(),
+        method: "cash",
+        reference: "",
+        notes: "",
+      },
+    ]);
     paymentModal.open();
   };
 
@@ -748,8 +839,10 @@ export default function InvoiceDetailPage() {
                 color="secondary"
                 size="sm"
                 startContent={<IoCreateOutline className="w-4 h-4" />}
-                onClick={() => navigate(`/dashboard/appointments-billing/${invoice.id}/edit`)}
                 variant="flat"
+                onClick={() =>
+                  navigate(`/dashboard/appointments-billing/${invoice.id}/edit`)
+                }
               >
                 Edit Invoice
               </Button>
@@ -946,8 +1039,8 @@ export default function InvoiceDetailPage() {
                   <p>
                     <span className="font-medium">Name:</span>{" "}
                     <Link
-                      to={`/dashboard/patients/${invoice.patientId}`}
                       className="text-primary font-semibold hover:underline"
+                      to={`/dashboard/patients/${invoice.patientId}`}
                     >
                       {patient?.name || invoice.patientName}
                     </Link>
@@ -973,7 +1066,10 @@ export default function InvoiceDetailPage() {
                   {previousDue > 0 && (
                     <div className="mt-3 p-2 bg-rose-50 border border-rose-200 rounded text-rose-700 text-[12px] font-medium flex items-center gap-1.5 no-print">
                       <IoWarningOutline className="w-4 h-4 shrink-0" />
-                      <span>Reminder: Patient has a previous due of {formatCurrency(previousDue)} from past visits.</span>
+                      <span>
+                        Reminder: Patient has a previous due of{" "}
+                        {formatCurrency(previousDue)} from past visits.
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1161,7 +1257,9 @@ export default function InvoiceDetailPage() {
                 color="secondary"
                 disabled={
                   paymentSplits.length === 0 ||
-                  paymentSplits.some(s => !s.amount || parseFloat(s.amount) <= 0) ||
+                  paymentSplits.some(
+                    (s) => !s.amount || parseFloat(s.amount) <= 0,
+                  ) ||
                   isSubmitting
                 }
                 isLoading={isSubmitting}
@@ -1172,7 +1270,7 @@ export default function InvoiceDetailPage() {
               </Button>
             </>
           }
-          size="md"
+          size="xl"
           subtitle={
             <div className="space-y-0.5 text-[12px]">
               <p>
@@ -1192,127 +1290,259 @@ export default function InvoiceDetailPage() {
           title="Record Payment"
           onClose={paymentModal.close}
         >
-          <div className="space-y-4">
-            {paymentSplits.map((split, index) => (
-              <div key={split.id} className="p-3 border border-border-base rounded-md bg-surface-2/30 relative space-y-3">
-                {paymentSplits.length > 1 && (
-                  <button 
-                    type="button" 
-                    className="absolute top-2 right-2 text-danger hover:text-danger-600" 
-                    onClick={() => setPaymentSplits(paymentSplits.filter(s => s.id !== split.id))}
-                  >
-                    <IoCloseOutline className="w-4 h-4"/>
-                  </button>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FlatInput
-                    required
-                    hint={index === 0 ? `Maximum: ${formatCurrency(invoice.balanceAmount)}` : undefined}
-                    label="Payment Amount"
-                    min="0"
-                    placeholder="Enter payment amount"
-                    prefixText="NPR"
-                    step="0.01"
-                    type="number"
-                    value={split.amount}
-                    onChange={(v) =>
-                      setPaymentSplits(paymentSplits.map(s => s.id === split.id ? { ...s, amount: v } : s))
-                    }
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              {previousDue > 0 && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded text-[13px] text-amber-800">
+                  <input
+                    checked={includePreviousDue}
+                    className="w-4 h-4 text-primary rounded border-mountain-300 focus:ring-primary"
+                    id="includePreviousDue"
+                    type="checkbox"
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+
+                      setIncludePreviousDue(checked);
+                      if (
+                        checked &&
+                        paymentSplits.length === 1 &&
+                        parseFloat(paymentSplits[0].amount) ===
+                          invoice.balanceAmount
+                      ) {
+                        setPaymentSplits([
+                          {
+                            ...paymentSplits[0],
+                            amount: (
+                              invoice.balanceAmount + previousDue
+                            ).toString(),
+                          },
+                        ]);
+                      } else if (
+                        !checked &&
+                        paymentSplits.length === 1 &&
+                        parseFloat(paymentSplits[0].amount) ===
+                          invoice.balanceAmount + previousDue
+                      ) {
+                        setPaymentSplits([
+                          {
+                            ...paymentSplits[0],
+                            amount: invoice.balanceAmount.toString(),
+                          },
+                        ]);
+                      }
+                    }}
                   />
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[12px] font-medium text-mountain-700">
-                      Payment Method <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      className="h-8 w-full px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100 text-mountain-800"
-                      value={split.method}
-                      onChange={(e) =>
-                        setPaymentSplits(paymentSplits.map(s => s.id === split.id ? { ...s, method: e.target.value } : s))
+                  <label
+                    className="font-medium cursor-pointer"
+                    htmlFor="includePreviousDue"
+                  >
+                    Include previous due of {formatCurrency(previousDue)}
+                  </label>
+                </div>
+              )}
+              {paymentSplits.map((split, index) => (
+                <div
+                  key={split.id}
+                  className="p-3 border border-border-base rounded-md bg-surface-2/30 relative space-y-3"
+                >
+                  {paymentSplits.length > 1 && (
+                    <button
+                      className="absolute top-2 right-2 text-danger hover:text-danger-600"
+                      type="button"
+                      onClick={() =>
+                        setPaymentSplits(
+                          paymentSplits.filter((s) => s.id !== split.id),
+                        )
                       }
                     >
-                      {availablePaymentMethods.map((method) => (
-                        <option key={method.key} value={method.key}>
-                          {method.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FlatInput
-                    hint="Transaction ID / Reference"
-                    label="Reference"
-                    placeholder="Optional"
-                    value={split.reference}
-                    onChange={(v) =>
-                      setPaymentSplits(paymentSplits.map(s => s.id === split.id ? { ...s, reference: v } : s))
-                    }
-                  />
-                  <FlatInput
-                    label="Notes"
-                    placeholder="Optional notes"
-                    value={split.notes}
-                    onChange={(v) =>
-                      setPaymentSplits(paymentSplits.map(s => s.id === split.id ? { ...s, notes: v } : s))
-                    }
-                  />
-                </div>
-              </div>
-            ))}
-
-            <Button 
-              type="button" 
-              variant="flat" 
-              color="primary" 
-              size="sm" 
-              startContent={<IoAddOutline />} 
-              onClick={() => setPaymentSplits([...paymentSplits, { id: Date.now().toString(), amount: "", method: "cash", reference: "", notes: "" }])}
-            >
-              Add Split Tender
-            </Button>
-
-            {(() => {
-              const totalAmount = Math.round(paymentSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0));
-              if (totalAmount > 0) {
-                const newBalance = invoice.balanceAmount - totalAmount;
-                return (
-                  <div className="p-3 bg-mountain-50 border border-mountain-100 rounded text-[12px] space-y-1 mt-4">
-                    <h4 className="font-semibold text-mountain-900 mb-1.5">
-                      Payment Summary
-                    </h4>
-                    <div className="flex justify-between">
-                      <span className="text-mountain-600">Total Invoice:</span>
-                      <span>{formatCurrency(invoice.totalAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-mountain-600">Already Paid:</span>
-                      <span className="text-health-600">
-                        {formatCurrency(invoice.paidAmount)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-mountain-600">Current Payment:</span>
-                      <span className="text-teal-700 font-semibold">
-                        {formatCurrency(totalAmount)}
-                      </span>
-                    </div>
-                    <div className="border-t border-mountain-200 my-1.5 pt-1.5 flex justify-between font-semibold">
-                      <span>New Balance:</span>
-                      <span className={newBalance <= 0 ? "text-health-600" : "text-red-600"}>
-                        {formatCurrency(newBalance)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-mountain-500">Status:</span>
-                      <span className={newBalance <= 0 ? "text-health-600 font-semibold" : "text-saffron-600 font-semibold"}>
-                        {newBalance <= 0 ? "Fully Paid" : "Partially Paid"}
-                      </span>
+                      <IoCloseOutline className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FlatInput
+                      required
+                      hint={
+                        index === 0
+                          ? `Maximum: ${formatCurrency(includePreviousDue ? invoice.balanceAmount + previousDue : invoice.balanceAmount)}`
+                          : undefined
+                      }
+                      label="Payment Amount"
+                      min="0"
+                      placeholder="Enter payment amount"
+                      prefixText="NPR"
+                      step="0.01"
+                      type="number"
+                      value={split.amount}
+                      onChange={(v) =>
+                        setPaymentSplits(
+                          paymentSplits.map((s) =>
+                            s.id === split.id ? { ...s, amount: v } : s,
+                          ),
+                        )
+                      }
+                    />
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[12px] font-medium text-mountain-700">
+                        Payment Method <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        className="h-8 w-full px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100 text-mountain-800"
+                        value={split.method}
+                        onChange={(e) =>
+                          setPaymentSplits(
+                            paymentSplits.map((s) =>
+                              s.id === split.id
+                                ? { ...s, method: e.target.value }
+                                : s,
+                            ),
+                          )
+                        }
+                      >
+                        {availablePaymentMethods.map((method) => (
+                          <option key={method.key} value={method.key}>
+                            {method.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FlatInput
+                      hint="Transaction ID / Reference"
+                      label="Reference"
+                      placeholder="Optional"
+                      value={split.reference}
+                      onChange={(v) =>
+                        setPaymentSplits(
+                          paymentSplits.map((s) =>
+                            s.id === split.id ? { ...s, reference: v } : s,
+                          ),
+                        )
+                      }
+                    />
+                    <FlatInput
+                      label="Notes"
+                      placeholder="Optional notes"
+                      value={split.notes}
+                      onChange={(v) =>
+                        setPaymentSplits(
+                          paymentSplits.map((s) =>
+                            s.id === split.id ? { ...s, notes: v } : s,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <Button
+                color="primary"
+                size="sm"
+                startContent={<IoAddOutline />}
+                type="button"
+                variant="flat"
+                onClick={() =>
+                  setPaymentSplits([
+                    ...paymentSplits,
+                    {
+                      id: Date.now().toString(),
+                      amount: "",
+                      method: "cash",
+                      reference: "",
+                      notes: "",
+                    },
+                  ])
+                }
+              >
+                Add Split Tender
+              </Button>
+            </div>
+            <div className="lg:col-span-1">
+              {(() => {
+                const totalAmount = Math.round(
+                  paymentSplits.reduce(
+                    (sum, s) => sum + (parseFloat(s.amount) || 0),
+                    0,
+                  ),
                 );
-              }
-              return null;
-            })()}
+
+                if (totalAmount > 0) {
+                  const totalTargetBalance = includePreviousDue
+                    ? invoice.balanceAmount + previousDue
+                    : invoice.balanceAmount;
+                  const newBalance = totalTargetBalance - totalAmount;
+
+                  return (
+                    <div className="p-3 bg-mountain-50 border border-mountain-100 rounded text-[12px] space-y-1 mt-4">
+                      <h4 className="font-semibold text-mountain-900 mb-1.5">
+                        Payment Summary
+                      </h4>
+                      <div className="flex justify-between">
+                        <span className="text-mountain-600">
+                          Total Invoice:
+                        </span>
+                        <span>{formatCurrency(invoice.totalAmount)}</span>
+                      </div>
+                      {includePreviousDue && (
+                        <div className="flex justify-between">
+                          <span className="text-mountain-600">
+                            Previous Due:
+                          </span>
+                          <span>{formatCurrency(previousDue)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-mountain-600">Already Paid:</span>
+                        <span className="text-health-600">
+                          {formatCurrency(invoice.paidAmount)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-mountain-200 mt-1 pt-1">
+                        <span className="text-mountain-600 font-medium">
+                          Total Payable:
+                        </span>
+                        <span className="font-semibold">
+                          {formatCurrency(totalTargetBalance)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-mountain-600">
+                          Current Payment:
+                        </span>
+                        <span className="text-teal-700 font-semibold">
+                          {formatCurrency(totalAmount)}
+                        </span>
+                      </div>
+                      <div className="border-t border-mountain-200 my-1.5 pt-1.5 flex justify-between font-semibold">
+                        <span>Remaining Balance:</span>
+                        <span
+                          className={
+                            newBalance <= 0 ? "text-health-600" : "text-red-600"
+                          }
+                        >
+                          {formatCurrency(newBalance)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-mountain-500">Status:</span>
+                        <span
+                          className={
+                            newBalance <= 0
+                              ? "text-health-600 font-semibold"
+                              : "text-saffron-600 font-semibold"
+                          }
+                        >
+                          {newBalance <= 0 ? "Fully Paid" : "Partially Paid"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
+            </div>
           </div>
         </ModalShell>
       )}

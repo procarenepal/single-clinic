@@ -401,6 +401,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
           // Fetch additional user data from Firestore
           console.log("Fetching user data for UID:", firebaseUser.uid);
           const userDataFromFirestore = await getUserData(firebaseUser.uid);
+
           console.log("User data from Firestore:", userDataFromFirestore);
 
           if (userDataFromFirestore) {

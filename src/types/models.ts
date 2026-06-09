@@ -305,6 +305,7 @@ export interface AppointmentType {
   isActive: boolean;
   categoryId?: string; // Reference to TreatmentCategory
   color?: string; // Color identifier for theme-dynamic blinking rows
+  billAtFrontDesk?: boolean; // Whether to bill automatically at check-in
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the appointment type
@@ -1028,6 +1029,7 @@ export interface StaffMember {
   taskCompletionScore?: number;
   shiftStartTime?: string; // Format: "HH:mm"
   shiftEndTime?: string; // Format: "HH:mm"
+  allowedLeavesPerMonth?: number; // Number of paid leaves allowed per month
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
   defaultCommission: number; // Default commission percentage
@@ -1083,10 +1085,19 @@ export interface StaffAttendance {
   totalHours?: number; // Calculated hours for the session
   lateByMinutes?: number; // Minutes late relative to expected start time
   notes?: string;
+  leaveType?: "paid" | "unpaid"; // Only relevant when status === "absent"
   clinicId: string;
   branchId: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ClinicHoliday {
+  id?: string;
+  clinicId: string;
+  date: Date;
+  name: string;
+  type?: "paid" | "unpaid";
 }
 
 export interface Enquiry {

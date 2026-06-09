@@ -3017,7 +3017,8 @@ export default function MedicinesTab({
                             {Math.round(
                               parseFloat(formDataList[0].costPrice) *
                                 (1 +
-                                  parseFloat(formDataList[0].vatPercentage) / 100)
+                                  parseFloat(formDataList[0].vatPercentage) /
+                                    100),
                             ).toLocaleString()}
                           </p>
                         </div>
@@ -3515,7 +3516,9 @@ export default function MedicinesTab({
                     </span>
                     <span className="text-[rgb(var(--color-text))]">
                       NPR{" "}
-                      {Math.round(purchaseSummary.taxableAmount).toLocaleString()}
+                      {Math.round(
+                        purchaseSummary.taxableAmount,
+                      ).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[12px]">
@@ -3524,7 +3527,9 @@ export default function MedicinesTab({
                     </span>
                     <span className="text-[rgb(var(--color-text))]">
                       NPR{" "}
-                      {Math.round(purchaseSummary.nonTaxableAmount).toLocaleString()}
+                      {Math.round(
+                        purchaseSummary.nonTaxableAmount,
+                      ).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[12px] pb-3 border-b border-[rgb(var(--color-border))]">

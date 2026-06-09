@@ -55,6 +55,13 @@ export interface CreatePrescriptionData {
   treatmentPlan?: string;
   prescribedBy: string;
   sendToPharmacy?: boolean;
+  sendToPathology?: boolean;
+  pathologyTests?: Array<{
+    id: string;
+    testId: string;
+    testName: string;
+    price?: number;
+  }>;
 }
 
 export interface UpdatePrescriptionData {
@@ -156,6 +163,8 @@ export const prescriptionService = {
         createdBy: data.prescribedBy,
         ...appointmentContext,
         sendToPharmacy: data.sendToPharmacy || false,
+        sendToPathology: data.sendToPathology || false,
+        pathologyTests: data.pathologyTests || [],
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };

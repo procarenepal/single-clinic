@@ -11,6 +11,7 @@ import {
   IoCallOutline,
   IoCreateOutline,
   IoDocumentsOutline,
+  IoTrashOutline,
 } from "react-icons/io5";
 import {
   format,
@@ -19,6 +20,8 @@ import {
   subMonths,
   startOfMonth,
   endOfMonth,
+  getDaysInMonth,
+  parse,
 } from "date-fns";
 import {
   Modal,
@@ -27,9 +30,12 @@ import {
   ModalBody,
   ModalFooter,
 } from "@heroui/modal";
+// @ts-ignore
+import NepaliDate from "nepali-datetime";
 import { Card, CardBody } from "@heroui/card";
 import { Select, SelectItem } from "@heroui/select";
 import { Input, Textarea } from "@heroui/input";
+import { Checkbox } from "@heroui/checkbox";
 import { Button } from "@heroui/button";
 import { Spinner } from "@heroui/spinner";
 import { Tabs, Tab } from "@heroui/tabs";
@@ -49,6 +55,7 @@ import {
   StaffAttendance,
   AccountBill,
   StaffCommission,
+  ClinicHoliday,
 } from "@/types/models";
 import { expertService } from "@/services/expertService";
 import { doctorService } from "@/services/doctorService";
@@ -66,14 +73,32 @@ export default function HRPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [attendance, setAttendance] = useState<StaffAttendance[]>([]);
   const [bills, setBills] = useState<AccountBill[]>([]);
+  const [holidays, setHolidays] = useState<ClinicHoliday[]>([]);
+  const [isHolidaysModalOpen, setIsHolidaysModalOpen] = useState(false);
+  const [newHoliday, setNewHoliday] = useState<{ name: string; date: string; type: "paid" | "unpaid" }>({ name: "", date: format(new Date(), "yyyy-MM-dd"), type: "paid" });
+  const [isAbsentModalOpen, setIsAbsentModalOpen] = useState(false);
+  const [absentTarget, setAbsentTarget] = useState<StaffMember | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
-  const [payrollForm, setPayrollForm] = useState({
+  const [payrollForm, setPayrollForm] = useState<{
+    amount: number;
+    paymentMethod: string;
+    notes: string;
+    selectedMonths: string[];
+    paymentType: "regular" | "advance";
+    waivedDays: number;
+    includeCommission: boolean;
+    incentive: number;
+  }>({
     amount: 0,
     paymentMethod: "Cash",
     notes: "",
-    selectedMonths: [format(new Date(), "MMMM yyyy")] as string[],
+    selectedMonths: [format(new Date(), "MMMM yyyy")],
+    paymentType: "regular",
+    waivedDays: 0,
+    includeCommission: false,
+    incentive: 0,
   });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -221,8 +246,8 @@ export default function HRPage() {
         lastPayment:
           staffBills.length > 0
             ? staffBills.sort(
-                (a, b) => b.billDate.getTime() - a.billDate.getTime(),
-              )[0].billDate
+              (a, b) => b.billDate.getTime() - a.billDate.getTime(),
+            )[0].billDate
             : null,
       };
     });
@@ -489,33 +514,153 @@ export default function HRPage() {
     }
   };
 
+
+  const getPreviouslyPaid = (months: string[]) => {
+    if (!selectedStaff || !bills) return 0;
+    return bills
+      .filter((b) => b.category === "salary" && b.vendorName === selectedStaff.name)
+      .filter((b) => months.some((m) => b.description?.includes(m)))
+      .reduce((sum, b) => sum + b.paidAmount, 0);
+  };
+
+  const getLeaveDetails = (months: string[]) => {
+    if (!selectedStaff || !attendance) {
+      return { absentDays: 0, allowedLeaves: 0, unpaidLeaves: 0, dailyWage: 0, deductionAmount: 0 };
+    }
+    const allowedLeaves = selectedStaff.allowedLeavesPerMonth ?? 4;
+
+    const absentDays = attendance.filter((a) => {
+      const isAbsent = a.status === "absent";
+      const isSelectedStaff = a.staffId === selectedStaff.id;
+      const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
+      // Only count explicitly-unpaid absences OR absences with no leaveType set (legacy) that exceed quota
+      // If leaveType is set, use it directly; otherwise fall back to quota logic
+      const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
+      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday;
+    }).length;
+
+    const totalAllowedLeaves = allowedLeaves * months.length;
+
+    // For attendance records with explicit leaveType, count only unpaid ones.
+    // For legacy records (no leaveType), fall back to quota-based logic.
+    const explicitUnpaidAbsences = attendance.filter((a) => {
+      const isAbsent = a.status === "absent";
+      const isSelectedStaff = a.staffId === selectedStaff.id;
+      const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
+      const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
+      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday && a.leaveType === "unpaid";
+    }).length;
+
+    const legacyAbsences = attendance.filter((a) => {
+      const isAbsent = a.status === "absent";
+      const isSelectedStaff = a.staffId === selectedStaff.id;
+      const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
+      const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
+      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday && !a.leaveType;
+    }).length;
+
+    const legacyUnpaid = Math.max(0, legacyAbsences - totalAllowedLeaves);
+    const unpaidLeaves = explicitUnpaidAbsences + legacyUnpaid;
+
+    // Calculate precise daily wage based on exact days in the selected Nepali BS months
+    const totalDaysInSelectedMonths = months.reduce((total, monthStr) => {
+      const date = parse(monthStr, "MMMM yyyy", new Date());
+      const nd = new NepaliDate(date);
+      return total + NepaliDate.getDaysOfMonth(nd.getYear(), nd.getMonth());
+    }, 0);
+
+    const averageDaysInMonth = months.length > 0 ? totalDaysInSelectedMonths / months.length : 30;
+    const dailyWage = (selectedStaff.salary || 0) / averageDaysInMonth;
+
+    return {
+      absentDays,
+      allowedLeaves: totalAllowedLeaves,
+      unpaidLeaves,
+      dailyWage,
+      deductionAmount: Math.round(unpaidLeaves * dailyWage),
+    };
+  };
+
+  const calculateExpectedAmount = (months: string[], type: "regular" | "advance", waivedDays: number) => {
+    if (type === "advance") return 0;
+    const baseExpected = (selectedStaff?.salary || 0) * (months.length || 1);
+    const previouslyPaid = getPreviouslyPaid(months);
+    const leaveDetails = getLeaveDetails(months);
+    const effectiveUnpaidLeaves = Math.max(0, leaveDetails.unpaidLeaves - waivedDays);
+    const leaveDeductions = Math.round(effectiveUnpaidLeaves * leaveDetails.dailyWage);
+    return Math.max(0, baseExpected - previouslyPaid - leaveDeductions);
+  };
+
+  const getIncentivesPaid = (staffName: string) => {
+    return bills
+      .filter(
+        (b) =>
+          b.category === "salary" &&
+          b.vendorName === staffName,
+      )
+      .reduce((acc, b) => {
+        const desc = b.description || "";
+        const match = desc.match(/Incentive\s+Rs\.?\s*([\d,]+)/i);
+        if (match) {
+          const val = parseFloat(match[1].replace(/,/g, ""));
+          if (!isNaN(val)) return acc + val;
+        }
+        return acc;
+      }, 0);
+  };
+
   const handleDisburseSalary = async () => {
     if (!selectedStaff) return;
     try {
+      const pendingCommission = payrollForm.includeCommission
+        ? (selectedStaff.totalCommissionBalance || 0)
+        : 0;
+      const incentiveAmt = Number(payrollForm.incentive) || 0;
+      const totalPayout = Number(payrollForm.amount) + pendingCommission + incentiveAmt;
+
       const bill: Omit<AccountBill, "id" | "createdAt" | "updatedAt"> = {
         category: "salary",
         vendorName: selectedStaff.name,
         billNumber: `PAY-${Date.now().toString().slice(-6)}`,
         billDate: new Date(),
-        totalAmount: Number(payrollForm.amount),
-        paidAmount: Number(payrollForm.amount),
+        totalAmount: totalPayout,
+        paidAmount: totalPayout,
         dueAmount: 0,
         paymentStatus: "paid",
         paymentMethod: payrollForm.paymentMethod,
-        description: `Salary for ${payrollForm.selectedMonths.join(", ")}. ${payrollForm.notes}`,
+        description: `Salary for ${payrollForm.selectedMonths.join(", ")}${pendingCommission > 0 ? ` + Commission Rs. ${pendingCommission.toLocaleString()}` : ""}${incentiveAmt > 0 ? ` + Incentive Rs. ${incentiveAmt.toLocaleString()}` : ""}. ${payrollForm.notes}`,
         clinicId: clinicId!,
         branchId: branchId || "",
         createdBy: userData?.id || "",
       };
 
       await accountService.createBill(bill);
+
+      // If commission is included, mark all pending commissions as paid
+      if (payrollForm.includeCommission && pendingCommission > 0) {
+        const pendingCommissions = staffCommissions.filter(c => c.status === "pending");
+        await Promise.all(
+          pendingCommissions.map(c =>
+            staffCommissionService.payCommission(
+              c.id,
+              c.commissionAmount - (c.paidAmount || 0),
+              payrollForm.paymentMethod,
+              undefined,
+              `Included in salary payment ${payrollForm.selectedMonths.join(", ")}`,
+              userData?.id || "system",
+            )
+          )
+        );
+      }
+
       addToast({
         title: "Success",
-        description: "Salary disbursed successfully",
+        description: `Salary disbursed successfully.${pendingCommission > 0 ? ` Included Commission: Rs. ${pendingCommission.toLocaleString()}.` : ""}${incentiveAmt > 0 ? ` Included Incentive: Rs. ${incentiveAmt.toLocaleString()}.` : ""}`,
         color: "success",
       });
       setIsPayModalOpen(false);
-      loadData(); // Refresh bills
+      loadData();
+      if (selectedStaff) loadStaffCommissions(selectedStaff.id);
     } catch (error) {
       console.error("Failed to disburse salary:", error);
       addToast({
@@ -592,12 +737,28 @@ export default function HRPage() {
   const handlePrintSalarySlip = async (bill: AccountBill) => {
     if (!clinicId || !selectedStaff) return;
     try {
-      const [clinicData, printConfig] = await Promise.all([
-        clinicService.getClinicById(clinicId),
-        clinicService.getPrintLayoutConfig(clinicId),
-      ]);
+      let clinicData = null;
+      let printConfig = null;
 
-      if (!clinicData) throw new Error("Clinic data not found");
+      try {
+        clinicData = await clinicService.getClinicById(clinicId);
+      } catch (err) {
+        console.error("Defensive catch: Failed to fetch clinic data", err);
+      }
+
+      try {
+        printConfig = await clinicService.getPrintLayoutConfig(clinicId);
+      } catch (err) {
+        console.error("Defensive catch: Failed to fetch print layout config", err);
+      }
+
+      const effectiveClinic = clinicData || {
+        id: clinicId,
+        name: "HSC Laser Hospital",
+        phone: "",
+        email: "",
+        address: "",
+      };
 
       // Use default config if none exists
       const effectiveConfig =
@@ -612,7 +773,7 @@ export default function HRPage() {
           headerHeight: "compact",
         } as any);
 
-      printSalarySlip(bill, selectedStaff, clinicData, effectiveConfig);
+      printSalarySlip(bill, selectedStaff, effectiveClinic as any, effectiveConfig);
     } catch (error) {
       console.error("Failed to print salary slip:", error);
       addToast({
@@ -647,6 +808,73 @@ export default function HRPage() {
       });
     } catch (error) {
       console.error("Failed to toggle break:", error);
+    }
+  };
+
+  const markAbsent = async (member: StaffMember, leaveType: "paid" | "unpaid") => {
+    if (!clinicId) return;
+
+    try {
+      const now = new Date();
+      await hrService.markAttendance({
+        staffId: member.id,
+        staffName: member.name,
+        date: now,
+        checkIn: null,
+        checkOut: null,
+        status: "absent",
+        leaveType,
+        clinicId: clinicId,
+        branchId: branchId || "",
+      });
+      loadData();
+      addToast({
+        title: "Attendance Marked",
+        description: `${member.name} marked as ${leaveType === "paid" ? "Paid Leave" : "Unpaid Leave (absent)"}`,
+        color: leaveType === "paid" ? "success" : "warning",
+      });
+    } catch (error) {
+      console.error("Failed to mark absent:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to mark absent",
+        color: "danger",
+      });
+    }
+  };
+
+  const injectTestAbsences = async () => {
+    if (!clinicId || staff.length === 0) return;
+    const testStaff = staff.find(s => s.name.toUpperCase().includes("ALINA")) || staff[0];
+    try {
+      setLoading(true);
+      const now = new Date();
+      for (let i = 1; i <= 6; i++) {
+        const pastDate = new Date();
+        pastDate.setDate(now.getDate() - i);
+
+        await hrService.markAttendance({
+          staffId: testStaff.id,
+          staffName: testStaff.name,
+          date: pastDate,
+          checkIn: null,
+          checkOut: null,
+          status: "absent",
+          clinicId: clinicId,
+          branchId: branchId || "",
+        });
+      }
+      addToast({
+        title: "Test Data Added",
+        description: `Added 6 absences for ${testStaff.name} to test deductions!`,
+        color: "success",
+      });
+      loadData();
+    } catch (e) {
+      console.error(e);
+      addToast({ title: "Error", description: "Failed to add test data", color: "danger" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -749,15 +977,32 @@ export default function HRPage() {
             Manage records, attendance, and payroll.
           </p>
         </div>
-        <Button
-          className="font-semibold h-7 px-3 text-[11px]"
-          color="primary"
-          radius="sm"
-          startContent={<IoAddOutline />}
-          onPress={() => setIsStaffModalOpen(true)}
-        >
-          Add Staff Member
-        </Button>
+        <div className="flex gap-2 items-center">
+          <Button
+            className="bg-white border border-mountain-200 text-mountain-700 font-medium h-7 px-3 text-[11px]"
+            radius="sm"
+            startContent={<IoCalendarOutline />}
+            onPress={() => setIsHolidaysModalOpen(true)}
+          >
+            Manage Holidays
+          </Button>
+          <Button
+            className="font-semibold h-7 px-3 text-[11px] bg-amber-500 text-white"
+            radius="sm"
+            onPress={injectTestAbsences}
+          >
+            Inject Test Absences
+          </Button>
+          <Button
+            className="font-semibold h-7 px-3 text-[11px]"
+            color="primary"
+            radius="sm"
+            startContent={<IoAddOutline />}
+            onPress={() => setIsStaffModalOpen(true)}
+          >
+            Add Staff Member
+          </Button>
+        </div>
       </div>
 
       {/* HR Overview Cards */}
@@ -940,7 +1185,7 @@ export default function HRPage() {
                             a.status === "late" ||
                             a.status === "on_break") &&
                           format(a.date, "yyyy-MM-dd") ===
-                            format(new Date(), "yyyy-MM-dd"),
+                          format(new Date(), "yyyy-MM-dd"),
                       );
 
                       return (
@@ -1012,7 +1257,7 @@ export default function HRPage() {
                                 (a) =>
                                   a.staffId === member.id &&
                                   format(a.date, "yyyy-MM-dd") ===
-                                    format(new Date(), "yyyy-MM-dd"),
+                                  format(new Date(), "yyyy-MM-dd"),
                               );
 
                               let statusLabel = "Off duty";
@@ -1077,7 +1322,7 @@ export default function HRPage() {
                                   (a) =>
                                     a.staffId === member.id &&
                                     format(a.date, "yyyy-MM-dd") ===
-                                      format(new Date(), "yyyy-MM-dd"),
+                                    format(new Date(), "yyyy-MM-dd"),
                                 )?.checkOut && (
                                   <Button
                                     className="font-semibold text-[10px] h-7 px-2 min-w-0"
@@ -1090,36 +1335,62 @@ export default function HRPage() {
                                       (a) =>
                                         a.staffId === member.id &&
                                         format(a.date, "yyyy-MM-dd") ===
-                                          format(new Date(), "yyyy-MM-dd"),
+                                        format(new Date(), "yyyy-MM-dd"),
                                     )?.status === "on_break"
                                       ? "Resume"
                                       : "Break"}
                                   </Button>
                                 )}
-                              {!attendance.find(
-                                (a) =>
-                                  a.staffId === member.id &&
-                                  format(a.date, "yyyy-MM-dd") ===
-                                    format(new Date(), "yyyy-MM-dd"),
-                              )?.checkOut ? (
-                                <Button
-                                  className="font-semibold text-[10px] h-7 px-3"
-                                  color={isPresent ? "danger" : "primary"}
-                                  size="sm"
-                                  variant="flat"
-                                  onPress={() =>
-                                    isPresent
-                                      ? handleClockOut(member)
-                                      : markPresent(member)
-                                  }
-                                >
-                                  {isPresent ? "Clock Out" : "Mark Present"}
-                                </Button>
-                              ) : (
-                                <span className="text-[10px] font-bold text-primary/40 uppercase tracking-widest py-1 px-3 bg-primary/5 rounded">
-                                  Shift Ended
-                                </span>
-                              )}
+                              {(() => {
+                                const todayAtt = attendance.find(
+                                  (a) =>
+                                    a.staffId === member.id &&
+                                    format(a.date, "yyyy-MM-dd") ===
+                                    format(new Date(), "yyyy-MM-dd")
+                                );
+                                const hasEndedShift = todayAtt && todayAtt.checkOut;
+                                const isCurrentlyAbsent = todayAtt && todayAtt.status === "absent";
+
+                                if (hasEndedShift) {
+                                  return (
+                                    <span className="text-[10px] font-bold text-primary/40 uppercase tracking-widest py-1 px-3 bg-primary/5 rounded">
+                                      Shift Ended
+                                    </span>
+                                  );
+                                }
+
+                                return (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      className="font-semibold text-[10px] h-7 px-3"
+                                      color={isPresent ? "danger" : "primary"}
+                                      size="sm"
+                                      variant="flat"
+                                      onPress={() =>
+                                        isPresent
+                                          ? handleClockOut(member)
+                                          : markPresent(member)
+                                      }
+                                    >
+                                      {isPresent ? "Clock Out" : "Mark Present"}
+                                    </Button>
+                                    {!isPresent && !isCurrentlyAbsent && (
+                                      <Button
+                                        className="font-semibold text-[10px] h-7 px-3"
+                                        color="danger"
+                                        size="sm"
+                                        variant="flat"
+                                        onPress={() => {
+                                          setAbsentTarget(member);
+                                          setIsAbsentModalOpen(true);
+                                        }}
+                                      >
+                                        Absent
+                                      </Button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1184,7 +1455,7 @@ export default function HRPage() {
                       (a) =>
                         a.status === "on_break" &&
                         format(a.date, "yyyy-MM-dd") ===
-                          format(new Date(), "yyyy-MM-dd"),
+                        format(new Date(), "yyyy-MM-dd"),
                     ).length
                   }{" "}
                   Members
@@ -1353,9 +1624,9 @@ export default function HRPage() {
                         <span className="text-[11px]">
                           {summary.lastPayment
                             ? format(
-                                new Date(summary.lastPayment),
-                                "MMM dd, yyyy",
-                              )
+                              new Date(summary.lastPayment),
+                              "MMM dd, yyyy",
+                            )
                             : "Never"}
                         </span>
                       </TableCell>
@@ -1370,28 +1641,28 @@ export default function HRPage() {
                   )),
                   ...(staffPayrollSummary.length > 0
                     ? [
-                        <TableRow
-                          key="total-payroll-summary-row"
-                          className="bg-primary/5 font-bold"
-                        >
-                          <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
-                          <TableCell>{""}</TableCell>
-                          <TableCell align="right">
-                            Rs.{" "}
-                            {staffPayrollSummary
-                              .reduce((acc, s) => acc + s.salary, 0)
-                              .toLocaleString()}
-                          </TableCell>
-                          <TableCell align="right" className="text-primary">
-                            Rs.{" "}
-                            {staffPayrollSummary
-                              .reduce((acc, s) => acc + s.totalPaid, 0)
-                              .toLocaleString()}
-                          </TableCell>
-                          <TableCell>{""}</TableCell>
-                          <TableCell>{""}</TableCell>
-                        </TableRow>,
-                      ]
+                      <TableRow
+                        key="total-payroll-summary-row"
+                        className="bg-primary/5 font-bold"
+                      >
+                        <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
+                        <TableCell>{""}</TableCell>
+                        <TableCell align="right">
+                          Rs.{" "}
+                          {staffPayrollSummary
+                            .reduce((acc, s) => acc + s.salary, 0)
+                            .toLocaleString()}
+                        </TableCell>
+                        <TableCell align="right" className="text-primary">
+                          Rs.{" "}
+                          {staffPayrollSummary
+                            .reduce((acc, s) => acc + s.totalPaid, 0)
+                            .toLocaleString()}
+                        </TableCell>
+                        <TableCell>{""}</TableCell>
+                        <TableCell>{""}</TableCell>
+                      </TableRow>,
+                    ]
                     : []),
                 ]}
               </TableBody>
@@ -1640,11 +1911,11 @@ export default function HRPage() {
                       currentFile={
                         staffForm.photoUrl
                           ? {
-                              id: "",
-                              name: "Profile Photo",
-                              url: staffForm.photoUrl,
-                              type: "image/jpeg",
-                            }
+                            id: "",
+                            name: "Profile Photo",
+                            url: staffForm.photoUrl,
+                            type: "image/jpeg",
+                          }
                           : undefined
                       }
                       uploadType="image"
@@ -1850,15 +2121,15 @@ export default function HRPage() {
                       )}
                     </div>
                     <div>
-                      <h2 className="text-[18px] font-bold text-[rgb(var(--color-text))] tracking-tight">
+                      <h2 className="text-[15px] font-bold text-[rgb(var(--color-text))] tracking-tight">
                         {selectedStaff?.name}
                       </h2>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[9.5px] font-bold text-primary bg-primary/5 px-2.5 py-1 rounded border border-primary/20 uppercase tracking-widest">
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[8.5px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded border border-primary/20 uppercase tracking-widest">
                           {selectedStaff?.role}
                         </span>
                         <span
-                          className={`text-[9.5px] font-bold px-2.5 py-1 rounded border uppercase tracking-widest ${selectedStaff?.status === "active" ? "bg-success/10 text-success border-success/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"}`}
+                          className={`text-[8.5px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${selectedStaff?.status === "active" ? "bg-success/10 text-success border-success/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"}`}
                         >
                           {selectedStaff?.status}
                         </span>
@@ -1887,7 +2158,7 @@ export default function HRPage() {
                 {selectedStaff && (
                   <div className="space-y-6">
                     {/* Quick Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
                         <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">
                           Present Days
@@ -1932,6 +2203,14 @@ export default function HRPage() {
                             )
                             .reduce((acc, b) => acc + b.paidAmount, 0)
                             .toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
+                        <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">
+                          Total Incentives
+                        </p>
+                        <p className="text-[16px] font-bold text-violet-600">
+                          Rs. {getIncentivesPaid(selectedStaff.name).toLocaleString()}
                         </p>
                       </div>
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
@@ -2053,7 +2332,7 @@ export default function HRPage() {
                               0,
                               Math.round(
                                 ((totalSessions - lateCount) / totalSessions) *
-                                  100,
+                                100,
                               ),
                             );
 
@@ -2180,7 +2459,7 @@ export default function HRPage() {
                                         className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${record.status === "present" || record.status === "late" ? (record.checkOut ? "bg-primary/10 text-primary" : record.status === "late" ? "bg-amber-500/10 text-amber-500" : "bg-success/10 text-success") : "bg-rose-500/10 text-rose-500"}`}
                                       >
                                         {record.status === "present" ||
-                                        record.status === "late"
+                                          record.status === "late"
                                           ? record.checkOut
                                             ? "Completed"
                                             : record.status === "late"
@@ -2283,10 +2562,10 @@ export default function HRPage() {
                             <span>Referral Commissions</span>
                             {(selectedStaff.totalCommissionBalance || 0) >
                               0 && (
-                              <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
-                                Pending
-                              </span>
-                            )}
+                                <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                                  Pending
+                                </span>
+                              )}
                           </div>
                         }
                       >
@@ -2429,9 +2708,12 @@ export default function HRPage() {
 
                     setPayrollForm({
                       ...payrollForm,
-                      amount: selectedStaff.salary,
+                      amount: calculateExpectedAmount([currentMonth], "regular", 0),
                       selectedMonths: [currentMonth],
                       notes: "",
+                      waivedDays: 0,
+                      includeCommission: false,
+                      incentive: 0,
                     });
                     setIsPayModalOpen(true);
                   }}
@@ -2453,13 +2735,79 @@ export default function HRPage() {
         </ModalContent>
       </Modal>
 
+      {/* Absent Leave Type Modal */}
+      <Modal
+        classNames={{ base: "bg-white border border-mountain-200 shadow-xl" }}
+        isOpen={isAbsentModalOpen}
+        size="sm"
+        onClose={() => { setIsAbsentModalOpen(false); setAbsentTarget(null); }}
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1 border-b border-mountain-100 pb-3">
+            <h2 className="text-[15px] font-bold text-mountain-900">Mark Absence</h2>
+            <p className="text-[12px] text-mountain-500 font-normal">
+              {absentTarget?.name} — Select leave type
+            </p>
+          </ModalHeader>
+          <ModalBody className="py-5">
+            <div className="flex flex-col gap-3">
+              <button
+                className="flex items-start gap-3 p-3 rounded-lg border-2 border-success/30 bg-success/5 hover:bg-success/10 transition-colors text-left"
+                onClick={async () => {
+                  if (!absentTarget) return;
+                  setIsAbsentModalOpen(false);
+                  await markAbsent(absentTarget, "paid");
+                  setAbsentTarget(null);
+                }}
+              >
+                <span className="mt-0.5 text-success text-xl">✓</span>
+                <div>
+                  <p className="text-[13px] font-bold text-success">Paid Leave</p>
+                  <p className="text-[11px] text-mountain-500 mt-0.5">
+                    Counts against their monthly leave quota ({absentTarget?.allowedLeavesPerMonth ?? 4} days/mo). No extra salary deduction unless quota is exceeded.
+                  </p>
+                </div>
+              </button>
+              <button
+                className="flex items-start gap-3 p-3 rounded-lg border-2 border-rose-200 bg-rose-50 hover:bg-rose-100 transition-colors text-left"
+                onClick={async () => {
+                  if (!absentTarget) return;
+                  setIsAbsentModalOpen(false);
+                  await markAbsent(absentTarget, "unpaid");
+                  setAbsentTarget(null);
+                }}
+              >
+                <span className="mt-0.5 text-rose-600 text-xl">✗</span>
+                <div>
+                  <p className="text-[13px] font-bold text-rose-600">Unpaid Leave</p>
+                  <p className="text-[11px] text-mountain-500 mt-0.5">
+                    Salary will be deducted for this day regardless of remaining leave quota.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="flat"
+              size="sm"
+              className="font-semibold"
+              onPress={() => { setIsAbsentModalOpen(false); setAbsentTarget(null); }}
+            >
+              Cancel
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {/* Salary Payment Modal */}
+
       <Modal
         classNames={{
           base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
         }}
         isOpen={isPayModalOpen}
-        size="md"
+        size="2xl"
         onOpenChange={setIsPayModalOpen}
       >
         <ModalContent>
@@ -2476,96 +2824,259 @@ export default function HRPage() {
                 </div>
               </ModalHeader>
               <ModalBody className="py-4">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
-                      Salary Month(s)
-                    </label>
-                    <Select
-                      aria-label="Salary Month(s)"
-                      classNames={{ trigger: "h-10" }}
-                      placeholder="Select months"
-                      selectedKeys={new Set(payrollForm.selectedMonths)}
-                      selectionMode="multiple"
-                      size="sm"
-                      onSelectionChange={(keys) => {
-                        const selected = Array.from(keys) as string[];
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Side: Form Inputs */}
+                  <div className="space-y-4">
+                    <div>
+                      <Tabs
+                        selectedKey={payrollForm.paymentType}
+                        onSelectionChange={(key) => {
+                          const type = key as "regular" | "advance";
+                          setPayrollForm({
+                            ...payrollForm,
+                            paymentType: type,
+                            amount: calculateExpectedAmount(payrollForm.selectedMonths, type, payrollForm.waivedDays),
+                          });
+                        }}
+                        size="sm"
+                        className="mb-2"
+                        classNames={{
+                          tabList: "bg-mountain-50 border border-mountain-200",
+                          cursor: "bg-white shadow-sm",
+                          tab: "font-semibold text-mountain-600",
+                        }}
+                      >
+                        <Tab key="regular" title="Regular Salary" />
+                        <Tab key="advance" title="Advance Payment" />
+                      </Tabs>
 
-                        setPayrollForm({
-                          ...payrollForm,
-                          selectedMonths: selected,
-                          amount:
-                            (selectedStaff?.salary || 0) *
-                            (selected.length || 1),
-                        });
-                      }}
-                    >
-                      {availableMonths.map((month) => (
-                        <SelectItem key={month}>{month}</SelectItem>
-                      ))}
-                    </Select>
+                      <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                        <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                          Salary Month(s)
+                        </label>
+                        <Select
+                          aria-label="Salary Month(s)"
+                          classNames={{ trigger: "h-10" }}
+                          placeholder="Select months"
+                          selectedKeys={new Set(payrollForm.selectedMonths)}
+                          selectionMode="multiple"
+                          size="sm"
+                          onSelectionChange={(keys) => {
+                            const selected = Array.from(keys) as string[];
+
+                            setPayrollForm({
+                              ...payrollForm,
+                              selectedMonths: selected,
+                              amount: calculateExpectedAmount(selected, payrollForm.paymentType, payrollForm.waivedDays),
+                            });
+                          }}
+                        >
+                          {availableMonths.map((month) => (
+                            <SelectItem key={month}>{month}</SelectItem>
+                          ))}
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                        Amount (Rs.)
+                      </label>
+                      <Input
+                        size="sm"
+                        startContent={
+                          <span className="text-[12px] text-text-muted">Rs.</span>
+                        }
+                        type="number"
+                        value={payrollForm.amount.toString()}
+                        onChange={(e) =>
+                          setPayrollForm({
+                            ...payrollForm,
+                            amount: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                        Incentive (Rs.)
+                      </label>
+                      <Input
+                        size="sm"
+                        startContent={
+                          <span className="text-[12px] text-text-muted">Rs.</span>
+                        }
+                        type="number"
+                        placeholder="0"
+                        value={payrollForm.incentive === 0 ? "" : payrollForm.incentive.toString()}
+                        onChange={(e) =>
+                          setPayrollForm({
+                            ...payrollForm,
+                            incentive: Number(e.target.value) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                        Payment Method
+                      </label>
+                      <Select
+                        aria-label="Payment Method"
+                        selectedKeys={[payrollForm.paymentMethod]}
+                        size="sm"
+                        onSelectionChange={(keys) =>
+                          setPayrollForm({
+                            ...payrollForm,
+                            paymentMethod: Array.from(keys)[0] as string,
+                          })
+                        }
+                      >
+                        <SelectItem key="Cash">Cash</SelectItem>
+                        <SelectItem key="Bank Transfer">Bank Transfer</SelectItem>
+                        <SelectItem key="Cheque">Cheque</SelectItem>
+                        <SelectItem key="E-Sewa">E-Sewa / Khalti</SelectItem>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                        Notes
+                      </label>
+                      <Textarea
+                        placeholder="e.g. Paid for May month including bonus"
+                        size="sm"
+                        value={payrollForm.notes}
+                        onChange={(e) =>
+                          setPayrollForm({
+                            ...payrollForm,
+                            notes: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
-                      Amount (Rs.)
-                    </label>
-                    <Input
-                      size="sm"
-                      startContent={
-                        <span className="text-[12px] text-text-muted">Rs.</span>
-                      }
-                      type="number"
-                      value={payrollForm.amount.toString()}
-                      onChange={(e) =>
-                        setPayrollForm({
-                          ...payrollForm,
-                          amount: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
-                      Payment Method
-                    </label>
-                    <Select
-                      aria-label="Payment Method"
-                      selectedKeys={[payrollForm.paymentMethod]}
-                      size="sm"
-                      onSelectionChange={(keys) =>
-                        setPayrollForm({
-                          ...payrollForm,
-                          paymentMethod: Array.from(keys)[0] as string,
-                        })
-                      }
-                    >
-                      <SelectItem key="Cash">Cash</SelectItem>
-                      <SelectItem key="Bank Transfer">Bank Transfer</SelectItem>
-                      <SelectItem key="Cheque">Cheque</SelectItem>
-                      <SelectItem key="E-Sewa">E-Sewa / Khalti</SelectItem>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
-                      Notes
-                    </label>
-                    <Textarea
-                      placeholder="e.g. Paid for May month including bonus"
-                      size="sm"
-                      value={payrollForm.notes}
-                      onChange={(e) =>
-                        setPayrollForm({
-                          ...payrollForm,
-                          notes: e.target.value,
-                        })
-                      }
-                    />
+
+                  {/* Right Side: Summary Pane */}
+                  <div className="bg-mountain-50 border border-mountain-200 rounded-xl p-4 flex flex-col justify-center">
+                    <h3 className="text-[11px] font-bold text-mountain-600 uppercase tracking-widest mb-3 border-b border-mountain-200 pb-2">
+                      Payment Summary
+                    </h3>
+                    <div className="space-y-2.5">
+                      <div className="flex justify-between text-[12px]">
+                        <span className="text-mountain-600">Months Selected:</span>
+                        <span className="font-semibold text-mountain-900">{payrollForm.selectedMonths.length}</span>
+                      </div>
+                      <div className="flex justify-between text-[12px]">
+                        <span className="text-mountain-600">Expected Salary:</span>
+                        <span className="font-semibold text-mountain-900">
+                          Rs. {((selectedStaff?.salary || 0) * (payrollForm.selectedMonths.length || 1)).toLocaleString()}
+                        </span>
+                      </div>
+                      {getLeaveDetails(payrollForm.selectedMonths).absentDays > 0 && (
+                        <div className="flex justify-between text-[12px] text-mountain-600">
+                          <span>Total Leaves Taken:</span>
+                          <span className="font-semibold">{getLeaveDetails(payrollForm.selectedMonths).absentDays}</span>
+                        </div>
+                      )}
+                      {getLeaveDetails(payrollForm.selectedMonths).deductionAmount > 0 && (
+                        <div className="flex flex-col gap-1 text-[12px] text-rose-600">
+                          <div className="flex justify-between">
+                            <span>Leave Deductions:</span>
+                            <span className={`font-semibold`}>
+                              - Rs. {Math.round(Math.max(0, getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves - payrollForm.waivedDays) * getLeaveDetails(payrollForm.selectedMonths).dailyWage).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-mountain-500 mt-1">
+                            <span className="text-[10px]">Waive deductions (Days):</span>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                className="h-6 w-6 min-w-0"
+                                isDisabled={payrollForm.waivedDays <= 0}
+                                onPress={() => {
+                                  setPayrollForm(prev => ({
+                                    ...prev,
+                                    waivedDays: Math.max(0, prev.waivedDays - 1),
+                                    amount: calculateExpectedAmount(prev.selectedMonths, prev.paymentType, Math.max(0, prev.waivedDays - 1))
+                                  }));
+                                }}
+                              >
+                                -
+                              </Button>
+                              <span className="font-bold w-4 text-center text-mountain-700">{payrollForm.waivedDays}</span>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                className="h-6 w-6 min-w-0"
+                                isDisabled={payrollForm.waivedDays >= getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves}
+                                onPress={() => {
+                                  setPayrollForm(prev => ({
+                                    ...prev,
+                                    waivedDays: Math.min(getLeaveDetails(prev.selectedMonths).unpaidLeaves, prev.waivedDays + 1),
+                                    amount: calculateExpectedAmount(prev.selectedMonths, prev.paymentType, Math.min(getLeaveDetails(prev.selectedMonths).unpaidLeaves, prev.waivedDays + 1))
+                                  }));
+                                }}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {getPreviouslyPaid(payrollForm.selectedMonths) > 0 && (
+                        <div className="flex justify-between text-[12px] text-health-600">
+                          <span>Previously Paid (Advance):</span>
+                          <span className="font-semibold">
+                            - Rs. {getPreviouslyPaid(payrollForm.selectedMonths).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-[13px] font-bold pt-2">
+                        <span className="text-mountain-900">Due Amount:</span>
+                        <span className="text-amber-600">Rs. {calculateExpectedAmount(payrollForm.selectedMonths, "regular", payrollForm.waivedDays).toLocaleString()}</span>
+                      </div>
+                      {(selectedStaff?.totalCommissionBalance || 0) > 0 && (
+                        <div className="flex flex-col gap-1 border border-violet-200 bg-violet-50 rounded-lg p-2 mt-1">
+                          <div className="flex justify-between text-[12px] text-violet-700">
+                            <span className="font-semibold">Pending Commission:</span>
+                            <span className="font-bold">+ Rs. {(selectedStaff?.totalCommissionBalance || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              size="sm"
+                              classNames={{ label: "text-[10px] text-mountain-600 font-medium" }}
+                              isSelected={payrollForm.includeCommission}
+                              onValueChange={(val) => setPayrollForm(prev => ({ ...prev, includeCommission: val }))}
+                            >
+                              Include commission in this payout
+                            </Checkbox>
+                          </div>
+                        </div>
+                      )}
+                      {payrollForm.incentive > 0 && (
+                        <div className="flex justify-between text-[12px] text-violet-700">
+                          <span>Incentives Added:</span>
+                          <span className="font-semibold">+ Rs. {payrollForm.incentive.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-[13px] font-bold pt-2 border-t border-mountain-200">
+                        <span className="text-mountain-900">Total Payout:</span>
+                        <span className="text-health-700">Rs. {(
+                          payrollForm.amount +
+                          (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) +
+                          payrollForm.incentive
+                        ).toLocaleString()}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </ModalBody>
               <ModalFooter>
                 <Button
-                  className="font-bold"
+                  className="font-bold text-[11px]"
+                  color="default"
                   size="sm"
                   variant="flat"
                   onPress={onClose}
@@ -2573,8 +3084,9 @@ export default function HRPage() {
                   Cancel
                 </Button>
                 <Button
-                  className="font-bold"
+                  className="font-bold text-[11px]"
                   color="primary"
+                  isLoading={saving}
                   size="sm"
                   onPress={handleDisburseSalary}
                 >
@@ -2705,6 +3217,176 @@ export default function HRPage() {
               </ModalFooter>
             </>
           )}
+        </ModalContent>
+      </Modal>
+
+      {/* Yearly Holidays Modal */}
+      <Modal
+        classNames={{
+          wrapper: "z-[10000]",
+          backdrop: "z-[9999]",
+          base: "bg-white border border-mountain-200 shadow-xl",
+        }}
+        isOpen={isHolidaysModalOpen}
+        onClose={() => setIsHolidaysModalOpen(false)}
+        size="md"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1 border-b border-mountain-100 pb-3">
+            <h2 className="text-[16px] font-bold text-mountain-900 leading-tight">
+              Manage Yearly Holidays
+            </h2>
+            <p className="text-[12px] text-mountain-500 font-medium">
+              Staff absences on these dates won't deduct from their salary
+            </p>
+          </ModalHeader>
+          <ModalBody className="py-4">
+            <div className="flex flex-col gap-3 mb-4 p-3 bg-mountain-50 rounded-lg border border-mountain-200">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="text-[11px] font-bold text-mountain-600 uppercase tracking-wider mb-1 block">
+                    Holiday Name
+                  </label>
+                  <Input
+                    size="sm"
+                    placeholder="e.g. Dashain"
+                    value={newHoliday.name}
+                    onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
+                  />
+                </div>
+                <div className="w-[140px]">
+                  <label className="text-[11px] font-bold text-mountain-600 uppercase tracking-wider mb-1 block">
+                    Date
+                  </label>
+                  <Input
+                    size="sm"
+                    type="date"
+                    value={newHoliday.date}
+                    onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] font-bold text-mountain-600 uppercase tracking-wider">Holiday Type:</span>
+                  <div className="flex gap-1 ml-2">
+                    <button
+                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${newHoliday.type === "paid"
+                        ? "bg-success/10 text-success border-success/30"
+                        : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
+                        }`}
+                      onClick={() => setNewHoliday({ ...newHoliday, type: "paid" })}
+                    >
+                      Paid Holiday
+                    </button>
+                    <button
+                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${newHoliday.type === "unpaid"
+                        ? "bg-rose-500/10 text-rose-600 border-rose-300"
+                        : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
+                        }`}
+                      onClick={() => setNewHoliday({ ...newHoliday, type: "unpaid" })}
+                    >
+                      Unpaid Holiday
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  color="primary"
+                  className="font-semibold"
+                  size="sm"
+                  onPress={async () => {
+                    if (!newHoliday.name || !newHoliday.date || !clinicId) return;
+                    try {
+                      setSaving(true);
+                      await hrService.addHoliday(clinicId, newHoliday.name, new Date(newHoliday.date), newHoliday.type);
+                      setNewHoliday({ name: "", date: format(new Date(), "yyyy-MM-dd"), type: "paid" });
+                      const updated = await hrService.getHolidays(clinicId);
+                      setHolidays(updated);
+                    } catch (e) {
+                      console.error("Error adding holiday:", e);
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  isLoading={saving}
+                >
+                  Add Holiday
+                </Button>
+              </div>
+              <p className="text-[10px] text-mountain-400">
+                <strong>Paid Holiday:</strong> Staff absences are ignored — no deduction.<br />
+                <strong>Unpaid Holiday:</strong> Day off but salary is deducted for that day.
+              </p>
+            </div>
+
+            <div className="border border-mountain-200 rounded-lg overflow-hidden bg-mountain-50">
+              <table className="w-full text-left text-[13px]">
+                <thead className="bg-mountain-100 border-b border-mountain-200">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold text-mountain-700">Date</th>
+                    <th className="px-3 py-2 font-semibold text-mountain-700">Holiday</th>
+                    <th className="px-3 py-2 font-semibold text-mountain-700">Type</th>
+                    <th className="px-3 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-mountain-100 bg-white">
+                  {holidays.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-3 py-6 text-center text-mountain-400">
+                        No holidays added yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    holidays
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((holiday) => (
+                        <tr key={holiday.id} className="hover:bg-mountain-50 transition-colors">
+                          <td className="px-3 py-2 font-medium text-mountain-900">
+                            {format(holiday.date, "MMM dd, yyyy")}
+                          </td>
+                          <td className="px-3 py-2 text-mountain-600">
+                            {holiday.name}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${(holiday.type === "unpaid")
+                              ? "bg-rose-50 text-rose-600 border-rose-200"
+                              : "bg-success/10 text-success border-success/20"
+                              }`}>
+                              {holiday.type === "unpaid" ? "Unpaid" : "Paid"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              className="p-1.5 text-mountain-400 hover:text-danger hover:bg-danger-50 rounded-md transition-colors"
+                              onClick={async () => {
+                                if (!holiday.id || !clinicId) return;
+                                try {
+                                  await hrService.deleteHoliday(holiday.id);
+                                  const updated = await hrService.getHolidays(clinicId);
+                                  setHolidays(updated);
+                                } catch (e) {
+                                  console.error("Error deleting holiday:", e);
+                                }
+                              }}
+                            >
+                              <IoTrashOutline size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              className="font-semibold text-mountain-700 bg-white border border-mountain-200"
+              onPress={() => setIsHolidaysModalOpen(false)}
+            >
+              Close
+            </Button>
+          </ModalFooter>
         </ModalContent>
       </Modal>
     </div>

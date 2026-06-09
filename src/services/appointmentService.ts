@@ -129,16 +129,19 @@ export const appointmentService = {
         firestoreData.paymentStatus = appointmentData.paymentStatus;
       }
       if (appointmentData.consultationBillingId) {
-        firestoreData.consultationBillingId = appointmentData.consultationBillingId;
+        firestoreData.consultationBillingId =
+          appointmentData.consultationBillingId;
       }
       if (appointmentData.consultationBillingStatus) {
-        firestoreData.consultationBillingStatus = appointmentData.consultationBillingStatus;
+        firestoreData.consultationBillingStatus =
+          appointmentData.consultationBillingStatus;
       }
       if (appointmentData.checkoutCompleted !== undefined) {
         firestoreData.checkoutCompleted = appointmentData.checkoutCompleted;
       }
       if (appointmentData.doctorConsultationCompleted !== undefined) {
-        firestoreData.doctorConsultationCompleted = appointmentData.doctorConsultationCompleted;
+        firestoreData.doctorConsultationCompleted =
+          appointmentData.doctorConsultationCompleted;
       }
       if (appointmentData.cabinName) {
         firestoreData.cabinName = appointmentData.cabinName;

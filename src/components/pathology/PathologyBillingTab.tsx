@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
@@ -13,7 +12,6 @@ import {
   TableCell,
 } from "@heroui/table";
 import { Chip } from "@heroui/chip";
-import { Switch } from "@heroui/switch";
 import {
   Modal,
   ModalContent,
@@ -21,7 +19,6 @@ import {
   ModalBody,
   ModalFooter,
 } from "@heroui/modal";
-import { Tab, Tabs } from "@heroui/tabs";
 import { addToast } from "@heroui/toast";
 import {
   IoAddOutline,
@@ -78,7 +75,11 @@ function PatientSearchBox({
 }) {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
-  const filtered = (q ? patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : patients).slice(0, 80);
+  const filtered = (
+    q
+      ? patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()))
+      : patients
+  ).slice(0, 80);
 
   return (
     <div className="relative">
@@ -88,28 +89,60 @@ function PatientSearchBox({
           className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full"
           placeholder="Search patient…"
           value={open ? q : value}
-          onChange={(e) => { setQ(e.target.value); onChange(e.target.value); setOpen(true); }}
+          onChange={(e) => {
+            setQ(e.target.value);
+            onChange(e.target.value);
+            setOpen(true);
+          }}
           onFocus={() => setOpen(true)}
         />
         {value && !open && (
-          <button className="mr-2 text-text-muted hover:text-text-main" type="button" onClick={() => { onChange(""); setQ(""); }}>
+          <button
+            className="mr-2 text-text-muted hover:text-text-main"
+            type="button"
+            onClick={() => {
+              onChange("");
+              setQ("");
+            }}
+          >
             <IoCloseOutline className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setQ(""); }} />
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => {
+              setOpen(false);
+              setQ("");
+            }}
+          />
           <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-lg">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-text-muted/70">No results</p>
-            ) : filtered.map((p) => (
-              <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-surface-2" type="button"
-                onClick={() => { onSelect(p); setOpen(false); setQ(""); }}>
-                <p className="text-[12.5px] text-text-main">{p.name}</p>
-                <p className="text-[11px] text-text-muted/60">{p.mobile || p.phone || ""} {p.regNumber ? `• ${p.regNumber}` : ""}</p>
-              </button>
-            ))}
+              <p className="px-3 py-2 text-[12px] text-text-muted/70">
+                No results
+              </p>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.id}
+                  className="w-full text-left px-3 py-2 hover:bg-surface-2"
+                  type="button"
+                  onClick={() => {
+                    onSelect(p);
+                    setOpen(false);
+                    setQ("");
+                  }}
+                >
+                  <p className="text-[12.5px] text-text-main">{p.name}</p>
+                  <p className="text-[11px] text-text-muted/60">
+                    {p.mobile || p.phone || ""}{" "}
+                    {p.regNumber ? `• ${p.regNumber}` : ""}
+                  </p>
+                </button>
+              ))
+            )}
           </div>
         </>
       )}
@@ -181,9 +214,7 @@ export default function PathologyBillingTab({
   const [submitting, setSubmitting] = useState(false);
   const [selectedBilling, setSelectedBilling] =
     useState<PathologyBilling | null>(null);
-  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(
-    null,
-  );
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
 
   // Payment states
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -409,10 +440,15 @@ export default function PathologyBillingTab({
     // Invoice-level discount applied on amount after item discounts
     const afterItemDiscount = subtotal - itemDiscountAmount;
     let mainDiscountAmount = 0;
+
     if (formData.discountType === "percent") {
-      mainDiscountAmount = (afterItemDiscount * (formData.discountValue || 0)) / 100;
+      mainDiscountAmount =
+        (afterItemDiscount * (formData.discountValue || 0)) / 100;
     } else {
-      mainDiscountAmount = Math.min(formData.discountValue || 0, afterItemDiscount);
+      mainDiscountAmount = Math.min(
+        formData.discountValue || 0,
+        afterItemDiscount,
+      );
     }
 
     const totalDiscount = itemDiscountAmount + mainDiscountAmount;
@@ -493,7 +529,9 @@ export default function PathologyBillingTab({
         testId: "", // Reset ID for free text
         testType: matchingType ? matchingType.name : value,
         price: matchingType ? matchingType.price : updatedItems[index].price,
-        amount: (matchingType ? matchingType.price : updatedItems[index].price) * updatedItems[index].quantity,
+        amount:
+          (matchingType ? matchingType.price : updatedItems[index].price) *
+          updatedItems[index].quantity,
       };
     } else if (field === "quantity") {
       const qty = parseInt(value) || 1;
@@ -501,33 +539,57 @@ export default function PathologyBillingTab({
       const base = item.price * qty;
       const dType = item.discountType || "percent";
       const dVal = item.discountValue || 0;
-      const discAmt = dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
+      const discAmt =
+        dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
 
-      updatedItems[index] = { ...item, quantity: qty, discountAmount: discAmt, amount: base - discAmt };
+      updatedItems[index] = {
+        ...item,
+        quantity: qty,
+        discountAmount: discAmt,
+        amount: base - discAmt,
+      };
     } else if (field === "price") {
       const price = parseFloat(value) || 0;
       const item = updatedItems[index];
       const base = price * item.quantity;
       const dType = item.discountType || "percent";
       const dVal = item.discountValue || 0;
-      const discAmt = dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
+      const discAmt =
+        dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
 
-      updatedItems[index] = { ...item, price, discountAmount: discAmt, amount: base - discAmt };
+      updatedItems[index] = {
+        ...item,
+        price,
+        discountAmount: discAmt,
+        amount: base - discAmt,
+      };
     } else if (field === "discountType") {
       const item = updatedItems[index];
       const base = item.price * item.quantity;
       const dVal = item.discountValue || 0;
-      const discAmt = value === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
+      const discAmt =
+        value === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
 
-      updatedItems[index] = { ...item, discountType: value, discountAmount: discAmt, amount: base - discAmt };
+      updatedItems[index] = {
+        ...item,
+        discountType: value,
+        discountAmount: discAmt,
+        amount: base - discAmt,
+      };
     } else if (field === "discountValue") {
       const item = updatedItems[index];
       const base = item.price * item.quantity;
       const dVal = parseFloat(value) || 0;
       const dType = item.discountType || "percent";
-      const discAmt = dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
+      const discAmt =
+        dType === "percent" ? (base * dVal) / 100 : Math.min(dVal, base);
 
-      updatedItems[index] = { ...item, discountValue: dVal, discountAmount: discAmt, amount: base - discAmt };
+      updatedItems[index] = {
+        ...item,
+        discountValue: dVal,
+        discountAmount: discAmt,
+        amount: base - discAmt,
+      };
     } else if (field === "isUrgent") {
       updatedItems[index] = { ...updatedItems[index], isUrgent: value };
     } else if (field === "sampleType") {
@@ -696,7 +758,7 @@ export default function PathologyBillingTab({
         const paidAmount = existing ? existing.paidAmount : 0;
         const balanceAmount = calculations.totalAmount - paidAmount;
         let paymentStatus = "unpaid";
-        
+
         if (paidAmount >= calculations.totalAmount) {
           paymentStatus = "paid";
         } else if (paidAmount > 0) {
@@ -709,7 +771,10 @@ export default function PathologyBillingTab({
           paymentStatus,
         };
 
-        await pathologyBillingService.updateBilling(editingInvoiceId, billingData);
+        await pathologyBillingService.updateBilling(
+          editingInvoiceId,
+          billingData,
+        );
         addToast({
           title: "Success",
           description: "Pathology invoice updated successfully",
@@ -763,7 +828,7 @@ export default function PathologyBillingTab({
       await loadData();
 
       setEditingInvoiceId(null);
-      
+
       // Switch to manage tab
       setActiveTab("manage");
       invoiceModal.forceClose();
@@ -781,11 +846,17 @@ export default function PathologyBillingTab({
 
   const handleEditInvoice = (billing: PathologyBilling) => {
     setEditingInvoiceId(billing.id);
-    
+
     // Format dates to YYYY-MM-DD for inputs
     const formatDateForInput = (dateValue: any) => {
       if (!dateValue) return new Date().toISOString().split("T")[0];
-      const d = dateValue instanceof Date ? dateValue : dateValue.toDate ? dateValue.toDate() : new Date(dateValue);
+      const d =
+        dateValue instanceof Date
+          ? dateValue
+          : dateValue.toDate
+            ? dateValue.toDate()
+            : new Date(dateValue);
+
       return d.toISOString().split("T")[0];
     };
 
@@ -808,12 +879,16 @@ export default function PathologyBillingTab({
       expectedReportDate: formatDateForInput(billing.expectedReportDate),
       reportStatus: billing.reportStatus || "pending_collection",
     });
-    
+
     setActiveTab("create");
   };
 
   const handleCancelInvoice = async (billing: PathologyBilling) => {
-    if (confirm("Are you sure you want to cancel this invoice? This action cannot be undone.")) {
+    if (
+      confirm(
+        "Are you sure you want to cancel this invoice? This action cannot be undone.",
+      )
+    ) {
       setSubmitting(true);
       try {
         await pathologyBillingService.updateBilling(billing.id!, {
@@ -1066,492 +1141,790 @@ export default function PathologyBillingTab({
       <div className="bg-surface border border-border-base rounded overflow-hidden">
         {/* Tab Strip */}
         <div className="flex border-b border-border-base bg-surface-2/50">
-        {[
-          { id: "create", label: editingInvoiceId ? "Edit Invoice" : "Create Invoice", icon: <IoAddOutline className="w-4 h-4" /> },
-          { id: "manage", label: "Manage Invoices", icon: <IoReceiptOutline className="w-4 h-4" /> },
-        ].map((t) => (
-          <button
-            key={t.id}
-            className={`flex items-center gap-2 px-5 py-3.5 text-[13px] font-medium border-b-2 transition-colors
+          {[
+            {
+              id: "create",
+              label: editingInvoiceId ? "Edit Invoice" : "Create Invoice",
+              icon: <IoAddOutline className="w-4 h-4" />,
+            },
+            {
+              id: "manage",
+              label: "Manage Invoices",
+              icon: <IoReceiptOutline className="w-4 h-4" />,
+            },
+          ].map((t) => (
+            <button
+              key={t.id}
+              className={`flex items-center gap-2 px-5 py-3.5 text-[13px] font-medium border-b-2 transition-colors
               ${activeTab === t.id ? "border-primary text-primary bg-surface" : "border-transparent text-text-muted hover:text-primary hover:bg-surface-2"}`}
-            type="button"
-            onClick={() => setActiveTab(t.id)}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
 
-      {/* Create Invoice Tab */}
-      {activeTab === "create" && (
-        <div className="p-5 flex flex-col gap-6">
-                {/* Patient Information */}
-                <div>
-                  <h3 className="text-[14px] font-semibold text-primary mb-3">Patient Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="lg:col-span-2 flex flex-col gap-1 relative">
-                      <label className="text-[12px] font-medium text-text-muted">Patient Name <span className="text-red-500">*</span></label>
-                      <PatientSearchBox
-                        value={formData.patientName}
-                        patients={patients}
-                        onSelect={(p) => setFormData((prev) => ({ ...prev, patientId: p.id, patientName: p.name, patientPhone: p.mobile || p.phone || "", patientEmail: p.email || "", patientAddress: p.address || "", patientAge: p.age?.toString() || "", patientGender: p.gender || "" }))}
-                        onChange={(v) => setFormData((prev) => ({ ...prev, patientName: v, patientId: undefined }))}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Phone</label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Phone" value={formData.patientPhone} onChange={(e) => setFormData((p) => ({ ...p, patientPhone: e.target.value }))} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Email</label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Email" type="email" value={formData.patientEmail} onChange={(e) => setFormData((p) => ({ ...p, patientEmail: e.target.value }))} />
-                    </div>
-                    <div className="lg:col-span-2 flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Address</label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Address" value={formData.patientAddress} onChange={(e) => setFormData((p) => ({ ...p, patientAddress: e.target.value }))} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Age</label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="Age" type="number" value={formData.patientAge} onChange={(e) => setFormData((p) => ({ ...p, patientAge: e.target.value }))} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Gender</label>
-                      <select className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" value={formData.patientGender} onChange={(e) => setFormData((p) => ({ ...p, patientGender: e.target.value }))}>
-                        <option value="">Select</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                  </div>
+        {/* Create Invoice Tab */}
+        {activeTab === "create" && (
+          <div className="p-5 flex flex-col gap-6">
+            {/* Patient Information */}
+            <div>
+              <h3 className="text-[14px] font-semibold text-primary mb-3">
+                Patient Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="lg:col-span-2 flex flex-col gap-1 relative">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Patient Name <span className="text-red-500">*</span>
+                  </label>
+                  <PatientSearchBox
+                    patients={patients}
+                    value={formData.patientName}
+                    onChange={(v) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        patientName: v,
+                        patientId: undefined,
+                      }))
+                    }
+                    onSelect={(p) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        patientId: p.id,
+                        patientName: p.name,
+                        patientPhone: p.mobile || p.phone || "",
+                        patientEmail: p.email || "",
+                        patientAddress: p.address || "",
+                        patientAge: p.age?.toString() || "",
+                        patientGender: p.gender || "",
+                      }))
+                    }
+                  />
                 </div>
-                <div className="border-t border-border-base" />
-
-
-
-                {/* Lab Tracking & Reporting */}
-                <div>
-                  <h3 className="text-[14px] font-semibold text-primary mb-3">Lab Tracking &amp; Reporting</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Lab Ref No</label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" placeholder="e.g. LAB-1001" value={formData.labReferenceNo || ""} onChange={(e) => setFormData((p) => ({ ...p, labReferenceNo: e.target.value }))} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Invoice Date <span className="text-red-500">*</span></label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" type="date" value={formData.invoiceDate} onChange={(e) => setFormData((p) => ({ ...p, invoiceDate: e.target.value }))} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Collection Date</label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" type="date" value={formData.sampleCollectionDate} onChange={(e) => setFormData((p) => ({ ...p, sampleCollectionDate: e.target.value }))} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Expected Delivery</label>
-                      <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" type="date" value={formData.expectedReportDate} onChange={(e) => setFormData((p) => ({ ...p, expectedReportDate: e.target.value }))} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Report Status</label>
-                      <select className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main" value={formData.reportStatus} onChange={(e) => setFormData((p) => ({ ...p, reportStatus: e.target.value as any }))}>
-                        <option value="pending_collection">Pending Collection</option>
-                        <option value="collected">Sample Collected</option>
-                        <option value="in_lab">In Laboratory</option>
-                        <option value="partially_ready">Partially Ready</option>
-                        <option value="ready">Report Ready</option>
-                        <option value="delivered">Delivered</option>
-                      </select>
-                    </div>
-                  </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Phone
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    placeholder="Phone"
+                    value={formData.patientPhone}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        patientPhone: e.target.value,
+                      }))
+                    }
+                  />
                 </div>
-                <div className="border-t border-border-base" />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Email
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    placeholder="Email"
+                    type="email"
+                    value={formData.patientEmail}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        patientEmail: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="lg:col-span-2 flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Address
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    placeholder="Address"
+                    value={formData.patientAddress}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        patientAddress: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Age
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    placeholder="Age"
+                    type="number"
+                    value={formData.patientAge}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, patientAge: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Gender
+                  </label>
+                  <select
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    value={formData.patientGender}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        patientGender: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border-base" />
 
+            {/* Lab Tracking & Reporting */}
+            <div>
+              <h3 className="text-[14px] font-semibold text-primary mb-3">
+                Lab Tracking &amp; Reporting
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Lab Ref No
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    placeholder="e.g. LAB-1001"
+                    value={formData.labReferenceNo || ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        labReferenceNo: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Invoice Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    type="date"
+                    value={formData.invoiceDate}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        invoiceDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Collection Date
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    type="date"
+                    value={formData.sampleCollectionDate}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        sampleCollectionDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Expected Delivery
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    type="date"
+                    value={formData.expectedReportDate}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        expectedReportDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Report Status
+                  </label>
+                  <select
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    value={formData.reportStatus}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        reportStatus: e.target.value as any,
+                      }))
+                    }
+                  >
+                    <option value="pending_collection">
+                      Pending Collection
+                    </option>
+                    <option value="collected">Sample Collected</option>
+                    <option value="in_lab">In Laboratory</option>
+                    <option value="partially_ready">Partially Ready</option>
+                    <option value="ready">Report Ready</option>
+                    <option value="delivered">Delivered</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border-base" />
 
-                {/* Test Items */}
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-[14px] font-semibold text-primary">Test Items</h3>
-                    <Button color="primary" size="sm" startContent={<IoAddOutline />} onPress={addInvoiceItem}>Add Test</Button>
+            {/* Test Items */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-[14px] font-semibold text-primary">
+                  Test Items
+                </h3>
+                <Button
+                  color="primary"
+                  size="sm"
+                  startContent={<IoAddOutline />}
+                  onPress={addInvoiceItem}
+                >
+                  Add Test
+                </Button>
+              </div>
+
+              {formData.items.length > 0 ? (
+                <div className="space-y-2">
+                  <datalist id="test-catalog-list">
+                    {testCatalog.map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.type}
+                      </option>
+                    ))}
+                  </datalist>
+                  <datalist id="test-types-list">
+                    {testTypes.map((t) => (
+                      <option key={t.id} value={t.name} />
+                    ))}
+                  </datalist>
+
+                  {/* Header row */}
+                  <div className="hidden md:grid grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 px-3 pb-2 items-center">
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Test Name
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Sample
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider text-center">
+                      Urgent
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Price
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Qty
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Disc. Type
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Disc. Val
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Amount
+                    </div>
+                    <div className="w-[32px]" />
                   </div>
 
-                  {formData.items.length > 0 ? (
-                    <div className="space-y-2">
-                      <datalist id="test-catalog-list">
-                        {testCatalog.map((t) => (
-                          <option key={t.id} value={t.name}>{t.type}</option>
-                        ))}
-                      </datalist>
-                      <datalist id="test-types-list">
-                        {testTypes.map((t) => (
-                          <option key={t.id} value={t.name} />
-                        ))}
-                      </datalist>
-
-                      {/* Header row */}
-                      <div className="hidden md:grid grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 px-3 pb-2 items-center">
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Test Name</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Sample</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider text-center">Urgent</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Price</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Qty</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Disc. Type</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Disc. Val</div>
-                        <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Amount</div>
-                        <div className="w-[32px]"></div>
+                  {formData.items.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 md:grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
+                    >
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Test Name
+                        </label>
+                        <input
+                          className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                          list="test-types-list"
+                          placeholder="Select Test"
+                          value={item.testName}
+                          onChange={(e) =>
+                            updateInvoiceItem(index, "testName", e.target.value)
+                          }
+                        />
                       </div>
-
-                      {formData.items.map((item, index) => (
-                        <div
-                          key={item.id}
-                          className="grid grid-cols-1 md:grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Sample
+                        </label>
+                        <select
+                          className="w-full h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                          value={item.sampleType || ""}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              index,
+                              "sampleType",
+                              e.target.value,
+                            )
+                          }
                         >
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Test Name</label>
-                            <input
-                              className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
-                              list="test-types-list"
-                              placeholder="Select Test"
-                              value={item.testName}
-                              onChange={(e) => updateInvoiceItem(index, "testName", e.target.value)}
-                            />
+                          <option value="">Select</option>
+                          <option value="Blood">Blood</option>
+                          <option value="Urine">Urine</option>
+                          <option value="Stool">Stool</option>
+                          <option value="Swab">Swab</option>
+                          <option value="Sputum">Sputum</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col items-start md:items-center">
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Urgent
+                        </label>
+                        <input
+                          checked={item.isUrgent}
+                          className="w-4 h-4 cursor-pointer accent-primary"
+                          type="checkbox"
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              index,
+                              "isUrgent",
+                              e.target.checked,
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Price
+                        </label>
+                        <input
+                          className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                          placeholder="0"
+                          type="number"
+                          value={item.price}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              index,
+                              "price",
+                              parseFloat(e.target.value) || 0,
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Qty
+                        </label>
+                        <input
+                          className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                          min={1}
+                          placeholder="1"
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              index,
+                              "quantity",
+                              parseInt(e.target.value, 10) || 1,
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Disc. Type
+                        </label>
+                        <select
+                          className="w-full h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                          value={item.discountType || "percent"}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              index,
+                              "discountType",
+                              e.target.value,
+                            )
+                          }
+                        >
+                          <option value="percent">%</option>
+                          <option value="flat">Flat</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Disc. Val
+                        </label>
+                        <input
+                          className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                          min={0}
+                          placeholder="0"
+                          type="number"
+                          value={item.discountValue || ""}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              index,
+                              "discountValue",
+                              parseFloat(e.target.value) || 0,
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Amount
+                        </label>
+                        <div className="w-full h-9 flex items-center px-2.5 border border-border-base/50 rounded bg-surface-2 text-[12.5px] font-semibold text-text-main">
+                          {item.amount.toFixed(0)}
+                        </div>
+                      </div>
+                      <div className="flex justify-end md:justify-center items-center">
+                        <Button
+                          isIconOnly
+                          color="danger"
+                          size="sm"
+                          variant="light"
+                          onPress={() => removeInvoiceItem(index)}
+                        >
+                          <IoTrashOutline className="text-[16px]" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-default-500 text-sm">
+                  No items added yet. Click "Add Test" to add items.
+                </p>
+              )}
+            </div>
+
+            {/* Referral Source Section */}
+            <div className="space-y-3">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 py-2 border-b border-default-100">
+                <div>
+                  <h3 className="text-[13px] font-bold text-default-800">
+                    Referral Sources
+                  </h3>
+                  <p className="text-xs text-default-500">
+                    Search and add doctors or partners for this invoice
+                  </p>
+                </div>
+                <div className="w-full md:w-80">
+                  <Autocomplete
+                    aria-label="Add Referral Source"
+                    classNames={{
+                      base: "max-w-full",
+                    }}
+                    placeholder="Search source..."
+                    radius="lg"
+                    size="sm"
+                    startContent={
+                      <IoSearchOutline className="text-default-400" />
+                    }
+                    variant="flat"
+                    onSelectionChange={(key) => {
+                      if (key) addReferralSource(key.toString());
+                    }}
+                  >
+                    {allReferralSources.map((source) => (
+                      <AutocompleteItem
+                        key={source.id}
+                        startContent={
+                          <div
+                            className={`p-1 rounded-md ${source.type === "doctor" ? "bg-primary-50" : "bg-secondary-50"}`}
+                          >
+                            {source.icon}
                           </div>
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Sample</label>
-                            <select className="w-full h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" value={item.sampleType || ""} onChange={(e) => updateInvoiceItem(index, "sampleType", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="Blood">Blood</option>
-                              <option value="Urine">Urine</option>
-                              <option value="Stool">Stool</option>
-                              <option value="Swab">Swab</option>
-                              <option value="Sputum">Sputum</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                          <div className="flex flex-col items-start md:items-center">
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Urgent</label>
-                            <input type="checkbox" className="w-4 h-4 cursor-pointer accent-primary" checked={item.isUrgent} onChange={(e) => updateInvoiceItem(index, "isUrgent", e.target.checked)} />
-                          </div>
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Price</label>
-                            <input className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" placeholder="0" type="number" value={item.price} onChange={(e) => updateInvoiceItem(index, "price", parseFloat(e.target.value) || 0)} />
-                          </div>
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Qty</label>
-                            <input className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={1} placeholder="1" type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(index, "quantity", parseInt(e.target.value, 10) || 1)} />
-                          </div>
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Disc. Type</label>
-                            <select
-                              className="w-full h-9 px-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
-                              value={item.discountType || "percent"}
-                              onChange={(e) => updateInvoiceItem(index, "discountType", e.target.value)}
+                        }
+                        textValue={source.name}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {source.name}
+                          </span>
+                          <span className="text-xs text-default-400 capitalize">
+                            {source.type}
+                          </span>
+                        </div>
+                      </AutocompleteItem>
+                    ))}
+                  </Autocomplete>
+                </div>
+              </div>
+
+              {formData.referringDoctors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-4 bg-surface-2/50 rounded-xl border-2 border-dashed border-border-base transition-all hover:bg-surface-2">
+                  <div className="p-2 rounded-full bg-surface shadow-sm mb-2">
+                    <IoMedkitOutline className="text-xl text-primary/60" />
+                  </div>
+                  <p className="text-sm font-medium text-default-600">
+                    No referral sources added yet
+                  </p>
+                  <p className="text-xs text-default-400 mt-1">
+                    Use the search bar above to add doctors or partners
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {formData.referringDoctors.map((refDoc, index) => {
+                    const sourceInfo = allReferralSources.find(
+                      (s) => s.id === refDoc.doctorId,
+                    );
+
+                    return (
+                      <div
+                        key={index}
+                        className="bg-surface border border-border-base rounded-lg p-2 transition-all hover:shadow-sm group"
+                      >
+                        <div className="grid grid-cols-12 gap-4 items-center">
+                          {/* Left: Info */}
+                          <div className="col-span-12 md:col-span-4 flex items-center gap-3">
+                            <div
+                              className={`p-2.5 rounded-xl ${refDoc.type === "doctor" ? "bg-primary-50 text-primary" : "bg-secondary-50 text-secondary"}`}
                             >
-                              <option value="percent">%</option>
-                              <option value="flat">Flat</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Disc. Val</label>
-                            <input className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={0} placeholder="0" type="number" value={item.discountValue || ""} onChange={(e) => updateInvoiceItem(index, "discountValue", parseFloat(e.target.value) || 0)} />
-                          </div>
-                          <div>
-                            <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Amount</label>
-                            <div className="w-full h-9 flex items-center px-2.5 border border-border-base/50 rounded bg-surface-2 text-[12.5px] font-semibold text-text-main">
-                              {item.amount.toFixed(0)}
+                              {refDoc.type === "doctor" ? (
+                                <IoMedkitOutline size={20} />
+                              ) : (
+                                <IoBusinessOutline size={20} />
+                              )}
+                            </div>
+                            <div className="overflow-hidden">
+                              <p className="font-bold text-default-800 truncate">
+                                {refDoc.doctorName}
+                              </p>
+                              <span
+                                className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${refDoc.type === "doctor" ? "bg-primary-100 text-primary-700" : "bg-secondary-100 text-secondary-700"}`}
+                              >
+                                {refDoc.type}
+                              </span>
                             </div>
                           </div>
-                          <div className="flex justify-end md:justify-center items-center">
+
+                          {/* Middle: Controls */}
+                          <div className="col-span-12 md:col-span-7 flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2 bg-surface-2 p-1.5 rounded-lg border border-border-base/50">
+                              <Select
+                                aria-label="Commission Type"
+                                className="w-28"
+                                selectedKeys={[refDoc.commissionType]}
+                                size="sm"
+                                variant="flat"
+                                onSelectionChange={(keys) => {
+                                  const type = Array.from(keys)[0] as
+                                    | "percent"
+                                    | "flat";
+
+                                  updateReferringDoctor(index, {
+                                    commissionType: type,
+                                  });
+                                }}
+                              >
+                                <SelectItem key="percent" textValue="% Percent">
+                                  % Percent
+                                </SelectItem>
+                                <SelectItem key="flat" textValue="NPR Flat">
+                                  NPR Flat
+                                </SelectItem>
+                              </Select>
+                              <Input
+                                aria-label="Commission Value"
+                                className="w-20"
+                                size="sm"
+                                type="number"
+                                value={refDoc.commissionValue.toString()}
+                                variant="flat"
+                                onValueChange={(val) =>
+                                  updateReferringDoctor(index, {
+                                    commissionValue: parseFloat(val) || 0,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-default-400 font-bold uppercase tracking-wider">
+                                Estimated Earned
+                              </span>
+                              <span className="text-md font-black text-primary">
+                                {Math.round(
+                                  refDoc.calculatedAmount,
+                                ).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Right: Action */}
+                          <div className="col-span-12 md:col-span-1 flex justify-end">
                             <Button
                               isIconOnly
+                              className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
                               color="danger"
                               size="sm"
                               variant="light"
-                              onPress={() => removeInvoiceItem(index)}
+                              onPress={() => removeReferringDoctor(index)}
                             >
-                              <IoTrashOutline className="text-[16px]" />
+                              <IoTrashOutline className="w-5 h-5" />
                             </Button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-default-500 text-sm">
-                      No items added yet. Click "Add Test" to add items.
-                    </p>
-                  )}
-                </div>
-
-                {/* Referral Source Section */}
-                <div className="space-y-3">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 py-2 border-b border-default-100">
-                    <div>
-                      <h3 className="text-[13px] font-bold text-default-800">
-                        Referral Sources
-                      </h3>
-                      <p className="text-xs text-default-500">
-                        Search and add doctors or partners for this invoice
-                      </p>
-                    </div>
-                    <div className="w-full md:w-80">
-                      <Autocomplete
-                        aria-label="Add Referral Source"
-                        classNames={{
-                          base: "max-w-full",
-                        }}
-                        placeholder="Search source..."
-                        radius="lg"
-                        size="sm"
-                        startContent={
-                          <IoSearchOutline className="text-default-400" />
-                        }
-                        variant="flat"
-                        onSelectionChange={(key) => {
-                          if (key) addReferralSource(key.toString());
-                        }}
-                      >
-                        {allReferralSources.map((source) => (
-                          <AutocompleteItem
-                            key={source.id}
-                            startContent={
-                              <div
-                                className={`p-1 rounded-md ${source.type === "doctor" ? "bg-primary-50" : "bg-secondary-50"}`}
-                              >
-                                {source.icon}
-                              </div>
-                            }
-                            textValue={source.name}
-                          >
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium">
-                                {source.name}
-                              </span>
-                              <span className="text-xs text-default-400 capitalize">
-                                {source.type}
-                              </span>
-                            </div>
-                          </AutocompleteItem>
-                        ))}
-                      </Autocomplete>
-                    </div>
-                  </div>
-
-                  {formData.referringDoctors.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-4 bg-surface-2/50 rounded-xl border-2 border-dashed border-border-base transition-all hover:bg-surface-2">
-                      <div className="p-2 rounded-full bg-surface shadow-sm mb-2">
-                        <IoMedkitOutline className="text-xl text-primary/60" />
                       </div>
-                      <p className="text-sm font-medium text-default-600">
-                        No referral sources added yet
-                      </p>
-                      <p className="text-xs text-default-400 mt-1">
-                        Use the search bar above to add doctors or partners
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {formData.referringDoctors.map((refDoc, index) => {
-                        const sourceInfo = allReferralSources.find(
-                          (s) => s.id === refDoc.doctorId,
-                        );
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
-                        return (
-                          <div
-                            key={index}
-                            className="bg-surface border border-border-base rounded-lg p-2 transition-all hover:shadow-sm group"
-                          >
-                            <div className="grid grid-cols-12 gap-4 items-center">
-                              {/* Left: Info */}
-                              <div className="col-span-12 md:col-span-4 flex items-center gap-3">
-                                <div
-                                  className={`p-2.5 rounded-xl ${refDoc.type === "doctor" ? "bg-primary-50 text-primary" : "bg-secondary-50 text-secondary"}`}
-                                >
-                                  {refDoc.type === "doctor" ? (
-                                    <IoMedkitOutline size={20} />
-                                  ) : (
-                                    <IoBusinessOutline size={20} />
-                                  )}
-                                </div>
-                                <div className="overflow-hidden">
-                                  <p className="font-bold text-default-800 truncate">
-                                    {refDoc.doctorName}
-                                  </p>
-                                  <span
-                                    className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${refDoc.type === "doctor" ? "bg-primary-100 text-primary-700" : "bg-secondary-100 text-secondary-700"}`}
-                                  >
-                                    {refDoc.type}
-                                  </span>
-                                </div>
-                              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border-base pt-4">
+              <div className="space-y-3">
+                <h3 className="text-[14px] font-semibold text-primary">
+                  Invoice Discount &amp; Notes
+                </h3>
+                <div className="flex gap-3">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[12px] font-medium text-text-muted">
+                      Discount Type
+                    </label>
+                    <select
+                      className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                      value={formData.discountType}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          discountType: e.target.value as "percent" | "flat",
+                        }))
+                      }
+                    >
+                      <option value="percent">Percentage (%)</option>
+                      <option value="flat">Flat Amount (NPR)</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[12px] font-medium text-text-muted">
+                      Discount Value
+                    </label>
+                    <input
+                      className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main"
+                      min={0}
+                      placeholder="0"
+                      type="number"
+                      value={formData.discountValue}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          discountValue: parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    Notes
+                  </label>
+                  <textarea
+                    className="px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main resize-none"
+                    placeholder="Additional notes (optional)"
+                    rows={2}
+                    value={formData.notes}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, notes: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
 
-                              {/* Middle: Controls */}
-                              <div className="col-span-12 md:col-span-7 flex flex-wrap items-center gap-3">
-                                <div className="flex items-center gap-2 bg-surface-2 p-1.5 rounded-lg border border-border-base/50">
-                                  <Select
-                                    aria-label="Commission Type"
-                                    className="w-28"
-                                    selectedKeys={[refDoc.commissionType]}
-                                    size="sm"
-                                    variant="flat"
-                                    onSelectionChange={(keys) => {
-                                      const type = Array.from(keys)[0] as
-                                        | "percent"
-                                        | "flat";
-
-                                      updateReferringDoctor(index, {
-                                        commissionType: type,
-                                      });
-                                    }}
-                                  >
-                                    <SelectItem
-                                      key="percent"
-                                      textValue="% Percent"
-                                    >
-                                      % Percent
-                                    </SelectItem>
-                                    <SelectItem key="flat" textValue="NPR Flat">
-                                      NPR Flat
-                                    </SelectItem>
-                                  </Select>
-                                  <Input
-                                    aria-label="Commission Value"
-                                    className="w-20"
-                                    size="sm"
-                                    type="number"
-                                    value={refDoc.commissionValue.toString()}
-                                    variant="flat"
-                                    onValueChange={(val) =>
-                                      updateReferringDoctor(index, {
-                                        commissionValue: parseFloat(val) || 0,
-                                      })
-                                    }
-                                  />
-                                </div>
-
-                                <div className="flex flex-col">
-                                  <span className="text-[10px] text-default-400 font-bold uppercase tracking-wider">
-                                    Estimated Earned
-                                  </span>
-                                  <span className="text-md font-black text-primary">
-                                    {Math.round(refDoc.calculatedAmount).toLocaleString()}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Right: Action */}
-                              <div className="col-span-12 md:col-span-1 flex justify-end">
-                                <Button
-                                  isIconOnly
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
-                                  color="danger"
-                                  size="sm"
-                                  variant="light"
-                                  onPress={() => removeReferringDoctor(index)}
-                                >
-                                  <IoTrashOutline className="w-5 h-5" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+              <div className="bg-surface-2/30 p-3 rounded-lg border border-border-base">
+                <p className="text-[12px] font-bold text-text-muted uppercase tracking-wider mb-2">
+                  Summary
+                </p>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[13px] text-text-muted">
+                    <span>Subtotal:</span>
+                    <span className="font-medium">
+                      {formatCurrency(calculations.subtotal)}
+                    </span>
+                  </div>
+                  {calculations.itemDiscountAmount > 0 && (
+                    <div className="flex justify-between text-[13px] text-danger-500">
+                      <span>Item Discount:</span>
+                      <span>
+                        - {formatCurrency(calculations.itemDiscountAmount)}
+                      </span>
                     </div>
                   )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border-base pt-4">
-                  <div className="space-y-3">
-                    <h3 className="text-[14px] font-semibold text-primary">Invoice Discount &amp; Notes</h3>
-                    <div className="flex gap-3">
-                      <div className="flex flex-col gap-1 flex-1">
-                        <label className="text-[12px] font-medium text-text-muted">Discount Type</label>
-                        <select className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" value={formData.discountType} onChange={(e) => setFormData((p) => ({ ...p, discountType: e.target.value as "percent" | "flat" }))}>
-                          <option value="percent">Percentage (%)</option>
-                          <option value="flat">Flat Amount (NPR)</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-1 flex-1">
-                        <label className="text-[12px] font-medium text-text-muted">Discount Value</label>
-                        <input className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main" min={0} placeholder="0" type="number" value={formData.discountValue} onChange={(e) => setFormData((p) => ({ ...p, discountValue: parseFloat(e.target.value) || 0 }))} />
-                      </div>
+                  {calculations.mainDiscountAmount > 0 && (
+                    <div className="flex justify-between text-[13px] text-danger-500">
+                      <span>Invoice Discount:</span>
+                      <span>
+                        - {formatCurrency(calculations.mainDiscountAmount)}
+                      </span>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-medium text-text-muted">Notes</label>
-                      <textarea className="px-2.5 py-2 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main resize-none" placeholder="Additional notes (optional)" rows={2} value={formData.notes} onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))} />
+                  )}
+                  {calculations.totalDiscount > 0 && (
+                    <div className="flex justify-between text-[13px] font-semibold text-danger-600 border-t border-border-base/50 pt-1">
+                      <span>Total Discount:</span>
+                      <span>
+                        - {formatCurrency(calculations.totalDiscount)}
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="bg-surface-2/30 p-3 rounded-lg border border-border-base">
-                    <p className="text-[12px] font-bold text-text-muted uppercase tracking-wider mb-2">Summary</p>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[13px] text-text-muted">
-                        <span>Subtotal:</span>
-                        <span className="font-medium">
-                          {formatCurrency(calculations.subtotal)}
-                        </span>
-                      </div>
-                      {(calculations.itemDiscountAmount > 0) && (
-                        <div className="flex justify-between text-[13px] text-danger-500">
-                          <span>Item Discount:</span>
-                          <span>- {formatCurrency(calculations.itemDiscountAmount)}</span>
-                        </div>
-                      )}
-                      {(calculations.mainDiscountAmount > 0) && (
-                        <div className="flex justify-between text-[13px] text-danger-500">
-                          <span>Invoice Discount:</span>
-                          <span>- {formatCurrency(calculations.mainDiscountAmount)}</span>
-                        </div>
-                      )}
-                      {(calculations.totalDiscount > 0) && (
-                        <div className="flex justify-between text-[13px] font-semibold text-danger-600 border-t border-border-base/50 pt-1">
-                          <span>Total Discount:</span>
-                          <span>- {formatCurrency(calculations.totalDiscount)}</span>
-                        </div>
-                      )}
-                      {billingSettings?.enableTax &&
-                        calculations.taxAmount > 0 && (
-                          <div className="flex justify-between text-[13px] text-text-muted">
-                            <span>
-                              Tax ({billingSettings.defaultTaxPercentage}%):
-                            </span>
-                            <span>
-                              {formatCurrency(calculations.taxAmount)}
-                            </span>
-                          </div>
-                        )}
-                      <div className="flex justify-between text-[16px] font-black text-primary border-t border-primary/20 pt-1 mt-1">
-                        <span>Total:</span>
-                        <span>{formatCurrency(calculations.totalAmount)}</span>
-                      </div>
+                  )}
+                  {billingSettings?.enableTax && calculations.taxAmount > 0 && (
+                    <div className="flex justify-between text-[13px] text-text-muted">
+                      <span>
+                        Tax ({billingSettings.defaultTaxPercentage}%):
+                      </span>
+                      <span>{formatCurrency(calculations.taxAmount)}</span>
                     </div>
-
-                    <div className="flex justify-end gap-2 pt-3">
-                      {editingInvoiceId && (
-                        <Button
-                          className="w-full md:w-auto px-6 font-medium"
-                          color="default"
-                          variant="flat"
-                          size="md"
-                          onPress={cancelEdit}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                      <Button
-                        className="w-full md:w-auto px-10 font-bold"
-                        color="primary"
-                        isDisabled={
-                          !formData.patientName.trim() ||
-                          formData.items.length === 0
-                        }
-                        isLoading={submitting}
-                        size="md"
-                        onPress={handleSubmit}
-                      >
-                        {editingInvoiceId ? "Update Invoice" : "Create Invoice"}
-                      </Button>
-                    </div>
+                  )}
+                  <div className="flex justify-between text-[16px] font-black text-primary border-t border-primary/20 pt-1 mt-1">
+                    <span>Total:</span>
+                    <span>{formatCurrency(calculations.totalAmount)}</span>
                   </div>
                 </div>
-        </div>
-      )}
+
+                <div className="flex justify-end gap-2 pt-3">
+                  {editingInvoiceId && (
+                    <Button
+                      className="w-full md:w-auto px-6 font-medium"
+                      color="default"
+                      size="md"
+                      variant="flat"
+                      onPress={cancelEdit}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    className="w-full md:w-auto px-10 font-bold"
+                    color="primary"
+                    isDisabled={
+                      !formData.patientName.trim() ||
+                      formData.items.length === 0
+                    }
+                    isLoading={submitting}
+                    size="md"
+                    onPress={handleSubmit}
+                  >
+                    {editingInvoiceId ? "Update Invoice" : "Create Invoice"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Manage Invoices Tab */}
         {activeTab === "manage" && (
@@ -1673,19 +2046,21 @@ export default function PathologyBillingTab({
                                   <IoWalletOutline className="text-lg" />
                                 </Button>
                               )}
-                            {billing.status !== "cancelled" && billing.status !== "finalized" && billing.paymentStatus !== "paid" && (
-                              <Button
-                                isIconOnly
-                                color="danger"
-                                size="sm"
-                                title="Cancel Invoice"
-                                variant="light"
-                                isLoading={submitting}
-                                onPress={() => handleCancelInvoice(billing)}
-                              >
-                                <IoCloseCircleOutline className="text-lg" />
-                              </Button>
-                            )}
+                            {billing.status !== "cancelled" &&
+                              billing.status !== "finalized" &&
+                              billing.paymentStatus !== "paid" && (
+                                <Button
+                                  isIconOnly
+                                  color="danger"
+                                  isLoading={submitting}
+                                  size="sm"
+                                  title="Cancel Invoice"
+                                  variant="light"
+                                  onPress={() => handleCancelInvoice(billing)}
+                                >
+                                  <IoCloseCircleOutline className="text-lg" />
+                                </Button>
+                              )}
                             <Button
                               isIconOnly
                               size="sm"
@@ -1979,26 +2354,45 @@ export default function PathologyBillingTab({
                   </div>
                 </div>
 
-                {selectedBilling.paymentHistory && selectedBilling.paymentHistory.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-success/20 bg-success-50/50 p-3 rounded-lg">
-                    <h5 className="text-[11px] font-semibold text-success-700 mb-2 uppercase tracking-wider">
-                      Payment History
-                    </h5>
-                    <div className="space-y-2">
-                      {selectedBilling.paymentHistory.map((p, idx) => (
-                        <div key={p.id || idx} className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-success/10">
-                          <div>
-                            <p className="font-semibold text-success-800">{formatCurrency(p.amount)}</p>
-                            <p className="text-default-500 mt-0.5">
-                              {p.method.charAt(0).toUpperCase() + p.method.slice(1)} • {new Date(p.date).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                            {p.reference && <p className="text-default-400 mt-0.5">Ref: {p.reference}</p>}
+                {selectedBilling.paymentHistory &&
+                  selectedBilling.paymentHistory.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-success/20 bg-success-50/50 p-3 rounded-lg">
+                      <h5 className="text-[11px] font-semibold text-success-700 mb-2 uppercase tracking-wider">
+                        Payment History
+                      </h5>
+                      <div className="space-y-2">
+                        {selectedBilling.paymentHistory.map((p, idx) => (
+                          <div
+                            key={p.id || idx}
+                            className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-success/10"
+                          >
+                            <div>
+                              <p className="font-semibold text-success-800">
+                                {formatCurrency(p.amount)}
+                              </p>
+                              <p className="text-default-500 mt-0.5">
+                                {p.method.charAt(0).toUpperCase() +
+                                  p.method.slice(1)}{" "}
+                                •{" "}
+                                {new Date(p.date).toLocaleString("en-US", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                              {p.reference && (
+                                <p className="text-default-400 mt-0.5">
+                                  Ref: {p.reference}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {selectedBilling.notes && (
                   <div>

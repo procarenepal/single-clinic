@@ -860,7 +860,10 @@ export default function NewPrescriptionPage() {
       if (selected) {
         setPatientId(selected.patientId);
         setDoctorId(selected.doctorId);
-        if (selected.assignedExpertId && selected.assignedExpertId !== "unassigned") {
+        if (
+          selected.assignedExpertId &&
+          selected.assignedExpertId !== "unassigned"
+        ) {
           setSendToExpert(true);
           setSelectedExpertId(selected.assignedExpertId);
         } else {
@@ -1171,7 +1174,10 @@ export default function NewPrescriptionPage() {
           }
 
           // 1.5) Log Assigned Expert Commission
-          const expertId = (sendToExpert && selectedExpertId) ? selectedExpertId : (apt.assignedExpertId || pat?.assignedExpertId);
+          const expertId =
+            sendToExpert && selectedExpertId
+              ? selectedExpertId
+              : apt.assignedExpertId || pat?.assignedExpertId;
 
           if (expertId) {
             try {
@@ -1280,7 +1286,9 @@ export default function NewPrescriptionPage() {
       await appointmentService.updateAppointment(appointmentId, {
         status: isDualRoute ? "in-progress" : "completed",
         ...(isDualRoute ? { doctorConsultationCompleted: true } : {}),
-        ...((sendToExpert && selectedExpertId) ? { assignedExpertId: selectedExpertId } : {}),
+        ...(sendToExpert && selectedExpertId
+          ? { assignedExpertId: selectedExpertId }
+          : {}),
         billingId: billingId || null,
         billingStatus: billingId ? "unpaid" : "paid",
         paymentStatus: billingId ? "unpaid" : "paid",
@@ -1334,7 +1342,8 @@ export default function NewPrescriptionPage() {
       const currentUser = userData?.id || "unknown-user";
       let isDualRoute = false;
       const finalSendToPharmacy = items.length > 0 ? sendToPharmacy : false;
-      const finalSendToPathology = selectedPathologyTests.length > 0 ? sendToPathology : false;
+      const finalSendToPathology =
+        selectedPathologyTests.length > 0 ? sendToPathology : false;
 
       const prescriptionItems = items.map((item) => ({
         medicineId: item.medicineId,
@@ -1451,7 +1460,9 @@ export default function NewPrescriptionPage() {
           await appointmentService.updateAppointment(appointmentId, {
             status: isDualRoute ? "in-progress" : "completed",
             ...(isDualRoute ? { doctorConsultationCompleted: true } : {}),
-            ...((sendToExpert && selectedExpertId) ? { assignedExpertId: selectedExpertId } : {}),
+            ...(sendToExpert && selectedExpertId
+              ? { assignedExpertId: selectedExpertId }
+              : {}),
             updatedAt: new Date(),
           } as any);
         } catch (apptErr) {
@@ -2398,18 +2409,6 @@ export default function NewPrescriptionPage() {
                   </div>
                 )}
               </div>
-
-              <div className="mt-2">
-                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider mb-2 block">
-                  Clinical Notes
-                </span>
-                <textarea
-                  className="w-full text-[13.5px] px-3 py-2 bg-transparent border border-border-base rounded-[8px] outline-none text-text-main placeholder:text-text-muted/50 min-h-[70px] resize-y focus:border-primary/50 transition-colors shadow-sm"
-                  placeholder="Enter additional laboratory investigations, diagnostic imaging, or free-text notes..."
-                  value={investigation}
-                  onChange={(e) => setInvestigation(e.target.value)}
-                />
-              </div>
             </div>
 
             {/* 4. Diagnosis */}
@@ -2686,7 +2685,7 @@ export default function NewPrescriptionPage() {
                   </span>
                 </label>
               </div>
-              
+
               <div className="flex items-center gap-3 bg-secondary/5 p-4 rounded-[12px] border border-secondary/20 mt-4">
                 <input
                   checked={sendToExpert}
@@ -2694,8 +2693,8 @@ export default function NewPrescriptionPage() {
                   id="sendToExpert"
                   type="checkbox"
                   onChange={(e) => {
-                     setSendToExpert(e.target.checked);
-                     if (!e.target.checked) setSelectedExpertId("");
+                    setSendToExpert(e.target.checked);
+                    if (!e.target.checked) setSelectedExpertId("");
                   }}
                 />
                 <label
@@ -2712,11 +2711,13 @@ export default function NewPrescriptionPage() {
                 {sendToExpert && (
                   <div className="w-[300px]">
                     <SearchSelect
-                      items={doctors.filter(d => d.isExpert).map(d => ({
-                        id: d.id,
-                        primary: d.name,
-                        secondary: d.speciality || "Expert"
-                      }))}
+                      items={doctors
+                        .filter((d) => d.isExpert)
+                        .map((d) => ({
+                          id: d.id,
+                          primary: d.name,
+                          secondary: d.speciality || "Expert",
+                        }))}
                       label=""
                       placeholder="Select Expert..."
                       value={selectedExpertId}
@@ -2749,7 +2750,12 @@ export default function NewPrescriptionPage() {
           )}
           <Button
             color="primary"
-            disabled={(items.length === 0 && selectedPathologyTests.length === 0) || !patientId || !doctorId || saving}
+            disabled={
+              (items.length === 0 && selectedPathologyTests.length === 0) ||
+              !patientId ||
+              !doctorId ||
+              saving
+            }
             isLoading={saving}
             startContent={!saving && <IoSaveOutline className="w-4 h-4" />}
             onClick={handleSave}

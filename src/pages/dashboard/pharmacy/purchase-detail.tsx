@@ -639,7 +639,10 @@ export default function PurchaseDetailPage() {
 
         setPurchase(purchaseData);
 
-        if (purchaseData.paymentHistory && purchaseData.paymentHistory.length > 0) {
+        if (
+          purchaseData.paymentHistory &&
+          purchaseData.paymentHistory.length > 0
+        ) {
           setPayments(
             purchaseData.paymentHistory.map((p) => ({
               id: p.id || crypto.randomUUID(),
@@ -649,7 +652,7 @@ export default function PurchaseDetailPage() {
               reference: p.reference,
               notes: p.notes,
               recordedBy: p.recordedBy || purchaseData.createdBy,
-            }))
+            })),
           );
         } else if (purchaseData.paymentStatus === "paid") {
           setPayments([
@@ -908,7 +911,10 @@ export default function PurchaseDetailPage() {
         recordedBy: currentUser.uid,
       };
 
-      const updatedHistory = [...(purchase.paymentHistory || []), newPaymentEvent];
+      const updatedHistory = [
+        ...(purchase.paymentHistory || []),
+        newPaymentEvent,
+      ];
 
       // Add to local state
       const newPayment: PaymentRecord = {
@@ -920,16 +926,15 @@ export default function PurchaseDetailPage() {
         notes: newPaymentEvent.notes,
         recordedBy: newPaymentEvent.recordedBy,
       };
-      
+
       const updatedPayments = [...payments, newPayment];
 
       setPayments(updatedPayments);
 
       // Calculate new totals
-      const newPaidAmount = Math.round(updatedPayments.reduce(
-        (sum, p) => sum + p.amount,
-        0,
-      ));
+      const newPaidAmount = Math.round(
+        updatedPayments.reduce((sum, p) => sum + p.amount, 0),
+      );
       const newStatus =
         newPaidAmount >= totalAmount
           ? "paid"
@@ -1480,9 +1485,29 @@ export default function PurchaseDetailPage() {
               <h1 className={`${title({ size: "lg" })} text-primary`}>
                 Purchase Details
               </h1>
-              <p className="text-[13.5px] text-text-muted mt-1">
-                {purchase.purchaseNo} •{" "}
-                {purchase.purchaseDate.toLocaleDateString()}
+              <p className="text-[13.5px] text-text-muted mt-1 flex items-center flex-wrap gap-2">
+                <span>{purchase.purchaseNo}</span>
+                <span>•</span>
+                <span>{purchase.purchaseDate.toLocaleDateString()}</span>
+                {purchase.patientName && (
+                  <>
+                    <span>•</span>
+                    <span className="font-semibold text-mountain-900">
+                      Patient: {purchase.patientName}
+                    </span>
+                  </>
+                )}
+                {medicationCourseInfo && (
+                  <>
+                    <span>•</span>
+                    <span
+                      className={`font-semibold bg-white px-2 py-0.5 rounded border border-mountain-200 ${courseStatusClass}`}
+                    >
+                      {courseStatusLabel} (Ends{" "}
+                      {medicationCourseInfo.endDate.toLocaleDateString()})
+                    </span>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -1725,34 +1750,7 @@ export default function PurchaseDetailPage() {
                 </tbody>
               </table>
 
-              {/* Purchase Summary */}
               <div className="p-4 border-t border-mountain-200 bg-mountain-50 text-[13px] text-mountain-700 space-y-2">
-                {purchase.patientName && (
-                  <div className="flex justify-between pb-2 border-b border-mountain-200">
-                    <span className="font-medium text-mountain-900">
-                      Patient Name:
-                    </span>
-                    <span className="text-mountain-800">
-                      {purchase.patientName}
-                    </span>
-                  </div>
-                )}
-                {medicationCourseInfo && (
-                  <div className="flex justify-between pb-2 border-b border-mountain-200">
-                    <div className="flex flex-col text-right w-full">
-                      <span className="font-medium text-mountain-900">
-                        Medication Duration:
-                      </span>
-                      <span className={courseStatusClass}>
-                        {courseStatusLabel}
-                      </span>
-                      <span className="text-[11px] text-mountain-500">
-                        Ends on{" "}
-                        {medicationCourseInfo.endDate.toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                )}
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span className="text-mountain-900">

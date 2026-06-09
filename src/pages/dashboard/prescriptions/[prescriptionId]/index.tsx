@@ -426,10 +426,24 @@ export default function PrescriptionDetailPage() {
 
       ${(() => {
         let dossierHtml = "";
+        const assignedLabs = (prescription as any).pathologyTests;
+        const hasAssignedLabs = assignedLabs && assignedLabs.length > 0;
+        let finalInvestigation = prescription.investigation || "";
+
+        if (hasAssignedLabs) {
+          const labText = assignedLabs
+            .map((l: any) => `- ${l.testName}`)
+            .join("\n");
+
+          finalInvestigation = finalInvestigation
+            ? finalInvestigation + "\n\n" + labText
+            : labText;
+        }
+
         const hasDossier =
           prescription.history ||
           prescription.examination ||
-          prescription.investigation ||
+          finalInvestigation ||
           prescription.diagnosis;
 
         if (hasDossier) {
@@ -448,11 +462,11 @@ export default function PrescriptionDetailPage() {
                 <div class="dossier-content">${prescription.examination}</div>
               </div>`;
           }
-          if (prescription.investigation) {
+          if (finalInvestigation) {
             dossierHtml += `
               <div class="dossier-box">
                 <div class="dossier-title">INVESTIGATION:</div>
-                <div class="dossier-content">${prescription.investigation}</div>
+                <div class="dossier-content">${finalInvestigation}</div>
               </div>`;
           }
           if (prescription.diagnosis) {
@@ -787,7 +801,9 @@ export default function PrescriptionDetailPage() {
               )}
 
               {/* Investigation Card */}
-              {prescription.investigation && (
+              {(prescription.investigation ||
+                ((prescription as any).pathologyTests &&
+                  (prescription as any).pathologyTests.length > 0)) && (
                 <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                   <div className="px-5 py-3 border-b border-border-base bg-surface-2/30 flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-primary" />
@@ -796,9 +812,28 @@ export default function PrescriptionDetailPage() {
                     </h3>
                   </div>
                   <div className="p-5">
-                    <p className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
-                      {prescription.investigation}
-                    </p>
+                    <div className="text-[13px] text-text-main leading-relaxed font-medium bg-surface-2/30 p-4 rounded-xl border border-border-base/50 whitespace-pre-wrap">
+                      {prescription.investigation && (
+                        <div>{prescription.investigation}</div>
+                      )}
+                      {(prescription as any).pathologyTests &&
+                        (prescription as any).pathologyTests.length > 0 && (
+                          <div
+                            className={prescription.investigation ? "mt-4" : ""}
+                          >
+                            <p className="font-semibold text-primary mb-1">
+                              Assigned Labs:
+                            </p>
+                            <ul className="list-disc pl-5 space-y-0.5">
+                              {(prescription as any).pathologyTests.map(
+                                (lab: any, idx: number) => (
+                                  <li key={idx}>{lab.testName}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                    </div>
                   </div>
                 </div>
               )}

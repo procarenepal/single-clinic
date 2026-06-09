@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   IoPeopleOutline,
@@ -9,17 +9,17 @@ import {
   IoCheckmarkCircleOutline,
   IoPlayOutline,
   IoCardOutline,
-  IoCloseOutline,
   IoHeartOutline,
-  IoThermometerOutline,
-  IoSpeedometerOutline,
-  IoBodyOutline,
   IoCreateOutline,
-  IoDocumentTextOutline,
-  IoSearchOutline,
   IoReceiptOutline,
 } from "react-icons/io5";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
+
+import { TriageModal } from "./TriageModal";
+import { RoutingModal } from "./RoutingModal";
+import { ProcedureModal } from "./ProcedureModal";
+import { QuickIntakeModal } from "./QuickIntakeModal";
+import { QueueList } from "./QueueList";
 
 import { title } from "@/components/primitives";
 import { useAuthContext } from "@/context/AuthContext";
@@ -51,7 +51,7 @@ import {
   TreatmentPackage,
   PatientPackage,
 } from "@/types/models";
-import { Spinner } from "@/components/ui";
+import { Spinner, Checkbox } from "@/components/ui";
 import { db } from "@/config/firebase";
 import { NotificationService } from "@/services/notificationService";
 import SellPackageModal from "@/components/packages/SellPackageModal";
@@ -79,7 +79,14 @@ export default function FrontOfficeDesk() {
   // App states
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    "lobby" | "triage" | "doctor" | "expert" | "billing" | "pharmacy" | "all"
+    | "urgent"
+    | "lobby"
+    | "triage"
+    | "doctor"
+    | "expert"
+    | "billing"
+    | "pharmacy"
+    | "all"
   >("lobby");
 
   // Resolved IDs for the currently logged-in doctor or expert
@@ -219,7 +226,18 @@ export default function FrontOfficeDesk() {
   const [procedureSaving, setProcedureSaving] = useState(false);
   const [historicalProcedures, setHistoricalProcedures] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [modalActivePackages, setModalActivePackages] = useState<PatientPackage[]>([]);
+  const [modalActivePackages, setModalActivePackages] = useState<
+    PatientPackage[]
+  >([]);
+
+  // State for Finalising Procedure from Front Office Desk
+  const [apptToFinalise, setApptToFinalise] = useState<Appointment | null>(
+    null,
+  );
+  const [isFinalisingProcedure, setIsFinalisingProcedure] = useState(false);
+  const [finaliseSelectedItems, setFinaliseSelectedItems] = useState<string[]>(
+    [],
+  );
 
   const [procedure, setProcedure] = useState({
     procedureType: "CO2 Laser Resurfacing",
@@ -241,14 +259,21 @@ export default function FrontOfficeDesk() {
     useState<Patient | null>(null);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [isSellPackageModalOpen, setIsSellPackageModalOpen] = useState(false);
-  const [activePatientPackages, setActivePatientPackages] = useState<PatientPackage[]>([]);
+  const [activePatientPackages, setActivePatientPackages] = useState<
+    PatientPackage[]
+  >([]);
 
   // Fetch active patient packages when existing patient is selected
   useEffect(() => {
     if (intakeMode === "existing" && selectedExistingPatient && clinicId) {
-      patientPackageService.getPatientPackages(selectedExistingPatient.id, clinicId)
-        .then(data => {
-          setActivePatientPackages(data.filter(p => p.status !== "expired" && p.status !== "completed"));
+      patientPackageService
+        .getPatientPackages(selectedExistingPatient.id, clinicId)
+        .then((data) => {
+          setActivePatientPackages(
+            data.filter(
+              (p) => p.status !== "expired" && p.status !== "completed",
+            ),
+          );
         })
         .catch(console.error);
     } else {
@@ -258,6 +283,63 @@ export default function FrontOfficeDesk() {
 
   // Date filter for the queue
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input/textarea
+      const target = e.target as HTMLElement;
+
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      // Alt + N for Quick Check-In
+      if (e.altKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setIsQuickIntakeOpen(true);
+
+        return;
+      }
+
+      // Ignore modifiers for tab switching
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+
+      // Tab switching 1-6
+      switch (e.key) {
+        case "1":
+          setActiveTab("lobby");
+          break;
+        case "2":
+          setActiveTab("triage");
+          break;
+        case "3":
+          setActiveTab("doctor");
+          break;
+        case "4":
+          setActiveTab("expert");
+          break;
+        case "5":
+          setActiveTab("billing");
+          break;
+        case "6":
+          setActiveTab("pharmacy");
+          break;
+        case "`":
+          setActiveTab("all");
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   const [quickIntakeForm, setQuickIntakeForm] = useState({
     name: "",
     mobile: "",
@@ -572,6 +654,8 @@ export default function FrontOfficeDesk() {
     appointmentId: string,
     reason: string,
     addClinicianCommission: boolean = true,
+    appointmentTypeId?: string,
+    generateConsultationFee: boolean = true,
   ) => {
     if (!clinicId) return;
 
@@ -594,22 +678,81 @@ export default function FrontOfficeDesk() {
         try {
           docInfo = (await doctorService.getDoctorById(doctorId)) || undefined;
           if (!docInfo) {
-             expInfo = (await expertService.getExpertById(doctorId)) || undefined;
+            expInfo =
+              (await expertService.getExpertById(doctorId)) || undefined;
           }
         } catch (err) {
-          console.error("Error loading clinician for consultation billing:", err);
+          console.error(
+            "Error loading clinician for consultation billing:",
+            err,
+          );
         }
       }
 
       if (expInfo) isExpert = true;
 
       // 1. Get consultation charge from clinician info (with a fallback to 500 NPR)
-      let price = 500;
+      let doctorConsultationPrice = 0;
 
-      if (docInfo && docInfo.consultationCharge !== undefined) {
-        price = Number(docInfo.consultationCharge) || 0;
-      } else if (expInfo && (expInfo as any).consultationCharge !== undefined) {
-        price = Number((expInfo as any).consultationCharge) || 0;
+      if (generateConsultationFee) {
+        if (docInfo && docInfo.id !== "unassigned") {
+          doctorConsultationPrice =
+            docInfo.consultationCharge !== undefined
+              ? Number(docInfo.consultationCharge)
+              : 500;
+        }
+      }
+
+      let totalInvoiceAmount = 0;
+      let apptTypeItem: any = null;
+      let isApptTypeConsultation = false;
+
+      if (
+        appointmentTypeId &&
+        appointmentTypeId !== "default" &&
+        appointmentTypeId !== "consultation-fee" &&
+        !appointmentTypeId.startsWith("pkg_") &&
+        !appointmentTypeId.startsWith("consume_")
+      ) {
+        const apptType = appointmentTypes.find(
+          (t) => t.id === appointmentTypeId,
+        );
+
+        if (apptType && apptType.price > 0) {
+          const nameLower = apptType.name.toLowerCase();
+
+          isApptTypeConsultation = nameLower.includes("consult");
+
+          if (
+            apptType.billAtFrontDesk ||
+            nameLower.includes("hair analy") ||
+            nameLower.includes("skin analy") ||
+            isApptTypeConsultation
+          ) {
+            apptTypeItem = {
+              id: crypto.randomUUID(),
+              appointmentTypeId: apptType.id,
+              appointmentTypeName: apptType.name,
+              price: Number(apptType.price),
+              quantity: 1,
+              commission: 0,
+              doctorId: doctorId,
+              doctorName: isExpert
+                ? expInfo?.name || "Expert"
+                : docInfo?.name || "GP",
+              amount: Number(apptType.price),
+            };
+            totalInvoiceAmount += Number(apptType.price);
+          }
+        }
+      }
+
+      if (doctorConsultationPrice > 0 && !isApptTypeConsultation) {
+        totalInvoiceAmount += doctorConsultationPrice;
+      }
+
+      if (totalInvoiceAmount === 0 && !apptTypeItem) {
+        return null;
       }
 
       // 2. Resolve all referrers (polymorphic and multiple)
@@ -628,7 +771,7 @@ export default function FrontOfficeDesk() {
       ) {
         for (const ref of pat.referrals) {
           const pct = ref.commissionPercentage || 0;
-          const amt = (price * pct) / 100;
+          const amt = (totalInvoiceAmount * pct) / 100;
 
           processedReferrals.push({
             type: ref.type,
@@ -647,7 +790,7 @@ export default function FrontOfficeDesk() {
 
           if (partner) {
             const pct = partner.defaultCommission || 0;
-            const amt = (price * pct) / 100;
+            const amt = (totalInvoiceAmount * pct) / 100;
 
             processedReferrals.push({
               type: "referral-partner",
@@ -681,19 +824,31 @@ export default function FrontOfficeDesk() {
       );
 
       const clinicianName = isExpert ? expInfo?.name : docInfo?.name;
-      const defaultComm = isExpert ? expInfo?.defaultCommission : docInfo?.defaultCommission;
+      const defaultComm = isExpert
+        ? expInfo?.defaultCommission
+        : docInfo?.defaultCommission;
 
-      const billingItem = {
-        id: crypto.randomUUID(),
-        appointmentTypeId: "consultation-fee",
-        appointmentTypeName: `${isExpert ? "Expert" : "Doctor"} Consultation Fee - ${isExpert ? "" : "Dr. "}${clinicianName || "GP"}`,
-        price: price,
-        quantity: 1,
-        commission: addClinicianCommission ? (defaultComm || 0) : 0,
-        doctorId: doctorId,
-        doctorName: clinicianName || "Unknown Clinician",
-        amount: price,
-      };
+      const items: any[] = [];
+
+      if (doctorConsultationPrice > 0 && !isApptTypeConsultation) {
+        items.push({
+          id: crypto.randomUUID(),
+          appointmentTypeId: "consultation-fee",
+          appointmentTypeName: `Doctor Consultation Fee - Dr. ${docInfo?.name || "GP"}`,
+          price: doctorConsultationPrice,
+          quantity: 1,
+          commission: addClinicianCommission
+            ? docInfo?.defaultCommission || 0
+            : 0,
+          doctorId: docInfo?.id || doctorId,
+          doctorName: docInfo?.name || "Unknown Doctor",
+          amount: doctorConsultationPrice,
+        });
+      }
+
+      if (apptTypeItem) {
+        items.push(apptTypeItem);
+      }
 
       const billingData = {
         invoiceNumber: invoiceNo,
@@ -711,8 +866,8 @@ export default function FrontOfficeDesk() {
             : undefined,
         referrals: processedReferrals, // Save complete polymorph referral ledger on invoice
         invoiceDate: new Date(),
-        items: [billingItem],
-        subtotal: price,
+        items: items,
+        subtotal: totalInvoiceAmount,
         itemDiscountAmount: 0,
         mainDiscountAmount: 0,
         discountType: "percent" as const,
@@ -720,11 +875,13 @@ export default function FrontOfficeDesk() {
         discountAmount: 0,
         taxPercentage: 0,
         taxAmount: 0,
-        totalAmount: price,
-        status: price === 0 ? ("paid" as const) : ("draft" as const),
-        paymentStatus: price === 0 ? ("paid" as const) : ("unpaid" as const),
+        totalAmount: totalInvoiceAmount,
+        status:
+          totalInvoiceAmount === 0 ? ("paid" as const) : ("draft" as const),
+        paymentStatus:
+          totalInvoiceAmount === 0 ? ("paid" as const) : ("unpaid" as const),
         paidAmount: 0,
-        balanceAmount: price,
+        balanceAmount: totalInvoiceAmount,
         createdBy: currentUser?.uid || "system",
       };
 
@@ -734,10 +891,10 @@ export default function FrontOfficeDesk() {
       // Link billing record to the appointment in Firestore
       await appointmentService.updateAppointment(appointmentId, {
         consultationBillingId: billingId,
-        consultationBillingStatus: price === 0 ? "paid" : "unpaid",
+        consultationBillingStatus: totalInvoiceAmount === 0 ? "paid" : "unpaid",
         billingId: null,
         billingStatus: "unpaid",
-        paymentStatus: price === 0 ? "paid" : "unpaid",
+        paymentStatus: totalInvoiceAmount === 0 ? "paid" : "unpaid",
         updatedAt: new Date(),
       } as any);
 
@@ -758,7 +915,7 @@ export default function FrontOfficeDesk() {
                 updatedAt: new Date(),
               } as any,
               defaultComm,
-              creatorUserId
+              creatorUserId,
             );
           } else if (docInfo) {
             await doctorCommissionService.createCommission(
@@ -773,7 +930,10 @@ export default function FrontOfficeDesk() {
             );
           }
         } catch (commErr) {
-          console.error("Error creating consulting clinician commission:", commErr);
+          console.error(
+            "Error creating consulting clinician commission:",
+            commErr,
+          );
         }
       }
 
@@ -829,7 +989,7 @@ export default function FrontOfficeDesk() {
               billingRecord.patientId,
               billingRecord.patientName,
               `Doctor Consultation Fee - Dr. ${docInfo?.name || "GP"}`,
-              price,
+              totalInvoiceAmount,
               r.commissionAmount,
               r.commissionPercentage,
               creatorUserId,
@@ -1073,7 +1233,10 @@ export default function FrontOfficeDesk() {
     }
   };
 
-  const handleCompleteConsultation = async (appointmentId: string, forceComplete: boolean = false) => {
+  const handleCompleteConsultation = async (
+    appointmentId: string,
+    forceComplete: boolean = false,
+  ) => {
     try {
       const appt = appointments.find((a) => a.id === appointmentId);
 
@@ -1082,7 +1245,12 @@ export default function FrontOfficeDesk() {
       const hasExpert =
         appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
 
-      if (hasDoctor && hasExpert && !appt.doctorConsultationCompleted && !forceComplete) {
+      if (
+        hasDoctor &&
+        hasExpert &&
+        !appt.doctorConsultationCompleted &&
+        !forceComplete
+      ) {
         // Complete the Doctor part and route to Expert
         await appointmentService.updateAppointment(appointmentId, {
           doctorConsultationCompleted: true,
@@ -1135,12 +1303,15 @@ export default function FrontOfficeDesk() {
             await patientPackageService.consumeSession(appt.patientPackageId, {
               appointmentId: appt.id,
               clinicianId: currentUser?.uid,
-              clinicianName: (userData as any)?.name || currentUser?.displayName || "Unknown Clinician",
+              clinicianName:
+                (userData as any)?.name ||
+                currentUser?.displayName ||
+                "Unknown Clinician",
             });
             addToast({
               title: "Session Consumed",
               description: "1 package session was automatically deducted.",
-              color: "success"
+              color: "success",
             });
           } catch (err) {
             console.error("Error consuming session", err);
@@ -1178,6 +1349,62 @@ export default function FrontOfficeDesk() {
   const handleCompleteCheckout = async (appointmentId: string) => {
     try {
       const appt = appointments.find((a) => a.id === appointmentId);
+
+      if (!appt) return;
+
+      // 1. Enforce workflow gating to verify clinical documentation
+      const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
+      const hasExpert = appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
+      
+      const isTriageCompleted = appt.notes?.includes("[Triage Vitals Recorded]");
+      
+      let isConsultationCompleted = true;
+      if (hasDoctor) {
+        isConsultationCompleted = appt.doctorConsultationCompleted === true;
+      }
+      
+      // If there's an expert, we should also ensure they've completed it if it's dual-assigned
+      // However, usually doctorConsultationCompleted covers it, or the fact it reached billing stage.
+
+      if (!isTriageCompleted && hasDoctor) {
+        addToast({
+          title: "Incomplete Clinical Documentation",
+          description: "Cannot complete checkout. Patient triage vitals have not been recorded.",
+          color: "danger",
+        });
+        return;
+      }
+
+      if (hasDoctor && !isConsultationCompleted) {
+        addToast({
+          title: "Incomplete Clinical Documentation",
+          description: "Cannot complete checkout. Doctor consultation has not been marked as completed.",
+          color: "danger",
+        });
+        return;
+      }
+
+      // Check state integrity to prevent premature settlement
+      const isFullyPaid = appt.billingStatus === "paid" || appt.paymentStatus === "paid";
+      let hasOutstandingBalance = !isFullyPaid;
+      
+      const pendingBillId = appt.billingId || (appt as any).consultationBillingId;
+      if (pendingBillId) {
+        const matchingBill = billings.find((b) => b.id === pendingBillId);
+        if (matchingBill && matchingBill.totalAmount <= 0) {
+          hasOutstandingBalance = false;
+        }
+      }
+
+      if (hasOutstandingBalance) {
+        addToast({
+          title: "Premature Settlement",
+          description: "Cannot complete checkout. Outstanding balance exists on this appointment.",
+          color: "warning",
+        });
+        // We will not block it entirely if it's a zero-amount bill or handled externally, but warn.
+      }
+
       await appointmentService.updateAppointment(appointmentId, {
         checkoutCompleted: true,
         updatedAt: new Date(),
@@ -1188,7 +1415,10 @@ export default function FrontOfficeDesk() {
           await patientPackageService.consumeSession(appt.patientPackageId, {
             appointmentId: appt.id,
             clinicianId: currentUser?.uid,
-            clinicianName: (userData as any)?.name || currentUser?.displayName || "System/Front Desk",
+            clinicianName:
+              (userData as any)?.name ||
+              currentUser?.displayName ||
+              "System/Front Desk",
           });
         } catch (err) {
           console.error("Error consuming session during checkout:", err);
@@ -1221,6 +1451,67 @@ export default function FrontOfficeDesk() {
       complaints: "",
     });
     setIsTriageModalOpen(true);
+  };
+
+  const handleOpenProcedure = (appt: Appointment) => {
+    setSelectedAppointment(appt);
+
+    const apptTypeName = getApptTypeLabel(appt.appointmentTypeId);
+    const apptType = appointmentTypes.find(
+      (t) => t.id === appt.appointmentTypeId,
+    );
+    
+    const recommended = (appt as any).recommendedProcedure;
+    let initialType = apptTypeName;
+    let initialFee = apptType ? String(apptType.price || "") : "";
+    let initialArea = "Full Face";
+    
+    if (recommended) {
+      initialType = recommended.name || initialType;
+      initialFee = recommended.fee !== undefined ? String(recommended.fee) : initialFee;
+      initialArea = recommended.area || initialArea;
+    }
+
+    setProcedure({
+      procedureType: initialType,
+      energy: "",
+      spotSize: "",
+      pulseWidth: "",
+      passes: "",
+      area: initialArea,
+      fee: initialFee,
+      notes: "",
+    });
+    setIsProcedureModalOpen(true);
+
+    if (clinicId && appt.patientId) {
+      setLoadingHistory(true);
+      PatientNoteEntriesService.getSectionNoteEntries(
+        clinicId,
+        appt.patientId,
+        "laser-procedure",
+      )
+        .then((entries) => {
+          setHistoricalProcedures(entries);
+        })
+        .catch((err) => {
+          console.error("Error loading patient procedure history:", err);
+        })
+        .finally(() => {
+          setLoadingHistory(false);
+        });
+
+      patientPackageService
+        .getPatientPackages(appt.patientId, clinicId)
+        .then((data) => {
+          setModalActivePackages(
+            data.filter(
+              (p) => p.status !== "expired" && p.status !== "completed",
+            ),
+          );
+        })
+        .catch(console.error);
+    }
   };
 
   const handleSaveTriage = async (
@@ -1326,7 +1617,10 @@ export default function FrontOfficeDesk() {
     }
   };
 
-  const handleSaveProcedure = async (e: React.FormEvent | null, target: "doctor" | "billing" = "billing") => {
+  const handleSaveProcedure = async (
+    e: React.FormEvent | null,
+    target: "doctor" | "billing" | "expert" = "billing",
+  ) => {
     if (e) e.preventDefault();
     if (!selectedAppointment || !clinicId) return;
 
@@ -1338,14 +1632,20 @@ export default function FrontOfficeDesk() {
       let actualProcedureName = procedure.procedureType;
 
       if (procedure.procedureType.startsWith("consume_pkg_")) {
-        packageIdToConsume = procedure.procedureType.replace("consume_pkg_", "");
-        const pkg = modalActivePackages.find(p => p.id === packageIdToConsume);
+        packageIdToConsume = procedure.procedureType.replace(
+          "consume_pkg_",
+          "",
+        );
+        const pkg = modalActivePackages.find(
+          (p) => p.id === packageIdToConsume,
+        );
+
         actualProcedureName = pkg ? pkg.packageName : "Package Session";
       }
 
-      // Build descriptive note content
+      const clinicianName = (userData as any)?.name || currentUser?.displayName || "Clinician";
       const settingsStr = `Energy: ${procedure.energy || "N/A"} J/cm² | Spot: ${procedure.spotSize || "N/A"} mm | Pulse: ${procedure.pulseWidth || "N/A"} ms | Passes: ${procedure.passes || "N/A"}`;
-      const procedureNoteContent = `Procedure: ${actualProcedureName}\nArea: ${procedure.area || "N/A"}\nLaser Settings: ${settingsStr}\nClinical Notes: ${procedure.notes || "None"}\nCharge: ${procedure.fee ? `${procedure.fee} NPR` : "Free/Included"}`;
+      const procedureNoteContent = `Procedure: ${actualProcedureName}\nArea: ${procedure.area || "N/A"}\nLaser Settings: ${settingsStr}\nClinical Notes: ${procedure.notes || "None"}\nCharge: ${procedure.fee ? `${procedure.fee} NPR` : "Free/Included"}\nWritten By: ${clinicianName}`;
 
       // Save directly into patient Note Entries (sectionKey = "laser-procedure")
       await PatientNoteEntriesService.saveNoteEntry(
@@ -1357,168 +1657,120 @@ export default function FrontOfficeDesk() {
         currentUserId,
       );
 
-      // If fee > 0, update or create draft invoice
+      // If fee > 0, store as recommended procedure instead of billing immediately
       const feeNum = Number(procedure.fee);
       let newPaymentStatus: "unpaid" | "partial" | "paid" =
         selectedAppointment.paymentStatus || "unpaid";
-      let billingId =
-        selectedAppointment.consultationBillingId ||
-        selectedAppointment.billingId;
+
+      let recommendedProcedureData: any = null;
 
       if (feeNum > 0) {
-        if (billingId) {
-          const billing =
-            await appointmentBillingService.getBillingById(billingId);
+        const procList = actualProcedureName.split(", ").filter(Boolean);
+        const itemsList: any[] = [];
+        let calculatedFee = 0;
 
-          if (billing) {
-            const procedureItem = {
-              id: crypto.randomUUID(),
-              appointmentTypeId:
-                selectedAppointment.appointmentTypeId || "procedure-fee",
-              appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
-              price: feeNum,
-              quantity: 1,
-              commission: 0,
-              discountValue: 0,
-              discountType: "percent" as const,
-              discountAmount: 0,
-              amount: feeNum,
-            };
+        procList.forEach((procName) => {
+          if (procName.startsWith("consume_pkg_")) return;
+          const matchingType = appointmentTypes.find(
+            (t) => t.name === procName,
+          );
 
-            const updatedItems = [...(billing.items || []), procedureItem];
-            const totals = appointmentBillingService.calculateInvoiceTotals(
-              updatedItems,
-              billing.discountType || "percent",
-              billing.discountValue || 0,
-              billing.taxPercentage || 0,
-            );
+          if (matchingType) {
+            let wasAlreadyBilled = false;
 
-            const newPaid = billing.paidAmount || 0;
-            const newTotal = totals.totalAmount;
-            const newBalance = newTotal - newPaid;
+            if (selectedAppointment.appointmentTypeId === matchingType.id) {
+              const nameLower = matchingType.name.toLowerCase();
+              const isConsult = nameLower.includes("consult");
 
-            newPaymentStatus =
-              newPaid >= newTotal ? "paid" : newPaid > 0 ? "partial" : "unpaid";
-            const newStatus = newPaymentStatus === "paid" ? "paid" : "draft";
-
-            await appointmentBillingService.updateBilling(billingId, {
-              items: updatedItems,
-              subtotal: totals.subtotal,
-              itemDiscountAmount: totals.itemDiscountAmount,
-              mainDiscountAmount: totals.mainDiscountAmount,
-              discountAmount: totals.totalDiscount,
-              taxAmount: totals.taxAmount,
-              totalAmount: totals.totalAmount,
-              balanceAmount: newBalance,
-              paymentStatus: newPaymentStatus,
-              status: newStatus,
-            });
-          }
-        } else {
-          // No invoice exists. Create a draft invoice for this procedure from scratch.
-          try {
-            const invoiceNo =
-              await appointmentBillingService.generateInvoiceNumber(clinicId);
-
-            let pat = patients.find(
-              (p) => p.id === selectedAppointment.patientId,
-            );
-
-            if (!pat && selectedAppointment.patientId) {
-              pat =
-                (await patientService.getPatientById(
-                  selectedAppointment.patientId,
-                )) || undefined;
+              if (
+                matchingType.billAtFrontDesk ||
+                nameLower.includes("hair analy") ||
+                nameLower.includes("skin analy") ||
+                isConsult
+              ) {
+                wasAlreadyBilled = true;
+              }
             }
-
-            const apptTypeName = getApptTypeLabel(
-              selectedAppointment.appointmentTypeId,
-            );
-            const isExpert =
-              selectedAppointment.assignedExpertId &&
-              selectedAppointment.assignedExpertId !== "unassigned";
-            const clinicianId = isExpert
-              ? selectedAppointment.assignedExpertId
-              : selectedAppointment.doctorId || "unassigned";
-            const docInfo =
-              doctors.find((d) => d.id === clinicianId) ||
-              experts.find((e) => e.id === clinicianId);
-
-            const billingItem = {
-              id: crypto.randomUUID(),
-              appointmentTypeId:
-                selectedAppointment.appointmentTypeId || "procedure-fee",
-              appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
-              price: feeNum,
-              quantity: 1,
-              commission: (docInfo as any)?.defaultCommission || 0,
-              doctorId: clinicianId,
-              doctorName: docInfo?.name || "Clinician",
-              amount: feeNum,
-            };
-
-            const billingData = {
-              invoiceNumber: invoiceNo,
-              clinicId: clinicId,
-              branchId: branchId || clinicId,
-              patientId: selectedAppointment.patientId,
-              patientName: pat?.name || "Unknown Patient",
-              doctorId: clinicianId,
-              doctorName: docInfo?.name || "Clinician",
-              doctorType: ((docInfo as any)?.doctorType || "regular") as
-                | "regular"
-                | "visitor",
-              invoiceDate: new Date(),
-              items: [billingItem],
-              subtotal: feeNum,
-              itemDiscountAmount: 0,
-              mainDiscountAmount: 0,
-              discountType: "percent" as const,
-              discountValue: 0,
-              discountAmount: 0,
-              taxPercentage: 0,
-              taxAmount: 0,
-              totalAmount: feeNum,
-              status: "draft" as const,
-              paymentStatus: "unpaid" as const,
-              paidAmount: 0,
-              balanceAmount: feeNum,
-              createdBy: currentUser?.uid || "system",
-            };
-
-            const newBillingId =
-              await appointmentBillingService.createBilling(billingData);
-
-            billingId = newBillingId;
-            newPaymentStatus = "unpaid";
-
-            // Link new billing to appointment
-            await appointmentService.updateAppointment(selectedAppointment.id, {
-              billingId: newBillingId,
-              billingStatus: "unpaid",
-              paymentStatus: "unpaid",
-              updatedAt: new Date(),
-            } as any);
-          } catch (genErr) {
-            console.error(
-              "Error creating procedure invoice from scratch:",
-              genErr,
-            );
+            if (!wasAlreadyBilled) {
+              itemsList.push({
+                name: procName,
+                fee: Number(matchingType.price || 0),
+                id: matchingType.id,
+              });
+              calculatedFee += Number(matchingType.price || 0);
+            }
           }
+        });
+
+        // If the expert manually altered the total fee, add an adjustment or just put it all into one line item
+        if (itemsList.length === 0 || calculatedFee !== feeNum) {
+          itemsList.push({
+            name: actualProcedureName,
+            fee: feeNum,
+            id: "custom",
+          });
         }
+
+        const newItems =
+          itemsList.length > 0 && calculatedFee === feeNum
+            ? itemsList
+            : [{ name: actualProcedureName, fee: feeNum, id: "custom" }];
+
+        const existingRec = (selectedAppointment as any).recommendedProcedure;
+        if (existingRec && existingRec.items && Array.isArray(existingRec.items)) {
+          // Merge items, avoiding duplicates
+          const mergedItems = [...existingRec.items];
+          newItems.forEach((newItem) => {
+            const exists = mergedItems.some(
+              (existingItem: any) =>
+                (newItem.id !== "custom" && existingItem.id === newItem.id) ||
+                (newItem.id === "custom" && existingItem.name === newItem.name),
+            );
+            if (!exists) {
+              mergedItems.push(newItem);
+            }
+          });
+
+          recommendedProcedureData = {
+            name: mergedItems.map((i: any) => i.name).join(", "),
+            fee: mergedItems.reduce((sum: number, i: any) => sum + i.fee, 0),
+            area: procedure.area || existingRec.area || "N/A",
+            items: mergedItems,
+          };
+        } else {
+          recommendedProcedureData = {
+            name: actualProcedureName,
+            fee: feeNum,
+            area: procedure.area || "N/A",
+            items: newItems,
+          };
+        }
+      } else {
+        // If the expert logged settings but did not specify a fee, preserve the doctor's recommended procedure
+        recommendedProcedureData = (selectedAppointment as any).recommendedProcedure || null;
       }
+      // End of procedure check
 
       // Mark appointment status based on target route
       let newStatus = target === "billing" ? "completed" : "in-progress";
       let updatedNotes = selectedAppointment.notes || "";
-      let doctorConsultationCompleted = target === "billing" ? true : selectedAppointment.doctorConsultationCompleted;
-      
+      let doctorConsultationCompleted =
+        target === "billing"
+          ? true
+          : selectedAppointment.doctorConsultationCompleted;
+
       if (target === "doctor") {
         updatedNotes = updatedNotes.replace("[Routed to: Expert]", "").trim();
         if (!updatedNotes.includes("[Routed to: Doctor]")) {
-           updatedNotes = (updatedNotes + " [Routed to: Doctor]").trim();
+          updatedNotes = (updatedNotes + " [Routed to: Doctor]").trim();
         }
         doctorConsultationCompleted = false;
+      } else if (target === "expert") {
+        updatedNotes = updatedNotes.replace("[Routed to: Doctor]", "").trim();
+        if (!updatedNotes.includes("[Routed to: Expert]")) {
+          updatedNotes = (updatedNotes + " [Routed to: Expert]").trim();
+        }
+        doctorConsultationCompleted = true; // Complete the doctor portion so it goes to expert cabin
       }
 
       await appointmentService.updateAppointment(selectedAppointment.id, {
@@ -1528,6 +1780,7 @@ export default function FrontOfficeDesk() {
         billingStatus: newPaymentStatus,
         paymentStatus: newPaymentStatus,
         patientPackageId: packageIdToConsume,
+        recommendedProcedure: recommendedProcedureData,
         updatedAt: new Date(),
       } as any);
 
@@ -1536,12 +1789,15 @@ export default function FrontOfficeDesk() {
           await patientPackageService.consumeSession(packageIdToConsume, {
             appointmentId: selectedAppointment.id,
             clinicianId: currentUser?.uid,
-            clinicianName: (userData as any)?.name || currentUser?.displayName || "Unknown Clinician",
+            clinicianName:
+              (userData as any)?.name ||
+              currentUser?.displayName ||
+              "Unknown Clinician",
           });
           addToast({
             title: "Session Consumed",
             description: "1 package session was automatically deducted.",
-            color: "success"
+            color: "success",
           });
         } catch (err) {
           console.error("Error consuming session", err);
@@ -1562,6 +1818,14 @@ export default function FrontOfficeDesk() {
             type: "billing_queue",
             targetRole: "front-office",
           });
+        } else if (target === "expert") {
+          NotificationService.sendNotification(clinicId, {
+            title: "Patient Sent to Expert",
+            message: `Patient ${patName} has been routed to the expert cabin.`,
+            type: "expert_queue",
+            targetRole: "expert",
+            targetUserId: selectedAppointment.assignedExpertId,
+          });
         } else {
           NotificationService.sendNotification(clinicId, {
             title: "Patient Returned from Expert",
@@ -1576,9 +1840,11 @@ export default function FrontOfficeDesk() {
       addToast({
         title: "Procedure Log Saved",
         description:
-          target === "billing" 
+          target === "billing"
             ? "Laser & Procedure details logged successfully. Patient is routed to Billing Counter."
-            : "Procedure logged successfully. Patient routed back to the Doctor.",
+            : target === "expert"
+              ? "Procedure logged successfully. Patient routed to the Expert."
+              : "Procedure logged successfully. Patient routed back to the Doctor.",
         color: "success",
       });
 
@@ -1643,11 +1909,15 @@ export default function FrontOfficeDesk() {
       return hasDoctor ? "doctor" : "expert";
     }
     if (status === "completed") {
-      const isCheckedOut =
+      let isCheckedOut =
         appt.checkoutCompleted === true ||
         appt.notes?.includes("[Checkout Completed]") ||
         appt.billingStatus === "paid" ||
         appt.paymentStatus === "paid";
+
+      if ((appt as any).recommendedProcedure) {
+        isCheckedOut = false;
+      }
 
       if (isCheckedOut) {
         // Check if there is an active prescription sent to pharmacy
@@ -1692,21 +1962,40 @@ export default function FrontOfficeDesk() {
       }
     }
 
-    const consBill = hasDoctor
-      ? billings.find(
-          (b) =>
-            b.patientId === appt.patientId &&
-            b.items?.some(
-              (item: any) =>
-                item.appointmentTypeId === "consultation-fee" ||
-                item.appointmentTypeName?.includes("Consultation Fee"),
-            ),
-        )
+    const consBill = (appt as any).consultationBillingId
+      ? billings.find((b) => b.id === (appt as any).consultationBillingId)
       : null;
     const isConsBillPaid = consBill
       ? consBill.status === "paid" || consBill.paymentStatus === "paid"
       : false;
     const isConsBillPending = hasDoctor && consBill && !isConsBillPaid;
+
+    if (activeTab === "urgent") {
+      if (stage === "billing") return true;
+      if (stage === "lobby" || stage === "scheduled") {
+        if (hasDoctor && consBill && !isConsBillPaid) return true;
+      }
+      if (
+        appt.createdAt &&
+        (stage === "lobby" ||
+          stage === "triage-done" ||
+          stage === "doctor" ||
+          stage === "expert")
+      ) {
+        const dObj = (appt.createdAt as any).seconds
+          ? new Date((appt.createdAt as any).seconds * 1000)
+          : new Date(appt.createdAt);
+
+        if (
+          !isNaN(dObj.getTime()) &&
+          Math.floor((new Date().getTime() - dObj.getTime()) / 60000) > 30
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    }
 
     if (activeTab === "lobby")
       return stage === "scheduled" || (stage === "lobby" && isConsBillPending);
@@ -1764,717 +2053,72 @@ export default function FrontOfficeDesk() {
   };
 
   const renderRoutingModal = () => {
-    if (!isRoutingModalOpen || !routingAppointment) return null;
-
-    const modalRoot = document.body;
-    const hasDoc =
-      routingAppointment.doctorId &&
-      routingAppointment.doctorId !== "unassigned";
-
-    return createPortal(
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-        <div
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          onClick={() => setIsRoutingModalOpen(false)}
-        />
-        <div className="bg-surface rounded border border-border-base shadow-xl max-w-md w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-5 py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
-            <div>
-              <h3 className="font-bold text-[14.5px] text-text-main">
-                🚪 Route Patient to Room/Cabin
-              </h3>
-              <p className="text-xs text-text-muted mt-0.5">
-                Patient:{" "}
-                <span className="font-semibold text-primary">
-                  {getPatientName(routingAppointment.patientId)}
-                </span>
-              </p>
-            </div>
-            <button
-              className="text-text-muted hover:text-text-main p-1"
-              onClick={() => setIsRoutingModalOpen(false)}
-            >
-              <IoCloseOutline className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="p-5 space-y-4">
-            <div>
-              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                Select Consultation Room or Procedure Cabin
-              </label>
-              <select
-                className="w-full h-10 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                value={routingCabin}
-                onChange={(e) => setRoutingCabin(e.target.value)}
-              >
-                <option value="">-- Select Room/Cabin (Optional) --</option>
-                <optgroup label="OPD Rooms">
-                  <option value="OPD Room 1">OPD Room 1</option>
-                  <option value="OPD Room 2">OPD Room 2</option>
-                  <option value="OPD Room 3">OPD Room 3</option>
-                </optgroup>
-                <optgroup label="Cabins & Laser">
-                  <option value="Laser Room 1">Laser Room 1</option>
-                  <option value="Laser Room 2">Laser Room 2</option>
-                  <option value="PRP Cabin A">PRP Cabin A</option>
-                  <option value="PRP Cabin B">PRP Cabin B</option>
-                  <option value="Facial Therapy Room">Facial Room</option>
-                </optgroup>
-                <optgroup label="Other Areas">
-                  <option value="Lobby">Lobby</option>
-                  <option value="Triage Area">Triage Area</option>
-                  <option value="Billing Counter">Billing Counter</option>
-                  <option value="Pharmacy">Pharmacy</option>
-                </optgroup>
-              </select>
-            </div>
-            <p className="text-xs text-text-muted">
-              Routing this patient will mark their status as{" "}
-              <strong>In Consultation</strong> and alert the assigned clinician
-              ({hasDoc ? getDoctorName(routingAppointment) : "Expert"}).
-            </p>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-border-base flex gap-2 justify-end px-5 pb-5">
-            <div className="flex-1 flex items-center mt-2 px-2">
-                 {(routingTarget === "doctor" || routingTarget === "expert") && routingCabin && routingCabin !== "unassigned" && (
-                    <label className="flex items-center gap-2 cursor-pointer text-xs text-text-main font-medium">
-                      <input 
-                        type="checkbox" 
-                        className="w-3.5 h-3.5 text-primary rounded focus:ring-primary border-border-base"
-                        checked={routingAddCommission}
-                        onChange={(e) => setRoutingAddCommission(e.target.checked)}
-                      />
-                      Add commission for clinician
-                    </label>
-                 )}
-              </div>
-            <button
-              className="h-9 px-4 rounded border border-border-base text-[12.5px] font-medium text-text-muted hover:bg-surface-3 transition-colors"
-              type="button"
-              onClick={() => setIsRoutingModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="h-9 px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 flex items-center gap-1.5 transition-colors"
-              type="button"
-              onClick={handleConfirmRoute}
-            >
-              Confirm & Route
-            </button>
-          </div>
-        </div>
-      </div>,
-      modalRoot,
+    return (
+      <RoutingModal
+        appointment={routingAppointment}
+        clinicianName={
+          routingAppointment ? getDoctorName(routingAppointment) : ""
+        }
+        isOpen={isRoutingModalOpen}
+        patientName={
+          routingAppointment ? getPatientName(routingAppointment.patientId) : ""
+        }
+        routingAddCommission={routingAddCommission}
+        routingCabin={routingCabin}
+        routingTarget={routingTarget}
+        setRoutingAddCommission={setRoutingAddCommission}
+        setRoutingCabin={setRoutingCabin}
+        onClose={() => setIsRoutingModalOpen(false)}
+        onConfirm={handleConfirmRoute}
+      />
     );
   };
 
   const renderTriageModal = () => {
-    if (!isTriageModalOpen || !selectedAppointment) return null;
-
-    const modalRoot = document.body;
-
-    const handleTriageKeyDown = (
-      e: React.KeyboardEvent<HTMLInputElement>,
-      nextId: string,
-    ) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        document.getElementById(nextId)?.focus();
-      }
-    };
-
-    return createPortal(
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-        <div
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          onClick={() => setIsTriageModalOpen(false)}
-        />
-        <div className="bg-surface rounded border border-border-base shadow-xl max-w-2xl w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-5 py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
-            <div>
-              <h3 className="font-bold text-[14.5px] text-text-main">
-                🩺 Record Triage Vitals
-              </h3>
-              <p className="text-xs text-text-muted mt-0.5">
-                Patient:{" "}
-                <span className="font-semibold text-primary">
-                  {getPatientName(selectedAppointment.patientId)}
-                </span>
-              </p>
-            </div>
-            <button
-              className="text-text-muted hover:text-text-main p-1"
-              onClick={() => setIsTriageModalOpen(false)}
-            >
-              <IoCloseOutline className="w-5 h-5" />
-            </button>
-          </div>
-
-          <form>
-            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                {/* Systolic BP */}
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                    <IoHeartOutline className="text-red-500" /> Blood Pressure
-                    (Systolic)
-                  </label>
-                  <input
-                    className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary"
-                    id="triage_bpSystolic"
-                    placeholder="e.g. 120"
-                    type="number"
-                    value={vitals.bpSystolic}
-                    onChange={(e) =>
-                      setVitals((v) => ({ ...v, bpSystolic: e.target.value }))
-                    }
-                    onKeyDown={(e) =>
-                      handleTriageKeyDown(e, "triage_bpDiastolic")
-                    }
-                  />
-                </div>
-                {/* Diastolic BP */}
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                    <IoHeartOutline className="text-red-500" /> Blood Pressure
-                    (Diastolic)
-                  </label>
-                  <input
-                    className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary"
-                    id="triage_bpDiastolic"
-                    placeholder="e.g. 80"
-                    type="number"
-                    value={vitals.bpDiastolic}
-                    onChange={(e) =>
-                      setVitals((v) => ({ ...v, bpDiastolic: e.target.value }))
-                    }
-                    onKeyDown={(e) => handleTriageKeyDown(e, "triage_temp")}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {/* Temperature */}
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                    <IoThermometerOutline className="text-saffron-500" />{" "}
-                    Temperature (°F)
-                  </label>
-                  <input
-                    className={`w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors ${getTriageClass("temp", vitals.temp)}`}
-                    id="triage_temp"
-                    placeholder="e.g. 98.6"
-                    step="0.1"
-                    type="number"
-                    value={vitals.temp}
-                    onChange={(e) =>
-                      setVitals((v) => ({ ...v, temp: e.target.value }))
-                    }
-                    onKeyDown={(e) => handleTriageKeyDown(e, "triage_pulse")}
-                  />
-                  {vitals.temp && parseFloat(vitals.temp) > 99.5 && (
-                    <p className="text-[10px] font-bold text-saffron-600 mt-1 leading-none">
-                      ⚠️ High Temp / Fever Warning
-                    </p>
-                  )}
-                </div>
-                {/* Pulse Rate */}
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                    <IoSpeedometerOutline className="text-teal-500" /> Pulse /
-                    Heart Rate (bpm)
-                  </label>
-                  <input
-                    className={`w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors ${getTriageClass("pulse", vitals.pulse)}`}
-                    id="triage_pulse"
-                    placeholder="e.g. 72"
-                    type="number"
-                    value={vitals.pulse}
-                    onChange={(e) =>
-                      setVitals((v) => ({ ...v, pulse: e.target.value }))
-                    }
-                    onKeyDown={(e) => handleTriageKeyDown(e, "triage_weight")}
-                  />
-                  {vitals.pulse &&
-                    (parseFloat(vitals.pulse) < 60 ||
-                      parseFloat(vitals.pulse) > 100) && (
-                      <p className="text-[10px] font-bold text-saffron-600 mt-1 leading-none">
-                        ⚠️ Pulse outside normal range
-                      </p>
-                    )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {/* Weight */}
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                    <IoBodyOutline className="text-sky-500" /> Weight (kg)
-                  </label>
-                  <input
-                    className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
-                    id="triage_weight"
-                    placeholder="e.g. 70"
-                    step="0.1"
-                    type="number"
-                    value={vitals.weight}
-                    onChange={(e) =>
-                      setVitals((v) => ({ ...v, weight: e.target.value }))
-                    }
-                    onKeyDown={(e) => handleTriageKeyDown(e, "triage_spo2")}
-                  />
-                </div>
-                {/* SpO2 */}
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                    <IoSpeedometerOutline className="text-indigo-500" /> SpO2
-                    (%) Oxygen Saturation
-                  </label>
-                  <input
-                    className={`w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors ${getTriageClass("spo2", vitals.spo2)}`}
-                    id="triage_spo2"
-                    placeholder="e.g. 98"
-                    type="number"
-                    value={vitals.spo2}
-                    onChange={(e) =>
-                      setVitals((v) => ({ ...v, spo2: e.target.value }))
-                    }
-                    onKeyDown={(e) =>
-                      handleTriageKeyDown(e, "triage_complaints")
-                    }
-                  />
-                  {vitals.spo2 && parseFloat(vitals.spo2) < 95 && (
-                    <p className="text-[10px] font-bold text-red-600 mt-1 leading-none">
-                      🚨 Critical Low Oxygen warning
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Chief Complaints */}
-              <div>
-                <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                  <IoCreateOutline className="text-text-muted" /> Chief
-                  Complaints / Symptoms
-                </label>
-                <textarea
-                  className="w-full min-h-20 px-3 py-2 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors resize-none"
-                  id="triage_complaints"
-                  placeholder="Describe patient symptoms (e.g. cough for 3 days, mild headache)..."
-                  value={vitals.complaints}
-                  onChange={(e) =>
-                    setVitals((v) => ({ ...v, complaints: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="px-5 py-3.5 border-t border-border-base bg-surface-2 flex flex-col md:flex-row items-center justify-between gap-3 rounded-b-lg">
-              <button
-                className="h-9 w-full md:w-auto px-4 rounded border border-border-base text-[12.5px] font-medium text-text-muted hover:bg-surface-3 transition-colors"
-                type="button"
-                onClick={() => setIsTriageModalOpen(false)}
-              >
-                Cancel
-              </button>
-
-              <div className="flex flex-col md:flex-row items-center justify-end gap-2 w-full md:w-auto flex-wrap">
-                <button
-                  className="h-9 w-full md:w-auto px-4 rounded border border-primary text-primary text-[12.5px] font-medium hover:bg-primary/10 transition-colors whitespace-nowrap"
-                  disabled={triageSaving}
-                  type="button"
-                  onClick={(e) => handleSaveTriage(e)}
-                >
-                  {triageSaving ? "Saving..." : "Save Vitals Only"}
-                </button>
-
-                {selectedAppointment?.doctorId &&
-                  selectedAppointment.doctorId !== "unassigned" && (
-                    <button
-                      className="h-9 w-full md:w-auto px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 transition-colors whitespace-nowrap"
-                      disabled={triageSaving}
-                      type="button"
-                      onClick={(e) => handleSaveTriage(e, "doctor")}
-                    >
-                      Save & Send to Doctor
-                    </button>
-                  )}
-                {selectedAppointment?.assignedExpertId &&
-                  selectedAppointment.assignedExpertId !== "unassigned" && (
-                    <button
-                      className="h-9 w-full md:w-auto px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 transition-colors whitespace-nowrap"
-                      disabled={triageSaving}
-                      type="button"
-                      onClick={(e) => handleSaveTriage(e, "expert")}
-                    >
-                      Save & Send to Expert
-                    </button>
-                  )}
-                {(!selectedAppointment?.doctorId ||
-                  selectedAppointment.doctorId === "unassigned") &&
-                  (!selectedAppointment?.assignedExpertId ||
-                    selectedAppointment.assignedExpertId === "unassigned") && (
-                    <button
-                      className="h-9 w-full md:w-auto px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 transition-colors whitespace-nowrap"
-                      disabled={triageSaving}
-                      type="button"
-                      onClick={(e) => handleSaveTriage(e, "doctor")}
-                    >
-                      Save & Send to Cabin
-                    </button>
-                  )}
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>,
-      modalRoot,
+    return (
+      <TriageModal
+        appointment={selectedAppointment}
+        isOpen={isTriageModalOpen}
+        patientName={
+          selectedAppointment
+            ? getPatientName(selectedAppointment.patientId)
+            : ""
+        }
+        saving={triageSaving}
+        setVitals={setVitals}
+        vitals={vitals}
+        onClose={() => setIsTriageModalOpen(false)}
+        onSave={(e, target) => handleSaveTriage(e as any, target)}
+      />
     );
   };
 
   const renderProcedureModal = () => {
-    if (!isProcedureModalOpen || !selectedAppointment) return null;
-
-    const modalRoot = document.body;
-
-    const getBookedApptTypeOption = () => {
-      const label = getApptTypeLabel(selectedAppointment.appointmentTypeId);
-      if (selectedAppointment.appointmentTypeId === "package-session") {
-         return null;
-      }
-      const isDynamicPresent = appointmentTypes.some((t) => t.name === label);
-      if (!isDynamicPresent) {
-        return <option value={label}>{label} (Booked)</option>;
-      }
-
-      return null;
-    };
-
-    return createPortal(
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-        <div
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          onClick={() => {
-            setIsProcedureModalOpen(false);
-            setHistoricalProcedures([]);
-          }}
-        />
-        <div className="bg-surface rounded border border-border-base shadow-xl max-w-4xl w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-          <div className="px-5 py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
-            <div>
-              <h3 className="font-bold text-[14.5px] text-text-main flex items-center gap-1.5">
-                ⚡ Record Laser & Aesthetic Procedure Log
-              </h3>
-              <p className="text-xs text-text-muted mt-0.5">
-                Patient:{" "}
-                <span className="font-semibold text-primary">
-                  {getPatientName(selectedAppointment.patientId)}
-                </span>
-              </p>
-            </div>
-            <button
-              className="text-text-muted hover:text-text-main p-1"
-              onClick={() => {
-                setIsProcedureModalOpen(false);
-                setHistoricalProcedures([]);
-              }}
-            >
-              <IoCloseOutline className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-0 overflow-hidden flex-1">
-            {/* Left side: Log Form */}
-            <form
-              className="col-span-3 flex flex-col justify-between border-r border-border-base max-h-[75vh]"
-              onSubmit={(e) => e.preventDefault()}
-            >
-              <div className="p-5 space-y-4 overflow-y-auto flex-1">
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Procedure Type */}
-                  <div className="col-span-2">
-                    <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                      Procedure Type
-                    </label>
-                    <select
-                      className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                      value={procedure.procedureType}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        let newFee = procedure.fee;
-                        if (val.startsWith("consume_pkg_")) {
-                          newFee = "0";
-                        } else {
-                          const matchingType = appointmentTypes.find(t => t.name === val);
-                          if (matchingType) {
-                            newFee = String(matchingType.price || 0);
-                          }
-                        }
-                        setProcedure((p) => ({
-                          ...p,
-                          procedureType: val,
-                          fee: newFee,
-                        }));
-                      }}
-                    >
-                      {modalActivePackages.map((pkg) => (
-                        <option key={`pkg_${pkg.id}`} value={`consume_pkg_${pkg.id}`}>
-                          Consume Session: {pkg.packageName} ({pkg.usedSessions}/{pkg.totalSessions} used)
-                        </option>
-                      ))}
-                      {appointmentTypes.map((type) => (
-                        <option key={type.id} value={type.name}>
-                          {type.name}
-                        </option>
-                      ))}
-                      {getBookedApptTypeOption()}
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Treated Area */}
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                      Treated Area
-                    </label>
-                    <input
-                      className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                      placeholder="e.g. Full Face, Cheeks"
-                      type="text"
-                      value={procedure.area}
-                      onChange={(e) =>
-                        setProcedure((p) => ({ ...p, area: e.target.value }))
-                      }
-                    />
-                  </div>
-
-                  {/* Procedure Cost/Fee */}
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5 flex items-center gap-1">
-                      Additional Procedure Fee (NPR){" "}
-                      <span className="text-[10px] font-normal text-text-muted">
-                        (Optional)
-                      </span>
-                    </label>
-                    <input
-                      className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                      placeholder="Leave blank if already billed"
-                      type="number"
-                      value={procedure.fee}
-                      onChange={(e) =>
-                        setProcedure((p) => ({ ...p, fee: e.target.value }))
-                      }
-                    />
-                  </div>
-
-                  {/* Energy (Fluence) */}
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                      Energy / Fluence (J/cm²)
-                    </label>
-                    <input
-                      className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                      placeholder="e.g. 15"
-                      type="text"
-                      value={procedure.energy}
-                      onChange={(e) =>
-                        setProcedure((p) => ({ ...p, energy: e.target.value }))
-                      }
-                    />
-                  </div>
-
-                  {/* Spot Size */}
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                      Spot Size (mm)
-                    </label>
-                    <input
-                      className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                      placeholder="e.g. 4"
-                      type="text"
-                      value={procedure.spotSize}
-                      onChange={(e) =>
-                        setProcedure((p) => ({
-                          ...p,
-                          spotSize: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  {/* Pulse Width */}
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                      Pulse Width (ms)
-                    </label>
-                    <input
-                      className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                      placeholder="e.g. 10"
-                      type="text"
-                      value={procedure.pulseWidth}
-                      onChange={(e) =>
-                        setProcedure((p) => ({
-                          ...p,
-                          pulseWidth: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  {/* Passes */}
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                      Passes (Count)
-                    </label>
-                    <input
-                      className="w-full h-9 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                      placeholder="e.g. 2"
-                      type="text"
-                      value={procedure.passes}
-                      onChange={(e) =>
-                        setProcedure((p) => ({ ...p, passes: e.target.value }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                    Clinical Procedure Notes
-                  </label>
-                  <textarea
-                    className="w-full min-h-[80px] p-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main resize-none"
-                    placeholder="Enter skin reaction details, patient tolerance, or post-procedure cream recommendations..."
-                    value={procedure.notes}
-                    onChange={(e) =>
-                      setProcedure((p) => ({ ...p, notes: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="px-5 py-4 border-t border-border-base bg-surface-2 flex justify-end gap-2.5">
-                <button
-                  className="h-9 px-4 rounded text-[13px] font-semibold border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                  type="button"
-                  onClick={() => {
-                    setIsProcedureModalOpen(false);
-                    setHistoricalProcedures([]);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="h-9 px-4 rounded text-[13px] font-semibold bg-mountain-600 text-white hover:bg-mountain-700 transition-colors outline-none disabled:opacity-50"
-                  disabled={procedureSaving}
-                  onClick={(e) => handleSaveProcedure(e as any, "doctor")}
-                  type="button"
-                >
-                  {procedureSaving ? "Saving..." : "Save & Send to Doctor"}
-                </button>
-                <button
-                  className="h-9 px-4 rounded text-[13px] font-semibold bg-primary text-white hover:bg-primary/95 transition-colors outline-none disabled:opacity-50"
-                  disabled={procedureSaving}
-                  onClick={(e) => handleSaveProcedure(e as any, "billing")}
-                  type="button"
-                >
-                  {procedureSaving ? "Saving..." : "Save & Send to Billing"}
-                </button>
-              </div>
-            </form>
-
-            {/* Right side: Patient History */}
-            <div className="col-span-2 bg-surface-2 p-5 flex flex-col max-h-[75vh] overflow-hidden">
-              <h4 className="font-bold text-[13px] text-text-main mb-3 flex items-center gap-1.5 border-b border-border-base pb-2">
-                📋 Past Treatment Records ({historicalProcedures.length})
-              </h4>
-
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {loadingHistory ? (
-                  <div className="h-full flex items-center justify-center py-10">
-                    <span className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
-                  </div>
-                ) : historicalProcedures.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center py-10 text-center text-text-muted">
-                    <IoReceiptOutline className="w-8 h-8 opacity-40 mb-1.5 text-text-muted" />
-                    <p className="text-[12px]">
-                      No past procedures recorded for this patient.
-                    </p>
-                  </div>
-                ) : (
-                  historicalProcedures.map((entry) => {
-                    const lines = entry.content.split("\n");
-                    let procType = "";
-                    let area = "";
-                    let settings = "";
-                    let notes = "";
-                    let fee = "";
-
-                    lines.forEach((line: string) => {
-                      if (line.startsWith("Procedure:"))
-                        procType = line.replace("Procedure:", "").trim();
-                      else if (line.startsWith("Area:"))
-                        area = line.replace("Area:", "").trim();
-                      else if (line.startsWith("Laser Settings:"))
-                        settings = line.replace("Laser Settings:", "").trim();
-                      else if (line.startsWith("Clinical Notes:"))
-                        notes = line.replace("Clinical Notes:", "").trim();
-                      else if (line.startsWith("Charge:"))
-                        fee = line.replace("Charge:", "").trim();
-                    });
-
-                    return (
-                      <div
-                        key={entry.id}
-                        className="p-3 bg-surface border border-border-base rounded-md text-[12px] space-y-1.5 shadow-sm hover:border-border-muted transition-colors"
-                      >
-                        <div className="flex justify-between items-center border-b border-border-base pb-1">
-                          <span className="font-semibold text-primary">
-                            {procType || "Laser Procedure"}
-                          </span>
-                          <span className="text-[10px] text-text-muted">
-                            {entry.createdAt
-                              ? new Date(entry.createdAt).toLocaleDateString()
-                              : ""}
-                          </span>
-                        </div>
-                        {area && (
-                          <p className="text-text-main text-[11.5px]">
-                            <span className="font-medium text-text-muted">
-                              Area:
-                            </span>{" "}
-                            {area}
-                          </p>
-                        )}
-                        {settings && (
-                          <div className="bg-surface-2 p-1.5 rounded text-[10.5px] font-mono text-text-main border border-border-base leading-relaxed">
-                            {settings}
-                          </div>
-                        )}
-                        {notes && notes !== "None" && (
-                          <p className="text-text-main italic text-[11px] bg-amber-50/20 p-1.5 rounded border border-amber-100/10 leading-snug">
-                            "{notes}"
-                          </p>
-                        )}
-                        {fee && (
-                          <p className="text-[10px] text-text-muted text-right">
-                            {fee}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>,
-      modalRoot,
+    return (
+      <ProcedureModal
+        appointment={selectedAppointment}
+        appointmentTypes={appointmentTypes}
+        getApptTypeLabel={getApptTypeLabel}
+        historicalProcedures={historicalProcedures}
+        isOpen={isProcedureModalOpen}
+        loadingHistory={loadingHistory}
+        modalActivePackages={modalActivePackages}
+        patientName={
+          selectedAppointment
+            ? getPatientName(selectedAppointment.patientId)
+            : ""
+        }
+        procedure={procedure}
+        procedureSaving={procedureSaving}
+        setProcedure={setProcedure}
+        onClose={() => {
+          setIsProcedureModalOpen(false);
+          setHistoricalProcedures([]);
+        }}
+        onSave={(e, target) => handleSaveProcedure(e as any, target)}
+        isDoctorCabin={selectedAppointment ? getPatientStage(selectedAppointment) === "doctor" || !!currentDoctorId : false}
+        hasExpert={selectedAppointment ? !!selectedAppointment.assignedExpertId && selectedAppointment.assignedExpertId !== "unassigned" : false}
+      />
     );
   };
 
@@ -2613,11 +2257,18 @@ export default function FrontOfficeDesk() {
     }
 
     const isPackageSale = quickIntakeForm.appointmentTypeId.startsWith("pkg_");
-    const packageId = isPackageSale ? quickIntakeForm.appointmentTypeId.replace("pkg_", "") : null;
-    const pkg = packages.find(p => p.id === packageId);
+    const packageId = isPackageSale
+      ? quickIntakeForm.appointmentTypeId.replace("pkg_", "")
+      : null;
+    const pkg = packages.find((p) => p.id === packageId);
 
     if (isPackageSale && !pkg) {
-      addToast({ title: "Validation Error", description: "Selected package not found.", color: "danger" });
+      addToast({
+        title: "Validation Error",
+        description: "Selected package not found.",
+        color: "danger",
+      });
+
       return;
     }
 
@@ -2741,7 +2392,9 @@ export default function FrontOfficeDesk() {
 
       if (isPackageSale && pkg) {
         // 1. Generate Invoice Number
-        const invoiceNo = await appointmentBillingService.generateInvoiceNumber(clinicId!);
+        const invoiceNo = await appointmentBillingService.generateInvoiceNumber(
+          clinicId!,
+        );
 
         // 2. Create the Billing record
         const billingItem = {
@@ -2783,7 +2436,8 @@ export default function FrontOfficeDesk() {
           createdBy: currentUser?.uid || "system",
         };
 
-        const billingId = await appointmentBillingService.createBilling(billingData);
+        const billingId =
+          await appointmentBillingService.createBilling(billingData);
 
         // 3. Record Payment (if price > 0)
         if (pkg.price > 0) {
@@ -2792,7 +2446,7 @@ export default function FrontOfficeDesk() {
             pkg.price,
             quickIntakeForm.paymentMethod,
             quickIntakeForm.paymentReference,
-            `Purchased ${pkg.name}`
+            `Purchased ${pkg.name}`,
           );
         }
 
@@ -2805,16 +2459,19 @@ export default function FrontOfficeDesk() {
             pkg.walletCreditAmount,
             quickIntakeForm.paymentMethod,
             `Package Credit: ${pkg.name}`,
-            currentUser?.uid || "system"
+            currentUser?.uid || "system",
           );
         }
 
         // 5. Create visual session tracker if it has total sessions
         let patientPkgId: string | undefined = undefined;
+
         if (pkg.totalSessions && pkg.totalSessions > 0) {
           let expiresAt: Date | undefined = undefined;
+
           if (pkg.validityDays && pkg.validityDays > 0) {
             const expirationDate = new Date();
+
             expirationDate.setDate(expirationDate.getDate() + pkg.validityDays);
             expiresAt = expirationDate;
           }
@@ -2832,12 +2489,13 @@ export default function FrontOfficeDesk() {
             createdBy: currentUser?.uid || "system",
           });
         }
-        
+
         if (quickIntakeForm.startSessionInstantly) {
           const now = new Date();
           const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-          const sessionReason = quickIntakeForm.reason.trim() || `Session 1 of ${pkg.name}`;
-          
+          const sessionReason =
+            quickIntakeForm.reason.trim() || `Session 1 of ${pkg.name}`;
+
           const newApptId = await appointmentService.createAppointment({
             patientId: patientIdToUse,
             doctorId: quickIntakeForm.doctorId || "unassigned",
@@ -2855,19 +2513,30 @@ export default function FrontOfficeDesk() {
             billingStatus: "paid",
             paymentStatus: "paid",
           } as any);
-          
+
           if (patientPkgId) {
             await patientPackageService.startSession(patientPkgId, newApptId);
           }
 
           // Generate consultation bill if a clinician is assigned and option is checked
-          const hasDoctor = quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
-          const hasExpert = quickIntakeForm.assignedExpertId && quickIntakeForm.assignedExpertId !== "unassigned";
+          const hasDoctor =
+            quickIntakeForm.doctorId &&
+            quickIntakeForm.doctorId !== "unassigned";
+          const hasExpert =
+            quickIntakeForm.assignedExpertId &&
+            quickIntakeForm.assignedExpertId !== "unassigned";
 
-          if (quickIntakeForm.generateConsultationBill && (hasDoctor || hasExpert)) {
-            const clinicianIdToBill = hasDoctor ? quickIntakeForm.doctorId : quickIntakeForm.assignedExpertId;
-            const addCommissionFlag = hasDoctor ? quickIntakeForm.addDoctorCommission : quickIntakeForm.addExpertCommission;
-            
+          if (
+            quickIntakeForm.generateConsultationBill &&
+            (hasDoctor || hasExpert)
+          ) {
+            const clinicianIdToBill = hasDoctor
+              ? quickIntakeForm.doctorId
+              : quickIntakeForm.assignedExpertId;
+            const addCommissionFlag = hasDoctor
+              ? quickIntakeForm.addDoctorCommission
+              : quickIntakeForm.addExpertCommission;
+
             try {
               await createConsultationBill(
                 patientIdToUse,
@@ -2875,6 +2544,8 @@ export default function FrontOfficeDesk() {
                 newApptId,
                 sessionReason,
                 addCommissionFlag,
+                "package-session",
+                true,
               );
             } catch (billErr) {
               console.error(
@@ -2888,7 +2559,7 @@ export default function FrontOfficeDesk() {
         addToast({
           title: "Package Sold!",
           description: `Successfully sold ${pkg.name} to ${patientNameToUse} and credited wallet.`,
-          color: "success"
+          color: "success",
         });
       } else {
         // Create Appointment
@@ -2903,25 +2574,34 @@ export default function FrontOfficeDesk() {
         }
 
         const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-        const isTodayAppt = appointmentDate.toDateString() === now.toDateString();
+        const isTodayAppt =
+          appointmentDate.toDateString() === now.toDateString();
 
-        const hasAssignedDoctor = quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
+        const hasAssignedDoctor =
+          quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
         const hasAssignedExpert = !!quickIntakeForm.assignedExpertId;
-        
+
         let targetStatus: any = isTodayAppt ? "confirmed" : "scheduled";
+
         if (isTodayAppt && quickIntakeForm.sendDirectlyToCabin) {
-           if (hasAssignedDoctor) targetStatus = "doctor";
-           else if (hasAssignedExpert) targetStatus = "expert";
+          if (hasAssignedDoctor) targetStatus = "doctor";
+          else if (hasAssignedExpert) targetStatus = "expert";
         }
 
         const apptData = {
           patientId: patientIdToUse,
           doctorId: quickIntakeForm.doctorId || "unassigned",
           assignedExpertId: quickIntakeForm.assignedExpertId || undefined,
-          appointmentTypeId: quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") 
-            ? "package-session" 
-            : (quickIntakeForm.appointmentTypeId || appointmentTypes[0]?.id || "default"),
-          patientPackageId: quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") 
+          appointmentTypeId: quickIntakeForm.appointmentTypeId.startsWith(
+            "consume_pkg_",
+          )
+            ? "package-session"
+            : quickIntakeForm.appointmentTypeId ||
+              appointmentTypes[0]?.id ||
+              "default",
+          patientPackageId: quickIntakeForm.appointmentTypeId.startsWith(
+            "consume_pkg_",
+          )
             ? quickIntakeForm.appointmentTypeId.replace("consume_pkg_", "")
             : undefined,
           appointmentDate: appointmentDate,
@@ -2934,23 +2614,48 @@ export default function FrontOfficeDesk() {
           ...(quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") && {
             billingStatus: "paid" as const,
             paymentStatus: "paid" as const,
-          })
+          }),
         };
 
         const newApptId = await appointmentService.createAppointment(apptData);
 
         if (quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_")) {
-          const patientPkgId = quickIntakeForm.appointmentTypeId.replace("consume_pkg_", "");
+          const patientPkgId = quickIntakeForm.appointmentTypeId.replace(
+            "consume_pkg_",
+            "",
+          );
+
           await patientPackageService.startSession(patientPkgId, newApptId);
         }
 
         // Generate consultation bill if a clinician is assigned and option is checked
-        const hasDoctor = quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
-        const hasExpert = quickIntakeForm.assignedExpertId && quickIntakeForm.assignedExpertId !== "unassigned";
+        const hasDoctor =
+          quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
+        const hasExpert =
+          quickIntakeForm.assignedExpertId &&
+          quickIntakeForm.assignedExpertId !== "unassigned";
 
-        if (quickIntakeForm.generateConsultationBill && (hasDoctor || hasExpert)) {
-          const clinicianIdToBill = hasDoctor ? quickIntakeForm.doctorId : quickIntakeForm.assignedExpertId;
-          const addCommissionFlag = hasDoctor ? quickIntakeForm.addDoctorCommission : quickIntakeForm.addExpertCommission;
+        const isPackage =
+          quickIntakeForm.appointmentTypeId.startsWith("pkg_") ||
+          quickIntakeForm.appointmentTypeId.startsWith("consume_");
+        const apptTypeObj = appointmentTypes.find(
+          (t) => t.id === quickIntakeForm.appointmentTypeId,
+        );
+        const hasApptFee =
+          !isPackage && apptTypeObj && Number(apptTypeObj.price) > 0;
+
+        const shouldGenerateConsFee =
+          quickIntakeForm.generateConsultationBill && (hasDoctor || hasExpert);
+
+        if (shouldGenerateConsFee || hasApptFee) {
+          const clinicianIdToBill = hasDoctor
+            ? quickIntakeForm.doctorId
+            : hasExpert
+              ? quickIntakeForm.assignedExpertId
+              : "unassigned";
+          const addCommissionFlag = hasDoctor
+            ? quickIntakeForm.addDoctorCommission
+            : quickIntakeForm.addExpertCommission;
 
           try {
             await createConsultationBill(
@@ -2959,6 +2664,8 @@ export default function FrontOfficeDesk() {
               newApptId,
               quickIntakeForm.reason.trim() || "Walk-in General Checkup",
               addCommissionFlag,
+              quickIntakeForm.appointmentTypeId,
+              shouldGenerateConsFee,
             );
           } catch (billErr) {
             console.error(
@@ -2979,7 +2686,9 @@ export default function FrontOfficeDesk() {
             quickIntakeForm.doctorId &&
             quickIntakeForm.doctorId !== "unassigned"
           ) {
-            const docObj = doctors.find((d) => d.id === quickIntakeForm.doctorId);
+            const docObj = doctors.find(
+              (d) => d.id === quickIntakeForm.doctorId,
+            );
             const docName = docObj ? docObj.name : "Clinician";
 
             NotificationService.sendNotification(clinicId, {
@@ -3060,927 +2769,218 @@ export default function FrontOfficeDesk() {
   };
 
   const renderQuickIntakeModal = () => {
-    if (!isQuickIntakeOpen) return null;
-
-    const modalRoot = document.body;
-
-    return createPortal(
-      <>
-        {/* Fixed backdrop — covers full viewport independently */}
-        <div
-          className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm"
-          onClick={() => setIsQuickIntakeOpen(false)}
-        />
-
-        {/* Scroll container — sits over backdrop */}
-        <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4 pointer-events-none">
-          <div className="bg-surface rounded border border-border-base shadow-2xl w-full max-w-6xl relative my-auto pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-[14px] sm:text-[14.5px] text-text-main">
-                  📋 Quick Walk-In Registration
-                </h3>
-                <p className="text-xs text-text-muted mt-0.5">
-                  Register & Check-in walk-in patient instantly.
-                </p>
-              </div>
-              <button
-                className="text-text-muted hover:text-text-main p-1"
-                onClick={() => setIsQuickIntakeOpen(false)}
-              >
-                <IoCloseOutline className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleQuickIntakeSubmit}>
-              <div className="p-4 sm:p-5 max-h-[calc(100vh-10rem)] overflow-y-auto">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Left Column: Demographics & Intake Details */}
-                  <div className="space-y-4">
-                    {/* Intake Mode Switcher */}
-                    <div className="flex bg-surface-2 p-1 rounded-lg border border-border-base w-full mb-2">
-                      <button
-                        className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                          intakeMode === "new"
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-text-muted hover:text-text-main"
-                        }`}
-                        type="button"
-                        onClick={() => {
-                          setIntakeMode("new");
-                          setSelectedExistingPatient(null);
-                          setPatientSearchQuery("");
-                        }}
-                      >
-                        New Patient Walk-in
-                      </button>
-                      <button
-                        className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                          intakeMode === "existing"
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-text-muted hover:text-text-main"
-                        }`}
-                        type="button"
-                        onClick={() => {
-                          setIntakeMode("existing");
-                        }}
-                      >
-                        Search Existing Patient
-                      </button>
-                    </div>
-
-                    <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-border-base pb-1">
-                      {intakeMode === "new"
-                        ? "New Patient Profile & Consultation"
-                        : "Select Patient & Consultation"}
-                    </h4>
-
-                    {intakeMode === "new" ? (
-                      <>
-                        {/* Full Name */}
-                        <div>
-                          <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                            Patient Full Name{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            required
-                            className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
-                            placeholder="e.g. John Doe"
-                            type="text"
-                            value={quickIntakeForm.name}
-                            onChange={(e) =>
-                              setQuickIntakeForm((prev) => ({
-                                ...prev,
-                                name: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-
-                        {/* Mobile & Age */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                              Mobile Number{" "}
-                              <span className="text-red-500">*</span>
-                            </label>
-                            <div className="relative">
-                              <input
-                                required
-                                className={`w-full h-9 px-3 pr-8 text-[13px] border ${mobileStatus === "duplicate" ? "border-error focus:border-error focus:ring-1 focus:ring-error/20" : "border-border-base focus:border-primary focus:ring-1 focus:ring-primary/20"} rounded outline-none bg-surface text-text-main transition-colors`}
-                                placeholder="e.g. 98XXXXXXXX"
-                                type="tel"
-                                value={quickIntakeForm.mobile}
-                                onChange={(e) =>
-                                  setQuickIntakeForm((prev) => ({
-                                    ...prev,
-                                    mobile: e.target.value,
-                                  }))
-                                }
-                              />
-                              {mobileStatus === "checking" && (
-                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                                  <Spinner size="xs" />
-                                </div>
-                              )}
-                            </div>
-                            {mobileStatus === "duplicate" && (
-                              <p className="text-[10.5px] text-error font-medium mt-1">
-                                ⚠️ Patient with this mobile exists.
-                              </p>
-                            )}
-                            {mobileStatus === "clear" && (
-                              <p className="text-[10.5px] text-health-600 font-medium mt-1">
-                                ✓ Number available.
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                              Age <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              required
-                              className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
-                              placeholder="e.g. 28 or 10 Months"
-                              type="text"
-                              value={quickIntakeForm.age}
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  age: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        {/* Gender, Appointment Category & Date */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                              Gender
-                            </label>
-                            <select
-                              className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                              value={quickIntakeForm.gender}
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  gender: e.target.value,
-                                }))
-                              }
-                            >
-                              <option value="male">Male</option>
-                              <option value="female">Female</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                              Appointment Date
-                            </label>
-                            <input
-                              required
-                              className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
-                              type="date"
-                              value={quickIntakeForm.appointmentDate}
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  appointmentDate: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                              Appointment Category
-                            </label>
-                            <select
-                              className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                              value={quickIntakeForm.appointmentTypeId}
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  appointmentTypeId: e.target.value,
-                                }))
-                              }
-                            >
-                              <optgroup label="Appointments">
-                                {appointmentTypes.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                              {packages.length > 0 && (
-                                <optgroup label="Treatment Packages">
-                                  {packages.map((pkg) => (
-                                    <option key={`pkg_${pkg.id}`} value={`pkg_${pkg.id}`}>
-                                      📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                            </select>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {/* Existing Patient Search Panel */}
-                        <div className="space-y-4">
-                          {!selectedExistingPatient ? (
-                            <div className="relative">
-                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                                🔍 Search Existing Patient
-                              </label>
-                              <div className="relative flex items-center border border-border-base rounded-[10px] min-h-[38px] bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20">
-                                <IoSearchOutline className="ml-3 w-4 h-4 text-text-muted/70 shrink-0" />
-                                <input
-                                  className="flex-1 w-full text-[13.5px] px-2 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/70"
-                                  placeholder="Search by name, Reg # or mobile number..."
-                                  type="text"
-                                  value={patientSearchQuery}
-                                  onChange={(e) => {
-                                    setPatientSearchQuery(e.target.value);
-                                    setIsSearchDropdownOpen(true);
-                                  }}
-                                  onFocus={() => setIsSearchDropdownOpen(true)}
-                                />
-                                {patientSearchQuery && (
-                                  <button
-                                    className="mr-3 text-text-muted hover:text-text-main"
-                                    type="button"
-                                    onClick={() => setPatientSearchQuery("")}
-                                  >
-                                    <IoCloseOutline className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Search Results Dropdown */}
-                              {isSearchDropdownOpen &&
-                                patientSearchQuery.trim().length > 0 && (
-                                  <>
-                                    <div
-                                      className="fixed inset-0 z-[10]"
-                                      onClick={() =>
-                                        setIsSearchDropdownOpen(false)
-                                      }
-                                    />
-                                    <div className="absolute left-0 right-0 mt-1 bg-surface border border-border-base rounded-lg shadow-xl max-h-60 overflow-y-auto z-[20] pr-1">
-                                      {(() => {
-                                        const query =
-                                          patientSearchQuery.toLowerCase();
-                                        const filteredPatients =
-                                          patients.filter(
-                                            (p) =>
-                                              p.name
-                                                .toLowerCase()
-                                                .includes(query) ||
-                                              (p.regNumber &&
-                                                p.regNumber
-                                                  .toLowerCase()
-                                                  .includes(query)) ||
-                                              p.mobile.includes(query),
-                                          );
-
-                                        if (filteredPatients.length === 0) {
-                                          return (
-                                            <div className="p-4 text-center text-xs text-text-muted">
-                                              No matching patients found.
-                                            </div>
-                                          );
-                                        }
-
-                                        return filteredPatients.map((p) => (
-                                          <button
-                                            key={p.id}
-                                            className="w-full text-left px-4 py-2.5 hover:bg-primary/5 border-b border-border-base/30 last:border-0 flex items-center justify-between transition-colors"
-                                            type="button"
-                                            onClick={() => {
-                                              setSelectedExistingPatient(p);
-                                              setIsSearchDropdownOpen(false);
-                                              // Auto-fill physician or referrals if they exist on the patient
-                                              setQuickIntakeForm((prev) => {
-                                                const updated = { ...prev };
-
-                                                if (
-                                                  p.doctorId &&
-                                                  p.doctorId !== "unassigned"
-                                                ) {
-                                                  updated.doctorId = p.doctorId;
-                                                }
-                                                if (p.assignedExpertId) {
-                                                  updated.assignedExpertId =
-                                                    p.assignedExpertId;
-                                                }
-                                                if (
-                                                  p.referrals &&
-                                                  p.referrals.length > 0
-                                                ) {
-                                                  updated.referrals =
-                                                    p.referrals;
-                                                }
-
-                                                return updated;
-                                              });
-                                            }}
-                                          >
-                                            <div>
-                                              <p className="text-[13px] font-bold text-text-main leading-tight font-sans">
-                                                {p.name}
-                                              </p>
-                                              <p className="text-[11px] text-text-muted mt-0.5 leading-tight font-sans">
-                                                Reg #: {p.regNumber || "N/A"} •
-                                                Mob: {p.mobile}
-                                              </p>
-                                            </div>
-                                            <span className="text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded uppercase">
-                                              Select
-                                            </span>
-                                          </button>
-                                        ));
-                                      })()}
-                                    </div>
-                                  </>
-                                )}
-                            </div>
-                          ) : (
-                            /* Selected Patient Preview Card */
-                            <div className="bg-surface-2/60 border border-border-base rounded-xl p-4 flex flex-col gap-3.5 relative shadow-sm animate-in fade-in zoom-in-95 duration-150">
-                              <div className="flex items-center gap-3.5">
-                                <div className="w-12 h-12 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-base font-bold shrink-0 shadow-sm">
-                                  {selectedExistingPatient.name
-                                    .substring(0, 2)
-                                    .toUpperCase()}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <p className="text-[14.5px] font-extrabold text-text-main leading-none">
-                                      {selectedExistingPatient.name}
-                                    </p>
-                                    {selectedExistingPatient.isCritical && (
-                                      <span className="text-[9px] font-bold bg-red-500/10 text-red-600 border border-red-500/20 px-1 py-0.5 rounded leading-none">
-                                        CRITICAL
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[11.5px] text-text-muted mt-1.5 font-medium leading-none">
-                                    Reg #:{" "}
-                                    <span className="text-primary font-bold">
-                                      {selectedExistingPatient.regNumber ||
-                                        "N/A"}
-                                    </span>
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border-base/50 pt-3 text-[12px]">
-                                <div>
-                                  <span className="text-text-muted block text-[10px] uppercase font-bold tracking-wider">
-                                    Mobile Number
-                                  </span>
-                                  <span className="text-text-main font-semibold mt-0.5 block">
-                                    {selectedExistingPatient.mobile}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-text-muted block text-[10px] uppercase font-bold tracking-wider">
-                                    Age / Gender
-                                  </span>
-                                  <span className="text-text-main font-semibold mt-0.5 block">
-                                    {selectedExistingPatient.age || "—"} /{" "}
-                                    {selectedExistingPatient.gender || "—"}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <button
-                                className="w-full mt-1.5 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 text-[11.5px] font-bold transition-all shadow-none flex items-center justify-center gap-1"
-                                type="button"
-                                onClick={() => {
-                                  setSelectedExistingPatient(null);
-                                  setPatientSearchQuery("");
-                                }}
-                              >
-                                <IoCloseOutline className="w-4 h-4" /> Reset &
-                                Search Another Patient
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Appointment Date & Category for Existing Patient */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                                Appointment Date
-                              </label>
-                              <input
-                                required
-                                className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
-                                type="date"
-                                value={quickIntakeForm.appointmentDate}
-                                onChange={(e) =>
-                                  setQuickIntakeForm((prev) => ({
-                                    ...prev,
-                                    appointmentDate: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                                Appointment Category
-                              </label>
-                            <select
-                              className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                              value={quickIntakeForm.appointmentTypeId}
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  appointmentTypeId: e.target.value,
-                                }))
-                              }
-                            >
-                              <optgroup label="Appointments">
-                                {appointmentTypes.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                              {activePatientPackages.length > 0 && (
-                                <optgroup label="Active Packages (Consume Session)">
-                                  {activePatientPackages.map((pkg) => (
-                                    <option key={`consume_${pkg.id}`} value={`consume_pkg_${pkg.id}`}>
-                                      ⭐ Consume Session: {pkg.packageName} ({pkg.usedSessions}/{pkg.totalSessions} used)
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {packages.length > 0 && (
-                                <optgroup label="Treatment Packages">
-                                  {packages.map((pkg) => (
-                                    <option key={`pkg_${pkg.id}`} value={`pkg_${pkg.id}`}>
-                                      📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                            </select>
-                          </div>
-                        </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Assigned Doctor & Assigned Expert */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                          Assigned Doctor (Internal)
-                        </label>
-                        <select
-                          className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                          value={quickIntakeForm.doctorId}
-                          onChange={(e) =>
-                            setQuickIntakeForm((prev) => ({
-                              ...prev,
-                              doctorId: e.target.value,
-                            }))
-                          }
-                        >
-                          <option value="">None / Unassigned</option>
-                          {doctors.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              Dr. {d.name} ({d.speciality || "GP"})
-                            </option>
-                          ))}
-                        </select>
-                        {quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned" && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <input 
-                              type="checkbox" 
-                              id="generateConsultationBill"
-                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                              checked={quickIntakeForm.generateConsultationBill}
-                              onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, generateConsultationBill: e.target.checked }))}
-                            />
-                            <label htmlFor="generateConsultationBill" className="text-[11px] text-text-muted font-medium cursor-pointer select-none">
-                              Charge Consultation Fee
-                            </label>
-                            
-                            <input 
-                              type="checkbox" 
-                              id="addClinicianCommissionDoc"
-                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer ml-3"
-                              checked={quickIntakeForm.addDoctorCommission}
-                              onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, addDoctorCommission: e.target.checked }))}
-                            />
-                            <label htmlFor="addClinicianCommissionDoc" className="text-[11px] text-text-muted font-medium cursor-pointer select-none">
-                              Add commission
-                            </label>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                          Assigned Expert (External)
-                        </label>
-                        <select
-                          className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                          value={quickIntakeForm.assignedExpertId}
-                          onChange={(e) =>
-                            setQuickIntakeForm((prev) => ({
-                              ...prev,
-                              assignedExpertId: e.target.value,
-                            }))
-                          }
-                        >
-                          <option value="">None / Unassigned</option>
-                          {experts.map((exp) => (
-                            <option key={exp.id} value={exp.id}>
-                              {exp.name} ({exp.speciality || "Consultant"})
-                            </option>
-                          ))}
-                        </select>
-                        {quickIntakeForm.assignedExpertId && quickIntakeForm.assignedExpertId !== "unassigned" && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <input 
-                              type="checkbox" 
-                              id="addClinicianCommissionExp"
-                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                              checked={quickIntakeForm.addExpertCommission}
-                              onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, addExpertCommission: e.target.checked }))}
-                            />
-                            <label htmlFor="addClinicianCommissionExp" className="text-[11px] text-text-muted font-medium cursor-pointer select-none">
-                              Add commission
-                            </label>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Payment details for Package Sales */}
-                    {quickIntakeForm.appointmentTypeId.startsWith("pkg_") && (
-                      <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                          <div>
-                          <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                            Payment Method
-                          </label>
-                          <select
-                            className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                            value={quickIntakeForm.paymentMethod}
-                            onChange={(e) =>
-                              setQuickIntakeForm((prev) => ({ ...prev, paymentMethod: e.target.value }))
-                            }
-                          >
-                            <option value="cash">Cash</option>
-                            <option value="card">Card</option>
-                            <option value="esewa">eSewa</option>
-                            <option value="khalti">Khalti</option>
-                            <option value="bank_transfer">Bank Transfer</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                            Payment Reference (Optional)
-                          </label>
-                          <input
-                            className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
-                            placeholder="e.g. Trx ID"
-                            type="text"
-                            value={quickIntakeForm.paymentReference}
-                            onChange={(e) =>
-                              setQuickIntakeForm((prev) => ({ ...prev, paymentReference: e.target.value }))
-                            }
-                          />
-                        </div>
-                      </div>
-                      
-                        {/* Checkbox for package sale: start session instantly */}
-                        <div className="mt-3 flex items-center gap-2 p-2 bg-primary/5 rounded border border-primary/10">
-                          <input 
-                            type="checkbox" 
-                            id="intakeStartSession"
-                            className="w-4 h-4 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                            checked={quickIntakeForm.startSessionInstantly}
-                            onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, startSessionInstantly: e.target.checked }))}
-                          />
-                          <label htmlFor="intakeStartSession" className="text-[12px] font-medium text-text-main cursor-pointer select-none">
-                            Start first session instantly (Add to Lobby Queue)
-                          </label>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Complaints / Reason */}
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                        Chief Complaints / Reason for Visit
-                      </label>
-                      <textarea
-                        className="w-full min-h-16 px-3 py-2 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors resize-none"
-                        placeholder="e.g. fever since yesterday, follow-up consult..."
-                        value={quickIntakeForm.reason}
-                        onChange={(e) =>
-                          setQuickIntakeForm((prev) => ({
-                            ...prev,
-                            reason: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    
-                    {/* Checkbox for bypass workflow */}
-                    {quickIntakeForm.appointmentTypeId.startsWith("consume_pkg_") && (
-                      <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-500/10 rounded border border-indigo-500/20">
-                        <input 
-                          type="checkbox" 
-                          id="intakeSendDirect"
-                          className="w-4 h-4 rounded border-border-base text-indigo-500 focus:ring-indigo-500 cursor-pointer"
-                          checked={quickIntakeForm.sendDirectlyToCabin}
-                          onChange={(e) => setQuickIntakeForm(prev => ({ ...prev, sendDirectlyToCabin: e.target.checked }))}
-                        />
-                        <label htmlFor="intakeSendDirect" className="text-[12px] font-medium text-text-main cursor-pointer select-none">
-                          Skip Lobby/Triage (Send directly to Doctor or Expert Cabin)
-                        </label>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Column: Polymorphic Referrals Panel */}
-                  <div className="space-y-4 flex flex-col justify-between">
-                    <div className="space-y-3">
-                      <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-border-base pb-1">
-                        Referral Sources & Commissions
-                      </h4>
-
-                      <div className="border border-border-base rounded p-3 bg-surface-2/30 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <label className="block text-[11.5px] font-bold text-text-main">
-                              Referral Sources & Commission Splits
-                            </label>
-                            <p className="text-[10px] text-text-muted">
-                              Associate this patient check-in with one or more
-                              referrers.
-                            </p>
-                          </div>
-                          <button
-                            className="px-2.5 py-1 text-[11px] font-bold text-primary border border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded transition-colors"
-                            type="button"
-                            onClick={addReferrerRow}
-                          >
-                            ➕ Add Referrer
-                          </button>
-                        </div>
-
-                        {quickIntakeForm.referrals.length === 0 ? (
-                          <div className="py-4 text-center text-[11.5px] text-text-muted bg-surface/50 border border-dashed border-border-base rounded">
-                            No active referrals added (Patient is a Direct
-                            Walk-in).
-                          </div>
-                        ) : (
-                          <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                            {quickIntakeForm.referrals.map((ref, idx) => (
-                              <div
-                                key={idx}
-                                className="flex flex-col gap-2 bg-surface p-2 border border-border-base rounded shadow-none relative"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="grid grid-cols-12 gap-2 flex-1">
-                                    {/* Referrer Type Dropdown */}
-                                    <div className="col-span-4">
-                                      <label className="block text-[9px] font-semibold text-text-muted mb-0.5">
-                                        Type
-                                      </label>
-                                      <select
-                                        className="w-full h-8 pl-2 pr-6 text-[11px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                                        value={ref.type}
-                                        onChange={(e) =>
-                                          updateReferrerRow(
-                                            idx,
-                                            "type",
-                                            e.target.value,
-                                          )
-                                        }
-                                      >
-                                        <option value="referral-partner">
-                                          External Partner
-                                        </option>
-                                        <option value="doctor">
-                                          Internal Doctor
-                                        </option>
-                                        <option value="expert">
-                                          External Expert
-                                        </option>
-                                        <option value="staff">
-                                          Internal Staff
-                                        </option>
-                                      </select>
-                                    </div>
-
-                                    {/* Referrer Name Dropdown */}
-                                    <div className="col-span-5">
-                                      <label className="block text-[9px] font-semibold text-text-muted mb-0.5">
-                                        Name
-                                      </label>
-                                      <select
-                                        className="w-full h-8 pl-2 pr-6 text-[11px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                                        value={ref.id}
-                                        onChange={(e) =>
-                                          updateReferrerRow(
-                                            idx,
-                                            "id",
-                                            e.target.value,
-                                          )
-                                        }
-                                      >
-                                        {ref.type === "referral-partner" && (
-                                          <>
-                                            <option value="">
-                                              -- Choose Partner --
-                                            </option>
-                                            {referralPartners.map((rp) => (
-                                              <option key={rp.id} value={rp.id}>
-                                                {rp.name}
-                                              </option>
-                                            ))}
-                                          </>
-                                        )}
-                                        {ref.type === "doctor" && (
-                                          <>
-                                            <option value="">
-                                              -- Choose Doctor --
-                                            </option>
-                                            {doctors.map((d) => (
-                                              <option key={d.id} value={d.id}>
-                                                Dr. {d.name}
-                                              </option>
-                                            ))}
-                                          </>
-                                        )}
-                                        {ref.type === "expert" && (
-                                          <>
-                                            <option value="">
-                                              -- Choose Expert --
-                                            </option>
-                                            {experts.map((exp) => (
-                                              <option
-                                                key={exp.id}
-                                                value={exp.id}
-                                              >
-                                                {exp.name}
-                                              </option>
-                                            ))}
-                                          </>
-                                        )}
-                                        {ref.type === "staff" && (
-                                          <>
-                                            <option value="">
-                                              -- Choose Staff --
-                                            </option>
-                                            {staff.map((s) => (
-                                              <option key={s.id} value={s.id}>
-                                                {s.name}
-                                              </option>
-                                            ))}
-                                          </>
-                                        )}
-                                      </select>
-                                    </div>
-
-                                    {/* Commission split percentage */}
-                                    <div className="col-span-3">
-                                      <label className="block text-[9px] font-semibold text-text-muted mb-0.5">
-                                        Split %
-                                      </label>
-                                      <input
-                                        className="w-full h-8 px-1 text-[11px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors text-right"
-                                        max="100"
-                                        min="0"
-                                        type="number"
-                                        value={ref.commissionPercentage}
-                                        onChange={(e) =>
-                                          updateReferrerRow(
-                                            idx,
-                                            "commissionPercentage",
-                                            e.target.value,
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                  </div>
-
-                                  {/* Action delete button */}
-                                  <button
-                                    className="h-8 w-8 rounded border border-border-base text-red-500 hover:bg-red-500/5 flex items-center justify-center transition-colors shrink-0 mt-3"
-                                    title="Remove referrer"
-                                    type="button"
-                                    onClick={() => removeReferrerRow(idx)}
-                                  >
-                                    &times;
-                                  </button>
-                                </div>
-
-                                {/* Partner sub-row: Specific referred by doctor/expert */}
-                                {ref.type === "referral-partner" && (
-                                  <div className="border-t border-border-base/50 pt-2 mt-1 grid grid-cols-12 gap-2 items-center">
-                                    <div className="col-span-5">
-                                      <span className="text-[9.5px] font-bold text-text-muted">
-                                        Referred By (Doc/Expert):
-                                      </span>
-                                    </div>
-                                    <div className="col-span-7">
-                                      <select
-                                        className="w-full h-8 pl-2 pr-6 text-[11px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                                        value={ref.referredById || ""}
-                                        onChange={(e) =>
-                                          updateReferrerRow(
-                                            idx,
-                                            "referredById",
-                                            e.target.value,
-                                          )
-                                        }
-                                      >
-                                        <option value="">
-                                          -- Optional Referring Person --
-                                        </option>
-                                        <optgroup label="Internal Doctors">
-                                          {doctors.map((d) => (
-                                            <option key={d.id} value={d.id}>
-                                              Dr. {d.name} (
-                                              {d.speciality || "GP"})
-                                            </option>
-                                          ))}
-                                        </optgroup>
-                                        <optgroup label="External Experts">
-                                          {experts.map((exp) => (
-                                            <option key={exp.id} value={exp.id}>
-                                              {exp.name}
-                                            </option>
-                                          ))}
-                                        </optgroup>
-                                      </select>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Smart CTA Redirect link */}
-                    <div className="p-3 bg-primary/5 rounded border border-primary/10 text-center">
-                      <p className="text-[11px] text-text-muted">
-                        Need to record Insurance, full family history, or
-                        payment details?
-                      </p>
-                      <button
-                        className="text-[11px] font-semibold text-primary hover:underline mt-1"
-                        type="button"
-                        onClick={() => {
-                          setIsQuickIntakeOpen(false);
-                          navigate("/dashboard/patients/new");
-                        }}
-                      >
-                        Go to Full Patient Registration Page &rarr;
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-4 sm:px-5 py-3 border-t border-border-base bg-surface-2 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 rounded-b-lg">
-                <button
-                  className="h-9 px-4 rounded border border-border-base text-[12.5px] font-medium text-text-muted hover:bg-surface-3 transition-colors w-full sm:w-auto"
-                  type="button"
-                  onClick={() => setIsQuickIntakeOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="h-9 px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors w-full sm:w-auto"
-                  disabled={quickIntakeSaving}
-                  type="submit"
-                >
-                  {quickIntakeSaving ? "Checking In..." : "Complete Check-In"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </>,
-      modalRoot,
+    return (
+      <QuickIntakeModal
+        activePatientPackages={activePatientPackages}
+        addReferrerRow={addReferrerRow}
+        appointmentTypes={appointmentTypes}
+        doctors={doctors}
+        experts={experts}
+        intakeMode={intakeMode}
+        isOpen={isQuickIntakeOpen}
+        isSearchDropdownOpen={isSearchDropdownOpen}
+        mobileStatus={mobileStatus}
+        packages={packages}
+        patientSearchQuery={patientSearchQuery}
+        patients={patients}
+        quickIntakeForm={quickIntakeForm}
+        quickIntakeSaving={quickIntakeSaving}
+        referralPartners={referralPartners}
+        removeReferrerRow={removeReferrerRow}
+        selectedExistingPatient={selectedExistingPatient}
+        setIntakeMode={setIntakeMode}
+        setIsSearchDropdownOpen={setIsSearchDropdownOpen}
+        setPatientSearchQuery={setPatientSearchQuery}
+        setQuickIntakeForm={setQuickIntakeForm}
+        setSelectedExistingPatient={setSelectedExistingPatient}
+        staff={staff}
+        updateReferrerRow={updateReferrerRow}
+        onClose={() => setIsQuickIntakeOpen(false)}
+        onSubmit={handleQuickIntakeSubmit}
+      />
     );
+  };
+
+  const handleFinaliseProcedure = async (accept: boolean) => {
+    if (!apptToFinalise || !clinicId) return;
+    setIsFinalisingProcedure(true);
+
+    try {
+      const rec = (apptToFinalise as any).recommendedProcedure;
+
+      if (accept && rec && rec.fee > 0) {
+        let feeNum = rec.fee;
+        let actualProcedureName = rec.name;
+
+        if (
+          rec.items &&
+          Array.isArray(rec.items) &&
+          finaliseSelectedItems.length > 0
+        ) {
+          const billedItems = rec.items.filter((i: any) =>
+            finaliseSelectedItems.includes(i.id),
+          );
+
+          feeNum = billedItems.reduce((sum: number, i: any) => sum + i.fee, 0);
+          actualProcedureName = billedItems.map((i: any) => i.name).join(", ");
+        }
+
+        let billingId =
+          apptToFinalise.consultationBillingId || apptToFinalise.billingId;
+
+        if (billingId) {
+          const billing =
+            await appointmentBillingService.getBillingById(billingId);
+
+          if (billing) {
+            const procedureItem = {
+              id: crypto.randomUUID(),
+              appointmentTypeId:
+                apptToFinalise.appointmentTypeId || "procedure-fee",
+              appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
+              price: feeNum,
+              quantity: 1,
+              commission: 0,
+              discountValue: 0,
+              discountType: "percent" as const,
+              discountAmount: 0,
+              amount: feeNum,
+            };
+
+            const updatedItems = [...(billing.items || []), procedureItem];
+            const totals = appointmentBillingService.calculateInvoiceTotals(
+              updatedItems,
+              billing.discountType || "percent",
+              billing.discountValue || 0,
+              billing.taxPercentage || 0,
+            );
+
+            const newPaid = billing.paidAmount || 0;
+            const newTotal = totals.totalAmount;
+            const newBalance = newTotal - newPaid;
+
+            const newPaymentStatus =
+              newPaid >= newTotal ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+            const newStatus = newPaymentStatus === "paid" ? "paid" : "draft";
+
+            await appointmentBillingService.updateBilling(billingId, {
+              items: updatedItems,
+              subtotal: totals.subtotal,
+              itemDiscountAmount: totals.itemDiscountAmount,
+              mainDiscountAmount: totals.mainDiscountAmount,
+              discountAmount: totals.totalDiscount,
+              taxAmount: totals.taxAmount,
+              totalAmount: totals.totalAmount,
+              balanceAmount: newBalance,
+              paymentStatus: newPaymentStatus,
+              status: newStatus,
+            });
+
+            await appointmentService.updateAppointment(apptToFinalise.id, {
+              billingStatus: newPaymentStatus,
+              paymentStatus: newPaymentStatus,
+              updatedAt: new Date(),
+            } as any);
+          }
+        } else {
+          // No invoice exists. Create a draft invoice for this procedure from scratch.
+          const invoiceNo =
+            await appointmentBillingService.generateInvoiceNumber(clinicId);
+
+          let pat = patients.find((p) => p.id === apptToFinalise.patientId);
+
+          if (!pat && apptToFinalise.patientId) {
+            pat =
+              (await patientService.getPatientById(apptToFinalise.patientId)) ||
+              undefined;
+          }
+
+          const isExpert =
+            apptToFinalise.assignedExpertId &&
+            apptToFinalise.assignedExpertId !== "unassigned";
+          const clinicianId = isExpert
+            ? apptToFinalise.assignedExpertId
+            : apptToFinalise.doctorId || "unassigned";
+          const docInfo =
+            doctors.find((d) => d.id === clinicianId) ||
+            experts.find((e) => e.id === clinicianId);
+
+          const billingItem = {
+            id: crypto.randomUUID(),
+            appointmentTypeId:
+              apptToFinalise.appointmentTypeId || "procedure-fee",
+            appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
+            price: feeNum,
+            quantity: 1,
+            commission: (docInfo as any)?.defaultCommission || 0,
+            doctorId: clinicianId,
+            doctorName: docInfo?.name || "Clinician",
+            amount: feeNum,
+          };
+
+          const billingData = {
+            invoiceNumber: invoiceNo,
+            clinicId: clinicId,
+            branchId: branchId || clinicId,
+            patientId: apptToFinalise.patientId,
+            patientName: pat?.name || "Unknown Patient",
+            doctorId: clinicianId,
+            doctorName: docInfo?.name || "Clinician",
+            doctorType: ((docInfo as any)?.doctorType || "regular") as
+              | "regular"
+              | "visitor",
+            invoiceDate: new Date(),
+            items: [billingItem],
+            subtotal: feeNum,
+            itemDiscountAmount: 0,
+            mainDiscountAmount: 0,
+            discountType: "percent" as const,
+            discountValue: 0,
+            discountAmount: 0,
+            taxPercentage: 0,
+            taxAmount: 0,
+            totalAmount: feeNum,
+            status: "draft" as const,
+            paymentStatus: "unpaid" as const,
+            paidAmount: 0,
+            balanceAmount: feeNum,
+            createdBy: currentUser?.uid || "system",
+          };
+
+          const newBillingId =
+            await appointmentBillingService.createBilling(billingData);
+
+          await appointmentService.updateAppointment(apptToFinalise.id, {
+            billingId: newBillingId,
+            billingStatus: "unpaid",
+            paymentStatus: "unpaid",
+            updatedAt: new Date(),
+          } as any);
+        }
+      }
+
+      await appointmentService.updateAppointment(apptToFinalise.id, {
+        recommendedProcedure: null,
+      } as any);
+
+      addToast({
+        title: accept ? "Procedure Billed" : "Procedure Declined",
+        description: accept
+          ? "The procedure has been added to the invoice."
+          : "The recommended procedure was discarded.",
+        color: accept ? "success" : "warning",
+      });
+    } catch (err) {
+      console.error("Error finalising procedure:", err);
+      addToast({
+        title: "Error",
+        description: "Failed to finalise procedure.",
+        color: "danger",
+      });
+    } finally {
+      setIsFinalisingProcedure(false);
+      setApptToFinalise(null);
+    }
   };
 
   const handleSettleBilling = async (appt: Appointment) => {
@@ -4396,14 +3396,18 @@ export default function FrontOfficeDesk() {
           onClick: () => {},
         };
       }
-      const isCons = consBill.items?.some(
-        (item: any) =>
-          item.appointmentTypeId === "consultation-fee" ||
-          item.appointmentTypeName?.includes("Consultation"),
-      );
+      const isOnlyCons =
+        consBill.items?.length === 1 &&
+        consBill.items.some(
+          (item: any) =>
+            item.appointmentTypeId === "consultation-fee" ||
+            item.appointmentTypeName?.includes("Consultation"),
+        );
 
       return {
-        label: isCons ? "Settle Consultation Bill" : "Settle Billing Invoice",
+        label: isOnlyCons
+          ? "Settle Consultation Bill"
+          : "Settle Billing Invoice",
         icon: <IoCardOutline className="w-4 h-4" />,
         colorClass: "bg-red-500 text-white hover:bg-red-600 animate-pulse",
         onClick: () =>
@@ -4459,7 +3463,9 @@ export default function FrontOfficeDesk() {
         }
 
         return {
-          label: hasExpert ? "Send to Expert Cabin" : "Complete (No Prescription)",
+          label: hasExpert
+            ? "Send to Expert Cabin"
+            : "Complete (No Prescription)",
           icon: <IoCheckmarkCircleOutline className="w-4 h-4" />,
           colorClass: "bg-primary text-white hover:bg-primary/90",
           onClick: () => handleCompleteConsultation(appt.id),
@@ -4480,57 +3486,28 @@ export default function FrontOfficeDesk() {
           label: "Record Procedure Log",
           icon: <IoCreateOutline className="w-4 h-4" />,
           colorClass: "bg-primary text-white hover:bg-primary/95",
-          onClick: () => {
-            setSelectedAppointment(appt);
-
-            const apptTypeName = getApptTypeLabel(appt.appointmentTypeId);
-            const apptType = appointmentTypes.find(
-              (t) => t.id === appt.appointmentTypeId,
-            );
-            const apptPrice = apptType ? String(apptType.price || "") : "";
-
-            setProcedure({
-              procedureType: apptTypeName,
-              energy: "",
-              spotSize: "",
-              pulseWidth: "",
-              passes: "",
-              area: "Full Face",
-              fee: apptPrice,
-              notes: "",
-            });
-            setIsProcedureModalOpen(true);
-
-            if (clinicId && appt.patientId) {
-              setLoadingHistory(true);
-              PatientNoteEntriesService.getSectionNoteEntries(
-                clinicId,
-                appt.patientId,
-                "laser-procedure",
-              )
-                .then((entries) => {
-                  setHistoricalProcedures(entries);
-                })
-                .catch((err) => {
-                  console.error(
-                    "Error loading patient procedure history:",
-                    err,
-                  );
-                })
-                .finally(() => {
-                  setLoadingHistory(false);
-                });
-                
-              patientPackageService.getPatientPackages(appt.patientId, clinicId)
-                .then(data => {
-                  setModalActivePackages(data.filter(p => p.status !== "expired" && p.status !== "completed"));
-                })
-                .catch(console.error);
-            }
-          },
+          onClick: () => handleOpenProcedure(appt),
         };
       }
       case "billing":
+        if ((appt as any).recommendedProcedure) {
+          return {
+            label: "Finalise Recommended Procedure",
+            icon: <IoCheckmarkCircleOutline className="w-4 h-4" />,
+            colorClass:
+              "bg-blue-500 text-white hover:bg-blue-600 animate-pulse",
+            onClick: () => {
+              setApptToFinalise(appt);
+              const rec = (appt as any).recommendedProcedure;
+
+              if (rec && rec.items && Array.isArray(rec.items)) {
+                setFinaliseSelectedItems(rec.items.map((i: any) => i.id));
+              } else {
+                setFinaliseSelectedItems([]);
+              }
+            },
+          };
+        }
         if (isExpertOnly) {
           return {
             label: "Billing Pending",
@@ -4540,6 +3517,7 @@ export default function FrontOfficeDesk() {
             onClick: () => {},
           };
         }
+
         return {
           label: "Settle Billing Invoice",
           icon: <IoCardOutline className="w-4 h-4" />,
@@ -4556,6 +3534,7 @@ export default function FrontOfficeDesk() {
             onClick: () => {},
           };
         }
+
         return {
           label: "Fulfill Prescription",
           icon: <IoReceiptOutline className="w-4 h-4" />,
@@ -4586,9 +3565,19 @@ export default function FrontOfficeDesk() {
       const isConsBillPending = hasDoctor && consBill && !isConsBillPaid;
 
       if (isConsBillPending) {
+        const isOnlyCons =
+          consBill.items?.length === 1 &&
+          consBill.items.some(
+            (item: any) =>
+              item.appointmentTypeId === "consultation-fee" ||
+              item.appointmentTypeName?.includes("Consultation"),
+          );
+
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 animate-pulse">
-            Consultation Fee Pending
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 animate-pulse whitespace-nowrap shrink-0">
+            {isOnlyCons
+              ? "Consultation Fee Pending"
+              : "Billing Invoice Pending"}
           </span>
         );
       }
@@ -4597,49 +3586,49 @@ export default function FrontOfficeDesk() {
     switch (stage) {
       case "scheduled":
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-surface-3 text-text-muted border border-border-base">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-surface-3 text-text-muted border border-border-base whitespace-nowrap shrink-0">
             Booking Today
           </span>
         );
       case "lobby":
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 whitespace-nowrap shrink-0">
             Waiting In Lobby
           </span>
         );
       case "triage-done":
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 whitespace-nowrap shrink-0">
             Triage Finished
           </span>
         );
       case "doctor":
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap shrink-0">
             In Doctor Cabin
           </span>
         );
       case "expert":
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
             In Expert Cabin
           </span>
         );
       case "billing":
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 border border-saffron-500/20">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 border border-saffron-500/20 whitespace-nowrap shrink-0">
             Billing Pending
           </span>
         );
       case "pharmacy":
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 whitespace-nowrap shrink-0">
             Pharmacy Pending
           </span>
         );
       default:
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 whitespace-nowrap shrink-0">
             Completed
           </span>
         );
@@ -4737,17 +3726,9 @@ export default function FrontOfficeDesk() {
                   if (s === "scheduled") return true;
                   if (s !== "lobby") return false;
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
-                  const consBill = hasDoc
+                  const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                        (b) =>
-                          b.patientId === a.patientId &&
-                          b.items?.some(
-                            (item: any) =>
-                              item.appointmentTypeId === "consultation-fee" ||
-                              item.appointmentTypeName?.includes(
-                                "Consultation Fee",
-                              ),
-                          ),
+                        (b) => b.id === (a as any).consultationBillingId,
                       )
                     : null;
                   const isConsBillPaid = consBill
@@ -4941,6 +3922,57 @@ export default function FrontOfficeDesk() {
 
             return [
               {
+                id: "urgent",
+                name: "🚨 ACTION REQUIRED",
+                count: appointments.filter(getQueueFilter).filter((a) => {
+                  const s = getPatientStage(a);
+
+                  if (s === "billing") return true;
+
+                  const hasDoc = a.doctorId && a.doctorId !== "unassigned";
+                  const consBill = (a as any).consultationBillingId
+                    ? billings.find(
+                        (b) => b.id === (a as any).consultationBillingId,
+                      )
+                    : null;
+                  const isConsBillPaid = consBill
+                    ? consBill.status === "paid" ||
+                      consBill.paymentStatus === "paid"
+                    : false;
+
+                  if (
+                    (s === "lobby" || s === "scheduled") &&
+                    hasDoc &&
+                    consBill &&
+                    !isConsBillPaid
+                  )
+                    return true;
+
+                  if (
+                    a.createdAt &&
+                    (s === "lobby" ||
+                      s === "triage-done" ||
+                      s === "doctor" ||
+                      s === "expert")
+                  ) {
+                    const dObj = (a.createdAt as any).seconds
+                      ? new Date((a.createdAt as any).seconds * 1000)
+                      : new Date(a.createdAt);
+
+                    if (
+                      !isNaN(dObj.getTime()) &&
+                      Math.floor(
+                        (new Date().getTime() - dObj.getTime()) / 60000,
+                      ) > 30
+                    ) {
+                      return true;
+                    }
+                  }
+
+                  return false;
+                }).length,
+              },
+              {
                 id: "lobby",
                 name: " LOBBY QUEUE / WAITLIST",
                 count: appointments.filter(getQueueFilter).filter((a) => {
@@ -4949,17 +3981,9 @@ export default function FrontOfficeDesk() {
                   if (s === "scheduled") return true;
                   if (s !== "lobby") return false;
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
-                  const consBill = hasDoc
+                  const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                        (b) =>
-                          b.patientId === a.patientId &&
-                          b.items?.some(
-                            (item: any) =>
-                              item.appointmentTypeId === "consultation-fee" ||
-                              item.appointmentTypeName?.includes(
-                                "Consultation Fee",
-                              ),
-                          ),
+                        (b) => b.id === (a as any).consultationBillingId,
                       )
                     : null;
                   const isConsBillPaid = consBill
@@ -4980,17 +4004,9 @@ export default function FrontOfficeDesk() {
 
                   if (s !== "lobby") return false;
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
-                  const consBill = hasDoc
+                  const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                        (b) =>
-                          b.patientId === a.patientId &&
-                          b.items?.some(
-                            (item: any) =>
-                              item.appointmentTypeId === "consultation-fee" ||
-                              item.appointmentTypeName?.includes(
-                                "Consultation Fee",
-                              ),
-                          ),
+                        (b) => b.id === (a as any).consultationBillingId,
                       )
                     : null;
                   const isConsBillPaid = consBill
@@ -5053,9 +4069,11 @@ export default function FrontOfficeDesk() {
             ]
               .filter((tab) => {
                 if (currentDoctorId && currentExpertId)
-                  return ["doctor", "expert", "all"].includes(tab.id);
-                if (currentDoctorId) return ["doctor", "all"].includes(tab.id);
-                if (currentExpertId) return ["expert", "all"].includes(tab.id);
+                  return ["urgent", "doctor", "expert", "all"].includes(tab.id);
+                if (currentDoctorId)
+                  return ["urgent", "doctor", "all"].includes(tab.id);
+                if (currentExpertId)
+                  return ["urgent", "expert", "all"].includes(tab.id);
 
                 return true;
               })
@@ -5106,285 +4124,26 @@ export default function FrontOfficeDesk() {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {filteredAppointments.map((appt) => {
-                const patientName = getPatientName(appt.patientId);
-                const doctorName = getDoctorName(appt);
-                const apptType = getApptTypeLabel(appt.appointmentTypeId);
-                const time = appt.startTime
-                  ? `${formatTimeTo12Hour(appt.startTime)}`
-                  : "Time not set";
-                const stage = getPatientStage(appt);
-                const action = getGuidedAction(appt);
-                const hasDoctor =
-                  appt.doctorId && appt.doctorId !== "unassigned";
-                const consBill = hasDoctor
-                  ? billings.find(
-                      (b) =>
-                        b.patientId === appt.patientId &&
-                        b.items?.some(
-                          (item: any) =>
-                            item.appointmentTypeId === "consultation-fee" ||
-                            item.appointmentTypeName?.includes(
-                              "Consultation Fee",
-                            ),
-                        ),
-                    )
-                  : null;
-                const isConsBillPaid = consBill
-                  ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
-                  : false;
-                const isConsBillPending =
-                  hasDoctor && consBill && !isConsBillPaid;
-
-                return (
-                  <div
-                    key={appt.id}
-                    className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-surface border border-border-base rounded hover:border-primary transition-colors relative"
-                  >
-                    <div className="flex items-start md:items-center flex-1 gap-4">
-                      {/* Avatar */}
-                      <div className="w-9 h-9 rounded bg-surface-2 border border-border-base text-text-muted flex items-center justify-center text-[12px] font-bold shrink-0">
-                        {patientName.substring(0, 2).toUpperCase()}
-                      </div>
-
-                      {/* Patient / Encounter Details */}
-                      <div className="flex-1 flex flex-col gap-3">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 w-full">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <Link
-                                className="text-[13.5px] font-bold text-primary hover:underline leading-none"
-                                to={`/dashboard/patients/${appt.patientId}`}
-                              >
-                                {patientName}
-                              </Link>
-                              {getStageBadge(stage, appt)}
-                              {appt.cabinName && (
-                                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center gap-1">
-                                  🚪 {appt.cabinName}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <p className="text-[11.5px] text-text-muted leading-none">
-                                Reg #{getPatientReg(appt.patientId)}
-                              </p>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-[13px] font-medium text-text-main leading-none mb-1">
-                              {doctorName}
-                            </p>
-                            <p className="text-[11.5px] text-text-muted">
-                              {getDoctorSpeciality(appt)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[13px] font-medium text-text-main leading-none mb-1">
-                              Today
-                            </p>
-                            <p className="text-[11.5px] text-text-muted">
-                              {time}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[13px] font-medium text-text-main leading-none mb-1">
-                              {apptType}
-                            </p>
-                            <p className="text-[11.5px] text-text-muted truncate">
-                              {appt.reason ||
-                                appt.notes ||
-                                "General consultation"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* High-Fidelity Progression Pipeline stepper */}
-                        <div className="border-t border-border-base/40 pt-2.5 flex items-center gap-1 md:gap-1.5 w-full max-w-2xl">
-                          {(() => {
-                            const hasDoctor =
-                              appt.doctorId && appt.doctorId !== "unassigned";
-                            const hasExpert =
-                              appt.assignedExpertId &&
-                              appt.assignedExpertId !== "unassigned";
-
-                            const steps: string[] = [
-                              "Check-In",
-                              "Lobby Wait",
-                              "Triage Done",
-                            ];
-                            const stepStages: string[] = [
-                              "scheduled",
-                              "lobby",
-                              "triage-done",
-                            ];
-
-                            if (hasDoctor) {
-                              steps.push("Doctor Cabin");
-                              stepStages.push("doctor");
-                            }
-                            if (hasExpert) {
-                              steps.push("Expert Cabin");
-                              stepStages.push("expert");
-                            }
-
-                            steps.push("Billing Pending", "Pharmacy Queue");
-                            stepStages.push("billing", "pharmacy");
-
-                            const currentStageIdx = stepStages.indexOf(stage);
-
-                            return steps.map((step, idx) => {
-                              const isCompleted =
-                                stage === "completed" ||
-                                (currentStageIdx > idx &&
-                                  currentStageIdx !== -1);
-                              const isActive = currentStageIdx === idx;
-
-                              let stepColor =
-                                "bg-surface-3 text-text-muted/40 border-transparent";
-
-                              if (isCompleted) {
-                                stepColor =
-                                  "bg-green-500/10 text-green-600 border-green-500/20";
-                              } else if (isActive) {
-                                if (step === "Lobby Wait") {
-                                  stepColor =
-                                    "bg-teal-500/10 text-teal-600 border-teal-500/20 ring-1 ring-teal-500/10";
-                                } else if (step === "Triage Done") {
-                                  stepColor =
-                                    "bg-indigo-500/10 text-indigo-600 border-indigo-500/20 ring-1 ring-indigo-500/10";
-                                } else if (
-                                  step === "Doctor Cabin" ||
-                                  step === "Expert Cabin"
-                                ) {
-                                  stepColor =
-                                    "bg-amber-500/10 text-amber-600 border-amber-500/20 ring-1 ring-amber-500/10";
-                                } else if (step === "Billing Pending") {
-                                  stepColor =
-                                    "bg-saffron-500/10 text-saffron-600 border-saffron-500/20 ring-1 ring-saffron-500/10";
-                                } else if (step === "Pharmacy Queue") {
-                                  stepColor =
-                                    "bg-purple-500/10 text-purple-600 border-purple-500/20 ring-1 ring-purple-500/10";
-                                } else {
-                                  stepColor =
-                                    "bg-primary/10 text-primary border-primary/20 ring-1 ring-primary/10";
-                                }
-                              }
-
-                              return (
-                                <React.Fragment key={step}>
-                                  <div
-                                    className={`flex-1 text-[9.5px] py-0.5 text-center font-bold rounded uppercase border tracking-wider transition-all duration-300 ${stepColor} truncate`}
-                                  >
-                                    {step}
-                                  </div>
-                                  {idx < steps.length - 1 && (
-                                    <span className="text-text-muted/30 text-[9px] font-bold shrink-0">
-                                      &rarr;
-                                    </span>
-                                  )}
-                                </React.Fragment>
-                              );
-                            });
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Guided Action Trigger Button */}
-                    <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0 ml-0 md:ml-4 self-end md:self-auto border-t md:border-t-0 border-border-base pt-3 md:pt-0 w-full md:w-auto justify-end">
-                      {stage === "lobby" && !isConsBillPending && (
-                        <>
-                          {(!appt.doctorId || appt.doctorId === "unassigned") &&
-                            (!appt.assignedExpertId ||
-                              appt.assignedExpertId === "unassigned") && (
-                              <button
-                                className="h-9 px-3 whitespace-nowrap rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                                type="button"
-                                onClick={() => handleSendToDoctor(appt.id)}
-                              >
-                                Skip Triage & Send to Cabin
-                              </button>
-                            )}
-                          {appt.doctorId && appt.doctorId !== "unassigned" && (
-                            <button
-                              className="h-9 px-3 whitespace-nowrap rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                              type="button"
-                              onClick={() => handleSendToDoctor(appt.id)}
-                            >
-                              Skip Triage & Send to Doctor Cabin
-                            </button>
-                          )}
-                          {appt.assignedExpertId &&
-                            appt.assignedExpertId !== "unassigned" && (
-                              <button
-                                className="h-9 px-3 whitespace-nowrap rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                                type="button"
-                                onClick={() => handleSendToExpert(appt.id)}
-                              >
-                                Skip Triage & Send to Expert Cabin
-                              </button>
-                            )}
-                        </>
-                      )}
-                      {((stage === "doctor" &&
-                        (!currentExpertId || currentDoctorId)) ||
-                        (stage === "expert" &&
-                          (!currentDoctorId || currentExpertId))) && (
-                        <>
-                          {stage === "doctor" ? (
-                            <button
-                              className="h-9 px-3 rounded text-[12.5px] font-medium border border-amber-500/50 text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-colors outline-none flex items-center gap-1.5"
-                              type="button"
-                              onClick={() => navigate(`/dashboard/prescriptions/new?appointmentId=${appt.id}`)}
-                            >
-                              <IoDocumentTextOutline className="w-4 h-4" />
-                              Write Prescription
-                            </button>
-                          ) : (
-                            <button
-                              className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                              type="button"
-                              onClick={() => handleCompleteConsultation(appt.id)}
-                            >
-                              Complete (No Log)
-                            </button>
-                          )}
-                          {stage === "doctor" && appt.assignedExpertId && appt.assignedExpertId !== "unassigned" && (
-                            <button
-                              className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                              type="button"
-                              onClick={() => handleCompleteConsultation(appt.id, true)}
-                            >
-                              Send to Billing
-                            </button>
-                          )}
-                        </>
-                      )}
-                      {stage === "billing" && (
-                        <button
-                          className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                          type="button"
-                          onClick={() => handleCompleteCheckout(appt.id)}
-                        >
-                          Complete Checkout
-                        </button>
-                      )}
-                      <button
-                        className={`h-9 px-4 whitespace-nowrap rounded text-[12.5px] font-semibold flex items-center gap-1.5 transition-colors outline-none ${action.colorClass}`}
-                        type="button"
-                        onClick={action.onClick}
-                      >
-                        {action.icon}
-                        {action.label}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <QueueList
+              billings={billings}
+              currentDoctorId={currentDoctorId}
+              currentExpertId={currentExpertId}
+              filteredAppointments={filteredAppointments}
+              getApptTypeLabel={getApptTypeLabel}
+              getDoctorName={getDoctorName}
+              getDoctorSpeciality={getDoctorSpeciality}
+              getGuidedAction={getGuidedAction}
+              getPatientName={getPatientName}
+              getPatientReg={getPatientReg}
+              getPatientStage={getPatientStage}
+              getStageBadge={getStageBadge}
+              handleCompleteCheckout={handleCompleteCheckout}
+              handleCompleteConsultation={handleCompleteConsultation}
+              handleSendToDoctor={handleSendToDoctor}
+              handleSendToExpert={handleSendToExpert}
+              handleOpenProcedure={handleOpenProcedure}
+              loading={loading}
+            />
           )}
         </div>
       </div>
@@ -5401,10 +4160,128 @@ export default function FrontOfficeDesk() {
       {/* Render the quick intake walk-in modal */}
       {isQuickIntakeOpen && renderQuickIntakeModal()}
 
+      {/* Render Finalise Procedure Modal */}
+      {apptToFinalise &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setApptToFinalise(null)}
+            />
+            <div className="bg-surface rounded border border-border-base shadow-xl max-w-md w-full mx-4 relative z-10 p-5 animate-in fade-in zoom-in-95 duration-200">
+              <h3 className="font-bold text-lg text-text-main mb-2">
+                Finalise Procedure
+              </h3>
+              <p className="text-sm text-text-muted mb-4">
+                The expert recommended the following procedure for this patient.
+                Would you like to generate a bill for it?
+              </p>
+              <div className="bg-surface-2 border border-border-base p-3 rounded mb-5">
+                {(apptToFinalise as any).recommendedProcedure?.items &&
+                Array.isArray(
+                  (apptToFinalise as any).recommendedProcedure.items,
+                ) ? (
+                  <div className="flex flex-col gap-2">
+                    {(apptToFinalise as any).recommendedProcedure.items.map(
+                      (item: any) => (
+                        <div
+                          key={item.id}
+                          className="flex justify-between items-center bg-surface border border-border-base rounded p-2"
+                        >
+                          <Checkbox
+                            isSelected={finaliseSelectedItems.includes(item.id)}
+                            onValueChange={(checked) => {
+                              if (checked) {
+                                setFinaliseSelectedItems((prev) => [
+                                  ...prev,
+                                  item.id,
+                                ]);
+                              } else {
+                                setFinaliseSelectedItems((prev) =>
+                                  prev.filter((id) => id !== item.id),
+                                );
+                              }
+                            }}
+                          >
+                            <span className="text-[12.5px] text-text-main font-medium">
+                              {item.name}
+                            </span>
+                          </Checkbox>
+                          <span className="text-[12.5px] text-text-muted font-semibold">
+                            NPR {item.fee.toLocaleString()}
+                          </span>
+                        </div>
+                      ),
+                    )}
+                    <div className="mt-2 pt-2 border-t border-border-base flex justify-between items-center">
+                      <span className="text-sm font-semibold text-text-main">
+                        Total Recommended Fee:
+                      </span>
+                      <span className="text-sm font-bold text-primary">
+                        NPR{" "}
+                        {(apptToFinalise as any).recommendedProcedure.items
+                          .filter((i: any) =>
+                            finaliseSelectedItems.includes(i.id),
+                          )
+                          .reduce((acc: number, curr: any) => acc + curr.fee, 0)
+                          .toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-primary mb-1">
+                      {(apptToFinalise as any).recommendedProcedure?.name}
+                    </p>
+                    <p className="text-xs text-text-main">
+                      Area:{" "}
+                      {(apptToFinalise as any).recommendedProcedure?.area ||
+                        "N/A"}
+                    </p>
+                    <p className="text-xs text-text-main font-semibold mt-1">
+                      Fee: NPR{" "}
+                      {(
+                        apptToFinalise as any
+                      ).recommendedProcedure?.fee?.toLocaleString() || "0"}
+                    </p>
+                  </>
+                )}
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  className="px-4 py-2 rounded text-sm font-semibold border border-border-base text-text-muted hover:text-red-500 hover:border-red-500 hover:bg-red-50 transition-colors"
+                  disabled={isFinalisingProcedure}
+                  type="button"
+                  onClick={() => handleFinaliseProcedure(false)}
+                >
+                  Decline & Discard
+                </button>
+                <button
+                  className="px-4 py-2 rounded text-sm font-semibold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  disabled={
+                    isFinalisingProcedure ||
+                    (Array.isArray(
+                      (apptToFinalise as any).recommendedProcedure?.items,
+                    ) &&
+                      finaliseSelectedItems.length === 0)
+                  }
+                  type="button"
+                  onClick={() => handleFinaliseProcedure(true)}
+                >
+                  {isFinalisingProcedure
+                    ? "Processing..."
+                    : "Accept & Generate Bill"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
       <SellPackageModal
         isOpen={isSellPackageModalOpen}
-        onClose={() => setIsSellPackageModalOpen(false)}
         patients={patients}
+        onClose={() => setIsSellPackageModalOpen(false)}
       />
     </div>
   );

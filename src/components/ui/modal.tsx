@@ -67,6 +67,7 @@ export function Modal({
   scrollBehavior = "inside",
   isDismissable = true,
   hideCloseButton = false,
+  classNames,
   children,
 }: ModalProps) {
   // Lock scroll while open
@@ -102,13 +103,13 @@ export function Modal({
       {/* Backdrop — semi-transparent, clinical */}
       <div
         aria-hidden="true"
-        className="fixed inset-0 z-[9998] bg-mountain-900/30"
+        className={`fixed inset-0 z-[9998] bg-mountain-900/30 ${classNames?.backdrop || ""}`}
         onMouseDown={() => {
           if (isDismissable) onClose();
         }}
       />
       {/* Centering wrapper */}
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-6 overflow-hidden pointer-events-none">
+      <div className={`fixed inset-0 z-[9999] flex items-center justify-center px-4 py-6 overflow-hidden pointer-events-none ${classNames?.wrapper || ""}`}>
         {children}
       </div>
     </ModalContext.Provider>,

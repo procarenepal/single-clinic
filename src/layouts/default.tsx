@@ -71,6 +71,7 @@ export default function DefaultLayout({
                     src={clinicLogo || "/logo.png"}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
+
                       target.onerror = null;
                       target.src = "/logo.png";
                     }}

@@ -624,8 +624,7 @@ export default function PurchaseReturnPage() {
                     </TableCell>
                     <TableCell>
                       <span className="font-medium">
-                        NPR{" "}
-                        {Math.round(item.lineAmount).toLocaleString()}
+                        NPR {Math.round(item.lineAmount).toLocaleString()}
                       </span>
                     </TableCell>
                   </TableRow>
@@ -663,8 +662,7 @@ export default function PurchaseReturnPage() {
               <div className="text-right">
                 <p className="text-sm text-default-500">Return Amount</p>
                 <p className="text-stat font-semibold text-warning-600">
-                  NPR{" "}
-                  {Math.round(totalReturnAmount).toLocaleString()}
+                  NPR {Math.round(totalReturnAmount).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -685,8 +683,7 @@ export default function PurchaseReturnPage() {
               You are about to record a return for this purchase with total
               amount{" "}
               <span className="font-semibold">
-                NPR{" "}
-                {Math.round(totalReturnAmount).toLocaleString()}
+                NPR {Math.round(totalReturnAmount).toLocaleString()}
               </span>
               . This will update the purchase record and be visible in history.
             </p>

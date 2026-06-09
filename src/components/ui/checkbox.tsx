@@ -80,9 +80,11 @@ export const Checkbox: React.FC<CheckboxProps> = ({
     >
       <span
         className={clsx(
-          "inline-flex items-center justify-center rounded border border-border-base bg-surface",
+          "inline-flex items-center justify-center rounded-[4px] border",
           boxSize,
-          (value || isIndeterminate) && activeClasses,
+          value || isIndeterminate
+            ? activeClasses
+            : "border-border-base bg-surface",
         )}
       >
         {isIndeterminate && !value ? (

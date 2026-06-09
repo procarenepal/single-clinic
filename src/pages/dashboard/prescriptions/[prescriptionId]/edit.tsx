@@ -632,6 +632,7 @@ export default function EditPrescriptionPage() {
         }));
 
         const combinedDoctors = [...formattedDoctors, ...formattedExperts];
+
         setDoctors(combinedDoctors);
 
         setMedicines(medicinesData || []);

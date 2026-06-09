@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { 
-  Button, 
-  Input, 
-  Modal, 
-  ModalContent, 
-  ModalHeader, 
-  ModalBody, 
-  ModalFooter 
+
+import {
+  Button,
+  Input,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
 } from "@/components/ui";
 import { Patient, TreatmentPackage } from "@/types/models";
 import { packageService } from "@/services/packageService";
@@ -24,11 +25,15 @@ interface SellPackageModalProps {
   patients: Patient[];
 }
 
-export default function SellPackageModal({ isOpen, onClose, patients }: SellPackageModalProps) {
+export default function SellPackageModal({
+  isOpen,
+  onClose,
+  patients,
+}: SellPackageModalProps) {
   const { clinicId, branchId, currentUser } = useAuthContext();
   const [packages, setPackages] = useState<TreatmentPackage[]>([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
-  
+
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -39,7 +44,12 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
 
   // New vs Existing mode
   const [saleMode, setSaleMode] = useState<"existing" | "new">("existing");
-  const [newPatientForm, setNewPatientForm] = useState({ name: "", mobile: "", age: "", gender: "male" });
+  const [newPatientForm, setNewPatientForm] = useState({
+    name: "",
+    mobile: "",
+    age: "",
+    gender: "male",
+  });
 
   useEffect(() => {
     if (isOpen && clinicId) {
@@ -50,7 +60,11 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
   const loadPackages = async () => {
     try {
       setLoadingPackages(true);
-      const data = await packageService.getPackagesByClinic(clinicId!, branchId || undefined);
+      const data = await packageService.getPackagesByClinic(
+        clinicId!,
+        branchId || undefined,
+      );
+
       setPackages(data);
     } catch (error) {
       console.error("Error loading packages:", error);
@@ -63,23 +77,43 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
     e.preventDefault();
 
     if (saleMode === "new") {
-      if (!newPatientForm.name || !newPatientForm.mobile || !newPatientForm.age) {
-        addToast({ title: "Validation Error", description: "Please fill in all new patient fields.", color: "warning" });
+      if (
+        !newPatientForm.name ||
+        !newPatientForm.mobile ||
+        !newPatientForm.age
+      ) {
+        addToast({
+          title: "Validation Error",
+          description: "Please fill in all new patient fields.",
+          color: "warning",
+        });
+
         return;
       }
     } else {
       if (!selectedPatientId) {
-        addToast({ title: "Validation Error", description: "Please select an existing patient.", color: "warning" });
+        addToast({
+          title: "Validation Error",
+          description: "Please select an existing patient.",
+          color: "warning",
+        });
+
         return;
       }
     }
 
     if (!selectedPackageId) {
-      addToast({ title: "Validation Error", description: "Please select a package.", color: "warning" });
+      addToast({
+        title: "Validation Error",
+        description: "Please select a package.",
+        color: "warning",
+      });
+
       return;
     }
 
-    const pkg = packages.find(p => p.id === selectedPackageId);
+    const pkg = packages.find((p) => p.id === selectedPackageId);
+
     if (!pkg || !clinicId || !currentUser) return;
 
     try {
@@ -90,7 +124,9 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
 
       if (saleMode === "new") {
         // Create patient first
-        const nextReg = await patientService.getNextRegistrationNumber(clinicId);
+        const nextReg =
+          await patientService.getNextRegistrationNumber(clinicId);
+
         finalPatientId = await patientService.createPatient({
           name: newPatientForm.name.trim(),
           mobile: newPatientForm.mobile.trim(),
@@ -103,13 +139,15 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
         });
         finalPatientName = newPatientForm.name.trim();
       } else {
-        const pat = patients.find(p => p.id === selectedPatientId);
+        const pat = patients.find((p) => p.id === selectedPatientId);
+
         if (!pat) throw new Error("Patient not found");
         finalPatientName = pat.name;
       }
-      
+
       // 1. Generate Invoice Number
-      const invoiceNo = await appointmentBillingService.generateInvoiceNumber(clinicId);
+      const invoiceNo =
+        await appointmentBillingService.generateInvoiceNumber(clinicId);
 
       // 2. Create the Billing record
       const billingItem = {
@@ -151,7 +189,8 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
         createdBy: currentUser.uid,
       };
 
-      const billingId = await appointmentBillingService.createBilling(billingData);
+      const billingId =
+        await appointmentBillingService.createBilling(billingData);
 
       // 3. Record Payment (if price > 0)
       if (pkg.price > 0) {
@@ -160,7 +199,7 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
           pkg.price,
           paymentMethod,
           reference,
-          notes || `Purchased ${pkg.name}`
+          notes || `Purchased ${pkg.name}`,
         );
       }
 
@@ -173,16 +212,19 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
           pkg.walletCreditAmount,
           paymentMethod,
           `Package Credit: ${pkg.name}`,
-          currentUser.uid
+          currentUser.uid,
         );
       }
 
       // 5. Create visual session tracker if it has total sessions
       let patientPkgId: string | undefined = undefined;
+
       if (pkg.totalSessions && pkg.totalSessions > 0) {
         let expiresAt: Date | undefined = undefined;
+
         if (pkg.validityDays && pkg.validityDays > 0) {
           const expirationDate = new Date();
+
           expirationDate.setDate(expirationDate.getDate() + pkg.validityDays);
           expiresAt = expirationDate;
         }
@@ -205,7 +247,7 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
       if (startSessionInstantly) {
         const now = new Date();
         const startTime24 = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-        
+
         const newApptId = await appointmentService.createAppointment({
           patientId: finalPatientId,
           doctorId: "unassigned",
@@ -222,7 +264,7 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
           billingStatus: "paid",
           paymentStatus: "paid",
         } as any);
-        
+
         if (patientPkgId) {
           await patientPackageService.startSession(patientPkgId, newApptId);
         }
@@ -231,13 +273,17 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
       addToast({
         title: "Package Sold!",
         description: `Successfully sold ${pkg.name} to ${finalPatientName} and credited wallet.`,
-        color: "success"
+        color: "success",
       });
-      
+
       onClose();
     } catch (error) {
       console.error("Error selling package:", error);
-      addToast({ title: "Error", description: "Failed to sell package.", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to sell package.",
+        color: "danger",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -245,141 +291,217 @@ export default function SellPackageModal({ isOpen, onClose, patients }: SellPack
 
   if (!isOpen) return null;
 
-  const selectedPkg = packages.find(p => p.id === selectedPackageId);
+  const selectedPkg = packages.find((p) => p.id === selectedPackageId);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+    <Modal isOpen={isOpen} size="lg" onClose={onClose}>
       <ModalContent>
         <form onSubmit={handleSellPackage}>
           <ModalHeader className="flex flex-col gap-1">
-              <h3>Sell Treatment Package</h3>
-              <p className="text-sm text-default-500 font-normal">Issue an invoice and instantly credit the patient's wallet</p>
-            </ModalHeader>
-            <ModalBody className="space-y-4 py-4">
-              
-              {/* Toggle Mode */}
-              <div className="flex bg-primary/10 p-1 rounded-md">
-                <button
-                  type="button"
-                  className={`flex-1 py-1.5 text-xs font-medium rounded ${saleMode === "existing" ? "bg-primary text-white shadow" : "text-primary hover:bg-primary/20"}`}
-                  onClick={() => setSaleMode("existing")}
-                >
-                  Existing Patient
-                </button>
-                <button
-                  type="button"
-                  className={`flex-1 py-1.5 text-xs font-medium rounded ${saleMode === "new" ? "bg-primary text-white shadow" : "text-primary hover:bg-primary/20"}`}
-                  onClick={() => setSaleMode("new")}
-                >
-                  Walk-In New Patient
-                </button>
-              </div>
+            <h3>Sell Treatment Package</h3>
+            <p className="text-sm text-default-500 font-normal">
+              Issue an invoice and instantly credit the patient's wallet
+            </p>
+          </ModalHeader>
+          <ModalBody className="space-y-4 py-4">
+            {/* Toggle Mode */}
+            <div className="flex bg-primary/10 p-1 rounded-md">
+              <button
+                className={`flex-1 py-1.5 text-xs font-medium rounded ${saleMode === "existing" ? "bg-primary text-white shadow" : "text-primary hover:bg-primary/20"}`}
+                type="button"
+                onClick={() => setSaleMode("existing")}
+              >
+                Existing Patient
+              </button>
+              <button
+                className={`flex-1 py-1.5 text-xs font-medium rounded ${saleMode === "new" ? "bg-primary text-white shadow" : "text-primary hover:bg-primary/20"}`}
+                type="button"
+                onClick={() => setSaleMode("new")}
+              >
+                Walk-In New Patient
+              </button>
+            </div>
 
-              {saleMode === "existing" ? (
-                <div>
-                  <label className="text-[12px] font-medium text-text-muted mb-1 block">Search Existing Patient <span className="text-red-500">*</span></label>
-                  <select 
-                    required
-                    className="w-full px-3 py-2 text-[13px] border border-border-base rounded bg-white focus:outline-none focus:border-primary"
-                    value={selectedPatientId}
-                    onChange={e => setSelectedPatientId(e.target.value)}
-                  >
-                    <option value="" disabled>Select a patient...</option>
-                    {patients.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.regNumber || p.mobile || "No Contact"})</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 p-3 bg-surface border border-border-base rounded-md">
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="text-[11px] font-semibold text-text-muted mb-1 block">Full Name *</label>
-                    <input required type="text" className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary" 
-                      value={newPatientForm.name} onChange={e => setNewPatientForm(prev => ({...prev, name: e.target.value}))} />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="text-[11px] font-semibold text-text-muted mb-1 block">Mobile *</label>
-                    <input required type="tel" className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary" 
-                      value={newPatientForm.mobile} onChange={e => setNewPatientForm(prev => ({...prev, mobile: e.target.value}))} />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-text-muted mb-1 block">Age *</label>
-                    <input required type="text" className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary" placeholder="e.g. 30"
-                      value={newPatientForm.age} onChange={e => setNewPatientForm(prev => ({...prev, age: e.target.value}))} />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-text-muted mb-1 block">Gender *</label>
-                    <select className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary"
-                      value={newPatientForm.gender} onChange={e => setNewPatientForm(prev => ({...prev, gender: e.target.value}))}>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
+            {saleMode === "existing" ? (
               <div>
-                <label className="text-[12px] font-medium text-text-muted mb-1 block">Package <span className="text-red-500">*</span></label>
-                <select 
+                <label className="text-[12px] font-medium text-text-muted mb-1 block">
+                  Search Existing Patient{" "}
+                  <span className="text-red-500">*</span>
+                </label>
+                <select
                   required
                   className="w-full px-3 py-2 text-[13px] border border-border-base rounded bg-white focus:outline-none focus:border-primary"
-                  value={selectedPackageId}
-                  onChange={e => setSelectedPackageId(e.target.value)}
+                  value={selectedPatientId}
+                  onChange={(e) => setSelectedPatientId(e.target.value)}
                 >
-                  <option value="" disabled>Select a package</option>
-                  {packages.map(pkg => (
-                    <option key={pkg.id} value={pkg.id}>{pkg.name} - NPR {pkg.price.toLocaleString()}</option>
+                  <option disabled value="">
+                    Select a patient...
+                  </option>
+                  {patients.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.regNumber || p.mobile || "No Contact"})
+                    </option>
                   ))}
                 </select>
-                {selectedPkg && (
-                  <p className="text-[11.5px] text-emerald-600 font-medium mt-1">
-                    Provides NPR {selectedPkg.walletCreditAmount.toLocaleString()} in wallet credits.
-                  </p>
-                )}
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            ) : (
+              <div className="grid grid-cols-2 gap-3 p-3 bg-surface border border-border-base rounded-md">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-[11px] font-semibold text-text-muted mb-1 block">
+                    Full Name *
+                  </label>
+                  <input
+                    required
+                    className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary"
+                    type="text"
+                    value={newPatientForm.name}
+                    onChange={(e) =>
+                      setNewPatientForm((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-[11px] font-semibold text-text-muted mb-1 block">
+                    Mobile *
+                  </label>
+                  <input
+                    required
+                    className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary"
+                    type="tel"
+                    value={newPatientForm.mobile}
+                    onChange={(e) =>
+                      setNewPatientForm((prev) => ({
+                        ...prev,
+                        mobile: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
                 <div>
-                  <label className="text-[12px] font-medium text-text-muted mb-1 block">Payment Method</label>
-                  <select 
-                    className="w-full px-3 py-2 text-[13px] border border-border-base rounded bg-white focus:outline-none focus:border-primary"
-                    value={paymentMethod}
-                    onChange={e => setPaymentMethod(e.target.value)}
+                  <label className="text-[11px] font-semibold text-text-muted mb-1 block">
+                    Age *
+                  </label>
+                  <input
+                    required
+                    className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary"
+                    placeholder="e.g. 30"
+                    type="text"
+                    value={newPatientForm.age}
+                    onChange={(e) =>
+                      setNewPatientForm((prev) => ({
+                        ...prev,
+                        age: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-text-muted mb-1 block">
+                    Gender *
+                  </label>
+                  <select
+                    className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary"
+                    value={newPatientForm.gender}
+                    onChange={(e) =>
+                      setNewPatientForm((prev) => ({
+                        ...prev,
+                        gender: e.target.value,
+                      }))
+                    }
                   >
-                    <option value="cash">Cash</option>
-                    <option value="card">Card</option>
-                    <option value="esewa">eSewa</option>
-                    <option value="khalti">Khalti</option>
-                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
                   </select>
                 </div>
-                <Input 
-                  label="Transaction Reference" 
-                  placeholder="Optional" 
-                  value={reference} 
-                  onChange={e => setReference(e.target.value)} 
-                />
               </div>
+            )}
 
-              {selectedPkg && (selectedPkg.totalSessions || 0) > 0 && (
-                <div className="flex items-center gap-2 mt-2 p-2 bg-primary/5 rounded border border-primary/10">
-                  <input 
-                    type="checkbox" 
-                    id="startSession"
-                    checked={startSessionInstantly}
-                    onChange={(e) => setStartSessionInstantly(e.target.checked)}
-                    className="w-4 h-4 text-primary rounded border-border-base focus:ring-primary"
-                  />
-                  <label htmlFor="startSession" className="text-[12px] font-medium text-text-main cursor-pointer select-none">
-                    Start first session instantly (Add to Lobby Queue)
-                  </label>
-                </div>
+            <div>
+              <label className="text-[12px] font-medium text-text-muted mb-1 block">
+                Package <span className="text-red-500">*</span>
+              </label>
+              <select
+                required
+                className="w-full px-3 py-2 text-[13px] border border-border-base rounded bg-white focus:outline-none focus:border-primary"
+                value={selectedPackageId}
+                onChange={(e) => setSelectedPackageId(e.target.value)}
+              >
+                <option disabled value="">
+                  Select a package
+                </option>
+                {packages.map((pkg) => (
+                  <option key={pkg.id} value={pkg.id}>
+                    {pkg.name} - NPR {pkg.price.toLocaleString()}
+                  </option>
+                ))}
+              </select>
+              {selectedPkg && (
+                <p className="text-[11.5px] text-emerald-600 font-medium mt-1">
+                  Provides NPR {selectedPkg.walletCreditAmount.toLocaleString()}{" "}
+                  in wallet credits.
+                </p>
               )}
-            </ModalBody>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[12px] font-medium text-text-muted mb-1 block">
+                  Payment Method
+                </label>
+                <select
+                  className="w-full px-3 py-2 text-[13px] border border-border-base rounded bg-white focus:outline-none focus:border-primary"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="esewa">eSewa</option>
+                  <option value="khalti">Khalti</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                </select>
+              </div>
+              <Input
+                label="Transaction Reference"
+                placeholder="Optional"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </div>
+
+            {selectedPkg && (selectedPkg.totalSessions || 0) > 0 && (
+              <div className="flex items-center gap-2 mt-2 p-2 bg-primary/5 rounded border border-primary/10">
+                <input
+                  checked={startSessionInstantly}
+                  className="w-4 h-4 text-primary rounded border-border-base focus:ring-primary"
+                  id="startSession"
+                  type="checkbox"
+                  onChange={(e) => setStartSessionInstantly(e.target.checked)}
+                />
+                <label
+                  className="text-[12px] font-medium text-text-main cursor-pointer select-none"
+                  htmlFor="startSession"
+                >
+                  Start first session instantly (Add to Lobby Queue)
+                </label>
+              </div>
+            )}
+          </ModalBody>
           <ModalFooter>
-            <Button color="default" variant="flat" onClick={onClose} isDisabled={isSubmitting}>Cancel</Button>
-            <Button color="primary" type="submit" isLoading={isSubmitting}>Confirm & Charge</Button>
+            <Button
+              color="default"
+              isDisabled={isSubmitting}
+              variant="flat"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button color="primary" isLoading={isSubmitting} type="submit">
+              Confirm & Charge
+            </Button>
           </ModalFooter>
         </form>
       </ModalContent>

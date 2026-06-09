@@ -128,13 +128,16 @@ export const dailyReportService = {
       ).getTime();
 
       // Include pathologyBillingService
-      const { pathologyBillingService } = await import("./pathologyBillingService");
+      const { pathologyBillingService } = await import(
+        "./pathologyBillingService"
+      );
 
-      const [allAppointmentBilling, allPurchases, allPathologyBilling] = await Promise.all([
-        appointmentBillingService.getBillingByClinic(clinicId, branchId),
-        pharmacyService.getMedicinePurchasesByClinic(clinicId, branchId),
-        pathologyBillingService.getBillingByClinic(clinicId, branchId),
-      ]);
+      const [allAppointmentBilling, allPurchases, allPathologyBilling] =
+        await Promise.all([
+          appointmentBillingService.getBillingByClinic(clinicId, branchId),
+          pharmacyService.getMedicinePurchasesByClinic(clinicId, branchId),
+          pathologyBillingService.getBillingByClinic(clinicId, branchId),
+        ]);
 
       const summaries: DailyBillingSummary[] = [];
 
@@ -148,16 +151,17 @@ export const dailyReportService = {
         paymentStatus: string,
         doctorName: string,
         createdDate: Date | null,
-        paymentHistory: any[] | undefined
+        paymentHistory: any[] | undefined,
       ) => {
         let paidToday = 0;
         let hasPaymentToday = false;
-        
+
         // Sum payments made exactly on this date
         if (paymentHistory && paymentHistory.length > 0) {
           paymentHistory.forEach((p: any) => {
             let pDate = p.date || p.paymentDate;
             let pTime = 0;
+
             if (pDate) {
               if (typeof pDate.toDate === "function") {
                 pTime = pDate.toDate().getTime();
@@ -176,13 +180,19 @@ export const dailyReportService = {
         } else {
           // Fallback if no paymentHistory but it was paid/created today
           const cTime = createdDate ? createdDate.getTime() : 0;
-          if (cTime >= startOfDay && cTime <= endOfDay && paymentStatus === "paid") {
-             paidToday = totalAmount;
+
+          if (
+            cTime >= startOfDay &&
+            cTime <= endOfDay &&
+            paymentStatus === "paid"
+          ) {
+            paidToday = totalAmount;
           }
         }
 
         const createdTime = createdDate ? createdDate.getTime() : 0;
-        const isCreatedToday = createdTime >= startOfDay && createdTime <= endOfDay;
+        const isCreatedToday =
+          createdTime >= startOfDay && createdTime <= endOfDay;
 
         // Include if invoice was created today OR received a payment today
         if (isCreatedToday || hasPaymentToday) {
@@ -212,12 +222,16 @@ export const dailyReportService = {
           billing.paymentStatus || "unpaid",
           billing.doctorName || "",
           billing.invoiceDate ? new Date(billing.invoiceDate) : null,
-          billing.paymentHistory
+          billing.paymentHistory,
         );
       });
 
       allPurchases.forEach((purchase) => {
-        const bal = purchase.paymentStatus === "paid" ? 0 : ((purchase as any).balanceAmount || purchase.netAmount || 0);
+        const bal =
+          purchase.paymentStatus === "paid"
+            ? 0
+            : (purchase as any).balanceAmount || purchase.netAmount || 0;
+
         processInvoice(
           purchase.id,
           "pharmacy",
@@ -228,7 +242,7 @@ export const dailyReportService = {
           purchase.paymentStatus || "unpaid",
           "Pharmacy Counter",
           purchase.purchaseDate ? new Date(purchase.purchaseDate) : null,
-          purchase.paymentHistory
+          purchase.paymentHistory,
         );
       });
 
@@ -243,7 +257,7 @@ export const dailyReportService = {
           billing.paymentStatus || "unpaid",
           "Pathology Lab",
           billing.invoiceDate ? new Date(billing.invoiceDate) : null,
-          billing.paymentHistory
+          billing.paymentHistory,
         );
       });
 

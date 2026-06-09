@@ -150,7 +150,7 @@ function ModalShell({
         </div>
       </div>
     </>,
-    modalRoot
+    modalRoot,
   );
 }
 

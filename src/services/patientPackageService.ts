@@ -11,6 +11,7 @@ import {
   increment,
   arrayUnion,
 } from "firebase/firestore";
+
 import { db } from "../config/firebase";
 import { PatientPackage } from "../types/models";
 
@@ -20,16 +21,19 @@ export const patientPackageService = {
   /**
    * Get all active packages for a patient
    */
-  async getPatientPackages(patientId: string, clinicId: string): Promise<PatientPackage[]> {
+  async getPatientPackages(
+    patientId: string,
+    clinicId: string,
+  ): Promise<PatientPackage[]> {
     try {
       const q = query(
         collection(db, PATIENT_PACKAGES_COLLECTION),
         where("patientId", "==", patientId),
-        where("clinicId", "==", clinicId)
+        where("clinicId", "==", clinicId),
       );
       const snapshot = await getDocs(q);
-      
-      return snapshot.docs.map(doc => {
+
+      return snapshot.docs.map((doc) => {
         const data = doc.data();
         const expiresAt = data.expiresAt?.toDate();
         let status = data.status;
@@ -48,11 +52,20 @@ export const patientPackageService = {
           expiresAt,
           sessionHistory: data.sessionHistory?.map((h: any) => ({
             ...h,
-            consumedAt: typeof h.consumedAt?.toDate === 'function' ? h.consumedAt.toDate() : (h.consumedAt ? new Date(h.consumedAt) : new Date()),
+            consumedAt:
+              typeof h.consumedAt?.toDate === "function"
+                ? h.consumedAt.toDate()
+                : h.consumedAt
+                  ? new Date(h.consumedAt)
+                  : new Date(),
           })),
           sessions: data.sessions?.map((s: any) => ({
             ...s,
-            consumedAt: s.consumedAt ? (typeof s.consumedAt?.toDate === 'function' ? s.consumedAt.toDate() : new Date(s.consumedAt)) : undefined,
+            consumedAt: s.consumedAt
+              ? typeof s.consumedAt?.toDate === "function"
+                ? s.consumedAt.toDate()
+                : new Date(s.consumedAt)
+              : undefined,
           })),
         } as PatientPackage;
       });
@@ -65,12 +78,15 @@ export const patientPackageService = {
   /**
    * Create a new patient package tracking record
    */
-  async createPatientPackage(pkgData: Omit<PatientPackage, "id" | "createdAt" | "updatedAt">): Promise<string> {
+  async createPatientPackage(
+    pkgData: Omit<PatientPackage, "id" | "createdAt" | "updatedAt">,
+  ): Promise<string> {
     try {
       const now = new Date();
-      
+
       // Generate explicit session tickets if totalSessions is provided
       const sessions = pkgData.sessions || [];
+
       if (sessions.length === 0 && pkgData.totalSessions > 0) {
         for (let i = 1; i <= pkgData.totalSessions; i++) {
           sessions.push({
@@ -83,12 +99,18 @@ export const patientPackageService = {
       const data = {
         ...pkgData,
         sessions,
-        expiresAt: pkgData.expiresAt ? Timestamp.fromDate(pkgData.expiresAt) : null,
+        expiresAt: pkgData.expiresAt
+          ? Timestamp.fromDate(pkgData.expiresAt)
+          : null,
         createdAt: Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now),
       };
 
-      const docRef = await addDoc(collection(db, PATIENT_PACKAGES_COLLECTION), data);
+      const docRef = await addDoc(
+        collection(db, PATIENT_PACKAGES_COLLECTION),
+        data,
+      );
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating patient package:", error);
@@ -103,13 +125,15 @@ export const patientPackageService = {
     try {
       const docRef = doc(db, PATIENT_PACKAGES_COLLECTION, id);
       const docSnap = await getDoc(docRef);
+
       if (!docSnap.exists()) throw new Error("Package not found");
 
       const data = docSnap.data() as PatientPackage;
       const sessions = data.sessions || [];
-      
+
       // Find the first pending session
-      const pendingIndex = sessions.findIndex(s => s.status === "pending");
+      const pendingIndex = sessions.findIndex((s) => s.status === "pending");
+
       if (pendingIndex === -1) {
         // No pending sessions, maybe they are all used or in-progress
         return;
@@ -134,17 +158,25 @@ export const patientPackageService = {
   /**
    * Consume a session (increment usedSessions)
    */
-  async consumeSession(id: string, auditData?: { appointmentId: string; clinicianId?: string; clinicianName?: string; }): Promise<void> {
+  async consumeSession(
+    id: string,
+    auditData?: {
+      appointmentId: string;
+      clinicianId?: string;
+      clinicianName?: string;
+    },
+  ): Promise<void> {
     try {
       const docRef = doc(db, PATIENT_PACKAGES_COLLECTION, id);
       const docSnap = await getDoc(docRef);
+
       if (!docSnap.exists()) throw new Error("Package not found");
 
       const data = docSnap.data() as PatientPackage;
       const currentUsed = data.usedSessions || 0;
       const totalSessions = data.totalSessions || 0;
       const sessions = data.sessions || [];
-      
+
       const updates: any = {
         usedSessions: increment(1),
         updatedAt: Timestamp.now(),
@@ -153,23 +185,27 @@ export const patientPackageService = {
       if (auditData) {
         // Strip undefined values to prevent Firestore arrayUnion errors
         const cleanAuditData = Object.fromEntries(
-          Object.entries(auditData).filter(([_, v]) => v !== undefined)
+          Object.entries(auditData).filter(([_, v]) => v !== undefined),
         );
 
         updates.sessionHistory = arrayUnion({
           ...cleanAuditData,
           consumedAt: Timestamp.now(),
         });
-        
+
         // Find the specific session ticket to mark as completed
         // First try to find one linked to this appointment
-        let targetIndex = sessions.findIndex(s => s.appointmentId === auditData.appointmentId && s.status !== "completed");
-        
+        let targetIndex = sessions.findIndex(
+          (s) =>
+            s.appointmentId === auditData.appointmentId &&
+            s.status !== "completed",
+        );
+
         // If not found, just grab the first pending or in-progress
         if (targetIndex === -1) {
-          targetIndex = sessions.findIndex(s => s.status !== "completed");
+          targetIndex = sessions.findIndex((s) => s.status !== "completed");
         }
-        
+
         if (targetIndex !== -1) {
           sessions[targetIndex] = {
             ...sessions[targetIndex],
@@ -193,24 +229,30 @@ export const patientPackageService = {
         if (data.packageId && totalSessions > 0) {
           const pkgRef = doc(db, "treatmentPackages", data.packageId);
           const pkgSnap = await getDoc(pkgRef);
+
           if (pkgSnap.exists()) {
-             const pkgData = pkgSnap.data();
-             const walletCreditAmount = pkgData.walletCreditAmount || 0;
-             if (walletCreditAmount > 0) {
-                const sessionCost = Math.round(walletCreditAmount / totalSessions);
-                if (sessionCost > 0) {
-                   const { walletService } = await import("./walletService");
-                   await walletService.deductFunds(
-                     data.patientId,
-                     data.clinicId,
-                     data.branchId || data.clinicId,
-                     sessionCost,
-                     data.id, // using package ticket as reference
-                     `Consumed 1 session of ${data.packageName} (Ticket #${currentUsed + 1})`,
-                     auditData?.clinicianId || "system"
-                   );
-                }
-             }
+            const pkgData = pkgSnap.data();
+            const walletCreditAmount = pkgData.walletCreditAmount || 0;
+
+            if (walletCreditAmount > 0) {
+              const sessionCost = Math.round(
+                walletCreditAmount / totalSessions,
+              );
+
+              if (sessionCost > 0) {
+                const { walletService } = await import("./walletService");
+
+                await walletService.deductFunds(
+                  data.patientId,
+                  data.clinicId,
+                  data.branchId || data.clinicId,
+                  sessionCost,
+                  data.id, // using package ticket as reference
+                  `Consumed 1 session of ${data.packageName} (Ticket #${currentUsed + 1})`,
+                  auditData?.clinicianId || "system",
+                );
+              }
+            }
           }
         }
       } catch (walletErr) {
@@ -220,5 +262,5 @@ export const patientPackageService = {
       console.error("Error consuming session:", error);
       throw error;
     }
-  }
+  },
 };

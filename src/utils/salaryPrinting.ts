@@ -19,25 +19,47 @@ export const printSalarySlip = (
   clinic: Clinic,
   config: PrintLayoutConfig,
 ) => {
-  const printWindow = window.open("", "_blank");
-
-  if (!printWindow) {
-    alert("Please allow popups to print the salary slip.");
-
+  // Create a hidden iframe to print directly from the current window, avoiding about:blank URLs
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "none";
+  iframe.style.visibility = "hidden";
+  
+  document.body.appendChild(iframe);
+  
+  const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
+  if (!iframeDoc) {
+    console.error("Could not access iframe document");
     return;
   }
 
-  // Ensure dates are valid Date objects
-  const paymentDate =
-    bill.billDate instanceof Date
-      ? bill.billDate
-      : new Date((bill.billDate as any)?.seconds * 1000 || bill.billDate);
-  const joiningDate =
-    staff.joiningDate instanceof Date
-      ? staff.joiningDate
-      : new Date(
-          (staff.joiningDate as any)?.seconds * 1000 || staff.joiningDate,
-        );
+  // Defensive date parsing helper
+  const parseDefensiveDate = (dateVal: any): Date => {
+    if (!dateVal) return new Date();
+    if (dateVal instanceof Date && !isNaN(dateVal.getTime())) return dateVal;
+    if (typeof dateVal?.toDate === "function") {
+      try {
+        const d = dateVal.toDate();
+        if (d instanceof Date && !isNaN(d.getTime())) return d;
+      } catch (e) {}
+    }
+    if (typeof dateVal?.seconds === "number") {
+      return new Date(dateVal.seconds * 1000);
+    }
+    const parsed = new Date(dateVal);
+    if (!isNaN(parsed.getTime())) return parsed;
+    return new Date(); // fallback to current date instead of failing
+  };
+
+  const paymentDate = parseDefensiveDate(bill.billDate);
+  const joiningDate = parseDefensiveDate(staff.joiningDate);
+
+  const formattedPaymentDate = format(paymentDate, "MMM dd, yyyy");
+  const formattedPeriod =
+    bill.description?.split(". ")[0]?.replace("Salary for ", "") ||
+    format(paymentDate, "MMMM yyyy");
 
   const primaryColor = config.primaryColor || "#7c3aed";
 
@@ -257,12 +279,12 @@ export const printSalarySlip = (
             </div>
             <div class="info-item">
               <span class="info-label">Disbursement Date</span>
-              <span class="info-value">${format(paymentDate, "MMM dd, yyyy")}</span>
+              <span class="info-value">${formattedPaymentDate}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Salary Period</span>
               <span class="info-value">
-                ${bill.description?.split(". ")[0]?.replace("Salary for ", "") || format(paymentDate, "MMMM yyyy")}
+                ${formattedPeriod}
               </span>
             </div>
             <div class="info-item">
@@ -281,7 +303,7 @@ export const printSalarySlip = (
             <tbody>
               <tr>
                 <td style="line-height: 1.6;">
-                  ${bill.description || `Salary disbursement for ${format(paymentDate, "MMMM yyyy")}.`}
+                  ${bill.description || `Salary disbursement for ${formattedPeriod}.`}
                 </td>
                 <td style="text-align: right; font-weight: 700;">Rs. ${bill.totalAmount.toLocaleString()}</td>
               </tr>
@@ -302,17 +324,20 @@ export const printSalarySlip = (
         ${getPrintFooterHTML(config)}
       </div>
 
-      <script>
-        window.onload = () => {
-          setTimeout(() => {
-            window.print();
-          }, 600);
-        };
-      </script>
-    </body>
-    </html>
   `;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  iframeDoc.open();
+  iframeDoc.write(html);
+  iframeDoc.close();
+
+  // Print using the iframe context and clean up afterward to avoid popup/blank tab issues
+  setTimeout(() => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      document.body.removeChild(iframe);
+    } catch (e) {
+      console.error("Failed to print via iframe:", e);
+    }
+  }, 500);
 };

@@ -8,8 +8,8 @@ import {
   Timestamp,
   updateDoc,
   increment,
-  orderBy,
 } from "firebase/firestore";
+
 import { db } from "../config/firebase";
 import { WalletTransaction } from "../types/models";
 
@@ -27,11 +27,11 @@ export const walletService = {
     amount: number,
     paymentMethod: string,
     notes: string,
-    createdBy: string
+    createdBy: string,
   ): Promise<string> {
     try {
       const now = new Date();
-      
+
       // 1. Record the transaction
       const transaction: Omit<WalletTransaction, "id"> = {
         patientId,
@@ -45,13 +45,17 @@ export const walletService = {
         createdBy,
       };
 
-      const docRef = await addDoc(collection(db, WALLET_TRANSACTIONS_COLLECTION), {
-        ...transaction,
-        createdAt: Timestamp.fromDate(now),
-      });
+      const docRef = await addDoc(
+        collection(db, WALLET_TRANSACTIONS_COLLECTION),
+        {
+          ...transaction,
+          createdAt: Timestamp.fromDate(now),
+        },
+      );
 
       // 2. Update the patient's wallet balance
       const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
+
       await updateDoc(patientRef, {
         walletBalance: increment(amount),
         updatedAt: Timestamp.now(),
@@ -74,11 +78,11 @@ export const walletService = {
     amount: number,
     invoiceId: string,
     notes: string,
-    createdBy: string
+    createdBy: string,
   ): Promise<string> {
     try {
       const now = new Date();
-      
+
       // 1. Record the transaction
       const transaction: Omit<WalletTransaction, "id"> = {
         patientId,
@@ -92,13 +96,17 @@ export const walletService = {
         createdBy,
       };
 
-      const docRef = await addDoc(collection(db, WALLET_TRANSACTIONS_COLLECTION), {
-        ...transaction,
-        createdAt: Timestamp.fromDate(now),
-      });
+      const docRef = await addDoc(
+        collection(db, WALLET_TRANSACTIONS_COLLECTION),
+        {
+          ...transaction,
+          createdAt: Timestamp.fromDate(now),
+        },
+      );
 
       // 2. Update the patient's wallet balance
       const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
+
       await updateDoc(patientRef, {
         // Increment with a negative value to deduct
         walletBalance: increment(-amount),
@@ -115,18 +123,22 @@ export const walletService = {
   /**
    * Get wallet transaction history for a specific patient
    */
-  async getPatientTransactions(patientId: string, clinicId: string): Promise<WalletTransaction[]> {
+  async getPatientTransactions(
+    patientId: string,
+    clinicId: string,
+  ): Promise<WalletTransaction[]> {
     try {
       const q = query(
         collection(db, WALLET_TRANSACTIONS_COLLECTION),
         where("patientId", "==", patientId),
-        where("clinicId", "==", clinicId)
+        where("clinicId", "==", clinicId),
       );
 
       const snapshot = await getDocs(q);
-      
-      const transactions = snapshot.docs.map(doc => {
+
+      const transactions = snapshot.docs.map((doc) => {
         const data = doc.data();
+
         return {
           id: doc.id,
           ...data,
@@ -135,10 +147,12 @@ export const walletService = {
       });
 
       // Sort locally to avoid needing a composite index in Firestore
-      return transactions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return transactions.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     } catch (error) {
       console.error("Error fetching wallet transactions:", error);
       throw error;
     }
-  }
+  },
 };
