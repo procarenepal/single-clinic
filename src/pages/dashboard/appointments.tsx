@@ -46,6 +46,7 @@ import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
+import { sendCheckInSMS } from "@/services/sendMessageService";
 import {
   Appointment,
   Patient,
@@ -437,6 +438,17 @@ export default function AppointmentsPage() {
           appt.id === appointmentId ? { ...appt, status: newStatus } : appt,
         ),
       );
+
+      const appt = appointments.find((a) => a.id === appointmentId);
+      if (appt && newStatus === "confirmed") {
+        sendCheckInSMS(
+          appt.patientId,
+          appt.clinicId || clinicId || "standalone",
+          appointmentId,
+          appt.branchId || branchId || undefined,
+        ).catch((err) => console.error("Auto check-in SMS failed:", err));
+      }
+
       addToast({
         title: "Status Updated",
         description: `Appointment has been ${newStatus.toLowerCase()}.`,

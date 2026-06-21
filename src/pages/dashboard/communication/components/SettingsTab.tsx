@@ -33,6 +33,8 @@ const SettingsTab: React.FC = () => {
   const [smsAppointmentTypes, setSmsAppointmentTypes] = useState<string[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [apiUrl, setApiUrl] = useState("");
+  const [campaign, setCampaign] = useState("9569");
+  const [routeId, setRouteId] = useState("10255");
 
   useEffect(() => {
     const loadData = async () => {
@@ -92,6 +94,8 @@ const SettingsTab: React.FC = () => {
         );
         setApiKey(updatedSettings.apiKey || "");
         setApiUrl(updatedSettings.apiUrl || "");
+        setCampaign(updatedSettings.campaign || "9569");
+        setRouteId(updatedSettings.routeId || "10255");
       } else {
         await createDefaultSMSSettings(
           clinicId,
@@ -105,6 +109,10 @@ const SettingsTab: React.FC = () => {
           setEnableReminders(freshSettings.enableReminders);
           setReminderHours(freshSettings.reminderHours);
           setMaxDailySMS(freshSettings.maxDailySMS);
+          setApiKey(freshSettings.apiKey || "");
+          setApiUrl(freshSettings.apiUrl || "");
+          setCampaign(freshSettings.campaign || "9569");
+          setRouteId(freshSettings.routeId || "10255");
         }
       }
     }
@@ -129,6 +137,8 @@ const SettingsTab: React.FC = () => {
         smsAppointmentTypes,
         apiKey,
         apiUrl,
+        campaign,
+        routeId,
       };
 
       await updateSMSSettings(
@@ -363,6 +373,32 @@ const SettingsTab: React.FC = () => {
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-[9px] font-bold text-text-muted uppercase mb-1 tracking-wide">
+              SMS Campaign ID (Required for Custom Sender Name)
+            </label>
+            <input
+              className="clarity-input w-full text-[11px] h-8"
+              placeholder="e.g. 9569"
+              type="text"
+              value={campaign}
+              onChange={(e) => setCampaign(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] font-bold text-text-muted uppercase mb-1 tracking-wide">
+              SMS Route ID (Required for Custom Sender Name)
+            </label>
+            <input
+              className="clarity-input w-full text-[11px] h-8"
+              placeholder="e.g. 10255"
+              type="text"
+              value={routeId}
+              onChange={(e) => setRouteId(e.target.value)}
             />
           </div>
         </div>

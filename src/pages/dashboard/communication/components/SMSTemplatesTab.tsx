@@ -73,6 +73,13 @@ const SMSTemplatesTab: React.FC = () => {
             "Welcome to {clinicName}! Thank you for choosing us for your healthcare needs. Call {clinicPhone} for any queries.",
         },
       ],
+      appointment: [
+        {
+          name: "Check-in confirmation",
+          message:
+            "Dear {patientName}, you have checked in successfully at {clinicName} for your consultation{doctorName}. Thank you!",
+        },
+      ],
       doctor: [
         {
           name: "Patient arrival",
@@ -104,6 +111,13 @@ const SMSTemplatesTab: React.FC = () => {
           name: "स्वागत सन्देश",
           message:
             "{clinicName} मा तपाईंलाई स्वागत छ! हामीलाई विश्वास गर्नुभएकोमा धन्यवाद। सहयोगको लागि {clinicPhone} मा सम्पर्क गर्नुहोस्।",
+        },
+      ],
+      appointment: [
+        {
+          name: "चेक-इन पुष्टि",
+          message:
+            "नमस्ते {patientName}, तपाईं {clinicName} मा परामर्शको लागि सफलतापूर्वक चेक-इन हुनुभएको छ। धन्यवाद!",
         },
       ],
       doctor: [

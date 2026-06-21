@@ -66,12 +66,12 @@ export interface SMSTemplate {
   name: string;
   message: string;
   type:
-    | "patient"
-    | "doctor"
-    | "general"
-    | "appointment"
-    | "reminder"
-    | "referral";
+  | "patient"
+  | "doctor"
+  | "general"
+  | "appointment"
+  | "reminder"
+  | "referral";
   language?: "en" | "ne";
   isActive: boolean;
   usageCount?: number;
@@ -98,6 +98,8 @@ export interface SMSSettings {
   defaultSenderId?: string;
   customApiUrl?: string;
   smsBalance?: number;
+  campaign?: string;
+  routeId?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -133,7 +135,7 @@ export const smsService = {
 
       // Use provided settings or environment variables
       const apiKey = settings?.apiKey || import.meta.env.VITE_SMS_API_KEY || "";
-      const senderId =
+      let senderId =
         settings?.senderId ||
         settings?.defaultSenderId ||
         import.meta.env.VITE_SMS_SENDER_ID ||
@@ -143,6 +145,29 @@ export const smsService = {
         settings?.customApiUrl ||
         import.meta.env.VITE_SMS_API_URL ||
         "";
+      const campaign =
+        settings?.campaign ||
+        import.meta.env.VITE_SMS_CAMPAIGN ||
+        "9569";
+      const routeId =
+        settings?.routeId ||
+        import.meta.env.VITE_SMS_ROUTE_ID ||
+        "10255";
+
+      // If it is Bit_Alert, or empty/falsy, treat it as wanting the fallback/clinic name
+      if (!senderId || senderId.toLowerCase() === "bit_alert") {
+        senderId = "hsclaserhospital";
+      }
+
+      // Try to resolve clinic name first
+      // NOTE: SamayaSMS replaces any unregistered Sender ID with "Bit_Alert".
+      // We should NOT dynamically generate senderId from the clinic name unless it is explicitly registered.
+      // Therefore, we bypass changing the senderId to a dynamic clinic name and stick to the registered one.
+
+      // If resolving clinic name resulted in empty string, fall back to hsclaserhospital
+      if (!senderId || senderId.toLowerCase() === "bit_alert") {
+        senderId = "hsclaserhospital";
+      }
 
       // Clean and validate phone number
       // Clean and validate phone number
@@ -187,11 +212,11 @@ export const smsService = {
       const formData = new URLSearchParams();
 
       formData.append("key", apiKey);
-      formData.append("campaign", "9569");
-      formData.append("routeid", "10255");
+      formData.append("campaign", campaign);
+      formData.append("routeid", routeId);
       formData.append("type", "text");
       formData.append("contacts", cleanPhoneNumber);
-      formData.append("senderid", senderId || "Bit_Alert");
+      formData.append("senderid", senderId);
       formData.append("msg", message);
       formData.append("responsetype", "json");
 
@@ -659,16 +684,16 @@ export const smsService = {
     try {
       const q = branchId
         ? query(
-            collection(db, SMS_TEMPLATES_COLLECTION),
-            where("clinicId", "==", clinicId),
-            where("branchId", "==", branchId),
-            where("isActive", "==", true),
-          )
+          collection(db, SMS_TEMPLATES_COLLECTION),
+          where("clinicId", "==", clinicId),
+          where("branchId", "==", branchId),
+          where("isActive", "==", true),
+        )
         : query(
-            collection(db, SMS_TEMPLATES_COLLECTION),
-            where("clinicId", "==", clinicId),
-            where("isActive", "==", true),
-          );
+          collection(db, SMS_TEMPLATES_COLLECTION),
+          where("clinicId", "==", clinicId),
+          where("isActive", "==", true),
+        );
 
       const querySnapshot = await getDocs(q);
 
@@ -827,6 +852,8 @@ export const smsService = {
         lastResetDate: new Date().toISOString().split("T")[0],
         enableAutoReminders: true,
         smsBalance: 0,
+        campaign: import.meta.env.VITE_SMS_CAMPAIGN || "9569",
+        routeId: import.meta.env.VITE_SMS_ROUTE_ID || "10255",
         isActive: true,
         updatedBy: createdBy,
       };
@@ -1022,7 +1049,7 @@ export const smsService = {
         remainingToday: Math.max(
           0,
           (smsSettings?.maxDailySMS || 100) -
-            (smsSettings?.currentDailySMS || 0),
+          (smsSettings?.currentDailySMS || 0),
         ),
         templatesCount: templates.length,
         activeTemplatesCount: templates.filter((template) => template.isActive)
@@ -1874,6 +1901,111 @@ export const smsService = {
   },
 
   /**
+   * Send a Check-In / Arrival SMS to a checked-in patient
+   */
+  async sendCheckInSMS(
+    patientId: string,
+    clinicId: string,
+    appointmentId: string,
+    branchId?: string,
+  ): Promise<boolean> {
+    try {
+      // Get patient, clinic, and appointment information
+      const [patientDoc, clinicDoc, appointmentDoc] = await Promise.all([
+        getDoc(doc(db, PATIENTS_COLLECTION, patientId)),
+        getDoc(doc(db, CLINICS_COLLECTION, clinicId)),
+        getDoc(doc(db, APPOINTMENTS_COLLECTION, appointmentId)),
+      ]);
+
+      if (!patientDoc.exists() || !clinicDoc.exists() || !appointmentDoc.exists()) {
+        console.error("Missing patient, clinic, or appointment data for check-in SMS");
+        return false;
+      }
+
+      const patient = patientDoc.data();
+      const clinic = clinicDoc.data();
+      const appointment = appointmentDoc.data();
+
+      // Check if SMS settings are active
+      const settings = await this.getSMSSettings(clinicId);
+      if (!settings || !settings.isActive) {
+        console.log("SMS settings not active or not configured for clinic:", clinicId);
+        return false;
+      }
+
+      const clinicName = clinic.hospitalName || clinic.name || "our clinic";
+      const patientName = patient.name || "Patient";
+      const phoneNumber = patient.mobile || patient.phone;
+
+      if (!phoneNumber) {
+        console.warn("No phone number found for patient:", patientId);
+        return false;
+      }
+
+      // Format doctor name if assigned
+      let doctorName = "";
+      if (appointment.doctorId && appointment.doctorId !== "unassigned") {
+        try {
+          const doctorDoc = await getDoc(doc(db, DOCTORS_COLLECTION, appointment.doctorId));
+          if (doctorDoc.exists()) {
+            doctorName = doctorDoc.data().name || "";
+          }
+        } catch (err) {
+          console.error("Error fetching doctor for check-in SMS:", err);
+        }
+      }
+
+      const docSnippet = doctorName ? ` with Dr. ${doctorName}` : "";
+      const message = `Dear ${patientName}, you have checked in successfully at ${clinicName}${docSnippet}. Thank you!`;
+
+      // Try to use a template if available
+      let finalMessage = message;
+      try {
+        const templates = await this.getSMSTemplates(clinicId);
+        const checkInTemplate = templates.find(
+          (t) => (t.name.toLowerCase().includes("check-in") || t.name.toLowerCase().includes("checkin") || t.name.toLowerCase().includes("arrival")) && (t.language || "en") === "en",
+        );
+
+        if (checkInTemplate) {
+          finalMessage = checkInTemplate.message
+            .replace(/{patientName}/g, patientName)
+            .replace(/{clinicName}/g, clinicName)
+            .replace(/{doctorName}/g, doctorName ? `Dr. ${doctorName}` : "Clinician");
+        }
+      } catch (err) {
+        console.warn("Could not fetch check-in template, using default:", err);
+      }
+
+      // Send the SMS
+      const response = await this.sendMessage(
+        phoneNumber,
+        finalMessage,
+        settings,
+      );
+      const isSuccess = response.success || response.isRawText;
+
+      // Log the SMS
+      await this.createSMSLog({
+        clinicId,
+        branchId: branchId || patient.branchId,
+        patientId,
+        patientName,
+        patientPhone: phoneNumber,
+        message: finalMessage,
+        status: isSuccess ? "sent" : "failed",
+        type: "appointment",
+        recipientType: "patient",
+        createdBy: "system",
+      });
+
+      return isSuccess;
+    } catch (error) {
+      console.error("Error sending check-in SMS:", error);
+      return false;
+    }
+  },
+
+  /**
    * Seed default SMS templates for a clinic
    */
   async seedTemplates(
@@ -1897,6 +2029,13 @@ export const smsService = {
           "Welcome to {clinicName}! We are honored to serve your healthcare needs. Call us at {clinicPhone} for any queries.",
       },
       {
+        name: "Check-In Message (EN)",
+        type: "appointment",
+        language: "en",
+        message:
+          "Dear {patientName}, you have checked in successfully at {clinicName} for your consultation. Thank you!",
+      },
+      {
         name: "Lab Report Ready (EN)",
         type: "patient",
         language: "en",
@@ -1918,6 +2057,13 @@ export const smsService = {
         language: "ne",
         message:
           "हाम्रो क्लिनिकमा स्वागत छ! तपाईंको स्वास्थ्य सेवा गर्न पाउँदा हामी खुसी छौं। जिज्ञासाको लागि {clinicPhone} मा सम्पर्क गर्नुहोस्।",
+      },
+      {
+        name: "चेक-इन पुष्टि (NE)",
+        type: "appointment",
+        language: "ne",
+        message:
+          "नमस्ते {patientName}, तपाईं {clinicName} मा परामर्शको लागि सफलतापूर्वक चेक-इन हुनुभएको छ। धन्यवाद!",
       },
       {
         name: "रिपोर्ट तयार छ (NE)",
@@ -1995,6 +2141,8 @@ export const scheduleDoctorAppointmentReminder =
   smsService.scheduleDoctorAppointmentReminder.bind(smsService);
 export const seedSMSTemplates = smsService.seedTemplates.bind(smsService);
 export const sendWelcomeSMS = smsService.sendWelcomeSMS.bind(smsService);
+export const sendCheckInSMS = smsService.sendCheckInSMS.bind(smsService);
 
 // Default export
 export default smsService;
+

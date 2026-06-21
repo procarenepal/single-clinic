@@ -54,6 +54,7 @@ import {
 import { Spinner, Checkbox } from "@/components/ui";
 import { db } from "@/config/firebase";
 import { NotificationService } from "@/services/notificationService";
+import { sendCheckInSMS } from "@/services/sendMessageService";
 import SellPackageModal from "@/components/packages/SellPackageModal";
 
 export default function FrontOfficeDesk() {
@@ -1039,6 +1040,14 @@ export default function FrontOfficeDesk() {
           true,
         );
       }
+
+      // Trigger Check-In SMS in background without blocking UI
+      sendCheckInSMS(
+        appt.patientId,
+        appt.clinicId || clinicId || "standalone",
+        appointmentId,
+        appt.branchId || branchId || undefined,
+      ).catch((err) => console.error("Auto check-in SMS failed:", err));
 
       addToast({
         title: "Checked In Successfully",
@@ -2518,6 +2527,14 @@ export default function FrontOfficeDesk() {
             await patientPackageService.startSession(patientPkgId, newApptId);
           }
 
+          // Trigger Check-In SMS in background without blocking UI
+          sendCheckInSMS(
+            patientIdToUse,
+            clinicId!,
+            newApptId,
+            branchId || undefined,
+          ).catch((err) => console.error("Auto check-in SMS failed for package session:", err));
+
           // Generate consultation bill if a clinician is assigned and option is checked
           const hasDoctor =
             quickIntakeForm.doctorId &&
@@ -2716,6 +2733,15 @@ export default function FrontOfficeDesk() {
               targetUserId: quickIntakeForm.assignedExpertId,
             });
           }
+        }
+
+        if (["confirmed", "doctor", "expert"].includes(targetStatus)) {
+          sendCheckInSMS(
+            patientIdToUse,
+            clinicId || "standalone",
+            newApptId,
+            branchId || undefined,
+          ).catch((err) => console.error("Auto check-in SMS failed:", err));
         }
 
         addToast({

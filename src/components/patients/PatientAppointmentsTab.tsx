@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { appointmentService } from "@/services/appointmentService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
+import { sendCheckInSMS } from "@/services/sendMessageService";
 import { Appointment, Doctor, AppointmentType } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -200,6 +201,17 @@ export default function PatientAppointmentsTab({
           a.id === appointmentId ? { ...a, status: newStatus } : a,
         ),
       );
+
+      const appt = appointments.find((x) => x.id === appointmentId);
+      if (appt && newStatus === "confirmed") {
+        sendCheckInSMS(
+          appt.patientId,
+          appt.clinicId || clinicId || "standalone",
+          appointmentId,
+          appt.branchId || undefined,
+        ).catch((err) => console.error("Auto check-in SMS failed:", err));
+      }
+
       addToast({ title: "Status updated", color: "success" });
     } catch {
       addToast({
