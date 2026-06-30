@@ -82,6 +82,7 @@ export default function PrintLayoutPage() {
             state: config.state ?? "Bagmati",
             zipCode: config.zipCode ?? "44600",
             country: config.country ?? "Nepal",
+            logoUrl: config.logoUrl ?? clinicObj?.logo,
           });
         } else if (clinicObj) {
           // New configuration: Compose everything for the user
@@ -100,6 +101,7 @@ export default function PrintLayoutPage() {
             email: clinicObj.email ?? "",
             // Compose the full address string for the Studio by default
             address: `${clinicObj.address || "Street Address"}\n${defaultCity}, ${defaultState} ${defaultZip}\nNepal`,
+            logoUrl: clinicObj.logo,
           }));
         }
       } catch (error) {
@@ -857,6 +859,7 @@ export default function PrintLayoutPage() {
                           isDisabled={isUploading}
                           size="sm"
                           variant="flat"
+                          onPress={() => document.getElementById("logo-upload")?.click()}
                         >
                           {isUploading ? "Uploading..." : "Choose Logo"}
                         </Button>

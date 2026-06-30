@@ -2835,8 +2835,8 @@ export default function FrontOfficeDesk() {
       const rec = (apptToFinalise as any).recommendedProcedure;
 
       if (accept && rec && rec.fee > 0) {
-        let feeNum = rec.fee;
-        let actualProcedureName = rec.name;
+        let procedureItemsToAdd: any[] = [];
+        let totalFee = 0;
 
         if (
           rec.items &&
@@ -2847,8 +2847,33 @@ export default function FrontOfficeDesk() {
             finaliseSelectedItems.includes(i.id),
           );
 
-          feeNum = billedItems.reduce((sum: number, i: any) => sum + i.fee, 0);
-          actualProcedureName = billedItems.map((i: any) => i.name).join(", ");
+          procedureItemsToAdd = billedItems.map((i: any) => ({
+            id: crypto.randomUUID(),
+            appointmentTypeId: apptToFinalise.appointmentTypeId || "procedure-fee",
+            appointmentTypeName: `${i.name} (Procedure Fee)`,
+            price: i.fee,
+            quantity: 1,
+            commission: 0,
+            discountValue: 0,
+            discountType: "percent" as const,
+            discountAmount: 0,
+            amount: i.fee,
+          }));
+          totalFee = billedItems.reduce((sum: number, i: any) => sum + i.fee, 0);
+        } else {
+          procedureItemsToAdd = [{
+            id: crypto.randomUUID(),
+            appointmentTypeId: apptToFinalise.appointmentTypeId || "procedure-fee",
+            appointmentTypeName: `${rec.name} (Procedure Fee)`,
+            price: rec.fee,
+            quantity: 1,
+            commission: 0,
+            discountValue: 0,
+            discountType: "percent" as const,
+            discountAmount: 0,
+            amount: rec.fee,
+          }];
+          totalFee = rec.fee;
         }
 
         let billingId =
@@ -2859,21 +2884,7 @@ export default function FrontOfficeDesk() {
             await appointmentBillingService.getBillingById(billingId);
 
           if (billing) {
-            const procedureItem = {
-              id: crypto.randomUUID(),
-              appointmentTypeId:
-                apptToFinalise.appointmentTypeId || "procedure-fee",
-              appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
-              price: feeNum,
-              quantity: 1,
-              commission: 0,
-              discountValue: 0,
-              discountType: "percent" as const,
-              discountAmount: 0,
-              amount: feeNum,
-            };
-
-            const updatedItems = [...(billing.items || []), procedureItem];
+            const updatedItems = [...(billing.items || []), ...procedureItemsToAdd];
             const totals = appointmentBillingService.calculateInvoiceTotals(
               updatedItems,
               billing.discountType || "percent",
@@ -2931,18 +2942,12 @@ export default function FrontOfficeDesk() {
             doctors.find((d) => d.id === clinicianId) ||
             experts.find((e) => e.id === clinicianId);
 
-          const billingItem = {
-            id: crypto.randomUUID(),
-            appointmentTypeId:
-              apptToFinalise.appointmentTypeId || "procedure-fee",
-            appointmentTypeName: `${actualProcedureName} (Procedure Fee)`,
-            price: feeNum,
-            quantity: 1,
+          const draftBillingItems = procedureItemsToAdd.map((item) => ({
+            ...item,
             commission: (docInfo as any)?.defaultCommission || 0,
             doctorId: clinicianId,
             doctorName: docInfo?.name || "Clinician",
-            amount: feeNum,
-          };
+          }));
 
           const billingData = {
             invoiceNumber: invoiceNo,
@@ -2956,8 +2961,8 @@ export default function FrontOfficeDesk() {
               | "regular"
               | "visitor",
             invoiceDate: new Date(),
-            items: [billingItem],
-            subtotal: feeNum,
+            items: draftBillingItems,
+            subtotal: totalFee,
             itemDiscountAmount: 0,
             mainDiscountAmount: 0,
             discountType: "percent" as const,
@@ -2965,11 +2970,11 @@ export default function FrontOfficeDesk() {
             discountAmount: 0,
             taxPercentage: 0,
             taxAmount: 0,
-            totalAmount: feeNum,
+            totalAmount: totalFee,
             status: "draft" as const,
             paymentStatus: "unpaid" as const,
             paidAmount: 0,
-            balanceAmount: feeNum,
+            balanceAmount: totalFee,
             createdBy: currentUser?.uid || "system",
           };
 

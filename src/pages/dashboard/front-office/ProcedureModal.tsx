@@ -50,6 +50,8 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
   isDoctorCabin,
   hasExpert,
 }) => {
+  const [procedureSearch, setProcedureSearch] = React.useState("");
+
   if (!isOpen || !appointment) return null;
 
   const modalRoot = document.body;
@@ -174,74 +176,90 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                     )}
                   </label>
                   <div className="w-full max-h-[140px] overflow-y-auto p-2 border rounded outline-none border-border-base bg-surface flex flex-col gap-2">
-                    {modalActivePackages.map((pkg) => {
-                      const val = `consume_pkg_${pkg.id}`;
-                      const isChecked = procedure.procedureType
-                        .split(", ")
-                        .includes(val);
-
-                      return (
-                        <Checkbox
-                          key={val}
-                          isSelected={isChecked}
-                          onValueChange={() => handleToggleProcedure(val)}
-                        >
-                          <span className="text-[12.5px] text-text-main">
-                            Consume Session: {pkg.packageName} (
-                            {pkg.usedSessions}/{pkg.totalSessions} used)
-                          </span>
-                        </Checkbox>
-                      );
-                    })}
-                    {appointmentTypes.map((type) => {
-                      const isChecked = procedure.procedureType
-                        .split(", ")
-                        .includes(type.name);
-
-                      return (
-                        <Checkbox
-                          key={type.id}
-                          isSelected={isChecked}
-                          onValueChange={() => handleToggleProcedure(type.name)}
-                        >
-                          <span className="text-[12.5px] text-text-main">
-                            {type.name}
-                          </span>
-                        </Checkbox>
-                      );
-                    })}
+                    <input
+                      type="text"
+                      placeholder="Search procedure..."
+                      value={procedureSearch}
+                      onChange={(e) => setProcedureSearch(e.target.value)}
+                      className="w-full h-8 px-2 text-[12px] border-b border-border-base outline-none bg-transparent mb-1 focus:border-primary transition-colors"
+                    />
                     {(() => {
-                      const label = getBookedApptTypeOption();
+                      const options = [];
+                      const procedureList = procedure.procedureType.split(", ").filter(x => x !== "");
 
-                      if (label) {
-                        const isChecked = procedure.procedureType
-                          .split(", ")
-                          .includes(label);
+                      // 1. Booked procedure
+                      const bookedLabel = getBookedApptTypeOption();
+                      if (bookedLabel) {
+                        options.push({
+                          type: "booked",
+                          id: bookedLabel,
+                          label: `${bookedLabel} (Booked)`,
+                          isChecked: procedureList.includes(bookedLabel)
+                        });
+                      }
 
+                      // 2. Packages
+                      modalActivePackages.forEach((pkg) => {
+                        const val = `consume_pkg_${pkg.id}`;
+                        options.push({
+                          type: "package",
+                          id: val,
+                          label: `Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`,
+                          isChecked: procedureList.includes(val)
+                        });
+                      });
+
+                      // 3. Appointment Types
+                      appointmentTypes.forEach((type) => {
+                        options.push({
+                          type: "type",
+                          id: type.name,
+                          label: type.name,
+                          isChecked: procedureList.includes(type.name)
+                        });
+                      });
+
+                      // 4. Other
+                      options.push({
+                        type: "other",
+                        id: "Other",
+                        label: "Other",
+                        isChecked: procedureList.includes("Other")
+                      });
+
+                      // Sort: Booked first, then Selected, then the rest
+                      options.sort((a, b) => {
+                        if (a.type === "booked") return -1;
+                        if (b.type === "booked") return 1;
+                        if (a.isChecked && !b.isChecked) return -1;
+                        if (!a.isChecked && b.isChecked) return 1;
+                        return 0;
+                      });
+
+                      const filteredOptions = options.filter(opt =>
+                        opt.label.toLowerCase().includes(procedureSearch.toLowerCase())
+                      );
+
+                      if (filteredOptions.length === 0) {
                         return (
-                          <Checkbox
-                            isSelected={isChecked}
-                            onValueChange={() => handleToggleProcedure(label)}
-                          >
-                            <span className="text-[12.5px] text-text-main">
-                              {label} (Booked)
-                            </span>
-                          </Checkbox>
+                          <div className="text-[12px] text-text-muted text-center py-2">
+                            No matching procedures
+                          </div>
                         );
                       }
 
-                      return null;
+                      return filteredOptions.map((opt) => (
+                        <Checkbox
+                          key={opt.id}
+                          isSelected={opt.isChecked}
+                          onValueChange={() => handleToggleProcedure(opt.id)}
+                        >
+                          <span className={`text-[12.5px] ${opt.type === "booked" ? "font-semibold text-primary" : "text-text-main"}`}>
+                            {opt.label}
+                          </span>
+                        </Checkbox>
+                      ));
                     })()}
-                    <Checkbox
-                      isSelected={procedure.procedureType
-                        .split(", ")
-                        .includes("Other")}
-                      onValueChange={() => handleToggleProcedure("Other")}
-                    >
-                      <span className="text-[12.5px] text-text-main">
-                        Other
-                      </span>
-                    </Checkbox>
                   </div>
                 </div>
 

@@ -144,21 +144,21 @@ export function Autocomplete({
       className={`relative flex flex-col gap-1 ${className ?? ""}`}
     >
       {label && (
-        <label className="text-sm font-medium text-mountain-800">
+        <label className="text-sm font-medium text-text-main">
           {label}
           {isRequired && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
 
       <div
-        className={`flex items-center border rounded-lg min-h-[38px] bg-white transition-colors ${
+        className={`flex items-center border rounded-lg min-h-[38px] bg-surface transition-colors ${
           isInvalid
             ? "border-red-400 focus-within:ring-red-100"
-            : "border-mountain-200 focus-within:border-teal-500 focus-within:ring-teal-100"
+            : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
         } focus-within:ring-1 ${isDisabled ? "opacity-50 pointer-events-none" : ""}`}
       >
         <input
-          className="flex-1 text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-mountain-800 placeholder:text-mountain-400"
+          className="flex-1 text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/70"
           disabled={isDisabled}
           placeholder={placeholder}
           required={isRequired}
@@ -171,11 +171,11 @@ export function Autocomplete({
           onFocus={() => setOpen(true)}
         />
         {isLoading ? (
-          <span className="pr-2 text-mountain-400 text-xs">Loading…</span>
+          <span className="pr-2 text-text-muted text-xs">Loading…</span>
         ) : currentKey ? (
           <button
             aria-label="Clear selection"
-            className="pr-2 text-mountain-400 hover:text-mountain-700"
+            className="pr-2 text-text-muted hover:text-text-main"
             type="button"
             onClick={handleClear}
           >
@@ -190,7 +190,7 @@ export function Autocomplete({
             </svg>
           </button>
         ) : (
-          <span className="pr-2 text-mountain-400 pointer-events-none">
+          <span className="pr-2 text-text-muted pointer-events-none">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
             </svg>
@@ -200,19 +200,19 @@ export function Autocomplete({
 
       {/* Dropdown */}
       {open && !isDisabled && (
-        <div className="absolute top-full left-0 right-0 z-[1100] mt-1 bg-white border border-mountain-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 z-[1100] mt-1 bg-surface border border-border-base rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filtered.length === 0 ? (
-            <div className="px-3 py-2 text-[13px] text-mountain-500 italic">
+            <div className="px-3 py-2 text-[13px] text-text-muted italic">
               No results
             </div>
           ) : (
             filtered.map((item) => (
               <button
                 key={item.key}
-                className={`w-full text-left px-3 py-2 text-[13px] hover:bg-teal-50 hover:text-teal-800 transition-colors ${
+                className={`w-full text-left px-3 py-2 text-[13px] hover:bg-primary/5 hover:text-primary transition-colors ${
                   String(item.key) === String(currentKey)
-                    ? "bg-teal-50 text-teal-800 font-medium"
-                    : "text-mountain-800"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-text-main"
                 }`}
                 type="button"
                 onMouseDown={(e) => {
@@ -228,7 +228,7 @@ export function Autocomplete({
       )}
 
       {!isInvalid && description && (
-        <p className="text-xs text-mountain-500">{description}</p>
+        <p className="text-xs text-text-muted">{description}</p>
       )}
       {isInvalid && errorMessage && (
         <p className="text-xs text-red-500">{errorMessage}</p>

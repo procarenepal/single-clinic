@@ -332,9 +332,9 @@ export default function AccountsPage() {
   });
 
   const stats = {
-    total: bills.reduce((acc, b) => acc + b.totalAmount, 0),
-    paid: bills.reduce((acc, b) => acc + b.paidAmount, 0),
-    due: bills.reduce((acc, b) => acc + b.dueAmount, 0),
+    total: filteredBills.reduce((acc, b) => acc + b.totalAmount, 0),
+    paid: filteredBills.reduce((acc, b) => acc + b.paidAmount, 0),
+    due: filteredBills.reduce((acc, b) => acc + b.dueAmount, 0),
   };
 
   return (

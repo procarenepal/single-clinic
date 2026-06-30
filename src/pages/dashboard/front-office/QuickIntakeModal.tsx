@@ -4,6 +4,7 @@ import { IoCloseOutline, IoSearchOutline } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
 
 import { Spinner } from "@/components/ui";
+import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
 
 export interface QuickIntakeModalProps {
   isOpen: boolean;
@@ -224,8 +225,8 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       </div>
 
                       {/* Gender, Appointment Category & Date */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div className="sm:col-span-1">
                           <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
                             Gender
                           </label>
@@ -233,7 +234,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                             className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
                             value={quickIntakeForm.gender}
                             onChange={(e) =>
-                              setQuickIntakeForm((prev) => ({
+                              setQuickIntakeForm((prev: any) => ({
                                 ...prev,
                                 gender: e.target.value,
                               }))
@@ -244,7 +245,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                             <option value="other">Other</option>
                           </select>
                         </div>
-                        <div>
+                        <div className="sm:col-span-1">
                           <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
                             Appointment Date
                           </label>
@@ -261,41 +262,34 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                             }
                           />
                         </div>
-                        <div>
+                        <div className="sm:col-span-2">
                           <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
                             Appointment Category
                           </label>
-                          <select
-                            className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                            value={quickIntakeForm.appointmentTypeId}
-                            onChange={(e) =>
-                              setQuickIntakeForm((prev) => ({
-                                ...prev,
-                                appointmentTypeId: e.target.value,
-                              }))
-                            }
+                          <Autocomplete
+                            className="w-full"
+                            placeholder="Search category..."
+                            selectedKey={quickIntakeForm.appointmentTypeId}
+                            onSelectionChange={(key) => {
+                              if (key) {
+                                setQuickIntakeForm((prev: any) => ({
+                                  ...prev,
+                                  appointmentTypeId: String(key),
+                                }));
+                              }
+                            }}
                           >
-                            <optgroup label="Appointments">
-                              {appointmentTypes.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}
-                                </option>
-                              ))}
-                            </optgroup>
-                            {packages.length > 0 && (
-                              <optgroup label="Treatment Packages">
-                                {packages.map((pkg) => (
-                                  <option
-                                    key={`pkg_${pkg.id}`}
-                                    value={`pkg_${pkg.id}`}
-                                  >
-                                    📦 {pkg.name} (NPR{" "}
-                                    {pkg.price.toLocaleString()})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </select>
+                            {appointmentTypes.map((t) => (
+                              <AutocompleteItem key={t.id} textValue={t.name}>
+                                {t.name}
+                              </AutocompleteItem>
+                            ))}
+                            {packages.map((pkg) => (
+                              <AutocompleteItem key={`pkg_${pkg.id}`} textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}>
+                                📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
+                              </AutocompleteItem>
+                            ))}
+                          </Autocomplete>
                         </div>
                       </div>
                     </>
@@ -482,8 +476,8 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                         )}
 
                         {/* Appointment Date & Category for Existing Patient */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-1">
                             <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
                               Appointment Date
                             </label>
@@ -500,55 +494,39 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                               }
                             />
                           </div>
-                          <div>
+                          <div className="sm:col-span-2">
                             <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
                               Appointment Category
                             </label>
-                            <select
-                              className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                              value={quickIntakeForm.appointmentTypeId}
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  appointmentTypeId: e.target.value,
-                                }))
-                              }
+                            <Autocomplete
+                              className="w-full"
+                              placeholder="Search category..."
+                              selectedKey={quickIntakeForm.appointmentTypeId}
+                              onSelectionChange={(key) => {
+                                if (key) {
+                                  setQuickIntakeForm((prev: any) => ({
+                                    ...prev,
+                                    appointmentTypeId: String(key),
+                                  }));
+                                }
+                              }}
                             >
-                              <optgroup label="Appointments">
-                                {appointmentTypes.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                              {activePatientPackages.length > 0 && (
-                                <optgroup label="Active Packages (Consume Session)">
-                                  {activePatientPackages.map((pkg) => (
-                                    <option
-                                      key={`consume_${pkg.id}`}
-                                      value={`consume_pkg_${pkg.id}`}
-                                    >
-                                      ⭐ Consume Session: {pkg.packageName} (
-                                      {pkg.usedSessions}/{pkg.totalSessions}{" "}
-                                      used)
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {packages.length > 0 && (
-                                <optgroup label="Treatment Packages">
-                                  {packages.map((pkg) => (
-                                    <option
-                                      key={`pkg_${pkg.id}`}
-                                      value={`pkg_${pkg.id}`}
-                                    >
-                                      📦 {pkg.name} (NPR{" "}
-                                      {pkg.price.toLocaleString()})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                            </select>
+                              {appointmentTypes.map((t) => (
+                                <AutocompleteItem key={t.id} textValue={t.name}>
+                                  {t.name}
+                                </AutocompleteItem>
+                              ))}
+                              {activePatientPackages.map((pkg) => (
+                                <AutocompleteItem key={`consume_pkg_${pkg.id}`} textValue={`⭐ Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`}>
+                                  ⭐ Consume Session: {pkg.packageName} ({pkg.usedSessions}/{pkg.totalSessions} used)
+                                </AutocompleteItem>
+                              ))}
+                              {packages.map((pkg) => (
+                                <AutocompleteItem key={`pkg_${pkg.id}`} textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}>
+                                  📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
+                                </AutocompleteItem>
+                              ))}
+                            </Autocomplete>
                           </div>
                         </div>
                       </div>

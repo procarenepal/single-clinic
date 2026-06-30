@@ -90,6 +90,8 @@ export default function HRPage() {
     waivedDays: number;
     includeCommission: boolean;
     incentive: number;
+    applyTax: boolean;
+    taxPercentage: number;
   }>({
     amount: 0,
     paymentMethod: "Cash",
@@ -99,6 +101,8 @@ export default function HRPage() {
     waivedDays: 0,
     includeCommission: false,
     incentive: 0,
+    applyTax: false,
+    taxPercentage: 1,
   });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -529,15 +533,16 @@ export default function HRPage() {
     }
     const allowedLeaves = selectedStaff.allowedLeavesPerMonth ?? 4;
 
-    const absentDays = attendance.filter((a) => {
+    const absentRecords = attendance.filter((a) => {
       const isAbsent = a.status === "absent";
       const isSelectedStaff = a.staffId === selectedStaff.id;
       const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
-      // Only count explicitly-unpaid absences OR absences with no leaveType set (legacy) that exceed quota
-      // If leaveType is set, use it directly; otherwise fall back to quota logic
       const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
       return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday;
-    }).length;
+    });
+    
+    const absentDays = absentRecords.length;
+    const absentDates = absentRecords.map(a => format(a.date, "MMM dd"));
 
     const totalAllowedLeaves = allowedLeaves * months.length;
 
@@ -574,6 +579,7 @@ export default function HRPage() {
 
     return {
       absentDays,
+      absentDates,
       allowedLeaves: totalAllowedLeaves,
       unpaidLeaves,
       dailyWage,
@@ -609,6 +615,24 @@ export default function HRPage() {
       }, 0);
   };
 
+  const getTaxPaid = (staffName: string) => {
+    return bills
+      .filter(
+        (b) =>
+          b.category === "salary" &&
+          b.vendorName === staffName,
+      )
+      .reduce((acc, b) => {
+        const desc = b.description || "";
+        const match = desc.match(/Tax\s+Rs\.?\s*([\d,]+)/i);
+        if (match) {
+          const val = parseFloat(match[1].replace(/,/g, ""));
+          if (!isNaN(val)) return acc + val;
+        }
+        return acc;
+      }, 0);
+  };
+
   const handleDisburseSalary = async () => {
     if (!selectedStaff) return;
     try {
@@ -616,7 +640,9 @@ export default function HRPage() {
         ? (selectedStaff.totalCommissionBalance || 0)
         : 0;
       const incentiveAmt = Number(payrollForm.incentive) || 0;
-      const totalPayout = Number(payrollForm.amount) + pendingCommission + incentiveAmt;
+      const subTotal = Number(payrollForm.amount) + pendingCommission + incentiveAmt;
+      const taxAmt = payrollForm.applyTax ? Math.round(subTotal * (payrollForm.taxPercentage / 100)) : 0;
+      const totalPayout = subTotal - taxAmt;
 
       const bill: Omit<AccountBill, "id" | "createdAt" | "updatedAt"> = {
         category: "salary",
@@ -628,7 +654,7 @@ export default function HRPage() {
         dueAmount: 0,
         paymentStatus: "paid",
         paymentMethod: payrollForm.paymentMethod,
-        description: `Salary for ${payrollForm.selectedMonths.join(", ")}${pendingCommission > 0 ? ` + Commission Rs. ${pendingCommission.toLocaleString()}` : ""}${incentiveAmt > 0 ? ` + Incentive Rs. ${incentiveAmt.toLocaleString()}` : ""}. ${payrollForm.notes}`,
+        description: `Salary for ${payrollForm.selectedMonths.join(", ")}${pendingCommission > 0 ? ` + Commission Rs. ${pendingCommission.toLocaleString()}` : ""}${incentiveAmt > 0 ? ` + Incentive Rs. ${incentiveAmt.toLocaleString()}` : ""}${taxAmt > 0 ? ` - Tax Rs. ${taxAmt.toLocaleString()}` : ""}. ${payrollForm.notes}`,
         clinicId: clinicId!,
         branchId: branchId || "",
         createdBy: userData?.id || "",
@@ -655,7 +681,7 @@ export default function HRPage() {
 
       addToast({
         title: "Success",
-        description: `Salary disbursed successfully.${pendingCommission > 0 ? ` Included Commission: Rs. ${pendingCommission.toLocaleString()}.` : ""}${incentiveAmt > 0 ? ` Included Incentive: Rs. ${incentiveAmt.toLocaleString()}.` : ""}`,
+        description: `Salary disbursed successfully.${pendingCommission > 0 ? ` Included Commission: Rs. ${pendingCommission.toLocaleString()}.` : ""}${incentiveAmt > 0 ? ` Included Incentive: Rs. ${incentiveAmt.toLocaleString()}.` : ""}${payrollForm.applyTax ? ` Deducted Tax: Rs. ${Math.round((Number(payrollForm.amount) + pendingCommission + incentiveAmt) * (payrollForm.taxPercentage / 100)).toLocaleString()}.` : ""}`,
         color: "success",
       });
       setIsPayModalOpen(false);
@@ -2158,7 +2184,7 @@ export default function HRPage() {
                 {selectedStaff && (
                   <div className="space-y-6">
                     {/* Quick Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
                         <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">
                           Present Days
@@ -2219,6 +2245,14 @@ export default function HRPage() {
                         </p>
                         <p className="text-[16px] font-bold text-[rgb(var(--color-text))]">
                           Rs. {selectedStaff.salary.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
+                        <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">
+                          Total Tax Paid
+                        </p>
+                        <p className="text-[16px] font-bold text-rose-500">
+                          Rs. {getTaxPaid(selectedStaff.name).toLocaleString()}
                         </p>
                       </div>
                     </div>
@@ -2555,6 +2589,58 @@ export default function HRPage() {
                           </Table>
                         </div>
                       </Tab>
+                      <Tab key="tax" title="Tax Records">
+                        <div className="py-4">
+                          <Table
+                            aria-label="Tax history"
+                            classNames={{
+                              th: "text-[10px] uppercase",
+                              td: "text-[12px]",
+                            }}
+                            shadow="none"
+                          >
+                            <TableHeader>
+                              <TableColumn>Bill #</TableColumn>
+                              <TableColumn>Payment Date</TableColumn>
+                              <TableColumn>Description</TableColumn>
+                              <TableColumn>Tax Deducted</TableColumn>
+                            </TableHeader>
+                            <TableBody emptyContent="No tax records found">
+                              {bills
+                                .filter(
+                                  (b) =>
+                                    b.category === "salary" &&
+                                    b.vendorName === selectedStaff.name &&
+                                    b.description?.match(/Tax\s+Rs\.?\s*([\d,]+)/i),
+                                )
+                                .sort(
+                                  (a, b) =>
+                                    b.billDate.getTime() - a.billDate.getTime(),
+                                )
+                                .map((bill, index) => {
+                                  const match = bill.description?.match(/Tax\s+Rs\.?\s*([\d,]+)/i);
+                                  const taxAmount = match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+                                  return (
+                                    <TableRow key={bill.id || `tax-${index}`}>
+                                      <TableCell className="font-mono">
+                                        {bill.billNumber}
+                                      </TableCell>
+                                      <TableCell>
+                                        {format(bill.billDate, "MMM dd, yyyy")}
+                                      </TableCell>
+                                      <TableCell className="text-[11.5px] text-[rgb(var(--color-text-muted))] max-w-[200px] truncate">
+                                        {bill.description}
+                                      </TableCell>
+                                      <TableCell className="font-bold text-rose-500">
+                                        Rs. {taxAmount.toLocaleString()}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </Tab>
                       <Tab
                         key="commissions"
                         title={
@@ -2714,6 +2800,8 @@ export default function HRPage() {
                       waivedDays: 0,
                       includeCommission: false,
                       incentive: 0,
+                      applyTax: false,
+                      taxPercentage: 1,
                     });
                     setIsPayModalOpen(true);
                   }}
@@ -2803,11 +2891,12 @@ export default function HRPage() {
       {/* Salary Payment Modal */}
 
       <Modal
+        backdrop="blur"
         classNames={{
-          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] min-h-[550px]",
         }}
         isOpen={isPayModalOpen}
-        size="2xl"
+        size="5xl"
         onOpenChange={setIsPayModalOpen}
       >
         <ModalContent>
@@ -2896,26 +2985,66 @@ export default function HRPage() {
                         }
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
-                        Incentive (Rs.)
-                      </label>
-                      <Input
-                        size="sm"
-                        startContent={
-                          <span className="text-[12px] text-text-muted">Rs.</span>
-                        }
-                        type="number"
-                        placeholder="0"
-                        value={payrollForm.incentive === 0 ? "" : payrollForm.incentive.toString()}
-                        onChange={(e) =>
-                          setPayrollForm({
-                            ...payrollForm,
-                            incentive: Number(e.target.value) || 0,
-                          })
-                        }
-                      />
-                    </div>
+                    {payrollForm.paymentType !== "advance" && (
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                            Incentive (Rs.)
+                          </label>
+                          <Input
+                            size="sm"
+                            startContent={
+                              <span className="text-[12px] text-text-muted">Rs.</span>
+                            }
+                            type="number"
+                            placeholder="0"
+                            value={payrollForm.incentive === 0 ? "" : payrollForm.incentive.toString()}
+                            onChange={(e) =>
+                              setPayrollForm({
+                                ...payrollForm,
+                                incentive: Number(e.target.value) || 0,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 border border-rose-100 bg-rose-50/50 p-2.5 rounded-lg">
+                          <Checkbox
+                            size="sm"
+                            isSelected={payrollForm.applyTax}
+                            onValueChange={(val) => setPayrollForm(prev => ({ ...prev, applyTax: val }))}
+                            classNames={{ label: "text-[11px] text-rose-700 font-semibold" }}
+                          >
+                            Apply Tax Deduction
+                          </Checkbox>
+                          
+                          {payrollForm.applyTax && (
+                            <div className="pl-6 pt-1">
+                              <label className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest mb-1 block">
+                                Tax Percentage (%)
+                              </label>
+                              <Input
+                                size="sm"
+                                variant="bordered"
+                                classNames={{
+                                  input: "text-[13px] font-semibold text-rose-700",
+                                  innerWrapper: "bg-transparent",
+                                  inputWrapper: "border-rose-200 hover:border-rose-300 focus-within:border-rose-400 bg-white"
+                                }}
+                                type="number"
+                                placeholder="1"
+                                value={payrollForm.taxPercentage.toString()}
+                                onChange={(e) =>
+                                  setPayrollForm({
+                                    ...payrollForm,
+                                    taxPercentage: Number(e.target.value) || 0,
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
                         Payment Method
@@ -2972,9 +3101,14 @@ export default function HRPage() {
                         </span>
                       </div>
                       {getLeaveDetails(payrollForm.selectedMonths).absentDays > 0 && (
-                        <div className="flex justify-between text-[12px] text-mountain-600">
-                          <span>Total Leaves Taken:</span>
-                          <span className="font-semibold">{getLeaveDetails(payrollForm.selectedMonths).absentDays}</span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-[12px] text-mountain-600">
+                            <span>Total Leaves Taken:</span>
+                            <span className="font-semibold">{getLeaveDetails(payrollForm.selectedMonths).absentDays}</span>
+                          </div>
+                          <div className="text-[10px] text-mountain-400 text-right leading-tight max-w-[200px] self-end">
+                            ( {getLeaveDetails(payrollForm.selectedMonths).absentDates.join(", ")} )
+                          </div>
                         </div>
                       )}
                       {getLeaveDetails(payrollForm.selectedMonths).deductionAmount > 0 && (
@@ -3061,13 +3195,19 @@ export default function HRPage() {
                           <span className="font-semibold">+ Rs. {payrollForm.incentive.toLocaleString()}</span>
                         </div>
                       )}
+                      {payrollForm.applyTax && (
+                        <div className="flex justify-between text-[12px] text-rose-600">
+                          <span>Tax Deducted ({payrollForm.taxPercentage}%):</span>
+                          <span className="font-semibold">- Rs. {Math.round((payrollForm.amount + (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) + payrollForm.incentive) * (payrollForm.taxPercentage / 100)).toLocaleString()}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-[13px] font-bold pt-2 border-t border-mountain-200">
                         <span className="text-mountain-900">Total Payout:</span>
-                        <span className="text-health-700">Rs. {(
-                          payrollForm.amount +
-                          (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) +
-                          payrollForm.incentive
-                        ).toLocaleString()}</span>
+                        <span className="text-health-700">Rs. {(() => {
+                          const subT = payrollForm.amount + (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) + payrollForm.incentive;
+                          const taxAmt = payrollForm.applyTax ? Math.round(subT * (payrollForm.taxPercentage / 100)) : 0;
+                          return (subT - taxAmt).toLocaleString();
+                        })()}</span>
                       </div>
                     </div>
                   </div>

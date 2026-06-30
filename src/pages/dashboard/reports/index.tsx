@@ -169,6 +169,7 @@ export default function ReportsPage() {
   const [selectedAppointmentType, setSelectedAppointmentType] = useState("all");
   const [isGenerating, setIsGenerating] = useState(false);
   const [allDates, setAllDates] = useState(false);
+  const [showAllDoctorsAnalysis, setShowAllDoctorsAnalysis] = useState(false);
 
   // Create doctor and partner options for select
   const doctorOptions = [
@@ -540,7 +541,7 @@ export default function ReportsPage() {
     }
 
     return billings;
-  }, [allDates, selectedDoctor]);
+  }, [allDates, selectedDoctor, dateRange.start, dateRange.end, reportData.billings, reportData.billingSettings]);
 
   // Filter pathology billings by date range and doctor
   const filteredPathologyBillings = useMemo(() => {
@@ -1004,7 +1005,7 @@ export default function ReportsPage() {
           "Attributed Doctor":
             selectedDoctor !== "all"
               ? reportData.doctors.find((d) => d.id === selectedDoctor)?.name ||
-                "N/A"
+              "N/A"
               : billing.doctorName,
           "Doctor Type":
             billing.doctorType === "visitor" ? "Visiting" : "Regular",
@@ -1509,12 +1510,12 @@ export default function ReportsPage() {
                               <Chip
                                 color={
                                   statusColor as
-                                    | "success"
-                                    | "primary"
-                                    | "warning"
-                                    | "danger"
-                                    | "default"
-                                    | "secondary"
+                                  | "success"
+                                  | "primary"
+                                  | "warning"
+                                  | "danger"
+                                  | "default"
+                                  | "secondary"
                                 }
                                 size="sm"
                                 variant="flat"
@@ -1690,8 +1691,8 @@ export default function ReportsPage() {
                           <td className="whitespace-nowrap">
                             {patient.createdAt
                               ? new Date(
-                                  patient.createdAt as any,
-                                ).toLocaleDateString()
+                                patient.createdAt as any,
+                              ).toLocaleDateString()
                               : ""}
                           </td>
                         </tr>
@@ -2346,7 +2347,7 @@ export default function ReportsPage() {
                       return (
                         <>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {doctorList.slice(0, 6).map((doc) => (
+                            {(showAllDoctorsAnalysis ? doctorList : doctorList.slice(0, 6)).map((doc) => (
                               <div
                                 key={doc.id}
                                 className="clarity-stat text-center"
@@ -2365,9 +2366,16 @@ export default function ReportsPage() {
                             ))}
                           </div>
                           {doctorList.length > 6 && (
-                            <p className="text-sm text-mountain-500 text-center mt-2">
-                              +{doctorList.length - 6} more doctors
-                            </p>
+                            <div className="flex justify-center mt-3">
+                              <Button
+                                size="sm"
+                                variant="light"
+                                className="text-mountain-500 text-sm"
+                                onPress={() => setShowAllDoctorsAnalysis(!showAllDoctorsAnalysis)}
+                              >
+                                {showAllDoctorsAnalysis ? "Show less" : `+${doctorList.length - 6} more doctors`}
+                              </Button>
+                            </div>
                           )}
                         </>
                       );

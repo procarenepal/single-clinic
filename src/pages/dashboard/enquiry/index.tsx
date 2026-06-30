@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { title } from "@/components/primitives";
 
-type DatePreset = "all" | "today" | "yesterday" | "tomorrow";
+type DatePreset = "all" | "today" | "yesterday" | "tomorrow" | "custom";
 
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: "all", label: "All" },
@@ -93,8 +93,8 @@ export default function EnquiriesPage() {
 
       return (
         !q ||
-        e.fullName.toLowerCase().includes(q) ||
-        e.phone.toLowerCase().includes(q) ||
+        e.fullName?.toLowerCase().includes(q) ||
+        e.phone?.toLowerCase().includes(q) ||
         e.reasonForVisit?.toLowerCase().includes(q) ||
         e.source?.toLowerCase().includes(q)
       );
@@ -470,8 +470,8 @@ export default function EnquiriesPage() {
       </div>
 
       {/* Search Toolbar */}
-      <div className="flex items-center gap-4 bg-surface border border-border-base rounded-xl p-3 shadow-sm">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-wrap items-center gap-4 bg-surface border border-border-base rounded-xl p-3 shadow-sm">
+        <div className="relative flex-1 min-w-[200px]">
           <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
             className="w-full h-9 pl-9 pr-3 text-[13px] border border-border-base rounded-lg bg-surface-2 text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
@@ -481,28 +481,75 @@ export default function EnquiriesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="h-6 w-px bg-border-base hidden sm:block" />
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-            Status
-          </label>
-          <select
-            className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as EnquiryStatus | "all")
-            }
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option
-                key={option.key}
-                className="bg-surface"
-                value={option.key}
-              >
-                {option.label}
-              </option>
-            ))}
-          </select>
+        
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 border-r border-border-base pr-3">
+            <select 
+              className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+              value={dateField}
+              onChange={(e) => setDateField(e.target.value as any)}
+            >
+              <option value="appointmentDate">Appt Date</option>
+              <option value="createdAt">Created At</option>
+            </select>
+            <select
+              className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+              value={datePreset}
+              onChange={(e) => {
+                setDatePreset(e.target.value as DatePreset);
+                if (e.target.value !== "custom") {
+                  setRangeStart("");
+                  setRangeEnd("");
+                }
+              }}
+            >
+              {DATE_PRESETS.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+              <option value="custom">Custom Range</option>
+            </select>
+
+            {datePreset === "custom" && (
+              <div className="flex items-center gap-1.5 ml-1.5">
+                <input 
+                  type="date" 
+                  className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+                  value={rangeStart}
+                  onChange={(e) => setRangeStart(e.target.value)}
+                />
+                <span className="text-text-muted text-[11px] font-bold">TO</span>
+                <input 
+                  type="date" 
+                  className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+                  value={rangeEnd}
+                  onChange={(e) => setRangeEnd(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 pl-1">
+            <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+              Status
+            </label>
+            <select
+              className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as EnquiryStatus | "all")
+              }
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option
+                  key={option.key}
+                  className="bg-surface"
+                  value={option.key}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

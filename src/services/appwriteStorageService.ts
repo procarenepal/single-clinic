@@ -76,6 +76,9 @@ export const uploadImage = async (
     const result = await uploadFile(file, fileName);
 
     // If dimensions specified, get optimized URL
+    // NOTE: Image transformations are blocked on Appwrite Free Tier.
+    // We will just use the original uploaded file URL instead.
+    /*
     if (maxWidth || maxHeight) {
       const optimizedUrl = storage.getFilePreview(
         APPWRITE_BUCKET_ID,
@@ -95,6 +98,7 @@ export const uploadImage = async (
 
       result.fileUrl = optimizedUrl.toString();
     }
+    */
 
     return result;
   } catch (error) {
