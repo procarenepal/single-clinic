@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -6,10 +6,24 @@ import {
   IoTimeOutline,
   IoCheckmarkCircleOutline,
   IoCalendarOutline,
-  IoCloudUploadOutline,
   IoEllipsisHorizontal,
   IoPrintOutline,
+  IoDownloadOutline,
+  IoBarChartOutline,
 } from "react-icons/io5";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from "chart.js";
+import { Bar, Doughnut } from "react-chartjs-2";
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 import { format } from "date-fns";
 import {
   Modal,
@@ -36,6 +50,12 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showChart, setShowChart] = useState(false);
+  const [dateRange, setDateRange] = useState({
+    start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd"),
+    end: format(new Date(), "yyyy-MM-dd"),
+  });
 
   const categories = [
     { id: "all", label: "All Bills" },
@@ -327,14 +347,75 @@ export default function AccountsPage() {
       bill.billNumber.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
       activeCategory === "all" || bill.category === activeCategory;
+    const matchesStatus =
+      statusFilter === "all" || bill.paymentStatus === statusFilter;
 
-    return matchesSearch && matchesCategory;
+    let matchesDate = true;
+    if (dateRange.start && dateRange.end) {
+      const billDate = new Date(bill.billDate);
+      const start = new Date(dateRange.start);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(dateRange.end);
+      end.setHours(23, 59, 59, 999);
+      matchesDate = billDate >= start && billDate <= end;
+    }
+
+    return matchesSearch && matchesCategory && matchesStatus && matchesDate;
   });
 
   const stats = {
     total: filteredBills.reduce((acc, b) => acc + b.totalAmount, 0),
     paid: filteredBills.reduce((acc, b) => acc + b.paidAmount, 0),
     due: filteredBills.reduce((acc, b) => acc + b.dueAmount, 0),
+  };
+
+  const chartData = useMemo(() => {
+    const categoryTotals: Record<string, number> = {};
+    filteredBills.forEach(b => {
+      const label = b.category.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+      categoryTotals[label] = (categoryTotals[label] || 0) + b.totalAmount;
+    });
+    const labels = Object.keys(categoryTotals);
+    const data = Object.values(categoryTotals);
+    const COLORS = ["#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#6366f1", "#84cc16"];
+    return {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: COLORS.slice(0, labels.length).map(c => c + "cc"),
+        borderColor: COLORS.slice(0, labels.length),
+        borderWidth: 2,
+        borderRadius: 6,
+      }],
+    };
+  }, [filteredBills]);
+
+  const handleExportCSV = () => {
+    if (filteredBills.length === 0) {
+      addToast({ title: "No Data", description: "Nothing to export.", color: "warning" });
+      return;
+    }
+    const headers = ["Bill #", "Vendor", "Category", "Total (Rs)", "Paid (Rs)", "Due (Rs)", "Status", "Date", "Description"];
+    const rows = filteredBills.map(b => [
+      b.billNumber,
+      b.vendorName,
+      b.category,
+      b.totalAmount,
+      b.paidAmount,
+      b.dueAmount,
+      b.paymentStatus,
+      format(new Date(b.billDate), "yyyy-MM-dd"),
+      (b.description || "").replace(/,/g, " "),
+    ]);
+    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `expenses_${dateRange.start || "all"}_to_${dateRange.end || "all"}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    addToast({ title: "Exported", description: `${filteredBills.length} records downloaded.`, color: "success" });
   };
 
   return (
@@ -350,9 +431,22 @@ export default function AccountsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="h-8 px-3 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] text-[11px] font-semibold flex items-center gap-2 transition-all hover:bg-[rgb(var(--color-surface))] tracking-tight">
-            <IoCloudUploadOutline className="w-3.5 h-3.5" />
+          <button
+            className="h-8 px-3 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] text-[11px] font-semibold flex items-center gap-2 transition-all hover:bg-[rgb(var(--color-surface))] tracking-tight"
+            onClick={handleExportCSV}
+          >
+            <IoDownloadOutline className="w-3.5 h-3.5" />
             Export CSV
+          </button>
+          <button
+            className={`h-8 px-3 rounded-xl border text-[11px] font-semibold flex items-center gap-2 transition-all tracking-tight ${showChart
+                ? "bg-primary text-white border-primary shadow-sm"
+                : "border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] hover:bg-[rgb(var(--color-surface))]"
+              }`}
+            onClick={() => setShowChart(v => !v)}
+          >
+            <IoBarChartOutline className="w-3.5 h-3.5" />
+            {showChart ? "Hide Chart" : "View Chart"}
           </button>
           <button
             className="h-8 px-4 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 transition-all active:scale-[0.98] tracking-tight shadow-sm shadow-primary/20"
@@ -418,24 +512,122 @@ export default function AccountsPage() {
         </div>
       </div>
 
+      {/* Expense Breakdown Chart */}
+      {showChart && (
+        <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))] tracking-tight">Expense Breakdown by Category</h3>
+              <p className="text-[10px] text-[rgb(var(--color-text-muted))] mt-0.5">Based on current filters · {filteredBills.length} records</p>
+            </div>
+          </div>
+          {chartData.labels.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-[rgb(var(--color-text-muted))] text-[13px]">No data to display</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              <div className="md:col-span-2 h-56">
+                <Bar
+                  data={chartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ` Rs. ${Number(ctx.raw).toLocaleString()}` } } },
+                    scales: {
+                      y: { ticks: { callback: (v) => `Rs. ${Number(v).toLocaleString()}`, font: { size: 10 } }, grid: { color: "rgba(0,0,0,0.05)" } },
+                      x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+                    },
+                  }}
+                />
+              </div>
+              <div className="h-52 flex items-center justify-center">
+                <Doughnut
+                  data={chartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: "bottom", labels: { font: { size: 10 }, padding: 10, boxWidth: 12 } },
+                      tooltip: { callbacks: { label: (ctx) => ` Rs. ${Number(ctx.raw).toLocaleString()}` } },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Filters & Search */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[rgb(var(--color-surface-2))/0.3] p-4 rounded-xl border border-[rgb(var(--color-border))]">
-        <div className="flex flex-wrap gap-2">
-          {categories.map((cat) => (
+      <div className="flex flex-col gap-3 bg-[rgb(var(--color-surface-2))/0.3] p-4 rounded-xl border border-[rgb(var(--color-border))]">
+        {/* Status Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest">Status:</span>
+          {(["all", "paid", "pending", "partial"] as const).map(s => (
             <button
-              key={cat.id}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
-                activeCategory === cat.id
-                  ? "bg-primary text-white shadow-md shadow-primary/20"
-                  : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-muted))] hover:text-primary hover:bg-primary/5"
-              }`}
-              onClick={() => setActiveCategory(cat.id)}
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all capitalize ${statusFilter === s
+                  ? s === "paid" ? "bg-primary/20 text-primary border border-primary/30"
+                    : s === "pending" ? "bg-rose-500/20 text-rose-500 border border-rose-500/30"
+                      : s === "partial" ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                        : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text))] border border-[rgb(var(--color-border))]"
+                  : "bg-transparent text-[rgb(var(--color-text-muted))] border border-transparent hover:border-[rgb(var(--color-border))]"
+                }`}
             >
-              {cat.label}
+              {s === "all" ? "All Status" : s}
+              <span className="ml-1 text-[9px] opacity-60">
+                ({s === "all" ? bills.length : bills.filter(b => b.paymentStatus === s).length})
+              </span>
             </button>
           ))}
         </div>
-        <div className="relative w-full md:w-64">
+        {/* Category pills + date range row */}
+        <div className="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
+          <div className="flex flex-wrap gap-2">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${activeCategory === cat.id
+                  ? "bg-primary text-white shadow-md shadow-primary/20"
+                  : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-muted))] hover:text-primary hover:bg-primary/5"
+                  }`}
+                onClick={() => setActiveCategory(cat.id)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Date Range */}
+          <div className="flex flex-wrap items-center gap-2">
+            <IoCalendarOutline className="w-4 h-4 text-[rgb(var(--color-text-muted))]" />
+            <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-semibold">From</span>
+            <input
+              type="date"
+              className="h-8 px-2 rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] text-[12px] focus:outline-none focus:ring-2 focus:ring-primary/20"
+              value={dateRange.start}
+              max={dateRange.end || undefined}
+              onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+            />
+            <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">to</span>
+            <input
+              type="date"
+              className="h-8 px-2 rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] text-[12px] focus:outline-none focus:ring-2 focus:ring-primary/20"
+              value={dateRange.end}
+              min={dateRange.start || undefined}
+              onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+            />
+            <button
+              className="text-[11px] font-bold text-rose-500 hover:text-rose-600 px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors border border-rose-500/20"
+              onClick={() => setDateRange({ start: "", end: "" })}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative w-full">
           <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted))] w-4 h-4" />
           <input
             className="w-full h-10 pl-10 pr-4 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
@@ -552,22 +744,20 @@ export default function AccountsPage() {
                     </td>
                     <td className="px-5 py-4">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
-                          bill.paymentStatus === "paid"
-                            ? "bg-primary/10 text-primary border border-primary/20"
-                            : bill.paymentStatus === "partial"
-                              ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
-                              : "bg-rose-500/10 text-rose-500 border border-rose-500/20"
-                        }`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${bill.paymentStatus === "paid"
+                          ? "bg-primary/10 text-primary border border-primary/20"
+                          : bill.paymentStatus === "partial"
+                            ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                            : "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                          }`}
                       >
                         <div
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            bill.paymentStatus === "paid"
-                              ? "bg-primary"
-                              : bill.paymentStatus === "partial"
-                                ? "bg-amber-500"
-                                : "bg-rose-500"
-                          }`}
+                          className={`w-1.5 h-1.5 rounded-full ${bill.paymentStatus === "paid"
+                            ? "bg-primary"
+                            : bill.paymentStatus === "partial"
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                            }`}
                         />
                         {bill.paymentStatus.charAt(0).toUpperCase() +
                           bill.paymentStatus.slice(1)}
@@ -731,20 +921,20 @@ export default function AccountsPage() {
                   {["equipment", "office_supply", "other"].includes(
                     billForm.category,
                   ) && (
-                    <div className="col-span-2">
-                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                        Item / Inventory Name
-                      </label>
-                      <Input
-                        placeholder="e.g. Laptop, Mobile, Oxygen Cylinder, Calculator..."
-                        size="sm"
-                        value={billForm.itemName}
-                        onChange={(e) =>
-                          setBillForm({ ...billForm, itemName: e.target.value })
-                        }
-                      />
-                    </div>
-                  )}
+                      <div className="col-span-2">
+                        <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                          Item / Inventory Name
+                        </label>
+                        <Input
+                          placeholder="e.g. Laptop, Mobile, Oxygen Cylinder, Calculator..."
+                          size="sm"
+                          value={billForm.itemName}
+                          onChange={(e) =>
+                            setBillForm({ ...billForm, itemName: e.target.value })
+                          }
+                        />
+                      </div>
+                    )}
 
                   <div className="col-span-2 md:col-span-1">
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">

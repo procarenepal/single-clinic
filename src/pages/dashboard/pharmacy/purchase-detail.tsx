@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { addDays, differenceInCalendarDays } from "date-fns";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   IoArrowBackOutline,
@@ -524,6 +524,9 @@ export default function PurchaseDetailPage() {
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
+  const [paymentDiscountType, setPaymentDiscountType] = useState<"none" | "flat" | "percent">("none");
+  const [paymentDiscountValue, setPaymentDiscountValue] = useState<string>("");
+
   const handleOpenPaymentModal = () => {
     setPaymentForm((prev) => ({
       ...prev,
@@ -850,6 +853,25 @@ export default function PurchaseDetailPage() {
     return "partial";
   };
 
+  const calculatedDiscountAmount = useMemo(() => {
+    if (paymentDiscountType === "none" || !paymentDiscountValue || !purchase) return 0;
+    const val = parseFloat(paymentDiscountValue);
+    if (isNaN(val) || val < 0) return 0;
+    if (paymentDiscountType === "flat") return val;
+    if (paymentDiscountType === "percent") {
+      return (dueAmount * val) / 100;
+    }
+    return 0;
+  }, [paymentDiscountType, paymentDiscountValue, purchase, dueAmount]);
+
+  useEffect(() => {
+    if (isPaymentModalOpen && purchase) {
+      const maxAllowed = Math.max(0, dueAmount - calculatedDiscountAmount);
+      
+      setPaymentForm((prev) => ({ ...prev, amount: maxAllowed }));
+    }
+  }, [calculatedDiscountAmount, dueAmount, isPaymentModalOpen, purchase]);
+
   const handleAddPayment = async () => {
     if (!purchase || !currentUser) return;
 
@@ -876,10 +898,11 @@ export default function PurchaseDetailPage() {
       return;
     }
 
-    if (paymentForm.amount > dueAmount) {
+    const maxAllowed = Math.max(0, dueAmount - calculatedDiscountAmount);
+    if (paymentForm.amount > maxAllowed) {
       addToast({
         title: "Validation Error",
-        description: `Payment amount cannot exceed due amount (NPR ${dueAmount.toLocaleString()})`,
+        description: `Payment amount cannot exceed effectively due amount (NPR ${maxAllowed.toLocaleString()})`,
         color: "warning",
       });
 
@@ -935,22 +958,41 @@ export default function PurchaseDetailPage() {
       const newPaidAmount = Math.round(
         updatedPayments.reduce((sum, p) => sum + p.amount, 0),
       );
+      
+      const newNetAmount = Math.max(0, purchase.netAmount - calculatedDiscountAmount);
+      const newTotalAmount = Math.max(0, totalAmount - calculatedDiscountAmount);
+      const newDiscountTotal = (purchase.discount || 0) + calculatedDiscountAmount;
+      
       const newStatus =
-        newPaidAmount >= totalAmount
+        newPaidAmount >= newTotalAmount
           ? "paid"
           : newPaidAmount > 0
             ? "partial"
             : "pending";
 
       // Update purchase record with new payment status and history
-      await pharmacyService.updateMedicinePurchase(purchase.id, {
+      const updatePayload: any = {
         paymentStatus: newStatus,
         paymentHistory: updatedHistory,
-      });
+      };
+
+      if (calculatedDiscountAmount > 0) {
+        updatePayload.discount = newDiscountTotal;
+        updatePayload.netAmount = newNetAmount;
+      }
+
+      await pharmacyService.updateMedicinePurchase(purchase.id, updatePayload);
 
       // Update local purchase state
       setPurchase((prev) =>
-        prev ? { ...prev, paymentStatus: newStatus } : null,
+        prev ? { 
+          ...prev, 
+          paymentStatus: newStatus,
+          ...(calculatedDiscountAmount > 0 && {
+            discount: newDiscountTotal,
+            netAmount: newNetAmount,
+          })
+        } : null,
       );
 
       addToast({
@@ -2521,6 +2563,38 @@ export default function PurchaseDetailPage() {
                 administrator to set up payment methods in pharmacy settings.
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border border-border-base rounded-md bg-surface-2/30">
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-medium text-mountain-700">
+                  Discount Type
+                </label>
+                <select
+                  className="h-8 w-full px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100 text-mountain-800"
+                  value={paymentDiscountType}
+                  onChange={(e) => {
+                    setPaymentDiscountType(e.target.value as "none" | "flat" | "percent");
+                    if (e.target.value === "none") {
+                      setPaymentDiscountValue("");
+                    }
+                  }}
+                >
+                  <option value="none">No Discount</option>
+                  <option value="flat">Flat Amount</option>
+                  <option value="percent">Percentage (%)</option>
+                </select>
+              </div>
+              {paymentDiscountType !== "none" && (
+                <FlatInput
+                  label="Discount Value"
+                  placeholder="0"
+                  prefixText={paymentDiscountType === "flat" ? "NPR" : "%"}
+                  type="number"
+                  value={paymentDiscountValue}
+                  onChange={(v) => setPaymentDiscountValue(v)}
+                />
+              )}
+            </div>
 
             <FlatInput
               hint={

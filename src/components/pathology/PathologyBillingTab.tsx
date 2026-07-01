@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
@@ -150,6 +151,77 @@ function PatientSearchBox({
   );
 }
 
+function ModalShell({
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  size = "lg",
+  disabled,
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+  footer: React.ReactNode;
+  size?: "md" | "lg" | "xl" | "5xl";
+  disabled?: boolean;
+}) {
+  const widthMap = {
+    md: "max-w-md",
+    lg: "max-w-2xl",
+    xl: "max-w-3xl",
+    "5xl": "max-w-5xl",
+  };
+
+  useEffect(() => {
+    const el = document.getElementById("dashboard-scroll-container") || document.body;
+    const prev = el.style.overflow;
+    el.style.overflow = "hidden";
+    return () => {
+      el.style.overflow = prev;
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !disabled) onClose();
+      }}
+    >
+      <div
+        className={`bg-surface border border-border-base rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] shadow-xl`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between px-4 py-3 border-b border-border-base shrink-0">
+          <div>
+            <h3 className="text-[14px] font-semibold text-text-main">
+              {title}
+            </h3>
+            {subtitle && <div className="mt-1">{subtitle}</div>}
+          </div>
+          {!disabled && (
+            <button
+              className="text-text-muted hover:text-text-main mt-0.5"
+              type="button"
+              onClick={onClose}
+            >
+              <IoCloseOutline className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">{children}</div>
+        <div className="flex justify-between gap-2 px-4 py-3 border-t border-border-base shrink-0 bg-surface-2/50 w-full">
+          {footer}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 interface PathologyBillingTabProps {
   clinicId: string;
   branchId: string;
@@ -226,6 +298,29 @@ export default function PathologyBillingTab({
     reference: "",
     notes: "",
   });
+
+  const [paymentDiscountType, setPaymentDiscountType] = useState<"none" | "flat" | "percent">("none");
+  const [paymentDiscountValue, setPaymentDiscountValue] = useState<string>("");
+
+  const calculatedDiscountAmount = useMemo(() => {
+    if (paymentDiscountType === "none" || !paymentDiscountValue || !selectedBillingForPayment) return 0;
+    const val = parseFloat(paymentDiscountValue);
+    if (isNaN(val) || val < 0) return 0;
+    if (paymentDiscountType === "flat") return val;
+    if (paymentDiscountType === "percent") {
+      return (selectedBillingForPayment.balanceAmount * val) / 100;
+    }
+    return 0;
+  }, [paymentDiscountType, paymentDiscountValue, selectedBillingForPayment]);
+
+  useEffect(() => {
+    if (paymentModal.isOpen && selectedBillingForPayment) {
+      const originalDue = selectedBillingForPayment.balanceAmount;
+      const maxAllowed = Math.max(0, originalDue - calculatedDiscountAmount);
+      
+      setPaymentForm((prev) => ({ ...prev, amount: maxAllowed.toString() }));
+    }
+  }, [calculatedDiscountAmount, paymentModal.isOpen, selectedBillingForPayment]);
 
   // Doctors & Partners list
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -952,6 +1047,8 @@ export default function PathologyBillingTab({
       reference: "",
       notes: "",
     });
+    setPaymentDiscountType("none");
+    setPaymentDiscountValue("");
     paymentModal.open();
   };
 
@@ -970,10 +1067,11 @@ export default function PathologyBillingTab({
       return;
     }
 
-    if (amount > selectedBillingForPayment.balanceAmount) {
+    const maxAllowed = Math.max(0, selectedBillingForPayment.balanceAmount - calculatedDiscountAmount);
+    if (amount > maxAllowed) {
       addToast({
         title: "Validation Error",
-        description: `Payment amount cannot exceed balance of ${Math.round(selectedBillingForPayment.balanceAmount).toLocaleString()}`,
+        description: `Payment amount cannot exceed effectively due amount (${Math.round(maxAllowed).toLocaleString()})`,
         color: "warning",
       });
 
@@ -990,6 +1088,7 @@ export default function PathologyBillingTab({
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
         currentUser.uid,
+        calculatedDiscountAmount
       );
 
       addToast({
@@ -1010,6 +1109,8 @@ export default function PathologyBillingTab({
       paymentModal.forceClose();
       setSelectedBillingForPayment(null);
       setPaymentForm({ amount: "", method: "cash", reference: "", notes: "" });
+      setPaymentDiscountType("none");
+      setPaymentDiscountValue("");
     } catch (error) {
       console.error("Error recording payment:", error);
       addToast({
@@ -2110,39 +2211,90 @@ export default function PathologyBillingTab({
       </div>
 
       {/* Payment Modal */}
-      <Modal
-        isOpen={paymentModal.isOpen}
-        size="lg"
-        onClose={paymentModal.close}
-      >
-        <ModalContent>
-          <ModalHeader>Record Payment</ModalHeader>
-          <ModalBody className="space-y-4">
+      {paymentModal.isOpen && (
+        <ModalShell
+          size="xl"
+          title="Record Payment"
+          onClose={paymentModal.close}
+          footer={
+            <div className="flex justify-end gap-2 w-full">
+              <Button variant="light" onPress={paymentModal.close}>
+                Cancel
+              </Button>
+              <Button
+                color="primary"
+                isLoading={paymentProcessing}
+                onPress={handlePaymentSubmit}
+              >
+                Record Payment
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
             {selectedBillingForPayment && (
               <>
-                <div>
-                  <p className="text-sm text-default-500">Invoice Number</p>
-                  <p className="font-medium">
-                    {selectedBillingForPayment.invoiceNumber}
-                  </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-default-500">Invoice Number</p>
+                    <p className="font-medium">
+                      {selectedBillingForPayment.invoiceNumber}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-default-500">Patient</p>
+                    <p className="font-medium">
+                      {selectedBillingForPayment.patientName}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-default-500">Total Amount</p>
+                    <p className="font-medium">
+                      {formatCurrency(selectedBillingForPayment.totalAmount)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-default-500">Balance</p>
+                    <p className="font-medium text-danger">
+                      {formatCurrency(selectedBillingForPayment.balanceAmount)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-default-500">Patient</p>
-                  <p className="font-medium">
-                    {selectedBillingForPayment.patientName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">Total Amount</p>
-                  <p className="font-medium">
-                    {formatCurrency(selectedBillingForPayment.totalAmount)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-default-500">Balance</p>
-                  <p className="font-medium text-danger">
-                    {formatCurrency(selectedBillingForPayment.balanceAmount)}
-                  </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border border-border-base rounded-md bg-surface-2/30">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[12px] font-medium text-text-muted">
+                      Discount Type
+                    </label>
+                    <select
+                      className="h-10 w-full px-2.5 text-[14px] border-2 border-border-base rounded-xl bg-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 text-text-main"
+                      value={paymentDiscountType}
+                      onChange={(e) => {
+                        setPaymentDiscountType(e.target.value as "none" | "flat" | "percent");
+                        if (e.target.value === "none") {
+                          setPaymentDiscountValue("");
+                        }
+                      }}
+                    >
+                      <option value="none">No Discount</option>
+                      <option value="flat">Flat Amount</option>
+                      <option value="percent">Percentage (%)</option>
+                    </select>
+                  </div>
+                  {paymentDiscountType !== "none" && (
+                    <Input
+                      label="Discount Value"
+                      placeholder="0"
+                      startContent={
+                        <span className="text-[12px] text-text-muted">
+                          {paymentDiscountType === "flat" ? "NPR" : "%"}
+                        </span>
+                      }
+                      type="number"
+                      value={paymentDiscountValue}
+                      onValueChange={(v) => setPaymentDiscountValue(v)}
+                    />
+                  )}
                 </div>
                 <Input
                   isRequired
@@ -2202,247 +2354,232 @@ export default function PathologyBillingTab({
                 />
               </>
             )}
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={paymentModal.close}>
-              Cancel
-            </Button>
-            <Button
-              color="primary"
-              isLoading={paymentProcessing}
-              onPress={handlePaymentSubmit}
-            >
-              Record Payment
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </div>
+        </ModalShell>
+      )}
 
       {/* View Invoice Modal */}
-      <Modal
-        isOpen={invoiceModal.isOpen}
-        size="2xl"
-        onClose={invoiceModal.close}
-      >
-        <ModalContent>
-          <ModalHeader>
-            Invoice Details - {selectedBilling?.invoiceNumber}
-          </ModalHeader>
-          <ModalBody>
-            {selectedBilling && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+      {invoiceModal.isOpen && (
+        <ModalShell
+          size="lg"
+          title={`Invoice Details - ${selectedBilling?.invoiceNumber}`}
+          onClose={invoiceModal.close}
+          footer={
+            <div className="flex justify-between items-center w-full">
+              <div className="flex items-center gap-2">
+                <Select
+                  className="w-48"
+                  label="Print Format"
+                  selectedKeys={[selectedPrintFormat]}
+                  size="sm"
+                  onOpenChange={invoiceModal.handleDropdownInteraction}
+                  onSelectionChange={(keys) => {
+                    const format = Array.from(keys)[0] as PrintFormat;
+
+                    if (format) setSelectedPrintFormat(format);
+                  }}
+                >
+                  <SelectItem key="A4">A4 Full Page</SelectItem>
+                  <SelectItem key="A4_HALF">A4 Half (A5)</SelectItem>
+                  <SelectItem key="THERMAL_80MM">Thermal 80mm</SelectItem>
+                  <SelectItem key="THERMAL_58MM">Thermal 58mm</SelectItem>
+                  <SelectItem key="THERMAL_4INCH">Label (4-inch)</SelectItem>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  color="primary"
+                  startContent={<IoPrintOutline />}
+                  onPress={() => {
+                    if (selectedBilling) {
+                      handlePrint(selectedBilling);
+                    }
+                  }}
+                >
+                  Print Invoice
+                </Button>
+                <Button variant="light" onPress={invoiceModal.close}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          {selectedBilling && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-text-muted">Patient Name</p>
+                  <p className="font-medium">{selectedBilling.patientName}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-text-muted">Invoice Date</p>
+                  <p className="font-medium">
+                    {new Date(
+                      selectedBilling.invoiceDate,
+                    ).toLocaleDateString()}
+                  </p>
+                </div>
+                {selectedBilling.patientPhone && (
                   <div>
-                    <p className="text-sm text-text-muted">Patient Name</p>
-                    <p className="font-medium">{selectedBilling.patientName}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-text-muted">Invoice Date</p>
+                    <p className="text-sm text-text-muted">Phone</p>
                     <p className="font-medium">
-                      {new Date(
-                        selectedBilling.invoiceDate,
-                      ).toLocaleDateString()}
+                      {selectedBilling.patientPhone}
                     </p>
                   </div>
-                  {selectedBilling.patientPhone && (
-                    <div>
-                      <p className="text-sm text-text-muted">Phone</p>
-                      <p className="font-medium">
-                        {selectedBilling.patientPhone}
-                      </p>
-                    </div>
-                  )}
-                  {selectedBilling.patientEmail && (
-                    <div>
-                      <p className="text-sm text-text-muted">Email</p>
-                      <p className="font-medium">
-                        {selectedBilling.patientEmail}
-                      </p>
-                    </div>
-                  )}
-                  {selectedBilling.patientAge && (
-                    <div>
-                      <p className="text-sm text-text-muted">Age</p>
-                      <p className="font-medium">
-                        {selectedBilling.patientAge}
-                      </p>
-                    </div>
-                  )}
-                  {selectedBilling.patientGender && (
-                    <div>
-                      <p className="text-sm text-text-muted">Gender</p>
-                      <p className="font-medium">
-                        {selectedBilling.patientGender.charAt(0).toUpperCase() +
-                          selectedBilling.patientGender.slice(1)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <p className="text-sm text-text-muted mb-2">Test Items</p>
-                  <Table>
-                    <TableHeader>
-                      <TableColumn>Test Name</TableColumn>
-                      <TableColumn>Price</TableColumn>
-                      <TableColumn>Quantity</TableColumn>
-                      <TableColumn>Amount</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedBilling.items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            {item.testName}
-                            {item.testType && (
-                              <span className="text-default-500 text-sm">
-                                {" "}
-                                ({item.testType})
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>{formatCurrency(item.price)}</TableCell>
-                          <TableCell>{item.quantity}</TableCell>
-                          <TableCell>{formatCurrency(item.amount)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="border-t pt-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal:</span>
-                      <span>{formatCurrency(selectedBilling.subtotal)}</span>
-                    </div>
-                    {selectedBilling.discountAmount > 0 && (
-                      <div className="flex justify-between text-warning">
-                        <span>Discount:</span>
-                        <span>
-                          -{formatCurrency(selectedBilling.discountAmount)}
-                        </span>
-                      </div>
-                    )}
-                    {selectedBilling.taxAmount > 0 && (
-                      <div className="flex justify-between">
-                        <span>Tax ({selectedBilling.taxPercentage}%):</span>
-                        <span>{formatCurrency(selectedBilling.taxAmount)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-lg font-bold border-t pt-2">
-                      <span>Total:</span>
-                      <span>{formatCurrency(selectedBilling.totalAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Paid:</span>
-                      <span className="text-success">
-                        {formatCurrency(selectedBilling.paidAmount)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Balance:</span>
-                      <span
-                        className={
-                          selectedBilling.balanceAmount > 0
-                            ? "text-danger font-semibold"
-                            : "text-success font-semibold"
-                        }
-                      >
-                        {formatCurrency(selectedBilling.balanceAmount)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {selectedBilling.paymentHistory &&
-                  selectedBilling.paymentHistory.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-success/20 bg-success-50/50 p-3 rounded-lg">
-                      <h5 className="text-[11px] font-semibold text-success-700 mb-2 uppercase tracking-wider">
-                        Payment History
-                      </h5>
-                      <div className="space-y-2">
-                        {selectedBilling.paymentHistory.map((p, idx) => (
-                          <div
-                            key={p.id || idx}
-                            className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-success/10"
-                          >
-                            <div>
-                              <p className="font-semibold text-success-800">
-                                {formatCurrency(p.amount)}
-                              </p>
-                              <p className="text-default-500 mt-0.5">
-                                {p.method.charAt(0).toUpperCase() +
-                                  p.method.slice(1)}{" "}
-                                •{" "}
-                                {new Date(p.date).toLocaleString("en-US", {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </p>
-                              {p.reference && (
-                                <p className="text-default-400 mt-0.5">
-                                  Ref: {p.reference}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                {selectedBilling.notes && (
+                )}
+                {selectedBilling.patientEmail && (
                   <div>
-                    <p className="text-sm text-default-500">Notes</p>
-                    <p className="font-medium">{selectedBilling.notes}</p>
+                    <p className="text-sm text-text-muted">Email</p>
+                    <p className="font-medium">
+                      {selectedBilling.patientEmail}
+                    </p>
+                  </div>
+                )}
+                {selectedBilling.patientAge && (
+                  <div>
+                    <p className="text-sm text-text-muted">Age</p>
+                    <p className="font-medium">
+                      {selectedBilling.patientAge}
+                    </p>
+                  </div>
+                )}
+                {selectedBilling.patientGender && (
+                  <div>
+                    <p className="text-sm text-text-muted">Gender</p>
+                    <p className="font-medium">
+                      {selectedBilling.patientGender.charAt(0).toUpperCase() +
+                        selectedBilling.patientGender.slice(1)}
+                    </p>
                   </div>
                 )}
               </div>
-            )}
-          </ModalBody>
-          <ModalFooter className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Select
-                className="w-48"
-                label="Print Format"
-                selectedKeys={[selectedPrintFormat]}
-                size="sm"
-                onOpenChange={invoiceModal.handleDropdownInteraction}
-                onSelectionChange={(keys) => {
-                  const format = Array.from(keys)[0] as PrintFormat;
 
-                  if (format) setSelectedPrintFormat(format);
-                }}
-              >
-                <SelectItem key="A4">A4 Full Page</SelectItem>
-                <SelectItem key="A4_HALF">A4 Half (A5)</SelectItem>
-                <SelectItem key="THERMAL_80MM">Thermal 80mm</SelectItem>
-                <SelectItem key="THERMAL_58MM">Thermal 58mm</SelectItem>
-                <SelectItem key="THERMAL_4INCH">Label (4-inch)</SelectItem>
-              </Select>
+              <div>
+                <p className="text-sm text-text-muted mb-2">Test Items</p>
+                <Table>
+                  <TableHeader>
+                    <TableColumn>Test Name</TableColumn>
+                    <TableColumn>Price</TableColumn>
+                    <TableColumn>Quantity</TableColumn>
+                    <TableColumn>Amount</TableColumn>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedBilling.items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          {item.testName}
+                          {item.testType && (
+                            <span className="text-default-500 text-sm">
+                              {" "}
+                              ({item.testType})
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>{formatCurrency(item.price)}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>{formatCurrency(item.amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="border-t pt-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>{formatCurrency(selectedBilling.subtotal)}</span>
+                  </div>
+                  {selectedBilling.discountAmount > 0 && (
+                    <div className="flex justify-between text-warning">
+                      <span>Discount:</span>
+                      <span>
+                        -{formatCurrency(selectedBilling.discountAmount)}
+                      </span>
+                    </div>
+                  )}
+                  {selectedBilling.taxAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span>Tax ({selectedBilling.taxPercentage}%):</span>
+                      <span>{formatCurrency(selectedBilling.taxAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Total:</span>
+                    <span>{formatCurrency(selectedBilling.totalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Paid:</span>
+                    <span className="text-success">
+                      {formatCurrency(selectedBilling.paidAmount)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Balance:</span>
+                    <span
+                      className={
+                        selectedBilling.balanceAmount > 0
+                          ? "text-danger font-semibold"
+                          : "text-success font-semibold"
+                      }
+                    >
+                      {formatCurrency(selectedBilling.balanceAmount)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedBilling.paymentHistory &&
+                selectedBilling.paymentHistory.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-success/20 bg-success-50/50 p-3 rounded-lg">
+                    <h5 className="text-[11px] font-semibold text-success-700 mb-2 uppercase tracking-wider">
+                      Payment History
+                    </h5>
+                    <div className="space-y-2">
+                      {selectedBilling.paymentHistory.map((p, idx) => (
+                        <div
+                          key={p.id || idx}
+                          className="bg-white/60 p-2 rounded text-[11px] flex justify-between items-center border border-success/10"
+                        >
+                          <div>
+                            <p className="font-semibold text-success-800">
+                              {formatCurrency(p.amount)}
+                            </p>
+                            <p className="text-default-500 mt-0.5">
+                              {p.method.charAt(0).toUpperCase() +
+                                p.method.slice(1)}{" "}
+                              •{" "}
+                              {new Date(p.date).toLocaleString("en-US", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                            {p.reference && (
+                              <p className="text-default-400 mt-0.5">
+                                Ref: {p.reference}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {selectedBilling.notes && (
+                <div>
+                  <p className="text-sm text-default-500">Notes</p>
+                  <p className="font-medium">{selectedBilling.notes}</p>
+                </div>
+              )}
             </div>
-            <div className="flex gap-2">
-              <Button
-                color="primary"
-                startContent={<IoPrintOutline />}
-                onPress={() => {
-                  if (selectedBilling) {
-                    handlePrint(selectedBilling);
-                  }
-                }}
-              >
-                Print Invoice
-              </Button>
-              <Button variant="light" onPress={invoiceModal.close}>
-                Close
-              </Button>
-            </div>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          )}
+        </ModalShell>
+      )}
     </div>
   );
 }

@@ -273,6 +273,35 @@ export const appointmentService = {
   },
 
   /**
+   * Get all appointments for a specific expert
+   * @param {string} expertId - ID of the expert
+   * @returns {Promise<Appointment[]>} - Array of appointments for the expert
+   */
+  async getAppointmentsByExpert(expertId: string): Promise<Appointment[]> {
+    try {
+      const appointmentsCollection = collection(db, "appointments");
+      const q = query(
+        appointmentsCollection,
+        where("assignedExpertId", "==", expertId),
+      );
+
+      const querySnapshot = await getDocs(q);
+      const appointments: Appointment[] = [];
+
+      querySnapshot.forEach((doc) => {
+        appointments.push(mapAppointmentDoc(doc));
+      });
+
+      return appointments.sort(
+        (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
+      );
+    } catch (error) {
+      console.error("Error fetching expert appointments:", error);
+      throw new Error("Failed to fetch expert appointments");
+    }
+  },
+
+  /**
    * Get a single appointment by ID
    * @param {string} appointmentId - ID of the appointment
    * @returns {Promise<Appointment | null>} - Appointment or null if not found

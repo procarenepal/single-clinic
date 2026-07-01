@@ -12,9 +12,10 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
-import { Item } from "../types/models";
+import { Item, ItemPurchase } from "../types/models";
 
 const ITEMS_COLLECTION = "items";
+const ITEM_PURCHASES_COLLECTION = "itemPurchases";
 
 /**
  * Service for managing inventory items (non-medicines)
@@ -310,6 +311,75 @@ export const itemService = {
       return Array.from(categories).sort();
     } catch (error) {
       console.error("Error getting item categories:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Log an item purchase / refill bill
+   */
+  async createItemPurchase(
+    purchaseData: Omit<ItemPurchase, "id" | "createdAt">
+  ): Promise<string> {
+    try {
+      const purchasesRef = collection(db, ITEM_PURCHASES_COLLECTION);
+      const now = Timestamp.now();
+
+      const data = {
+        ...purchaseData,
+        purchaseDate: purchaseData.purchaseDate
+          ? purchaseData.purchaseDate instanceof Timestamp
+            ? purchaseData.purchaseDate
+            : Timestamp.fromDate(new Date(purchaseData.purchaseDate))
+          : now,
+        createdAt: now,
+      };
+
+      const docRef = await addDoc(purchasesRef, data);
+      return docRef.id;
+    } catch (error) {
+      console.error("Error creating item purchase log:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get purchase logs (refill history) by clinic
+   */
+  async getItemPurchasesByClinic(
+    clinicId: string,
+    branchId?: string
+  ): Promise<ItemPurchase[]> {
+    try {
+      const purchasesRef = collection(db, ITEM_PURCHASES_COLLECTION);
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
+
+      if (branchId) {
+        constraints.push(where("branchId", "==", branchId));
+      }
+
+      const q = query(purchasesRef, ...constraints);
+      const querySnapshot = await getDocs(q);
+      const purchases: ItemPurchase[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        purchases.push({
+          ...data,
+          id: doc.id,
+          createdAt: data.createdAt?.toDate(),
+          purchaseDate: data.purchaseDate?.toDate(),
+        } as ItemPurchase);
+      });
+
+      // Sort in memory by createdAt desc to avoid requiring a composite index in Firestore
+      return purchases.sort((a, b) => {
+        const dateA = a.createdAt ? a.createdAt.getTime() : 0;
+        const dateB = b.createdAt ? b.createdAt.getTime() : 0;
+        return dateB - dateA;
+      });
+    } catch (error) {
+      console.error("Error getting item purchases:", error);
       throw error;
     }
   },

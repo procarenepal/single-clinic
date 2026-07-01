@@ -776,6 +776,23 @@ export interface Item {
   createdBy: string;
 }
 
+// Item Purchase model for tracking refills and purchase bills of items
+export interface ItemPurchase {
+  id: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  purchaseDate: Date;
+  invoiceNumber?: string;
+  notes?: string;
+  clinicId: string;
+  branchId: string;
+  createdAt: Date;
+  createdBy: string;
+}
+
 // Purchase Medicine Item model for individual items in a purchase
 export interface MedicinePurchaseItem {
   id: string;

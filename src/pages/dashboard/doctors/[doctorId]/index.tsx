@@ -30,6 +30,7 @@ import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
 import { doctorCommissionService } from "@/services/doctorCommissionService";
+import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { Doctor, Appointment, Patient, DoctorCommission } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 
@@ -181,6 +182,7 @@ export default function DoctorProfilePage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientNames, setPatientNames] = useState<Record<string, string>>({});
+  const [appointmentTypeNames, setAppointmentTypeNames] = useState<Record<string, string>>({});
   const [commissions, setCommissions] = useState<DoctorCommission[]>([]);
   const [commissionStats, setCommissionStats] = useState({
     totalCommission: 0,
@@ -197,6 +199,25 @@ export default function DoctorProfilePage() {
   const [commissionsLoading, setCommissionsLoading] = useState(false);
 
   const [selectedTab, setSelectedTab] = useState("overview");
+  
+  // Appointment Filters
+  const [appointmentTypeFilter, setAppointmentTypeFilter] = useState("all");
+  const [appointmentDateRange, setAppointmentDateRange] = useState({
+    start: "",
+    end: "",
+  });
+  
+  // Patient Filters
+  const [patientDateRange, setPatientDateRange] = useState({
+    start: "",
+    end: "",
+  });
+  
+  // Commission Filters
+  const [commissionDateRange, setCommissionDateRange] = useState({
+    start: "",
+    end: "",
+  });
 
   const [selectedCommission, setSelectedCommission] =
     useState<DoctorCommission | null>(null);
@@ -279,6 +300,16 @@ export default function DoctorProfilePage() {
             patientNamesMap[result.value.patientId] = result.value.name;
         });
         setPatientNames(patientNamesMap);
+        
+        // Fetch appointment types for names
+        if (clinicId) {
+          const types = await appointmentTypeService.getAppointmentTypes(clinicId);
+          const typeNamesMap: Record<string, string> = {};
+          types.forEach(t => {
+            typeNamesMap[t.id] = t.name;
+          });
+          setAppointmentTypeNames(typeNamesMap);
+        }
       }
     } finally {
       setAppointmentsLoading(false);
@@ -438,20 +469,69 @@ export default function DoctorProfilePage() {
     (apt) => apt.status === "completed",
   ).length;
 
-  const recentAppointments = [...appointments]
+  const filteredAppointments = [...appointments]
+    .filter((apt) => {
+      // Type Filter (using appointmentTypeId now)
+      if (appointmentTypeFilter !== "all" && apt.appointmentTypeId !== appointmentTypeFilter) {
+        return false;
+      }
+      
+      // Date Filter
+      if (appointmentDateRange.start && appointmentDateRange.end) {
+        const aptDate = new Date(apt.appointmentDate);
+        const start = new Date(appointmentDateRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(appointmentDateRange.end);
+        end.setHours(23, 59, 59, 999);
+        if (aptDate < start || aptDate > end) {
+          return false;
+        }
+      }
+      return true;
+    })
     .sort(
       (a, b) =>
         new Date(b.appointmentDate).getTime() -
         new Date(a.appointmentDate).getTime(),
-    )
-    .slice(0, 10);
-  const recentPatients = [...patients]
+    );
+    
+  const filteredPatients = [...patients]
+    .filter((pat) => {
+      if (patientDateRange.start && patientDateRange.end) {
+        const patDate = new Date(pat.createdAt);
+        const start = new Date(patientDateRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(patientDateRange.end);
+        end.setHours(23, 59, 59, 999);
+        if (patDate < start || patDate > end) {
+          return false;
+        }
+      }
+      return true;
+    })
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )
-    .slice(0, 10);
-
+    );
+    
+  const filteredCommissions = [...commissions]
+    .filter((comm) => {
+      if (commissionDateRange.start && commissionDateRange.end) {
+        const commDate = new Date(comm.createdAt);
+        const start = new Date(commissionDateRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(commissionDateRange.end);
+        end.setHours(23, 59, 59, 999);
+        if (commDate < start || commDate > end) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   const formatSpeciality = (speciality: string) =>
     speciality
       .split("-")
@@ -703,20 +783,95 @@ export default function DoctorProfilePage() {
 
           {selectedTab === "appointments" && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="text-[16px] font-bold text-text-main">
-                  Recent Appointments
-                </h3>
-                <Button
-                  isLoading={appointmentsLoading}
-                  size="sm"
-                  variant="bordered"
-                  onClick={() => loadAppointments(doctorId!)}
-                >
-                  Refresh
-                </Button>
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-[16px] font-bold text-text-main">
+                    Appointments
+                  </h3>
+                  <Button
+                    isLoading={appointmentsLoading}
+                    size="sm"
+                    variant="bordered"
+                    onClick={() => loadAppointments(doctorId!)}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+                
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-4 bg-surface-2/50 p-3 rounded-lg border border-border-base">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Type:</span>
+                    <select
+                      className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={appointmentTypeFilter}
+                      onChange={(e) => setAppointmentTypeFilter(e.target.value)}
+                    >
+                      <option value="all">All Types</option>
+                      {[...new Set(appointments.map(a => a.appointmentTypeId).filter(Boolean))]
+                        .filter(typeId => {
+                          // Keep if it exists in the active appointment types map
+                          if (appointmentTypeNames[typeId]) return true;
+                          // Keep system types
+                          if (typeId === "package-session") return true;
+                          // If it's a legacy string like 'initial', 'followup', keep it.
+                          // Usually Firestore IDs are exactly 20 characters long.
+                          if (typeId.length !== 20) return true;
+                          // Otherwise, it's a deleted ID. Don't show it in the dropdown.
+                          return false;
+                        })
+                        .map(typeId => {
+                          let displayName = appointmentTypeNames[typeId];
+                          if (!displayName) {
+                            if (typeId === "package-session") displayName = "Package Session";
+                            else {
+                              const apt = appointments.find(a => a.appointmentTypeId === typeId);
+                              if (apt && apt.appointmentType && apt.appointmentType !== typeId) {
+                                displayName = apt.appointmentType.charAt(0).toUpperCase() + apt.appointmentType.slice(1).replace("-", " ");
+                              } else {
+                                displayName = typeId; // fallback
+                              }
+                            }
+                          }
+                          return (
+                            <option key={typeId} value={typeId}>{displayName}</option>
+                          );
+                      })}
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <IoCalendarOutline className="w-4 h-4 text-text-muted" />
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Date:</span>
+                    <input
+                      type="date"
+                      className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={appointmentDateRange.start}
+                      onChange={(e) => setAppointmentDateRange(p => ({ ...p, start: e.target.value }))}
+                    />
+                    <span className="text-[11px] text-text-muted font-medium">to</span>
+                    <input
+                      type="date"
+                      className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={appointmentDateRange.end}
+                      onChange={(e) => setAppointmentDateRange(p => ({ ...p, end: e.target.value }))}
+                    />
+                    {(appointmentDateRange.start || appointmentDateRange.end || appointmentTypeFilter !== "all") && (
+                      <button
+                        className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
+                        onClick={() => {
+                          setAppointmentDateRange({ start: "", end: "" });
+                          setAppointmentTypeFilter("all");
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              {recentAppointments.length > 0 ? (
+              
+              {filteredAppointments.length > 0 ? (
                 <div className="overflow-x-auto border border-border-base rounded-[10px]">
                   <table className="w-full text-left">
                     <thead>
@@ -733,7 +888,7 @@ export default function DoctorProfilePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-base/50">
-                      {recentAppointments.map((appointment) => (
+                      {filteredAppointments.map((appointment) => (
                         <tr
                           key={appointment.id}
                           className="hover:bg-surface-2/30"
@@ -763,7 +918,7 @@ export default function DoctorProfilePage() {
                                 {appointment.status}
                               </span>
                               <span className="text-[12px] text-text-muted">
-                                {appointment.appointmentType}
+                                {appointmentTypeNames[appointment.appointmentTypeId] || appointment.appointmentType || "Consultation"}
                               </span>
                             </div>
                           </td>
@@ -783,22 +938,54 @@ export default function DoctorProfilePage() {
 
           {selectedTab === "patients" && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="text-[16px] font-bold text-text-main">
-                  Recent Patients
-                </h3>
-                <Button
-                  isLoading={patientsLoading}
-                  size="sm"
-                  variant="bordered"
-                  onClick={() => loadPatients(doctorId!)}
-                >
-                  Refresh
-                </Button>
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-[16px] font-bold text-text-main">
+                    Patients
+                  </h3>
+                  <Button
+                    isLoading={patientsLoading}
+                    size="sm"
+                    variant="bordered"
+                    onClick={() => loadPatients(doctorId!)}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+                
+                {/* Patient Filters */}
+                <div className="flex flex-wrap items-center gap-4 bg-surface-2/50 p-3 rounded-lg border border-border-base">
+                  <div className="flex items-center gap-2">
+                    <IoCalendarOutline className="w-4 h-4 text-text-muted" />
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Date:</span>
+                    <input
+                      type="date"
+                      className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={patientDateRange.start}
+                      onChange={(e) => setPatientDateRange(p => ({ ...p, start: e.target.value }))}
+                    />
+                    <span className="text-[11px] text-text-muted font-medium">to</span>
+                    <input
+                      type="date"
+                      className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={patientDateRange.end}
+                      onChange={(e) => setPatientDateRange(p => ({ ...p, end: e.target.value }))}
+                    />
+                    {(patientDateRange.start || patientDateRange.end) && (
+                      <button
+                        className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
+                        onClick={() => setPatientDateRange({ start: "", end: "" })}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              {recentPatients.length > 0 ? (
+              
+              {filteredPatients.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {recentPatients.map((patient) => (
+                  {filteredPatients.map((patient) => (
                     <div
                       key={patient.id}
                       className="p-4 border border-border-base rounded-[10px] hover:border-primary/50 transition-colors flex items-start gap-4 shadow-sm bg-surface"
@@ -863,23 +1050,54 @@ export default function DoctorProfilePage() {
                 ))}
               </div>
 
-              <div className="flex justify-between items-center mt-6">
-                <h3 className="text-[16px] font-bold text-text-main">
-                  Commission Records
-                </h3>
-                <Button
-                  isLoading={commissionsLoading}
-                  size="sm"
-                  variant="bordered"
-                  onClick={() => loadCommissions(doctorId!)}
-                >
-                  Refresh Data
-                </Button>
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-[16px] font-bold text-text-main">
+                    Commission Records
+                  </h3>
+                  <Button
+                    isLoading={commissionsLoading}
+                    size="sm"
+                    variant="bordered"
+                    onClick={() => loadCommissions(doctorId!)}
+                  >
+                    Refresh Data
+                  </Button>
+                </div>
+                
+                {/* Commission Filters */}
+                <div className="flex flex-wrap items-center gap-4 bg-surface-2/50 p-3 rounded-lg border border-border-base">
+                  <div className="flex items-center gap-2">
+                    <IoCalendarOutline className="w-4 h-4 text-text-muted" />
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Date:</span>
+                    <input
+                      type="date"
+                      className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={commissionDateRange.start}
+                      onChange={(e) => setCommissionDateRange(p => ({ ...p, start: e.target.value }))}
+                    />
+                    <span className="text-[11px] text-text-muted font-medium">to</span>
+                    <input
+                      type="date"
+                      className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={commissionDateRange.end}
+                      onChange={(e) => setCommissionDateRange(p => ({ ...p, end: e.target.value }))}
+                    />
+                    {(commissionDateRange.start || commissionDateRange.end) && (
+                      <button
+                        className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
+                        onClick={() => setCommissionDateRange({ start: "", end: "" })}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {commissions.length > 0 ? (
+              {filteredCommissions.length > 0 ? (
                 <div className="space-y-3">
-                  {commissions.map((commission) => (
+                  {filteredCommissions.map((commission) => (
                     <div
                       key={commission.id}
                       className="p-4 border border-border-base rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface shadow-sm hover:border-primary/50"

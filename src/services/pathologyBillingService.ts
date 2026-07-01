@@ -536,6 +536,7 @@ export const pathologyBillingService = {
     paymentReference?: string,
     paymentNotes?: string,
     recordedBy?: string,
+    discountAmount: number = 0,
   ): Promise<void> {
     try {
       const billing = await this.getBillingById(id);
@@ -544,12 +545,14 @@ export const pathologyBillingService = {
         throw new Error("Billing record not found");
       }
 
+      const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
+      const newDiscountAmount = (billing.discountAmount || 0) + discountAmount;
       const newPaidAmount = (billing.paidAmount || 0) + paymentAmount;
-      const newBalanceAmount = billing.totalAmount - newPaidAmount;
+      const newBalanceAmount = Math.max(0, newTotalAmount - newPaidAmount);
 
       let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
 
-      if (newPaidAmount >= billing.totalAmount) {
+      if (newPaidAmount >= newTotalAmount) {
         paymentStatus = "paid";
       } else if (newPaidAmount > 0) {
         paymentStatus = "partial";
@@ -572,6 +575,8 @@ export const pathologyBillingService = {
 
       // Prepare update data, only including non-empty optional fields
       const updateData: Partial<PathologyBilling> = {
+        totalAmount: newTotalAmount,
+        discountAmount: newDiscountAmount,
         paidAmount: newPaidAmount,
         balanceAmount: newBalanceAmount,
         paymentStatus,

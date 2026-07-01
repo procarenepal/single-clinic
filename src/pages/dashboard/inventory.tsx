@@ -32,6 +32,7 @@ import {
   IoCreateOutline,
   IoCloseCircleOutline,
   IoTrashOutline,
+  IoPrintOutline,
 } from "react-icons/io5";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -46,7 +47,7 @@ import { accountService } from "@/services/accountService";
 import { hrService } from "@/services/hrService";
 
 // Types
-import { Item, ItemCategory, IssuedItem, Vendor } from "@/types/models";
+import { Item, ItemCategory, IssuedItem, Vendor, ItemPurchase } from "@/types/models";
 
 // Icons
 
@@ -61,10 +62,12 @@ export default function InventoryPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<ItemCategory[]>([]);
   const [issuedItems, setIssuedItems] = useState<IssuedItem[]>([]);
+  const [purchases, setPurchases] = useState<ItemPurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("items");
   const [saving, setSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Pagination states
   const [itemsPage, setItemsPage] = useState(1);
@@ -78,6 +81,7 @@ export default function InventoryPage() {
   const issueModalState = useModalState(false);
   const returnModalState = useModalState(false);
   const vendorModalState = useModalState(false);
+  const refillModalState = useModalState(false);
   const [isDisposing, setIsDisposing] = useState(false);
   const [isAddingUnit, setIsAddingUnit] = useState(false);
   const [newUnit, setNewUnit] = useState("");
@@ -140,14 +144,48 @@ export default function InventoryPage() {
     category: "Equipment",
   });
 
+  const [refillForm, setRefillForm] = useState({
+    itemId: "",
+    quantity: 1,
+    cost: 0,
+    invoiceNumber: "",
+    purchaseDate: format(new Date(), "yyyy-MM-dd"),
+    notes: "",
+  });
+
   const [selectedIssuedItem, setSelectedIssuedItem] =
     useState<IssuedItem | null>(null);
+  const [selectedPrintBill, setSelectedPrintBill] = 
+    useState<ItemPurchase | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
   // Load data
   useEffect(() => {
     loadInventoryData();
   }, [clinicId, branchId]);
+
+  useEffect(() => {
+    const handleBeforePrint = () => setIsPrinting(true);
+    const handleAfterPrint = () => {
+      setIsPrinting(false);
+      setSelectedPrintBill(null);
+    };
+
+    window.addEventListener("beforeprint", handleBeforePrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+
+    return () => {
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, []);
+
+  const handlePrintBill = (bill: ItemPurchase) => {
+    setSelectedPrintBill(bill);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
 
   const loadInventoryData = async () => {
     if (!clinicId || !branchId) return;
@@ -160,18 +198,21 @@ export default function InventoryPage() {
         issuedItemsData,
         vendorsData,
         staffData,
+        purchasesData,
       ] = await Promise.all([
         itemService.getItemsByClinic(clinicId, branchId),
         itemCategoryService.getCategoriesByClinic(clinicId, branchId),
         issuedItemService.getIssuedItemsByClinic(clinicId, branchId),
         accountService.getVendorsByClinic(clinicId, branchId),
         hrService.getStaffByClinic(clinicId), // Fetch all clinic staff
+        itemService.getItemPurchasesByClinic(clinicId, branchId),
       ]);
 
       setItems(itemsData.filter((i) => !i.isDisposed));
       setCategories(categoriesData);
       setIssuedItems(issuedItemsData);
       setVendors(vendorsData);
+      setPurchases(purchasesData);
 
       // Map HR staff for selection
       const staffMembers = staffData
@@ -291,9 +332,19 @@ export default function InventoryPage() {
       item.category.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const filteredCategories = categories.filter((category) =>
-    category.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredCategories = categories.filter((category) => {
+    const matchesCategoryName = category.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    
+    const matchesItemName = items
+      .filter((item) => item.category === category.name)
+      .some((item) =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      );
+
+    return matchesCategoryName || matchesItemName;
+  });
 
   const filteredIssuedItems = issuedItems.filter(
     (item) =>
@@ -358,7 +409,25 @@ export default function InventoryPage() {
           color: "success",
         });
       } else {
-        await itemService.createItem(itemData);
+        const newItemId = await itemService.createItem(itemData);
+        
+        // Log the initial purchase bill if quantity > 0
+        if (itemData.quantity > 0) {
+          await itemService.createItemPurchase({
+            itemId: newItemId,
+            itemName: itemData.name,
+            quantity: itemData.quantity,
+            unitPrice: itemData.purchasePrice,
+            totalAmount: itemData.quantity * itemData.purchasePrice,
+            purchaseDate: itemData.purchaseDate,
+            invoiceNumber: "INITIAL-STOCK",
+            notes: "Initial stock entry during asset creation.",
+            clinicId: clinicId!,
+            branchId: branchId!,
+            createdBy: currentUser?.uid || "",
+          });
+        }
+
         addToast({
           title: "Success",
           description: "Asset recorded successfully",
@@ -600,6 +669,92 @@ export default function InventoryPage() {
     }
   };
 
+  const handleRefillItem = async () => {
+    if (!refillForm.itemId || !refillForm.quantity || refillForm.quantity <= 0) {
+      addToast({
+        title: "Error",
+        description: "Please enter a valid quantity",
+        color: "danger",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const selectedItem = items.find((item) => item.id === refillForm.itemId);
+      if (!selectedItem) {
+        addToast({
+          title: "Error",
+          description: "Selected item not found",
+          color: "danger",
+        });
+        return;
+      }
+
+      const oldQty = selectedItem.quantity || 0;
+      const oldPrice = selectedItem.purchasePrice || 0;
+      const newQty = refillForm.quantity;
+      const newPrice = refillForm.cost || oldPrice;
+
+      // Calculate Weighted Average Cost (WAC)
+      const totalOldValue = oldQty * oldPrice;
+      const totalNewValue = newQty * newPrice;
+      const blendedPrice = Math.round((totalOldValue + totalNewValue) / (oldQty + newQty));
+
+      const updatedItemData = {
+        ...selectedItem,
+        quantity: oldQty + newQty,
+        purchasePrice: blendedPrice,
+        purchaseDate: refillForm.purchaseDate,
+      };
+
+      const { id, createdAt, updatedAt, ...itemUpdates } = updatedItemData as any;
+
+      await itemService.updateItem(selectedItem.id, itemUpdates);
+
+      // Create permanent purchase bill / refill log
+      await itemService.createItemPurchase({
+        itemId: selectedItem.id,
+        itemName: selectedItem.name,
+        quantity: newQty,
+        unitPrice: newPrice,
+        totalAmount: newQty * newPrice,
+        purchaseDate: new Date(refillForm.purchaseDate),
+        invoiceNumber: refillForm.invoiceNumber,
+        notes: refillForm.notes,
+        clinicId,
+        branchId,
+        createdBy: currentUser?.uid || "",
+      });
+
+      addToast({
+        title: "Success",
+        description: `Successfully added ${refillForm.quantity} to stock`,
+        color: "success",
+      });
+
+      refillModalState.close();
+      loadInventoryData();
+      setRefillForm({
+        itemId: "",
+        quantity: 1,
+        cost: 0,
+        invoiceNumber: "",
+        purchaseDate: format(new Date(), "yyyy-MM-dd"),
+        notes: "",
+      });
+    } catch (error) {
+      console.error("Error refilling item:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to refill stock",
+        color: "danger",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleReturnItem = async () => {
     if (!selectedIssuedItem) return;
 
@@ -829,51 +984,70 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-2">
+      <style>
+        {`
+          @media print {
+            @page {
+              margin: 10mm;
+            }
+            html, body, #root {
+              height: auto !important;
+              min-height: auto !important;
+              overflow: visible !important;
+            }
+            /* Fix content-visibility bugs in print */
+            * {
+              content-visibility: visible !important;
+            }
+            /* Hide any portals/modals/inactive-tabs that might add blank height */
+            body > *:not(#root),
+            [role="tabpanel"][data-state="inactive"],
+            [role="tabpanel"][hidden],
+            [data-slot="backdrop"] {
+              display: none !important;
+            }
+          }
+        `}
+      </style>
+      <div className="flex justify-between items-center mb-6 print:hidden">
         <div>
-          <h1 className="text-[15.5px] font-semibold text-primary tracking-tight">
+          <h1 className="text-2xl font-black text-primary tracking-tight">
             Asset inventory
           </h1>
-          <p className="text-[10.5px] text-[rgb(var(--color-text-muted))] font-medium uppercase tracking-wider opacity-60">
+          <p className="text-[12px] font-bold text-text-muted tracking-wide uppercase mt-1">
             Track clinic assets, machines, and equipment lifecycle.
           </p>
         </div>
+        <Button
+          className="h-9 px-4 rounded-xl text-[12.5px] font-semibold tracking-tight bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all print:hidden"
+          startContent={<IoPrintOutline className="w-4 h-4" />}
+          onPress={() => {
+            setSelectedPrintBill(null);
+            setTimeout(() => window.print(), 100);
+          }}
+        >
+          Print Report
+        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl relative overflow-hidden group">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
-            Total valuation
-          </p>
-          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">
-            Rs. {valuation.toLocaleString()}
-          </p>
+      {/* Stats Cards - visible on screen, hidden when printing individual bill */}
+      <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 print:hidden`}>
+        <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl">
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Total valuation</p>
+          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">Rs. {valuation.toLocaleString()}</p>
         </div>
-        <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl relative overflow-hidden group border-l-4 border-l-primary">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
-            Active assets
-          </p>
-          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">
-            {items.reduce((acc, item) => acc + (item.quantity || 0), 0)}
-          </p>
+        <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl border-l-4 border-l-primary">
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Active assets</p>
+          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">{items.reduce((acc, item) => acc + (item.quantity || 0), 0)}</p>
         </div>
-        <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl relative overflow-hidden group border-l-4 border-l-amber-500">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
-            Items in use
-          </p>
-          <p className="text-[16px] font-semibold text-amber-500 tracking-tighter mt-0.5">
-            {issuedItems
-              .filter((i) => i.status === "issued")
-              .reduce((acc, i) => acc + (i.quantity || 0), 0)}
-          </p>
+        <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl border-l-4 border-l-amber-500">
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Items in use</p>
+          <p className="text-[16px] font-semibold text-amber-500 tracking-tighter mt-0.5">{issuedItems.filter((i) => i.status === "issued").reduce((acc, i) => acc + (i.quantity || 0), 0)}</p>
         </div>
       </div>
 
-      {/* Main Content */}
-      <Card className="bg-surface border border-[rgb(var(--color-border))] shadow-none rounded-xl">
-        <CardHeader className="flex justify-between items-center p-4 border-b border-[rgb(var(--color-border))]">
+      <Card className={`bg-surface border border-[rgb(var(--color-border))] shadow-none rounded-xl print:border-none print:shadow-none print:overflow-visible ${selectedPrintBill ? 'print:hidden' : ''}`}>
+        <CardHeader className="flex justify-between items-center p-4 border-b border-[rgb(var(--color-border))] print:hidden">
           <div className="relative w-80">
             <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted))] w-4 h-4" />
             <input
@@ -897,9 +1071,10 @@ export default function InventoryPage() {
           </Button>
         </CardHeader>
 
-        <CardBody className="p-0">
+        <CardBody className="p-0 print:overflow-visible">
           <Tabs
-            className="px-4 pt-2"
+            className="px-4 pt-2 print:overflow-visible"
+            classNames={{ tabList: "print:hidden" }}
             color="primary"
             selectedKey={selectedTab}
             variant="underlined"
@@ -912,7 +1087,7 @@ export default function InventoryPage() {
                     <Table
                       removeWrapper
                       aria-label="Items table"
-                      className="border border-[rgb(var(--color-border))] rounded-xl overflow-hidden"
+                      className="border border-[rgb(var(--color-border))] rounded-xl overflow-hidden print:overflow-visible print:border-none"
                     >
                       <TableHeader className="bg-[rgb(var(--color-surface-2))]">
                         <TableColumn
@@ -947,18 +1122,32 @@ export default function InventoryPage() {
                         </TableColumn>
                         <TableColumn
                           align="center"
-                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))]"
+                          className="bg-[rgb(var(--color-surface-2))] text-[12px] font-semibold text-[rgb(var(--color-text-muted))] print:hidden"
                         >
                           Actions
                         </TableColumn>
                       </TableHeader>
                       <TableBody>
-                        {paginatedItems.map((item, index) => (
-                          <TableRow key={item.id || `item-${index}`}>
-                            <TableCell>
+                        {filteredItems.map((item, index) => {
+                          const isVisible =
+                            index >= (itemsPage - 1) * itemsPerPage &&
+                            index < itemsPage * itemsPerPage;
+
+                          const inUseQty = issuedItems
+                            .filter((i) => i.itemId === item.id && i.status === "issued")
+                            .reduce((acc, i) => acc + (i.quantity || 0), 0);
+                          const remainingQty = item.quantity || 0;
+                          const totalBoughtQty = remainingQty + inUseQty;
+
+                          return (
+                            <TableRow 
+                              key={item.id || `item-${index}`}
+                              className={isVisible ? "print:table-row" : "hidden print:table-row"}
+                            >
+                              <TableCell>
                               <div>
-                                <p className="font-semibold text-[14.5px]">
-                                  {item.name}
+                                <p className="font-semibold text-[13.5px] text-text-main capitalize">
+                                  {item.name?.toLowerCase()}
                                 </p>
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span
@@ -976,8 +1165,8 @@ export default function InventoryPage() {
                                       : "New"}
                                   </span>
                                   {item.supplierName && (
-                                    <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium italic opacity-70">
-                                      from {item.supplierName}
+                                    <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium italic opacity-70 capitalize">
+                                      from {item.supplierName?.toLowerCase()}
                                     </span>
                                   )}
                                 </div>
@@ -985,18 +1174,28 @@ export default function InventoryPage() {
                             </TableCell>
                             <TableCell align="left">
                               <Chip
-                                className="font-bold"
+                                className="font-bold capitalize"
                                 color="primary"
                                 size="sm"
                                 variant="flat"
                               >
-                                {item.category}
+                                {item.category?.toLowerCase()}
                               </Chip>
                             </TableCell>
                             <TableCell align="center">
-                              <span className="font-medium">
-                                {item.quantity || 0}
-                              </span>
+                              <div className="flex flex-col items-center gap-0.5 min-w-[70px]">
+                                <span className="font-semibold text-text-main text-[13px] whitespace-nowrap">
+                                  {remainingQty} left
+                                </span>
+                                {inUseQty > 0 && (
+                                  <span className="text-[11px] text-primary whitespace-nowrap font-medium">
+                                    {inUseQty} in use
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-text-muted whitespace-nowrap uppercase tracking-wider">
+                                  {totalBoughtQty} total
+                                </span>
+                              </div>
                             </TableCell>
                             <TableCell align="right">
                               <p className="font-semibold text-primary">
@@ -1010,7 +1209,7 @@ export default function InventoryPage() {
                                   : "—"}
                               </span>
                             </TableCell>
-                            <TableCell align="center">
+                            <TableCell align="center" className="print:hidden">
                               <div className="flex items-center justify-center gap-2">
                                 <button
                                   className="p-2 text-[rgb(var(--color-text-muted))] hover:text-primary transition-colors"
@@ -1018,6 +1217,23 @@ export default function InventoryPage() {
                                   onClick={() => editItem(item)}
                                 >
                                   <IoCreateOutline size={18} />
+                                </button>
+                                <button
+                                  className="px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all bg-success/10 text-success hover:bg-success hover:text-white"
+                                  title="Refill stock"
+                                  onClick={() => {
+                                  setRefillForm({
+                                      itemId: item.id,
+                                      quantity: 1,
+                                      cost: item.purchasePrice || 0,
+                                      invoiceNumber: "",
+                                      purchaseDate: format(new Date(), "yyyy-MM-dd"),
+                                      notes: "",
+                                    });
+                                    refillModalState.open();
+                                  }}
+                                >
+                                  Refill
                                 </button>
                                 <button
                                   className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all ${
@@ -1047,12 +1263,13 @@ export default function InventoryPage() {
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
 
                     {filteredItems.length > itemsPerPage && (
-                      <div className="flex w-full justify-center mt-4">
+                      <div className="flex w-full justify-center mt-4 print:hidden">
                         <Pagination
                           isCompact
                           showControls
@@ -1291,13 +1508,13 @@ export default function InventoryPage() {
                             className="border-b border-[rgb(var(--color-border))]"
                           >
                             <TableCell align="left">
-                              <p className="text-[14px] font-semibold text-[rgb(var(--color-text))]">
-                                {issuedItem.itemName}
+                              <p className="text-[13.5px] font-semibold text-text-main capitalize">
+                                {issuedItem.itemName?.toLowerCase()}
                               </p>
                             </TableCell>
                             <TableCell align="left">
-                              <span className="text-[13px] font-medium text-primary px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20">
-                                {issuedItem.itemCategory}
+                              <span className="text-[13px] font-medium text-primary px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20 capitalize">
+                                {issuedItem.itemCategory?.toLowerCase()}
                               </span>
                             </TableCell>
                             <TableCell
@@ -1417,6 +1634,108 @@ export default function InventoryPage() {
                       <p className="text-[13px] text-text-muted mt-1 max-w-sm mx-auto">
                         Record equipment assignments to track who is using what
                         in the clinic.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Tab>
+            <Tab key="purchases" title="Purchase Bills">
+              <div className="bg-[rgb(var(--color-surface))] min-h-[400px] print:min-h-0 print:h-auto">
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-center p-4 border-b border-[rgb(var(--color-border))] print:hidden">
+                  <div>
+                    <h3 className="text-sm font-bold text-[rgb(var(--color-text))]">
+                      Restock & Purchase History
+                    </h3>
+                    <p className="text-xs text-[rgb(var(--color-text-muted))] mt-0.5">
+                      Detailed permanent record of all inventory refill bills
+                    </p>
+                  </div>
+                </div>
+
+                {purchases.length > 0 ? (
+                  <div className="overflow-x-auto w-full max-w-[100vw] sm:max-w-none">
+                    <table className="w-full min-w-[800px] border-collapse text-left">
+                      <thead className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))]">
+                        <tr>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] whitespace-nowrap">
+                            Date
+                          </th>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] whitespace-nowrap">
+                            Asset / Item
+                          </th>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] whitespace-nowrap">
+                            Invoice No.
+                          </th>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] text-center whitespace-nowrap">
+                            Qty
+                          </th>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] text-right whitespace-nowrap">
+                            Unit Cost
+                          </th>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] text-right whitespace-nowrap">
+                            Total Value
+                          </th>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] whitespace-nowrap">
+                            Notes
+                          </th>
+                          <th className="px-4 py-3 text-[11px] font-black uppercase text-[rgb(var(--color-text-muted))] text-right whitespace-nowrap print:hidden">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[rgb(var(--color-border))]">
+                        {purchases.map((purchase) => (
+                          <tr
+                            key={purchase.id}
+                            className="hover:bg-[rgb(var(--color-surface-2))] transition-colors print:!bg-white"
+                          >
+                            <td className="px-4 py-3 text-[13px] text-text-main whitespace-nowrap">
+                              {purchase.purchaseDate ? format(new Date(purchase.purchaseDate), "MMM dd, yyyy") : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-[13px] text-text-main font-semibold capitalize">
+                              {purchase.itemName?.toLowerCase()}
+                            </td>
+                            <td className="px-4 py-3 text-[13px] text-text-muted">
+                              {purchase.invoiceNumber || "-"}
+                            </td>
+                            <td className="px-4 py-3 text-[13px] font-bold text-text-main text-center">
+                              +{purchase.quantity}
+                            </td>
+                            <td className="px-4 py-3 text-[13px] text-text-main text-right">
+                              Rs. {purchase.unitPrice?.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-[13px] font-bold text-emerald-600 text-right">
+                              Rs. {purchase.totalAmount?.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-[12px] text-text-muted max-w-[200px] truncate" title={purchase.notes}>
+                              {purchase.notes || "-"}
+                            </td>
+                            <td className="px-4 py-3 text-right print:hidden">
+                              <button
+                                className="p-2 text-primary bg-primary/10 hover:bg-primary hover:text-white rounded-lg transition-colors"
+                                title="Print Receipt"
+                                onClick={() => handlePrintBill(purchase)}
+                              >
+                                <IoPrintOutline size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 mb-4 mx-auto">
+                      <IoTimeOutline className="text-3xl text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-[rgb(var(--color-text))]">
+                        No purchase bills yet
+                      </h3>
+                      <p className="text-[13px] text-text-muted mt-1 max-w-sm mx-auto">
+                        Restock items to automatically generate permanent purchase logs and bills.
                       </p>
                     </div>
                   </div>
@@ -2281,6 +2600,202 @@ export default function InventoryPage() {
           )}
         </ModalContent>
       </Modal>
+
+      {/* Refill Modal */}
+      <Modal
+        classNames={{
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl",
+        }}
+        isOpen={refillModalState.isOpen}
+        onClose={refillModalState.close}
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            <h2 className="text-[16px] font-semibold text-primary">
+              Refill Stock
+            </h2>
+            <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">
+              Add new inventory and generate a purchase bill.
+            </p>
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                isRequired
+                classNames={{ inputWrapper: "rounded-xl" }}
+                label="Quantity to Add"
+                min="1"
+                size="sm"
+                type="number"
+                value={refillForm.quantity.toString()}
+                onChange={(e) =>
+                  setRefillForm({
+                    ...refillForm,
+                    quantity: parseInt(e.target.value) || 0,
+                  })
+                }
+              />
+              <Input
+                classNames={{ inputWrapper: "rounded-xl" }}
+                label="New Unit Price (Rs.)"
+                min="0"
+                placeholder="Leave 0 if price hasn't changed"
+                size="sm"
+                type="number"
+                value={refillForm.cost.toString()}
+                onChange={(e) =>
+                  setRefillForm({
+                    ...refillForm,
+                    cost: parseInt(e.target.value) || 0,
+                  })
+                }
+              />
+              <Input
+                classNames={{ inputWrapper: "rounded-xl" }}
+                label="Purchase / Refill Date"
+                size="sm"
+                type="date"
+                value={refillForm.purchaseDate}
+                onChange={(e) =>
+                  setRefillForm({
+                    ...refillForm,
+                    purchaseDate: e.target.value,
+                  })
+                }
+              />
+              <Input
+                classNames={{ inputWrapper: "rounded-xl" }}
+                label="Invoice / Bill No."
+                placeholder="Optional invoice tracking"
+                size="sm"
+                value={refillForm.invoiceNumber}
+                onChange={(e) =>
+                  setRefillForm({
+                    ...refillForm,
+                    invoiceNumber: e.target.value,
+                  })
+                }
+              />
+              <Textarea
+                classNames={{ inputWrapper: "rounded-xl" }}
+                label="Notes"
+                placeholder="Optional notes"
+                size="sm"
+                value={refillForm.notes}
+                onChange={(e) =>
+                  setRefillForm({ ...refillForm, notes: e.target.value })
+                }
+              />
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              className="font-semibold text-[12px] rounded-xl"
+              size="sm"
+              variant="light"
+              onPress={refillModalState.close}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="font-semibold text-[12px] rounded-xl px-6"
+              color="primary"
+              isLoading={saving}
+              size="sm"
+              onPress={handleRefillItem}
+            >
+              Confirm Refill
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* INDIVIDUAL PRINT INVOICE LAYOUT */}
+      {selectedPrintBill && (
+        <div className="hidden print:block w-full text-black bg-white p-8 font-sans">
+          <div className="flex justify-between items-start border-b-2 border-gray-200 pb-6 mb-6">
+            <div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">PURCHASE RECEIPT</h1>
+              <p className="text-sm font-bold text-gray-500 uppercase mt-1">Inventory Asset Restock</p>
+            </div>
+            <div className="text-right">
+              <h2 className="text-xl font-black text-gray-800">Clinic Inventory</h2>
+              <p className="text-sm text-gray-500 mt-1">Official Document</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 mb-8">
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Receipt Details</p>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm mb-2"><span className="font-semibold w-24 inline-block text-gray-600">Date:</span> <span className="font-medium text-gray-900">{format(new Date(selectedPrintBill.purchaseDate || new Date()), "MMMM dd, yyyy")}</span></p>
+                <p className="text-sm mb-2"><span className="font-semibold w-24 inline-block text-gray-600">Invoice No:</span> <span className="font-medium text-gray-900">{selectedPrintBill.invoiceNumber || "N/A"}</span></p>
+                <p className="text-sm"><span className="font-semibold w-24 inline-block text-gray-600">Log ID:</span> <span className="font-mono text-gray-900 text-xs">{selectedPrintBill.id.slice(-8).toUpperCase()}</span></p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Generated By</p>
+              <div className="bg-gray-50 p-4 rounded-lg h-[92px]">
+                <p className="text-sm mb-2"><span className="font-semibold w-24 inline-block text-gray-600">User ID:</span> <span className="font-medium text-gray-900">System Admin</span></p>
+                <p className="text-sm"><span className="font-semibold w-24 inline-block text-gray-600">Status:</span> <span className="font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded text-xs">Completed</span></p>
+              </div>
+            </div>
+          </div>
+
+          <table className="w-full mb-8 border-collapse">
+            <thead>
+              <tr className="bg-gray-100 border-y border-gray-300 text-left">
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider">Item Description</th>
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-center">Quantity</th>
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-right">Unit Price</th>
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-right">Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-gray-200">
+                <td className="py-4 px-4">
+                  <p className="font-bold text-gray-900 text-sm capitalize">{selectedPrintBill.itemName?.toLowerCase()}</p>
+                  <p className="text-xs text-gray-500 mt-1">Asset Registry Refill</p>
+                </td>
+                <td className="py-4 px-4 text-center text-sm font-semibold text-gray-800">{selectedPrintBill.quantity} units</td>
+                <td className="py-4 px-4 text-right text-sm text-gray-700">Rs. {selectedPrintBill.unitPrice?.toLocaleString()}</td>
+                <td className="py-4 px-4 text-right text-sm font-bold text-gray-900">Rs. {selectedPrintBill.totalAmount?.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="flex justify-end mb-12">
+            <div className="w-1/3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold text-gray-600">Subtotal:</span>
+                <span className="text-sm text-gray-800">Rs. {selectedPrintBill.totalAmount?.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-sm font-semibold text-gray-600">Tax/Fees:</span>
+                <span className="text-sm text-gray-800">Rs. 0</span>
+              </div>
+              <div className="flex justify-between items-center pt-3 border-t border-gray-300">
+                <span className="text-base font-black text-gray-900">TOTAL:</span>
+                <span className="text-lg font-black text-emerald-600">Rs. {selectedPrintBill.totalAmount?.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          {selectedPrintBill.notes && (
+            <div className="mb-12">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Transaction Notes</p>
+              <p className="text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-100 italic">
+                "{selectedPrintBill.notes}"
+              </p>
+            </div>
+          )}
+
+          <div className="text-center pt-8 border-t border-gray-200 mt-auto">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">End of Receipt</p>
+            <p className="text-[10px] text-gray-400 mt-2">Generated automatically by ProCare Clinical System</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

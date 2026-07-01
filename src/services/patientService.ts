@@ -455,6 +455,53 @@ export const patientService = {
   },
 
   /**
+   * Get patients by expert for a specific clinic.
+   * @param {string} expertId - ID of the expert
+   * @param {string} [_clinicId] - Optional clinic ID
+   * @returns {Promise<Patient[]>} - Array of patients assigned to the expert
+   */
+  async getPatientsByExpert(
+    expertId: string,
+    _clinicId?: string,
+  ): Promise<Patient[]> {
+    try {
+      const patientsRef = collection(db, PATIENTS_COLLECTION);
+      const q = query(patientsRef, where("assignedExpertId", "==", expertId));
+      const querySnapshot = await getDocs(q);
+
+      const patients: Patient[] = [];
+
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const createdAt = data.createdAt
+          ? new Date(data.createdAt.seconds * 1000)
+          : new Date();
+        const updatedAt = data.updatedAt
+          ? new Date(data.updatedAt.seconds * 1000)
+          : new Date();
+        const dob = data.dob ? new Date(data.dob.seconds * 1000) : undefined;
+        const bsDate = data.bsDate
+          ? new Date(data.bsDate.seconds * 1000)
+          : undefined;
+
+        patients.push({
+          id: docSnap.id,
+          ...data,
+          createdAt,
+          updatedAt,
+          dob,
+          bsDate,
+        } as Patient);
+      });
+
+      return patients;
+    } catch (error) {
+      console.error("Error getting patients by expert:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Paginated patients for a clinic with optional filters.
    * Does not use cache; always fetches fresh from Firestore.
    * @param clinicId - ID of the clinic

@@ -23,6 +23,7 @@ import { Divider } from "@/components/ui/divider";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
+import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
 import { title } from "@/components/primitives";
 import { Skeleton } from "@/components/ui";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,6 +44,7 @@ import { pathologyBillingService } from "@/services/pathologyBillingService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
+import { expertService } from "@/services/expertService";
 
 // Types
 import {
@@ -64,12 +66,14 @@ import {
   ReferralPartner,
   AppointmentType,
   Branch,
+  Expert,
 } from "@/types/models";
 
 interface ReportData {
   appointments: Appointment[];
   patients: Patient[];
   doctors: Doctor[];
+  experts: Expert[];
   appointmentTypes: AppointmentType[];
   medicines: Medicine[];
   medicineStock: (MedicineStock & { medicine: Medicine })[];
@@ -143,6 +147,7 @@ export default function ReportsPage() {
     appointments: [],
     patients: [],
     doctors: [],
+    experts: [],
     appointmentTypes: [],
     medicines: [],
     medicineStock: [],
@@ -170,6 +175,7 @@ export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [allDates, setAllDates] = useState(false);
   const [showAllDoctorsAnalysis, setShowAllDoctorsAnalysis] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   // Create doctor and partner options for select
   const doctorOptions = [
@@ -177,6 +183,10 @@ export default function ReportsPage() {
     ...reportData.doctors.map((doctor) => ({
       key: doctor.id,
       label: `Dr. ${doctor.name}`,
+    })),
+    ...reportData.experts.map((expert) => ({
+      key: expert.id,
+      label: `Expert: ${expert.name}`,
     })),
     ...reportData.referralPartners.map((partner) => ({
       key: partner.id,
@@ -242,6 +252,7 @@ export default function ReportsPage() {
           appointments,
           patients,
           doctors,
+          experts,
           appointmentTypes,
           medicines,
           medicineStock,
@@ -254,6 +265,7 @@ export default function ReportsPage() {
           appointmentService.getAppointmentsByClinic(clinicId, reportBranchId),
           patientService.getPatientsByClinic(clinicId, reportBranchId),
           doctorService.getDoctorsByClinic(clinicId, reportBranchId),
+          expertService.getExpertsByClinic(clinicId, reportBranchId),
           appointmentTypeService.getAppointmentTypesByClinic(
             clinicId,
             reportBranchId,
@@ -338,6 +350,7 @@ export default function ReportsPage() {
             appointments,
             patients,
             doctors,
+            experts,
             appointmentTypes,
             medicines,
             medicineStock,
@@ -392,7 +405,9 @@ export default function ReportsPage() {
         ? true
         : appointmentDate >= startDate && appointmentDate <= endDate;
       const matchesDoctor =
-        selectedDoctor === "all" || appointment.doctorId === selectedDoctor;
+        selectedDoctor === "all" || 
+        appointment.doctorId === selectedDoctor || 
+        appointment.assignedExpertId === selectedDoctor;
       const matchesAppointmentType =
         selectedAppointmentType === "all" ||
         appointment.appointmentTypeId === selectedAppointmentType;
@@ -422,10 +437,10 @@ export default function ReportsPage() {
       let doctorOk = true;
 
       if (selectedDoctor !== "all") {
-        const assignedMatches = (p as any).doctorId === selectedDoctor;
+        const assignedMatches = (p as any).doctorId === selectedDoctor || (p as any).assignedExpertId === selectedDoctor;
         const hasAppointmentWithDoctor = reportData.appointments.some((apt) => {
           if (apt.patientId !== p.id) return false;
-          if (apt.doctorId !== selectedDoctor) return false;
+          if (apt.doctorId !== selectedDoctor && apt.assignedExpertId !== selectedDoctor) return false;
           if (allDates) return true;
           const aptDate = new Date(apt.appointmentDate);
 
@@ -532,11 +547,13 @@ export default function ReportsPage() {
 
     // Apply doctor filter if a specific doctor is selected
     if (selectedDoctor !== "all") {
-      // Include bills where the selected doctor is the primary OR appears on any item
+      // Include bills where the selected doctor is the primary OR appears on any item OR is a referral partner
       billings = billings.filter(
         (b) =>
           b.doctorId === selectedDoctor ||
-          b.items.some((item) => item.doctorId === selectedDoctor),
+          b.items.some((item) => item.doctorId === selectedDoctor) ||
+          b.referralPartnerId === selectedDoctor ||
+          (b.referrals && b.referrals.some((r) => r.id === selectedDoctor)),
       );
     }
 
@@ -594,9 +611,9 @@ export default function ReportsPage() {
     selectedDoctor,
   ]);
 
-  // Generate statistics for overview
   const generateOverviewStats = (): OverviewStats => {
     const filteredAppointments = getFilteredAppointments();
+    const filteredPatients = getFilteredPatients();
 
     const totalAppointments = filteredAppointments.length;
     const completedAppointments = filteredAppointments.filter(
@@ -605,9 +622,9 @@ export default function ReportsPage() {
     const cancelledAppointments = filteredAppointments.filter(
       (a) => a.status === "cancelled",
     ).length;
-    const totalPatients = reportData.patients.length;
+    const totalPatients = filteredPatients.length;
     const activeDoctors = reportData.doctors.filter((d) => d.isActive).length;
-    const criticalPatients = reportData.patients.filter(
+    const criticalPatients = filteredPatients.filter(
       (p) => p.isCritical,
     ).length;
 
@@ -695,7 +712,7 @@ export default function ReportsPage() {
   };
 
   const exportPatientsReport = () => {
-    const patientsData = reportData.patients.map((patient) => {
+    const patientsData = getFilteredPatients().map((patient) => {
       const assignedDoctor =
         reportData.doctors.find((d) => d.id === (patient as any).doctorId)
           ?.name || "N/A";
@@ -1005,6 +1022,8 @@ export default function ReportsPage() {
           "Attributed Doctor":
             selectedDoctor !== "all"
               ? reportData.doctors.find((d) => d.id === selectedDoctor)?.name ||
+                reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
+                reportData.referralPartners.find((p) => p.id === selectedDoctor)?.name ||
               "N/A"
               : billing.doctorName,
           "Doctor Type":
@@ -1127,32 +1146,34 @@ export default function ReportsPage() {
             value={dateRange.end}
             onValueChange={(v) => setDateRange((prev) => ({ ...prev, end: v }))}
           />
-          <Select
-            fullWidth
+          <Autocomplete
+            className="w-full"
             label="Doctor"
-            selectedKeys={[selectedDoctor]}
-            size="md"
-            onSelectionChange={(keys) =>
-              setSelectedDoctor(Array.from(keys)[0] as string)
+            selectedKey={selectedDoctor}
+            onSelectionChange={(key) =>
+              setSelectedDoctor((key as string) || "all")
             }
           >
             {doctorOptions.map((option) => (
-              <SelectItem key={option.key}>{option.label}</SelectItem>
+              <AutocompleteItem key={option.key} textValue={option.label}>
+                {option.label}
+              </AutocompleteItem>
             ))}
-          </Select>
-          <Select
-            fullWidth
+          </Autocomplete>
+          <Autocomplete
+            className="w-full"
             label="Appointment Type"
-            selectedKeys={[selectedAppointmentType]}
-            size="md"
-            onSelectionChange={(keys) =>
-              setSelectedAppointmentType(Array.from(keys)[0] as string)
+            selectedKey={selectedAppointmentType}
+            onSelectionChange={(key) =>
+              setSelectedAppointmentType((key as string) || "all")
             }
           >
             {appointmentTypeOptions.map((option) => (
-              <SelectItem key={option.key}>{option.label}</SelectItem>
+              <AutocompleteItem key={option.key} textValue={option.label}>
+                {option.label}
+              </AutocompleteItem>
             ))}
-          </Select>
+          </Autocomplete>
         </div>
         <div className="mt-3 flex items-center justify-end">
           <Checkbox isSelected={allDates} onValueChange={setAllDates}>
@@ -2316,6 +2337,33 @@ export default function ReportsPage() {
                           stats.revenue += (item.amount || 0) * scaleFactor;
                           stats.invoices.add(b.id);
                         });
+
+                        if (b.referrals && b.referrals.length > 0) {
+                          b.referrals.forEach((ref) => {
+                            if (!doctorStats.has(ref.id)) {
+                              doctorStats.set(ref.id, {
+                                name: ref.name || "Partner",
+                                invoices: new Set(),
+                                revenue: 0,
+                              });
+                            }
+                            const stats = doctorStats.get(ref.id)!;
+                            stats.revenue += ref.commissionAmount || 0;
+                            stats.invoices.add(b.id);
+                          });
+                        } else if (b.referralPartnerId && b.referralCommissionAmount) {
+                          if (!doctorStats.has(b.referralPartnerId)) {
+                            const partnerName = reportData.referralPartners.find(p => p.id === b.referralPartnerId)?.name || "Partner";
+                            doctorStats.set(b.referralPartnerId, {
+                              name: partnerName,
+                              invoices: new Set(),
+                              revenue: 0,
+                            });
+                          }
+                          const stats = doctorStats.get(b.referralPartnerId)!;
+                          stats.revenue += b.referralCommissionAmount;
+                          stats.invoices.add(b.id);
+                        }
                       });
 
                       filteredPathologyBillings.forEach((b) => {
@@ -2506,7 +2554,7 @@ export default function ReportsPage() {
                 <Divider className="my-3" />
                 <h4 className="clarity-section-header">Category Breakdown</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {reportData.itemCategories.slice(0, 6).map((category) => {
+                  {(showAllCategories ? reportData.itemCategories : reportData.itemCategories.slice(0, 6)).map((category) => {
                     const categoryItems = reportData.items.filter(
                       (item) => item.category === category.name,
                     );
@@ -2527,9 +2575,18 @@ export default function ReportsPage() {
                   })}
                 </div>
                 {reportData.itemCategories.length > 6 && (
-                  <p className="text-sm text-mountain-500 text-center mt-2">
-                    +{reportData.itemCategories.length - 6} more categories
-                  </p>
+                  <div className="flex justify-center mt-3">
+                    <Button
+                      size="sm"
+                      variant="light"
+                      className="text-mountain-500 text-sm"
+                      onPress={() => setShowAllCategories(!showAllCategories)}
+                    >
+                      {showAllCategories
+                        ? "Show less"
+                        : `+${reportData.itemCategories.length - 6} more categories`}
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

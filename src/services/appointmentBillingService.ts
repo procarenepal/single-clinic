@@ -680,6 +680,7 @@ export const appointmentBillingService = {
     paymentMethod: string,
     paymentReference?: string,
     paymentNotes?: string,
+    discountAmount: number = 0,
   ): Promise<void> {
     try {
       const billing = await this.getBillingById(id);
@@ -688,12 +689,17 @@ export const appointmentBillingService = {
         throw new Error("Billing record not found");
       }
 
+      // Handle discount
+      const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
+      const newMainDiscountAmount = (billing.mainDiscountAmount || 0) + discountAmount;
+      const newTotalDiscountAmount = (billing.discountAmount || 0) + discountAmount;
+
       const newPaidAmount = billing.paidAmount + paymentAmount;
-      const newBalanceAmount = billing.totalAmount - newPaidAmount;
+      const newBalanceAmount = Math.max(0, newTotalAmount - newPaidAmount);
 
       let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
 
-      if (newPaidAmount >= billing.totalAmount) {
+      if (newPaidAmount >= newTotalAmount) {
         paymentStatus = "paid";
       } else if (newPaidAmount > 0) {
         paymentStatus = "partial";
@@ -719,6 +725,9 @@ export const appointmentBillingService = {
 
       // Prepare update data, only including non-empty optional fields
       const updateData: Partial<AppointmentBilling> = {
+        totalAmount: newTotalAmount,
+        mainDiscountAmount: newMainDiscountAmount,
+        discountAmount: newTotalDiscountAmount,
         paidAmount: newPaidAmount,
         balanceAmount: newBalanceAmount,
         paymentStatus,

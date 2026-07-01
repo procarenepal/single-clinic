@@ -315,14 +315,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-bg">
+    <div className="flex flex-col h-screen bg-bg print:!h-auto print:!bg-white print:!block print:!w-full print:!max-w-none">
       {/* ── Top header ──────────────────────────────────────────────────── */}
-      <DashboardHeader
-        isSidebarOpen={isSidebarOpen}
-        toggleSidebar={toggleSidebar}
-      />
+      <div className="print:hidden">
+        <DashboardHeader
+          isSidebarOpen={isSidebarOpen}
+          toggleSidebar={toggleSidebar}
+        />
+      </div>
 
-      <div className="flex flex-1 pt-14">
+      <div className="flex flex-1 pt-14 print:!pt-0 print:!block print:!w-full print:!max-w-none">
         {/* ── Sidebar ───────────────────────────────────────────────────── */}
         <aside
           aria-label="Sidebar navigation"
@@ -429,7 +431,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         <main
           className={clsx(
-            "flex-1 w-full flex flex-col items-start justify-start transition-all duration-300 ease-in-out overflow-hidden relative",
+            "flex-1 w-full flex flex-col items-start justify-start transition-all duration-300 ease-in-out overflow-hidden relative print:!overflow-visible print:!pl-0 print:!ml-0 print:!h-auto print:!block print:!w-full print:!max-w-none",
             "bg-bg mesh-gradient",
             isSidebarOpen ? "md:pl-[240px]" : "",
           )}
@@ -437,13 +439,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         >
           {/* Content well with subtle mesh gradient */}
           <div
-            className="w-full h-full overflow-auto print:p-0 cv-auto will-scroll relative z-10"
+            className="w-full h-full overflow-auto print:p-0 cv-auto will-scroll relative z-10 print:!h-auto print:overflow-visible"
             id="dashboard-scroll-container"
           >
             <motion.div
               key={location.pathname}
               animate={{ opacity: 1, y: 0 }}
-              className="w-full px-4 py-3 pb-10 min-h-full"
+              className="w-full px-4 py-3 pb-10 min-h-full print:px-8 print:pt-8 print:pb-0 print:!min-h-0"
               initial={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.4, ease: "easeOut" }}
             >

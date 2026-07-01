@@ -13,6 +13,26 @@ import {
   IoDocumentsOutline,
   IoTrashOutline,
 } from "react-icons/io5";
+
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 import {
   format,
   subDays,
@@ -65,6 +85,7 @@ import { hrService } from "@/services/hrService";
 import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
 import { printSalarySlip } from "@/utils/salaryPrinting";
+import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "@/utils/printBranding";
 import { clinicService } from "@/services/clinicService";
 
 export default function HRPage() {
@@ -90,6 +111,10 @@ export default function HRPage() {
     waivedDays: number;
     includeCommission: boolean;
     incentive: number;
+    customBonus: number;
+    customBonusNotes: string;
+    customDeduction: number;
+    customDeductionNotes: string;
     applyTax: boolean;
     taxPercentage: number;
   }>({
@@ -101,6 +126,10 @@ export default function HRPage() {
     waivedDays: 0,
     includeCommission: false,
     incentive: 0,
+    customBonus: 0,
+    customBonusNotes: "",
+    customDeduction: 0,
+    customDeductionNotes: "",
     applyTax: false,
     taxPercentage: 1,
   });
@@ -129,6 +158,7 @@ export default function HRPage() {
     start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
     end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
   });
+  const [payrollReportFilter, setPayrollReportFilter] = useState("all"); // 'all', 'paid', 'unpaid'
 
   const availableMonths = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -237,30 +267,130 @@ export default function HRPage() {
     }
   };
 
+  const payrollChartData = useMemo(() => {
+    const labels = [];
+    const data = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(new Date(), i);
+      labels.push(format(d, "MMM yyyy"));
+
+      const monthStart = startOfMonth(d);
+      const monthEnd = endOfMonth(d);
+      const sum = bills.filter(b => b.category === "salary" && b.billDate >= monthStart && b.billDate <= monthEnd).reduce((a, b) => a + b.paidAmount, 0);
+      data.push(sum);
+    }
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Total Salary Disbursed (Rs.)',
+          data,
+          backgroundColor: 'rgba(99, 102, 241, 0.8)',
+          borderRadius: 4,
+        }
+      ]
+    };
+  }, [bills]);
+
   const staffPayrollSummary = useMemo(() => {
+    const startDate = new Date(reportDateRange.start);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(reportDateRange.end);
+    endDate.setHours(23, 59, 59, 999);
+
     return staff.map((s) => {
       const staffBills = bills.filter(
-        (b) => b.category === "salary" && b.vendorName === s.name,
+        (b) => b.category === "salary" &&
+          b.vendorName === s.name &&
+          b.billDate >= startDate &&
+          b.billDate <= endDate,
       );
       const totalPaid = staffBills.reduce((acc, b) => acc + b.paidAmount, 0);
+
+      const sortedBills = staffBills.sort(
+        (a, b) => b.billDate.getTime() - a.billDate.getTime(),
+      );
 
       return {
         ...s,
         totalPaid,
-        lastPayment:
-          staffBills.length > 0
-            ? staffBills.sort(
-              (a, b) => b.billDate.getTime() - a.billDate.getTime(),
-            )[0].billDate
-            : null,
+        lastPayment: sortedBills.length > 0 ? sortedBills[0].billDate : null,
+        lastBill: sortedBills.length > 0 ? sortedBills[0] : null,
       };
+    }).filter(s => {
+      if (payrollReportFilter === "paid") return s.totalPaid > 0;
+      if (payrollReportFilter === "unpaid") return s.totalPaid === 0;
+      return true;
     });
-  }, [staff, bills]);
+  }, [staff, bills, reportDateRange, payrollReportFilter]);
 
-  const handlePrintPayrollSummary = () => {
+  const handlePrintPayrollSummary = async () => {
     const printContent = document.getElementById("payroll-summary-report");
 
-    if (!printContent) return;
+    if (!printContent || !clinicId) return;
+
+    // Validate date range
+    if (!reportDateRange.start || !reportDateRange.end) {
+      addToast({
+        title: "Date Range Required",
+        description: "Please select a valid start and end date before printing.",
+        color: "warning",
+      });
+      return;
+    }
+    const startDateVal = new Date(reportDateRange.start);
+    const endDateVal = new Date(reportDateRange.end);
+    if (isNaN(startDateVal.getTime()) || isNaN(endDateVal.getTime())) {
+      addToast({
+        title: "Invalid Date Range",
+        description: "The selected dates are invalid. Please re-select and try again.",
+        color: "danger",
+      });
+      return;
+    }
+    if (staffPayrollSummary.length === 0) {
+      addToast({
+        title: "No Data to Print",
+        description: "No payroll records found for the selected date range and filter.",
+        color: "warning",
+      });
+      return;
+    }
+
+    let clinicData = null;
+    let printConfig = null;
+
+    try {
+      clinicData = await clinicService.getClinicById(clinicId);
+    } catch (err) {
+      console.error("Failed to fetch clinic data", err);
+    }
+
+    try {
+      printConfig = await clinicService.getPrintLayoutConfig(clinicId);
+    } catch (err) {
+      console.error("Failed to fetch print layout config", err);
+    }
+
+    const effectiveClinic = clinicData || {
+      id: clinicId,
+      name: "Clinic",
+      phone: "",
+      email: "",
+      address: "",
+    };
+
+    const effectiveConfig = printConfig || ({
+      clinicId,
+      primaryColor: "#0ea5e9",
+      fontSize: "medium",
+      showAddress: true,
+      showPhone: true,
+      showEmail: true,
+      headerHeight: "compact",
+    } as any);
+
+    const primaryColor = effectiveConfig.primaryColor || "#0ea5e9";
 
     const printWindow = window.open("", "_blank");
 
@@ -269,47 +399,171 @@ export default function HRPage() {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Payroll Summary Report - ${clinicId}</title>
+          <title>Payroll Summary Report</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-            body { font-family: 'Inter', sans-serif; padding: 40px; color: #1a1a1a; line-height: 1.5; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-            .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
-            .header p { margin: 5px 0; color: #666; font-size: 14px; }
-            .report-info { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 12px; font-weight: 600; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th { background: #f4f4f4; text-align: left; padding: 12px 10px; border: 1px solid #ddd; font-size: 11px; text-transform: uppercase; }
-            td { padding: 10px; border: 1px solid #ddd; font-size: 12px; }
-            .amount { text-align: right; font-family: monospace; font-weight: 600; }
-            .total-row { background: #f9f9f9; font-weight: bold; }
-            .footer { margin-top: 50px; font-size: 10px; color: #999; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
-            .signature-space { margin-top: 60px; display: flex; justify-content: space-between; }
-            .sig-box { width: 200px; border-top: 1px solid #000; text-align: center; padding-top: 5px; font-size: 12px; }
+            ${getPrintBrandingCSS(effectiveConfig)}
+            body { 
+              font-family: 'Inter', -apple-system, sans-serif !important; 
+              padding: 40px; 
+              background: white; 
+              color: #0f172a; 
+            }
+            .report-container {
+              max-width: 1000px;
+              margin: 0 auto;
+            }
+            .report-title-section {
+              text-align: center;
+              margin: 20px 0 30px 0;
+            }
+            .report-title-section h2 {
+              font-family: 'Outfit', sans-serif !important;
+              font-size: 16px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.2em;
+              color: #0f172a;
+              margin: 0;
+              display: inline-block;
+              border-bottom: 3px solid ${primaryColor};
+              padding-bottom: 6px;
+            }
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr 1fr;
+              gap: 20px;
+              margin-bottom: 30px;
+              background: #f8fafc;
+              padding: 20px 30px;
+              border-radius: 4px;
+              border: 1px solid #e2e8f0;
+              position: relative;
+            }
+            .info-grid::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 4px;
+              background: ${primaryColor};
+              opacity: 0.3;
+            }
+            .info-item {
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+            }
+            .info-label {
+              font-size: 9px;
+              font-weight: 800;
+              color: #64748b;
+              text-transform: uppercase;
+              letter-spacing: 0.12em;
+            }
+            .info-value {
+              font-family: 'Outfit', sans-serif !important;
+              font-size: 13px;
+              font-weight: 700;
+              color: #0f172a;
+            }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 40px; }
+            th { 
+              background: ${primaryColor}; 
+              text-align: left; 
+              padding: 12px 15px; 
+              font-size: 10px; 
+              font-weight: 800; 
+              text-transform: uppercase; 
+              color: white; 
+              letter-spacing: 0.15em; 
+            }
+            td { 
+              padding: 15px 15px; 
+              border-bottom: 1px solid #f1f5f9; 
+              font-size: 12px; 
+              color: #334155; 
+              font-weight: 500; 
+            }
+            .amount, th[style*="text-align: right"] { text-align: right; }
+            td[style*="text-align: right"] { text-align: right; font-family: 'Outfit', sans-serif !important; font-weight: 700; }
+            .total-row { background: #f8fafc; font-weight: 800; border-top: 2px solid ${primaryColor}; }
+            .total-row td { font-size: 14px; font-weight: 800; color: #0f172a; }
+            .signature-section {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 150px;
+              margin-top: 60px;
+              padding: 0 40px;
+            }
+            .signature-box {
+              border-top: 2px solid #e2e8f0;
+              padding-top: 15px;
+              text-align: center;
+              font-size: 9.5px;
+              font-weight: 800;
+              color: #64748b;
+              text-transform: uppercase;
+              letter-spacing: 0.15em;
+            }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tbody tr { page-break-inside: avoid; }
+            .total-row { page-break-inside: avoid; }
+            .signature-section { page-break-inside: avoid; }
+            .info-grid { page-break-inside: avoid; }
             @media print {
-              @page { margin: 2cm; }
+              @page { margin: 1.5cm; }
+              body { background: white; padding: 0; }
               .no-print { display: none; }
+              thead { display: table-header-group; }
+              tfoot { display: table-footer-group; }
+              tbody tr { page-break-inside: avoid; }
+              th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .total-row { page-break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .signature-section { page-break-inside: avoid; margin-top: 40px; }
+              .report-container { max-width: 100%; }
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>Staff Payroll Summary</h1>
-            <p>ProCareSoft Health Information System</p>
+          <div class="report-container">
+            ${getPrintHeaderHTML(effectiveConfig, effectiveClinic as any)}
+            
+            <div class="report-title-section">
+              <h2>Staff Payroll Summary</h2>
+            </div>
+            
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">Report Period</span>
+                <span class="info-value">${format(new Date(reportDateRange.start), "MMM dd, yyyy")} - ${format(new Date(reportDateRange.end), "MMM dd, yyyy")}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Staff Filter</span>
+                <span class="info-value">${payrollReportFilter === 'all' ? 'All Staff' : payrollReportFilter === 'paid' ? 'Paid Only' : 'Unpaid Only'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Generated On</span>
+                <span class="info-value">${format(new Date(), "PPP")}</span>
+              </div>
+            </div>
+
+            ${printContent.innerHTML}
+            
+            <div class="signature-section">
+              <div class="signature-box">Accountant / HR Authorization</div>
+              <div class="signature-box">Manager / MD Authorization</div>
+            </div>
+            
+            ${getPrintFooterHTML(effectiveConfig)}
           </div>
-          <div class="report-info">
-            <span>Report Date: ${format(new Date(), "PPP")}</span>
-            <span>Clinic ID: ${clinicId}</span>
-          </div>
-          ${printContent.innerHTML}
-          <div class="signature-space">
-            <div class="sig-box">Accountant Signature</div>
-            <div class="sig-box">Manager/MD Signature</div>
-          </div>
-          <div class="footer">Generated via ProCareSoft HR Management Module</div>
           <script>
             window.onload = function() {
-              window.print();
-              setTimeout(() => { window.close(); }, 500);
+              setTimeout(() => { 
+                window.print();
+                setTimeout(() => { window.close(); }, 500);
+              }, 300);
             }
           </script>
         </body>
@@ -321,12 +575,14 @@ export default function HRPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const thirtyDaysAgo = subDays(new Date(), 30);
+      const fiveYearsAgo = new Date();
+      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+
       const [staffData, attendanceData, billsData] = await Promise.all([
         hrService.getStaffByClinic(clinicId!, branchId || undefined),
         hrService.getAttendanceByRange(
           clinicId!,
-          startOfDay(thirtyDaysAgo),
+          startOfDay(fiveYearsAgo),
           new Date(),
           branchId || undefined,
         ),
@@ -529,43 +785,34 @@ export default function HRPage() {
 
   const getLeaveDetails = (months: string[]) => {
     if (!selectedStaff || !attendance) {
-      return { absentDays: 0, allowedLeaves: 0, unpaidLeaves: 0, dailyWage: 0, deductionAmount: 0 };
+      return { absentDays: 0, absentDates: [], allowedLeaves: 0, unpaidLeaves: 0, dailyWage: 0, deductionAmount: 0 };
     }
     const allowedLeaves = selectedStaff.allowedLeavesPerMonth ?? 4;
 
-    const absentRecords = attendance.filter((a) => {
+    const relevantAbsences = attendance.filter((a) => {
       const isAbsent = a.status === "absent";
       const isSelectedStaff = a.staffId === selectedStaff.id;
       const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
       const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
       return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday;
     });
-    
-    const absentDays = absentRecords.length;
-    const absentDates = absentRecords.map(a => format(a.date, "MMM dd"));
+
+    const absentDays = relevantAbsences.length;
+    const absentDates = relevantAbsences.map(a => format(a.date, "MMM dd"));
 
     const totalAllowedLeaves = allowedLeaves * months.length;
 
-    // For attendance records with explicit leaveType, count only unpaid ones.
-    // For legacy records (no leaveType), fall back to quota-based logic.
-    const explicitUnpaidAbsences = attendance.filter((a) => {
-      const isAbsent = a.status === "absent";
-      const isSelectedStaff = a.staffId === selectedStaff.id;
-      const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
-      const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
-      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday && a.leaveType === "unpaid";
-    }).length;
+    // Explicitly unpaid leaves are deducted regardless of quota
+    const explicitUnpaid = relevantAbsences.filter(a => a.leaveType === "unpaid").length;
 
-    const legacyAbsences = attendance.filter((a) => {
-      const isAbsent = a.status === "absent";
-      const isSelectedStaff = a.staffId === selectedStaff.id;
-      const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
-      const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
-      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday && !a.leaveType;
-    }).length;
+    // Leaves that count against the quota (explicitly paid or legacy without type)
+    const leavesAgainstQuota = relevantAbsences.filter(a => a.leaveType === "paid" || !a.leaveType).length;
 
-    const legacyUnpaid = Math.max(0, legacyAbsences - totalAllowedLeaves);
-    const unpaidLeaves = explicitUnpaidAbsences + legacyUnpaid;
+    // Calculate how many of the quota leaves exceeded the total allowed amount
+    const excessQuotaLeaves = Math.max(0, leavesAgainstQuota - totalAllowedLeaves);
+
+    // Total leaves to deduct is explicit unpaid plus any leaves that exceeded the quota
+    const unpaidLeaves = explicitUnpaid + excessQuotaLeaves;
 
     // Calculate precise daily wage based on exact days in the selected Nepali BS months
     const totalDaysInSelectedMonths = months.reduce((total, monthStr) => {
@@ -582,6 +829,9 @@ export default function HRPage() {
       absentDates,
       allowedLeaves: totalAllowedLeaves,
       unpaidLeaves,
+      explicitUnpaid,
+      leavesAgainstQuota,
+      excessQuotaLeaves,
       dailyWage,
       deductionAmount: Math.round(unpaidLeaves * dailyWage),
     };
@@ -636,13 +886,34 @@ export default function HRPage() {
   const handleDisburseSalary = async () => {
     if (!selectedStaff) return;
     try {
+      const baseExpected = (selectedStaff.salary || 0) * (payrollForm.selectedMonths.length || 1);
+      const previouslyPaid = getPreviouslyPaid(payrollForm.selectedMonths);
+
+      if (payrollForm.paymentType === "regular" && previouslyPaid >= baseExpected) {
+        addToast({
+          title: "Already Paid",
+          description: "The salary for the selected month(s) has already been fully paid.",
+          color: "warning"
+        });
+        return;
+      }
+
       const pendingCommission = payrollForm.includeCommission
         ? (selectedStaff.totalCommissionBalance || 0)
         : 0;
       const incentiveAmt = Number(payrollForm.incentive) || 0;
-      const subTotal = Number(payrollForm.amount) + pendingCommission + incentiveAmt;
-      const taxAmt = payrollForm.applyTax ? Math.round(subTotal * (payrollForm.taxPercentage / 100)) : 0;
-      const totalPayout = subTotal - taxAmt;
+      const customBonusAmt = Number(payrollForm.customBonus) || 0;
+      const customDeductionAmt = Number(payrollForm.customDeduction) || 0;
+
+      const subTotal = Number(payrollForm.amount) + pendingCommission + incentiveAmt + customBonusAmt;
+      const taxAmt = payrollForm.applyTax ? Math.round(Number(payrollForm.amount) * (payrollForm.taxPercentage / 100)) : 0;
+      const totalPayout = subTotal - taxAmt - customDeductionAmt;
+
+      const isAdvance = payrollForm.paymentType === "advance" || payrollForm.selectedMonths.some(monthStr => {
+        const d = parse(monthStr, "MMMM yyyy", new Date());
+        const now = new Date();
+        return d.getFullYear() > now.getFullYear() || (d.getFullYear() === now.getFullYear() && d.getMonth() > now.getMonth());
+      });
 
       const bill: Omit<AccountBill, "id" | "createdAt" | "updatedAt"> = {
         category: "salary",
@@ -654,7 +925,7 @@ export default function HRPage() {
         dueAmount: 0,
         paymentStatus: "paid",
         paymentMethod: payrollForm.paymentMethod,
-        description: `Salary for ${payrollForm.selectedMonths.join(", ")}${pendingCommission > 0 ? ` + Commission Rs. ${pendingCommission.toLocaleString()}` : ""}${incentiveAmt > 0 ? ` + Incentive Rs. ${incentiveAmt.toLocaleString()}` : ""}${taxAmt > 0 ? ` - Tax Rs. ${taxAmt.toLocaleString()}` : ""}. ${payrollForm.notes}`,
+        description: `${isAdvance ? "Advance Salary" : "Salary"} for ${payrollForm.selectedMonths.join(", ")}${pendingCommission > 0 ? ` + Commission Rs. ${pendingCommission.toLocaleString()}` : ""}${incentiveAmt > 0 ? ` + Incentive Rs. ${incentiveAmt.toLocaleString()}` : ""}${customBonusAmt > 0 ? ` + Bonus Rs. ${customBonusAmt.toLocaleString()} (${payrollForm.customBonusNotes})` : ""}${taxAmt > 0 ? ` - Tax Rs. ${taxAmt.toLocaleString()}` : ""}${customDeductionAmt > 0 ? ` - Deduction Rs. ${customDeductionAmt.toLocaleString()} (${payrollForm.customDeductionNotes})` : ""}. ${payrollForm.notes}`,
         clinicId: clinicId!,
         branchId: branchId || "",
         createdBy: userData?.id || "",
@@ -681,7 +952,7 @@ export default function HRPage() {
 
       addToast({
         title: "Success",
-        description: `Salary disbursed successfully.${pendingCommission > 0 ? ` Included Commission: Rs. ${pendingCommission.toLocaleString()}.` : ""}${incentiveAmt > 0 ? ` Included Incentive: Rs. ${incentiveAmt.toLocaleString()}.` : ""}${payrollForm.applyTax ? ` Deducted Tax: Rs. ${Math.round((Number(payrollForm.amount) + pendingCommission + incentiveAmt) * (payrollForm.taxPercentage / 100)).toLocaleString()}.` : ""}`,
+        description: `Salary disbursed successfully.${pendingCommission > 0 ? ` Included Commission: Rs. ${pendingCommission.toLocaleString()}.` : ""}${incentiveAmt > 0 ? ` Included Incentive: Rs. ${incentiveAmt.toLocaleString()}.` : ""}${payrollForm.applyTax ? ` Deducted Tax: Rs. ${Math.round(Number(payrollForm.amount) * (payrollForm.taxPercentage / 100)).toLocaleString()}.` : ""}`,
         color: "success",
       });
       setIsPayModalOpen(false);
@@ -760,8 +1031,9 @@ export default function HRPage() {
     }
   };
 
-  const handlePrintSalarySlip = async (bill: AccountBill) => {
-    if (!clinicId || !selectedStaff) return;
+  const handlePrintSalarySlip = async (bill: AccountBill, staff?: StaffMember) => {
+    const targetStaff = staff || selectedStaff;
+    if (!clinicId || !targetStaff) return;
     try {
       let clinicData = null;
       let printConfig = null;
@@ -799,7 +1071,7 @@ export default function HRPage() {
           headerHeight: "compact",
         } as any);
 
-      printSalarySlip(bill, selectedStaff, effectiveClinic as any, effectiveConfig);
+      printSalarySlip(bill, targetStaff, effectiveClinic as any, effectiveConfig);
     } catch (error) {
       console.error("Failed to print salary slip:", error);
       addToast({
@@ -1577,6 +1849,35 @@ export default function HRPage() {
 
       {activeTab === "payroll_reports" && (
         <div className="py-6 space-y-6">
+          <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+            <CardBody className="p-6">
+              <h3 className="text-[14px] font-bold text-[rgb(var(--color-text))] tracking-tight mb-4">
+                Payroll Expense Trend (Last 6 Months)
+              </h3>
+              <div className="h-64 w-full">
+                <Bar
+                  data={payrollChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                      },
+                      x: {
+                        grid: { display: false }
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </CardBody>
+          </Card>
+
           <div className="flex justify-between items-end bg-[rgb(var(--color-surface-2))/0.3] p-4 rounded-xl border border-[rgb(var(--color-border))]">
             <div>
               <h3 className="text-[14px] font-bold text-primary tracking-tight">
@@ -1586,7 +1887,37 @@ export default function HRPage() {
                 Comprehensive overview of staff salaries and payments.
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input
+                  size="sm"
+                  type="date"
+                  className="w-32"
+                  value={reportDateRange.start}
+                  max={reportDateRange.end}
+                  onChange={(e) => setReportDateRange(prev => ({ ...prev, start: e.target.value }))}
+                />
+                <span className="text-[11px] text-[rgb(var(--color-text-muted))]">to</span>
+                <Input
+                  size="sm"
+                  type="date"
+                  className="w-32"
+                  value={reportDateRange.end}
+                  min={reportDateRange.start}
+                  onChange={(e) => setReportDateRange(prev => ({ ...prev, end: e.target.value }))}
+                />
+              </div>
+              <Select
+                size="sm"
+                className="w-32"
+                selectedKeys={[payrollReportFilter]}
+                onSelectionChange={(keys) => setPayrollReportFilter(Array.from(keys)[0] as string)}
+                aria-label="Filter by payment status"
+              >
+                <SelectItem key="all">All Staff</SelectItem>
+                <SelectItem key="paid">Paid</SelectItem>
+                <SelectItem key="unpaid">Unpaid</SelectItem>
+              </Select>
               <Button
                 className="font-bold text-[11px]"
                 color="primary"
@@ -1595,7 +1926,7 @@ export default function HRPage() {
                 variant="flat"
                 onPress={handlePrintPayrollSummary}
               >
-                Print Full Report
+                Print Report
               </Button>
             </div>
           </div>
@@ -1609,6 +1940,7 @@ export default function HRPage() {
                 <TableColumn align="end">Total Paid (To Date)</TableColumn>
                 <TableColumn>Last Payment</TableColumn>
                 <TableColumn align="center">Status</TableColumn>
+                <TableColumn align="center">Actions</TableColumn>
               </TableHeader>
               <TableBody emptyContent="No payroll data available">
                 {[
@@ -1663,6 +1995,23 @@ export default function HRPage() {
                           {summary.status}
                         </span>
                       </TableCell>
+                      <TableCell align="center">
+                        {summary.lastBill ? (
+                          <Button
+                            isIconOnly
+                            className="h-7 w-7"
+                            color="primary"
+                            size="sm"
+                            variant="light"
+                            onPress={() => handlePrintSalarySlip(summary.lastBill, summary)}
+                            title="Print Latest Payslip"
+                          >
+                            <IoPrintOutline size={16} />
+                          </Button>
+                        ) : (
+                          <span className="text-[10px] text-[rgb(var(--color-text-muted))]">N/A</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   )),
                   ...(staffPayrollSummary.length > 0
@@ -1685,6 +2034,7 @@ export default function HRPage() {
                             .reduce((acc, s) => acc + s.totalPaid, 0)
                             .toLocaleString()}
                         </TableCell>
+                        <TableCell>{""}</TableCell>
                         <TableCell>{""}</TableCell>
                         <TableCell>{""}</TableCell>
                       </TableRow>,
@@ -2115,8 +2465,9 @@ export default function HRPage() {
       </Modal>
       {/* Staff Detail Modal */}
       <Modal
+        backdrop="blur"
         classNames={{
-          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] min-h-[85vh]",
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] min-h-[85vh] !max-w-[1200px]",
           header:
             "border-b border-[rgb(var(--color-border))] py-5 bg-[rgb(var(--color-surface))]",
           footer:
@@ -2184,7 +2535,7 @@ export default function HRPage() {
                 {selectedStaff && (
                   <div className="space-y-6">
                     {/* Quick Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
                         <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">
                           Present Days
@@ -2200,20 +2551,55 @@ export default function HRPage() {
                           Days
                         </p>
                       </div>
-                      <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
-                        <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">
-                          Absent Days
+                      <div className="p-4 rounded-xl border border-rose-100 bg-rose-50/30 col-span-2 md:col-span-2">
+                        <p className="text-[8.5px] font-semibold text-rose-500 uppercase tracking-[0.15em] opacity-80 mb-1">
+                          Total Leaves (Since Joining)
                         </p>
-                        <p className="text-[16px] font-bold text-rose-500">
-                          {
-                            attendance.filter(
-                              (a) =>
-                                a.staffId === selectedStaff.id &&
-                                a.status === "absent",
-                            ).length
-                          }{" "}
-                          Days
-                        </p>
+                        {(() => {
+                          // Generate array of all months from joining date to current month
+                          const joiningDate = new Date(selectedStaff.joiningDate);
+                          const currentDate = new Date();
+                          const monthsToCalculate = [];
+
+                          let current = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
+                          while (current <= currentDate) {
+                            monthsToCalculate.push(format(current, "MMMM yyyy"));
+                            current.setMonth(current.getMonth() + 1);
+                          }
+
+                          // Fallback if somehow empty
+                          if (monthsToCalculate.length === 0) monthsToCalculate.push(format(currentDate, "MMMM yyyy"));
+
+                          const stats = getLeaveDetails(monthsToCalculate);
+                          const remaining = Math.max(0, stats.allowedLeaves - stats.leavesAgainstQuota);
+
+                          return (
+                            <div className="flex items-center gap-4">
+                              <div className="flex flex-col">
+                                <div className="flex items-end gap-1.5">
+                                  <p className="text-[16px] font-bold text-rose-600">
+                                    {stats.absentDays}
+                                  </p>
+                                  <p className="text-[10px] font-semibold text-rose-600/70 pb-0.5">Total Taken</p>
+                                </div>
+                              </div>
+
+                              <div className="h-6 w-px bg-rose-200/50"></div>
+
+                              <div className="flex flex-col">
+                                <div className="flex items-end gap-1.5">
+                                  <p className="text-[16px] font-bold text-mountain-600">
+                                    {remaining}
+                                  </p>
+                                  <p className="text-[10px] font-semibold text-mountain-500 pb-0.5">Remaining Balance</p>
+                                </div>
+                                <p className="text-[9px] text-mountain-400 mt-0.5">
+                                  Out of {stats.allowedLeaves} total allowed
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
                         <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-[0.15em] opacity-60 mb-1">
@@ -3007,6 +3393,58 @@ export default function HRPage() {
                             }
                           />
                         </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                              Custom Bonus (Rs.)
+                            </label>
+                            <Input
+                              size="sm"
+                              startContent={<span className="text-[12px] text-text-muted">Rs.</span>}
+                              type="number"
+                              placeholder="0"
+                              value={payrollForm.customBonus === 0 ? "" : payrollForm.customBonus.toString()}
+                              onChange={(e) => setPayrollForm({ ...payrollForm, customBonus: Number(e.target.value) || 0 })}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                              Bonus Reason
+                            </label>
+                            <Input
+                              size="sm"
+                              placeholder="e.g. Overtime"
+                              value={payrollForm.customBonusNotes}
+                              onChange={(e) => setPayrollForm({ ...payrollForm, customBonusNotes: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                              Custom Deduction (Rs.)
+                            </label>
+                            <Input
+                              size="sm"
+                              startContent={<span className="text-[12px] text-text-muted">Rs.</span>}
+                              type="number"
+                              placeholder="0"
+                              value={payrollForm.customDeduction === 0 ? "" : payrollForm.customDeduction.toString()}
+                              onChange={(e) => setPayrollForm({ ...payrollForm, customDeduction: Number(e.target.value) || 0 })}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-1 block">
+                              Deduction Reason
+                            </label>
+                            <Input
+                              size="sm"
+                              placeholder="e.g. Uniform"
+                              value={payrollForm.customDeductionNotes}
+                              onChange={(e) => setPayrollForm({ ...payrollForm, customDeductionNotes: e.target.value })}
+                            />
+                          </div>
+                        </div>
                         <div className="flex flex-col gap-2 border border-rose-100 bg-rose-50/50 p-2.5 rounded-lg">
                           <Checkbox
                             size="sm"
@@ -3016,7 +3454,7 @@ export default function HRPage() {
                           >
                             Apply Tax Deduction
                           </Checkbox>
-                          
+
                           {payrollForm.applyTax && (
                             <div className="pl-6 pt-1">
                               <label className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest mb-1 block">
@@ -3101,23 +3539,52 @@ export default function HRPage() {
                         </span>
                       </div>
                       {getLeaveDetails(payrollForm.selectedMonths).absentDays > 0 && (
-                        <div className="flex flex-col gap-1">
-                          <div className="flex justify-between text-[12px] text-mountain-600">
-                            <span>Total Leaves Taken:</span>
-                            <span className="font-semibold">{getLeaveDetails(payrollForm.selectedMonths).absentDays}</span>
+                        <div className="flex flex-col gap-2 border-t border-b border-mountain-200/50 py-2 my-2">
+                          <div className="flex justify-between text-[12px] text-mountain-700 font-semibold">
+                            <span>Total Leave Breakdown:</span>
+                            <span>
+                              {getLeaveDetails(payrollForm.selectedMonths).absentDays} Days Taken
+                            </span>
                           </div>
-                          <div className="text-[10px] text-mountain-400 text-right leading-tight max-w-[200px] self-end">
-                            ( {getLeaveDetails(payrollForm.selectedMonths).absentDates.join(", ")} )
+
+                          <div className="flex flex-col gap-1 pl-2 border-l-2 border-mountain-200">
+                            <div className="flex justify-between text-[11px] text-mountain-600">
+                              <span>Quota Leaves (Paid):</span>
+                              <span className={getLeaveDetails(payrollForm.selectedMonths).leavesAgainstQuota > getLeaveDetails(payrollForm.selectedMonths).allowedLeaves ? "text-amber-600 font-semibold" : ""}>
+                                {getLeaveDetails(payrollForm.selectedMonths).leavesAgainstQuota} / {getLeaveDetails(payrollForm.selectedMonths).allowedLeaves} Allowed
+                              </span>
+                            </div>
+
+                            {getLeaveDetails(payrollForm.selectedMonths).excessQuotaLeaves > 0 && (
+                              <div className="flex justify-between text-[11px] text-rose-500">
+                                <span>↳ Quota Exceeded (Unpaid):</span>
+                                <span>{getLeaveDetails(payrollForm.selectedMonths).excessQuotaLeaves} Days</span>
+                              </div>
+                            )}
+
+                            {getLeaveDetails(payrollForm.selectedMonths).explicitUnpaid > 0 && (
+                              <div className="flex justify-between text-[11px] text-rose-500">
+                                <span>Explicit Unpaid Leaves:</span>
+                                <span>{getLeaveDetails(payrollForm.selectedMonths).explicitUnpaid} Days</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="text-[9px] text-mountain-400 text-right leading-tight self-end mt-1 italic">
+                            Dates: {getLeaveDetails(payrollForm.selectedMonths).absentDates.join(", ")}
                           </div>
                         </div>
                       )}
                       {getLeaveDetails(payrollForm.selectedMonths).deductionAmount > 0 && (
-                        <div className="flex flex-col gap-1 text-[12px] text-rose-600">
+                        <div className="flex flex-col gap-1 text-[12px] text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
                           <div className="flex justify-between">
-                            <span>Leave Deductions:</span>
-                            <span className={`font-semibold`}>
+                            <span className="font-semibold">Leave Salary Deduction:</span>
+                            <span className={`font-bold`}>
                               - Rs. {Math.round(Math.max(0, getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves - payrollForm.waivedDays) * getLeaveDetails(payrollForm.selectedMonths).dailyWage).toLocaleString()}
                             </span>
+                          </div>
+                          <div className="text-[10px] text-rose-500/80 text-right">
+                            ({Math.max(0, getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves - payrollForm.waivedDays)} unpaid days @ Rs. {Math.round(getLeaveDetails(payrollForm.selectedMonths).dailyWage).toLocaleString()}/day)
                           </div>
                           <div className="flex items-center justify-between text-mountain-500 mt-1">
                             <span className="text-[10px]">Waive deductions (Days):</span>
@@ -3195,18 +3662,30 @@ export default function HRPage() {
                           <span className="font-semibold">+ Rs. {payrollForm.incentive.toLocaleString()}</span>
                         </div>
                       )}
+                      {payrollForm.customBonus > 0 && (
+                        <div className="flex justify-between text-[12px] text-violet-700">
+                          <span>Bonus ({payrollForm.customBonusNotes || "Custom"}):</span>
+                          <span className="font-semibold">+ Rs. {payrollForm.customBonus.toLocaleString()}</span>
+                        </div>
+                      )}
                       {payrollForm.applyTax && (
                         <div className="flex justify-between text-[12px] text-rose-600">
-                          <span>Tax Deducted ({payrollForm.taxPercentage}%):</span>
-                          <span className="font-semibold">- Rs. {Math.round((payrollForm.amount + (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) + payrollForm.incentive) * (payrollForm.taxPercentage / 100)).toLocaleString()}</span>
+                          <span>Tax Deducted ({payrollForm.taxPercentage}% of Base):</span>
+                          <span className="font-semibold">- Rs. {Math.round(payrollForm.amount * (payrollForm.taxPercentage / 100)).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {payrollForm.customDeduction > 0 && (
+                        <div className="flex justify-between text-[12px] text-rose-600">
+                          <span>Deduction ({payrollForm.customDeductionNotes || "Custom"}):</span>
+                          <span className="font-semibold">- Rs. {payrollForm.customDeduction.toLocaleString()}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-[13px] font-bold pt-2 border-t border-mountain-200">
                         <span className="text-mountain-900">Total Payout:</span>
                         <span className="text-health-700">Rs. {(() => {
-                          const subT = payrollForm.amount + (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) + payrollForm.incentive;
-                          const taxAmt = payrollForm.applyTax ? Math.round(subT * (payrollForm.taxPercentage / 100)) : 0;
-                          return (subT - taxAmt).toLocaleString();
+                          const subT = payrollForm.amount + (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) + payrollForm.incentive + payrollForm.customBonus;
+                          const taxAmt = payrollForm.applyTax ? Math.round(payrollForm.amount * (payrollForm.taxPercentage / 100)) : 0;
+                          return (subT - taxAmt - payrollForm.customDeduction).toLocaleString();
                         })()}</span>
                       </div>
                     </div>

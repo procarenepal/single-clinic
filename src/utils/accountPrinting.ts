@@ -307,6 +307,9 @@ export const printAccountBill = (
             window.print();
           }, 600);
         };
+        window.onafterprint = () => {
+          window.close();
+        };
       </script>
     </body>
     </html>

@@ -86,20 +86,21 @@ export const getPrintBrandingCSS = (
     }
 
     .clinic-name {
-      font-size: ${config.fontSize === "small" ? "18px" : config.fontSize === "large" ? "26px" : "22px"};
+      font-size: ${config.fontSize === "small" ? "20px" : config.fontSize === "large" ? "28px" : "24px"};
       margin: 0;
-      font-weight: 500;
-      color: ${primaryColor};
+      font-weight: 800;
+      color: #0f172a;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       line-height: 1.1;
       text-align: center;
+      -webkit-print-color-adjust: exact;
     }
 
     .tagline {
-      font-size: 10px;
-      font-weight: 400;
-      color: ${textColor};
+      font-size: 14px;
+      font-weight: 600;
+      color: #1e293b;
       text-transform: uppercase;
       letter-spacing: 0.12em;
       margin: 4px 0 0 0;
@@ -112,8 +113,9 @@ export const getPrintBrandingCSS = (
     }
 
     .address {
-      font-size: 10px;
-      color: ${textColor};
+      font-size: 14px;
+      font-weight: 500;
+      color: #1e293b;
       line-height: 1.4;
       text-align: center;
       white-space: pre-wrap;
@@ -135,22 +137,22 @@ export const getPrintBrandingCSS = (
     }
 
     .contact-label {
-      font-size: 10px;
-      font-weight: 400;
-      color: #64748b;
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
       text-transform: uppercase;
     }
 
     .contact-value {
-      font-size: 11px;
-      font-weight: 500;
-      color: #334155;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
     }
 
     .website {
-      font-size: 11px;
-      font-weight: 500;
-      color: ${textColor};
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
       margin-top: 2px;
       text-align: center;
     }
@@ -179,11 +181,11 @@ export const getPrintBrandingCSS = (
     }
 
     .footer-text {
-      font-size: 9px;
-      font-weight: 400;
-      color: #64748b;
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
       text-transform: uppercase;
-      letter-spacing: 0.15em;
+      letter-spacing: 0.1em;
     }
   `;
 };
