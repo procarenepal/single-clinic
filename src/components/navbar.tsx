@@ -4,7 +4,6 @@ import clsx from "clsx";
 
 import { addToast } from "@/components/ui/toast";
 import { siteConfig } from "@/config/site";
-import { useAuth } from "@/hooks/useAuth";
 import { useAuthContext } from "@/context/AuthContext";
 import { clinicService } from "@/services/clinicService";
 import { storage, APPWRITE_BUCKET_ID } from "@/config/appwrite";
@@ -16,7 +15,7 @@ import {
 } from "@/components/ui/dropdown";
 
 export const Navbar = () => {
-  const { currentUser, logout, isLoading } = useAuth();
+  const { currentUser, logout, isLoading } = useAuthContext();
   const { clinicId } = useAuthContext();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();

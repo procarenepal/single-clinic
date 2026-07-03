@@ -170,6 +170,9 @@ const ManageCallLogsPage = lazy(
 const FrontOfficeDeskPage = lazy(
   () => import("@/pages/dashboard/front-office/front-office-desk"),
 );
+const FollowupsPage = lazy(
+  () => import("@/pages/dashboard/follow-ups/index"),
+);
 
 // Lazy load invitation handler
 const InvitationPage = lazy(() => import("@/pages/invitation/index"));
@@ -742,6 +745,14 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="front-office/manage-call-logs"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/front-office">
+                                <FollowupsPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="follow-ups"
                           />
                           {/* Core Settings Routes - No RBAC needed for basic settings */}
                           <Route element={<SettingsPage />} path="settings" />

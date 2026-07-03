@@ -12,6 +12,13 @@ import {
   IoCreateOutline,
   IoDocumentsOutline,
   IoTrashOutline,
+  IoLeafOutline,
+  IoCheckmarkOutline,
+  IoCloseOutline,
+  IoAlertCircleOutline,
+  IoShieldCheckmarkOutline,
+  IoHourglassOutline,
+  IoStatsChartOutline,
 } from "react-icons/io5";
 
 import {
@@ -76,6 +83,8 @@ import {
   AccountBill,
   StaffCommission,
   ClinicHoliday,
+  LeaveRequest,
+  LeaveBalance,
 } from "@/types/models";
 import { expertService } from "@/services/expertService";
 import { doctorService } from "@/services/doctorService";
@@ -87,6 +96,7 @@ import { addToast } from "@/components/ui/toast";
 import { printSalarySlip } from "@/utils/salaryPrinting";
 import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "@/utils/printBranding";
 import { clinicService } from "@/services/clinicService";
+import { leaveRequestService } from "@/services/leaveRequestService";
 
 export default function HRPage() {
   const { clinicId, userData, branchId } = useAuthContext();
@@ -95,6 +105,26 @@ export default function HRPage() {
   const [attendance, setAttendance] = useState<StaffAttendance[]>([]);
   const [bills, setBills] = useState<AccountBill[]>([]);
   const [holidays, setHolidays] = useState<ClinicHoliday[]>([]);
+
+  // Leave Management state
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
+  const [leavesLoading, setLeavesLoading] = useState(false);
+  const [leaveFilter, setLeaveFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [leaveSearch, setLeaveSearch] = useState("");
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewingLeave, setReviewingLeave] = useState<LeaveRequest | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({
+    staffId: "",
+    leaveType: "annual" as LeaveRequest["leaveType"],
+    startDate: format(new Date(), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+    reason: "",
+  });
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [isHolidaysModalOpen, setIsHolidaysModalOpen] = useState(false);
   const [newHoliday, setNewHoliday] = useState<{ name: string; date: string; type: "paid" | "unpaid" }>({ name: "", date: format(new Date(), "yyyy-MM-dd"), type: "paid" });
   const [isAbsentModalOpen, setIsAbsentModalOpen] = useState(false);
@@ -245,8 +275,15 @@ export default function HRPage() {
   useEffect(() => {
     if (clinicId) {
       loadData();
+      loadLeaves();
     }
   }, [clinicId, branchId]);
+
+  useEffect(() => {
+    if (activeTab === "leaves" && clinicId) {
+      loadLeaves();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (selectedStaff && clinicId && isDetailModalOpen) {
@@ -604,7 +641,111 @@ export default function HRPage() {
     }
   };
 
+  const loadLeaves = async () => {
+    if (!clinicId) return;
+    setLeavesLoading(true);
+    try {
+      const [requests, balances] = await Promise.all([
+        leaveRequestService.getLeavesByClinic(clinicId!, branchId || undefined),
+        leaveRequestService.getAllBalancesForClinic(clinicId!, new Date().getFullYear()),
+      ]);
+      setLeaveRequests(requests);
+      setLeaveBalances(balances);
+    } catch (error) {
+      console.error("Error loading leave data:", error);
+      addToast({ title: "Error", description: "Failed to load leave records", color: "danger" });
+    } finally {
+      setLeavesLoading(false);
+    }
+  };
+
+  const handleSubmitLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetStaff = staff.find((s) => s.id === leaveForm.staffId);
+    if (!targetStaff || !leaveForm.reason) {
+      addToast({ title: "Validation Error", description: "Select a staff member and provide a reason.", color: "warning" });
+      return;
+    }
+    const start = new Date(leaveForm.startDate);
+    const end = new Date(leaveForm.endDate);
+    if (end < start) {
+      addToast({ title: "Invalid Dates", description: "End date must be on or after start date.", color: "warning" });
+      return;
+    }
+    const totalDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    setLeaveSubmitting(true);
+    try {
+      await leaveRequestService.createLeaveRequest({
+        staffId: targetStaff.id,
+        staffName: targetStaff.name,
+        staffRole: targetStaff.role,
+        clinicId: clinicId!,
+        branchId: branchId || "",
+        leaveType: leaveForm.leaveType,
+        startDate: start,
+        endDate: end,
+        totalDays,
+        reason: leaveForm.reason,
+      });
+      addToast({ title: "Leave Submitted", description: `${totalDays}-day leave request created for ${targetStaff.name}.`, color: "success" });
+      setIsLeaveModalOpen(false);
+      setLeaveForm({ staffId: "", leaveType: "annual", startDate: format(new Date(), "yyyy-MM-dd"), endDate: format(new Date(), "yyyy-MM-dd"), reason: "" });
+      loadLeaves();
+    } catch (error) {
+      addToast({ title: "Error", description: "Failed to submit leave request.", color: "danger" });
+    } finally {
+      setLeaveSubmitting(false);
+    }
+  };
+
+  const handleApproveLeave = async () => {
+    if (!reviewingLeave || !userData) return;
+    setReviewLoading(true);
+    try {
+      await leaveRequestService.approveLeave(reviewingLeave.id, userData.id || "", userData.displayName || "Admin", reviewNotes);
+      addToast({ title: "Leave Approved", description: `${reviewingLeave.staffName}'s leave has been approved.`, color: "success" });
+      setIsReviewModalOpen(false);
+      setReviewNotes("");
+      loadLeaves();
+    } catch (error) {
+      addToast({ title: "Error", description: "Failed to approve leave.", color: "danger" });
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleRejectLeave = async () => {
+    if (!reviewingLeave || !reviewNotes.trim()) {
+      addToast({ title: "Note Required", description: "Please provide a reason for rejection.", color: "warning" });
+      return;
+    }
+    if (!userData) return;
+    setReviewLoading(true);
+    try {
+      await leaveRequestService.rejectLeave(reviewingLeave.id, userData.id || "", userData.displayName || "Admin", reviewNotes);
+      addToast({ title: "Leave Rejected", description: `${reviewingLeave.staffName}'s request has been rejected.`, color: "warning" });
+      setIsReviewModalOpen(false);
+      setReviewNotes("");
+      loadLeaves();
+    } catch (error) {
+      addToast({ title: "Error", description: "Failed to reject leave.", color: "danger" });
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleCancelLeave = async (leaveId: string) => {
+    try {
+      await leaveRequestService.cancelLeave(leaveId);
+      addToast({ title: "Cancelled", description: "Leave request has been cancelled.", color: "success" });
+      loadLeaves();
+    } catch {
+      addToast({ title: "Error", description: "Failed to cancel leave.", color: "danger" });
+    }
+  };
+
   const handleSaveStaff = async (e: React.FormEvent) => {
+
     e.preventDefault();
     if (!staffForm.name || !staffForm.role || !staffForm.salary) {
       addToast({
@@ -784,35 +925,59 @@ export default function HRPage() {
   };
 
   const getLeaveDetails = (months: string[]) => {
-    if (!selectedStaff || !attendance) {
-      return { absentDays: 0, absentDates: [], allowedLeaves: 0, unpaidLeaves: 0, dailyWage: 0, deductionAmount: 0 };
+    if (!selectedStaff) {
+      return { absentDays: 0, absentDates: [], unpaidLeaves: 0, dailyWage: 0, deductionAmount: 0 };
     }
-    const allowedLeaves = selectedStaff.allowedLeavesPerMonth ?? 4;
 
-    const relevantAbsences = attendance.filter((a) => {
+    // Get all approved leave requests for the selected staff member
+    const approvedLeaves = leaveRequests.filter(l => l.staffId === selectedStaff.id && l.status === "approved");
+
+    let absentDatesList: string[] = [];
+    let unpaidLeavesCount = 0;
+
+    for (const req of approvedLeaves) {
+      // Loop through each day of the leave request
+      const start = new Date(req.startDate);
+      const end = new Date(req.endDate);
+      let current = new Date(start);
+      while (current <= end) {
+        const monthStr = format(current, "MMMM yyyy");
+        if (months.includes(monthStr)) {
+          // Skip if it's a paid holiday
+          const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(current, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
+          if (!isPaidHoliday) {
+            absentDatesList.push(format(current, "MMM dd"));
+            if (!req.isPaid) {
+              unpaidLeavesCount++;
+            }
+          }
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    // Catch any unexcused absences (marked absent in attendance log, but no approved leave request)
+    const unexcusedAbsences = attendance.filter((a) => {
       const isAbsent = a.status === "absent";
       const isSelectedStaff = a.staffId === selectedStaff.id;
       const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
       const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
-      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday;
+
+      const coveredByLeave = approvedLeaves.some(req => {
+        const reqStart = new Date(req.startDate);
+        const reqEnd = new Date(req.endDate);
+        reqStart.setHours(0, 0, 0, 0);
+        reqEnd.setHours(23, 59, 59, 999);
+        return a.date >= reqStart && a.date <= reqEnd;
+      });
+
+      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday && !coveredByLeave;
     });
 
-    const absentDays = relevantAbsences.length;
-    const absentDates = relevantAbsences.map(a => format(a.date, "MMM dd"));
-
-    const totalAllowedLeaves = allowedLeaves * months.length;
-
-    // Explicitly unpaid leaves are deducted regardless of quota
-    const explicitUnpaid = relevantAbsences.filter(a => a.leaveType === "unpaid").length;
-
-    // Leaves that count against the quota (explicitly paid or legacy without type)
-    const leavesAgainstQuota = relevantAbsences.filter(a => a.leaveType === "paid" || !a.leaveType).length;
-
-    // Calculate how many of the quota leaves exceeded the total allowed amount
-    const excessQuotaLeaves = Math.max(0, leavesAgainstQuota - totalAllowedLeaves);
-
-    // Total leaves to deduct is explicit unpaid plus any leaves that exceeded the quota
-    const unpaidLeaves = explicitUnpaid + excessQuotaLeaves;
+    for (const a of unexcusedAbsences) {
+      absentDatesList.push(format(a.date, "MMM dd"));
+      unpaidLeavesCount++;
+    }
 
     // Calculate precise daily wage based on exact days in the selected Nepali BS months
     const totalDaysInSelectedMonths = months.reduce((total, monthStr) => {
@@ -825,15 +990,11 @@ export default function HRPage() {
     const dailyWage = (selectedStaff.salary || 0) / averageDaysInMonth;
 
     return {
-      absentDays,
-      absentDates,
-      allowedLeaves: totalAllowedLeaves,
-      unpaidLeaves,
-      explicitUnpaid,
-      leavesAgainstQuota,
-      excessQuotaLeaves,
+      absentDays: absentDatesList.length,
+      absentDates: absentDatesList,
+      unpaidLeaves: unpaidLeavesCount,
       dailyWage,
-      deductionAmount: Math.round(unpaidLeaves * dailyWage),
+      deductionAmount: Math.round(unpaidLeavesCount * dailyWage),
     };
   };
 
@@ -1006,7 +1167,7 @@ export default function HRPage() {
       const activeAttendance = attendance.find(
         (a) =>
           a.staffId === member.id &&
-          (a.status === "present" || a.status === "on_break") &&
+          a.status !== "absent" &&
           format(a.date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"),
       );
 
@@ -1420,6 +1581,20 @@ export default function HRPage() {
               <div className="flex items-center gap-2">
                 <IoDocumentsOutline size={18} />
                 <span>Payroll Reports</span>
+              </div>
+            }
+          />
+          <Tab
+            key="leaves"
+            title={
+              <div className="flex items-center gap-2">
+                <IoLeafOutline size={18} />
+                <span>Leave Management</span>
+                {leaveRequests.filter((l) => l.status === "pending").length > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-500 text-white">
+                    {leaveRequests.filter((l) => l.status === "pending").length}
+                  </span>
+                )}
               </div>
             }
           />
@@ -2099,7 +2274,398 @@ export default function HRPage() {
         </div>
       )}
 
+      {/* ───────────────── LEAVE MANAGEMENT TAB ───────────────── */}
+      {activeTab === "leaves" && (
+        <div className="space-y-5">
+          {/* Top action bar */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-[rgb(var(--color-surface-2))/0.3] p-4 rounded-xl border border-[rgb(var(--color-border))]">
+            <div>
+              <h3 className="text-[14px] font-bold text-[rgb(var(--color-text))] tracking-tight">Leave Requests</h3>
+              <p className="text-[11px] text-[rgb(var(--color-text-muted))]">Manage and review staff leave applications for {new Date().getFullYear()}.</p>
+            </div>
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Status filter pills */}
+              {(["all", "pending", "approved", "rejected"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setLeaveFilter(f)}
+                  className={`px-3 py-1 text-[11px] font-semibold rounded-full border capitalize transition-all ${leaveFilter === f
+                      ? "bg-primary text-white border-primary"
+                      : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))] hover:border-primary hover:text-primary"
+                    }`}
+                >
+                  {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+                  {f !== "all" && (
+                    <span className="ml-1 opacity-70">
+                      ({leaveRequests.filter((l) => l.status === f).length})
+                    </span>
+                  )}
+                </button>
+              ))}
+              <div className="relative">
+                <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[rgb(var(--color-text-muted))]" />
+                <input
+                  className="h-8 pl-8 pr-3 text-[12px] rounded-lg border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] outline-none focus:ring-1 focus:ring-primary/20 w-44"
+                  placeholder="Search staff..."
+                  value={leaveSearch}
+                  onChange={(e) => setLeaveSearch(e.target.value)}
+                />
+              </div>
+              <Button
+                className="font-semibold text-[11px] h-8 px-3"
+                color="primary"
+                size="sm"
+                startContent={<IoAddOutline />}
+                onPress={() => setIsLeaveModalOpen(true)}
+              >
+                New Request
+              </Button>
+            </div>
+          </div>
+
+          {/* KPI Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Pending Review", value: leaveRequests.filter((l) => l.status === "pending").length, color: "text-amber-500", bg: "bg-amber-500/10", icon: <IoHourglassOutline className="text-amber-500 text-[22px] opacity-20" /> },
+              { label: "Approved", value: leaveRequests.filter((l) => l.status === "approved").length, color: "text-emerald-500", bg: "bg-emerald-500/10", icon: <IoShieldCheckmarkOutline className="text-emerald-500 text-[22px] opacity-20" /> },
+              { label: "Rejected", value: leaveRequests.filter((l) => l.status === "rejected").length, color: "text-rose-500", bg: "bg-rose-500/10", icon: <IoCloseOutline className="text-rose-500 text-[22px] opacity-20" /> },
+              { label: "Total Days Taken", value: leaveRequests.filter((l) => l.status === "approved").reduce((s, l) => s + l.totalDays, 0), color: "text-primary", bg: "bg-primary/10", icon: <IoStatsChartOutline className="text-primary text-[22px] opacity-20" /> },
+            ].map((kpi) => (
+              <Card key={kpi.label} className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+                <CardBody className="p-3 flex flex-row items-center justify-between">
+                  <div>
+                    <p className="text-[8px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">{kpi.label}</p>
+                    <h4 className={`text-[18px] font-bold ${kpi.color}`}>{kpi.value}</h4>
+                  </div>
+                  {kpi.icon}
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+
+          {/* Leave Requests Table */}
+          {leavesLoading ? (
+            <div className="py-20 text-center"><Spinner label="Loading leave requests..." /></div>
+          ) : (
+            <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+              <Table
+                aria-label="Leave requests table"
+                classNames={{
+                  th: "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] font-semibold text-[11px]",
+                  td: "text-[12.5px] py-3 border-b border-[rgb(var(--color-border))]/40",
+                }}
+                shadow="none"
+              >
+                <TableHeader>
+                  <TableColumn>Staff Member</TableColumn>
+                  <TableColumn>Leave Type</TableColumn>
+                  <TableColumn>Duration</TableColumn>
+                  <TableColumn>Days</TableColumn>
+                  <TableColumn>Reason</TableColumn>
+                  <TableColumn>Status</TableColumn>
+                  <TableColumn align="center">Actions</TableColumn>
+                </TableHeader>
+                <TableBody emptyContent="No leave requests found.">
+                  {leaveRequests
+                    .filter((l) => {
+                      const matchFilter = leaveFilter === "all" || l.status === leaveFilter;
+                      const matchSearch = !leaveSearch || l.staffName.toLowerCase().includes(leaveSearch.toLowerCase());
+                      return matchFilter && matchSearch;
+                    })
+                    .map((leave, i) => {
+                      const typeConfig: Record<string, { label: string; cls: string }> = {
+                        annual: { label: "Annual", cls: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+                        sick: { label: "Sick", cls: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+                        casual: { label: "Casual", cls: "bg-violet-500/10 text-violet-600 border-violet-500/20" },
+                        unpaid: { label: "Unpaid", cls: "bg-slate-400/10 text-slate-500 border-slate-400/20" },
+                        maternity: { label: "Maternity", cls: "bg-pink-500/10 text-pink-600 border-pink-500/20" },
+                        emergency: { label: "Emergency", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+                      };
+                      const statusConfig: Record<string, { label: string; cls: string }> = {
+                        pending: { label: "Pending", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+                        approved: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+                        rejected: { label: "Rejected", cls: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+                        cancelled: { label: "Cancelled", cls: "bg-slate-400/10 text-slate-500 border-slate-400/20" },
+                      };
+                      const tc = typeConfig[leave.leaveType] || { label: leave.leaveType, cls: "bg-default-100 text-default-500" };
+                      const sc = statusConfig[leave.status] || { label: leave.status, cls: "bg-default-100 text-default-500" };
+                      return (
+                        <TableRow key={leave.id || `leave-${i}`} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
+                          <TableCell>
+                            <div className="font-semibold text-[rgb(var(--color-text))]">{leave.staffName}</div>
+                            <div className="text-[10px] text-[rgb(var(--color-text-muted))]">{leave.staffRole}</div>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tc.cls}`}>{tc.label}</span>
+                            {leave.isPaid && <span className="ml-1 text-[9px] text-emerald-500 font-semibold">Paid</span>}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-[11px]">{format(new Date(leave.startDate), "MMM dd")} → {format(new Date(leave.endDate), "MMM dd, yyyy")}</div>
+                            <div className="text-[10px] text-[rgb(var(--color-text-muted))]">Submitted {format(new Date(leave.createdAt), "MMM dd")}</div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-bold text-primary">{leave.totalDays}d</span>
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-[11.5px] text-[rgb(var(--color-text-muted))] max-w-[180px] truncate" title={leave.reason}>{leave.reason}</p>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sc.cls}`}>{sc.label}</span>
+                            {leave.status !== "pending" && leave.reviewerName && (
+                              <p className="text-[9px] text-[rgb(var(--color-text-muted))] mt-0.5">by {leave.reviewerName}</p>
+                            )}
+                          </TableCell>
+                          <TableCell align="center">
+                            <div className="flex items-center gap-1 justify-center">
+                              {leave.status === "pending" && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="flat"
+                                    color="success"
+                                    className="h-7 px-2 text-[10px] font-bold"
+                                    startContent={<IoCheckmarkOutline size={12} />}
+                                    onPress={() => { setReviewingLeave(leave); setReviewNotes(""); setIsReviewModalOpen(true); }}
+                                  >
+                                    Review
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="light"
+                                    color="danger"
+                                    className="h-7 px-2 text-[10px] font-bold"
+                                    onPress={() => handleCancelLeave(leave.id)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              )}
+                              {leave.status !== "pending" && leave.reviewNotes && (
+                                <span title={leave.reviewNotes} className="cursor-help text-[rgb(var(--color-text-muted))]">
+                                  <IoAlertCircleOutline size={15} />
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+
+          {/* Leave Balance Grid */}
+          {leaveBalances.length > 0 && (
+            <div>
+              <h3 className="text-[13px] font-bold text-[rgb(var(--color-text))] mb-3 mt-2 flex items-center gap-2">
+                <IoStatsChartOutline className="text-primary" />
+                Staff Leave Balances — {new Date().getFullYear()}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {leaveBalances.map((bal) => {
+                  const annualRemaining = bal.annualAllotted - bal.annualUsed;
+                  const sickRemaining = bal.sickAllotted - bal.sickUsed;
+                  const casualRemaining = bal.casualAllotted - bal.casualUsed;
+                  return (
+                    <Card key={bal.id} className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+                      <CardBody className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="text-[13px] font-bold text-[rgb(var(--color-text))]">{bal.staffName}</p>
+                            <p className="text-[10px] text-[rgb(var(--color-text-muted))] uppercase tracking-wider">{bal.year} Quota</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] text-[rgb(var(--color-text-muted))] uppercase tracking-widest">Unpaid Taken</p>
+                            <p className="text-[14px] font-bold text-rose-500">{bal.unpaidUsed}d</p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {[
+                            { label: "Annual", used: bal.annualUsed, total: bal.annualAllotted, remaining: annualRemaining, color: "bg-blue-500" },
+                            { label: "Sick", used: bal.sickUsed, total: bal.sickAllotted, remaining: sickRemaining, color: "bg-rose-400" },
+                            { label: "Casual", used: bal.casualUsed, total: bal.casualAllotted, remaining: casualRemaining, color: "bg-violet-400" },
+                          ].map((item) => (
+                            <div key={item.label}>
+                              <div className="flex justify-between text-[10px] font-semibold text-[rgb(var(--color-text-muted))] mb-1">
+                                <span>{item.label}</span>
+                                <span>{item.remaining} / {item.total} remaining</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-[rgb(var(--color-surface-2))] overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${item.color} transition-all`}
+                                  style={{ width: `${Math.min(100, (item.used / item.total) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardBody>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── New Leave Request Modal ── */}
+      <Modal
+        classNames={{ base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]", header: "border-b border-[rgb(var(--color-border))] py-4", footer: "border-t border-[rgb(var(--color-border))] py-3" }}
+        isOpen={isLeaveModalOpen}
+        size="xl"
+        backdrop="blur"
+        onOpenChange={setIsLeaveModalOpen}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <form onSubmit={handleSubmitLeave}>
+              <ModalHeader>
+                <div>
+                  <h2 className="text-[16px] font-bold text-primary">New Leave Request</h2>
+                  <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">Submit a leave application on behalf of a staff member.</p>
+                </div>
+              </ModalHeader>
+              <ModalBody className="py-5 space-y-4">
+                <div>
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Staff Member</label>
+                  <Select
+                    size="sm"
+                    placeholder="Select staff member"
+                    selectedKeys={leaveForm.staffId ? [leaveForm.staffId] : []}
+                    onSelectionChange={(keys) => setLeaveForm({ ...leaveForm, staffId: Array.from(keys)[0] as string })}
+                    aria-label="Select staff"
+                  >
+                    {staff.map((s) => (
+                      <SelectItem key={s.id}>{s.name} — {s.role}</SelectItem>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Leave Type</label>
+                  <Select
+                    size="sm"
+                    selectedKeys={[leaveForm.leaveType]}
+                    onSelectionChange={(keys) => setLeaveForm({ ...leaveForm, leaveType: Array.from(keys)[0] as LeaveRequest["leaveType"] })}
+                    aria-label="Leave type"
+                  >
+                    <SelectItem key="annual">Annual Leave (Paid)</SelectItem>
+                    <SelectItem key="sick">Sick Leave (Paid)</SelectItem>
+                    <SelectItem key="casual">Casual Leave (Paid)</SelectItem>
+                    <SelectItem key="maternity">Maternity Leave (Paid)</SelectItem>
+                    <SelectItem key="emergency">Emergency Leave</SelectItem>
+                    <SelectItem key="unpaid">Unpaid Leave</SelectItem>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">From</label>
+                    <Input size="sm" type="date" value={leaveForm.startDate} onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">To</label>
+                    <Input size="sm" type="date" value={leaveForm.endDate} min={leaveForm.startDate} onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })} />
+                  </div>
+                </div>
+                {leaveForm.startDate && leaveForm.endDate && (
+                  <p className="text-[11px] text-primary font-semibold">
+                    Duration: {Math.round((new Date(leaveForm.endDate).getTime() - new Date(leaveForm.startDate).getTime()) / 86400000) + 1} day(s)
+                  </p>
+                )}
+                <div>
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Reason</label>
+                  <Textarea size="sm" minRows={2} placeholder="Provide reason for leave..." value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" size="sm" onPress={onClose}>Cancel</Button>
+                <Button type="submit" color="primary" size="sm" isLoading={leaveSubmitting} className="font-bold">Submit Request</Button>
+              </ModalFooter>
+            </form>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* ── Manager Review Modal ── */}
+      <Modal
+        classNames={{ base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]", header: "border-b border-[rgb(var(--color-border))] py-4", footer: "border-t border-[rgb(var(--color-border))] py-3" }}
+        isOpen={isReviewModalOpen}
+        size="lg"
+        onOpenChange={setIsReviewModalOpen}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>
+                <div>
+                  <h2 className="text-[16px] font-bold text-primary">Review Leave Request</h2>
+                  <p className="text-[11px] text-[rgb(var(--color-text-muted))]">Approve or reject this application.</p>
+                </div>
+              </ModalHeader>
+              <ModalBody className="py-5 space-y-4">
+                {reviewingLeave && (
+                  <div className="bg-[rgb(var(--color-surface-2))/0.5] p-4 rounded-xl border border-[rgb(var(--color-border))] space-y-2">
+                    <div className="flex justify-between">
+                      <div>
+                        <p className="text-[13px] font-bold text-[rgb(var(--color-text))]">{reviewingLeave.staffName}</p>
+                        <p className="text-[10px] text-[rgb(var(--color-text-muted))]">{reviewingLeave.staffRole}</p>
+                      </div>
+                      <span className="text-[11px] font-bold text-primary">{reviewingLeave.totalDays} day(s)</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-[rgb(var(--color-text-muted))]">Type: </span>
+                        <span className="font-semibold capitalize">{reviewingLeave.leaveType}</span>
+                        {reviewingLeave.isPaid && <span className="ml-1 text-emerald-500">(Paid)</span>}
+                      </div>
+                      <div>
+                        <span className="text-[rgb(var(--color-text-muted))]">Period: </span>
+                        <span className="font-semibold">{format(new Date(reviewingLeave.startDate), "MMM dd")} – {format(new Date(reviewingLeave.endDate), "MMM dd, yyyy")}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[rgb(var(--color-text-muted))] uppercase font-bold">Reason</span>
+                      <p className="text-[12px] mt-0.5 text-[rgb(var(--color-text))]">{reviewingLeave.reason}</p>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Manager Note <span className="text-rose-400">(required for rejection)</span></label>
+                  <Textarea size="sm" minRows={2} placeholder="Add a note (e.g. Approved. Please arrange handover.)" value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} />
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" size="sm" onPress={onClose}>Close</Button>
+                <Button
+                  size="sm"
+                  color="danger"
+                  variant="flat"
+                  className="font-bold"
+                  isLoading={reviewLoading}
+                  startContent={<IoCloseOutline />}
+                  onPress={handleRejectLeave}
+                >
+                  Reject
+                </Button>
+                <Button
+                  size="sm"
+                  color="success"
+                  className="font-bold"
+                  isLoading={reviewLoading}
+                  startContent={<IoCheckmarkOutline />}
+                  onPress={handleApproveLeave}
+                >
+                  Approve
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
       {/* Add Staff Modal */}
+
       <Modal
         classNames={{
           base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
@@ -2571,7 +3137,6 @@ export default function HRPage() {
                           if (monthsToCalculate.length === 0) monthsToCalculate.push(format(currentDate, "MMMM yyyy"));
 
                           const stats = getLeaveDetails(monthsToCalculate);
-                          const remaining = Math.max(0, stats.allowedLeaves - stats.leavesAgainstQuota);
 
                           return (
                             <div className="flex items-center gap-4">
@@ -2589,12 +3154,12 @@ export default function HRPage() {
                               <div className="flex flex-col">
                                 <div className="flex items-end gap-1.5">
                                   <p className="text-[16px] font-bold text-mountain-600">
-                                    {remaining}
+                                    {stats.unpaidLeaves}
                                   </p>
-                                  <p className="text-[10px] font-semibold text-mountain-500 pb-0.5">Remaining Balance</p>
+                                  <p className="text-[10px] font-semibold text-mountain-500 pb-0.5">Unpaid Leaves</p>
                                 </div>
                                 <p className="text-[9px] text-mountain-400 mt-0.5">
-                                  Out of {stats.allowedLeaves} total allowed
+                                  All-time history
                                 </p>
                               </div>
                             </div>
@@ -3548,24 +4113,10 @@ export default function HRPage() {
                           </div>
 
                           <div className="flex flex-col gap-1 pl-2 border-l-2 border-mountain-200">
-                            <div className="flex justify-between text-[11px] text-mountain-600">
-                              <span>Quota Leaves (Paid):</span>
-                              <span className={getLeaveDetails(payrollForm.selectedMonths).leavesAgainstQuota > getLeaveDetails(payrollForm.selectedMonths).allowedLeaves ? "text-amber-600 font-semibold" : ""}>
-                                {getLeaveDetails(payrollForm.selectedMonths).leavesAgainstQuota} / {getLeaveDetails(payrollForm.selectedMonths).allowedLeaves} Allowed
-                              </span>
-                            </div>
-
-                            {getLeaveDetails(payrollForm.selectedMonths).excessQuotaLeaves > 0 && (
+                            {getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves > 0 && (
                               <div className="flex justify-between text-[11px] text-rose-500">
-                                <span>↳ Quota Exceeded (Unpaid):</span>
-                                <span>{getLeaveDetails(payrollForm.selectedMonths).excessQuotaLeaves} Days</span>
-                              </div>
-                            )}
-
-                            {getLeaveDetails(payrollForm.selectedMonths).explicitUnpaid > 0 && (
-                              <div className="flex justify-between text-[11px] text-rose-500">
-                                <span>Explicit Unpaid Leaves:</span>
-                                <span>{getLeaveDetails(payrollForm.selectedMonths).explicitUnpaid} Days</span>
+                                <span>Unpaid Leaves:</span>
+                                <span>{getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves} Days</span>
                               </div>
                             )}
                           </div>
@@ -3848,7 +4399,7 @@ export default function HRPage() {
         }}
         isOpen={isHolidaysModalOpen}
         onClose={() => setIsHolidaysModalOpen(false)}
-        size="md"
+        size="2xl"
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 border-b border-mountain-100 pb-3">

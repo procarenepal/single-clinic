@@ -20,6 +20,9 @@ import {
   IoWalletOutline,
   IoCashOutline,
   IoCloseOutline,
+  IoFlagOutline,
+  IoCopyOutline,
+  IoCheckmarkOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
@@ -172,6 +175,35 @@ function ModalShell({
   );
 }
 
+// Copy to clipboard helper component
+const CopyButton = ({ text, label }: { text: string; label: string }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    addToast({
+      title: "Copied!",
+      description: `${label} copied to clipboard.`,
+      color: "success",
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1 hover:bg-surface-2 text-text-muted/40 hover:text-primary rounded transition-colors inline-flex items-center justify-center"
+      title={`Copy ${label}`}
+    >
+      {copied ? (
+        <IoCheckmarkOutline className="w-3.5 h-3.5 text-success" />
+      ) : (
+        <IoCopyOutline className="w-3.5 h-3.5" />
+      )}
+    </button>
+  );
+};
+
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function DoctorProfilePage() {
   const { doctorId } = useParams<{ doctorId: string }>();
@@ -199,6 +231,15 @@ export default function DoctorProfilePage() {
   const [commissionsLoading, setCommissionsLoading] = useState(false);
 
   const [selectedTab, setSelectedTab] = useState("overview");
+
+  const [globalDateRange, setGlobalDateRange] = useState({
+    start: "",
+    end: "",
+  });
+
+  const [updatingTarget, setUpdatingTarget] = useState(false);
+  const [targetInput, setTargetInput] = useState("");
+  const [earningsDateRange, setEarningsDateRange] = useState({ start: "", end: "" });
   
   // Appointment Filters
   const [appointmentTypeFilter, setAppointmentTypeFilter] = useState("all");
@@ -233,6 +274,12 @@ export default function DoctorProfilePage() {
   useEffect(() => {
     if (doctorId && clinicId) loadDoctorProfile();
   }, [doctorId, clinicId]);
+
+  useEffect(() => {
+    if (doctor) {
+      setTargetInput(doctor.monthlyTarget?.toString() || "");
+    }
+  }, [doctor]);
 
   const loadDoctorProfile = async () => {
     if (!doctorId) return;
@@ -454,9 +501,142 @@ export default function DoctorProfilePage() {
     return "bg-surface-2 text-text-muted border-border-base";
   };
 
-  const totalAppointments = appointments.length;
-  const totalPatients = patients.length;
-  const upcomingAppointments = appointments.filter((apt) => {
+  // Business and Target Calculations
+  const getCommissionBusiness = (c: DoctorCommission) => {
+    const percentage = c.commissionPercentage || 0;
+    const amt = c.commissionAmount || 0;
+    if (percentage > 0) {
+      return (amt * 100) / percentage;
+    }
+    return c.totalInvoiceAmount || amt;
+  };
+
+  const thisMonthBusiness = commissions
+    .filter((c) => {
+      const date = new Date(c.appointmentDate || c.createdAt);
+      const now = new Date();
+      return (
+        date.getMonth() === now.getMonth() &&
+        date.getFullYear() === now.getFullYear() &&
+        c.status !== "cancelled"
+      );
+    })
+    .reduce((sum, c) => sum + getCommissionBusiness(c), 0);
+
+  const achievementBusiness = commissions
+    .filter((c) => {
+      if (c.status === "cancelled") return false;
+      if (globalDateRange.start && globalDateRange.end) {
+        const date = new Date(c.appointmentDate || c.createdAt);
+        const start = new Date(globalDateRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(globalDateRange.end);
+        end.setHours(23, 59, 59, 999);
+        return date >= start && date <= end;
+      } else {
+        const date = new Date(c.appointmentDate || c.createdAt);
+        const now = new Date();
+        return (
+          date.getMonth() === now.getMonth() &&
+          date.getFullYear() === now.getFullYear()
+        );
+      }
+    })
+    .reduce((sum, c) => sum + getCommissionBusiness(c), 0);
+
+  const filteredCommissionsForEarnings = commissions.filter((c) => {
+    if (c.status === "cancelled") return false;
+    const startStr = earningsDateRange.start;
+    const endStr = earningsDateRange.end;
+    if (startStr && endStr) {
+      const date = new Date(c.appointmentDate || c.createdAt);
+      const start = new Date(startStr);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endStr);
+      end.setHours(23, 59, 59, 999);
+      return date >= start && date <= end;
+    }
+    return true;
+  });
+
+  const getSelectedRangeBusiness = () => {
+    if (earningsDateRange.start && earningsDateRange.end) {
+      return filteredCommissionsForEarnings.reduce((sum, c) => sum + getCommissionBusiness(c), 0);
+    }
+    return thisMonthBusiness;
+  };
+
+  const getSelectedRangeCommissionEarned = () => {
+    if (earningsDateRange.start && earningsDateRange.end) {
+      return filteredCommissionsForEarnings.reduce((sum, c) => sum + c.commissionAmount, 0);
+    }
+    return commissionStats.totalCommission || 0;
+  };
+
+  const getSelectedRangeCommissionBalance = () => {
+    if (earningsDateRange.start && earningsDateRange.end) {
+      return filteredCommissionsForEarnings
+        .filter(c => c.status === "pending")
+        .reduce((sum, c) => sum + (c.commissionAmount - (c.paidAmount || 0)), 0);
+    }
+    return commissionStats.pendingCommission || 0;
+  };
+
+  const handleUpdateTarget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(targetInput);
+    if (isNaN(val) || val < 0) return;
+    try {
+      setUpdatingTarget(true);
+      await doctorService.updateDoctor(doctorId!, { monthlyTarget: val });
+      setDoctor((prev) => (prev ? { ...prev, monthlyTarget: val } : null));
+      addToast({
+        title: "Success",
+        description: "Monthly target updated.",
+        color: "success",
+      });
+    } catch {
+      addToast({
+        title: "Error",
+        description: "Failed to update target.",
+        color: "danger",
+      });
+    } finally {
+      setUpdatingTarget(false);
+    }
+  };
+
+  // Stats for cards (responsive to global date range filter)
+  const getFilteredAppointmentsForStats = () => {
+    if (!globalDateRange.start || !globalDateRange.end) return appointments;
+    const start = new Date(globalDateRange.start);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(globalDateRange.end);
+    end.setHours(23, 59, 59, 999);
+    return appointments.filter((apt) => {
+      const aptDate = new Date(apt.appointmentDate);
+      return aptDate >= start && aptDate <= end;
+    });
+  };
+
+  const getFilteredPatientsForStats = () => {
+    if (!globalDateRange.start || !globalDateRange.end) return patients;
+    const start = new Date(globalDateRange.start);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(globalDateRange.end);
+    end.setHours(23, 59, 59, 999);
+    return patients.filter((pat) => {
+      const patDate = new Date(pat.createdAt);
+      return patDate >= start && patDate <= end;
+    });
+  };
+
+  const statsAppointments = getFilteredAppointmentsForStats();
+  const statsPatients = getFilteredPatientsForStats();
+
+  const totalAppointments = statsAppointments.length;
+  const totalPatients = statsPatients.length;
+  const upcomingAppointments = statsAppointments.filter((apt) => {
     try {
       return (
         new Date(apt.appointmentDate) > new Date() && apt.status === "scheduled"
@@ -465,23 +645,23 @@ export default function DoctorProfilePage() {
       return false;
     }
   }).length;
-  const completedAppointments = appointments.filter(
+  const completedAppointments = statsAppointments.filter(
     (apt) => apt.status === "completed",
   ).length;
 
   const filteredAppointments = [...appointments]
     .filter((apt) => {
-      // Type Filter (using appointmentTypeId now)
       if (appointmentTypeFilter !== "all" && apt.appointmentTypeId !== appointmentTypeFilter) {
         return false;
       }
       
-      // Date Filter
-      if (appointmentDateRange.start && appointmentDateRange.end) {
+      const startStr = globalDateRange.start || appointmentDateRange.start;
+      const endStr = globalDateRange.end || appointmentDateRange.end;
+      if (startStr && endStr) {
         const aptDate = new Date(apt.appointmentDate);
-        const start = new Date(appointmentDateRange.start);
+        const start = new Date(startStr);
         start.setHours(0, 0, 0, 0);
-        const end = new Date(appointmentDateRange.end);
+        const end = new Date(endStr);
         end.setHours(23, 59, 59, 999);
         if (aptDate < start || aptDate > end) {
           return false;
@@ -497,11 +677,13 @@ export default function DoctorProfilePage() {
     
   const filteredPatients = [...patients]
     .filter((pat) => {
-      if (patientDateRange.start && patientDateRange.end) {
+      const startStr = globalDateRange.start || patientDateRange.start;
+      const endStr = globalDateRange.end || patientDateRange.end;
+      if (startStr && endStr) {
         const patDate = new Date(pat.createdAt);
-        const start = new Date(patientDateRange.start);
+        const start = new Date(startStr);
         start.setHours(0, 0, 0, 0);
-        const end = new Date(patientDateRange.end);
+        const end = new Date(endStr);
         end.setHours(23, 59, 59, 999);
         if (patDate < start || patDate > end) {
           return false;
@@ -516,11 +698,13 @@ export default function DoctorProfilePage() {
     
   const filteredCommissions = [...commissions]
     .filter((comm) => {
-      if (commissionDateRange.start && commissionDateRange.end) {
+      const startStr = globalDateRange.start || commissionDateRange.start;
+      const endStr = globalDateRange.end || commissionDateRange.end;
+      if (startStr && endStr) {
         const commDate = new Date(comm.createdAt);
-        const start = new Date(commissionDateRange.start);
+        const start = new Date(startStr);
         start.setHours(0, 0, 0, 0);
-        const end = new Date(commissionDateRange.end);
+        const end = new Date(endStr);
         end.setHours(23, 59, 59, 999);
         if (commDate < start || commDate > end) {
           return false;
@@ -595,52 +779,159 @@ export default function DoctorProfilePage() {
         </div>
       </div>
 
-      {/* Hero Overview */}
-      <div className="bg-surface border border-border-base rounded-[10px] shadow-sm p-6 overflow-hidden relative">
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10 w-full">
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0 text-stat font-bold text-primary">
-            {doctor.name.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 text-center md:text-left">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-center md:justify-start">
-              <h2 className="text-page-title font-bold text-text-main">
-                {doctor.name}
-              </h2>
-              <span
-                className={`inline-flex items-center px-2 py-0.5 border rounded-full text-[12px] font-semibold tracking-wide uppercase ${doctor.isActive ? "bg-primary/10 text-primary border-primary/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}
+      {/* Global Date Range Picker */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface border border-border-base rounded-[10px] p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <IoCalendarOutline className="w-5 h-5 text-primary" />
+          <span className="text-[13px] font-semibold text-text-main">Filter Profile by Date:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Quick presets */}
+          <div className="flex items-center gap-1">
+            {[
+              {
+                label: "Today",
+                getRange: () => {
+                  const d = new Date();
+                  const formatted = d.toISOString().split("T")[0];
+                  return { start: formatted, end: formatted };
+                },
+              },
+              {
+                label: "This Month",
+                getRange: () => {
+                  const now = new Date();
+                  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+                  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+                  return { start, end };
+                },
+              },
+              {
+                label: "Last 30 Days",
+                getRange: () => {
+                  const end = new Date();
+                  const start = new Date();
+                  start.setDate(end.getDate() - 30);
+                  return { start: start.toISOString().split("T")[0], end: end.toISOString().split("T")[0] };
+                },
+              },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                onClick={() => setGlobalDateRange(preset.getRange())}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-surface-2 hover:bg-primary/5 hover:text-primary border border-border-base transition-all"
               >
-                <span
-                  className={`w-2 h-2 rounded-full mr-1.5 shrink-0 ${doctor.isActive ? "bg-primary" : "bg-red-500"}`}
-                />
-                {doctor.isActive ? "Active" : "Inactive"}
-              </span>
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
+          <input
+            type="date"
+            className="h-9 px-3 text-[13px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary focus:ring-1 focus:ring-primary/10"
+            value={globalDateRange.start}
+            onChange={(e) => setGlobalDateRange(p => ({ ...p, start: e.target.value }))}
+          />
+          <span className="text-[13px] text-text-muted font-medium">to</span>
+          <input
+            type="date"
+            className="h-9 px-3 text-[13px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary focus:ring-1 focus:ring-primary/10"
+            value={globalDateRange.end}
+            onChange={(e) => setGlobalDateRange(p => ({ ...p, end: e.target.value }))}
+          />
+          {(globalDateRange.start || globalDateRange.end) && (
+            <Button
+              size="sm"
+              variant="bordered"
+              color="danger"
+              onClick={() => setGlobalDateRange({ start: "", end: "" })}
+            >
+              Clear Range
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Hero Overview */}
+      <div className="bg-surface border border-border-base rounded-[10px] shadow-sm p-5 overflow-hidden relative group hover:shadow-md transition-all duration-300">
+        {/* Production-grade background aesthetics */}
+        <div className="absolute right-0 top-0 w-64 h-64 bg-gradient-to-bl from-primary/5 via-transparent to-transparent rounded-bl-full pointer-events-none" />
+        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-gradient-to-tr from-indigo-500/5 via-transparent to-transparent rounded-tr-full pointer-events-none" />
+        
+        <div className="flex flex-col lg:flex-row items-center gap-6 relative z-10 w-full">
+          {/* Avatar and Main Info Column */}
+          <div className="flex items-center gap-4 shrink-0 w-full lg:w-auto">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/20 shrink-0 text-[22px] font-bold text-primary shadow-inner">
+              {doctor.name.charAt(0).toUpperCase()}
             </div>
-            <p className="text-text-muted font-medium text-[15px] mt-1.5">
-              {formatSpeciality(doctor.speciality)}
-            </p>
-            <div className="flex flex-wrap gap-4 mt-4 justify-center md:justify-start">
-              <span className="flex items-center gap-1.5 text-[13.5px] text-text-main font-medium bg-surface-2 px-3 py-1.5 rounded border border-border-base/50">
-                <IoBusinessOutline className="text-primary" />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-[17px] font-bold text-text-main">
+                  {doctor.name}
+                </h2>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 border rounded-full text-[11px] font-semibold tracking-wide uppercase ${
+                    doctor.isActive
+                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                      : "bg-red-500/10 text-red-500 border-red-500/20"
+                  }`}
+                >
+                  {doctor.isActive ? (
+                    <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full mr-1 shrink-0 bg-red-500" />
+                  )}
+                  {doctor.isActive ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <p className="text-text-muted font-medium text-[13.5px] mt-0.5">
+                {formatSpeciality(doctor.speciality)}
+              </p>
+            </div>
+          </div>
+
+          {/* Details & Contact Columns */}
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+            {/* Badges Column */}
+            <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-center">
+              <span
+                className={`flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1 rounded border ${
+                  doctor.doctorType === "regular"
+                    ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
+                    : doctor.doctorType === "visiting"
+                    ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
+                    : "bg-primary/10 text-primary border-primary/20"
+                }`}
+              >
+                <IoBusinessOutline className="w-3.5 h-3.5" />
                 <span className="capitalize">{doctor.doctorType}</span>
               </span>
-              <span className="flex items-center gap-1.5 text-[13.5px] text-text-main font-medium bg-surface-2 px-3 py-1.5 rounded border border-border-base/50">
-                <IoIdCardOutline className="text-primary" />
-                NMC: {doctor.nmcNumber}
+              <span className="flex items-center gap-1.5 text-[12.5px] text-blue-600 font-semibold bg-blue-500/10 px-2.5 py-1 rounded border border-blue-500/20">
+                <IoIdCardOutline className="w-3.5 h-3.5" />
+                <span>NMC: {doctor.nmcNumber}</span>
+                <CopyButton text={doctor.nmcNumber} label="NMC Number" />
               </span>
-              <span className="flex items-center gap-1.5 text-[13.5px] text-text-main font-medium bg-surface-2 px-3 py-1.5 rounded border border-border-base/50">
-                <IoStatsChartOutline className="text-primary" />
+              <span className="flex items-center gap-1.5 text-[12.5px] text-indigo-600 font-semibold bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-500/20">
+                <IoStatsChartOutline className="w-3.5 h-3.5" />
                 Rate: {doctor.defaultCommission}%
               </span>
             </div>
-            <div className="flex flex-wrap gap-6 mt-4 justify-center md:justify-start">
-              <span className="flex items-center gap-2 text-[13.5px] text-text-muted">
-                <IoCallOutline className="text-text-muted/40" />
-                {doctor.phone}
+
+            {/* Contact Info Column */}
+            <div className="flex flex-col gap-1.5 justify-center md:items-end">
+              <span className="flex items-center gap-1.5 text-[13px] text-text-muted hover:text-text-main transition-colors">
+                <IoCallOutline className="text-text-muted/50 w-3.5 h-3.5" />
+                <span>{doctor.phone}</span>
+                <CopyButton text={doctor.phone} label="Phone Number" />
               </span>
               {doctor.email && (
-                <span className="flex items-center gap-2 text-[13.5px] text-text-muted">
-                  <IoMailOutline className="text-text-muted/40" />
-                  {doctor.email}
+                <span className="flex items-center gap-1.5 text-[13px] text-text-muted hover:text-text-main transition-colors">
+                  <IoMailOutline className="text-text-muted/50 w-3.5 h-3.5" />
+                  <span>{doctor.email}</span>
+                  <CopyButton text={doctor.email} label="Email Address" />
                 </span>
               )}
             </div>
@@ -705,6 +996,7 @@ export default function DoctorProfilePage() {
             { key: "appointments", label: "Appointments" },
             { key: "patients", label: "Patients" },
             { key: "commission", label: "Commission" },
+            { key: "target-setting", label: "Target Setting" },
           ].map((t) => (
             <button
               key={t.key}
@@ -751,7 +1043,7 @@ export default function DoctorProfilePage() {
                   <span className="font-semibold text-text-main">
                     {doctor.consultationCharge !== undefined
                       ? `NPR ${doctor.consultationCharge.toLocaleString()}`
-                      : "N NPR"}
+                      : "N/A"}
                   </span>
                 </div>
                 <div className="flex justify-between text-[14px] pb-2">
@@ -763,6 +1055,63 @@ export default function DoctorProfilePage() {
               </div>
               <div className="space-y-4">
                 <h3 className="text-[15px] font-bold text-text-main uppercase tracking-wider mb-4 border-b border-border-base pb-2">
+                  Earnings & Business
+                </h3>
+                
+                {/* Inline Date Filter */}
+                <div className="flex flex-col gap-2 p-3 bg-surface-2/40 border border-border-base/50 rounded-lg mb-4">
+                  <div className="text-[12px] font-semibold text-text-muted">Filter Earnings by Date:</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      className="flex-1 h-8 px-2 text-[12px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={earningsDateRange.start}
+                      onChange={(e) => setEarningsDateRange(p => ({ ...p, start: e.target.value }))}
+                    />
+                    <span className="text-[12px] text-text-muted">to</span>
+                    <input
+                      type="date"
+                      className="flex-1 h-8 px-2 text-[12px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      value={earningsDateRange.end}
+                      onChange={(e) => setEarningsDateRange(p => ({ ...p, end: e.target.value }))}
+                    />
+                    {(earningsDateRange.start || earningsDateRange.end) && (
+                      <button
+                        className="text-[11px] font-semibold text-red-500 hover:text-red-600 px-1"
+                        onClick={() => setEarningsDateRange({ start: "", end: "" })}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
+                  <span className="text-text-muted">
+                    {earningsDateRange.start && earningsDateRange.end ? "Filtered Business" : "This Month Business"}
+                  </span>
+                  <span className="font-bold text-primary">
+                    NPR {getSelectedRangeBusiness().toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
+                  <span className="text-text-muted">
+                    {earningsDateRange.start && earningsDateRange.end ? "Filtered Commission" : "Total Commission Earned"}
+                  </span>
+                  <span className="font-semibold text-text-main">
+                    NPR {getSelectedRangeCommissionEarned().toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[14px] pb-2">
+                  <span className="text-text-muted font-medium">
+                    {earningsDateRange.start && earningsDateRange.end ? "Filtered Balance" : "Commission Balance"}
+                  </span>
+                  <span className="font-bold text-success">
+                    NPR {getSelectedRangeCommissionBalance().toLocaleString()}
+                  </span>
+                </div>
+
+                <h3 className="text-[15px] font-bold text-text-main uppercase tracking-wider mt-6 mb-4 border-b border-border-base pb-2">
                   System
                 </h3>
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
@@ -777,6 +1126,101 @@ export default function DoctorProfilePage() {
                     {doctor.updatedAt.toLocaleDateString()}
                   </span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {selectedTab === "target-setting" && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-[16px] font-bold text-text-main">
+                  Monthly Target Tracking
+                </h3>
+              </div>
+
+              {/* Progress Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-surface border border-border-base p-5 rounded-[10px] shadow-sm flex items-center gap-4">
+                  <div className="p-3 bg-green-500/10 text-green-600 rounded-full">
+                    <IoStatsChartOutline className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] text-text-muted font-medium">Achievement ({globalDateRange.start && globalDateRange.end ? "Filtered" : "This Month"})</p>
+                    <p className="text-stat-sm text-green-600 font-bold mt-1">
+                      NPR {achievementBusiness.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-surface border border-border-base p-5 rounded-[10px] shadow-sm flex items-center gap-4">
+                  <div className="p-3 bg-amber-500/10 text-amber-600 rounded-full">
+                    <IoTimeOutline className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] text-text-muted font-medium">Remaining Target</p>
+                    <p className="text-stat-sm text-amber-600 font-bold mt-1">
+                      NPR {Math.max((doctor.monthlyTarget || 0) - achievementBusiness, 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-surface border border-border-base p-5 rounded-[10px] shadow-sm flex items-center gap-4">
+                  <div className="p-3 bg-primary/10 text-primary rounded-full">
+                    <IoFlagOutline className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] text-text-muted font-medium">Total Monthly Target</p>
+                    <p className="text-stat-sm text-primary font-bold mt-1">
+                      NPR {(doctor.monthlyTarget || 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="bg-surface border border-border-base p-6 rounded-[10px] shadow-sm">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-[14px] font-semibold text-text-main">Target Completion</span>
+                  <span className="text-[14px] font-bold text-primary">
+                    {doctor.monthlyTarget && doctor.monthlyTarget > 0
+                      ? `${Math.round((achievementBusiness / doctor.monthlyTarget) * 100)}%`
+                      : "0%"}
+                  </span>
+                </div>
+                <div className="w-full bg-border-base rounded-full h-3 overflow-hidden">
+                  <div
+                    className="bg-primary h-3 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${doctor.monthlyTarget && doctor.monthlyTarget > 0 ? Math.min((achievementBusiness / doctor.monthlyTarget) * 100, 100) : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Set/Update Target Form */}
+              <div className="bg-surface border border-border-base p-6 rounded-[10px] shadow-sm max-w-md">
+                <h4 className="text-[15px] font-bold text-text-main mb-4">Update Monthly Target</h4>
+                <form onSubmit={handleUpdateTarget} className="flex gap-3">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-2.5 text-[13px] text-text-muted font-semibold">NPR</span>
+                    <input
+                      type="number"
+                      placeholder="Enter monthly target"
+                      className="w-full h-10 pl-12 pr-3 text-[13.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary focus:ring-1 focus:ring-primary/10"
+                      value={targetInput}
+                      onChange={(e) => setTargetInput(e.target.value)}
+                      min="0"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    color="primary"
+                    isLoading={updatingTarget}
+                    disabled={updatingTarget}
+                  >
+                    Save Target
+                  </Button>
+                </form>
               </div>
             </div>
           )}

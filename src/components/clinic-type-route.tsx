@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { clinicService } from "@/services/clinicService";
 import { pageService } from "@/services/pageService";
 
@@ -12,7 +12,7 @@ interface ClinicTypeRouteProps {
 }
 
 export const ClinicTypeRoute = ({ children, path }: ClinicTypeRouteProps) => {
-  const { currentUser, userData, isLoading } = useAuth();
+  const { currentUser, userData, isLoading } = useAuthContext();
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [accessChecking, setAccessChecking] = useState(true);
 

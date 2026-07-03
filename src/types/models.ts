@@ -376,6 +376,7 @@ export interface Doctor {
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
   consultationCharge?: number; // Custom charge per doctor consultation
+  monthlyTarget?: number; // Monthly business target
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -397,6 +398,7 @@ export interface Expert {
   isDeleted?: boolean; // Soft delete flag
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
+  monthlyTarget?: number; // Monthly business target
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -1117,6 +1119,59 @@ export interface ClinicHoliday {
   type?: "paid" | "unpaid";
 }
 
+/**
+ * LeaveRequest model for formal staff leave management workflow
+ */
+export interface LeaveRequest {
+  id: string;
+  staffId: string;
+  staffName: string;
+  staffRole: string;
+  clinicId: string;
+  branchId: string;
+
+  // Leave details
+  leaveType: "annual" | "sick" | "casual" | "unpaid" | "maternity" | "emergency";
+  startDate: Date;
+  endDate: Date;
+  totalDays: number;
+  reason: string;
+  attachmentUrl?: string; // Medical certificate, etc.
+
+  // Workflow
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  reviewedBy?: string; // userId who approved/rejected
+  reviewerName?: string;
+  reviewedAt?: Date;
+  reviewNotes?: string; // Manager's note on decision
+
+  // Payroll impact
+  isPaid: boolean; // Computed from leaveType
+
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * LeaveBalance model for tracking annual leave quotas per staff
+ */
+export interface LeaveBalance {
+  id: string;
+  staffId: string;
+  staffName: string;
+  clinicId: string;
+  year: number; // Calendar year e.g. 2025
+  annualAllotted: number;
+  sickAllotted: number;
+  casualAllotted: number;
+  annualUsed: number;
+  sickUsed: number;
+  casualUsed: number;
+  unpaidUsed: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Enquiry {
   id: string;
   clinicId: string;
@@ -1212,6 +1267,73 @@ export interface PaymentMethod {
 // ============= PRESCRIPTION MANAGEMENT MODELS =============
 
 // Prescription model for storing prescription information
+// ============= PATIENT FOLLOW-UP MANAGEMENT =============
+// Tracks multi-step follow-up schedules per patient visit, mirroring
+// the clinic's internal "Patient Follow up" sheet.
+
+export type FollowupStatus = "pending" | "completed" | "no-answer" | "wrong-no" | "cancelled";
+export type FollowupInitStatus = "good" | "complain" | "neutral";
+export type FollowupUpdatedStatus = "good" | "solved" | "wrong-no" | "no-answer" | "neutral";
+
+export interface PatientFollowup {
+  id: string;
+  clinicId: string;
+  branchId: string;
+
+  // Patient info (denormalized for performance)
+  patientId: string;
+  patientName: string;
+  patientMobile: string;
+
+  // Visit context
+  appointmentId?: string; // Optional link to the originating appointment
+  visitDate?: Date; // The date of the original visit
+  session?: string; // e.g. "1st", "2nd", "3rd"
+
+  // Status tracking (matches Excel init/updated status columns)
+  initStatus: FollowupInitStatus;
+  updatedStatus?: FollowupUpdatedStatus;
+
+  // Store statuses per session
+  sessionStatuses?: {
+    [session: string]: {
+      initStatus?: FollowupInitStatus;
+      updatedStatus?: FollowupUpdatedStatus;
+    }
+  };
+
+  // Follow-up date chain (up to 5 sequential follow-ups per Excel)
+  followupDates: {
+    first?: Date;
+    second?: Date;
+    third?: Date;
+    fourth?: Date;
+    fifth?: Date;
+  };
+
+  // Clinical notes
+  service?: string; // Service received (e.g. "HYDRAFACIAL ST", "PRP FACE")
+  product?: string; // Product used/sold (e.g. "TPS NIACINAMIDE 5% serum")
+  notes?: string; // General free-text notes
+
+  // Computed status for the module view
+  overallStatus: FollowupStatus;
+
+  // Action Log / History timeline
+  logs?: {
+    date: Date;
+    note: string;
+    user?: string;
+  }[];
+
+  // Audit fields
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+}
+
+// ============= END PATIENT FOLLOW-UP MANAGEMENT =============
+
 export interface Prescription {
   id: string;
   prescriptionNo: string; // Generated prescription number

@@ -748,7 +748,7 @@ export default function FrontOfficeDesk() {
         }
       }
 
-      if (doctorConsultationPrice > 0 && !isApptTypeConsultation) {
+      if (doctorConsultationPrice > 0 && !apptTypeItem) {
         totalInvoiceAmount += doctorConsultationPrice;
       }
 
@@ -831,7 +831,7 @@ export default function FrontOfficeDesk() {
 
       const items: any[] = [];
 
-      if (doctorConsultationPrice > 0 && !isApptTypeConsultation) {
+      if (doctorConsultationPrice > 0 && !apptTypeItem) {
         items.push({
           id: crypto.randomUUID(),
           appointmentTypeId: "consultation-fee",

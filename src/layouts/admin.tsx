@@ -13,7 +13,7 @@ import {
 } from "react-icons/io5";
 
 import { Button, Avatar } from "@/components/ui";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { AdminHeader } from "@/components/admin-header";
 import { DeletionProgressIndicator } from "@/components/DeletionProgressIndicator";
 import { prefetchChunks } from "@/utils/prefetchRoutes";
@@ -81,7 +81,7 @@ export interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { currentUser } = useAuth();
+  const { currentUser } = useAuthContext();
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
 
   // Toggle submenu

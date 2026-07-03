@@ -118,6 +118,12 @@ class NavigationService {
         children: [],
       },
       {
+        title: "Patient Follow-ups",
+        href: "/dashboard/follow-ups",
+        icon: <Icons.IoCheckmarkDoneCircleOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
         title: "Accounts",
         href: "/dashboard/accounts",
         icon: <Icons.IoCardOutline className="w-5 h-5" />,
@@ -199,6 +205,7 @@ class NavigationService {
       "Billing",
       "Appointment Billing",
       "Front Office",
+      "Patient Follow-ups",
       "Accounts",
       "Reports",
       "Inventory",
@@ -241,6 +248,12 @@ class NavigationService {
         title: "Front Office",
         href: "/dashboard/front-office",
         icon: <Icons.IoCalendarOutline className="w-5 h-5" />,
+        children: [],
+      },
+      {
+        title: "Patient Follow-ups",
+        href: "/dashboard/follow-ups",
+        icon: <Icons.IoCheckmarkDoneCircleOutline className="w-5 h-5" />,
         children: [],
       },
       {

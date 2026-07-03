@@ -416,7 +416,7 @@ export default function ReportsPage() {
     });
   };
 
-  // Filter patients by date range (createdAt) and selected doctor
+  // Filter patients by date range (createdAt), selected doctor, and selected appointment type
   const getFilteredPatients = () => {
     const startDate = new Date(dateRange.start);
     const endDate = new Date(dateRange.end);
@@ -450,7 +450,21 @@ export default function ReportsPage() {
         doctorOk = assignedMatches || hasAppointmentWithDoctor;
       }
 
-      return createdOk && doctorOk;
+      // Appointment type filter: has any appointment of selected type within date window
+      let appointmentTypeOk = true;
+
+      if (selectedAppointmentType !== "all") {
+        appointmentTypeOk = reportData.appointments.some((apt) => {
+          if (apt.patientId !== p.id) return false;
+          if (apt.appointmentTypeId !== selectedAppointmentType) return false;
+          if (allDates) return true;
+          const aptDate = new Date(apt.appointmentDate);
+
+          return aptDate >= startDate && aptDate <= endDate;
+        });
+      }
+
+      return createdOk && doctorOk && appointmentTypeOk;
     });
   };
 
@@ -557,8 +571,23 @@ export default function ReportsPage() {
       );
     }
 
+    // Apply appointment type filter if a specific appointment type is selected
+    if (selectedAppointmentType !== "all") {
+      billings = billings.filter((b) =>
+        b.items.some((item) => item.appointmentTypeId === selectedAppointmentType),
+      );
+    }
+
     return billings;
-  }, [allDates, selectedDoctor, dateRange.start, dateRange.end, reportData.billings, reportData.billingSettings]);
+  }, [
+    allDates,
+    selectedDoctor,
+    selectedAppointmentType,
+    dateRange.start,
+    dateRange.end,
+    reportData.billings,
+    reportData.billingSettings,
+  ]);
 
   // Filter pathology billings by date range and doctor
   const filteredPathologyBillings = useMemo(() => {
@@ -995,22 +1024,29 @@ export default function ReportsPage() {
           (d) => d.id === billing.doctorId,
         );
 
-        // Calculate attributed revenue if a specific doctor is selected
+        // Calculate attributed revenue if a specific doctor or appointment type is selected
         let attributedAmount = billing.totalAmount;
 
-        if (selectedDoctor !== "all") {
+        if (selectedDoctor !== "all" || selectedAppointmentType !== "all") {
           const itemsTotal =
             billing.items.reduce((s, i) => s + (i.amount || 0), 0) ||
             billing.subtotal ||
             1;
           const scaleFactor =
             itemsTotal > 0 ? billing.totalAmount / itemsTotal : 1;
-          const doctorItems = billing.items.filter(
-            (item) => (item.doctorId || billing.doctorId) === selectedDoctor,
-          );
+          const matchingItems = billing.items.filter((item) => {
+            const matchesDoctor =
+              selectedDoctor === "all" ||
+              (item.doctorId || billing.doctorId) === selectedDoctor;
+            const matchesType =
+              selectedAppointmentType === "all" ||
+              item.appointmentTypeId === selectedAppointmentType;
+
+            return matchesDoctor && matchesType;
+          });
 
           attributedAmount =
-            doctorItems.reduce((s, i) => s + (i.amount || 0), 0) * scaleFactor;
+            matchingItems.reduce((s, i) => s + (i.amount || 0), 0) * scaleFactor;
         }
 
         return {
@@ -2089,143 +2125,96 @@ export default function ReportsPage() {
                     </Button>
                   </div>
                   <div className="clarity-card p-3">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <div className="clarity-stat text-center">
-                        <p className="clarity-stat-value text-teal-700">
-                          {filteredBillings.length}
-                        </p>
-                        <p className="clarity-stat-label">Total Invoices</p>
-                      </div>
-                      <div className="clarity-stat text-center">
-                        <p className="clarity-stat-value text-health-600">
-                          NPR{" "}
-                          {(() => {
-                            let totalRevenue = 0;
+                    {(() => {
+                      let totalRevenue = 0;
+                      let totalPaid = 0;
 
-                            // Appointment Billing Revenue
-                            if (selectedDoctor === "all") {
-                              totalRevenue += filteredBillings.reduce(
-                                (sum, b) => sum + b.totalAmount,
-                                0,
-                              );
-                            } else {
-                              filteredBillings.forEach((b) => {
-                                const itemsTotal =
-                                  b.items.reduce(
-                                    (s, i) => s + (i.amount || 0),
-                                    0,
-                                  ) ||
-                                  b.subtotal ||
-                                  1;
-                                const scale = b.totalAmount / itemsTotal;
+                      // Appointment Billing Revenue & Collection
+                      filteredBillings.forEach((b) => {
+                        if (selectedDoctor === "all" && selectedAppointmentType === "all") {
+                          totalRevenue += b.totalAmount;
+                          totalPaid += b.paidAmount || 0;
+                        } else {
+                          const itemsTotal =
+                            b.items.reduce((s, i) => s + (i.amount || 0), 0) ||
+                            b.subtotal ||
+                            1;
+                          const revenueScale = b.totalAmount / itemsTotal;
+                          const paidScale = (b.paidAmount || 0) / itemsTotal;
 
-                                b.items.forEach((item) => {
-                                  if (
-                                    (item.doctorId || b.doctorId) ===
-                                    selectedDoctor
-                                  ) {
-                                    totalRevenue += (item.amount || 0) * scale;
-                                  }
-                                });
-                              });
+                          b.items.forEach((item) => {
+                            const matchesDoctor =
+                              selectedDoctor === "all" ||
+                              (item.doctorId || b.doctorId) === selectedDoctor;
+                            const matchesType =
+                              selectedAppointmentType === "all" ||
+                              item.appointmentTypeId === selectedAppointmentType;
+
+                            if (matchesDoctor && matchesType) {
+                              totalRevenue += (item.amount || 0) * revenueScale;
+                              totalPaid += (item.amount || 0) * paidScale;
                             }
+                          });
+                        }
+                      });
 
-                            // Pathology Billing Revenue
-                            if (selectedDoctor === "all") {
-                              totalRevenue += filteredPathologyBillings.reduce(
-                                (sum, b) => sum + (b.totalAmount || 0),
-                                0,
-                              );
-                            } else {
-                              filteredPathologyBillings.forEach((b) => {
-                                const referral = b.referringDoctors?.find(
-                                  (rd) => rd.doctorId === selectedDoctor,
-                                );
+                      // Pathology Billing Revenue & Collection (only applies if selectedAppointmentType is "all")
+                      if (selectedAppointmentType === "all") {
+                        if (selectedDoctor === "all") {
+                          totalRevenue += filteredPathologyBillings.reduce(
+                            (sum, b) => sum + (b.totalAmount || 0),
+                            0,
+                          );
+                          totalPaid += filteredPathologyBillings.reduce(
+                            (sum, b) => sum + (b.paidAmount || 0),
+                            0,
+                          );
+                        } else {
+                          filteredPathologyBillings.forEach((b) => {
+                            const referral = b.referringDoctors?.find(
+                              (rd) => rd.doctorId === selectedDoctor,
+                            );
 
-                                if (referral) {
-                                  totalRevenue += referral.calculatedAmount;
-                                }
-                              });
+                            if (referral) {
+                              totalRevenue += referral.calculatedAmount;
+                              const share = referral.calculatedAmount / b.totalAmount;
+                              totalPaid += (b.paidAmount || 0) * share;
                             }
+                          });
+                        }
+                      }
 
-                            return Math.round(totalRevenue).toLocaleString();
-                          })()}
-                        </p>
-                        <p className="clarity-stat-label">Total Revenue</p>
-                      </div>
-                      <div className="clarity-stat text-center">
-                        <p className="clarity-stat-value text-saffron-600">
-                          NPR{" "}
-                          {(() => {
-                            let totalPaid = 0;
+                      const outstandingBalance = Math.max(0, totalRevenue - totalPaid);
 
-                            // Appointment Billing Collection
-                            if (selectedDoctor === "all") {
-                              totalPaid += filteredBillings.reduce(
-                                (sum, b) => sum + (b.paidAmount || 0),
-                                0,
-                              );
-                            } else {
-                              filteredBillings.forEach((b) => {
-                                const itemsTotal =
-                                  b.items.reduce(
-                                    (s, i) => s + (i.amount || 0),
-                                    0,
-                                  ) ||
-                                  b.subtotal ||
-                                  1;
-                                const scale = (b.paidAmount || 0) / itemsTotal;
-
-                                b.items.forEach((item) => {
-                                  if (
-                                    (item.doctorId || b.doctorId) ===
-                                    selectedDoctor
-                                  ) {
-                                    totalPaid += (item.amount || 0) * scale;
-                                  }
-                                });
-                              });
-                            }
-
-                            // Pathology Billing Collection
-                            if (selectedDoctor === "all") {
-                              totalPaid += filteredPathologyBillings.reduce(
-                                (sum, b) => sum + (b.paidAmount || 0),
-                                0,
-                              );
-                            } else {
-                              filteredPathologyBillings.forEach((b) => {
-                                const referral = b.referringDoctors?.find(
-                                  (rd) => rd.doctorId === selectedDoctor,
-                                );
-
-                                if (referral) {
-                                  // Pro-rate the paid amount based on revenue share
-                                  const share =
-                                    referral.calculatedAmount / b.totalAmount;
-
-                                  totalPaid += (b.paidAmount || 0) * share;
-                                }
-                              });
-                            }
-
-                            return Math.round(totalPaid).toLocaleString();
-                          })()}
-                        </p>
-                        <p className="clarity-stat-label">Total Collected</p>
-                      </div>
-                      <div className="clarity-stat text-center">
-                        <p className="clarity-stat-value text-rose-600">
-                          NPR{" "}
-                          {filteredBillings
-                            .reduce((sum, b) => sum + b.balanceAmount, 0)
-                            .toLocaleString()}
-                        </p>
-                        <p className="clarity-stat-label">
-                          Outstanding Balance
-                        </p>
-                      </div>
-                    </div>
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          <div className="clarity-stat text-center">
+                            <p className="clarity-stat-value text-teal-700">
+                              {filteredBillings.length}
+                            </p>
+                            <p className="clarity-stat-label">Total Invoices</p>
+                          </div>
+                          <div className="clarity-stat text-center">
+                            <p className="clarity-stat-value text-health-600">
+                              NPR {Math.round(totalRevenue).toLocaleString()}
+                            </p>
+                            <p className="clarity-stat-label">Total Revenue</p>
+                          </div>
+                          <div className="clarity-stat text-center">
+                            <p className="clarity-stat-value text-saffron-600">
+                              NPR {Math.round(totalPaid).toLocaleString()}
+                            </p>
+                            <p className="clarity-stat-label">Total Collected</p>
+                          </div>
+                          <div className="clarity-stat text-center">
+                            <p className="clarity-stat-value text-rose-600">
+                              NPR {Math.round(outstandingBalance).toLocaleString()}
+                            </p>
+                            <p className="clarity-stat-label">Outstanding Balance</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <Divider className="my-3" />
                     <h4 className="clarity-section-header">Payment Status</h4>
                     <div className="grid grid-cols-3 gap-3">
@@ -2320,6 +2309,9 @@ export default function ReportsPage() {
                           itemsTotal > 0 ? b.totalAmount / itemsTotal : 1;
 
                         b.items.forEach((item) => {
+                          if (selectedAppointmentType !== "all" && item.appointmentTypeId !== selectedAppointmentType) {
+                            return;
+                          }
                           const dId = item.doctorId || b.doctorId;
                           const dName =
                             item.doctorName || b.doctorName || "Unknown";

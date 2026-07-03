@@ -91,6 +91,7 @@ export function Autocomplete({
 
   const [query, setQuery] = useState(currentLabel);
   const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Sync query when controlled selection changes from outside
   useEffect(() => {
@@ -98,11 +99,11 @@ export function Autocomplete({
   }, [currentLabel]);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return rawItems;
+    if (!query.trim() || query === currentLabel) return rawItems;
     const q = query.trim().toLowerCase();
 
     return rawItems.filter((i) => i.textValue.toLowerCase().includes(q));
-  }, [query, rawItems]);
+  }, [query, rawItems, currentLabel]);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -151,14 +152,16 @@ export function Autocomplete({
       )}
 
       <div
-        className={`flex items-center border rounded-lg min-h-[38px] bg-surface transition-colors ${
+        className={`flex items-center border rounded-lg min-h-[38px] bg-surface transition-colors cursor-text ${
           isInvalid
             ? "border-red-400 focus-within:ring-red-100"
             : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
         } focus-within:ring-1 ${isDisabled ? "opacity-50 pointer-events-none" : ""}`}
+        onClick={() => inputRef.current?.focus()}
       >
         <input
-          className="flex-1 text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/70"
+          ref={inputRef}
+          className="flex-1 text-[13.5px] px-3 py-1.5 bg-transparent outline-none text-text-main placeholder:text-text-muted/70 w-full"
           disabled={isDisabled}
           placeholder={placeholder}
           required={isRequired}
@@ -168,16 +171,27 @@ export function Autocomplete({
             setQuery(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={(e) => {
+            setOpen(true);
+            e.target.select();
+          }}
+          onDoubleClick={(e) => {
+            if (e.target instanceof HTMLInputElement) {
+              e.target.select();
+            }
+          }}
         />
         {isLoading ? (
           <span className="pr-2 text-text-muted text-xs">Loading…</span>
         ) : currentKey ? (
           <button
             aria-label="Clear selection"
-            className="pr-2 text-text-muted hover:text-text-main"
+            className="pr-2 text-text-muted hover:text-text-main shrink-0"
             type="button"
-            onClick={handleClear}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClear();
+            }}
           >
             <svg
               className="w-3.5 h-3.5"
@@ -190,11 +204,20 @@ export function Autocomplete({
             </svg>
           </button>
         ) : (
-          <span className="pr-2 text-text-muted pointer-events-none">
+          <button
+            aria-label="Toggle dropdown"
+            className="pr-2 text-text-muted hover:text-text-main shrink-0"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((prev) => !prev);
+              inputRef.current?.focus();
+            }}
+          >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
             </svg>
-          </span>
+          </button>
         )}
       </div>
 
