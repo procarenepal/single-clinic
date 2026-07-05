@@ -11,7 +11,7 @@ import { Input, Textarea } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { Doctor } from "@/types/models";
 
@@ -26,7 +26,7 @@ export default function AddPrescriptionModal({
   onClose,
   onSubmit,
 }: AddPrescriptionModalProps) {
-  const { clinicId } = useAuth();
+  const { clinicId } = useAuthContext();
   const [prescribedBy, setPrescribedBy] = useState("");
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(false);

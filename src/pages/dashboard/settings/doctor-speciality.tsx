@@ -17,7 +17,7 @@ import {
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { specialityService } from "@/services/specialityService";
 import { DoctorSpeciality } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
@@ -48,7 +48,7 @@ interface SpecialityFormData {
 }
 
 const DoctorSpecialityPage: React.FC = () => {
-  const { clinicId, currentUser, userData } = useAuth();
+  const { clinicId, currentUser, userData } = useAuthContext();
   const { isOpen, onOpen, onClose, onOpenChange } = useDisclosure();
 
   const effectiveBranchId = userData?.branchId ?? undefined;

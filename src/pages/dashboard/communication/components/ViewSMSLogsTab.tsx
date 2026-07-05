@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 
 import { addToast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { smsService, SMSLog } from "@/services/sendMessageService";
 
 const ViewSMSLogsTab: React.FC = () => {
-  const { clinicId } = useAuth();
+  const { clinicId } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);

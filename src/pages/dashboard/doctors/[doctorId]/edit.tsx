@@ -9,7 +9,7 @@ import { IoArrowBackOutline, IoSaveOutline } from "react-icons/io5";
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { specialityService } from "@/services/specialityService";
 import { addToast } from "@/components/ui/toast";
@@ -119,7 +119,7 @@ function CustomSelect({
 export default function EditDoctorPage() {
   const { doctorId } = useParams<{ doctorId: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [specialities, setSpecialities] = useState<

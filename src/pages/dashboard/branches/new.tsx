@@ -12,12 +12,12 @@ import {
 } from "react-icons/io5";
 
 import { addToast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { branchService } from "@/services/branchService";
 
 export default function NewBranchPage() {
   const navigate = useNavigate();
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",

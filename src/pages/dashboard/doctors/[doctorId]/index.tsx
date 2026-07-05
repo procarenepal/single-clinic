@@ -28,7 +28,7 @@ import {
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
@@ -208,7 +208,7 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
 export default function DoctorProfilePage() {
   const { doctorId } = useParams<{ doctorId: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);

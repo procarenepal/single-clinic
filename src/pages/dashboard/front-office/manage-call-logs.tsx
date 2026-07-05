@@ -15,7 +15,7 @@ import {
   IoChevronForwardOutline,
 } from "react-icons/io5";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { callLogService } from "@/services/callLogService";
 import { CallLog } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
@@ -26,7 +26,7 @@ const callTypeOptions = [
 ];
 
 export default function ManageCallLogsPage() {
-  const { clinicId, userData, currentUser } = useAuth();
+  const { clinicId, userData, currentUser } = useAuthContext();
   const [isOpen, setIsOpen] = useState(false);
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [loading, setLoading] = useState(true);

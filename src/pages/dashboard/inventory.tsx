@@ -35,7 +35,7 @@ import {
   IoPrintOutline,
 } from "react-icons/io5";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -52,7 +52,7 @@ import { Item, ItemCategory, IssuedItem, Vendor, ItemPurchase } from "@/types/mo
 // Icons
 
 export default function InventoryPage() {
-  const { currentUser, userData, clinicId } = useAuth();
+  const { currentUser, userData, clinicId } = useAuthContext();
   const { themeConfig, isDark } = useTheme();
 
   // Get branchId from userData

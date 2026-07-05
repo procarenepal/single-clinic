@@ -15,14 +15,14 @@ import {
   IoChevronForwardOutline,
 } from "react-icons/io5";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { visitorService } from "@/services/visitorService";
 import { Visitor } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { title } from "@/components/primitives";
 
 export default function ManageVisitorsPage() {
-  const { clinicId, userData, currentUser } = useAuth();
+  const { clinicId, userData, currentUser } = useAuthContext();
   const [isOpen, setIsOpen] = useState(false);
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [loading, setLoading] = useState(true);

@@ -17,7 +17,7 @@ import {
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { referralCommissionService } from "@/services/referralCommissionService";
 import { ReferralPartner, ReferralCommission, Patient } from "@/types/models";
@@ -157,7 +157,7 @@ function ModalShell({
 export default function ReferralPartnerProfilePage() {
   const { partnerId } = useParams<{ partnerId: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
 
   const [partner, setPartner] = useState<ReferralPartner | null>(null);
   const [commissions, setCommissions] = useState<ReferralCommission[]>([]);

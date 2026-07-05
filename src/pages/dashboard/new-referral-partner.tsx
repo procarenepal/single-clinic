@@ -4,7 +4,7 @@ import { IoArrowBackOutline, IoSaveOutline } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { branchService } from "@/services/branchService";
 import { addToast } from "@/components/ui/toast";
@@ -18,7 +18,7 @@ export default function NewReferralPartnerPage() {
   const navigate = useNavigate();
   const { partnerId } = useParams();
   const isEdit = !!partnerId;
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuth();
+  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
   const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);

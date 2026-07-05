@@ -20,7 +20,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { branchService } from "@/services/branchService";
 import { clinicService } from "@/services/clinicService";
 import { userService } from "@/services/userService";
@@ -31,7 +31,7 @@ type BranchWithAdmin = Branch & { admin?: User | null };
 
 export default function BranchManagementPage() {
   const navigate = useNavigate();
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData } = useAuthContext();
   const [branches, setBranches] = useState<BranchWithAdmin[]>([]);
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [loading, setLoading] = useState(true);

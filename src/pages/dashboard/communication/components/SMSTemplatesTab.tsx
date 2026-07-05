@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/modal";
 import { Chip } from "@/components/ui/chip";
 import { addToast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import {
   getSMSTemplates,
   addSMSTemplate,
@@ -24,7 +24,7 @@ import {
 } from "@/services/sendMessageService";
 
 const SMSTemplatesTab: React.FC = () => {
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<SMSTemplate[]>([]);

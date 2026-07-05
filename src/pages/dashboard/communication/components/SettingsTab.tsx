@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { RefreshCwIcon } from "lucide-react";
 
 import { addToast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import {
   getSMSSettings,
   updateSMSSettings,
@@ -19,7 +19,7 @@ interface AppointmentType {
 }
 
 const SettingsTab: React.FC = () => {
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<SMSSettings | null>(null);

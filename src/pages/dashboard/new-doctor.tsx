@@ -13,7 +13,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { specialityService } from "@/services/specialityService";
 import { branchService } from "@/services/branchService";
@@ -119,7 +119,7 @@ function CustomSelect({
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function NewDoctorPage() {
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuth();
+  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [specialities, setSpecialities] = useState<
     Array<{ value: string; label: string }>

@@ -28,14 +28,14 @@ import {
 } from "@/components/ui/modal";
 import { addToast } from "@/components/ui/toast";
 import { title } from "@/components/primitives";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { branchService } from "@/services/branchService";
 import { userService } from "@/services/userService";
 import { impersonationService } from "@/services/impersonationService";
 
 export default function NewBranchPage() {
   const navigate = useNavigate();
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [adminPasswordModal, setAdminPasswordModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");

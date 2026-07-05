@@ -12,7 +12,7 @@ import {
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
 import { branchService } from "@/services/branchService";
@@ -24,7 +24,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function NewExpertPage() {
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuth();
+  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [specialities, setSpecialities] = useState<
     Array<{ value: string; label: string }>

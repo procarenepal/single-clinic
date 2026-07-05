@@ -22,7 +22,7 @@ import { createPortal } from "react-dom";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { doctorService } from "@/services/doctorService";
@@ -337,7 +337,7 @@ function ModalShell({
 export default function PatientBillingTab({
   patientId,
 }: PatientBillingTabProps) {
-  const { clinicId, currentUser, userData } = useAuth();
+  const { clinicId, currentUser, userData } = useAuthContext();
   const navigate = useNavigate();
   const paymentModal = useModalState(false);
   const invoiceModal = useModalState(false);

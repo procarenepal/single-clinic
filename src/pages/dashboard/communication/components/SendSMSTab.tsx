@@ -3,7 +3,7 @@ import { RefreshCwIcon, AlertCircleIcon, CheckCircleIcon } from "lucide-react";
 import { IoSearchOutline, IoCloseOutline } from "react-icons/io5";
 
 import { addToast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { clinicService } from "@/services/clinicService";
@@ -118,7 +118,7 @@ function SearchSelect({
 }
 
 const SendSMSTab: React.FC = () => {
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [patients, setPatients] = useState<Patient[]>([]);

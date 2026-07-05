@@ -29,7 +29,7 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@/components/ui/dropdown";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -371,7 +371,7 @@ function ModalShell({
 
 // ── Main Page ───────────────────────────────────────────────────────────────
 export default function AppointmentBillingPage() {
-  const { clinicId, currentUser, userData } = useAuth();
+  const { clinicId, currentUser, userData } = useAuthContext();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterDate = searchParams.get("date");

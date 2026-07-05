@@ -23,7 +23,7 @@ import {
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { expertCommissionService } from "@/services/expertCommissionService";
 import { appointmentService } from "@/services/appointmentService";
@@ -73,7 +73,7 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
 export default function ExpertProfilePage() {
   const { expertId } = useParams<{ expertId: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
 
   const [expert, setExpert] = useState<Expert | null>(null);
   const [commissions, setCommissions] = useState<ExpertCommission[]>([]);

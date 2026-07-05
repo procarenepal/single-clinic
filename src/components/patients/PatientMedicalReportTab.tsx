@@ -19,7 +19,7 @@ import { medicalReportFieldService } from "@/services/medicalReportFieldService"
 import { MedicalReportResponseService } from "@/services/medicalReportResponseService";
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 
 interface PatientMedicalReportTabProps {
   patientId: string;
@@ -102,7 +102,7 @@ function YesNoField({
 export const PatientMedicalReportTab: React.FC<
   PatientMedicalReportTabProps
 > = ({ patientId, clinicId, isReadOnly = false, compactLayout = false }) => {
-  const { currentUser, userData: authUserData } = useAuth();
+  const { currentUser, userData: authUserData } = useAuthContext();
   const [fields, setFields] = useState<MedicalReportField[]>([]);
   const [responses, setResponses] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);

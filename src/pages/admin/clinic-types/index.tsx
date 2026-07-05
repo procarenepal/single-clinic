@@ -36,10 +36,10 @@ import {
 import { title } from "@/components/primitives";
 import { clinicTypeService } from "@/services/clinicTypeService";
 import { ClinicType } from "@/types/models";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 
 export default function ClinicTypesPage() {
-  const { userData } = useAuth();
+  const { userData } = useAuthContext();
   const navigate = useNavigate();
 
   // State for clinic types and UI

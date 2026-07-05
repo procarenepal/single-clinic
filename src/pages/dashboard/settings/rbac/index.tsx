@@ -13,12 +13,12 @@ import {
   UserManagement,
   AuditLogViewer,
 } from "../../../../components/rbac";
-import { useAuth } from "../../../../hooks/useAuth";
+import { useAuthContext } from "../../../../context/AuthContext";
 
 import { title } from "@/components/primitives";
 
 export default function RBACManagementPage() {
-  const { clinicId, isClinicAdmin, isLoading } = useAuth();
+  const { clinicId, isClinicAdmin, isLoading } = useAuthContext();
   const [selectedTab, setSelectedTab] = useState("roles");
   const navigate = useNavigate();
 

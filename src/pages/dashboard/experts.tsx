@@ -20,7 +20,7 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@/components/ui/dropdown";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
 import { branchService } from "@/services/branchService";
@@ -86,7 +86,7 @@ function CustomSelect({
 
 export default function ExpertsPage() {
   const navigate = useNavigate();
-  const { clinicId, userData, isClinicAdmin, isSystemOwner } = useAuth();
+  const { clinicId, userData, isClinicAdmin, isSystemOwner } = useAuthContext();
   const [experts, setExperts] = useState<Expert[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");

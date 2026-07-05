@@ -37,7 +37,7 @@ import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { AppointmentBilling, Patient } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { adToBS } from "@/utils/dateConverter";
 import {
@@ -210,7 +210,7 @@ export default function InvoiceDetailPage() {
   const { id: invoiceId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { currentUser, clinicId, userData, isLoading: authLoading } = useAuth();
+  const { currentUser, clinicId, userData, isLoading: authLoading } = useAuthContext();
   const paymentModal = useModalState(false);
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin = userData?.role === "system-owner";

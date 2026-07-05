@@ -15,7 +15,7 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@/components/ui/dropdown";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { branchService } from "@/services/branchService";
 import { Branch, ReferralPartner } from "@/types/models";
@@ -26,7 +26,7 @@ import { Select, SelectItem } from "@/components/ui/select";
 
 export default function ReferralPartnersPage() {
   const navigate = useNavigate();
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData } = useAuthContext();
   const [partners, setPartners] = useState<ReferralPartner[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");

@@ -11,7 +11,7 @@ import {
   IoRefreshOutline,
 } from "react-icons/io5";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { appointmentService } from "@/services/appointmentService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
@@ -113,7 +113,7 @@ function StatusDropdown({
 export default function PatientAppointmentsTab({
   patientId,
 }: PatientAppointmentsTabProps) {
-  const { clinicId } = useAuth();
+  const { clinicId } = useAuthContext();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(

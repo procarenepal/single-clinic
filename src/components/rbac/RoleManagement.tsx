@@ -3,7 +3,7 @@ import { PlusIcon, EditIcon, TrashIcon, MoreVerticalIcon } from "lucide-react";
 
 import { Role, Page } from "../../types/models";
 import { rbacService } from "../../services/rbacService";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuthContext } from "../../context/AuthContext";
 
 import {
   Modal,
@@ -41,7 +41,7 @@ interface RoleManagementProps {
 }
 
 export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData } = useAuthContext();
   const [roles, setRoles] = useState<Role[]>([]);
   const [availablePages, setAvailablePages] = useState<Page[]>([]);
   const [loading, setLoading] = useState(true);

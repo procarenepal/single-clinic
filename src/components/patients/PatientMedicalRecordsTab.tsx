@@ -9,7 +9,7 @@ import { IoDocumentsOutline, IoImageOutline } from "react-icons/io5";
 import DocumentsTab from "./medical-records/DocumentsTab";
 import XraysTab from "./medical-records/XraysTab";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
 import { MedicalDocument, XrayRecord } from "@/types/models";
@@ -35,7 +35,7 @@ const SUB_TABS = [
 export default function PatientMedicalRecordsTab({
   patientId,
 }: PatientMedicalRecordsTabProps) {
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
   const [documents, setDocuments] = useState<MedicalDocument[]>([]);
   const [xrays, setXrays] = useState<XrayRecord[]>([]);
   const [loading, setLoading] = useState(true);

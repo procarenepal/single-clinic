@@ -19,7 +19,7 @@ import { Chip } from "@/components/ui/chip";
 import { Spinner } from "@/components/ui/spinner";
 import { addToast } from "@/components/ui/toast";
 import { title } from "@/components/primitives";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import {
   dailyReportService,
   DailyReportData,
@@ -73,7 +73,7 @@ const formatCurrency = (amount: number): string => {
 };
 
 export default function DailyReportPage() {
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData } = useAuthContext();
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0],

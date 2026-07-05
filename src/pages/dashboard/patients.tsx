@@ -299,15 +299,12 @@ export default function PatientsPage() {
       ? undefined
       : (branchFilter ?? undefined));
 
-  // Bypass server-side pagination (and Firebase composite index errors) if a doctor/expert is logged in
+  // Bypass server-side pagination only for complex filters not supported by Firestore natively
   const useServerPagination =
-    !search.trim() &&
     !ageMin &&
     !ageMax &&
     !regStart &&
-    !regEnd &&
-    !currentDoctorId &&
-    !currentExpertId;
+    !regEnd;
 
   const fetchPatientsPaginated = useCallback(
     async (
@@ -681,7 +678,9 @@ export default function PatientsPage() {
     );
 
   const totalPages = useServerPagination
-    ? Math.ceil((totalCount ?? 0) / PER_PAGE)
+    ? totalCount != null
+      ? Math.ceil(totalCount / PER_PAGE)
+      : page + (patients.length === PER_PAGE ? 1 : 0)
     : Math.ceil(filtered.length / PER_PAGE);
   const pagePatients = useServerPagination
     ? patients
@@ -1352,16 +1351,21 @@ export default function PatientsPage() {
               <p className="text-[11px] text-text-muted">
                 Showing <strong>{(page - 1) * PER_PAGE + 1}</strong>–
                 <strong>
-                  {Math.min(
-                    page * PER_PAGE,
-                    useServerPagination ? (totalCount ?? 0) : filtered.length,
-                  )}
+                  {useServerPagination
+                    ? (page - 1) * PER_PAGE + pagePatients.length
+                    : Math.min(page * PER_PAGE, filtered.length)}
                 </strong>{" "}
-                of{" "}
-                <strong>
-                  {useServerPagination ? (totalCount ?? 0) : filtered.length}
-                </strong>{" "}
-                patients
+                {useServerPagination && totalCount == null ? (
+                  "patients"
+                ) : (
+                  <>
+                    of{" "}
+                    <strong>
+                      {useServerPagination ? totalCount : filtered.length}
+                    </strong>{" "}
+                    patients
+                  </>
+                )}
                 {!useServerPagination &&
                   filtered.length !== patients.length &&
                   ` (${patients.length} total)`}

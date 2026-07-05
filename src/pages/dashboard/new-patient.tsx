@@ -28,7 +28,7 @@ import {
 } from "react-icons/io5";
 import { Check as CheckIcon } from "lucide-react";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
@@ -728,7 +728,7 @@ interface ConversionProgress {
 // ═════════════════════════════════════════════════════════════════════════════
 const NewPatientPage: React.FC = () => {
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuth();
+  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
   const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
 
   // ── Loading states

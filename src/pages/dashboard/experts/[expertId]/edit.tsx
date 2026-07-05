@@ -8,7 +8,7 @@ import { IoArrowBackOutline } from "react-icons/io5";
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
 import { addToast } from "@/components/ui/toast";
@@ -19,7 +19,7 @@ import { Expert } from "@/types/models";
 export default function EditExpertPage() {
   const { expertId } = useParams<{ expertId: string }>();
   const navigate = useNavigate();
-  const { clinicId } = useAuth();
+  const { clinicId } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [specialities, setSpecialities] = useState<any[]>([]);

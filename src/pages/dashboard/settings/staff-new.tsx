@@ -47,12 +47,10 @@ import { User, Role } from "@/types/models";
 import { userService } from "@/services/userService";
 import { rbacService } from "@/services/rbacService";
 import { useAuthContext } from "@/context/AuthContext";
-import { useAuth } from "@/hooks/useAuth";
 import { title, subtitle } from "@/components/primitives";
 
 export default function StaffManagementPage() {
-  const { clinicId, currentUser } = useAuthContext();
-  const { userData } = useAuth();
+  const { clinicId, currentUser, userData } = useAuthContext();
   const isBranchAdmin =
     !!userData?.branchId && userData?.role === "clinic-admin";
   const {

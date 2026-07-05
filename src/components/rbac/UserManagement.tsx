@@ -13,7 +13,7 @@ import { rbacService } from "../../services/rbacService";
 import { userService } from "../../services/userService";
 import { doctorService } from "../../services/doctorService";
 import { expertService } from "../../services/expertService";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuthContext } from "../../context/AuthContext";
 
 import {
   Modal,
@@ -55,7 +55,7 @@ interface UserManagementProps {
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData } = useAuthContext();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);

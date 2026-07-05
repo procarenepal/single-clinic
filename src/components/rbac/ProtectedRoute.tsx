@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Card, CardBody, Spinner } from "@heroui/react";
 import { ShieldOffIcon } from "lucide-react";
 
-import { useAuth } from "../../hooks/useAuth";
+import { useAuthContext } from "../../context/AuthContext";
 
 import { cacheService } from "@/services/cacheService";
 
@@ -33,7 +33,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = React.memo(
       hasPagePermissionByPath,
       preloadPermissions,
       isLoading,
-    } = useAuth();
+    } = useAuthContext();
 
     const [hasAccess, setHasAccess] = useState<boolean | null>(null);
     const [checking, setChecking] = useState(true);

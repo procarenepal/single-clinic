@@ -12,7 +12,7 @@ import {
   UserCheck,
 } from "lucide-react";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
@@ -24,7 +24,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Patient, Doctor, Appointment } from "@/types/models";
 
 const BulkMessagingTab: React.FC = () => {
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });

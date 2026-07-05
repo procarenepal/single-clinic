@@ -9,6 +9,8 @@ import {
   deleteDoc,
   query,
   where,
+  orderBy,
+  limit,
   Timestamp,
   increment,
 } from "firebase/firestore";
@@ -534,13 +536,14 @@ export const appointmentBillingService = {
 
       const billingRef = collection(db, APPOINTMENT_BILLING_COLLECTION);
 
-      const constraints: ReturnType<typeof where>[] = [
+      const constraints: any[] = [
         where("clinicId", "==", clinicId),
       ];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
       }
+
       const q = query(billingRef, ...constraints);
 
       const querySnapshot = await getDocs(q);

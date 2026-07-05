@@ -15,7 +15,7 @@ import {
 } from "react-icons/io5";
 
 import { Skeleton } from "@/components/ui";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { branchService } from "@/services/branchService";
 import { clinicService } from "@/services/clinicService";
 import { Branch, Clinic } from "@/types/models";
@@ -34,7 +34,7 @@ interface BranchStats {
 
 export default function SystemOwnerDashboard() {
   const navigate = useNavigate();
-  const { clinicId, userData } = useAuth();
+  const { clinicId, userData } = useAuthContext();
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchStats, setBranchStats] = useState<BranchStats[]>([]);

@@ -18,7 +18,7 @@ import {
   IoPrintOutline,
 } from "react-icons/io5";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import { patientService } from "@/services/patientService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { appointmentService } from "@/services/appointmentService";
@@ -56,7 +56,7 @@ import PatientWalletTab from "@/components/patients/PatientWalletTab";
 export default function PatientDetailPage() {
   const { patientId } = useParams();
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuth();
+  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [patient, setPatient] = useState<Patient | null>(null);

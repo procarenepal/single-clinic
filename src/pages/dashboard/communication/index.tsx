@@ -17,7 +17,7 @@ import SettingsTab from "./components/SettingsTab";
 import SMSTemplatesTab from "./components/SMSTemplatesTab";
 import BulkMessagingTab from "./components/BulkMessagingTab";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 import {
   smsService,
   getSMSSettings,
@@ -56,7 +56,7 @@ const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 ];
 
 const CommunicationPage: React.FC = () => {
-  const { clinicId, currentUser } = useAuth();
+  const { clinicId, currentUser } = useAuthContext();
   const [activeTab, setActiveTab] = useState<TabKey>("send-sms");
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<SMSSettings | null>(null);

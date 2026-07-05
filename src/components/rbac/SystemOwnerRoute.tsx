@@ -3,7 +3,7 @@ import { Card, CardBody } from "@heroui/card";
 import { Spinner } from "@heroui/spinner";
 import { IoBusinessOutline } from "react-icons/io5";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/context/AuthContext";
 
 interface SystemOwnerRouteProps {
   children: React.ReactNode;
@@ -18,7 +18,7 @@ export function SystemOwnerRoute({
   children,
   fallbackMessage = "Only system owners can access this page.",
 }: SystemOwnerRouteProps) {
-  const { userData, isLoading } = useAuth();
+  const { userData, isLoading } = useAuthContext();
 
   // Show loading state
   if (isLoading) {
