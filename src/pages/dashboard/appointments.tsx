@@ -199,6 +199,7 @@ export default function AppointmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  const [isExpertUser, setIsExpertUser] = useState(false);
 
   // Hover and status change state
   const [hoveredAppointment, setHoveredAppointment] = useState<string | null>(
@@ -275,6 +276,7 @@ export default function AppointmentsPage() {
         const isAdmin =
           userRole === "clinic-admin" || userRole === "system-owner";
         let doctorId: string | null = null;
+        let isLocalExpert = false;
 
         if (!isAdmin && userData.email) {
           try {
@@ -287,7 +289,9 @@ export default function AppointmentsPage() {
 
             if (matchingProvider) {
               doctorId = matchingProvider.id;
+              isLocalExpert = !!matchingExpert;
               setCurrentDoctorId(doctorId);
+              setIsExpertUser(isLocalExpert);
             }
           } catch (error) {
             console.error("Error checking provider linkage:", error);
@@ -298,9 +302,7 @@ export default function AppointmentsPage() {
 
         const [patientsData, doctorsData, appointmentTypesData] =
           await Promise.all([
-            doctorId
-              ? patientService.getPatientsByDoctor(doctorId, clinicId)
-              : patientService.getPatients(clinicId),
+            patientService.getPatients(clinicId),
             doctorService.getDoctors(clinicId),
             appointmentTypeService.getAppointmentTypesByClinic(
               clinicId,
@@ -348,12 +350,19 @@ export default function AppointmentsPage() {
     };
 
     const unsubscribe = currentDoctorId
-      ? appointmentService.subscribeToDoctorAppointments(
-          currentDoctorId,
-          effectiveBranchId,
-          handleSnapshot,
-          handleError,
-        )
+      ? (isExpertUser
+          ? appointmentService.subscribeToExpertAppointments(
+              currentDoctorId,
+              effectiveBranchId,
+              handleSnapshot,
+              handleError,
+            )
+          : appointmentService.subscribeToDoctorAppointments(
+              currentDoctorId,
+              effectiveBranchId,
+              handleSnapshot,
+              handleError,
+            ))
       : appointmentService.subscribeToClinicAppointments(
           undefined, // clinicId
           effectiveBranchId,

@@ -27,6 +27,7 @@ interface PathologyCategoriesTabProps {
   onDeleteParameter: (parameter: PathologyParameter) => void;
   parameters: PathologyParameter[];
   units: PathologyUnit[];
+  canEdit?: boolean;
 }
 
 export default function PathologyCategoriesTab({
@@ -41,6 +42,7 @@ export default function PathologyCategoriesTab({
   onDeleteParameter,
   parameters,
   units,
+  canEdit = true,
 }: PathologyCategoriesTabProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -68,9 +70,11 @@ export default function PathologyCategoriesTab({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         </div>
-        <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
-          New Pathology Category
-        </Button>
+        {canEdit && (
+          <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
+            New Pathology Category
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -86,9 +90,11 @@ export default function PathologyCategoriesTab({
                 <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Parameters
                 </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em] text-right">
-                  Actions
-                </th>
+                {canEdit && (
+                  <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em] text-right">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -130,40 +136,42 @@ export default function PathologyCategoriesTab({
                           </span>
                         )}
                       </td>
-                      <td
-                        className="px-4 py-3"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex gap-1.5 justify-end">
-                          <Button
-                            color="default"
-                            size="sm"
-                            startContent={<IoAddOutline />}
-                            variant="flat"
-                            onClick={() => onAddSubCategory(category)}
-                          >
-                            Add Parameter
-                          </Button>
-                          <Button
-                            isIconOnly
-                            color="primary"
-                            size="sm"
-                            variant="flat"
-                            onClick={() => onEdit(category)}
-                          >
-                            <IoCreateOutline />
-                          </Button>
-                          <Button
-                            isIconOnly
-                            color="danger"
-                            size="sm"
-                            variant="flat"
-                            onClick={() => onDelete(category)}
-                          >
-                            <IoTrashOutline />
-                          </Button>
-                        </div>
-                      </td>
+                      {canEdit && (
+                        <td
+                          className="px-4 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex gap-1.5 justify-end">
+                            <Button
+                              color="default"
+                              size="sm"
+                              startContent={<IoAddOutline />}
+                              variant="flat"
+                              onClick={() => onAddSubCategory(category)}
+                            >
+                              Add Parameter
+                            </Button>
+                            <Button
+                              isIconOnly
+                              color="primary"
+                              size="sm"
+                              variant="flat"
+                              onClick={() => onEdit(category)}
+                            >
+                              <IoCreateOutline />
+                            </Button>
+                            <Button
+                              isIconOnly
+                              color="danger"
+                              size="sm"
+                              variant="flat"
+                              onClick={() => onDelete(category)}
+                            >
+                              <IoTrashOutline />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
 
                     {/* ── Collapsible parameter table ── */}
@@ -206,7 +214,7 @@ export default function PathologyCategoriesTab({
                                   <th className="px-4 py-1.5 text-[10px] font-bold text-danger uppercase tracking-wider text-left">
                                     Critical High
                                   </th>
-                                  <th className="px-4 py-1.5 w-16" />
+                                  {canEdit && <th className="px-4 py-1.5 w-16" />}
                                 </tr>
                               </thead>
                               <tbody>
@@ -253,31 +261,35 @@ export default function PathologyCategoriesTab({
                                       <td className="px-4 py-2 text-[12px] text-danger font-medium">
                                         {p.criticalHigh ?? "—"}
                                       </td>
-                                      <td
-                                        className="px-2 py-1.5"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <div className="flex gap-1 justify-end">
-                                          <Button
-                                            isIconOnly
-                                            color="primary"
-                                            size="sm"
-                                            variant="flat"
-                                            onClick={() => onEditParameter(p)}
-                                          >
-                                            <IoCreateOutline className="w-3.5 h-3.5" />
-                                          </Button>
-                                          <Button
-                                            isIconOnly
-                                            color="danger"
-                                            size="sm"
-                                            variant="flat"
-                                            onClick={() => onDeleteParameter(p)}
-                                          >
-                                            <IoTrashOutline className="w-3.5 h-3.5" />
-                                          </Button>
-                                        </div>
-                                      </td>
+                                      {canEdit && (
+                                        <td
+                                          className="px-2 py-1.5"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <div className="flex gap-1 justify-end">
+                                            <Button
+                                              isIconOnly
+                                              color="primary"
+                                              size="sm"
+                                              variant="flat"
+                                              onClick={() => onEditParameter(p)}
+                                            >
+                                              <IoCreateOutline className="w-3.5 h-3.5" />
+                                            </Button>
+                                            <Button
+                                              isIconOnly
+                                              color="danger"
+                                              size="sm"
+                                              variant="flat"
+                                              onClick={() =>
+                                                onDeleteParameter(p)
+                                              }
+                                            >
+                                              <IoTrashOutline className="w-3.5 h-3.5" />
+                                            </Button>
+                                          </div>
+                                        </td>
+                                      )}
                                     </tr>
                                   );
                                 })}

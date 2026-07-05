@@ -20,6 +20,8 @@ import { pathologyService } from "@/services/pathologyService";
 import { labTechnicianService } from "@/services/labTechnicianService";
 import { pathologyBillingService } from "@/services/pathologyBillingService";
 import { clinicService } from "@/services/clinicService";
+import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import LabTechnicianManagement from "@/components/pathology/LabTechnicianManagement";
 import PathologyBillingTab from "@/components/pathology/PathologyBillingTab";
 import PathologyTestsTab from "@/components/pathology/PathologyTestsTab";
@@ -81,10 +83,10 @@ function PathologySearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -197,8 +199,9 @@ function PathologySearchSelect({
 }
 
 export default function PathologyPage() {
-  const { clinicId, currentUser, userData } = useAuthContext();
+  const { clinicId, currentUser, userData, isClinicAdmin, isSystemOwner } = useAuthContext();
   const branchId = userData?.branchId || userData?.clinicId || clinicId;
+  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
 
   // Active tab state
   const [activeTab, setActiveTab] = useState("tests");
@@ -340,10 +343,34 @@ export default function PathologyPage() {
   // Load all data
   useEffect(() => {
     const loadData = async () => {
-      if (!clinicId || !branchId) return;
+      if (!clinicId || !branchId || !userData) return;
 
       try {
         setLoading(true);
+
+        const isAdmin = isClinicAdmin() || isSystemOwner();
+        let doctorId: string | null = null;
+        let allowedPatientIds: Set<string> | null = null;
+
+        if (!isAdmin && userData.email) {
+          try {
+            const [matchingDoctor, matchingExpert] = await Promise.all([
+              doctorService.getDoctorByEmail(userData.email),
+              expertService.getExpertByEmail(userData.email),
+            ]);
+            const matchingProvider = matchingDoctor || matchingExpert;
+            if (matchingProvider) {
+              doctorId = matchingProvider.id;
+              setCurrentDoctorId(doctorId);
+              // Fetch only their patients
+              const doctorPatients = await patientService.getPatientsByDoctor(doctorId, clinicId);
+              allowedPatientIds = new Set(doctorPatients.map((p) => p.id));
+            }
+          } catch (error) {
+            console.error("Error checking provider linkage:", error);
+          }
+        }
+
         const [
           testsData,
           categoriesData,
@@ -365,16 +392,26 @@ export default function PathologyPage() {
           pathologyBillingService.getBillingByClinic(clinicId, branchId),
           clinicService.getClinicById(clinicId),
           clinicService.getPrintLayoutConfig(clinicId),
-          patientService.getPatientsByClinic(clinicId, branchId),
+          doctorId && allowedPatientIds
+            ? patientService.getPatientsByDoctor(doctorId, clinicId)
+            : patientService.getPatientsByClinic(clinicId, branchId),
         ]);
 
-        setTests(testsData);
+        let filteredTests = testsData;
+        let filteredBillings = billingsData;
+
+        if (allowedPatientIds) {
+          filteredTests = testsData.filter((t) => t.patientId && allowedPatientIds?.has(t.patientId));
+          filteredBillings = billingsData.filter((b) => b.patientId && allowedPatientIds?.has(b.patientId));
+        }
+
+        setTests(filteredTests);
         setCategories(categoriesData);
         setUnits(unitsData);
         setParameters(parametersData);
         setTestTypes(testTypesData);
         setLabTechnicians(techniciansData);
-        setBillings(billingsData);
+        setBillings(filteredBillings);
         setClinic(clinicData);
         setLayoutConfig(layoutConfigData);
         setPatients(patientsData);
@@ -391,17 +428,29 @@ export default function PathologyPage() {
     };
 
     loadData();
-  }, [clinicId, branchId]);
+  }, [clinicId, branchId, userData, isClinicAdmin, isSystemOwner]);
 
   // Refresh billings and tests when switching to daily report tab
   useEffect(() => {
     if (activeTab === "dailyReport" && clinicId) {
-      pathologyBillingService
-        .getBillingByClinic(clinicId, branchId)
-        .then(setBillings);
-      pathologyService.getTestsByClinic(clinicId, branchId).then(setTests);
+      Promise.all([
+        pathologyBillingService.getBillingByClinic(clinicId, branchId),
+        pathologyService.getTestsByClinic(clinicId, branchId)
+      ]).then(([newBillings, newTests]) => {
+        if (currentDoctorId) {
+          // If we are filtering by doctor, we need their patient IDs to filter these fresh fetches
+          patientService.getPatientsByDoctor(currentDoctorId, clinicId).then(doctorPatients => {
+            const allowedIds = new Set(doctorPatients.map(p => p.id));
+            setBillings(newBillings.filter(b => b.patientId && allowedIds.has(b.patientId)));
+            setTests(newTests.filter(t => t.patientId && allowedIds.has(t.patientId)));
+          });
+        } else {
+          setBillings(newBillings);
+          setTests(newTests);
+        }
+      });
     }
-  }, [activeTab, clinicId, branchId]);
+  }, [activeTab, clinicId, branchId, currentDoctorId]);
 
   // Filtered data
   const filteredTests = useMemo(() => {
@@ -956,12 +1005,12 @@ export default function PathologyPage() {
         testName: testForm.testType || testForm.shortName || "Unknown Test",
         categoryName: testForm.categoryId
           ? testForm.categoryId
-              .split(", ")
-              .map(
-                (id) =>
-                  categories.find((c) => c.id === id.trim())?.name || id.trim(),
-              )
-              .join(", ")
+            .split(", ")
+            .map(
+              (id) =>
+                categories.find((c) => c.id === id.trim())?.name || id.trim(),
+            )
+            .join(", ")
           : "Unknown Category",
         shortName: testForm.shortName,
         testType: testForm.testType,
@@ -1058,15 +1107,15 @@ export default function PathologyPage() {
       labTechnicianId: test.labTechnicianId || "",
       parameters: test.parameters
         ? test.parameters.map((p) => {
-            // If unit is an ID, try to resolve it to a name
-            let displayUnit = p.unit;
+          // If unit is an ID, try to resolve it to a name
+          let displayUnit = p.unit;
 
-            if (p.unit && units.find((u) => u.id === p.unit)) {
-              displayUnit = units.find((u) => u.id === p.unit)?.name || p.unit;
-            }
+          if (p.unit && units.find((u) => u.id === p.unit)) {
+            displayUnit = units.find((u) => u.id === p.unit)?.name || p.unit;
+          }
 
-            return { ...p, unit: displayUnit, categoryId: p.categoryId || "" };
-          })
+          return { ...p, unit: displayUnit, categoryId: p.categoryId || "" };
+        })
         : [],
     });
     setIsEditing(true);
@@ -1946,11 +1995,11 @@ export default function PathologyPage() {
             // Robust Value Parsing (Handle commas in numbers like 1,000)
             const resultVal = param.patientResult
               ? parseFloat(
-                  param.patientResult
-                    .toString()
-                    .replace(/,/g, "")
-                    .replace(/[^0-9.]/g, ""),
-                )
+                param.patientResult
+                  .toString()
+                  .replace(/,/g, "")
+                  .replace(/[^0-9.]/g, ""),
+              )
               : NaN;
 
             if (!isNaN(resultVal)) {
@@ -2363,8 +2412,8 @@ export default function PathologyPage() {
               </thead>
               <tbody>
                 ${reportData.dailyTests
-                  .map(
-                    (test) => `
+        .map(
+          (test) => `
                   <tr>
                     <td class="font-bold">${test.testName}</td>
                     <td>${test.patientName}${test.patientAge ? ` (${test.patientAge}${test.patientGender ? `, ${test.patientGender}` : ""})` : ""}</td>
@@ -2374,8 +2423,8 @@ export default function PathologyPage() {
                     <td class="text-right">${new Date(test.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
                 `,
-                  )
-                  .join("")}
+        )
+        .join("")}
               </tbody>
             </table>
 
@@ -2393,8 +2442,8 @@ export default function PathologyPage() {
               </thead>
               <tbody>
                 ${reportData.dailyBillings
-                  .map(
-                    (billing) => `
+        .map(
+          (billing) => `
                   <tr>
                     <td class="font-bold">${billing.invoiceNumber}</td>
                     <td>${billing.patientName}</td>
@@ -2404,8 +2453,8 @@ export default function PathologyPage() {
                     <td class="text-right">${new Date(billing.invoiceDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
                 `,
-                  )
-                  .join("")}
+        )
+        .join("")}
               </tbody>
             </table>
           </div>
@@ -2468,6 +2517,13 @@ export default function PathologyPage() {
     billing: "Billing",
     dailyReport: "Daily Report",
   };
+
+  // Restrict administrative pathology tabs for clinical staff (doctors & experts)
+  const isClinicalStaff = userData?.role === "doctor" || userData?.role === "expert";
+  if (isClinicalStaff) {
+    delete tabLabels.billing;
+    delete tabLabels.dailyReport;
+  }
 
   const unpaidBillingsCount = billings.filter(
     (b) =>
@@ -3240,14 +3296,13 @@ export default function PathologyPage() {
           {/* Tab header */}
           <div className="border-b border-border-base overflow-x-auto">
             <div className="inline-flex rounded-t">
-              {TAB_KEYS.map((key) => (
+              {TAB_KEYS.filter((key) => key in tabLabels).map((key) => (
                 <button
                   key={key}
-                  className={`px-4 py-3 flex items-center gap-2 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                    activeTab === key
+                  className={`px-4 py-3 flex items-center gap-2 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeTab === key
                       ? "border-primary text-primary"
                       : "border-transparent text-text-muted hover:text-text-main hover:border-border-base"
-                  }`}
+                    }`}
                   type="button"
                   onClick={() => setActiveTab(key)}
                 >
@@ -3265,6 +3320,7 @@ export default function PathologyPage() {
           <div className="p-4">
             {activeTab === "tests" && (
               <PathologyTestsTab
+                canEdit={!isClinicalStaff}
                 filteredTests={filteredTests}
                 searchQuery={testsSearchQuery}
                 onAdd={() => {
@@ -3281,6 +3337,7 @@ export default function PathologyPage() {
             )}
             {activeTab === "category" && (
               <PathologyCategoriesTab
+                canEdit={!isClinicalStaff}
                 filteredCategories={filteredCategories}
                 parameters={parameters}
                 searchQuery={categoriesSearchQuery}
@@ -3307,6 +3364,7 @@ export default function PathologyPage() {
             )}
             {activeTab === "units" && (
               <PathologyUnitsTab
+                canEdit={!isClinicalStaff}
                 filteredUnits={filteredUnits}
                 searchQuery={unitsSearchQuery}
                 onAdd={() => {
@@ -3320,6 +3378,7 @@ export default function PathologyPage() {
             )}
             {activeTab === "parameters" && (
               <PathologyParametersTab
+                canEdit={!isClinicalStaff}
                 categories={categories}
                 filteredParameters={filteredParameters}
                 searchQuery={parametersSearchQuery}
@@ -3335,6 +3394,7 @@ export default function PathologyPage() {
             )}
             {activeTab === "testPrices" && (
               <PathologyTestTypesTab
+                canEdit={!isClinicalStaff}
                 filteredTestTypes={filteredTestTypes}
                 searchQuery={testTypesSearchQuery}
                 onAdd={() => {
@@ -3354,6 +3414,7 @@ export default function PathologyPage() {
             )}
             {activeTab === "technicians" && (
               <LabTechnicianManagement
+                canEdit={!isClinicalStaff}
                 branchId={branchId!}
                 clinicId={clinicId!}
               />
@@ -3897,14 +3958,14 @@ export default function PathologyPage() {
                                           isMale && p.minValueMale !== undefined
                                             ? p.minValueMale
                                             : isFemale &&
-                                                p.minValueFemale !== undefined
+                                              p.minValueFemale !== undefined
                                               ? p.minValueFemale
                                               : p.minValue;
                                         const maxVal =
                                           isMale && p.maxValueMale !== undefined
                                             ? p.maxValueMale
                                             : isFemale &&
-                                                p.maxValueFemale !== undefined
+                                              p.maxValueFemale !== undefined
                                               ? p.maxValueFemale
                                               : p.maxValue;
 
@@ -4067,13 +4128,12 @@ export default function PathologyPage() {
 
                                       return (
                                         <span
-                                          className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
-                                            flag.color === "danger"
+                                          className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${flag.color === "danger"
                                               ? "bg-danger-50 text-danger-700 border-danger-200"
                                               : flag.color === "warning"
                                                 ? "bg-warning-50 text-warning-700 border-warning-200"
                                                 : "bg-success-50 text-success-700 border-success-200"
-                                          }`}
+                                            }`}
                                         >
                                           {flag.icon} {flag.label}
                                         </span>

@@ -278,8 +278,14 @@ export default function PatientsPage() {
   const [criticalReason, setCriticalReason] = useState("");
   const [savingCritical, setSavingCritical] = useState(false);
 
-  // ── Doctor view
+  // ── Delete state
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<Patient | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // ── Doctor/Expert view
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  const [currentExpertId, setCurrentExpertId] = useState<string | null>(null);
   const [isDoctorResolved, setIsDoctorResolved] = useState(false);
 
   // Branch context
@@ -293,20 +299,22 @@ export default function PatientsPage() {
       ? undefined
       : (branchFilter ?? undefined));
 
-  // Bypass server-side pagination (and Firebase composite index errors) if a doctor is logged in
+  // Bypass server-side pagination (and Firebase composite index errors) if a doctor/expert is logged in
   const useServerPagination =
     !search.trim() &&
     !ageMin &&
     !ageMax &&
     !regStart &&
     !regEnd &&
-    !currentDoctorId;
+    !currentDoctorId &&
+    !currentExpertId;
 
   const fetchPatientsPaginated = useCallback(
     async (
       targetPage: number,
       cursor?: QueryDocumentSnapshot | null,
       doctorIdOverride?: string | null,
+      expertIdOverride?: string | null,
     ): Promise<
       | {
         patients: Patient[];
@@ -337,11 +345,13 @@ export default function PatientsPage() {
               ? false
               : undefined;
         const effectiveDoctorId = doctorIdOverride ?? currentDoctorId;
+        const effectiveExpertId = expertIdOverride ?? currentExpertId;
         const { patients: pagePatients, lastDoc: nextLastDoc } =
           await patientService.getPatientsByClinicPaginated(clinicId, {
             pageSize: PER_PAGE,
             lastDoc: targetPage === 1 ? undefined : (cursor ?? undefined),
             doctorId: effectiveDoctorId ?? undefined,
+            expertId: effectiveExpertId ?? undefined,
             searchPrefix,
             gender: genderFilter === "all" ? undefined : genderFilter,
             isCritical: isCriticalOpt,
@@ -353,6 +363,7 @@ export default function PatientsPage() {
           try {
             totalCount = await patientService.getPatientsCountByClinic(clinicId, {
               doctorId: effectiveDoctorId ?? undefined,
+              expertId: effectiveExpertId ?? undefined,
               searchPrefix,
               gender: genderFilter === "all" ? undefined : genderFilter,
               isCritical: isCriticalOpt,
@@ -384,6 +395,7 @@ export default function PatientsPage() {
     [
       clinicId,
       currentDoctorId,
+      currentExpertId,
       search,
       genderFilter,
       criticalFilter,
@@ -456,19 +468,20 @@ export default function PatientsPage() {
 
     (async () => {
       try {
-        console.log(
-          "isDoctorResolved: fetching doctor by email",
-          userData.email,
-        );
-        const doc = await doctorService.getDoctorByEmail(userData.email);
+        const { expertService } = await import("@/services/expertService");
+        const [matchingDoctor, matchingExpert] = await Promise.all([
+          doctorService.getDoctorByEmail(userData.email),
+          expertService.getExpertByEmail(userData.email),
+        ]);
 
-        console.log("isDoctorResolved: fetched doctor", !!doc);
-
-        if (doc) setCurrentDoctorId(doc.id);
+        if (matchingExpert) {
+          setCurrentExpertId(matchingExpert.id);
+        } else if (matchingDoctor) {
+          setCurrentDoctorId(matchingDoctor.id);
+        }
       } catch (err) {
         console.log("isDoctorResolved: error", err);
       } finally {
-        console.log("isDoctorResolved: setting true in finally");
         setIsDoctorResolved(true);
       }
     })();
@@ -493,9 +506,14 @@ export default function PatientsPage() {
 
     (async () => {
       try {
-        const data = currentDoctorId
-          ? await patientService.getPatientsByDoctor(currentDoctorId)
-          : await patientService.getPatients();
+        let data;
+        if (currentExpertId) {
+          data = await patientService.getPatientsByExpert(currentExpertId);
+        } else if (currentDoctorId) {
+          data = await patientService.getPatientsByDoctor(currentDoctorId);
+        } else {
+          data = await patientService.getPatients();
+        }
 
         if (!cancelled) {
           setPatients(data);
@@ -520,6 +538,7 @@ export default function PatientsPage() {
     userData?.email,
     useServerPagination,
     currentDoctorId,
+    currentExpertId,
     effectiveBranchId,
     isDoctorResolved,
   ]);
@@ -549,6 +568,7 @@ export default function PatientsPage() {
           1,
           undefined,
           currentDoctorId,
+          currentExpertId,
         );
 
         console.log("server effect got result", {
@@ -583,6 +603,7 @@ export default function PatientsPage() {
     genderFilter,
     criticalFilter,
     currentDoctorId,
+    currentExpertId,
     isDoctorResolved,
     search, // Trigger when search changes (relies on local state instead of fetchPatientsPaginated ref)
   ]);
@@ -779,13 +800,53 @@ export default function PatientsPage() {
           }),
         );
       }
-      addToast({ title: "Critical status removed", color: "success" });
+      addToast({
+        title: "Status Removed",
+        description: "Patient is no longer marked as critical.",
+        color: "success",
+      });
     } catch {
       addToast({
         title: "Error",
         description: "Failed to remove critical status.",
         color: "danger",
       });
+    }
+  };
+
+  const openDeleteModal = (patient: Patient) => {
+    setSelectedForDelete(patient);
+    setDeleteModal(true);
+  };
+
+  const handleDeletePatient = async () => {
+    if (!selectedForDelete) return;
+    setIsDeleting(true);
+    try {
+      await patientService.deletePatient(selectedForDelete.id);
+      
+      setPatients(prev => prev.filter(p => p.id !== selectedForDelete.id));
+      
+      if (useServerPagination && totalCount !== null) {
+        setTotalCount(prev => (prev || 1) - 1);
+      }
+      
+      addToast({
+        title: "Patient Deleted",
+        description: `${selectedForDelete.name} has been successfully deleted.`,
+        color: "success"
+      });
+      setDeleteModal(false);
+      setSelectedForDelete(null);
+    } catch (err) {
+      console.error("Error deleting patient:", err);
+      addToast({
+        title: "Error",
+        description: "Failed to delete patient.",
+        color: "danger"
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1267,6 +1328,13 @@ export default function PatientsPage() {
                                   ⚠ Mark as Critical
                                 </DropdownItem>
                               )}
+                              <DropdownItem
+                                key="delete"
+                                className="text-error"
+                                onClick={() => openDeleteModal(patient)}
+                              >
+                                ✕ Delete Patient
+                              </DropdownItem>
                             </DropdownMenu>
                           </Dropdown>
                         </td>
@@ -1378,6 +1446,43 @@ export default function PatientsPage() {
               value={criticalReason}
               onChange={(e) => setCriticalReason(e.target.value)}
             />
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Delete Confirmation Modal ─────────────────────────────────────── */}
+      <Modal
+        footer={
+          <>
+            <Button
+              color="default"
+              size="sm"
+              variant="bordered"
+              onClick={() => setDeleteModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="danger"
+              isLoading={isDeleting}
+              size="sm"
+              onClick={handleDeletePatient}
+            >
+              Delete
+            </Button>
+          </>
+        }
+        open={deleteModal}
+        subtitle={selectedForDelete?.name}
+        title="Delete Patient"
+        onClose={() => setDeleteModal(false)}
+      >
+        <div className="space-y-3 p-2">
+          <div className="flex gap-2.5 p-3 bg-error/10 border border-error/20 rounded">
+            <IoAlertCircleOutline className="w-5 h-5 text-error shrink-0" />
+            <p className="text-[13px] text-error/90 leading-relaxed">
+              Are you sure you want to delete this patient? This action cannot be undone and will permanently remove their records.
+            </p>
           </div>
         </div>
       </Modal>

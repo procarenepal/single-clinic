@@ -15,6 +15,7 @@ interface PathologyTestNamesTabProps {
   onAdd: () => void;
   onEdit: (testName: PathologyTest) => void;
   onDelete: (testName: PathologyTest) => void;
+  canEdit?: boolean;
 }
 
 export default function PathologyTestNamesTab({
@@ -24,6 +25,7 @@ export default function PathologyTestNamesTab({
   onAdd,
   onEdit,
   onDelete,
+  canEdit = true,
 }: PathologyTestNamesTabProps) {
   return (
     <div className="space-y-4">
@@ -38,9 +40,11 @@ export default function PathologyTestNamesTab({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         </div>
-        <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
-          New Test Name
-        </Button>
+        {canEdit && (
+          <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
+            New Test Name
+          </Button>
+        )}
       </div>
 
       {filteredTestNames.length > 0 ? (
@@ -51,9 +55,11 @@ export default function PathologyTestNamesTab({
                 <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Name
                 </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
-                  Actions
-                </th>
+                {canEdit && (
+                  <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -67,28 +73,30 @@ export default function PathologyTestNamesTab({
                       {testName.testName}
                     </p>
                   </td>
-                  <td className="px-4 py-2">
-                    <div className="flex gap-2">
-                      <Button
-                        color="primary"
-                        size="sm"
-                        startContent={<IoCreateOutline />}
-                        variant="flat"
-                        onClick={() => onEdit(testName)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        color="danger"
-                        size="sm"
-                        startContent={<IoTrashOutline />}
-                        variant="flat"
-                        onClick={() => onDelete(testName)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
+                  {canEdit && (
+                    <td className="px-4 py-2">
+                      <div className="flex gap-2">
+                        <Button
+                          color="primary"
+                          size="sm"
+                          startContent={<IoCreateOutline />}
+                          variant="flat"
+                          onClick={() => onEdit(testName)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          color="danger"
+                          size="sm"
+                          startContent={<IoTrashOutline />}
+                          variant="flat"
+                          onClick={() => onDelete(testName)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

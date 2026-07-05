@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { isToday, isFuture, isPast, startOfDay, format } from "date-fns";
+import DoctorDashboard from "./components/DoctorDashboard";
+import ExpertDashboard from "./components/ExpertDashboard";
+import HRDashboard from "./components/HRDashboard";
 
 // Services
 import {
@@ -466,6 +469,10 @@ export default function DashboardIndexPage() {
   const { clinicId, userData, branchId, currentUser } = useAuthContext();
   const isClinicAdmin =
     userData?.role === "system-owner" || userData?.role === "clinic-admin";
+
+  const isDoctor = userData?.role === "doctor";
+  const isExpert = userData?.role === "expert";
+  const isHR = userData?.role === "hr";
 
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0,
@@ -954,6 +961,21 @@ export default function DashboardIndexPage() {
         </Button>
       </div>
     );
+  }
+
+  // Doctors get their own tailored dashboard (must be after all hooks)
+  if (isDoctor) {
+    return <DoctorDashboard />;
+  }
+
+  // Experts get their own tailored dashboard (must be after all hooks)
+  if (isExpert) {
+    return <ExpertDashboard />;
+  }
+
+  // HR get their own tailored dashboard
+  if (isHR) {
+    return <HRDashboard />;
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

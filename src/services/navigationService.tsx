@@ -45,7 +45,6 @@ class NavigationService {
       "Bed Management",
       "Pharmacy",
       "Pathology",
-      "HR Management",
     ];
     const OPERATIONS = [
       "Communication",
@@ -152,11 +151,32 @@ class NavigationService {
       availablePages = await rbacService.getAvailablePagesForClinic(clinicId);
     }
 
+    // Populate children for hardcoded items
+    items.forEach((item) => {
+      if (item.href !== "/dashboard") {
+        const children = availablePages
+          .filter((page) => page.path.startsWith(item.href + "/") && page.path !== item.href && page.showInSidebar !== false)
+          .map((child) => ({
+            title: child.name,
+            href: child.path,
+            icon: this.renderIcon(child.icon),
+            children: [],
+          }));
+        item.children = children;
+
+        // If admin doesn't have access to the parent page itself, redirect the parent link to the first accessible child
+        const hasParentAccess = availablePages.some((p) => p.path === item.href);
+        if (!hasParentAccess && children.length > 0) {
+          item.href = children[0].href;
+        }
+      }
+    });
+
     if (availablePages.length > 0) {
       // Filter and add parent pages
       availablePages.forEach((page) => {
         // Prevent duplicates for core modules
-        if (items.some((item) => item.title === page.name)) return;
+        if (items.some((item) => item.title === page.name || item.href === page.path)) return;
 
         if (page.path !== "/dashboard" && !page.parentId) {
           // Filter children
@@ -269,7 +289,7 @@ class NavigationService {
         children: [],
       },
       {
-        title: "Staff Management",
+        title: "HR Management",
         href: "/dashboard/hr",
         icon: <Icons.IoPeopleOutline className="w-5 h-5" />,
         children: [],
@@ -301,6 +321,27 @@ class NavigationService {
       });
     });
 
+    // Populate children for hardcoded items
+    items.forEach((item) => {
+      if (item.href !== "/dashboard") {
+        const children = userAccessiblePages
+          .filter((page) => page.path.startsWith(item.href + "/") && page.path !== item.href && page.showInSidebar !== false)
+          .map((child) => ({
+            title: child.name,
+            href: child.path,
+            icon: this.renderIcon(child.icon),
+            children: [],
+          }));
+        item.children = children;
+
+        // If user doesn't have access to the parent page itself, redirect the parent link to the first accessible child
+        const hasParentAccess = userAccessiblePages.some((p) => p.path === item.href);
+        if (!hasParentAccess && children.length > 0) {
+          item.href = children[0].href;
+        }
+      }
+    });
+
     // Also get all clinic type pages for comparison
     const allClinicTypePages =
       await rbacService.getAvailablePagesForClinic(clinicId);
@@ -325,7 +366,7 @@ class NavigationService {
       // Filter and add parent pages that the user has access to
       userAccessiblePages.forEach((page) => {
         // Prevent duplicates for core modules
-        if (items.some((item) => item.title === page.name)) return;
+        if (items.some((item) => item.title === page.name || item.href === page.path)) return;
 
         if (page.path !== "/dashboard" && !page.parentId) {
           // Filter out billing-related pages if billing is disabled

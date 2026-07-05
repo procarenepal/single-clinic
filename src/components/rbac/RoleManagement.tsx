@@ -964,7 +964,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   {
                     id: "admin",
                     label: "Administration & Settings",
-                    paths: ["setting", "report", "communication", "dashboard"],
+                    paths: ["setting", "report", "communication", "dashboard", "hr"],
                   },
                   { id: "other", label: "Other", paths: [] },
                 ].map((category) => {
@@ -993,11 +993,13 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                         "setting",
                         "report",
                         "communication",
-                        "dashboard",
-                      ].some((path) => p.includes(path));
+                        "hr"
+                      ].some((path) => p.includes(path)) && p !== "/dashboard";
                     }
 
-                    return category.paths.some((path) => p.includes(path));
+                    return category.paths.some((path) => 
+                      path === "dashboard" ? p === "/dashboard" : p.includes(path)
+                    );
                   });
 
                   if (categoryPages.length === 0) return null;
@@ -1016,7 +1018,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                           return (
                             <label
                               key={page.id}
-                              className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all select-none ${
+                              className={`relative flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all select-none ${
                                 isChecked
                                   ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
                                   : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/40"

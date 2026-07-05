@@ -514,6 +514,7 @@ export const patientService = {
       pageSize: number;
       lastDoc?: QueryDocumentSnapshot | null;
       doctorId?: string;
+      expertId?: string;
       searchPrefix?: string;
       gender?: string;
       isCritical?: boolean;
@@ -524,6 +525,7 @@ export const patientService = {
       pageSize,
       lastDoc,
       doctorId,
+      expertId,
       searchPrefix,
       gender,
       isCritical,
@@ -556,6 +558,7 @@ export const patientService = {
     if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
+    if (expertId) baseConstraints.push(where("assignedExpertId", "==", expertId));
     if (gender) baseConstraints.push(where("gender", "==", gender));
     if (isCritical === true)
       baseConstraints.push(where("isCritical", "==", true));
@@ -650,15 +653,17 @@ export const patientService = {
     _clinicId?: string,
     options: {
       doctorId?: string;
+      expertId?: string;
       searchPrefix?: string;
       gender?: string;
       isCritical?: boolean;
       branchId?: string;
     } = {} as any,
   ): Promise<number> {
-    const { doctorId, searchPrefix, gender, isCritical, branchId } =
+    const { doctorId, expertId, searchPrefix, gender, isCritical, branchId } =
       options as {
         doctorId?: string;
+        expertId?: string;
         searchPrefix?: string;
         gender?: string;
         isCritical?: boolean;
@@ -684,6 +689,7 @@ export const patientService = {
     if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
+    if (expertId) baseConstraints.push(where("assignedExpertId", "==", expertId));
     if (gender) baseConstraints.push(where("gender", "==", gender));
     if (isCritical === true)
       baseConstraints.push(where("isCritical", "==", true));

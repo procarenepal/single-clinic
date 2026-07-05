@@ -732,7 +732,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/front-office">
+                              <RbacProtectedRoute pagePath="/dashboard/front-office/manage-visitors">
                                 <ManageVisitorsPage />
                               </RbacProtectedRoute>
                             }
@@ -740,11 +740,11 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/front-office">
+                              <RbacProtectedRoute pagePath="/dashboard/front-office/call-logs">
                                 <ManageCallLogsPage />
                               </RbacProtectedRoute>
                             }
-                            path="front-office/manage-call-logs"
+                            path="front-office/call-logs"
                           />
                           <Route
                             element={

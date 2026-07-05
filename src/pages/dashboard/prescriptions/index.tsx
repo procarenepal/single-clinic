@@ -265,7 +265,9 @@ export default function PrescriptionsPage() {
     if (branchId) setSelectedBranchId(null);
   }, [branchId]);
 
-  // Load all doctors for the filter
+  // Load all doctors for the filter and determine current doctor if any
+  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!clinicId) return;
     (async () => {
@@ -285,11 +287,26 @@ export default function PrescriptionsPage() {
         }));
 
         setAllDoctors([...formattedDoctors, ...formattedExperts]);
+
+        if (!isClinicAdmin && userData?.email) {
+          try {
+            const [matchingDoctor, matchingExpert] = await Promise.all([
+              doctorService.getDoctorByEmail(userData.email),
+              expertService.getExpertByEmail(userData.email),
+            ]);
+            const matchingProvider = matchingDoctor || matchingExpert;
+            if (matchingProvider) {
+              setCurrentDoctorId(matchingProvider.id);
+            }
+          } catch (error) {
+            console.error("Error checking provider linkage:", error);
+          }
+        }
       } catch (err) {
         console.error("Error fetching doctors:", err);
       }
     })();
-  }, [clinicId]);
+  }, [clinicId, isClinicAdmin, userData]);
 
   useEffect(() => {
     const fetchPrescriptions = async () => {
@@ -303,7 +320,7 @@ export default function PrescriptionsPage() {
             effectiveBranchId,
           );
 
-        const extendedPrescriptions = await Promise.all(
+        let extendedPrescriptions = await Promise.all(
           prescriptionsData.map(async (prescription) => {
             const [patient, doctor, expert] = await Promise.all([
               patientService
@@ -341,6 +358,10 @@ export default function PrescriptionsPage() {
           }),
         );
 
+        if (currentDoctorId) {
+          extendedPrescriptions = extendedPrescriptions.filter(p => p.doctorId === currentDoctorId);
+        }
+
         extendedPrescriptions.sort(
           (a, b) =>
             new Date(b.prescriptionDate).getTime() -
@@ -361,7 +382,7 @@ export default function PrescriptionsPage() {
     };
 
     fetchPrescriptions();
-  }, [clinicId, effectiveBranchId]);
+  }, [clinicId, effectiveBranchId, currentDoctorId]);
 
   const formatDate = (date: Date | string): string => {
     if (!date) return "N/A";

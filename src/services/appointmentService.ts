@@ -681,4 +681,40 @@ export const appointmentService = {
       },
     );
   },
+
+  /**
+   * Subscribe to expert appointments (real-time updates)
+   */
+  subscribeToExpertAppointments(
+    expertId: string,
+    branchId: string | undefined,
+    onData: AppointmentSnapshotHandler,
+    onError?: AppointmentErrorHandler,
+  ) {
+    const appointmentsCollection = collection(db, "appointments");
+    const constraints: any[] = [where("assignedExpertId", "==", expertId)];
+    // Removed orderBy to avoid composite index requirement
+    const q = query(appointmentsCollection, ...constraints);
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const nextAppointments: Appointment[] = [];
+
+        snapshot.forEach((docSnap) => {
+          nextAppointments.push(mapAppointmentDoc(docSnap));
+        });
+        // Sort by date descending in memory
+        onData(
+          nextAppointments.sort(
+            (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
+          ),
+        );
+      },
+      (error) => {
+        console.error("Expert appointments subscription error:", error);
+        onError?.(error as Error);
+      },
+    );
+  },
 };

@@ -34,11 +34,13 @@ import { LabTechnician } from "@/types/models";
 interface LabTechnicianManagementProps {
   clinicId: string;
   branchId: string;
+  canEdit?: boolean;
 }
 
 export default function LabTechnicianManagement({
   clinicId,
   branchId,
+  canEdit = true,
 }: LabTechnicianManagementProps) {
   const { currentUser } = useAuthContext();
   const [technicians, setTechnicians] = useState<LabTechnician[]>([]);
@@ -250,16 +252,18 @@ export default function LabTechnicianManagement({
           value={searchQuery}
           onValueChange={setSearchQuery}
         />
-        <Button
-          color="primary"
-          startContent={<IoAddOutline />}
-          onPress={() => {
-            resetForm();
-            technicianModalState.open();
-          }}
-        >
-          New Lab Technician
-        </Button>
+        {canEdit && (
+          <Button
+            color="primary"
+            startContent={<IoAddOutline />}
+            onPress={() => {
+              resetForm();
+              technicianModalState.open();
+            }}
+          >
+            New Lab Technician
+          </Button>
+        )}
       </div>
 
       {filteredTechnicians.length > 0 ? (
@@ -271,7 +275,7 @@ export default function LabTechnicianManagement({
             <TableColumn>EMAIL</TableColumn>
             <TableColumn>SPECIALIZATION</TableColumn>
             <TableColumn>STATUS</TableColumn>
-            <TableColumn>ACTIONS</TableColumn>
+            {canEdit && <TableColumn>ACTIONS</TableColumn>}
           </TableHeader>
           <TableBody>
             {filteredTechnicians.map((technician) => (
@@ -302,30 +306,32 @@ export default function LabTechnicianManagement({
                     {technician.isActive ? "Active" : "Inactive"}
                   </Chip>
                 </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button
-                      color="primary"
-                      size="sm"
-                      startContent={<IoCreateOutline />}
-                      variant="flat"
-                      onPress={() => editTechnician(technician)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      color="danger"
-                      size="sm"
-                      startContent={<IoTrashOutline />}
-                      variant="flat"
-                      onPress={() =>
-                        openDeleteModal(technician.id, technician.name)
-                      }
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </TableCell>
+                {canEdit && (
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        color="primary"
+                        size="sm"
+                        startContent={<IoCreateOutline />}
+                        variant="flat"
+                        onPress={() => editTechnician(technician)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        color="danger"
+                        size="sm"
+                        startContent={<IoTrashOutline />}
+                        variant="flat"
+                        onPress={() =>
+                          openDeleteModal(technician.id, technician.name)
+                        }
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

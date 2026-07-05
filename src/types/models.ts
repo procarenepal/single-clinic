@@ -73,7 +73,7 @@ export interface User {
 }
 
 // Possible user roles in the system
-export type UserRole = "system-owner" | "clinic-admin" | "staff";
+export type UserRole = "system-owner" | "clinic-admin" | "staff" | "doctor" | "expert" | "hr";
 
 // Clinic Type model for categorizing clinics
 export interface ClinicType {

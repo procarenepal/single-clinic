@@ -21,6 +21,7 @@ interface PathologyParametersTabProps {
   onAdd: () => void;
   onEdit: (parameter: PathologyParameter) => void;
   onDelete: (parameter: PathologyParameter) => void;
+  canEdit?: boolean;
 }
 
 export default function PathologyParametersTab({
@@ -32,6 +33,7 @@ export default function PathologyParametersTab({
   onAdd,
   onEdit,
   onDelete,
+  canEdit = true,
 }: PathologyParametersTabProps) {
   return (
     <div className="space-y-4">
@@ -46,9 +48,11 @@ export default function PathologyParametersTab({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         </div>
-        <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
-          New Pathology Parameters
-        </Button>
+        {canEdit && (
+          <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
+            New Pathology Parameters
+          </Button>
+        )}
       </div>
 
       {filteredParameters.length > 0 ? (
@@ -71,9 +75,11 @@ export default function PathologyParametersTab({
                 <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
                   Unit
                 </th>
-                <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
-                  Actions
-                </th>
+                {canEdit && (
+                  <th className="px-4 py-2 text-[11px] font-semibold text-text-muted uppercase tracking-[0.08em]">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -112,35 +118,37 @@ export default function PathologyParametersTab({
                       </span>
                     </td>
                     <td className="px-4 py-2 text-[13px] text-text-main">
-                      {parameter.referenceRange}
+                      {parameter.referenceRange || "—"}
                     </td>
                     <td className="px-4 py-2">
                       <span className="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
                         {unitObj?.name || parameter.unit}
                       </span>
                     </td>
-                    <td className="px-4 py-2">
-                      <div className="flex gap-2">
-                        <Button
-                          color="primary"
-                          size="sm"
-                          startContent={<IoCreateOutline />}
-                          variant="flat"
-                          onClick={() => onEdit(parameter)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          color="danger"
-                          size="sm"
-                          startContent={<IoTrashOutline />}
-                          variant="flat"
-                          onClick={() => onDelete(parameter)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
+                    {canEdit && (
+                      <td className="px-4 py-2">
+                        <div className="flex gap-2">
+                          <Button
+                            color="primary"
+                            size="sm"
+                            startContent={<IoCreateOutline />}
+                            variant="flat"
+                            onClick={() => onEdit(parameter)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            color="danger"
+                            size="sm"
+                            startContent={<IoTrashOutline />}
+                            variant="flat"
+                            onClick={() => onDelete(parameter)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

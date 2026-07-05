@@ -40,7 +40,7 @@ interface ModalCtx {
 }
 
 const ModalContext = React.createContext<ModalCtx>({
-  onClose: () => {},
+  onClose: () => { },
   isDismissable: true,
   hideCloseButton: false,
   scrollBehavior: "inside",
@@ -109,7 +109,7 @@ export function Modal({
         }}
       />
       {/* Centering wrapper */}
-      <div className={`fixed inset-0 z-[9999] flex items-center justify-center px-4 py-6 overflow-hidden pointer-events-none ${classNames?.wrapper || ""}`}>
+      <div className={`fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 overflow-hidden pointer-events-none ${classNames?.wrapper || ""}`}>
         {children}
       </div>
     </ModalContext.Provider>,
@@ -135,7 +135,7 @@ export function ModalContent({ children, className }: ModalContentProps) {
         "border border-[rgb(var(--color-border))] rounded-md",
         "flex flex-col w-full",
         widthClass,
-        scrollBehavior === "inside" ? "max-h-[92vh]" : "",
+        scrollBehavior === "inside" ? "max-h-[calc(100vh-4rem)]" : "",
         className ?? "",
       ].join(" ")}
       onMouseDown={(e) => e.stopPropagation()}
@@ -202,7 +202,7 @@ export function ModalBody({ children, className }: ModalBodyProps) {
     <div
       className={[
         "px-4 py-3" /* spec: content padding px-4 py-3 */,
-        "flex-1",
+        "flex-1 min-h-0",
         scrollBehavior === "inside" ? "overflow-y-auto" : "",
         className ?? "",
       ].join(" ")}
