@@ -47,7 +47,13 @@ import { accountService } from "@/services/accountService";
 import { hrService } from "@/services/hrService";
 
 // Types
-import { Item, ItemCategory, IssuedItem, Vendor, ItemPurchase } from "@/types/models";
+import {
+  Item,
+  ItemCategory,
+  IssuedItem,
+  Vendor,
+  ItemPurchase,
+} from "@/types/models";
 
 // Icons
 
@@ -155,7 +161,7 @@ export default function InventoryPage() {
 
   const [selectedIssuedItem, setSelectedIssuedItem] =
     useState<IssuedItem | null>(null);
-  const [selectedPrintBill, setSelectedPrintBill] = 
+  const [selectedPrintBill, setSelectedPrintBill] =
     useState<ItemPurchase | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -336,7 +342,7 @@ export default function InventoryPage() {
     const matchesCategoryName = category.name
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
-    
+
     const matchesItemName = items
       .filter((item) => item.category === category.name)
       .some((item) =>
@@ -410,7 +416,7 @@ export default function InventoryPage() {
         });
       } else {
         const newItemId = await itemService.createItem(itemData);
-        
+
         // Log the initial purchase bill if quantity > 0
         if (itemData.quantity > 0) {
           await itemService.createItemPurchase({
@@ -670,24 +676,31 @@ export default function InventoryPage() {
   };
 
   const handleRefillItem = async () => {
-    if (!refillForm.itemId || !refillForm.quantity || refillForm.quantity <= 0) {
+    if (
+      !refillForm.itemId ||
+      !refillForm.quantity ||
+      refillForm.quantity <= 0
+    ) {
       addToast({
         title: "Error",
         description: "Please enter a valid quantity",
         color: "danger",
       });
+
       return;
     }
 
     setSaving(true);
     try {
       const selectedItem = items.find((item) => item.id === refillForm.itemId);
+
       if (!selectedItem) {
         addToast({
           title: "Error",
           description: "Selected item not found",
           color: "danger",
         });
+
         return;
       }
 
@@ -699,7 +712,9 @@ export default function InventoryPage() {
       // Calculate Weighted Average Cost (WAC)
       const totalOldValue = oldQty * oldPrice;
       const totalNewValue = newQty * newPrice;
-      const blendedPrice = Math.round((totalOldValue + totalNewValue) / (oldQty + newQty));
+      const blendedPrice = Math.round(
+        (totalOldValue + totalNewValue) / (oldQty + newQty),
+      );
 
       const updatedItemData = {
         ...selectedItem,
@@ -708,7 +723,8 @@ export default function InventoryPage() {
         purchaseDate: refillForm.purchaseDate,
       };
 
-      const { id, createdAt, updatedAt, ...itemUpdates } = updatedItemData as any;
+      const { id, createdAt, updatedAt, ...itemUpdates } =
+        updatedItemData as any;
 
       await itemService.updateItem(selectedItem.id, itemUpdates);
 
@@ -1031,22 +1047,40 @@ export default function InventoryPage() {
       </div>
 
       {/* Stats Cards - visible on screen, hidden when printing individual bill */}
-      <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 print:hidden`}>
+      <div
+        className={`grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 print:hidden`}
+      >
         <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Total valuation</p>
-          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">Rs. {valuation.toLocaleString()}</p>
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
+            Total valuation
+          </p>
+          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">
+            Rs. {valuation.toLocaleString()}
+          </p>
         </div>
         <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl border-l-4 border-l-primary">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Active assets</p>
-          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">{items.reduce((acc, item) => acc + (item.quantity || 0), 0)}</p>
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
+            Active assets
+          </p>
+          <p className="text-[16px] font-semibold text-primary tracking-tighter mt-0.5">
+            {items.reduce((acc, item) => acc + (item.quantity || 0), 0)}
+          </p>
         </div>
         <div className="p-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-xl border-l-4 border-l-amber-500">
-          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">Items in use</p>
-          <p className="text-[16px] font-semibold text-amber-500 tracking-tighter mt-0.5">{issuedItems.filter((i) => i.status === "issued").reduce((acc, i) => acc + (i.quantity || 0), 0)}</p>
+          <p className="text-[8.5px] font-semibold text-[rgb(var(--color-text-muted))] tracking-[0.1em] opacity-60 uppercase">
+            Items in use
+          </p>
+          <p className="text-[16px] font-semibold text-amber-500 tracking-tighter mt-0.5">
+            {issuedItems
+              .filter((i) => i.status === "issued")
+              .reduce((acc, i) => acc + (i.quantity || 0), 0)}
+          </p>
         </div>
       </div>
 
-      <Card className={`bg-surface border border-[rgb(var(--color-border))] shadow-none rounded-xl print:border-none print:shadow-none print:overflow-visible ${selectedPrintBill ? 'print:hidden' : ''}`}>
+      <Card
+        className={`bg-surface border border-[rgb(var(--color-border))] shadow-none rounded-xl print:border-none print:shadow-none print:overflow-visible ${selectedPrintBill ? "print:hidden" : ""}`}
+      >
         <CardHeader className="flex justify-between items-center p-4 border-b border-[rgb(var(--color-border))] print:hidden">
           <div className="relative w-80">
             <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[rgb(var(--color-text-muted))] w-4 h-4" />
@@ -1134,135 +1168,151 @@ export default function InventoryPage() {
                             index < itemsPage * itemsPerPage;
 
                           const inUseQty = issuedItems
-                            .filter((i) => i.itemId === item.id && i.status === "issued")
+                            .filter(
+                              (i) =>
+                                i.itemId === item.id && i.status === "issued",
+                            )
                             .reduce((acc, i) => acc + (i.quantity || 0), 0);
                           const remainingQty = item.quantity || 0;
                           const totalBoughtQty = remainingQty + inUseQty;
 
                           return (
-                            <TableRow 
+                            <TableRow
                               key={item.id || `item-${index}`}
-                              className={isVisible ? "print:table-row" : "hidden print:table-row"}
+                              className={
+                                isVisible
+                                  ? "print:table-row"
+                                  : "hidden print:table-row"
+                              }
                             >
                               <TableCell>
-                              <div>
-                                <p className="font-semibold text-[13.5px] text-text-main capitalize">
-                                  {item.name?.toLowerCase()}
-                                </p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span
-                                    className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border ${
-                                      item.condition === "new"
-                                        ? "bg-green-500/10 text-green-600 border-green-500/20"
-                                        : item.condition === "damaged"
-                                          ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                                          : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                    }`}
-                                  >
-                                    {item.condition
-                                      ? item.condition.charAt(0).toUpperCase() +
-                                        item.condition.slice(1)
-                                      : "New"}
+                                <div>
+                                  <p className="font-semibold text-[13.5px] text-text-main capitalize">
+                                    {item.name?.toLowerCase()}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span
+                                      className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border ${
+                                        item.condition === "new"
+                                          ? "bg-green-500/10 text-green-600 border-green-500/20"
+                                          : item.condition === "damaged"
+                                            ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                      }`}
+                                    >
+                                      {item.condition
+                                        ? item.condition
+                                            .charAt(0)
+                                            .toUpperCase() +
+                                          item.condition.slice(1)
+                                        : "New"}
+                                    </span>
+                                    {item.supplierName && (
+                                      <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium italic opacity-70 capitalize">
+                                        from {item.supplierName?.toLowerCase()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell align="left">
+                                <Chip
+                                  className="font-bold capitalize"
+                                  color="primary"
+                                  size="sm"
+                                  variant="flat"
+                                >
+                                  {item.category?.toLowerCase()}
+                                </Chip>
+                              </TableCell>
+                              <TableCell align="center">
+                                <div className="flex flex-col items-center gap-0.5 min-w-[70px]">
+                                  <span className="font-semibold text-text-main text-[13px] whitespace-nowrap">
+                                    {remainingQty} left
                                   </span>
-                                  {item.supplierName && (
-                                    <span className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium italic opacity-70 capitalize">
-                                      from {item.supplierName?.toLowerCase()}
+                                  {inUseQty > 0 && (
+                                    <span className="text-[11px] text-primary whitespace-nowrap font-medium">
+                                      {inUseQty} in use
                                     </span>
                                   )}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell align="left">
-                              <Chip
-                                className="font-bold capitalize"
-                                color="primary"
-                                size="sm"
-                                variant="flat"
-                              >
-                                {item.category?.toLowerCase()}
-                              </Chip>
-                            </TableCell>
-                            <TableCell align="center">
-                              <div className="flex flex-col items-center gap-0.5 min-w-[70px]">
-                                <span className="font-semibold text-text-main text-[13px] whitespace-nowrap">
-                                  {remainingQty} left
-                                </span>
-                                {inUseQty > 0 && (
-                                  <span className="text-[11px] text-primary whitespace-nowrap font-medium">
-                                    {inUseQty} in use
+                                  <span className="text-[10px] text-text-muted whitespace-nowrap uppercase tracking-wider">
+                                    {totalBoughtQty} total
                                   </span>
-                                )}
-                                <span className="text-[10px] text-text-muted whitespace-nowrap uppercase tracking-wider">
-                                  {totalBoughtQty} total
+                                </div>
+                              </TableCell>
+                              <TableCell align="right">
+                                <p className="font-semibold text-primary">
+                                  Rs.{" "}
+                                  {(item.purchasePrice || 0).toLocaleString()}
+                                </p>
+                              </TableCell>
+                              <TableCell align="left">
+                                <span className="text-[13.5px] text-text-muted">
+                                  {item.purchaseDate
+                                    ? safeFormatDate(item.purchaseDate)
+                                    : "—"}
                                 </span>
-                              </div>
-                            </TableCell>
-                            <TableCell align="right">
-                              <p className="font-semibold text-primary">
-                                Rs. {(item.purchasePrice || 0).toLocaleString()}
-                              </p>
-                            </TableCell>
-                            <TableCell align="left">
-                              <span className="text-[13.5px] text-text-muted">
-                                {item.purchaseDate
-                                  ? safeFormatDate(item.purchaseDate)
-                                  : "—"}
-                              </span>
-                            </TableCell>
-                            <TableCell align="center" className="print:hidden">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  className="p-2 text-[rgb(var(--color-text-muted))] hover:text-primary transition-colors"
-                                  title="Edit"
-                                  onClick={() => editItem(item)}
-                                >
-                                  <IoCreateOutline size={18} />
-                                </button>
-                                <button
-                                  className="px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all bg-success/10 text-success hover:bg-success hover:text-white"
-                                  title="Refill stock"
-                                  onClick={() => {
-                                  setRefillForm({
-                                      itemId: item.id,
-                                      quantity: 1,
-                                      cost: item.purchasePrice || 0,
-                                      invoiceNumber: "",
-                                      purchaseDate: format(new Date(), "yyyy-MM-dd"),
-                                      notes: "",
-                                    });
-                                    refillModalState.open();
-                                  }}
-                                >
-                                  Refill
-                                </button>
-                                <button
-                                  className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all ${
-                                    item.quantity > 0
-                                      ? "bg-primary text-white hover:opacity-90"
-                                      : "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] cursor-not-allowed"
-                                  }`}
-                                  disabled={item.quantity === 0}
-                                  title="Issue item"
-                                  onClick={() => {
-                                    setIssueForm({
-                                      ...issueForm,
-                                      itemId: item.id,
-                                    });
-                                    issueModalState.open();
-                                  }}
-                                >
-                                  Issue
-                                </button>
-                                <button
-                                  className="p-2 text-[rgb(var(--color-text-muted))] hover:text-rose-500 transition-colors"
-                                  title="Mark as damaged / Dispose"
-                                  onClick={() => handleDisposeItem(item.id)}
-                                >
-                                  <IoCloseCircleOutline size={18} />
-                                </button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                              </TableCell>
+                              <TableCell
+                                align="center"
+                                className="print:hidden"
+                              >
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    className="p-2 text-[rgb(var(--color-text-muted))] hover:text-primary transition-colors"
+                                    title="Edit"
+                                    onClick={() => editItem(item)}
+                                  >
+                                    <IoCreateOutline size={18} />
+                                  </button>
+                                  <button
+                                    className="px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all bg-success/10 text-success hover:bg-success hover:text-white"
+                                    title="Refill stock"
+                                    onClick={() => {
+                                      setRefillForm({
+                                        itemId: item.id,
+                                        quantity: 1,
+                                        cost: item.purchasePrice || 0,
+                                        invoiceNumber: "",
+                                        purchaseDate: format(
+                                          new Date(),
+                                          "yyyy-MM-dd",
+                                        ),
+                                        notes: "",
+                                      });
+                                      refillModalState.open();
+                                    }}
+                                  >
+                                    Refill
+                                  </button>
+                                  <button
+                                    className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all ${
+                                      item.quantity > 0
+                                        ? "bg-primary text-white hover:opacity-90"
+                                        : "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] cursor-not-allowed"
+                                    }`}
+                                    disabled={item.quantity === 0}
+                                    title="Issue item"
+                                    onClick={() => {
+                                      setIssueForm({
+                                        ...issueForm,
+                                        itemId: item.id,
+                                      });
+                                      issueModalState.open();
+                                    }}
+                                  >
+                                    Issue
+                                  </button>
+                                  <button
+                                    className="p-2 text-[rgb(var(--color-text-muted))] hover:text-rose-500 transition-colors"
+                                    title="Mark as damaged / Dispose"
+                                    onClick={() => handleDisposeItem(item.id)}
+                                  >
+                                    <IoCloseCircleOutline size={18} />
+                                  </button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
                           );
                         })}
                       </TableBody>
@@ -1691,7 +1741,12 @@ export default function InventoryPage() {
                             className="hover:bg-[rgb(var(--color-surface-2))] transition-colors print:!bg-white"
                           >
                             <td className="px-4 py-3 text-[13px] text-text-main whitespace-nowrap">
-                              {purchase.purchaseDate ? format(new Date(purchase.purchaseDate), "MMM dd, yyyy") : "-"}
+                              {purchase.purchaseDate
+                                ? format(
+                                    new Date(purchase.purchaseDate),
+                                    "MMM dd, yyyy",
+                                  )
+                                : "-"}
                             </td>
                             <td className="px-4 py-3 text-[13px] text-text-main font-semibold capitalize">
                               {purchase.itemName?.toLowerCase()}
@@ -1708,7 +1763,10 @@ export default function InventoryPage() {
                             <td className="px-4 py-3 text-[13px] font-bold text-emerald-600 text-right">
                               Rs. {purchase.totalAmount?.toLocaleString()}
                             </td>
-                            <td className="px-4 py-3 text-[12px] text-text-muted max-w-[200px] truncate" title={purchase.notes}>
+                            <td
+                              className="px-4 py-3 text-[12px] text-text-muted max-w-[200px] truncate"
+                              title={purchase.notes}
+                            >
                               {purchase.notes || "-"}
                             </td>
                             <td className="px-4 py-3 text-right print:hidden">
@@ -1735,7 +1793,8 @@ export default function InventoryPage() {
                         No purchase bills yet
                       </h3>
                       <p className="text-[13px] text-text-muted mt-1 max-w-sm mx-auto">
-                        Restock items to automatically generate permanent purchase logs and bills.
+                        Restock items to automatically generate permanent
+                        purchase logs and bills.
                       </p>
                     </div>
                   </div>
@@ -2715,29 +2774,77 @@ export default function InventoryPage() {
         <div className="hidden print:block w-full text-black bg-white p-8 font-sans">
           <div className="flex justify-between items-start border-b-2 border-gray-200 pb-6 mb-6">
             <div>
-              <h1 className="text-3xl font-black text-gray-900 tracking-tight">PURCHASE RECEIPT</h1>
-              <p className="text-sm font-bold text-gray-500 uppercase mt-1">Inventory Asset Restock</p>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                PURCHASE RECEIPT
+              </h1>
+              <p className="text-sm font-bold text-gray-500 uppercase mt-1">
+                Inventory Asset Restock
+              </p>
             </div>
             <div className="text-right">
-              <h2 className="text-xl font-black text-gray-800">Clinic Inventory</h2>
+              <h2 className="text-xl font-black text-gray-800">
+                Clinic Inventory
+              </h2>
               <p className="text-sm text-gray-500 mt-1">Official Document</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-8 mb-8">
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Receipt Details</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
+                Receipt Details
+              </p>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm mb-2"><span className="font-semibold w-24 inline-block text-gray-600">Date:</span> <span className="font-medium text-gray-900">{format(new Date(selectedPrintBill.purchaseDate || new Date()), "MMMM dd, yyyy")}</span></p>
-                <p className="text-sm mb-2"><span className="font-semibold w-24 inline-block text-gray-600">Invoice No:</span> <span className="font-medium text-gray-900">{selectedPrintBill.invoiceNumber || "N/A"}</span></p>
-                <p className="text-sm"><span className="font-semibold w-24 inline-block text-gray-600">Log ID:</span> <span className="font-mono text-gray-900 text-xs">{selectedPrintBill.id.slice(-8).toUpperCase()}</span></p>
+                <p className="text-sm mb-2">
+                  <span className="font-semibold w-24 inline-block text-gray-600">
+                    Date:
+                  </span>{" "}
+                  <span className="font-medium text-gray-900">
+                    {format(
+                      new Date(selectedPrintBill.purchaseDate || new Date()),
+                      "MMMM dd, yyyy",
+                    )}
+                  </span>
+                </p>
+                <p className="text-sm mb-2">
+                  <span className="font-semibold w-24 inline-block text-gray-600">
+                    Invoice No:
+                  </span>{" "}
+                  <span className="font-medium text-gray-900">
+                    {selectedPrintBill.invoiceNumber || "N/A"}
+                  </span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold w-24 inline-block text-gray-600">
+                    Log ID:
+                  </span>{" "}
+                  <span className="font-mono text-gray-900 text-xs">
+                    {selectedPrintBill.id.slice(-8).toUpperCase()}
+                  </span>
+                </p>
               </div>
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Generated By</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
+                Generated By
+              </p>
               <div className="bg-gray-50 p-4 rounded-lg h-[92px]">
-                <p className="text-sm mb-2"><span className="font-semibold w-24 inline-block text-gray-600">User ID:</span> <span className="font-medium text-gray-900">System Admin</span></p>
-                <p className="text-sm"><span className="font-semibold w-24 inline-block text-gray-600">Status:</span> <span className="font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded text-xs">Completed</span></p>
+                <p className="text-sm mb-2">
+                  <span className="font-semibold w-24 inline-block text-gray-600">
+                    User ID:
+                  </span>{" "}
+                  <span className="font-medium text-gray-900">
+                    System Admin
+                  </span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold w-24 inline-block text-gray-600">
+                    Status:
+                  </span>{" "}
+                  <span className="font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded text-xs">
+                    Completed
+                  </span>
+                </p>
               </div>
             </div>
           </div>
@@ -2745,21 +2852,39 @@ export default function InventoryPage() {
           <table className="w-full mb-8 border-collapse">
             <thead>
               <tr className="bg-gray-100 border-y border-gray-300 text-left">
-                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider">Item Description</th>
-                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-center">Quantity</th>
-                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-right">Unit Price</th>
-                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-right">Total Amount</th>
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider">
+                  Item Description
+                </th>
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-center">
+                  Quantity
+                </th>
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-right">
+                  Unit Price
+                </th>
+                <th className="py-3 px-4 text-xs font-black uppercase text-gray-600 tracking-wider text-right">
+                  Total Amount
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b border-gray-200">
                 <td className="py-4 px-4">
-                  <p className="font-bold text-gray-900 text-sm capitalize">{selectedPrintBill.itemName?.toLowerCase()}</p>
-                  <p className="text-xs text-gray-500 mt-1">Asset Registry Refill</p>
+                  <p className="font-bold text-gray-900 text-sm capitalize">
+                    {selectedPrintBill.itemName?.toLowerCase()}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Asset Registry Refill
+                  </p>
                 </td>
-                <td className="py-4 px-4 text-center text-sm font-semibold text-gray-800">{selectedPrintBill.quantity} units</td>
-                <td className="py-4 px-4 text-right text-sm text-gray-700">Rs. {selectedPrintBill.unitPrice?.toLocaleString()}</td>
-                <td className="py-4 px-4 text-right text-sm font-bold text-gray-900">Rs. {selectedPrintBill.totalAmount?.toLocaleString()}</td>
+                <td className="py-4 px-4 text-center text-sm font-semibold text-gray-800">
+                  {selectedPrintBill.quantity} units
+                </td>
+                <td className="py-4 px-4 text-right text-sm text-gray-700">
+                  Rs. {selectedPrintBill.unitPrice?.toLocaleString()}
+                </td>
+                <td className="py-4 px-4 text-right text-sm font-bold text-gray-900">
+                  Rs. {selectedPrintBill.totalAmount?.toLocaleString()}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -2767,23 +2892,35 @@ export default function InventoryPage() {
           <div className="flex justify-end mb-12">
             <div className="w-1/3 bg-gray-50 p-4 rounded-lg border border-gray-200">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-gray-600">Subtotal:</span>
-                <span className="text-sm text-gray-800">Rs. {selectedPrintBill.totalAmount?.toLocaleString()}</span>
+                <span className="text-sm font-semibold text-gray-600">
+                  Subtotal:
+                </span>
+                <span className="text-sm text-gray-800">
+                  Rs. {selectedPrintBill.totalAmount?.toLocaleString()}
+                </span>
               </div>
               <div className="flex justify-between items-center mb-4">
-                <span className="text-sm font-semibold text-gray-600">Tax/Fees:</span>
+                <span className="text-sm font-semibold text-gray-600">
+                  Tax/Fees:
+                </span>
                 <span className="text-sm text-gray-800">Rs. 0</span>
               </div>
               <div className="flex justify-between items-center pt-3 border-t border-gray-300">
-                <span className="text-base font-black text-gray-900">TOTAL:</span>
-                <span className="text-lg font-black text-emerald-600">Rs. {selectedPrintBill.totalAmount?.toLocaleString()}</span>
+                <span className="text-base font-black text-gray-900">
+                  TOTAL:
+                </span>
+                <span className="text-lg font-black text-emerald-600">
+                  Rs. {selectedPrintBill.totalAmount?.toLocaleString()}
+                </span>
               </div>
             </div>
           </div>
 
           {selectedPrintBill.notes && (
             <div className="mb-12">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Transaction Notes</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                Transaction Notes
+              </p>
               <p className="text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-100 italic">
                 "{selectedPrintBill.notes}"
               </p>
@@ -2791,8 +2928,12 @@ export default function InventoryPage() {
           )}
 
           <div className="text-center pt-8 border-t border-gray-200 mt-auto">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">End of Receipt</p>
-            <p className="text-[10px] text-gray-400 mt-2">Generated automatically by ProCare Clinical System</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+              End of Receipt
+            </p>
+            <p className="text-[10px] text-gray-400 mt-2">
+              Generated automatically by ProCare Clinical System
+            </p>
           </div>
         </div>
       )}

@@ -170,9 +170,7 @@ const ManageCallLogsPage = lazy(
 const FrontOfficeDeskPage = lazy(
   () => import("@/pages/dashboard/front-office/front-office-desk"),
 );
-const FollowupsPage = lazy(
-  () => import("@/pages/dashboard/follow-ups/index"),
-);
+const FollowupsPage = lazy(() => import("@/pages/dashboard/follow-ups/index"));
 
 // Lazy load invitation handler
 const InvitationPage = lazy(() => import("@/pages/invitation/index"));

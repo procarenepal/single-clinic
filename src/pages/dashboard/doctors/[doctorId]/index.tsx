@@ -189,11 +189,12 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
     });
     setTimeout(() => setCopied(false), 2000);
   };
+
   return (
     <button
-      onClick={handleCopy}
       className="p-1 hover:bg-surface-2 text-text-muted/40 hover:text-primary rounded transition-colors inline-flex items-center justify-center"
       title={`Copy ${label}`}
+      onClick={handleCopy}
     >
       {copied ? (
         <IoCheckmarkOutline className="w-3.5 h-3.5 text-success" />
@@ -214,7 +215,9 @@ export default function DoctorProfilePage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientNames, setPatientNames] = useState<Record<string, string>>({});
-  const [appointmentTypeNames, setAppointmentTypeNames] = useState<Record<string, string>>({});
+  const [appointmentTypeNames, setAppointmentTypeNames] = useState<
+    Record<string, string>
+  >({});
   const [commissions, setCommissions] = useState<DoctorCommission[]>([]);
   const [commissionStats, setCommissionStats] = useState({
     totalCommission: 0,
@@ -239,21 +242,24 @@ export default function DoctorProfilePage() {
 
   const [updatingTarget, setUpdatingTarget] = useState(false);
   const [targetInput, setTargetInput] = useState("");
-  const [earningsDateRange, setEarningsDateRange] = useState({ start: "", end: "" });
-  
+  const [earningsDateRange, setEarningsDateRange] = useState({
+    start: "",
+    end: "",
+  });
+
   // Appointment Filters
   const [appointmentTypeFilter, setAppointmentTypeFilter] = useState("all");
   const [appointmentDateRange, setAppointmentDateRange] = useState({
     start: "",
     end: "",
   });
-  
+
   // Patient Filters
   const [patientDateRange, setPatientDateRange] = useState({
     start: "",
     end: "",
   });
-  
+
   // Commission Filters
   const [commissionDateRange, setCommissionDateRange] = useState({
     start: "",
@@ -347,12 +353,14 @@ export default function DoctorProfilePage() {
             patientNamesMap[result.value.patientId] = result.value.name;
         });
         setPatientNames(patientNamesMap);
-        
+
         // Fetch appointment types for names
         if (clinicId) {
-          const types = await appointmentTypeService.getAppointmentTypes(clinicId);
+          const types =
+            await appointmentTypeService.getAppointmentTypes(clinicId);
           const typeNamesMap: Record<string, string> = {};
-          types.forEach(t => {
+
+          types.forEach((t) => {
             typeNamesMap[t.id] = t.name;
           });
           setAppointmentTypeNames(typeNamesMap);
@@ -505,9 +513,11 @@ export default function DoctorProfilePage() {
   const getCommissionBusiness = (c: DoctorCommission) => {
     const percentage = c.commissionPercentage || 0;
     const amt = c.commissionAmount || 0;
+
     if (percentage > 0) {
       return (amt * 100) / percentage;
     }
+
     return c.totalInvoiceAmount || amt;
   };
 
@@ -515,6 +525,7 @@ export default function DoctorProfilePage() {
     .filter((c) => {
       const date = new Date(c.appointmentDate || c.createdAt);
       const now = new Date();
+
       return (
         date.getMonth() === now.getMonth() &&
         date.getFullYear() === now.getFullYear() &&
@@ -529,13 +540,17 @@ export default function DoctorProfilePage() {
       if (globalDateRange.start && globalDateRange.end) {
         const date = new Date(c.appointmentDate || c.createdAt);
         const start = new Date(globalDateRange.start);
+
         start.setHours(0, 0, 0, 0);
         const end = new Date(globalDateRange.end);
+
         end.setHours(23, 59, 59, 999);
+
         return date >= start && date <= end;
       } else {
         const date = new Date(c.appointmentDate || c.createdAt);
         const now = new Date();
+
         return (
           date.getMonth() === now.getMonth() &&
           date.getFullYear() === now.getFullYear()
@@ -548,43 +563,61 @@ export default function DoctorProfilePage() {
     if (c.status === "cancelled") return false;
     const startStr = earningsDateRange.start;
     const endStr = earningsDateRange.end;
+
     if (startStr && endStr) {
       const date = new Date(c.appointmentDate || c.createdAt);
       const start = new Date(startStr);
+
       start.setHours(0, 0, 0, 0);
       const end = new Date(endStr);
+
       end.setHours(23, 59, 59, 999);
+
       return date >= start && date <= end;
     }
+
     return true;
   });
 
   const getSelectedRangeBusiness = () => {
     if (earningsDateRange.start && earningsDateRange.end) {
-      return filteredCommissionsForEarnings.reduce((sum, c) => sum + getCommissionBusiness(c), 0);
+      return filteredCommissionsForEarnings.reduce(
+        (sum, c) => sum + getCommissionBusiness(c),
+        0,
+      );
     }
+
     return thisMonthBusiness;
   };
 
   const getSelectedRangeCommissionEarned = () => {
     if (earningsDateRange.start && earningsDateRange.end) {
-      return filteredCommissionsForEarnings.reduce((sum, c) => sum + c.commissionAmount, 0);
+      return filteredCommissionsForEarnings.reduce(
+        (sum, c) => sum + c.commissionAmount,
+        0,
+      );
     }
+
     return commissionStats.totalCommission || 0;
   };
 
   const getSelectedRangeCommissionBalance = () => {
     if (earningsDateRange.start && earningsDateRange.end) {
       return filteredCommissionsForEarnings
-        .filter(c => c.status === "pending")
-        .reduce((sum, c) => sum + (c.commissionAmount - (c.paidAmount || 0)), 0);
+        .filter((c) => c.status === "pending")
+        .reduce(
+          (sum, c) => sum + (c.commissionAmount - (c.paidAmount || 0)),
+          0,
+        );
     }
+
     return commissionStats.pendingCommission || 0;
   };
 
   const handleUpdateTarget = async (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseFloat(targetInput);
+
     if (isNaN(val) || val < 0) return;
     try {
       setUpdatingTarget(true);
@@ -610,11 +643,15 @@ export default function DoctorProfilePage() {
   const getFilteredAppointmentsForStats = () => {
     if (!globalDateRange.start || !globalDateRange.end) return appointments;
     const start = new Date(globalDateRange.start);
+
     start.setHours(0, 0, 0, 0);
     const end = new Date(globalDateRange.end);
+
     end.setHours(23, 59, 59, 999);
+
     return appointments.filter((apt) => {
       const aptDate = new Date(apt.appointmentDate);
+
       return aptDate >= start && aptDate <= end;
     });
   };
@@ -622,11 +659,15 @@ export default function DoctorProfilePage() {
   const getFilteredPatientsForStats = () => {
     if (!globalDateRange.start || !globalDateRange.end) return patients;
     const start = new Date(globalDateRange.start);
+
     start.setHours(0, 0, 0, 0);
     const end = new Date(globalDateRange.end);
+
     end.setHours(23, 59, 59, 999);
+
     return patients.filter((pat) => {
       const patDate = new Date(pat.createdAt);
+
       return patDate >= start && patDate <= end;
     });
   };
@@ -651,22 +692,29 @@ export default function DoctorProfilePage() {
 
   const filteredAppointments = [...appointments]
     .filter((apt) => {
-      if (appointmentTypeFilter !== "all" && apt.appointmentTypeId !== appointmentTypeFilter) {
+      if (
+        appointmentTypeFilter !== "all" &&
+        apt.appointmentTypeId !== appointmentTypeFilter
+      ) {
         return false;
       }
-      
+
       const startStr = globalDateRange.start || appointmentDateRange.start;
       const endStr = globalDateRange.end || appointmentDateRange.end;
+
       if (startStr && endStr) {
         const aptDate = new Date(apt.appointmentDate);
         const start = new Date(startStr);
+
         start.setHours(0, 0, 0, 0);
         const end = new Date(endStr);
+
         end.setHours(23, 59, 59, 999);
         if (aptDate < start || aptDate > end) {
           return false;
         }
       }
+
       return true;
     })
     .sort(
@@ -674,42 +722,50 @@ export default function DoctorProfilePage() {
         new Date(b.appointmentDate).getTime() -
         new Date(a.appointmentDate).getTime(),
     );
-    
+
   const filteredPatients = [...patients]
     .filter((pat) => {
       const startStr = globalDateRange.start || patientDateRange.start;
       const endStr = globalDateRange.end || patientDateRange.end;
+
       if (startStr && endStr) {
         const patDate = new Date(pat.createdAt);
         const start = new Date(startStr);
+
         start.setHours(0, 0, 0, 0);
         const end = new Date(endStr);
+
         end.setHours(23, 59, 59, 999);
         if (patDate < start || patDate > end) {
           return false;
         }
       }
+
       return true;
     })
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-    
+
   const filteredCommissions = [...commissions]
     .filter((comm) => {
       const startStr = globalDateRange.start || commissionDateRange.start;
       const endStr = globalDateRange.end || commissionDateRange.end;
+
       if (startStr && endStr) {
         const commDate = new Date(comm.createdAt);
         const start = new Date(startStr);
+
         start.setHours(0, 0, 0, 0);
         const end = new Date(endStr);
+
         end.setHours(23, 59, 59, 999);
         if (commDate < start || commDate > end) {
           return false;
         }
       }
+
       return true;
     })
     .sort(
@@ -783,7 +839,9 @@ export default function DoctorProfilePage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface border border-border-base rounded-[10px] p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <IoCalendarOutline className="w-5 h-5 text-primary" />
-          <span className="text-[13px] font-semibold text-text-main">Filter Profile by Date:</span>
+          <span className="text-[13px] font-semibold text-text-main">
+            Filter Profile by Date:
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           {/* Quick presets */}
@@ -794,6 +852,7 @@ export default function DoctorProfilePage() {
                 getRange: () => {
                   const d = new Date();
                   const formatted = d.toISOString().split("T")[0];
+
                   return { start: formatted, end: formatted };
                 },
               },
@@ -801,8 +860,13 @@ export default function DoctorProfilePage() {
                 label: "This Month",
                 getRange: () => {
                   const now = new Date();
-                  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-                  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+                  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+                    .toISOString()
+                    .split("T")[0];
+                  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+                    .toISOString()
+                    .split("T")[0];
+
                   return { start, end };
                 },
               },
@@ -811,15 +875,20 @@ export default function DoctorProfilePage() {
                 getRange: () => {
                   const end = new Date();
                   const start = new Date();
+
                   start.setDate(end.getDate() - 30);
-                  return { start: start.toISOString().split("T")[0], end: end.toISOString().split("T")[0] };
+
+                  return {
+                    start: start.toISOString().split("T")[0],
+                    end: end.toISOString().split("T")[0],
+                  };
                 },
               },
             ].map((preset) => (
               <button
                 key={preset.label}
-                onClick={() => setGlobalDateRange(preset.getRange())}
                 className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-surface-2 hover:bg-primary/5 hover:text-primary border border-border-base transition-all"
+                onClick={() => setGlobalDateRange(preset.getRange())}
               >
                 {preset.label}
               </button>
@@ -827,23 +896,27 @@ export default function DoctorProfilePage() {
           </div>
 
           <input
-            type="date"
             className="h-9 px-3 text-[13px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary focus:ring-1 focus:ring-primary/10"
+            type="date"
             value={globalDateRange.start}
-            onChange={(e) => setGlobalDateRange(p => ({ ...p, start: e.target.value }))}
+            onChange={(e) =>
+              setGlobalDateRange((p) => ({ ...p, start: e.target.value }))
+            }
           />
           <span className="text-[13px] text-text-muted font-medium">to</span>
           <input
-            type="date"
             className="h-9 px-3 text-[13px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary focus:ring-1 focus:ring-primary/10"
+            type="date"
             value={globalDateRange.end}
-            onChange={(e) => setGlobalDateRange(p => ({ ...p, end: e.target.value }))}
+            onChange={(e) =>
+              setGlobalDateRange((p) => ({ ...p, end: e.target.value }))
+            }
           />
           {(globalDateRange.start || globalDateRange.end) && (
             <Button
+              color="danger"
               size="sm"
               variant="bordered"
-              color="danger"
               onClick={() => setGlobalDateRange({ start: "", end: "" })}
             >
               Clear Range
@@ -857,7 +930,7 @@ export default function DoctorProfilePage() {
         {/* Production-grade background aesthetics */}
         <div className="absolute right-0 top-0 w-64 h-64 bg-gradient-to-bl from-primary/5 via-transparent to-transparent rounded-bl-full pointer-events-none" />
         <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-gradient-to-tr from-indigo-500/5 via-transparent to-transparent rounded-tr-full pointer-events-none" />
-        
+
         <div className="flex flex-col lg:flex-row items-center gap-6 relative z-10 w-full">
           {/* Avatar and Main Info Column */}
           <div className="flex items-center gap-4 shrink-0 w-full lg:w-auto">
@@ -878,8 +951,8 @@ export default function DoctorProfilePage() {
                 >
                   {doctor.isActive ? (
                     <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                     </span>
                   ) : (
                     <span className="w-1.5 h-1.5 rounded-full mr-1 shrink-0 bg-red-500" />
@@ -902,8 +975,8 @@ export default function DoctorProfilePage() {
                   doctor.doctorType === "regular"
                     ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
                     : doctor.doctorType === "visiting"
-                    ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
-                    : "bg-primary/10 text-primary border-primary/20"
+                      ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
+                      : "bg-primary/10 text-primary border-primary/20"
                 }`}
               >
                 <IoBusinessOutline className="w-3.5 h-3.5" />
@@ -912,7 +985,7 @@ export default function DoctorProfilePage() {
               <span className="flex items-center gap-1.5 text-[12.5px] text-blue-600 font-semibold bg-blue-500/10 px-2.5 py-1 rounded border border-blue-500/20">
                 <IoIdCardOutline className="w-3.5 h-3.5" />
                 <span>NMC: {doctor.nmcNumber}</span>
-                <CopyButton text={doctor.nmcNumber} label="NMC Number" />
+                <CopyButton label="NMC Number" text={doctor.nmcNumber} />
               </span>
               <span className="flex items-center gap-1.5 text-[12.5px] text-indigo-600 font-semibold bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-500/20">
                 <IoStatsChartOutline className="w-3.5 h-3.5" />
@@ -925,13 +998,13 @@ export default function DoctorProfilePage() {
               <span className="flex items-center gap-1.5 text-[13px] text-text-muted hover:text-text-main transition-colors">
                 <IoCallOutline className="text-text-muted/50 w-3.5 h-3.5" />
                 <span>{doctor.phone}</span>
-                <CopyButton text={doctor.phone} label="Phone Number" />
+                <CopyButton label="Phone Number" text={doctor.phone} />
               </span>
               {doctor.email && (
                 <span className="flex items-center gap-1.5 text-[13px] text-text-muted hover:text-text-main transition-colors">
                   <IoMailOutline className="text-text-muted/50 w-3.5 h-3.5" />
                   <span>{doctor.email}</span>
-                  <CopyButton text={doctor.email} label="Email Address" />
+                  <CopyButton label="Email Address" text={doctor.email} />
                 </span>
               )}
             </div>
@@ -1057,28 +1130,42 @@ export default function DoctorProfilePage() {
                 <h3 className="text-[15px] font-bold text-text-main uppercase tracking-wider mb-4 border-b border-border-base pb-2">
                   Earnings & Business
                 </h3>
-                
+
                 {/* Inline Date Filter */}
                 <div className="flex flex-col gap-2 p-3 bg-surface-2/40 border border-border-base/50 rounded-lg mb-4">
-                  <div className="text-[12px] font-semibold text-text-muted">Filter Earnings by Date:</div>
+                  <div className="text-[12px] font-semibold text-text-muted">
+                    Filter Earnings by Date:
+                  </div>
                   <div className="flex items-center gap-2">
                     <input
-                      type="date"
                       className="flex-1 h-8 px-2 text-[12px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={earningsDateRange.start}
-                      onChange={(e) => setEarningsDateRange(p => ({ ...p, start: e.target.value }))}
+                      onChange={(e) =>
+                        setEarningsDateRange((p) => ({
+                          ...p,
+                          start: e.target.value,
+                        }))
+                      }
                     />
                     <span className="text-[12px] text-text-muted">to</span>
                     <input
-                      type="date"
                       className="flex-1 h-8 px-2 text-[12px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={earningsDateRange.end}
-                      onChange={(e) => setEarningsDateRange(p => ({ ...p, end: e.target.value }))}
+                      onChange={(e) =>
+                        setEarningsDateRange((p) => ({
+                          ...p,
+                          end: e.target.value,
+                        }))
+                      }
                     />
                     {(earningsDateRange.start || earningsDateRange.end) && (
                       <button
                         className="text-[11px] font-semibold text-red-500 hover:text-red-600 px-1"
-                        onClick={() => setEarningsDateRange({ start: "", end: "" })}
+                        onClick={() =>
+                          setEarningsDateRange({ start: "", end: "" })
+                        }
                       >
                         Clear
                       </button>
@@ -1088,7 +1175,9 @@ export default function DoctorProfilePage() {
 
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                   <span className="text-text-muted">
-                    {earningsDateRange.start && earningsDateRange.end ? "Filtered Business" : "This Month Business"}
+                    {earningsDateRange.start && earningsDateRange.end
+                      ? "Filtered Business"
+                      : "This Month Business"}
                   </span>
                   <span className="font-bold text-primary">
                     NPR {getSelectedRangeBusiness().toLocaleString()}
@@ -1096,7 +1185,9 @@ export default function DoctorProfilePage() {
                 </div>
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                   <span className="text-text-muted">
-                    {earningsDateRange.start && earningsDateRange.end ? "Filtered Commission" : "Total Commission Earned"}
+                    {earningsDateRange.start && earningsDateRange.end
+                      ? "Filtered Commission"
+                      : "Total Commission Earned"}
                   </span>
                   <span className="font-semibold text-text-main">
                     NPR {getSelectedRangeCommissionEarned().toLocaleString()}
@@ -1104,7 +1195,9 @@ export default function DoctorProfilePage() {
                 </div>
                 <div className="flex justify-between text-[14px] pb-2">
                   <span className="text-text-muted font-medium">
-                    {earningsDateRange.start && earningsDateRange.end ? "Filtered Balance" : "Commission Balance"}
+                    {earningsDateRange.start && earningsDateRange.end
+                      ? "Filtered Balance"
+                      : "Commission Balance"}
                   </span>
                   <span className="font-bold text-success">
                     NPR {getSelectedRangeCommissionBalance().toLocaleString()}
@@ -1145,7 +1238,13 @@ export default function DoctorProfilePage() {
                     <IoStatsChartOutline className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[13px] text-text-muted font-medium">Achievement ({globalDateRange.start && globalDateRange.end ? "Filtered" : "This Month"})</p>
+                    <p className="text-[13px] text-text-muted font-medium">
+                      Achievement (
+                      {globalDateRange.start && globalDateRange.end
+                        ? "Filtered"
+                        : "This Month"}
+                      )
+                    </p>
                     <p className="text-stat-sm text-green-600 font-bold mt-1">
                       NPR {achievementBusiness.toLocaleString()}
                     </p>
@@ -1157,9 +1256,15 @@ export default function DoctorProfilePage() {
                     <IoTimeOutline className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[13px] text-text-muted font-medium">Remaining Target</p>
+                    <p className="text-[13px] text-text-muted font-medium">
+                      Remaining Target
+                    </p>
                     <p className="text-stat-sm text-amber-600 font-bold mt-1">
-                      NPR {Math.max((doctor.monthlyTarget || 0) - achievementBusiness, 0).toLocaleString()}
+                      NPR{" "}
+                      {Math.max(
+                        (doctor.monthlyTarget || 0) - achievementBusiness,
+                        0,
+                      ).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -1169,7 +1274,9 @@ export default function DoctorProfilePage() {
                     <IoFlagOutline className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[13px] text-text-muted font-medium">Total Monthly Target</p>
+                    <p className="text-[13px] text-text-muted font-medium">
+                      Total Monthly Target
+                    </p>
                     <p className="text-stat-sm text-primary font-bold mt-1">
                       NPR {(doctor.monthlyTarget || 0).toLocaleString()}
                     </p>
@@ -1180,7 +1287,9 @@ export default function DoctorProfilePage() {
               {/* Progress Bar */}
               <div className="bg-surface border border-border-base p-6 rounded-[10px] shadow-sm">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="text-[14px] font-semibold text-text-main">Target Completion</span>
+                  <span className="text-[14px] font-semibold text-text-main">
+                    Target Completion
+                  </span>
                   <span className="text-[14px] font-bold text-primary">
                     {doctor.monthlyTarget && doctor.monthlyTarget > 0
                       ? `${Math.round((achievementBusiness / doctor.monthlyTarget) * 100)}%`
@@ -1199,24 +1308,28 @@ export default function DoctorProfilePage() {
 
               {/* Set/Update Target Form */}
               <div className="bg-surface border border-border-base p-6 rounded-[10px] shadow-sm max-w-md">
-                <h4 className="text-[15px] font-bold text-text-main mb-4">Update Monthly Target</h4>
-                <form onSubmit={handleUpdateTarget} className="flex gap-3">
+                <h4 className="text-[15px] font-bold text-text-main mb-4">
+                  Update Monthly Target
+                </h4>
+                <form className="flex gap-3" onSubmit={handleUpdateTarget}>
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-2.5 text-[13px] text-text-muted font-semibold">NPR</span>
+                    <span className="absolute left-3 top-2.5 text-[13px] text-text-muted font-semibold">
+                      NPR
+                    </span>
                     <input
-                      type="number"
-                      placeholder="Enter monthly target"
                       className="w-full h-10 pl-12 pr-3 text-[13.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary focus:ring-1 focus:ring-primary/10"
+                      min="0"
+                      placeholder="Enter monthly target"
+                      type="number"
                       value={targetInput}
                       onChange={(e) => setTargetInput(e.target.value)}
-                      min="0"
                     />
                   </div>
                   <Button
-                    type="submit"
                     color="primary"
-                    isLoading={updatingTarget}
                     disabled={updatingTarget}
+                    isLoading={updatingTarget}
+                    type="submit"
                   >
                     Save Target
                   </Button>
@@ -1241,19 +1354,27 @@ export default function DoctorProfilePage() {
                     Refresh
                   </Button>
                 </div>
-                
+
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-4 bg-surface-2/50 p-3 rounded-lg border border-border-base">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Type:</span>
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">
+                      Type:
+                    </span>
                     <select
                       className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
                       value={appointmentTypeFilter}
                       onChange={(e) => setAppointmentTypeFilter(e.target.value)}
                     >
                       <option value="all">All Types</option>
-                      {[...new Set(appointments.map(a => a.appointmentTypeId).filter(Boolean))]
-                        .filter(typeId => {
+                      {[
+                        ...new Set(
+                          appointments
+                            .map((a) => a.appointmentTypeId)
+                            .filter(Boolean),
+                        ),
+                      ]
+                        .filter((typeId) => {
                           // Keep if it exists in the active appointment types map
                           if (appointmentTypeNames[typeId]) return true;
                           // Keep system types
@@ -1261,46 +1382,79 @@ export default function DoctorProfilePage() {
                           // If it's a legacy string like 'initial', 'followup', keep it.
                           // Usually Firestore IDs are exactly 20 characters long.
                           if (typeId.length !== 20) return true;
+
                           // Otherwise, it's a deleted ID. Don't show it in the dropdown.
                           return false;
                         })
-                        .map(typeId => {
+                        .map((typeId) => {
                           let displayName = appointmentTypeNames[typeId];
+
                           if (!displayName) {
-                            if (typeId === "package-session") displayName = "Package Session";
+                            if (typeId === "package-session")
+                              displayName = "Package Session";
                             else {
-                              const apt = appointments.find(a => a.appointmentTypeId === typeId);
-                              if (apt && apt.appointmentType && apt.appointmentType !== typeId) {
-                                displayName = apt.appointmentType.charAt(0).toUpperCase() + apt.appointmentType.slice(1).replace("-", " ");
+                              const apt = appointments.find(
+                                (a) => a.appointmentTypeId === typeId,
+                              );
+
+                              if (
+                                apt &&
+                                apt.appointmentType &&
+                                apt.appointmentType !== typeId
+                              ) {
+                                displayName =
+                                  apt.appointmentType.charAt(0).toUpperCase() +
+                                  apt.appointmentType
+                                    .slice(1)
+                                    .replace("-", " ");
                               } else {
                                 displayName = typeId; // fallback
                               }
                             }
                           }
+
                           return (
-                            <option key={typeId} value={typeId}>{displayName}</option>
+                            <option key={typeId} value={typeId}>
+                              {displayName}
+                            </option>
                           );
-                      })}
+                        })}
                     </select>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <IoCalendarOutline className="w-4 h-4 text-text-muted" />
-                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Date:</span>
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">
+                      Date:
+                    </span>
                     <input
-                      type="date"
                       className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={appointmentDateRange.start}
-                      onChange={(e) => setAppointmentDateRange(p => ({ ...p, start: e.target.value }))}
+                      onChange={(e) =>
+                        setAppointmentDateRange((p) => ({
+                          ...p,
+                          start: e.target.value,
+                        }))
+                      }
                     />
-                    <span className="text-[11px] text-text-muted font-medium">to</span>
+                    <span className="text-[11px] text-text-muted font-medium">
+                      to
+                    </span>
                     <input
-                      type="date"
                       className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={appointmentDateRange.end}
-                      onChange={(e) => setAppointmentDateRange(p => ({ ...p, end: e.target.value }))}
+                      onChange={(e) =>
+                        setAppointmentDateRange((p) => ({
+                          ...p,
+                          end: e.target.value,
+                        }))
+                      }
                     />
-                    {(appointmentDateRange.start || appointmentDateRange.end || appointmentTypeFilter !== "all") && (
+                    {(appointmentDateRange.start ||
+                      appointmentDateRange.end ||
+                      appointmentTypeFilter !== "all") && (
                       <button
                         className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
                         onClick={() => {
@@ -1314,7 +1468,7 @@ export default function DoctorProfilePage() {
                   </div>
                 </div>
               </div>
-              
+
               {filteredAppointments.length > 0 ? (
                 <div className="overflow-x-auto border border-border-base rounded-[10px]">
                   <table className="w-full text-left">
@@ -1362,7 +1516,11 @@ export default function DoctorProfilePage() {
                                 {appointment.status}
                               </span>
                               <span className="text-[12px] text-text-muted">
-                                {appointmentTypeNames[appointment.appointmentTypeId] || appointment.appointmentType || "Consultation"}
+                                {appointmentTypeNames[
+                                  appointment.appointmentTypeId
+                                ] ||
+                                  appointment.appointmentType ||
+                                  "Consultation"}
                               </span>
                             </div>
                           </td>
@@ -1396,29 +1554,45 @@ export default function DoctorProfilePage() {
                     Refresh
                   </Button>
                 </div>
-                
+
                 {/* Patient Filters */}
                 <div className="flex flex-wrap items-center gap-4 bg-surface-2/50 p-3 rounded-lg border border-border-base">
                   <div className="flex items-center gap-2">
                     <IoCalendarOutline className="w-4 h-4 text-text-muted" />
-                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Date:</span>
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">
+                      Date:
+                    </span>
                     <input
-                      type="date"
                       className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={patientDateRange.start}
-                      onChange={(e) => setPatientDateRange(p => ({ ...p, start: e.target.value }))}
+                      onChange={(e) =>
+                        setPatientDateRange((p) => ({
+                          ...p,
+                          start: e.target.value,
+                        }))
+                      }
                     />
-                    <span className="text-[11px] text-text-muted font-medium">to</span>
+                    <span className="text-[11px] text-text-muted font-medium">
+                      to
+                    </span>
                     <input
-                      type="date"
                       className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={patientDateRange.end}
-                      onChange={(e) => setPatientDateRange(p => ({ ...p, end: e.target.value }))}
+                      onChange={(e) =>
+                        setPatientDateRange((p) => ({
+                          ...p,
+                          end: e.target.value,
+                        }))
+                      }
                     />
                     {(patientDateRange.start || patientDateRange.end) && (
                       <button
                         className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
-                        onClick={() => setPatientDateRange({ start: "", end: "" })}
+                        onClick={() =>
+                          setPatientDateRange({ start: "", end: "" })
+                        }
                       >
                         Clear
                       </button>
@@ -1426,7 +1600,7 @@ export default function DoctorProfilePage() {
                   </div>
                 </div>
               </div>
-              
+
               {filteredPatients.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredPatients.map((patient) => (
@@ -1508,29 +1682,45 @@ export default function DoctorProfilePage() {
                     Refresh Data
                   </Button>
                 </div>
-                
+
                 {/* Commission Filters */}
                 <div className="flex flex-wrap items-center gap-4 bg-surface-2/50 p-3 rounded-lg border border-border-base">
                   <div className="flex items-center gap-2">
                     <IoCalendarOutline className="w-4 h-4 text-text-muted" />
-                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">Date:</span>
+                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-widest">
+                      Date:
+                    </span>
                     <input
-                      type="date"
                       className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={commissionDateRange.start}
-                      onChange={(e) => setCommissionDateRange(p => ({ ...p, start: e.target.value }))}
+                      onChange={(e) =>
+                        setCommissionDateRange((p) => ({
+                          ...p,
+                          start: e.target.value,
+                        }))
+                      }
                     />
-                    <span className="text-[11px] text-text-muted font-medium">to</span>
+                    <span className="text-[11px] text-text-muted font-medium">
+                      to
+                    </span>
                     <input
-                      type="date"
                       className="h-8 px-2 text-[12.5px] rounded border border-border-base bg-surface text-text-main outline-none focus:border-primary"
+                      type="date"
                       value={commissionDateRange.end}
-                      onChange={(e) => setCommissionDateRange(p => ({ ...p, end: e.target.value }))}
+                      onChange={(e) =>
+                        setCommissionDateRange((p) => ({
+                          ...p,
+                          end: e.target.value,
+                        }))
+                      }
                     />
                     {(commissionDateRange.start || commissionDateRange.end) && (
                       <button
                         className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
-                        onClick={() => setCommissionDateRange({ start: "", end: "" })}
+                        onClick={() =>
+                          setCommissionDateRange({ start: "", end: "" })
+                        }
                       >
                         Clear
                       </button>

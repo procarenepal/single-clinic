@@ -171,14 +171,14 @@ export function Autocomplete({
             setQuery(e.target.value);
             setOpen(true);
           }}
-          onFocus={(e) => {
-            setOpen(true);
-            e.target.select();
-          }}
           onDoubleClick={(e) => {
             if (e.target instanceof HTMLInputElement) {
               e.target.select();
             }
+          }}
+          onFocus={(e) => {
+            setOpen(true);
+            e.target.select();
           }}
         />
         {isLoading ? (

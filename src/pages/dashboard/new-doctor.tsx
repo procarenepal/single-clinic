@@ -119,7 +119,12 @@ function CustomSelect({
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function NewDoctorPage() {
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
+  const {
+    clinicId,
+    currentUser,
+    userData,
+    isLoading: authLoading,
+  } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [specialities, setSpecialities] = useState<
     Array<{ value: string; label: string }>

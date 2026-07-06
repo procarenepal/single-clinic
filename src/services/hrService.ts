@@ -265,11 +265,13 @@ export const hrService = {
   async getHolidays(clinicId: string): Promise<ClinicHoliday[]> {
     const q = query(
       collection(db, HOLIDAY_COLLECTION),
-      where("clinicId", "==", clinicId)
+      where("clinicId", "==", clinicId),
     );
     const querySnapshot = await getDocs(q);
+
     return querySnapshot.docs.map((doc) => {
       const data = doc.data();
+
       return {
         id: doc.id,
         clinicId: data.clinicId || clinicId,
@@ -280,7 +282,12 @@ export const hrService = {
     });
   },
 
-  async addHoliday(clinicId: string, name: string, date: Date, type: "paid" | "unpaid" = "paid"): Promise<string> {
+  async addHoliday(
+    clinicId: string,
+    name: string,
+    date: Date,
+    type: "paid" | "unpaid" = "paid",
+  ): Promise<string> {
     const docRef = await addDoc(collection(db, HOLIDAY_COLLECTION), {
       clinicId,
       name,
@@ -288,12 +295,14 @@ export const hrService = {
       date: Timestamp.fromDate(new Date(date)),
       createdAt: serverTimestamp(),
     });
+
     return docRef.id;
   },
 
   async deleteHoliday(id: string): Promise<void> {
     const { deleteDoc } = await import("firebase/firestore");
     const docRef = doc(db, HOLIDAY_COLLECTION, id);
+
     await deleteDoc(docRef);
   },
 };

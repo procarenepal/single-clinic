@@ -524,7 +524,9 @@ export default function PurchaseDetailPage() {
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  const [paymentDiscountType, setPaymentDiscountType] = useState<"none" | "flat" | "percent">("none");
+  const [paymentDiscountType, setPaymentDiscountType] = useState<
+    "none" | "flat" | "percent"
+  >("none");
   const [paymentDiscountValue, setPaymentDiscountValue] = useState<string>("");
 
   const handleOpenPaymentModal = () => {
@@ -854,20 +856,23 @@ export default function PurchaseDetailPage() {
   };
 
   const calculatedDiscountAmount = useMemo(() => {
-    if (paymentDiscountType === "none" || !paymentDiscountValue || !purchase) return 0;
+    if (paymentDiscountType === "none" || !paymentDiscountValue || !purchase)
+      return 0;
     const val = parseFloat(paymentDiscountValue);
+
     if (isNaN(val) || val < 0) return 0;
     if (paymentDiscountType === "flat") return val;
     if (paymentDiscountType === "percent") {
       return (dueAmount * val) / 100;
     }
+
     return 0;
   }, [paymentDiscountType, paymentDiscountValue, purchase, dueAmount]);
 
   useEffect(() => {
     if (isPaymentModalOpen && purchase) {
       const maxAllowed = Math.max(0, dueAmount - calculatedDiscountAmount);
-      
+
       setPaymentForm((prev) => ({ ...prev, amount: maxAllowed }));
     }
   }, [calculatedDiscountAmount, dueAmount, isPaymentModalOpen, purchase]);
@@ -899,6 +904,7 @@ export default function PurchaseDetailPage() {
     }
 
     const maxAllowed = Math.max(0, dueAmount - calculatedDiscountAmount);
+
     if (paymentForm.amount > maxAllowed) {
       addToast({
         title: "Validation Error",
@@ -958,11 +964,18 @@ export default function PurchaseDetailPage() {
       const newPaidAmount = Math.round(
         updatedPayments.reduce((sum, p) => sum + p.amount, 0),
       );
-      
-      const newNetAmount = Math.max(0, purchase.netAmount - calculatedDiscountAmount);
-      const newTotalAmount = Math.max(0, totalAmount - calculatedDiscountAmount);
-      const newDiscountTotal = (purchase.discount || 0) + calculatedDiscountAmount;
-      
+
+      const newNetAmount = Math.max(
+        0,
+        purchase.netAmount - calculatedDiscountAmount,
+      );
+      const newTotalAmount = Math.max(
+        0,
+        totalAmount - calculatedDiscountAmount,
+      );
+      const newDiscountTotal =
+        (purchase.discount || 0) + calculatedDiscountAmount;
+
       const newStatus =
         newPaidAmount >= newTotalAmount
           ? "paid"
@@ -985,14 +998,16 @@ export default function PurchaseDetailPage() {
 
       // Update local purchase state
       setPurchase((prev) =>
-        prev ? { 
-          ...prev, 
-          paymentStatus: newStatus,
-          ...(calculatedDiscountAmount > 0 && {
-            discount: newDiscountTotal,
-            netAmount: newNetAmount,
-          })
-        } : null,
+        prev
+          ? {
+              ...prev,
+              paymentStatus: newStatus,
+              ...(calculatedDiscountAmount > 0 && {
+                discount: newDiscountTotal,
+                netAmount: newNetAmount,
+              }),
+            }
+          : null,
       );
 
       addToast({
@@ -2573,7 +2588,9 @@ export default function PurchaseDetailPage() {
                   className="h-8 w-full px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100 text-mountain-800"
                   value={paymentDiscountType}
                   onChange={(e) => {
-                    setPaymentDiscountType(e.target.value as "none" | "flat" | "percent");
+                    setPaymentDiscountType(
+                      e.target.value as "none" | "flat" | "percent",
+                    );
                     if (e.target.value === "none") {
                       setPaymentDiscountValue("");
                     }

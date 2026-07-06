@@ -73,7 +73,13 @@ export interface User {
 }
 
 // Possible user roles in the system
-export type UserRole = "system-owner" | "clinic-admin" | "staff" | "doctor" | "expert" | "hr";
+export type UserRole =
+  | "system-owner"
+  | "clinic-admin"
+  | "staff"
+  | "doctor"
+  | "expert"
+  | "hr";
 
 // Clinic Type model for categorizing clinics
 export interface ClinicType {
@@ -1131,7 +1137,13 @@ export interface LeaveRequest {
   branchId: string;
 
   // Leave details
-  leaveType: "annual" | "sick" | "casual" | "unpaid" | "maternity" | "emergency";
+  leaveType:
+    | "annual"
+    | "sick"
+    | "casual"
+    | "unpaid"
+    | "maternity"
+    | "emergency";
   startDate: Date;
   endDate: Date;
   totalDays: number;
@@ -1271,9 +1283,19 @@ export interface PaymentMethod {
 // Tracks multi-step follow-up schedules per patient visit, mirroring
 // the clinic's internal "Patient Follow up" sheet.
 
-export type FollowupStatus = "pending" | "completed" | "no-answer" | "wrong-no" | "cancelled";
+export type FollowupStatus =
+  | "pending"
+  | "completed"
+  | "no-answer"
+  | "wrong-no"
+  | "cancelled";
 export type FollowupInitStatus = "good" | "complain" | "neutral";
-export type FollowupUpdatedStatus = "good" | "solved" | "wrong-no" | "no-answer" | "neutral";
+export type FollowupUpdatedStatus =
+  | "good"
+  | "solved"
+  | "wrong-no"
+  | "no-answer"
+  | "neutral";
 
 export interface PatientFollowup {
   id: string;
@@ -1299,7 +1321,7 @@ export interface PatientFollowup {
     [session: string]: {
       initStatus?: FollowupInitStatus;
       updatedStatus?: FollowupUpdatedStatus;
-    }
+    };
   };
 
   // Follow-up date chain (up to 5 sequential follow-ups per Excel)

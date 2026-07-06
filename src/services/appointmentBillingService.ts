@@ -9,8 +9,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
-  limit,
   Timestamp,
   increment,
 } from "firebase/firestore";
@@ -536,9 +534,7 @@ export const appointmentBillingService = {
 
       const billingRef = collection(db, APPOINTMENT_BILLING_COLLECTION);
 
-      const constraints: any[] = [
-        where("clinicId", "==", clinicId),
-      ];
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
@@ -694,8 +690,10 @@ export const appointmentBillingService = {
 
       // Handle discount
       const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
-      const newMainDiscountAmount = (billing.mainDiscountAmount || 0) + discountAmount;
-      const newTotalDiscountAmount = (billing.discountAmount || 0) + discountAmount;
+      const newMainDiscountAmount =
+        (billing.mainDiscountAmount || 0) + discountAmount;
+      const newTotalDiscountAmount =
+        (billing.discountAmount || 0) + discountAmount;
 
       const newPaidAmount = billing.paidAmount + paymentAmount;
       const newBalanceAmount = Math.max(0, newTotalAmount - newPaidAmount);

@@ -22,7 +22,6 @@ import { Tabs, Tab } from "@/components/ui/tabs";
 import { Divider } from "@/components/ui/divider";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
-import { Select, SelectItem } from "@/components/ui/select";
 import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
 import { title } from "@/components/primitives";
 import { Skeleton } from "@/components/ui";
@@ -405,8 +404,8 @@ export default function ReportsPage() {
         ? true
         : appointmentDate >= startDate && appointmentDate <= endDate;
       const matchesDoctor =
-        selectedDoctor === "all" || 
-        appointment.doctorId === selectedDoctor || 
+        selectedDoctor === "all" ||
+        appointment.doctorId === selectedDoctor ||
         appointment.assignedExpertId === selectedDoctor;
       const matchesAppointmentType =
         selectedAppointmentType === "all" ||
@@ -437,10 +436,16 @@ export default function ReportsPage() {
       let doctorOk = true;
 
       if (selectedDoctor !== "all") {
-        const assignedMatches = (p as any).doctorId === selectedDoctor || (p as any).assignedExpertId === selectedDoctor;
+        const assignedMatches =
+          (p as any).doctorId === selectedDoctor ||
+          (p as any).assignedExpertId === selectedDoctor;
         const hasAppointmentWithDoctor = reportData.appointments.some((apt) => {
           if (apt.patientId !== p.id) return false;
-          if (apt.doctorId !== selectedDoctor && apt.assignedExpertId !== selectedDoctor) return false;
+          if (
+            apt.doctorId !== selectedDoctor &&
+            apt.assignedExpertId !== selectedDoctor
+          )
+            return false;
           if (allDates) return true;
           const aptDate = new Date(apt.appointmentDate);
 
@@ -574,7 +579,9 @@ export default function ReportsPage() {
     // Apply appointment type filter if a specific appointment type is selected
     if (selectedAppointmentType !== "all") {
       billings = billings.filter((b) =>
-        b.items.some((item) => item.appointmentTypeId === selectedAppointmentType),
+        b.items.some(
+          (item) => item.appointmentTypeId === selectedAppointmentType,
+        ),
       );
     }
 
@@ -1046,7 +1053,8 @@ export default function ReportsPage() {
           });
 
           attributedAmount =
-            matchingItems.reduce((s, i) => s + (i.amount || 0), 0) * scaleFactor;
+            matchingItems.reduce((s, i) => s + (i.amount || 0), 0) *
+            scaleFactor;
         }
 
         return {
@@ -1059,8 +1067,9 @@ export default function ReportsPage() {
             selectedDoctor !== "all"
               ? reportData.doctors.find((d) => d.id === selectedDoctor)?.name ||
                 reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
-                reportData.referralPartners.find((p) => p.id === selectedDoctor)?.name ||
-              "N/A"
+                reportData.referralPartners.find((p) => p.id === selectedDoctor)
+                  ?.name ||
+                "N/A"
               : billing.doctorName,
           "Doctor Type":
             billing.doctorType === "visitor" ? "Visiting" : "Regular",
@@ -1567,12 +1576,12 @@ export default function ReportsPage() {
                               <Chip
                                 color={
                                   statusColor as
-                                  | "success"
-                                  | "primary"
-                                  | "warning"
-                                  | "danger"
-                                  | "default"
-                                  | "secondary"
+                                    | "success"
+                                    | "primary"
+                                    | "warning"
+                                    | "danger"
+                                    | "default"
+                                    | "secondary"
                                 }
                                 size="sm"
                                 variant="flat"
@@ -1748,8 +1757,8 @@ export default function ReportsPage() {
                           <td className="whitespace-nowrap">
                             {patient.createdAt
                               ? new Date(
-                                patient.createdAt as any,
-                              ).toLocaleDateString()
+                                  patient.createdAt as any,
+                                ).toLocaleDateString()
                               : ""}
                           </td>
                         </tr>
@@ -2131,7 +2140,10 @@ export default function ReportsPage() {
 
                       // Appointment Billing Revenue & Collection
                       filteredBillings.forEach((b) => {
-                        if (selectedDoctor === "all" && selectedAppointmentType === "all") {
+                        if (
+                          selectedDoctor === "all" &&
+                          selectedAppointmentType === "all"
+                        ) {
                           totalRevenue += b.totalAmount;
                           totalPaid += b.paidAmount || 0;
                         } else {
@@ -2148,7 +2160,8 @@ export default function ReportsPage() {
                               (item.doctorId || b.doctorId) === selectedDoctor;
                             const matchesType =
                               selectedAppointmentType === "all" ||
-                              item.appointmentTypeId === selectedAppointmentType;
+                              item.appointmentTypeId ===
+                                selectedAppointmentType;
 
                             if (matchesDoctor && matchesType) {
                               totalRevenue += (item.amount || 0) * revenueScale;
@@ -2177,14 +2190,19 @@ export default function ReportsPage() {
 
                             if (referral) {
                               totalRevenue += referral.calculatedAmount;
-                              const share = referral.calculatedAmount / b.totalAmount;
+                              const share =
+                                referral.calculatedAmount / b.totalAmount;
+
                               totalPaid += (b.paidAmount || 0) * share;
                             }
                           });
                         }
                       }
 
-                      const outstandingBalance = Math.max(0, totalRevenue - totalPaid);
+                      const outstandingBalance = Math.max(
+                        0,
+                        totalRevenue - totalPaid,
+                      );
 
                       return (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -2204,13 +2222,18 @@ export default function ReportsPage() {
                             <p className="clarity-stat-value text-saffron-600">
                               NPR {Math.round(totalPaid).toLocaleString()}
                             </p>
-                            <p className="clarity-stat-label">Total Collected</p>
+                            <p className="clarity-stat-label">
+                              Total Collected
+                            </p>
                           </div>
                           <div className="clarity-stat text-center">
                             <p className="clarity-stat-value text-rose-600">
-                              NPR {Math.round(outstandingBalance).toLocaleString()}
+                              NPR{" "}
+                              {Math.round(outstandingBalance).toLocaleString()}
                             </p>
-                            <p className="clarity-stat-label">Outstanding Balance</p>
+                            <p className="clarity-stat-label">
+                              Outstanding Balance
+                            </p>
                           </div>
                         </div>
                       );
@@ -2309,7 +2332,10 @@ export default function ReportsPage() {
                           itemsTotal > 0 ? b.totalAmount / itemsTotal : 1;
 
                         b.items.forEach((item) => {
-                          if (selectedAppointmentType !== "all" && item.appointmentTypeId !== selectedAppointmentType) {
+                          if (
+                            selectedAppointmentType !== "all" &&
+                            item.appointmentTypeId !== selectedAppointmentType
+                          ) {
                             return;
                           }
                           const dId = item.doctorId || b.doctorId;
@@ -2340,12 +2366,20 @@ export default function ReportsPage() {
                               });
                             }
                             const stats = doctorStats.get(ref.id)!;
+
                             stats.revenue += ref.commissionAmount || 0;
                             stats.invoices.add(b.id);
                           });
-                        } else if (b.referralPartnerId && b.referralCommissionAmount) {
+                        } else if (
+                          b.referralPartnerId &&
+                          b.referralCommissionAmount
+                        ) {
                           if (!doctorStats.has(b.referralPartnerId)) {
-                            const partnerName = reportData.referralPartners.find(p => p.id === b.referralPartnerId)?.name || "Partner";
+                            const partnerName =
+                              reportData.referralPartners.find(
+                                (p) => p.id === b.referralPartnerId,
+                              )?.name || "Partner";
+
                             doctorStats.set(b.referralPartnerId, {
                               name: partnerName,
                               invoices: new Set(),
@@ -2353,6 +2387,7 @@ export default function ReportsPage() {
                             });
                           }
                           const stats = doctorStats.get(b.referralPartnerId)!;
+
                           stats.revenue += b.referralCommissionAmount;
                           stats.invoices.add(b.id);
                         }
@@ -2387,7 +2422,10 @@ export default function ReportsPage() {
                       return (
                         <>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {(showAllDoctorsAnalysis ? doctorList : doctorList.slice(0, 6)).map((doc) => (
+                            {(showAllDoctorsAnalysis
+                              ? doctorList
+                              : doctorList.slice(0, 6)
+                            ).map((doc) => (
                               <div
                                 key={doc.id}
                                 className="clarity-stat text-center"
@@ -2408,12 +2446,18 @@ export default function ReportsPage() {
                           {doctorList.length > 6 && (
                             <div className="flex justify-center mt-3">
                               <Button
+                                className="text-mountain-500 text-sm"
                                 size="sm"
                                 variant="light"
-                                className="text-mountain-500 text-sm"
-                                onPress={() => setShowAllDoctorsAnalysis(!showAllDoctorsAnalysis)}
+                                onPress={() =>
+                                  setShowAllDoctorsAnalysis(
+                                    !showAllDoctorsAnalysis,
+                                  )
+                                }
                               >
-                                {showAllDoctorsAnalysis ? "Show less" : `+${doctorList.length - 6} more doctors`}
+                                {showAllDoctorsAnalysis
+                                  ? "Show less"
+                                  : `+${doctorList.length - 6} more doctors`}
                               </Button>
                             </div>
                           )}
@@ -2546,7 +2590,10 @@ export default function ReportsPage() {
                 <Divider className="my-3" />
                 <h4 className="clarity-section-header">Category Breakdown</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {(showAllCategories ? reportData.itemCategories : reportData.itemCategories.slice(0, 6)).map((category) => {
+                  {(showAllCategories
+                    ? reportData.itemCategories
+                    : reportData.itemCategories.slice(0, 6)
+                  ).map((category) => {
                     const categoryItems = reportData.items.filter(
                       (item) => item.category === category.name,
                     );
@@ -2569,9 +2616,9 @@ export default function ReportsPage() {
                 {reportData.itemCategories.length > 6 && (
                   <div className="flex justify-center mt-3">
                     <Button
+                      className="text-mountain-500 text-sm"
                       size="sm"
                       variant="light"
-                      className="text-mountain-500 text-sm"
                       onPress={() => setShowAllCategories(!showAllCategories)}
                     >
                       {showAllCategories

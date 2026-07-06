@@ -319,7 +319,7 @@ export const itemService = {
    * Log an item purchase / refill bill
    */
   async createItemPurchase(
-    purchaseData: Omit<ItemPurchase, "id" | "createdAt">
+    purchaseData: Omit<ItemPurchase, "id" | "createdAt">,
   ): Promise<string> {
     try {
       const purchasesRef = collection(db, ITEM_PURCHASES_COLLECTION);
@@ -336,6 +336,7 @@ export const itemService = {
       };
 
       const docRef = await addDoc(purchasesRef, data);
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating item purchase log:", error);
@@ -348,7 +349,7 @@ export const itemService = {
    */
   async getItemPurchasesByClinic(
     clinicId: string,
-    branchId?: string
+    branchId?: string,
   ): Promise<ItemPurchase[]> {
     try {
       const purchasesRef = collection(db, ITEM_PURCHASES_COLLECTION);
@@ -364,6 +365,7 @@ export const itemService = {
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+
         purchases.push({
           ...data,
           id: doc.id,
@@ -376,6 +378,7 @@ export const itemService = {
       return purchases.sort((a, b) => {
         const dateA = a.createdAt ? a.createdAt.getTime() : 0;
         const dateB = b.createdAt ? b.createdAt.getTime() : 0;
+
         return dateB - dateA;
       });
     } catch (error) {

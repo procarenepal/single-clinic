@@ -558,7 +558,8 @@ export const patientService = {
     if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
-    if (expertId) baseConstraints.push(where("assignedExpertId", "==", expertId));
+    if (expertId)
+      baseConstraints.push(where("assignedExpertId", "==", expertId));
     if (gender) baseConstraints.push(where("gender", "==", gender));
     if (isCritical === true)
       baseConstraints.push(where("isCritical", "==", true));
@@ -689,7 +690,8 @@ export const patientService = {
     if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
-    if (expertId) baseConstraints.push(where("assignedExpertId", "==", expertId));
+    if (expertId)
+      baseConstraints.push(where("assignedExpertId", "==", expertId));
     if (gender) baseConstraints.push(where("gender", "==", gender));
     if (isCritical === true)
       baseConstraints.push(where("isCritical", "==", true));

@@ -56,7 +56,7 @@ class CacheService {
         `${this.STORAGE_PREFIX}${key}`,
         JSON.stringify(value),
       );
-    } catch {}
+    } catch { }
   }
 
   private storageGet<T = any>(key: string): T | null {
@@ -76,7 +76,7 @@ class CacheService {
     if (!this.isStorageAvailable()) return;
     try {
       window.localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -567,7 +567,7 @@ class CacheService {
     if (this.isStorageAvailable()) {
       try {
         window.localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
-      } catch {}
+      } catch { }
     }
   }
 
@@ -579,7 +579,7 @@ class CacheService {
     if (this.isStorageAvailable()) {
       try {
         window.localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
-      } catch {}
+      } catch { }
     }
   }
 
@@ -820,7 +820,7 @@ class CacheService {
     if (this.isStorageAvailable()) {
       try {
         window.localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
-      } catch {}
+      } catch { }
     }
   }
 
@@ -885,7 +885,7 @@ class CacheService {
     if (this.isStorageAvailable()) {
       try {
         window.localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
-      } catch {}
+      } catch { }
     }
   }
 }

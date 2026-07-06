@@ -4902,7 +4902,8 @@ export default function PharmacyPage() {
                                           type: "medicine" as const,
                                           productId: item.medicineId,
                                           productName: item.medicineName,
-                                          originalMedicineName: item.medicineName,
+                                          originalMedicineName:
+                                            item.medicineName,
                                           expiryDate:
                                             item.expiryDate ||
                                             (med
@@ -7099,15 +7100,15 @@ export default function PharmacyPage() {
                                 required
                                 items={
                                   item.type === "medicine"
-                                    ? medicines
-                                        .map((m) => {
-                                          const stock = medicineStocks[m.id] || 0;
-                                          const isOutOfStock = stock <= 0;
-                                          return {
-                                            id: m.id,
-                                            primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}${isOutOfStock ? " (Out of Stock)" : ""}`,
-                                          };
-                                        })
+                                    ? medicines.map((m) => {
+                                        const stock = medicineStocks[m.id] || 0;
+                                        const isOutOfStock = stock <= 0;
+
+                                        return {
+                                          id: m.id,
+                                          primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}${isOutOfStock ? " (Out of Stock)" : ""}`,
+                                        };
+                                      })
                                     : items.map((i) => ({
                                         id: i.id,
                                         primary: i.name,
@@ -7120,11 +7121,12 @@ export default function PharmacyPage() {
                                   updatePurchaseItem(item.id, "productId", key)
                                 }
                               />
-                              {item.originalMedicineName && item.type === "medicine" && (
-                                <div className="text-[10px] text-amber-600 font-medium mt-1 ml-1">
-                                  Prescribed: {item.originalMedicineName}
-                                </div>
-                              )}
+                              {item.originalMedicineName &&
+                                item.type === "medicine" && (
+                                  <div className="text-[10px] text-amber-600 font-medium mt-1 ml-1">
+                                    Prescribed: {item.originalMedicineName}
+                                  </div>
+                                )}
                             </div>
 
                             {item.type === "medicine" && item.productId && (

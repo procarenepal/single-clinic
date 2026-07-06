@@ -964,7 +964,13 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   {
                     id: "admin",
                     label: "Administration & Settings",
-                    paths: ["setting", "report", "communication", "dashboard", "hr"],
+                    paths: [
+                      "setting",
+                      "report",
+                      "communication",
+                      "dashboard",
+                      "hr",
+                    ],
                   },
                   { id: "other", label: "Other", paths: [] },
                 ].map((category) => {
@@ -973,32 +979,36 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                     const isOther = category.id === "other";
 
                     if (isOther) {
-                      return ![
-                        "patient",
-                        "prescription",
-                        "pathology",
-                        "medicine",
-                        "bed",
-                        "text-editor",
-                        "appointment",
-                        "doctor",
-                        "expert",
-                        "front-office",
-                        "visitor",
-                        "call",
-                        "enquir",
-                        "billing",
-                        "inventory",
-                        "pharmacy",
-                        "setting",
-                        "report",
-                        "communication",
-                        "hr"
-                      ].some((path) => p.includes(path)) && p !== "/dashboard";
+                      return (
+                        ![
+                          "patient",
+                          "prescription",
+                          "pathology",
+                          "medicine",
+                          "bed",
+                          "text-editor",
+                          "appointment",
+                          "doctor",
+                          "expert",
+                          "front-office",
+                          "visitor",
+                          "call",
+                          "enquir",
+                          "billing",
+                          "inventory",
+                          "pharmacy",
+                          "setting",
+                          "report",
+                          "communication",
+                          "hr",
+                        ].some((path) => p.includes(path)) && p !== "/dashboard"
+                      );
                     }
 
-                    return category.paths.some((path) => 
-                      path === "dashboard" ? p === "/dashboard" : p.includes(path)
+                    return category.paths.some((path) =>
+                      path === "dashboard"
+                        ? p === "/dashboard"
+                        : p.includes(path),
                     );
                   });
 

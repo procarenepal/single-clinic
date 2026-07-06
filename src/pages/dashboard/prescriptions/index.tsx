@@ -295,6 +295,7 @@ export default function PrescriptionsPage() {
               expertService.getExpertByEmail(userData.email),
             ]);
             const matchingProvider = matchingDoctor || matchingExpert;
+
             if (matchingProvider) {
               setCurrentDoctorId(matchingProvider.id);
             }
@@ -359,7 +360,9 @@ export default function PrescriptionsPage() {
         );
 
         if (currentDoctorId) {
-          extendedPrescriptions = extendedPrescriptions.filter(p => p.doctorId === currentDoctorId);
+          extendedPrescriptions = extendedPrescriptions.filter(
+            (p) => p.doctorId === currentDoctorId,
+          );
         }
 
         extendedPrescriptions.sort(

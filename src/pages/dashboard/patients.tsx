@@ -280,7 +280,9 @@ export default function PatientsPage() {
 
   // ── Delete state
   const [deleteModal, setDeleteModal] = useState(false);
-  const [selectedForDelete, setSelectedForDelete] = useState<Patient | null>(null);
+  const [selectedForDelete, setSelectedForDelete] = useState<Patient | null>(
+    null,
+  );
   const [isDeleting, setIsDeleting] = useState(false);
 
   // ── Doctor/Expert view
@@ -300,11 +302,9 @@ export default function PatientsPage() {
       : (branchFilter ?? undefined));
 
   // Bypass server-side pagination only for complex filters not supported by Firestore natively
+  // Also bypass for search to use client-side comprehensive filtering (mobile, email, etc.)
   const useServerPagination =
-    !ageMin &&
-    !ageMax &&
-    !regStart &&
-    !regEnd;
+    !search && !ageMin && !ageMax && !regStart && !regEnd;
 
   const fetchPatientsPaginated = useCallback(
     async (
@@ -358,16 +358,22 @@ export default function PatientsPage() {
 
         if (targetPage === 1) {
           try {
-            totalCount = await patientService.getPatientsCountByClinic(clinicId, {
-              doctorId: effectiveDoctorId ?? undefined,
-              expertId: effectiveExpertId ?? undefined,
-              searchPrefix,
-              gender: genderFilter === "all" ? undefined : genderFilter,
-              isCritical: isCriticalOpt,
-              branchId: effectiveBranchId,
-            });
+            totalCount = await patientService.getPatientsCountByClinic(
+              clinicId,
+              {
+                doctorId: effectiveDoctorId ?? undefined,
+                expertId: effectiveExpertId ?? undefined,
+                searchPrefix,
+                gender: genderFilter === "all" ? undefined : genderFilter,
+                isCritical: isCriticalOpt,
+                branchId: effectiveBranchId,
+              },
+            );
           } catch (countErr) {
-            console.warn("Failed to fetch total patient count (likely rate limited), proceeding with data anyway.", countErr);
+            console.warn(
+              "Failed to fetch total patient count (likely rate limited), proceeding with data anyway.",
+              countErr,
+            );
             totalCount = undefined;
           }
         }
@@ -504,6 +510,7 @@ export default function PatientsPage() {
     (async () => {
       try {
         let data;
+
         if (currentExpertId) {
           data = await patientService.getPatientsByExpert(currentExpertId);
         } else if (currentDoctorId) {
@@ -823,17 +830,17 @@ export default function PatientsPage() {
     setIsDeleting(true);
     try {
       await patientService.deletePatient(selectedForDelete.id);
-      
-      setPatients(prev => prev.filter(p => p.id !== selectedForDelete.id));
-      
+
+      setPatients((prev) => prev.filter((p) => p.id !== selectedForDelete.id));
+
       if (useServerPagination && totalCount !== null) {
-        setTotalCount(prev => (prev || 1) - 1);
+        setTotalCount((prev) => (prev || 1) - 1);
       }
-      
+
       addToast({
         title: "Patient Deleted",
         description: `${selectedForDelete.name} has been successfully deleted.`,
-        color: "success"
+        color: "success",
       });
       setDeleteModal(false);
       setSelectedForDelete(null);
@@ -842,7 +849,7 @@ export default function PatientsPage() {
       addToast({
         title: "Error",
         description: "Failed to delete patient.",
-        color: "danger"
+        color: "danger",
       });
     } finally {
       setIsDeleting(false);
@@ -1485,7 +1492,8 @@ export default function PatientsPage() {
           <div className="flex gap-2.5 p-3 bg-error/10 border border-error/20 rounded">
             <IoAlertCircleOutline className="w-5 h-5 text-error shrink-0" />
             <p className="text-[13px] text-error/90 leading-relaxed">
-              Are you sure you want to delete this patient? This action cannot be undone and will permanently remove their records.
+              Are you sure you want to delete this patient? This action cannot
+              be undone and will permanently remove their records.
             </p>
           </div>
         </div>

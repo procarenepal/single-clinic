@@ -56,7 +56,12 @@ import PatientWalletTab from "@/components/patients/PatientWalletTab";
 export default function PatientDetailPage() {
   const { patientId } = useParams();
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
+  const {
+    clinicId,
+    currentUser,
+    userData,
+    isLoading: authLoading,
+  } = useAuthContext();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [patient, setPatient] = useState<Patient | null>(null);

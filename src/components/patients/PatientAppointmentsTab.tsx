@@ -203,6 +203,7 @@ export default function PatientAppointmentsTab({
       );
 
       const appt = appointments.find((x) => x.id === appointmentId);
+
       if (appt && newStatus === "confirmed") {
         sendCheckInSMS(
           appt.patientId,

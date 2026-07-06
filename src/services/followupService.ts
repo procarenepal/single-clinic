@@ -1,3 +1,10 @@
+import type {
+  PatientFollowup,
+  FollowupStatus,
+  FollowupInitStatus,
+  FollowupUpdatedStatus,
+} from "@/types/models";
+
 import {
   collection,
   doc,
@@ -8,13 +15,11 @@ import {
   getDoc,
   query,
   where,
-  orderBy,
   Timestamp,
   serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
-import type { PatientFollowup, FollowupStatus, FollowupInitStatus, FollowupUpdatedStatus } from "@/types/models";
 
 const COLLECTION = "patientFollowups";
 
@@ -24,6 +29,7 @@ function toDate(val: any): Date | undefined {
   if (!val) return undefined;
   if (val instanceof Date) return val;
   if (val?.seconds) return new Date(val.seconds * 1000);
+
   return new Date(val);
 }
 
@@ -52,11 +58,12 @@ function mapDoc(id: string, data: any): PatientFollowup {
     product: data.product,
     notes: data.notes,
     overallStatus: (data.overallStatus as FollowupStatus) || "pending",
-    logs: data.logs?.map((l: any) => ({
-      date: toDate(l.date) || new Date(),
-      note: l.note,
-      user: l.user,
-    })) || [],
+    logs:
+      data.logs?.map((l: any) => ({
+        date: toDate(l.date) || new Date(),
+        note: l.note,
+        user: l.user,
+      })) || [],
     createdAt: toDate(data.createdAt) || new Date(),
     updatedAt: toDate(data.updatedAt) || new Date(),
     createdBy: data.createdBy || "",
@@ -65,17 +72,20 @@ function mapDoc(id: string, data: any): PatientFollowup {
 
 function toTimestamp(date?: Date): Timestamp | null {
   if (!date) return null;
+
   return Timestamp.fromDate(date);
 }
 
 function serializeDates(followup: Partial<PatientFollowup>): any {
   const result: any = { ...followup };
 
-  if ('visitDate' in followup) {
-    result.visitDate = followup.visitDate ? toTimestamp(followup.visitDate) : null;
+  if ("visitDate" in followup) {
+    result.visitDate = followup.visitDate
+      ? toTimestamp(followup.visitDate)
+      : null;
   }
 
-  if ('followupDates' in followup) {
+  if ("followupDates" in followup) {
     result.followupDates = followup.followupDates
       ? {
           first: toTimestamp(followup.followupDates.first),
@@ -87,11 +97,12 @@ function serializeDates(followup: Partial<PatientFollowup>): any {
       : {};
   }
 
-  if ('logs' in followup) {
-    result.logs = followup.logs?.map(l => ({
-      ...l,
-      date: toTimestamp(l.date) || null,
-    })) || [];
+  if ("logs" in followup) {
+    result.logs =
+      followup.logs?.map((l) => ({
+        ...l,
+        date: toTimestamp(l.date) || null,
+      })) || [];
   }
 
   return result;
@@ -103,7 +114,10 @@ export const followupService = {
   /**
    * Fetch all follow-ups for a clinic/branch.
    */
-  async getFollowups(clinicId: string, branchId?: string): Promise<PatientFollowup[]> {
+  async getFollowups(
+    clinicId: string,
+    branchId?: string,
+  ): Promise<PatientFollowup[]> {
     let q = query(
       collection(db, COLLECTION),
       where("clinicId", "==", clinicId),
@@ -122,6 +136,7 @@ export const followupService = {
 
     // Sort in-memory by createdAt desc to avoid composite index
     results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
     return results;
   },
 
@@ -130,7 +145,9 @@ export const followupService = {
    */
   async getFollowupById(id: string): Promise<PatientFollowup | null> {
     const snap = await getDoc(doc(db, COLLECTION, id));
+
     if (!snap.exists()) return null;
+
     return mapDoc(snap.id, snap.data());
   },
 
@@ -144,22 +161,30 @@ export const followupService = {
     );
     const snap = await getDocs(q);
     const results = snap.docs.map((d) => mapDoc(d.id, d.data()));
+
     results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
     return results;
   },
 
   /**
    * Get follow-ups that are due today or in the next N days.
    */
-  async getDueFollowups(clinicId: string, days: number = 7): Promise<PatientFollowup[]> {
+  async getDueFollowups(
+    clinicId: string,
+    days: number = 7,
+  ): Promise<PatientFollowup[]> {
     const all = await this.getFollowups(clinicId);
     const now = new Date();
     const cutoff = new Date();
+
     cutoff.setDate(cutoff.getDate() + days);
 
     return all.filter((f) => {
-      if (f.overallStatus === "completed" || f.overallStatus === "cancelled") return false;
+      if (f.overallStatus === "completed" || f.overallStatus === "cancelled")
+        return false;
       const dates = Object.values(f.followupDates).filter(Boolean) as Date[];
+
       return dates.some((d) => d >= now && d <= cutoff);
     });
   },
@@ -176,18 +201,23 @@ export const followupService = {
       updatedAt: serverTimestamp(),
     };
     const ref = await addDoc(collection(db, COLLECTION), payload);
+
     return ref.id;
   },
 
   /**
    * Update an existing follow-up record.
    */
-  async updateFollowup(id: string, data: Partial<PatientFollowup>): Promise<void> {
+  async updateFollowup(
+    id: string,
+    data: Partial<PatientFollowup>,
+  ): Promise<void> {
     const { id: _id, createdAt: _ca, ...rest } = data as any;
     const payload = {
       ...serializeDates(rest),
       updatedAt: serverTimestamp(),
     };
+
     await updateDoc(doc(db, COLLECTION, id), payload);
   },
 

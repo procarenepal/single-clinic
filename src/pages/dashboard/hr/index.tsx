@@ -20,7 +20,6 @@ import {
   IoHourglassOutline,
   IoStatsChartOutline,
 } from "react-icons/io5";
-
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -29,8 +28,8 @@ import {
   Title,
   Tooltip,
   Legend,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
 
 ChartJS.register(
   CategoryScale,
@@ -38,16 +37,14 @@ ChartJS.register(
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
 );
 import {
   format,
-  subDays,
   startOfDay,
   subMonths,
   startOfMonth,
   endOfMonth,
-  getDaysInMonth,
   parse,
 } from "date-fns";
 import {
@@ -94,7 +91,11 @@ import { hrService } from "@/services/hrService";
 import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
 import { printSalarySlip } from "@/utils/salaryPrinting";
-import { getPrintBrandingCSS, getPrintHeaderHTML, getPrintFooterHTML } from "@/utils/printBranding";
+import {
+  getPrintBrandingCSS,
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+} from "@/utils/printBranding";
 import { clinicService } from "@/services/clinicService";
 import { leaveRequestService } from "@/services/leaveRequestService";
 
@@ -110,11 +111,15 @@ export default function HRPage() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [leavesLoading, setLeavesLoading] = useState(false);
-  const [leaveFilter, setLeaveFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [leaveFilter, setLeaveFilter] = useState<
+    "all" | "pending" | "approved" | "rejected"
+  >("all");
   const [leaveSearch, setLeaveSearch] = useState("");
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [reviewingLeave, setReviewingLeave] = useState<LeaveRequest | null>(null);
+  const [reviewingLeave, setReviewingLeave] = useState<LeaveRequest | null>(
+    null,
+  );
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [leaveForm, setLeaveForm] = useState({
@@ -126,7 +131,11 @@ export default function HRPage() {
   });
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [isHolidaysModalOpen, setIsHolidaysModalOpen] = useState(false);
-  const [newHoliday, setNewHoliday] = useState<{ name: string; date: string; type: "paid" | "unpaid" }>({ name: "", date: format(new Date(), "yyyy-MM-dd"), type: "paid" });
+  const [newHoliday, setNewHoliday] = useState<{
+    name: string;
+    date: string;
+    type: "paid" | "unpaid";
+  }>({ name: "", date: format(new Date(), "yyyy-MM-dd"), type: "paid" });
   const [isAbsentModalOpen, setIsAbsentModalOpen] = useState(false);
   const [absentTarget, setAbsentTarget] = useState<StaffMember | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
@@ -307,58 +316,75 @@ export default function HRPage() {
   const payrollChartData = useMemo(() => {
     const labels = [];
     const data = [];
+
     for (let i = 5; i >= 0; i--) {
       const d = subMonths(new Date(), i);
+
       labels.push(format(d, "MMM yyyy"));
 
       const monthStart = startOfMonth(d);
       const monthEnd = endOfMonth(d);
-      const sum = bills.filter(b => b.category === "salary" && b.billDate >= monthStart && b.billDate <= monthEnd).reduce((a, b) => a + b.paidAmount, 0);
+      const sum = bills
+        .filter(
+          (b) =>
+            b.category === "salary" &&
+            b.billDate >= monthStart &&
+            b.billDate <= monthEnd,
+        )
+        .reduce((a, b) => a + b.paidAmount, 0);
+
       data.push(sum);
     }
+
     return {
       labels,
       datasets: [
         {
-          label: 'Total Salary Disbursed (Rs.)',
+          label: "Total Salary Disbursed (Rs.)",
           data,
-          backgroundColor: 'rgba(99, 102, 241, 0.8)',
+          backgroundColor: "rgba(99, 102, 241, 0.8)",
           borderRadius: 4,
-        }
-      ]
+        },
+      ],
     };
   }, [bills]);
 
   const staffPayrollSummary = useMemo(() => {
     const startDate = new Date(reportDateRange.start);
+
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(reportDateRange.end);
+
     endDate.setHours(23, 59, 59, 999);
 
-    return staff.map((s) => {
-      const staffBills = bills.filter(
-        (b) => b.category === "salary" &&
-          b.vendorName === s.name &&
-          b.billDate >= startDate &&
-          b.billDate <= endDate,
-      );
-      const totalPaid = staffBills.reduce((acc, b) => acc + b.paidAmount, 0);
+    return staff
+      .map((s) => {
+        const staffBills = bills.filter(
+          (b) =>
+            b.category === "salary" &&
+            b.vendorName === s.name &&
+            b.billDate >= startDate &&
+            b.billDate <= endDate,
+        );
+        const totalPaid = staffBills.reduce((acc, b) => acc + b.paidAmount, 0);
 
-      const sortedBills = staffBills.sort(
-        (a, b) => b.billDate.getTime() - a.billDate.getTime(),
-      );
+        const sortedBills = staffBills.sort(
+          (a, b) => b.billDate.getTime() - a.billDate.getTime(),
+        );
 
-      return {
-        ...s,
-        totalPaid,
-        lastPayment: sortedBills.length > 0 ? sortedBills[0].billDate : null,
-        lastBill: sortedBills.length > 0 ? sortedBills[0] : null,
-      };
-    }).filter(s => {
-      if (payrollReportFilter === "paid") return s.totalPaid > 0;
-      if (payrollReportFilter === "unpaid") return s.totalPaid === 0;
-      return true;
-    });
+        return {
+          ...s,
+          totalPaid,
+          lastPayment: sortedBills.length > 0 ? sortedBills[0].billDate : null,
+          lastBill: sortedBills.length > 0 ? sortedBills[0] : null,
+        };
+      })
+      .filter((s) => {
+        if (payrollReportFilter === "paid") return s.totalPaid > 0;
+        if (payrollReportFilter === "unpaid") return s.totalPaid === 0;
+
+        return true;
+      });
   }, [staff, bills, reportDateRange, payrollReportFilter]);
 
   const handlePrintPayrollSummary = async () => {
@@ -370,27 +396,34 @@ export default function HRPage() {
     if (!reportDateRange.start || !reportDateRange.end) {
       addToast({
         title: "Date Range Required",
-        description: "Please select a valid start and end date before printing.",
+        description:
+          "Please select a valid start and end date before printing.",
         color: "warning",
       });
+
       return;
     }
     const startDateVal = new Date(reportDateRange.start);
     const endDateVal = new Date(reportDateRange.end);
+
     if (isNaN(startDateVal.getTime()) || isNaN(endDateVal.getTime())) {
       addToast({
         title: "Invalid Date Range",
-        description: "The selected dates are invalid. Please re-select and try again.",
+        description:
+          "The selected dates are invalid. Please re-select and try again.",
         color: "danger",
       });
+
       return;
     }
     if (staffPayrollSummary.length === 0) {
       addToast({
         title: "No Data to Print",
-        description: "No payroll records found for the selected date range and filter.",
+        description:
+          "No payroll records found for the selected date range and filter.",
         color: "warning",
       });
+
       return;
     }
 
@@ -417,15 +450,17 @@ export default function HRPage() {
       address: "",
     };
 
-    const effectiveConfig = printConfig || ({
-      clinicId,
-      primaryColor: "#0ea5e9",
-      fontSize: "medium",
-      showAddress: true,
-      showPhone: true,
-      showEmail: true,
-      headerHeight: "compact",
-    } as any);
+    const effectiveConfig =
+      printConfig ||
+      ({
+        clinicId,
+        primaryColor: "#0ea5e9",
+        fontSize: "medium",
+        showAddress: true,
+        showPhone: true,
+        showEmail: true,
+        headerHeight: "compact",
+      } as any);
 
     const primaryColor = effectiveConfig.primaryColor || "#0ea5e9";
 
@@ -578,7 +613,7 @@ export default function HRPage() {
               </div>
               <div class="info-item">
                 <span class="info-label">Staff Filter</span>
-                <span class="info-value">${payrollReportFilter === 'all' ? 'All Staff' : payrollReportFilter === 'paid' ? 'Paid Only' : 'Unpaid Only'}</span>
+                <span class="info-value">${payrollReportFilter === "all" ? "All Staff" : payrollReportFilter === "paid" ? "Paid Only" : "Unpaid Only"}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Generated On</span>
@@ -613,6 +648,7 @@ export default function HRPage() {
     setLoading(true);
     try {
       const fiveYearsAgo = new Date();
+
       fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
       const [staffData, attendanceData, billsData] = await Promise.all([
@@ -647,13 +683,21 @@ export default function HRPage() {
     try {
       const [requests, balances] = await Promise.all([
         leaveRequestService.getLeavesByClinic(clinicId!, branchId || undefined),
-        leaveRequestService.getAllBalancesForClinic(clinicId!, new Date().getFullYear()),
+        leaveRequestService.getAllBalancesForClinic(
+          clinicId!,
+          new Date().getFullYear(),
+        ),
       ]);
+
       setLeaveRequests(requests);
       setLeaveBalances(balances);
     } catch (error) {
       console.error("Error loading leave data:", error);
-      addToast({ title: "Error", description: "Failed to load leave records", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to load leave records",
+        color: "danger",
+      });
     } finally {
       setLeavesLoading(false);
     }
@@ -662,17 +706,31 @@ export default function HRPage() {
   const handleSubmitLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetStaff = staff.find((s) => s.id === leaveForm.staffId);
+
     if (!targetStaff || !leaveForm.reason) {
-      addToast({ title: "Validation Error", description: "Select a staff member and provide a reason.", color: "warning" });
+      addToast({
+        title: "Validation Error",
+        description: "Select a staff member and provide a reason.",
+        color: "warning",
+      });
+
       return;
     }
     const start = new Date(leaveForm.startDate);
     const end = new Date(leaveForm.endDate);
+
     if (end < start) {
-      addToast({ title: "Invalid Dates", description: "End date must be on or after start date.", color: "warning" });
+      addToast({
+        title: "Invalid Dates",
+        description: "End date must be on or after start date.",
+        color: "warning",
+      });
+
       return;
     }
-    const totalDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    const totalDays =
+      Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+
     setLeaveSubmitting(true);
     try {
       await leaveRequestService.createLeaveRequest({
@@ -687,12 +745,26 @@ export default function HRPage() {
         totalDays,
         reason: leaveForm.reason,
       });
-      addToast({ title: "Leave Submitted", description: `${totalDays}-day leave request created for ${targetStaff.name}.`, color: "success" });
+      addToast({
+        title: "Leave Submitted",
+        description: `${totalDays}-day leave request created for ${targetStaff.name}.`,
+        color: "success",
+      });
       setIsLeaveModalOpen(false);
-      setLeaveForm({ staffId: "", leaveType: "annual", startDate: format(new Date(), "yyyy-MM-dd"), endDate: format(new Date(), "yyyy-MM-dd"), reason: "" });
+      setLeaveForm({
+        staffId: "",
+        leaveType: "annual",
+        startDate: format(new Date(), "yyyy-MM-dd"),
+        endDate: format(new Date(), "yyyy-MM-dd"),
+        reason: "",
+      });
       loadLeaves();
     } catch (error) {
-      addToast({ title: "Error", description: "Failed to submit leave request.", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to submit leave request.",
+        color: "danger",
+      });
     } finally {
       setLeaveSubmitting(false);
     }
@@ -702,13 +774,26 @@ export default function HRPage() {
     if (!reviewingLeave || !userData) return;
     setReviewLoading(true);
     try {
-      await leaveRequestService.approveLeave(reviewingLeave.id, userData.id || "", userData.displayName || "Admin", reviewNotes);
-      addToast({ title: "Leave Approved", description: `${reviewingLeave.staffName}'s leave has been approved.`, color: "success" });
+      await leaveRequestService.approveLeave(
+        reviewingLeave.id,
+        userData.id || "",
+        userData.displayName || "Admin",
+        reviewNotes,
+      );
+      addToast({
+        title: "Leave Approved",
+        description: `${reviewingLeave.staffName}'s leave has been approved.`,
+        color: "success",
+      });
       setIsReviewModalOpen(false);
       setReviewNotes("");
       loadLeaves();
     } catch (error) {
-      addToast({ title: "Error", description: "Failed to approve leave.", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to approve leave.",
+        color: "danger",
+      });
     } finally {
       setReviewLoading(false);
     }
@@ -716,19 +801,37 @@ export default function HRPage() {
 
   const handleRejectLeave = async () => {
     if (!reviewingLeave || !reviewNotes.trim()) {
-      addToast({ title: "Note Required", description: "Please provide a reason for rejection.", color: "warning" });
+      addToast({
+        title: "Note Required",
+        description: "Please provide a reason for rejection.",
+        color: "warning",
+      });
+
       return;
     }
     if (!userData) return;
     setReviewLoading(true);
     try {
-      await leaveRequestService.rejectLeave(reviewingLeave.id, userData.id || "", userData.displayName || "Admin", reviewNotes);
-      addToast({ title: "Leave Rejected", description: `${reviewingLeave.staffName}'s request has been rejected.`, color: "warning" });
+      await leaveRequestService.rejectLeave(
+        reviewingLeave.id,
+        userData.id || "",
+        userData.displayName || "Admin",
+        reviewNotes,
+      );
+      addToast({
+        title: "Leave Rejected",
+        description: `${reviewingLeave.staffName}'s request has been rejected.`,
+        color: "warning",
+      });
       setIsReviewModalOpen(false);
       setReviewNotes("");
       loadLeaves();
     } catch (error) {
-      addToast({ title: "Error", description: "Failed to reject leave.", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to reject leave.",
+        color: "danger",
+      });
     } finally {
       setReviewLoading(false);
     }
@@ -737,15 +840,22 @@ export default function HRPage() {
   const handleCancelLeave = async (leaveId: string) => {
     try {
       await leaveRequestService.cancelLeave(leaveId);
-      addToast({ title: "Cancelled", description: "Leave request has been cancelled.", color: "success" });
+      addToast({
+        title: "Cancelled",
+        description: "Leave request has been cancelled.",
+        color: "success",
+      });
       loadLeaves();
     } catch {
-      addToast({ title: "Error", description: "Failed to cancel leave.", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to cancel leave.",
+        color: "danger",
+      });
     }
   };
 
   const handleSaveStaff = async (e: React.FormEvent) => {
-
     e.preventDefault();
     if (!staffForm.name || !staffForm.role || !staffForm.salary) {
       addToast({
@@ -915,22 +1025,32 @@ export default function HRPage() {
     }
   };
 
-
   const getPreviouslyPaid = (months: string[]) => {
     if (!selectedStaff || !bills) return 0;
+
     return bills
-      .filter((b) => b.category === "salary" && b.vendorName === selectedStaff.name)
+      .filter(
+        (b) => b.category === "salary" && b.vendorName === selectedStaff.name,
+      )
       .filter((b) => months.some((m) => b.description?.includes(m)))
       .reduce((sum, b) => sum + b.paidAmount, 0);
   };
 
   const getLeaveDetails = (months: string[]) => {
     if (!selectedStaff) {
-      return { absentDays: 0, absentDates: [], unpaidLeaves: 0, dailyWage: 0, deductionAmount: 0 };
+      return {
+        absentDays: 0,
+        absentDates: [],
+        unpaidLeaves: 0,
+        dailyWage: 0,
+        deductionAmount: 0,
+      };
     }
 
     // Get all approved leave requests for the selected staff member
-    const approvedLeaves = leaveRequests.filter(l => l.staffId === selectedStaff.id && l.status === "approved");
+    const approvedLeaves = leaveRequests.filter(
+      (l) => l.staffId === selectedStaff.id && l.status === "approved",
+    );
 
     let absentDatesList: string[] = [];
     let unpaidLeavesCount = 0;
@@ -940,11 +1060,18 @@ export default function HRPage() {
       const start = new Date(req.startDate);
       const end = new Date(req.endDate);
       let current = new Date(start);
+
       while (current <= end) {
         const monthStr = format(current, "MMMM yyyy");
+
         if (months.includes(monthStr)) {
           // Skip if it's a paid holiday
-          const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(current, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
+          const isPaidHoliday = holidays.some(
+            (h) =>
+              format(h.date, "yyyy-MM-dd") === format(current, "yyyy-MM-dd") &&
+              (h.type === "paid" || !h.type),
+          );
+
           if (!isPaidHoliday) {
             absentDatesList.push(format(current, "MMM dd"));
             if (!req.isPaid) {
@@ -961,17 +1088,29 @@ export default function HRPage() {
       const isAbsent = a.status === "absent";
       const isSelectedStaff = a.staffId === selectedStaff.id;
       const isSelectedMonth = months.includes(format(a.date, "MMMM yyyy"));
-      const isPaidHoliday = holidays.some(h => format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") && (h.type === "paid" || !h.type));
+      const isPaidHoliday = holidays.some(
+        (h) =>
+          format(h.date, "yyyy-MM-dd") === format(a.date, "yyyy-MM-dd") &&
+          (h.type === "paid" || !h.type),
+      );
 
-      const coveredByLeave = approvedLeaves.some(req => {
+      const coveredByLeave = approvedLeaves.some((req) => {
         const reqStart = new Date(req.startDate);
         const reqEnd = new Date(req.endDate);
+
         reqStart.setHours(0, 0, 0, 0);
         reqEnd.setHours(23, 59, 59, 999);
+
         return a.date >= reqStart && a.date <= reqEnd;
       });
 
-      return isAbsent && isSelectedStaff && isSelectedMonth && !isPaidHoliday && !coveredByLeave;
+      return (
+        isAbsent &&
+        isSelectedStaff &&
+        isSelectedMonth &&
+        !isPaidHoliday &&
+        !coveredByLeave
+      );
     });
 
     for (const a of unexcusedAbsences) {
@@ -983,10 +1122,12 @@ export default function HRPage() {
     const totalDaysInSelectedMonths = months.reduce((total, monthStr) => {
       const date = parse(monthStr, "MMMM yyyy", new Date());
       const nd = new NepaliDate(date);
+
       return total + NepaliDate.getDaysOfMonth(nd.getYear(), nd.getMonth());
     }, 0);
 
-    const averageDaysInMonth = months.length > 0 ? totalDaysInSelectedMonths / months.length : 30;
+    const averageDaysInMonth =
+      months.length > 0 ? totalDaysInSelectedMonths / months.length : 30;
     const dailyWage = (selectedStaff.salary || 0) / averageDaysInMonth;
 
     return {
@@ -998,48 +1139,56 @@ export default function HRPage() {
     };
   };
 
-  const calculateExpectedAmount = (months: string[], type: "regular" | "advance", waivedDays: number) => {
+  const calculateExpectedAmount = (
+    months: string[],
+    type: "regular" | "advance",
+    waivedDays: number,
+  ) => {
     if (type === "advance") return 0;
     const baseExpected = (selectedStaff?.salary || 0) * (months.length || 1);
     const previouslyPaid = getPreviouslyPaid(months);
     const leaveDetails = getLeaveDetails(months);
-    const effectiveUnpaidLeaves = Math.max(0, leaveDetails.unpaidLeaves - waivedDays);
-    const leaveDeductions = Math.round(effectiveUnpaidLeaves * leaveDetails.dailyWage);
+    const effectiveUnpaidLeaves = Math.max(
+      0,
+      leaveDetails.unpaidLeaves - waivedDays,
+    );
+    const leaveDeductions = Math.round(
+      effectiveUnpaidLeaves * leaveDetails.dailyWage,
+    );
+
     return Math.max(0, baseExpected - previouslyPaid - leaveDeductions);
   };
 
   const getIncentivesPaid = (staffName: string) => {
     return bills
-      .filter(
-        (b) =>
-          b.category === "salary" &&
-          b.vendorName === staffName,
-      )
+      .filter((b) => b.category === "salary" && b.vendorName === staffName)
       .reduce((acc, b) => {
         const desc = b.description || "";
         const match = desc.match(/Incentive\s+Rs\.?\s*([\d,]+)/i);
+
         if (match) {
           const val = parseFloat(match[1].replace(/,/g, ""));
+
           if (!isNaN(val)) return acc + val;
         }
+
         return acc;
       }, 0);
   };
 
   const getTaxPaid = (staffName: string) => {
     return bills
-      .filter(
-        (b) =>
-          b.category === "salary" &&
-          b.vendorName === staffName,
-      )
+      .filter((b) => b.category === "salary" && b.vendorName === staffName)
       .reduce((acc, b) => {
         const desc = b.description || "";
         const match = desc.match(/Tax\s+Rs\.?\s*([\d,]+)/i);
+
         if (match) {
           const val = parseFloat(match[1].replace(/,/g, ""));
+
           if (!isNaN(val)) return acc + val;
         }
+
         return acc;
       }, 0);
   };
@@ -1047,34 +1196,55 @@ export default function HRPage() {
   const handleDisburseSalary = async () => {
     if (!selectedStaff) return;
     try {
-      const baseExpected = (selectedStaff.salary || 0) * (payrollForm.selectedMonths.length || 1);
+      const baseExpected =
+        (selectedStaff.salary || 0) * (payrollForm.selectedMonths.length || 1);
       const previouslyPaid = getPreviouslyPaid(payrollForm.selectedMonths);
 
-      if (payrollForm.paymentType === "regular" && previouslyPaid >= baseExpected) {
+      if (
+        payrollForm.paymentType === "regular" &&
+        previouslyPaid >= baseExpected
+      ) {
         addToast({
           title: "Already Paid",
-          description: "The salary for the selected month(s) has already been fully paid.",
-          color: "warning"
+          description:
+            "The salary for the selected month(s) has already been fully paid.",
+          color: "warning",
         });
+
         return;
       }
 
       const pendingCommission = payrollForm.includeCommission
-        ? (selectedStaff.totalCommissionBalance || 0)
+        ? selectedStaff.totalCommissionBalance || 0
         : 0;
       const incentiveAmt = Number(payrollForm.incentive) || 0;
       const customBonusAmt = Number(payrollForm.customBonus) || 0;
       const customDeductionAmt = Number(payrollForm.customDeduction) || 0;
 
-      const subTotal = Number(payrollForm.amount) + pendingCommission + incentiveAmt + customBonusAmt;
-      const taxAmt = payrollForm.applyTax ? Math.round(Number(payrollForm.amount) * (payrollForm.taxPercentage / 100)) : 0;
+      const subTotal =
+        Number(payrollForm.amount) +
+        pendingCommission +
+        incentiveAmt +
+        customBonusAmt;
+      const taxAmt = payrollForm.applyTax
+        ? Math.round(
+            Number(payrollForm.amount) * (payrollForm.taxPercentage / 100),
+          )
+        : 0;
       const totalPayout = subTotal - taxAmt - customDeductionAmt;
 
-      const isAdvance = payrollForm.paymentType === "advance" || payrollForm.selectedMonths.some(monthStr => {
-        const d = parse(monthStr, "MMMM yyyy", new Date());
-        const now = new Date();
-        return d.getFullYear() > now.getFullYear() || (d.getFullYear() === now.getFullYear() && d.getMonth() > now.getMonth());
-      });
+      const isAdvance =
+        payrollForm.paymentType === "advance" ||
+        payrollForm.selectedMonths.some((monthStr) => {
+          const d = parse(monthStr, "MMMM yyyy", new Date());
+          const now = new Date();
+
+          return (
+            d.getFullYear() > now.getFullYear() ||
+            (d.getFullYear() === now.getFullYear() &&
+              d.getMonth() > now.getMonth())
+          );
+        });
 
       const bill: Omit<AccountBill, "id" | "createdAt" | "updatedAt"> = {
         category: "salary",
@@ -1096,9 +1266,12 @@ export default function HRPage() {
 
       // If commission is included, mark all pending commissions as paid
       if (payrollForm.includeCommission && pendingCommission > 0) {
-        const pendingCommissions = staffCommissions.filter(c => c.status === "pending");
+        const pendingCommissions = staffCommissions.filter(
+          (c) => c.status === "pending",
+        );
+
         await Promise.all(
-          pendingCommissions.map(c =>
+          pendingCommissions.map((c) =>
             staffCommissionService.payCommission(
               c.id,
               c.commissionAmount - (c.paidAmount || 0),
@@ -1106,8 +1279,8 @@ export default function HRPage() {
               undefined,
               `Included in salary payment ${payrollForm.selectedMonths.join(", ")}`,
               userData?.id || "system",
-            )
-          )
+            ),
+          ),
         );
       }
 
@@ -1192,8 +1365,12 @@ export default function HRPage() {
     }
   };
 
-  const handlePrintSalarySlip = async (bill: AccountBill, staff?: StaffMember) => {
+  const handlePrintSalarySlip = async (
+    bill: AccountBill,
+    staff?: StaffMember,
+  ) => {
     const targetStaff = staff || selectedStaff;
+
     if (!clinicId || !targetStaff) return;
     try {
       let clinicData = null;
@@ -1208,7 +1385,10 @@ export default function HRPage() {
       try {
         printConfig = await clinicService.getPrintLayoutConfig(clinicId);
       } catch (err) {
-        console.error("Defensive catch: Failed to fetch print layout config", err);
+        console.error(
+          "Defensive catch: Failed to fetch print layout config",
+          err,
+        );
       }
 
       const effectiveClinic = clinicData || {
@@ -1232,7 +1412,12 @@ export default function HRPage() {
           headerHeight: "compact",
         } as any);
 
-      printSalarySlip(bill, targetStaff, effectiveClinic as any, effectiveConfig);
+      printSalarySlip(
+        bill,
+        targetStaff,
+        effectiveClinic as any,
+        effectiveConfig,
+      );
     } catch (error) {
       console.error("Failed to print salary slip:", error);
       addToast({
@@ -1270,11 +1455,15 @@ export default function HRPage() {
     }
   };
 
-  const markAbsent = async (member: StaffMember, leaveType: "paid" | "unpaid") => {
+  const markAbsent = async (
+    member: StaffMember,
+    leaveType: "paid" | "unpaid",
+  ) => {
     if (!clinicId) return;
 
     try {
       const now = new Date();
+
       await hrService.markAttendance({
         staffId: member.id,
         staffName: member.name,
@@ -1304,12 +1493,16 @@ export default function HRPage() {
 
   const injectTestAbsences = async () => {
     if (!clinicId || staff.length === 0) return;
-    const testStaff = staff.find(s => s.name.toUpperCase().includes("ALINA")) || staff[0];
+    const testStaff =
+      staff.find((s) => s.name.toUpperCase().includes("ALINA")) || staff[0];
+
     try {
       setLoading(true);
       const now = new Date();
+
       for (let i = 1; i <= 6; i++) {
         const pastDate = new Date();
+
         pastDate.setDate(now.getDate() - i);
 
         await hrService.markAttendance({
@@ -1331,7 +1524,11 @@ export default function HRPage() {
       loadData();
     } catch (e) {
       console.error(e);
-      addToast({ title: "Error", description: "Failed to add test data", color: "danger" });
+      addToast({
+        title: "Error",
+        description: "Failed to add test data",
+        color: "danger",
+      });
     } finally {
       setLoading(false);
     }
@@ -1590,7 +1787,8 @@ export default function HRPage() {
               <div className="flex items-center gap-2">
                 <IoLeafOutline size={18} />
                 <span>Leave Management</span>
-                {leaveRequests.filter((l) => l.status === "pending").length > 0 && (
+                {leaveRequests.filter((l) => l.status === "pending").length >
+                  0 && (
                   <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-500 text-white">
                     {leaveRequests.filter((l) => l.status === "pending").length}
                   </span>
@@ -1658,7 +1856,7 @@ export default function HRPage() {
                             a.status === "late" ||
                             a.status === "on_break") &&
                           format(a.date, "yyyy-MM-dd") ===
-                          format(new Date(), "yyyy-MM-dd"),
+                            format(new Date(), "yyyy-MM-dd"),
                       );
 
                       return (
@@ -1730,7 +1928,7 @@ export default function HRPage() {
                                 (a) =>
                                   a.staffId === member.id &&
                                   format(a.date, "yyyy-MM-dd") ===
-                                  format(new Date(), "yyyy-MM-dd"),
+                                    format(new Date(), "yyyy-MM-dd"),
                               );
 
                               let statusLabel = "Off duty";
@@ -1795,7 +1993,7 @@ export default function HRPage() {
                                   (a) =>
                                     a.staffId === member.id &&
                                     format(a.date, "yyyy-MM-dd") ===
-                                    format(new Date(), "yyyy-MM-dd"),
+                                      format(new Date(), "yyyy-MM-dd"),
                                 )?.checkOut && (
                                   <Button
                                     className="font-semibold text-[10px] h-7 px-2 min-w-0"
@@ -1808,7 +2006,7 @@ export default function HRPage() {
                                       (a) =>
                                         a.staffId === member.id &&
                                         format(a.date, "yyyy-MM-dd") ===
-                                        format(new Date(), "yyyy-MM-dd"),
+                                          format(new Date(), "yyyy-MM-dd"),
                                     )?.status === "on_break"
                                       ? "Resume"
                                       : "Break"}
@@ -1819,10 +2017,12 @@ export default function HRPage() {
                                   (a) =>
                                     a.staffId === member.id &&
                                     format(a.date, "yyyy-MM-dd") ===
-                                    format(new Date(), "yyyy-MM-dd")
+                                      format(new Date(), "yyyy-MM-dd"),
                                 );
-                                const hasEndedShift = todayAtt && todayAtt.checkOut;
-                                const isCurrentlyAbsent = todayAtt && todayAtt.status === "absent";
+                                const hasEndedShift =
+                                  todayAtt && todayAtt.checkOut;
+                                const isCurrentlyAbsent =
+                                  todayAtt && todayAtt.status === "absent";
 
                                 if (hasEndedShift) {
                                   return (
@@ -1928,7 +2128,7 @@ export default function HRPage() {
                       (a) =>
                         a.status === "on_break" &&
                         format(a.date, "yyyy-MM-dd") ===
-                        format(new Date(), "yyyy-MM-dd"),
+                          format(new Date(), "yyyy-MM-dd"),
                     ).length
                   }{" "}
                   Members
@@ -2024,7 +2224,10 @@ export default function HRPage() {
 
       {activeTab === "payroll_reports" && (
         <div className="py-6 space-y-6">
-          <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+          <Card
+            className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]"
+            shadow="none"
+          >
             <CardBody className="p-6">
               <h3 className="text-[14px] font-bold text-[rgb(var(--color-text))] tracking-tight mb-4">
                 Payroll Expense Trend (Last 6 Months)
@@ -2036,17 +2239,17 @@ export default function HRPage() {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                      legend: { display: false }
+                      legend: { display: false },
                     },
                     scales: {
                       y: {
                         beginAtZero: true,
-                        grid: { color: 'rgba(0,0,0,0.05)' }
+                        grid: { color: "rgba(0,0,0,0.05)" },
                       },
                       x: {
-                        grid: { display: false }
-                      }
-                    }
+                        grid: { display: false },
+                      },
+                    },
                   }}
                 />
               </div>
@@ -2065,29 +2268,43 @@ export default function HRPage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <Input
-                  size="sm"
-                  type="date"
                   className="w-32"
-                  value={reportDateRange.start}
                   max={reportDateRange.end}
-                  onChange={(e) => setReportDateRange(prev => ({ ...prev, start: e.target.value }))}
-                />
-                <span className="text-[11px] text-[rgb(var(--color-text-muted))]">to</span>
-                <Input
                   size="sm"
                   type="date"
+                  value={reportDateRange.start}
+                  onChange={(e) =>
+                    setReportDateRange((prev) => ({
+                      ...prev,
+                      start: e.target.value,
+                    }))
+                  }
+                />
+                <span className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                  to
+                </span>
+                <Input
                   className="w-32"
-                  value={reportDateRange.end}
                   min={reportDateRange.start}
-                  onChange={(e) => setReportDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  size="sm"
+                  type="date"
+                  value={reportDateRange.end}
+                  onChange={(e) =>
+                    setReportDateRange((prev) => ({
+                      ...prev,
+                      end: e.target.value,
+                    }))
+                  }
                 />
               </div>
               <Select
-                size="sm"
+                aria-label="Filter by payment status"
                 className="w-32"
                 selectedKeys={[payrollReportFilter]}
-                onSelectionChange={(keys) => setPayrollReportFilter(Array.from(keys)[0] as string)}
-                aria-label="Filter by payment status"
+                size="sm"
+                onSelectionChange={(keys) =>
+                  setPayrollReportFilter(Array.from(keys)[0] as string)
+                }
               >
                 <SelectItem key="all">All Staff</SelectItem>
                 <SelectItem key="paid">Paid</SelectItem>
@@ -2157,9 +2374,9 @@ export default function HRPage() {
                         <span className="text-[11px]">
                           {summary.lastPayment
                             ? format(
-                              new Date(summary.lastPayment),
-                              "MMM dd, yyyy",
-                            )
+                                new Date(summary.lastPayment),
+                                "MMM dd, yyyy",
+                              )
                             : "Never"}
                         </span>
                       </TableCell>
@@ -2177,43 +2394,47 @@ export default function HRPage() {
                             className="h-7 w-7"
                             color="primary"
                             size="sm"
-                            variant="light"
-                            onPress={() => handlePrintSalarySlip(summary.lastBill, summary)}
                             title="Print Latest Payslip"
+                            variant="light"
+                            onPress={() =>
+                              handlePrintSalarySlip(summary.lastBill, summary)
+                            }
                           >
                             <IoPrintOutline size={16} />
                           </Button>
                         ) : (
-                          <span className="text-[10px] text-[rgb(var(--color-text-muted))]">N/A</span>
+                          <span className="text-[10px] text-[rgb(var(--color-text-muted))]">
+                            N/A
+                          </span>
                         )}
                       </TableCell>
                     </TableRow>
                   )),
                   ...(staffPayrollSummary.length > 0
                     ? [
-                      <TableRow
-                        key="total-payroll-summary-row"
-                        className="bg-primary/5 font-bold"
-                      >
-                        <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
-                        <TableCell>{""}</TableCell>
-                        <TableCell align="right">
-                          Rs.{" "}
-                          {staffPayrollSummary
-                            .reduce((acc, s) => acc + s.salary, 0)
-                            .toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" className="text-primary">
-                          Rs.{" "}
-                          {staffPayrollSummary
-                            .reduce((acc, s) => acc + s.totalPaid, 0)
-                            .toLocaleString()}
-                        </TableCell>
-                        <TableCell>{""}</TableCell>
-                        <TableCell>{""}</TableCell>
-                        <TableCell>{""}</TableCell>
-                      </TableRow>,
-                    ]
+                        <TableRow
+                          key="total-payroll-summary-row"
+                          className="bg-primary/5 font-bold"
+                        >
+                          <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
+                          <TableCell>{""}</TableCell>
+                          <TableCell align="right">
+                            Rs.{" "}
+                            {staffPayrollSummary
+                              .reduce((acc, s) => acc + s.salary, 0)
+                              .toLocaleString()}
+                          </TableCell>
+                          <TableCell align="right" className="text-primary">
+                            Rs.{" "}
+                            {staffPayrollSummary
+                              .reduce((acc, s) => acc + s.totalPaid, 0)
+                              .toLocaleString()}
+                          </TableCell>
+                          <TableCell>{""}</TableCell>
+                          <TableCell>{""}</TableCell>
+                          <TableCell>{""}</TableCell>
+                        </TableRow>,
+                      ]
                     : []),
                 ]}
               </TableBody>
@@ -2280,28 +2501,38 @@ export default function HRPage() {
           {/* Top action bar */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-[rgb(var(--color-surface-2))/0.3] p-4 rounded-xl border border-[rgb(var(--color-border))]">
             <div>
-              <h3 className="text-[14px] font-bold text-[rgb(var(--color-text))] tracking-tight">Leave Requests</h3>
-              <p className="text-[11px] text-[rgb(var(--color-text-muted))]">Manage and review staff leave applications for {new Date().getFullYear()}.</p>
+              <h3 className="text-[14px] font-bold text-[rgb(var(--color-text))] tracking-tight">
+                Leave Requests
+              </h3>
+              <p className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                Manage and review staff leave applications for{" "}
+                {new Date().getFullYear()}.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2 items-center">
               {/* Status filter pills */}
-              {(["all", "pending", "approved", "rejected"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setLeaveFilter(f)}
-                  className={`px-3 py-1 text-[11px] font-semibold rounded-full border capitalize transition-all ${leaveFilter === f
-                      ? "bg-primary text-white border-primary"
-                      : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))] hover:border-primary hover:text-primary"
+              {(["all", "pending", "approved", "rejected"] as const).map(
+                (f) => (
+                  <button
+                    key={f}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-full border capitalize transition-all ${
+                      leaveFilter === f
+                        ? "bg-primary text-white border-primary"
+                        : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))] hover:border-primary hover:text-primary"
                     }`}
-                >
-                  {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
-                  {f !== "all" && (
-                    <span className="ml-1 opacity-70">
-                      ({leaveRequests.filter((l) => l.status === f).length})
-                    </span>
-                  )}
-                </button>
-              ))}
+                    onClick={() => setLeaveFilter(f)}
+                  >
+                    {f === "all"
+                      ? "All"
+                      : f.charAt(0).toUpperCase() + f.slice(1)}
+                    {f !== "all" && (
+                      <span className="ml-1 opacity-70">
+                        ({leaveRequests.filter((l) => l.status === f).length})
+                      </span>
+                    )}
+                  </button>
+                ),
+              )}
               <div className="relative">
                 <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[rgb(var(--color-text-muted))]" />
                 <input
@@ -2326,16 +2557,61 @@ export default function HRPage() {
           {/* KPI Summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Pending Review", value: leaveRequests.filter((l) => l.status === "pending").length, color: "text-amber-500", bg: "bg-amber-500/10", icon: <IoHourglassOutline className="text-amber-500 text-[22px] opacity-20" /> },
-              { label: "Approved", value: leaveRequests.filter((l) => l.status === "approved").length, color: "text-emerald-500", bg: "bg-emerald-500/10", icon: <IoShieldCheckmarkOutline className="text-emerald-500 text-[22px] opacity-20" /> },
-              { label: "Rejected", value: leaveRequests.filter((l) => l.status === "rejected").length, color: "text-rose-500", bg: "bg-rose-500/10", icon: <IoCloseOutline className="text-rose-500 text-[22px] opacity-20" /> },
-              { label: "Total Days Taken", value: leaveRequests.filter((l) => l.status === "approved").reduce((s, l) => s + l.totalDays, 0), color: "text-primary", bg: "bg-primary/10", icon: <IoStatsChartOutline className="text-primary text-[22px] opacity-20" /> },
+              {
+                label: "Pending Review",
+                value: leaveRequests.filter((l) => l.status === "pending")
+                  .length,
+                color: "text-amber-500",
+                bg: "bg-amber-500/10",
+                icon: (
+                  <IoHourglassOutline className="text-amber-500 text-[22px] opacity-20" />
+                ),
+              },
+              {
+                label: "Approved",
+                value: leaveRequests.filter((l) => l.status === "approved")
+                  .length,
+                color: "text-emerald-500",
+                bg: "bg-emerald-500/10",
+                icon: (
+                  <IoShieldCheckmarkOutline className="text-emerald-500 text-[22px] opacity-20" />
+                ),
+              },
+              {
+                label: "Rejected",
+                value: leaveRequests.filter((l) => l.status === "rejected")
+                  .length,
+                color: "text-rose-500",
+                bg: "bg-rose-500/10",
+                icon: (
+                  <IoCloseOutline className="text-rose-500 text-[22px] opacity-20" />
+                ),
+              },
+              {
+                label: "Total Days Taken",
+                value: leaveRequests
+                  .filter((l) => l.status === "approved")
+                  .reduce((s, l) => s + l.totalDays, 0),
+                color: "text-primary",
+                bg: "bg-primary/10",
+                icon: (
+                  <IoStatsChartOutline className="text-primary text-[22px] opacity-20" />
+                ),
+              },
             ].map((kpi) => (
-              <Card key={kpi.label} className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+              <Card
+                key={kpi.label}
+                className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]"
+                shadow="none"
+              >
                 <CardBody className="p-3 flex flex-row items-center justify-between">
                   <div>
-                    <p className="text-[8px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">{kpi.label}</p>
-                    <h4 className={`text-[18px] font-bold ${kpi.color}`}>{kpi.value}</h4>
+                    <p className="text-[8px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">
+                      {kpi.label}
+                    </p>
+                    <h4 className={`text-[18px] font-bold ${kpi.color}`}>
+                      {kpi.value}
+                    </h4>
                   </div>
                   {kpi.icon}
                 </CardBody>
@@ -2345,9 +2621,14 @@ export default function HRPage() {
 
           {/* Leave Requests Table */}
           {leavesLoading ? (
-            <div className="py-20 text-center"><Spinner label="Loading leave requests..." /></div>
+            <div className="py-20 text-center">
+              <Spinner label="Loading leave requests..." />
+            </div>
           ) : (
-            <Card className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+            <Card
+              className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]"
+              shadow="none"
+            >
               <Table
                 aria-label="Leave requests table"
                 classNames={{
@@ -2368,83 +2649,177 @@ export default function HRPage() {
                 <TableBody emptyContent="No leave requests found.">
                   {leaveRequests
                     .filter((l) => {
-                      const matchFilter = leaveFilter === "all" || l.status === leaveFilter;
-                      const matchSearch = !leaveSearch || l.staffName.toLowerCase().includes(leaveSearch.toLowerCase());
+                      const matchFilter =
+                        leaveFilter === "all" || l.status === leaveFilter;
+                      const matchSearch =
+                        !leaveSearch ||
+                        l.staffName
+                          .toLowerCase()
+                          .includes(leaveSearch.toLowerCase());
+
                       return matchFilter && matchSearch;
                     })
                     .map((leave, i) => {
-                      const typeConfig: Record<string, { label: string; cls: string }> = {
-                        annual: { label: "Annual", cls: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
-                        sick: { label: "Sick", cls: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
-                        casual: { label: "Casual", cls: "bg-violet-500/10 text-violet-600 border-violet-500/20" },
-                        unpaid: { label: "Unpaid", cls: "bg-slate-400/10 text-slate-500 border-slate-400/20" },
-                        maternity: { label: "Maternity", cls: "bg-pink-500/10 text-pink-600 border-pink-500/20" },
-                        emergency: { label: "Emergency", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+                      const typeConfig: Record<
+                        string,
+                        { label: string; cls: string }
+                      > = {
+                        annual: {
+                          label: "Annual",
+                          cls: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+                        },
+                        sick: {
+                          label: "Sick",
+                          cls: "bg-rose-500/10 text-rose-500 border-rose-500/20",
+                        },
+                        casual: {
+                          label: "Casual",
+                          cls: "bg-violet-500/10 text-violet-600 border-violet-500/20",
+                        },
+                        unpaid: {
+                          label: "Unpaid",
+                          cls: "bg-slate-400/10 text-slate-500 border-slate-400/20",
+                        },
+                        maternity: {
+                          label: "Maternity",
+                          cls: "bg-pink-500/10 text-pink-600 border-pink-500/20",
+                        },
+                        emergency: {
+                          label: "Emergency",
+                          cls: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+                        },
                       };
-                      const statusConfig: Record<string, { label: string; cls: string }> = {
-                        pending: { label: "Pending", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
-                        approved: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
-                        rejected: { label: "Rejected", cls: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
-                        cancelled: { label: "Cancelled", cls: "bg-slate-400/10 text-slate-500 border-slate-400/20" },
+                      const statusConfig: Record<
+                        string,
+                        { label: string; cls: string }
+                      > = {
+                        pending: {
+                          label: "Pending",
+                          cls: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+                        },
+                        approved: {
+                          label: "Approved",
+                          cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+                        },
+                        rejected: {
+                          label: "Rejected",
+                          cls: "bg-rose-500/10 text-rose-500 border-rose-500/20",
+                        },
+                        cancelled: {
+                          label: "Cancelled",
+                          cls: "bg-slate-400/10 text-slate-500 border-slate-400/20",
+                        },
                       };
-                      const tc = typeConfig[leave.leaveType] || { label: leave.leaveType, cls: "bg-default-100 text-default-500" };
-                      const sc = statusConfig[leave.status] || { label: leave.status, cls: "bg-default-100 text-default-500" };
+                      const tc = typeConfig[leave.leaveType] || {
+                        label: leave.leaveType,
+                        cls: "bg-default-100 text-default-500",
+                      };
+                      const sc = statusConfig[leave.status] || {
+                        label: leave.status,
+                        cls: "bg-default-100 text-default-500",
+                      };
+
                       return (
-                        <TableRow key={leave.id || `leave-${i}`} className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors">
+                        <TableRow
+                          key={leave.id || `leave-${i}`}
+                          className="hover:bg-[rgb(var(--color-surface-2))/0.3] transition-colors"
+                        >
                           <TableCell>
-                            <div className="font-semibold text-[rgb(var(--color-text))]">{leave.staffName}</div>
-                            <div className="text-[10px] text-[rgb(var(--color-text-muted))]">{leave.staffRole}</div>
+                            <div className="font-semibold text-[rgb(var(--color-text))]">
+                              {leave.staffName}
+                            </div>
+                            <div className="text-[10px] text-[rgb(var(--color-text-muted))]">
+                              {leave.staffRole}
+                            </div>
                           </TableCell>
                           <TableCell>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tc.cls}`}>{tc.label}</span>
-                            {leave.isPaid && <span className="ml-1 text-[9px] text-emerald-500 font-semibold">Paid</span>}
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-[11px]">{format(new Date(leave.startDate), "MMM dd")} → {format(new Date(leave.endDate), "MMM dd, yyyy")}</div>
-                            <div className="text-[10px] text-[rgb(var(--color-text-muted))]">Submitted {format(new Date(leave.createdAt), "MMM dd")}</div>
-                          </TableCell>
-                          <TableCell>
-                            <span className="font-bold text-primary">{leave.totalDays}d</span>
-                          </TableCell>
-                          <TableCell>
-                            <p className="text-[11.5px] text-[rgb(var(--color-text-muted))] max-w-[180px] truncate" title={leave.reason}>{leave.reason}</p>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sc.cls}`}>{sc.label}</span>
-                            {leave.status !== "pending" && leave.reviewerName && (
-                              <p className="text-[9px] text-[rgb(var(--color-text-muted))] mt-0.5">by {leave.reviewerName}</p>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tc.cls}`}
+                            >
+                              {tc.label}
+                            </span>
+                            {leave.isPaid && (
+                              <span className="ml-1 text-[9px] text-emerald-500 font-semibold">
+                                Paid
+                              </span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-[11px]">
+                              {format(new Date(leave.startDate), "MMM dd")} →{" "}
+                              {format(new Date(leave.endDate), "MMM dd, yyyy")}
+                            </div>
+                            <div className="text-[10px] text-[rgb(var(--color-text-muted))]">
+                              Submitted{" "}
+                              {format(new Date(leave.createdAt), "MMM dd")}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-bold text-primary">
+                              {leave.totalDays}d
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <p
+                              className="text-[11.5px] text-[rgb(var(--color-text-muted))] max-w-[180px] truncate"
+                              title={leave.reason}
+                            >
+                              {leave.reason}
+                            </p>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sc.cls}`}
+                            >
+                              {sc.label}
+                            </span>
+                            {leave.status !== "pending" &&
+                              leave.reviewerName && (
+                                <p className="text-[9px] text-[rgb(var(--color-text-muted))] mt-0.5">
+                                  by {leave.reviewerName}
+                                </p>
+                              )}
                           </TableCell>
                           <TableCell align="center">
                             <div className="flex items-center gap-1 justify-center">
                               {leave.status === "pending" && (
                                 <>
                                   <Button
-                                    size="sm"
-                                    variant="flat"
-                                    color="success"
                                     className="h-7 px-2 text-[10px] font-bold"
-                                    startContent={<IoCheckmarkOutline size={12} />}
-                                    onPress={() => { setReviewingLeave(leave); setReviewNotes(""); setIsReviewModalOpen(true); }}
+                                    color="success"
+                                    size="sm"
+                                    startContent={
+                                      <IoCheckmarkOutline size={12} />
+                                    }
+                                    variant="flat"
+                                    onPress={() => {
+                                      setReviewingLeave(leave);
+                                      setReviewNotes("");
+                                      setIsReviewModalOpen(true);
+                                    }}
                                   >
                                     Review
                                   </Button>
                                   <Button
+                                    className="h-7 px-2 text-[10px] font-bold"
+                                    color="danger"
                                     size="sm"
                                     variant="light"
-                                    color="danger"
-                                    className="h-7 px-2 text-[10px] font-bold"
                                     onPress={() => handleCancelLeave(leave.id)}
                                   >
                                     Cancel
                                   </Button>
                                 </>
                               )}
-                              {leave.status !== "pending" && leave.reviewNotes && (
-                                <span title={leave.reviewNotes} className="cursor-help text-[rgb(var(--color-text-muted))]">
-                                  <IoAlertCircleOutline size={15} />
-                                </span>
-                              )}
+                              {leave.status !== "pending" &&
+                                leave.reviewNotes && (
+                                  <span
+                                    className="cursor-help text-[rgb(var(--color-text-muted))]"
+                                    title={leave.reviewNotes}
+                                  >
+                                    <IoAlertCircleOutline size={15} />
+                                  </span>
+                                )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -2467,34 +2842,69 @@ export default function HRPage() {
                   const annualRemaining = bal.annualAllotted - bal.annualUsed;
                   const sickRemaining = bal.sickAllotted - bal.sickUsed;
                   const casualRemaining = bal.casualAllotted - bal.casualUsed;
+
                   return (
-                    <Card key={bal.id} className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]" shadow="none">
+                    <Card
+                      key={bal.id}
+                      className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]"
+                      shadow="none"
+                    >
                       <CardBody className="p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
-                            <p className="text-[13px] font-bold text-[rgb(var(--color-text))]">{bal.staffName}</p>
-                            <p className="text-[10px] text-[rgb(var(--color-text-muted))] uppercase tracking-wider">{bal.year} Quota</p>
+                            <p className="text-[13px] font-bold text-[rgb(var(--color-text))]">
+                              {bal.staffName}
+                            </p>
+                            <p className="text-[10px] text-[rgb(var(--color-text-muted))] uppercase tracking-wider">
+                              {bal.year} Quota
+                            </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-[9px] text-[rgb(var(--color-text-muted))] uppercase tracking-widest">Unpaid Taken</p>
-                            <p className="text-[14px] font-bold text-rose-500">{bal.unpaidUsed}d</p>
+                            <p className="text-[9px] text-[rgb(var(--color-text-muted))] uppercase tracking-widest">
+                              Unpaid Taken
+                            </p>
+                            <p className="text-[14px] font-bold text-rose-500">
+                              {bal.unpaidUsed}d
+                            </p>
                           </div>
                         </div>
                         <div className="space-y-2">
                           {[
-                            { label: "Annual", used: bal.annualUsed, total: bal.annualAllotted, remaining: annualRemaining, color: "bg-blue-500" },
-                            { label: "Sick", used: bal.sickUsed, total: bal.sickAllotted, remaining: sickRemaining, color: "bg-rose-400" },
-                            { label: "Casual", used: bal.casualUsed, total: bal.casualAllotted, remaining: casualRemaining, color: "bg-violet-400" },
+                            {
+                              label: "Annual",
+                              used: bal.annualUsed,
+                              total: bal.annualAllotted,
+                              remaining: annualRemaining,
+                              color: "bg-blue-500",
+                            },
+                            {
+                              label: "Sick",
+                              used: bal.sickUsed,
+                              total: bal.sickAllotted,
+                              remaining: sickRemaining,
+                              color: "bg-rose-400",
+                            },
+                            {
+                              label: "Casual",
+                              used: bal.casualUsed,
+                              total: bal.casualAllotted,
+                              remaining: casualRemaining,
+                              color: "bg-violet-400",
+                            },
                           ].map((item) => (
                             <div key={item.label}>
                               <div className="flex justify-between text-[10px] font-semibold text-[rgb(var(--color-text-muted))] mb-1">
                                 <span>{item.label}</span>
-                                <span>{item.remaining} / {item.total} remaining</span>
+                                <span>
+                                  {item.remaining} / {item.total} remaining
+                                </span>
                               </div>
                               <div className="h-1.5 rounded-full bg-[rgb(var(--color-surface-2))] overflow-hidden">
                                 <div
                                   className={`h-full rounded-full ${item.color} transition-all`}
-                                  style={{ width: `${Math.min(100, (item.used / item.total) * 100)}%` }}
+                                  style={{
+                                    width: `${Math.min(100, (item.used / item.total) * 100)}%`,
+                                  }}
                                 />
                               </div>
                             </div>
@@ -2512,10 +2922,14 @@ export default function HRPage() {
 
       {/* ── New Leave Request Modal ── */}
       <Modal
-        classNames={{ base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]", header: "border-b border-[rgb(var(--color-border))] py-4", footer: "border-t border-[rgb(var(--color-border))] py-3" }}
+        backdrop="blur"
+        classNames={{
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
+          header: "border-b border-[rgb(var(--color-border))] py-4",
+          footer: "border-t border-[rgb(var(--color-border))] py-3",
+        }}
         isOpen={isLeaveModalOpen}
         size="xl"
-        backdrop="blur"
         onOpenChange={setIsLeaveModalOpen}
       >
         <ModalContent>
@@ -2523,64 +2937,136 @@ export default function HRPage() {
             <form onSubmit={handleSubmitLeave}>
               <ModalHeader>
                 <div>
-                  <h2 className="text-[16px] font-bold text-primary">New Leave Request</h2>
-                  <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">Submit a leave application on behalf of a staff member.</p>
+                  <h2 className="text-[16px] font-bold text-primary">
+                    New Leave Request
+                  </h2>
+                  <p className="text-[11px] text-[rgb(var(--color-text-muted))] font-medium">
+                    Submit a leave application on behalf of a staff member.
+                  </p>
                 </div>
               </ModalHeader>
               <ModalBody className="py-5 space-y-4">
                 <div>
-                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Staff Member</label>
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    Staff Member
+                  </label>
                   <Select
-                    size="sm"
+                    aria-label="Select staff"
                     placeholder="Select staff member"
                     selectedKeys={leaveForm.staffId ? [leaveForm.staffId] : []}
-                    onSelectionChange={(keys) => setLeaveForm({ ...leaveForm, staffId: Array.from(keys)[0] as string })}
-                    aria-label="Select staff"
+                    size="sm"
+                    onSelectionChange={(keys) =>
+                      setLeaveForm({
+                        ...leaveForm,
+                        staffId: Array.from(keys)[0] as string,
+                      })
+                    }
                   >
                     {staff.map((s) => (
-                      <SelectItem key={s.id}>{s.name} — {s.role}</SelectItem>
+                      <SelectItem key={s.id}>
+                        {s.name} — {s.role}
+                      </SelectItem>
                     ))}
                   </Select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Leave Type</label>
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    Leave Type
+                  </label>
                   <Select
-                    size="sm"
-                    selectedKeys={[leaveForm.leaveType]}
-                    onSelectionChange={(keys) => setLeaveForm({ ...leaveForm, leaveType: Array.from(keys)[0] as LeaveRequest["leaveType"] })}
                     aria-label="Leave type"
+                    selectedKeys={[leaveForm.leaveType]}
+                    size="sm"
+                    onSelectionChange={(keys) =>
+                      setLeaveForm({
+                        ...leaveForm,
+                        leaveType: Array.from(
+                          keys,
+                        )[0] as LeaveRequest["leaveType"],
+                      })
+                    }
                   >
                     <SelectItem key="annual">Annual Leave (Paid)</SelectItem>
                     <SelectItem key="sick">Sick Leave (Paid)</SelectItem>
                     <SelectItem key="casual">Casual Leave (Paid)</SelectItem>
-                    <SelectItem key="maternity">Maternity Leave (Paid)</SelectItem>
+                    <SelectItem key="maternity">
+                      Maternity Leave (Paid)
+                    </SelectItem>
                     <SelectItem key="emergency">Emergency Leave</SelectItem>
                     <SelectItem key="unpaid">Unpaid Leave</SelectItem>
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">From</label>
-                    <Input size="sm" type="date" value={leaveForm.startDate} onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })} />
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      From
+                    </label>
+                    <Input
+                      size="sm"
+                      type="date"
+                      value={leaveForm.startDate}
+                      onChange={(e) =>
+                        setLeaveForm({
+                          ...leaveForm,
+                          startDate: e.target.value,
+                        })
+                      }
+                    />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">To</label>
-                    <Input size="sm" type="date" value={leaveForm.endDate} min={leaveForm.startDate} onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })} />
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      To
+                    </label>
+                    <Input
+                      min={leaveForm.startDate}
+                      size="sm"
+                      type="date"
+                      value={leaveForm.endDate}
+                      onChange={(e) =>
+                        setLeaveForm({ ...leaveForm, endDate: e.target.value })
+                      }
+                    />
                   </div>
                 </div>
                 {leaveForm.startDate && leaveForm.endDate && (
                   <p className="text-[11px] text-primary font-semibold">
-                    Duration: {Math.round((new Date(leaveForm.endDate).getTime() - new Date(leaveForm.startDate).getTime()) / 86400000) + 1} day(s)
+                    Duration:{" "}
+                    {Math.round(
+                      (new Date(leaveForm.endDate).getTime() -
+                        new Date(leaveForm.startDate).getTime()) /
+                        86400000,
+                    ) + 1}{" "}
+                    day(s)
                   </p>
                 )}
                 <div>
-                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Reason</label>
-                  <Textarea size="sm" minRows={2} placeholder="Provide reason for leave..." value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    Reason
+                  </label>
+                  <Textarea
+                    minRows={2}
+                    placeholder="Provide reason for leave..."
+                    size="sm"
+                    value={leaveForm.reason}
+                    onChange={(e) =>
+                      setLeaveForm({ ...leaveForm, reason: e.target.value })
+                    }
+                  />
                 </div>
               </ModalBody>
               <ModalFooter>
-                <Button variant="light" size="sm" onPress={onClose}>Cancel</Button>
-                <Button type="submit" color="primary" size="sm" isLoading={leaveSubmitting} className="font-bold">Submit Request</Button>
+                <Button size="sm" variant="light" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  className="font-bold"
+                  color="primary"
+                  isLoading={leaveSubmitting}
+                  size="sm"
+                  type="submit"
+                >
+                  Submit Request
+                </Button>
               </ModalFooter>
             </form>
           )}
@@ -2589,7 +3075,11 @@ export default function HRPage() {
 
       {/* ── Manager Review Modal ── */}
       <Modal
-        classNames={{ base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]", header: "border-b border-[rgb(var(--color-border))] py-4", footer: "border-t border-[rgb(var(--color-border))] py-3" }}
+        classNames={{
+          base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
+          header: "border-b border-[rgb(var(--color-border))] py-4",
+          footer: "border-t border-[rgb(var(--color-border))] py-3",
+        }}
         isOpen={isReviewModalOpen}
         size="lg"
         onOpenChange={setIsReviewModalOpen}
@@ -2599,8 +3089,12 @@ export default function HRPage() {
             <>
               <ModalHeader>
                 <div>
-                  <h2 className="text-[16px] font-bold text-primary">Review Leave Request</h2>
-                  <p className="text-[11px] text-[rgb(var(--color-text-muted))]">Approve or reject this application.</p>
+                  <h2 className="text-[16px] font-bold text-primary">
+                    Review Leave Request
+                  </h2>
+                  <p className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                    Approve or reject this application.
+                  </p>
                 </div>
               </ModalHeader>
               <ModalBody className="py-5 space-y-4">
@@ -2608,51 +3102,89 @@ export default function HRPage() {
                   <div className="bg-[rgb(var(--color-surface-2))/0.5] p-4 rounded-xl border border-[rgb(var(--color-border))] space-y-2">
                     <div className="flex justify-between">
                       <div>
-                        <p className="text-[13px] font-bold text-[rgb(var(--color-text))]">{reviewingLeave.staffName}</p>
-                        <p className="text-[10px] text-[rgb(var(--color-text-muted))]">{reviewingLeave.staffRole}</p>
+                        <p className="text-[13px] font-bold text-[rgb(var(--color-text))]">
+                          {reviewingLeave.staffName}
+                        </p>
+                        <p className="text-[10px] text-[rgb(var(--color-text-muted))]">
+                          {reviewingLeave.staffRole}
+                        </p>
                       </div>
-                      <span className="text-[11px] font-bold text-primary">{reviewingLeave.totalDays} day(s)</span>
+                      <span className="text-[11px] font-bold text-primary">
+                        {reviewingLeave.totalDays} day(s)
+                      </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[11px]">
                       <div>
-                        <span className="text-[rgb(var(--color-text-muted))]">Type: </span>
-                        <span className="font-semibold capitalize">{reviewingLeave.leaveType}</span>
-                        {reviewingLeave.isPaid && <span className="ml-1 text-emerald-500">(Paid)</span>}
+                        <span className="text-[rgb(var(--color-text-muted))]">
+                          Type:{" "}
+                        </span>
+                        <span className="font-semibold capitalize">
+                          {reviewingLeave.leaveType}
+                        </span>
+                        {reviewingLeave.isPaid && (
+                          <span className="ml-1 text-emerald-500">(Paid)</span>
+                        )}
                       </div>
                       <div>
-                        <span className="text-[rgb(var(--color-text-muted))]">Period: </span>
-                        <span className="font-semibold">{format(new Date(reviewingLeave.startDate), "MMM dd")} – {format(new Date(reviewingLeave.endDate), "MMM dd, yyyy")}</span>
+                        <span className="text-[rgb(var(--color-text-muted))]">
+                          Period:{" "}
+                        </span>
+                        <span className="font-semibold">
+                          {format(new Date(reviewingLeave.startDate), "MMM dd")}{" "}
+                          –{" "}
+                          {format(
+                            new Date(reviewingLeave.endDate),
+                            "MMM dd, yyyy",
+                          )}
+                        </span>
                       </div>
                     </div>
                     <div>
-                      <span className="text-[10px] text-[rgb(var(--color-text-muted))] uppercase font-bold">Reason</span>
-                      <p className="text-[12px] mt-0.5 text-[rgb(var(--color-text))]">{reviewingLeave.reason}</p>
+                      <span className="text-[10px] text-[rgb(var(--color-text-muted))] uppercase font-bold">
+                        Reason
+                      </span>
+                      <p className="text-[12px] mt-0.5 text-[rgb(var(--color-text))]">
+                        {reviewingLeave.reason}
+                      </p>
                     </div>
                   </div>
                 )}
                 <div>
-                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">Manager Note <span className="text-rose-400">(required for rejection)</span></label>
-                  <Textarea size="sm" minRows={2} placeholder="Add a note (e.g. Approved. Please arrange handover.)" value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} />
+                  <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                    Manager Note{" "}
+                    <span className="text-rose-400">
+                      (required for rejection)
+                    </span>
+                  </label>
+                  <Textarea
+                    minRows={2}
+                    placeholder="Add a note (e.g. Approved. Please arrange handover.)"
+                    size="sm"
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                  />
                 </div>
               </ModalBody>
               <ModalFooter>
-                <Button variant="light" size="sm" onPress={onClose}>Close</Button>
+                <Button size="sm" variant="light" onPress={onClose}>
+                  Close
+                </Button>
                 <Button
-                  size="sm"
-                  color="danger"
-                  variant="flat"
                   className="font-bold"
+                  color="danger"
                   isLoading={reviewLoading}
+                  size="sm"
                   startContent={<IoCloseOutline />}
+                  variant="flat"
                   onPress={handleRejectLeave}
                 >
                   Reject
                 </Button>
                 <Button
-                  size="sm"
-                  color="success"
                   className="font-bold"
+                  color="success"
                   isLoading={reviewLoading}
+                  size="sm"
                   startContent={<IoCheckmarkOutline />}
                   onPress={handleApproveLeave}
                 >
@@ -2853,11 +3385,11 @@ export default function HRPage() {
                       currentFile={
                         staffForm.photoUrl
                           ? {
-                            id: "",
-                            name: "Profile Photo",
-                            url: staffForm.photoUrl,
-                            type: "image/jpeg",
-                          }
+                              id: "",
+                              name: "Profile Photo",
+                              url: staffForm.photoUrl,
+                              type: "image/jpeg",
+                            }
                           : undefined
                       }
                       uploadType="image"
@@ -3123,18 +3655,30 @@ export default function HRPage() {
                         </p>
                         {(() => {
                           // Generate array of all months from joining date to current month
-                          const joiningDate = new Date(selectedStaff.joiningDate);
+                          const joiningDate = new Date(
+                            selectedStaff.joiningDate,
+                          );
                           const currentDate = new Date();
                           const monthsToCalculate = [];
 
-                          let current = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
+                          let current = new Date(
+                            joiningDate.getFullYear(),
+                            joiningDate.getMonth(),
+                            1,
+                          );
+
                           while (current <= currentDate) {
-                            monthsToCalculate.push(format(current, "MMMM yyyy"));
+                            monthsToCalculate.push(
+                              format(current, "MMMM yyyy"),
+                            );
                             current.setMonth(current.getMonth() + 1);
                           }
 
                           // Fallback if somehow empty
-                          if (monthsToCalculate.length === 0) monthsToCalculate.push(format(currentDate, "MMMM yyyy"));
+                          if (monthsToCalculate.length === 0)
+                            monthsToCalculate.push(
+                              format(currentDate, "MMMM yyyy"),
+                            );
 
                           const stats = getLeaveDetails(monthsToCalculate);
 
@@ -3145,18 +3689,22 @@ export default function HRPage() {
                                   <p className="text-[16px] font-bold text-rose-600">
                                     {stats.absentDays}
                                   </p>
-                                  <p className="text-[10px] font-semibold text-rose-600/70 pb-0.5">Total Taken</p>
+                                  <p className="text-[10px] font-semibold text-rose-600/70 pb-0.5">
+                                    Total Taken
+                                  </p>
                                 </div>
                               </div>
 
-                              <div className="h-6 w-px bg-rose-200/50"></div>
+                              <div className="h-6 w-px bg-rose-200/50" />
 
                               <div className="flex flex-col">
                                 <div className="flex items-end gap-1.5">
                                   <p className="text-[16px] font-bold text-mountain-600">
                                     {stats.unpaidLeaves}
                                   </p>
-                                  <p className="text-[10px] font-semibold text-mountain-500 pb-0.5">Unpaid Leaves</p>
+                                  <p className="text-[10px] font-semibold text-mountain-500 pb-0.5">
+                                    Unpaid Leaves
+                                  </p>
                                 </div>
                                 <p className="text-[9px] text-mountain-400 mt-0.5">
                                   All-time history
@@ -3187,7 +3735,10 @@ export default function HRPage() {
                           Total Incentives
                         </p>
                         <p className="text-[16px] font-bold text-violet-600">
-                          Rs. {getIncentivesPaid(selectedStaff.name).toLocaleString()}
+                          Rs.{" "}
+                          {getIncentivesPaid(
+                            selectedStaff.name,
+                          ).toLocaleString()}
                         </p>
                       </div>
                       <div className="p-4 rounded-xl border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))/0.3]">
@@ -3317,7 +3868,7 @@ export default function HRPage() {
                               0,
                               Math.round(
                                 ((totalSessions - lateCount) / totalSessions) *
-                                100,
+                                  100,
                               ),
                             );
 
@@ -3444,7 +3995,7 @@ export default function HRPage() {
                                         className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${record.status === "present" || record.status === "late" ? (record.checkOut ? "bg-primary/10 text-primary" : record.status === "late" ? "bg-amber-500/10 text-amber-500" : "bg-success/10 text-success") : "bg-rose-500/10 text-rose-500"}`}
                                       >
                                         {record.status === "present" ||
-                                          record.status === "late"
+                                        record.status === "late"
                                           ? record.checkOut
                                             ? "Completed"
                                             : record.status === "late"
@@ -3562,15 +4113,22 @@ export default function HRPage() {
                                   (b) =>
                                     b.category === "salary" &&
                                     b.vendorName === selectedStaff.name &&
-                                    b.description?.match(/Tax\s+Rs\.?\s*([\d,]+)/i),
+                                    b.description?.match(
+                                      /Tax\s+Rs\.?\s*([\d,]+)/i,
+                                    ),
                                 )
                                 .sort(
                                   (a, b) =>
                                     b.billDate.getTime() - a.billDate.getTime(),
                                 )
                                 .map((bill, index) => {
-                                  const match = bill.description?.match(/Tax\s+Rs\.?\s*([\d,]+)/i);
-                                  const taxAmount = match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+                                  const match = bill.description?.match(
+                                    /Tax\s+Rs\.?\s*([\d,]+)/i,
+                                  );
+                                  const taxAmount = match
+                                    ? parseFloat(match[1].replace(/,/g, ""))
+                                    : 0;
+
                                   return (
                                     <TableRow key={bill.id || `tax-${index}`}>
                                       <TableCell className="font-mono">
@@ -3599,10 +4157,10 @@ export default function HRPage() {
                             <span>Referral Commissions</span>
                             {(selectedStaff.totalCommissionBalance || 0) >
                               0 && (
-                                <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
-                                  Pending
-                                </span>
-                              )}
+                              <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                                Pending
+                              </span>
+                            )}
                           </div>
                         }
                       >
@@ -3745,7 +4303,11 @@ export default function HRPage() {
 
                     setPayrollForm({
                       ...payrollForm,
-                      amount: calculateExpectedAmount([currentMonth], "regular", 0),
+                      amount: calculateExpectedAmount(
+                        [currentMonth],
+                        "regular",
+                        0,
+                      ),
                       selectedMonths: [currentMonth],
                       notes: "",
                       waivedDays: 0,
@@ -3779,11 +4341,16 @@ export default function HRPage() {
         classNames={{ base: "bg-white border border-mountain-200 shadow-xl" }}
         isOpen={isAbsentModalOpen}
         size="sm"
-        onClose={() => { setIsAbsentModalOpen(false); setAbsentTarget(null); }}
+        onClose={() => {
+          setIsAbsentModalOpen(false);
+          setAbsentTarget(null);
+        }}
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 border-b border-mountain-100 pb-3">
-            <h2 className="text-[15px] font-bold text-mountain-900">Mark Absence</h2>
+            <h2 className="text-[15px] font-bold text-mountain-900">
+              Mark Absence
+            </h2>
             <p className="text-[12px] text-mountain-500 font-normal">
               {absentTarget?.name} — Select leave type
             </p>
@@ -3801,9 +4368,13 @@ export default function HRPage() {
               >
                 <span className="mt-0.5 text-success text-xl">✓</span>
                 <div>
-                  <p className="text-[13px] font-bold text-success">Paid Leave</p>
+                  <p className="text-[13px] font-bold text-success">
+                    Paid Leave
+                  </p>
                   <p className="text-[11px] text-mountain-500 mt-0.5">
-                    Counts against their monthly leave quota ({absentTarget?.allowedLeavesPerMonth ?? 4} days/mo). No extra salary deduction unless quota is exceeded.
+                    Counts against their monthly leave quota (
+                    {absentTarget?.allowedLeavesPerMonth ?? 4} days/mo). No
+                    extra salary deduction unless quota is exceeded.
                   </p>
                 </div>
               </button>
@@ -3818,9 +4389,12 @@ export default function HRPage() {
               >
                 <span className="mt-0.5 text-rose-600 text-xl">✗</span>
                 <div>
-                  <p className="text-[13px] font-bold text-rose-600">Unpaid Leave</p>
+                  <p className="text-[13px] font-bold text-rose-600">
+                    Unpaid Leave
+                  </p>
                   <p className="text-[11px] text-mountain-500 mt-0.5">
-                    Salary will be deducted for this day regardless of remaining leave quota.
+                    Salary will be deducted for this day regardless of remaining
+                    leave quota.
                   </p>
                 </div>
               </button>
@@ -3828,10 +4402,13 @@ export default function HRPage() {
           </ModalBody>
           <ModalFooter>
             <Button
-              variant="flat"
-              size="sm"
               className="font-semibold"
-              onPress={() => { setIsAbsentModalOpen(false); setAbsentTarget(null); }}
+              size="sm"
+              variant="flat"
+              onPress={() => {
+                setIsAbsentModalOpen(false);
+                setAbsentTarget(null);
+              }}
             >
               Cancel
             </Button>
@@ -3869,21 +4446,26 @@ export default function HRPage() {
                   <div className="space-y-4">
                     <div>
                       <Tabs
-                        selectedKey={payrollForm.paymentType}
-                        onSelectionChange={(key) => {
-                          const type = key as "regular" | "advance";
-                          setPayrollForm({
-                            ...payrollForm,
-                            paymentType: type,
-                            amount: calculateExpectedAmount(payrollForm.selectedMonths, type, payrollForm.waivedDays),
-                          });
-                        }}
-                        size="sm"
                         className="mb-2"
                         classNames={{
                           tabList: "bg-mountain-50 border border-mountain-200",
                           cursor: "bg-white shadow-sm",
                           tab: "font-semibold text-mountain-600",
+                        }}
+                        selectedKey={payrollForm.paymentType}
+                        size="sm"
+                        onSelectionChange={(key) => {
+                          const type = key as "regular" | "advance";
+
+                          setPayrollForm({
+                            ...payrollForm,
+                            paymentType: type,
+                            amount: calculateExpectedAmount(
+                              payrollForm.selectedMonths,
+                              type,
+                              payrollForm.waivedDays,
+                            ),
+                          });
                         }}
                       >
                         <Tab key="regular" title="Regular Salary" />
@@ -3907,7 +4489,11 @@ export default function HRPage() {
                             setPayrollForm({
                               ...payrollForm,
                               selectedMonths: selected,
-                              amount: calculateExpectedAmount(selected, payrollForm.paymentType, payrollForm.waivedDays),
+                              amount: calculateExpectedAmount(
+                                selected,
+                                payrollForm.paymentType,
+                                payrollForm.waivedDays,
+                              ),
                             });
                           }}
                         >
@@ -3924,7 +4510,9 @@ export default function HRPage() {
                       <Input
                         size="sm"
                         startContent={
-                          <span className="text-[12px] text-text-muted">Rs.</span>
+                          <span className="text-[12px] text-text-muted">
+                            Rs.
+                          </span>
                         }
                         type="number"
                         value={payrollForm.amount.toString()}
@@ -3943,13 +4531,19 @@ export default function HRPage() {
                             Incentive (Rs.)
                           </label>
                           <Input
+                            placeholder="0"
                             size="sm"
                             startContent={
-                              <span className="text-[12px] text-text-muted">Rs.</span>
+                              <span className="text-[12px] text-text-muted">
+                                Rs.
+                              </span>
                             }
                             type="number"
-                            placeholder="0"
-                            value={payrollForm.incentive === 0 ? "" : payrollForm.incentive.toString()}
+                            value={
+                              payrollForm.incentive === 0
+                                ? ""
+                                : payrollForm.incentive.toString()
+                            }
                             onChange={(e) =>
                               setPayrollForm({
                                 ...payrollForm,
@@ -3964,12 +4558,25 @@ export default function HRPage() {
                               Custom Bonus (Rs.)
                             </label>
                             <Input
-                              size="sm"
-                              startContent={<span className="text-[12px] text-text-muted">Rs.</span>}
-                              type="number"
                               placeholder="0"
-                              value={payrollForm.customBonus === 0 ? "" : payrollForm.customBonus.toString()}
-                              onChange={(e) => setPayrollForm({ ...payrollForm, customBonus: Number(e.target.value) || 0 })}
+                              size="sm"
+                              startContent={
+                                <span className="text-[12px] text-text-muted">
+                                  Rs.
+                                </span>
+                              }
+                              type="number"
+                              value={
+                                payrollForm.customBonus === 0
+                                  ? ""
+                                  : payrollForm.customBonus.toString()
+                              }
+                              onChange={(e) =>
+                                setPayrollForm({
+                                  ...payrollForm,
+                                  customBonus: Number(e.target.value) || 0,
+                                })
+                              }
                             />
                           </div>
                           <div className="flex-1">
@@ -3977,10 +4584,15 @@ export default function HRPage() {
                               Bonus Reason
                             </label>
                             <Input
-                              size="sm"
                               placeholder="e.g. Overtime"
+                              size="sm"
                               value={payrollForm.customBonusNotes}
-                              onChange={(e) => setPayrollForm({ ...payrollForm, customBonusNotes: e.target.value })}
+                              onChange={(e) =>
+                                setPayrollForm({
+                                  ...payrollForm,
+                                  customBonusNotes: e.target.value,
+                                })
+                              }
                             />
                           </div>
                         </div>
@@ -3990,12 +4602,25 @@ export default function HRPage() {
                               Custom Deduction (Rs.)
                             </label>
                             <Input
-                              size="sm"
-                              startContent={<span className="text-[12px] text-text-muted">Rs.</span>}
-                              type="number"
                               placeholder="0"
-                              value={payrollForm.customDeduction === 0 ? "" : payrollForm.customDeduction.toString()}
-                              onChange={(e) => setPayrollForm({ ...payrollForm, customDeduction: Number(e.target.value) || 0 })}
+                              size="sm"
+                              startContent={
+                                <span className="text-[12px] text-text-muted">
+                                  Rs.
+                                </span>
+                              }
+                              type="number"
+                              value={
+                                payrollForm.customDeduction === 0
+                                  ? ""
+                                  : payrollForm.customDeduction.toString()
+                              }
+                              onChange={(e) =>
+                                setPayrollForm({
+                                  ...payrollForm,
+                                  customDeduction: Number(e.target.value) || 0,
+                                })
+                              }
                             />
                           </div>
                           <div className="flex-1">
@@ -4003,19 +4628,31 @@ export default function HRPage() {
                               Deduction Reason
                             </label>
                             <Input
-                              size="sm"
                               placeholder="e.g. Uniform"
+                              size="sm"
                               value={payrollForm.customDeductionNotes}
-                              onChange={(e) => setPayrollForm({ ...payrollForm, customDeductionNotes: e.target.value })}
+                              onChange={(e) =>
+                                setPayrollForm({
+                                  ...payrollForm,
+                                  customDeductionNotes: e.target.value,
+                                })
+                              }
                             />
                           </div>
                         </div>
                         <div className="flex flex-col gap-2 border border-rose-100 bg-rose-50/50 p-2.5 rounded-lg">
                           <Checkbox
-                            size="sm"
+                            classNames={{
+                              label: "text-[11px] text-rose-700 font-semibold",
+                            }}
                             isSelected={payrollForm.applyTax}
-                            onValueChange={(val) => setPayrollForm(prev => ({ ...prev, applyTax: val }))}
-                            classNames={{ label: "text-[11px] text-rose-700 font-semibold" }}
+                            size="sm"
+                            onValueChange={(val) =>
+                              setPayrollForm((prev) => ({
+                                ...prev,
+                                applyTax: val,
+                              }))
+                            }
                           >
                             Apply Tax Deduction
                           </Checkbox>
@@ -4026,16 +4663,18 @@ export default function HRPage() {
                                 Tax Percentage (%)
                               </label>
                               <Input
-                                size="sm"
-                                variant="bordered"
                                 classNames={{
-                                  input: "text-[13px] font-semibold text-rose-700",
+                                  input:
+                                    "text-[13px] font-semibold text-rose-700",
                                   innerWrapper: "bg-transparent",
-                                  inputWrapper: "border-rose-200 hover:border-rose-300 focus-within:border-rose-400 bg-white"
+                                  inputWrapper:
+                                    "border-rose-200 hover:border-rose-300 focus-within:border-rose-400 bg-white",
                                 }}
-                                type="number"
                                 placeholder="1"
+                                size="sm"
+                                type="number"
                                 value={payrollForm.taxPercentage.toString()}
+                                variant="bordered"
                                 onChange={(e) =>
                                   setPayrollForm({
                                     ...payrollForm,
@@ -4064,7 +4703,9 @@ export default function HRPage() {
                         }
                       >
                         <SelectItem key="Cash">Cash</SelectItem>
-                        <SelectItem key="Bank Transfer">Bank Transfer</SelectItem>
+                        <SelectItem key="Bank Transfer">
+                          Bank Transfer
+                        </SelectItem>
                         <SelectItem key="Cheque">Cheque</SelectItem>
                         <SelectItem key="E-Sewa">E-Sewa / Khalti</SelectItem>
                       </Select>
@@ -4094,80 +4735,155 @@ export default function HRPage() {
                     </h3>
                     <div className="space-y-2.5">
                       <div className="flex justify-between text-[12px]">
-                        <span className="text-mountain-600">Months Selected:</span>
-                        <span className="font-semibold text-mountain-900">{payrollForm.selectedMonths.length}</span>
-                      </div>
-                      <div className="flex justify-between text-[12px]">
-                        <span className="text-mountain-600">Expected Salary:</span>
+                        <span className="text-mountain-600">
+                          Months Selected:
+                        </span>
                         <span className="font-semibold text-mountain-900">
-                          Rs. {((selectedStaff?.salary || 0) * (payrollForm.selectedMonths.length || 1)).toLocaleString()}
+                          {payrollForm.selectedMonths.length}
                         </span>
                       </div>
-                      {getLeaveDetails(payrollForm.selectedMonths).absentDays > 0 && (
+                      <div className="flex justify-between text-[12px]">
+                        <span className="text-mountain-600">
+                          Expected Salary:
+                        </span>
+                        <span className="font-semibold text-mountain-900">
+                          Rs.{" "}
+                          {(
+                            (selectedStaff?.salary || 0) *
+                            (payrollForm.selectedMonths.length || 1)
+                          ).toLocaleString()}
+                        </span>
+                      </div>
+                      {getLeaveDetails(payrollForm.selectedMonths).absentDays >
+                        0 && (
                         <div className="flex flex-col gap-2 border-t border-b border-mountain-200/50 py-2 my-2">
                           <div className="flex justify-between text-[12px] text-mountain-700 font-semibold">
                             <span>Total Leave Breakdown:</span>
                             <span>
-                              {getLeaveDetails(payrollForm.selectedMonths).absentDays} Days Taken
+                              {
+                                getLeaveDetails(payrollForm.selectedMonths)
+                                  .absentDays
+                              }{" "}
+                              Days Taken
                             </span>
                           </div>
 
                           <div className="flex flex-col gap-1 pl-2 border-l-2 border-mountain-200">
-                            {getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves > 0 && (
+                            {getLeaveDetails(payrollForm.selectedMonths)
+                              .unpaidLeaves > 0 && (
                               <div className="flex justify-between text-[11px] text-rose-500">
                                 <span>Unpaid Leaves:</span>
-                                <span>{getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves} Days</span>
+                                <span>
+                                  {
+                                    getLeaveDetails(payrollForm.selectedMonths)
+                                      .unpaidLeaves
+                                  }{" "}
+                                  Days
+                                </span>
                               </div>
                             )}
                           </div>
 
                           <div className="text-[9px] text-mountain-400 text-right leading-tight self-end mt-1 italic">
-                            Dates: {getLeaveDetails(payrollForm.selectedMonths).absentDates.join(", ")}
+                            Dates:{" "}
+                            {getLeaveDetails(
+                              payrollForm.selectedMonths,
+                            ).absentDates.join(", ")}
                           </div>
                         </div>
                       )}
-                      {getLeaveDetails(payrollForm.selectedMonths).deductionAmount > 0 && (
+                      {getLeaveDetails(payrollForm.selectedMonths)
+                        .deductionAmount > 0 && (
                         <div className="flex flex-col gap-1 text-[12px] text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
                           <div className="flex justify-between">
-                            <span className="font-semibold">Leave Salary Deduction:</span>
+                            <span className="font-semibold">
+                              Leave Salary Deduction:
+                            </span>
                             <span className={`font-bold`}>
-                              - Rs. {Math.round(Math.max(0, getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves - payrollForm.waivedDays) * getLeaveDetails(payrollForm.selectedMonths).dailyWage).toLocaleString()}
+                              - Rs.{" "}
+                              {Math.round(
+                                Math.max(
+                                  0,
+                                  getLeaveDetails(payrollForm.selectedMonths)
+                                    .unpaidLeaves - payrollForm.waivedDays,
+                                ) *
+                                  getLeaveDetails(payrollForm.selectedMonths)
+                                    .dailyWage,
+                              ).toLocaleString()}
                             </span>
                           </div>
                           <div className="text-[10px] text-rose-500/80 text-right">
-                            ({Math.max(0, getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves - payrollForm.waivedDays)} unpaid days @ Rs. {Math.round(getLeaveDetails(payrollForm.selectedMonths).dailyWage).toLocaleString()}/day)
+                            (
+                            {Math.max(
+                              0,
+                              getLeaveDetails(payrollForm.selectedMonths)
+                                .unpaidLeaves - payrollForm.waivedDays,
+                            )}{" "}
+                            unpaid days @ Rs.{" "}
+                            {Math.round(
+                              getLeaveDetails(payrollForm.selectedMonths)
+                                .dailyWage,
+                            ).toLocaleString()}
+                            /day)
                           </div>
                           <div className="flex items-center justify-between text-mountain-500 mt-1">
-                            <span className="text-[10px]">Waive deductions (Days):</span>
+                            <span className="text-[10px]">
+                              Waive deductions (Days):
+                            </span>
                             <div className="flex items-center gap-2">
                               <Button
                                 isIconOnly
-                                size="sm"
-                                variant="flat"
                                 className="h-6 w-6 min-w-0"
                                 isDisabled={payrollForm.waivedDays <= 0}
+                                size="sm"
+                                variant="flat"
                                 onPress={() => {
-                                  setPayrollForm(prev => ({
+                                  setPayrollForm((prev) => ({
                                     ...prev,
-                                    waivedDays: Math.max(0, prev.waivedDays - 1),
-                                    amount: calculateExpectedAmount(prev.selectedMonths, prev.paymentType, Math.max(0, prev.waivedDays - 1))
+                                    waivedDays: Math.max(
+                                      0,
+                                      prev.waivedDays - 1,
+                                    ),
+                                    amount: calculateExpectedAmount(
+                                      prev.selectedMonths,
+                                      prev.paymentType,
+                                      Math.max(0, prev.waivedDays - 1),
+                                    ),
                                   }));
                                 }}
                               >
                                 -
                               </Button>
-                              <span className="font-bold w-4 text-center text-mountain-700">{payrollForm.waivedDays}</span>
+                              <span className="font-bold w-4 text-center text-mountain-700">
+                                {payrollForm.waivedDays}
+                              </span>
                               <Button
                                 isIconOnly
+                                className="h-6 w-6 min-w-0"
+                                isDisabled={
+                                  payrollForm.waivedDays >=
+                                  getLeaveDetails(payrollForm.selectedMonths)
+                                    .unpaidLeaves
+                                }
                                 size="sm"
                                 variant="flat"
-                                className="h-6 w-6 min-w-0"
-                                isDisabled={payrollForm.waivedDays >= getLeaveDetails(payrollForm.selectedMonths).unpaidLeaves}
                                 onPress={() => {
-                                  setPayrollForm(prev => ({
+                                  setPayrollForm((prev) => ({
                                     ...prev,
-                                    waivedDays: Math.min(getLeaveDetails(prev.selectedMonths).unpaidLeaves, prev.waivedDays + 1),
-                                    amount: calculateExpectedAmount(prev.selectedMonths, prev.paymentType, Math.min(getLeaveDetails(prev.selectedMonths).unpaidLeaves, prev.waivedDays + 1))
+                                    waivedDays: Math.min(
+                                      getLeaveDetails(prev.selectedMonths)
+                                        .unpaidLeaves,
+                                      prev.waivedDays + 1,
+                                    ),
+                                    amount: calculateExpectedAmount(
+                                      prev.selectedMonths,
+                                      prev.paymentType,
+                                      Math.min(
+                                        getLeaveDetails(prev.selectedMonths)
+                                          .unpaidLeaves,
+                                        prev.waivedDays + 1,
+                                      ),
+                                    ),
                                   }));
                                 }}
                               >
@@ -4181,26 +4897,51 @@ export default function HRPage() {
                         <div className="flex justify-between text-[12px] text-health-600">
                           <span>Previously Paid (Advance):</span>
                           <span className="font-semibold">
-                            - Rs. {getPreviouslyPaid(payrollForm.selectedMonths).toLocaleString()}
+                            - Rs.{" "}
+                            {getPreviouslyPaid(
+                              payrollForm.selectedMonths,
+                            ).toLocaleString()}
                           </span>
                         </div>
                       )}
                       <div className="flex justify-between text-[13px] font-bold pt-2">
                         <span className="text-mountain-900">Due Amount:</span>
-                        <span className="text-amber-600">Rs. {calculateExpectedAmount(payrollForm.selectedMonths, "regular", payrollForm.waivedDays).toLocaleString()}</span>
+                        <span className="text-amber-600">
+                          Rs.{" "}
+                          {calculateExpectedAmount(
+                            payrollForm.selectedMonths,
+                            "regular",
+                            payrollForm.waivedDays,
+                          ).toLocaleString()}
+                        </span>
                       </div>
                       {(selectedStaff?.totalCommissionBalance || 0) > 0 && (
                         <div className="flex flex-col gap-1 border border-violet-200 bg-violet-50 rounded-lg p-2 mt-1">
                           <div className="flex justify-between text-[12px] text-violet-700">
-                            <span className="font-semibold">Pending Commission:</span>
-                            <span className="font-bold">+ Rs. {(selectedStaff?.totalCommissionBalance || 0).toLocaleString()}</span>
+                            <span className="font-semibold">
+                              Pending Commission:
+                            </span>
+                            <span className="font-bold">
+                              + Rs.{" "}
+                              {(
+                                selectedStaff?.totalCommissionBalance || 0
+                              ).toLocaleString()}
+                            </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Checkbox
-                              size="sm"
-                              classNames={{ label: "text-[10px] text-mountain-600 font-medium" }}
+                              classNames={{
+                                label:
+                                  "text-[10px] text-mountain-600 font-medium",
+                              }}
                               isSelected={payrollForm.includeCommission}
-                              onValueChange={(val) => setPayrollForm(prev => ({ ...prev, includeCommission: val }))}
+                              size="sm"
+                              onValueChange={(val) =>
+                                setPayrollForm((prev) => ({
+                                  ...prev,
+                                  includeCommission: val,
+                                }))
+                              }
                             >
                               Include commission in this payout
                             </Checkbox>
@@ -4210,34 +4951,72 @@ export default function HRPage() {
                       {payrollForm.incentive > 0 && (
                         <div className="flex justify-between text-[12px] text-violet-700">
                           <span>Incentives Added:</span>
-                          <span className="font-semibold">+ Rs. {payrollForm.incentive.toLocaleString()}</span>
+                          <span className="font-semibold">
+                            + Rs. {payrollForm.incentive.toLocaleString()}
+                          </span>
                         </div>
                       )}
                       {payrollForm.customBonus > 0 && (
                         <div className="flex justify-between text-[12px] text-violet-700">
-                          <span>Bonus ({payrollForm.customBonusNotes || "Custom"}):</span>
-                          <span className="font-semibold">+ Rs. {payrollForm.customBonus.toLocaleString()}</span>
+                          <span>
+                            Bonus ({payrollForm.customBonusNotes || "Custom"}):
+                          </span>
+                          <span className="font-semibold">
+                            + Rs. {payrollForm.customBonus.toLocaleString()}
+                          </span>
                         </div>
                       )}
                       {payrollForm.applyTax && (
                         <div className="flex justify-between text-[12px] text-rose-600">
-                          <span>Tax Deducted ({payrollForm.taxPercentage}% of Base):</span>
-                          <span className="font-semibold">- Rs. {Math.round(payrollForm.amount * (payrollForm.taxPercentage / 100)).toLocaleString()}</span>
+                          <span>
+                            Tax Deducted ({payrollForm.taxPercentage}% of Base):
+                          </span>
+                          <span className="font-semibold">
+                            - Rs.{" "}
+                            {Math.round(
+                              payrollForm.amount *
+                                (payrollForm.taxPercentage / 100),
+                            ).toLocaleString()}
+                          </span>
                         </div>
                       )}
                       {payrollForm.customDeduction > 0 && (
                         <div className="flex justify-between text-[12px] text-rose-600">
-                          <span>Deduction ({payrollForm.customDeductionNotes || "Custom"}):</span>
-                          <span className="font-semibold">- Rs. {payrollForm.customDeduction.toLocaleString()}</span>
+                          <span>
+                            Deduction (
+                            {payrollForm.customDeductionNotes || "Custom"}):
+                          </span>
+                          <span className="font-semibold">
+                            - Rs. {payrollForm.customDeduction.toLocaleString()}
+                          </span>
                         </div>
                       )}
                       <div className="flex justify-between text-[13px] font-bold pt-2 border-t border-mountain-200">
                         <span className="text-mountain-900">Total Payout:</span>
-                        <span className="text-health-700">Rs. {(() => {
-                          const subT = payrollForm.amount + (payrollForm.includeCommission ? (selectedStaff?.totalCommissionBalance || 0) : 0) + payrollForm.incentive + payrollForm.customBonus;
-                          const taxAmt = payrollForm.applyTax ? Math.round(payrollForm.amount * (payrollForm.taxPercentage / 100)) : 0;
-                          return (subT - taxAmt - payrollForm.customDeduction).toLocaleString();
-                        })()}</span>
+                        <span className="text-health-700">
+                          Rs.{" "}
+                          {(() => {
+                            const subT =
+                              payrollForm.amount +
+                              (payrollForm.includeCommission
+                                ? selectedStaff?.totalCommissionBalance || 0
+                                : 0) +
+                              payrollForm.incentive +
+                              payrollForm.customBonus;
+                            const taxAmt = payrollForm.applyTax
+                              ? Math.round(
+                                  payrollForm.amount *
+                                    (payrollForm.taxPercentage / 100),
+                                )
+                              : 0;
+
+                            return (
+                              subT -
+                              taxAmt -
+                              payrollForm.customDeduction
+                            ).toLocaleString();
+                          })()}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -4398,8 +5177,8 @@ export default function HRPage() {
           base: "bg-white border border-mountain-200 shadow-xl",
         }}
         isOpen={isHolidaysModalOpen}
-        onClose={() => setIsHolidaysModalOpen(false)}
         size="2xl"
+        onClose={() => setIsHolidaysModalOpen(false)}
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 border-b border-mountain-100 pb-3">
@@ -4418,10 +5197,12 @@ export default function HRPage() {
                     Holiday Name
                   </label>
                   <Input
-                    size="sm"
                     placeholder="e.g. Dashain"
+                    size="sm"
                     value={newHoliday.name}
-                    onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
+                    onChange={(e) =>
+                      setNewHoliday({ ...newHoliday, name: e.target.value })
+                    }
                   />
                 </div>
                 <div className="w-[140px]">
@@ -4432,45 +5213,67 @@ export default function HRPage() {
                     size="sm"
                     type="date"
                     value={newHoliday.date}
-                    onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })}
+                    onChange={(e) =>
+                      setNewHoliday({ ...newHoliday, date: e.target.value })
+                    }
                   />
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <span className="text-[11px] font-bold text-mountain-600 uppercase tracking-wider">Holiday Type:</span>
+                  <span className="text-[11px] font-bold text-mountain-600 uppercase tracking-wider">
+                    Holiday Type:
+                  </span>
                   <div className="flex gap-1 ml-2">
                     <button
-                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${newHoliday.type === "paid"
-                        ? "bg-success/10 text-success border-success/30"
-                        : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
-                        }`}
-                      onClick={() => setNewHoliday({ ...newHoliday, type: "paid" })}
+                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${
+                        newHoliday.type === "paid"
+                          ? "bg-success/10 text-success border-success/30"
+                          : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
+                      }`}
+                      onClick={() =>
+                        setNewHoliday({ ...newHoliday, type: "paid" })
+                      }
                     >
                       Paid Holiday
                     </button>
                     <button
-                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${newHoliday.type === "unpaid"
-                        ? "bg-rose-500/10 text-rose-600 border-rose-300"
-                        : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
-                        }`}
-                      onClick={() => setNewHoliday({ ...newHoliday, type: "unpaid" })}
+                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${
+                        newHoliday.type === "unpaid"
+                          ? "bg-rose-500/10 text-rose-600 border-rose-300"
+                          : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
+                      }`}
+                      onClick={() =>
+                        setNewHoliday({ ...newHoliday, type: "unpaid" })
+                      }
                     >
                       Unpaid Holiday
                     </button>
                   </div>
                 </div>
                 <Button
-                  color="primary"
                   className="font-semibold"
+                  color="primary"
+                  isLoading={saving}
                   size="sm"
                   onPress={async () => {
-                    if (!newHoliday.name || !newHoliday.date || !clinicId) return;
+                    if (!newHoliday.name || !newHoliday.date || !clinicId)
+                      return;
                     try {
                       setSaving(true);
-                      await hrService.addHoliday(clinicId, newHoliday.name, new Date(newHoliday.date), newHoliday.type);
-                      setNewHoliday({ name: "", date: format(new Date(), "yyyy-MM-dd"), type: "paid" });
+                      await hrService.addHoliday(
+                        clinicId,
+                        newHoliday.name,
+                        new Date(newHoliday.date),
+                        newHoliday.type,
+                      );
+                      setNewHoliday({
+                        name: "",
+                        date: format(new Date(), "yyyy-MM-dd"),
+                        type: "paid",
+                      });
                       const updated = await hrService.getHolidays(clinicId);
+
                       setHolidays(updated);
                     } catch (e) {
                       console.error("Error adding holiday:", e);
@@ -4478,14 +5281,16 @@ export default function HRPage() {
                       setSaving(false);
                     }
                   }}
-                  isLoading={saving}
                 >
                   Add Holiday
                 </Button>
               </div>
               <p className="text-[10px] text-mountain-400">
-                <strong>Paid Holiday:</strong> Staff absences are ignored — no deduction.<br />
-                <strong>Unpaid Holiday:</strong> Day off but salary is deducted for that day.
+                <strong>Paid Holiday:</strong> Staff absences are ignored — no
+                deduction.
+                <br />
+                <strong>Unpaid Holiday:</strong> Day off but salary is deducted
+                for that day.
               </p>
             </div>
 
@@ -4493,24 +5298,40 @@ export default function HRPage() {
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-mountain-100 border-b border-mountain-200">
                   <tr>
-                    <th className="px-3 py-2 font-semibold text-mountain-700">Date</th>
-                    <th className="px-3 py-2 font-semibold text-mountain-700">Holiday</th>
-                    <th className="px-3 py-2 font-semibold text-mountain-700">Type</th>
-                    <th className="px-3 py-2 w-10"></th>
+                    <th className="px-3 py-2 font-semibold text-mountain-700">
+                      Date
+                    </th>
+                    <th className="px-3 py-2 font-semibold text-mountain-700">
+                      Holiday
+                    </th>
+                    <th className="px-3 py-2 font-semibold text-mountain-700">
+                      Type
+                    </th>
+                    <th className="px-3 py-2 w-10" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-mountain-100 bg-white">
                   {holidays.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-3 py-6 text-center text-mountain-400">
+                      <td
+                        className="px-3 py-6 text-center text-mountain-400"
+                        colSpan={3}
+                      >
                         No holidays added yet.
                       </td>
                     </tr>
                   ) : (
                     holidays
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .sort(
+                        (a, b) =>
+                          new Date(b.date).getTime() -
+                          new Date(a.date).getTime(),
+                      )
                       .map((holiday) => (
-                        <tr key={holiday.id} className="hover:bg-mountain-50 transition-colors">
+                        <tr
+                          key={holiday.id}
+                          className="hover:bg-mountain-50 transition-colors"
+                        >
                           <td className="px-3 py-2 font-medium text-mountain-900">
                             {format(holiday.date, "MMM dd, yyyy")}
                           </td>
@@ -4518,10 +5339,13 @@ export default function HRPage() {
                             {holiday.name}
                           </td>
                           <td className="px-3 py-2">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${(holiday.type === "unpaid")
-                              ? "bg-rose-50 text-rose-600 border-rose-200"
-                              : "bg-success/10 text-success border-success/20"
-                              }`}>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                holiday.type === "unpaid"
+                                  ? "bg-rose-50 text-rose-600 border-rose-200"
+                                  : "bg-success/10 text-success border-success/20"
+                              }`}
+                            >
                               {holiday.type === "unpaid" ? "Unpaid" : "Paid"}
                             </span>
                           </td>
@@ -4532,7 +5356,9 @@ export default function HRPage() {
                                 if (!holiday.id || !clinicId) return;
                                 try {
                                   await hrService.deleteHoliday(holiday.id);
-                                  const updated = await hrService.getHolidays(clinicId);
+                                  const updated =
+                                    await hrService.getHolidays(clinicId);
+
                                   setHolidays(updated);
                                 } catch (e) {
                                   console.error("Error deleting holiday:", e);

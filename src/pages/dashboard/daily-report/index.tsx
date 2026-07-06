@@ -12,13 +12,10 @@ import {
 } from "react-icons/io5";
 
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Divider } from "@/components/ui/divider";
 import { Chip } from "@/components/ui/chip";
 import { Spinner } from "@/components/ui/spinner";
 import { addToast } from "@/components/ui/toast";
-import { title } from "@/components/primitives";
 import { useAuthContext } from "@/context/AuthContext";
 import {
   dailyReportService,
@@ -452,12 +449,14 @@ export default function DailyReportPage() {
                 </select>
               )}
             <div className="w-40 shrink-0 flex flex-col gap-1">
-              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider pl-0.5">Date Filter</span>
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider pl-0.5">
+                Date Filter
+              </span>
               <div className="relative">
                 <IoCalendarOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
                 <input
-                  type="date"
                   className="w-full h-8 pl-8 pr-2.5 text-[11.5px] bg-surface border border-border-base rounded-md text-text-main focus:outline-none focus:border-primary transition-colors"
+                  type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                 />
@@ -534,7 +533,9 @@ export default function DailyReportPage() {
                   </div>
                 </div>
                 <p className="text-[9.5px] font-medium text-text-muted flex gap-2">
-                  <span className="text-emerald-600 font-semibold">{summaryStats.completedAppointments} completed</span>
+                  <span className="text-emerald-600 font-semibold">
+                    {summaryStats.completedAppointments} completed
+                  </span>
                   <span>{summaryStats.cancelledAppointments} cancelled</span>
                 </p>
               </div>
@@ -565,7 +566,9 @@ export default function DailyReportPage() {
                   {summaryStats.totalRevenueCollected > 0 && (
                     <div className="flex justify-between items-center bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-medium">
                       <span>Collected</span>
-                      <span>{formatCurrency(summaryStats.totalRevenueCollected)}</span>
+                      <span>
+                        {formatCurrency(summaryStats.totalRevenueCollected)}
+                      </span>
                     </div>
                   )}
                   {summaryStats.totalDue > 0 && (
@@ -574,9 +577,12 @@ export default function DailyReportPage() {
                       <span>{formatCurrency(summaryStats.totalDue)}</span>
                     </div>
                   )}
-                  {summaryStats.totalRevenueCollected === 0 && summaryStats.totalDue === 0 && (
-                    <span className="text-text-muted opacity-60">No revenue data</span>
-                  )}
+                  {summaryStats.totalRevenueCollected === 0 &&
+                    summaryStats.totalDue === 0 && (
+                      <span className="text-text-muted opacity-60">
+                        No revenue data
+                      </span>
+                    )}
                 </div>
               </div>
 
@@ -591,7 +597,10 @@ export default function DailyReportPage() {
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className="text-[10.5px] font-bold uppercase tracking-wider text-text-muted mb-1" title="Revenue from appointments and procedures (excluding pharmacy and pathology)">
+                    <p
+                      className="text-[10.5px] font-bold uppercase tracking-wider text-text-muted mb-1"
+                      title="Revenue from appointments and procedures (excluding pharmacy and pathology)"
+                    >
                       Clinical Revenue
                     </p>
                     <p className="text-[15px] font-bold text-text-main leading-none">
@@ -606,7 +615,9 @@ export default function DailyReportPage() {
                   {summaryStats.clinicalRevenueCollected > 0 && (
                     <div className="flex justify-between items-center bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-medium">
                       <span>Collected</span>
-                      <span>{formatCurrency(summaryStats.clinicalRevenueCollected)}</span>
+                      <span>
+                        {formatCurrency(summaryStats.clinicalRevenueCollected)}
+                      </span>
                     </div>
                   )}
                   {summaryStats.clinicalDue > 0 && (
@@ -615,9 +626,12 @@ export default function DailyReportPage() {
                       <span>{formatCurrency(summaryStats.clinicalDue)}</span>
                     </div>
                   )}
-                  {summaryStats.clinicalRevenueCollected === 0 && summaryStats.clinicalDue === 0 && (
-                    <span className="text-text-muted opacity-60">No revenue data</span>
-                  )}
+                  {summaryStats.clinicalRevenueCollected === 0 &&
+                    summaryStats.clinicalDue === 0 && (
+                      <span className="text-text-muted opacity-60">
+                        No revenue data
+                      </span>
+                    )}
                 </div>
               </div>
 
@@ -663,7 +677,9 @@ export default function DailyReportPage() {
                     </div>
                   )}
                   {summaryStats.totalInvoices === 0 && (
-                    <span className="text-text-muted opacity-60">No invoices</span>
+                    <span className="text-text-muted opacity-60">
+                      No invoices
+                    </span>
                   )}
                 </div>
               </div>

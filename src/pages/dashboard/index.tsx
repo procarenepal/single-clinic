@@ -2,11 +2,6 @@ import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { isToday, isFuture, isPast, startOfDay, format } from "date-fns";
-import DoctorDashboard from "./components/DoctorDashboard";
-import ExpertDashboard from "./components/ExpertDashboard";
-import HRDashboard from "./components/HRDashboard";
-
-// Services
 import {
   IoPersonOutline,
   IoCalendarOutline,
@@ -24,6 +19,12 @@ import {
   IoReceiptOutline,
   IoDownloadOutline,
 } from "react-icons/io5";
+
+import DoctorDashboard from "./components/DoctorDashboard";
+import ExpertDashboard from "./components/ExpertDashboard";
+import HRDashboard from "./components/HRDashboard";
+
+// Services
 
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";

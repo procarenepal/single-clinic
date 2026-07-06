@@ -83,10 +83,10 @@ function PathologySearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-        (i.primary + (i.secondary || ""))
-          .toLowerCase()
-          .includes(q.toLowerCase()),
-      )
+          (i.primary + (i.secondary || ""))
+            .toLowerCase()
+            .includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -199,7 +199,8 @@ function PathologySearchSelect({
 }
 
 export default function PathologyPage() {
-  const { clinicId, currentUser, userData, isClinicAdmin, isSystemOwner } = useAuthContext();
+  const { clinicId, currentUser, userData, isClinicAdmin, isSystemOwner } =
+    useAuthContext();
   const branchId = userData?.branchId || userData?.clinicId || clinicId;
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
 
@@ -359,11 +360,16 @@ export default function PathologyPage() {
               expertService.getExpertByEmail(userData.email),
             ]);
             const matchingProvider = matchingDoctor || matchingExpert;
+
             if (matchingProvider) {
               doctorId = matchingProvider.id;
               setCurrentDoctorId(doctorId);
               // Fetch only their patients
-              const doctorPatients = await patientService.getPatientsByDoctor(doctorId, clinicId);
+              const doctorPatients = await patientService.getPatientsByDoctor(
+                doctorId,
+                clinicId,
+              );
+
               allowedPatientIds = new Set(doctorPatients.map((p) => p.id));
             }
           } catch (error) {
@@ -401,8 +407,12 @@ export default function PathologyPage() {
         let filteredBillings = billingsData;
 
         if (allowedPatientIds) {
-          filteredTests = testsData.filter((t) => t.patientId && allowedPatientIds?.has(t.patientId));
-          filteredBillings = billingsData.filter((b) => b.patientId && allowedPatientIds?.has(b.patientId));
+          filteredTests = testsData.filter(
+            (t) => t.patientId && allowedPatientIds?.has(t.patientId),
+          );
+          filteredBillings = billingsData.filter(
+            (b) => b.patientId && allowedPatientIds?.has(b.patientId),
+          );
         }
 
         setTests(filteredTests);
@@ -435,15 +445,26 @@ export default function PathologyPage() {
     if (activeTab === "dailyReport" && clinicId) {
       Promise.all([
         pathologyBillingService.getBillingByClinic(clinicId, branchId),
-        pathologyService.getTestsByClinic(clinicId, branchId)
+        pathologyService.getTestsByClinic(clinicId, branchId),
       ]).then(([newBillings, newTests]) => {
         if (currentDoctorId) {
           // If we are filtering by doctor, we need their patient IDs to filter these fresh fetches
-          patientService.getPatientsByDoctor(currentDoctorId, clinicId).then(doctorPatients => {
-            const allowedIds = new Set(doctorPatients.map(p => p.id));
-            setBillings(newBillings.filter(b => b.patientId && allowedIds.has(b.patientId)));
-            setTests(newTests.filter(t => t.patientId && allowedIds.has(t.patientId)));
-          });
+          patientService
+            .getPatientsByDoctor(currentDoctorId, clinicId)
+            .then((doctorPatients) => {
+              const allowedIds = new Set(doctorPatients.map((p) => p.id));
+
+              setBillings(
+                newBillings.filter(
+                  (b) => b.patientId && allowedIds.has(b.patientId),
+                ),
+              );
+              setTests(
+                newTests.filter(
+                  (t) => t.patientId && allowedIds.has(t.patientId),
+                ),
+              );
+            });
         } else {
           setBillings(newBillings);
           setTests(newTests);
@@ -1005,12 +1026,12 @@ export default function PathologyPage() {
         testName: testForm.testType || testForm.shortName || "Unknown Test",
         categoryName: testForm.categoryId
           ? testForm.categoryId
-            .split(", ")
-            .map(
-              (id) =>
-                categories.find((c) => c.id === id.trim())?.name || id.trim(),
-            )
-            .join(", ")
+              .split(", ")
+              .map(
+                (id) =>
+                  categories.find((c) => c.id === id.trim())?.name || id.trim(),
+              )
+              .join(", ")
           : "Unknown Category",
         shortName: testForm.shortName,
         testType: testForm.testType,
@@ -1107,15 +1128,15 @@ export default function PathologyPage() {
       labTechnicianId: test.labTechnicianId || "",
       parameters: test.parameters
         ? test.parameters.map((p) => {
-          // If unit is an ID, try to resolve it to a name
-          let displayUnit = p.unit;
+            // If unit is an ID, try to resolve it to a name
+            let displayUnit = p.unit;
 
-          if (p.unit && units.find((u) => u.id === p.unit)) {
-            displayUnit = units.find((u) => u.id === p.unit)?.name || p.unit;
-          }
+            if (p.unit && units.find((u) => u.id === p.unit)) {
+              displayUnit = units.find((u) => u.id === p.unit)?.name || p.unit;
+            }
 
-          return { ...p, unit: displayUnit, categoryId: p.categoryId || "" };
-        })
+            return { ...p, unit: displayUnit, categoryId: p.categoryId || "" };
+          })
         : [],
     });
     setIsEditing(true);
@@ -1995,11 +2016,11 @@ export default function PathologyPage() {
             // Robust Value Parsing (Handle commas in numbers like 1,000)
             const resultVal = param.patientResult
               ? parseFloat(
-                param.patientResult
-                  .toString()
-                  .replace(/,/g, "")
-                  .replace(/[^0-9.]/g, ""),
-              )
+                  param.patientResult
+                    .toString()
+                    .replace(/,/g, "")
+                    .replace(/[^0-9.]/g, ""),
+                )
               : NaN;
 
             if (!isNaN(resultVal)) {
@@ -2412,8 +2433,8 @@ export default function PathologyPage() {
               </thead>
               <tbody>
                 ${reportData.dailyTests
-        .map(
-          (test) => `
+                  .map(
+                    (test) => `
                   <tr>
                     <td class="font-bold">${test.testName}</td>
                     <td>${test.patientName}${test.patientAge ? ` (${test.patientAge}${test.patientGender ? `, ${test.patientGender}` : ""})` : ""}</td>
@@ -2423,8 +2444,8 @@ export default function PathologyPage() {
                     <td class="text-right">${new Date(test.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
                 `,
-        )
-        .join("")}
+                  )
+                  .join("")}
               </tbody>
             </table>
 
@@ -2442,8 +2463,8 @@ export default function PathologyPage() {
               </thead>
               <tbody>
                 ${reportData.dailyBillings
-        .map(
-          (billing) => `
+                  .map(
+                    (billing) => `
                   <tr>
                     <td class="font-bold">${billing.invoiceNumber}</td>
                     <td>${billing.patientName}</td>
@@ -2453,8 +2474,8 @@ export default function PathologyPage() {
                     <td class="text-right">${new Date(billing.invoiceDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                   </tr>
                 `,
-        )
-        .join("")}
+                  )
+                  .join("")}
               </tbody>
             </table>
           </div>
@@ -2519,7 +2540,9 @@ export default function PathologyPage() {
   };
 
   // Restrict administrative pathology tabs for clinical staff (doctors & experts)
-  const isClinicalStaff = userData?.role === "doctor" || userData?.role === "expert";
+  const isClinicalStaff =
+    userData?.role === "doctor" || userData?.role === "expert";
+
   if (isClinicalStaff) {
     delete tabLabels.billing;
     delete tabLabels.dailyReport;
@@ -3299,10 +3322,11 @@ export default function PathologyPage() {
               {TAB_KEYS.filter((key) => key in tabLabels).map((key) => (
                 <button
                   key={key}
-                  className={`px-4 py-3 flex items-center gap-2 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeTab === key
+                  className={`px-4 py-3 flex items-center gap-2 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                    activeTab === key
                       ? "border-primary text-primary"
                       : "border-transparent text-text-muted hover:text-text-main hover:border-border-base"
-                    }`}
+                  }`}
                   type="button"
                   onClick={() => setActiveTab(key)}
                 >
@@ -3414,8 +3438,8 @@ export default function PathologyPage() {
             )}
             {activeTab === "technicians" && (
               <LabTechnicianManagement
-                canEdit={!isClinicalStaff}
                 branchId={branchId!}
+                canEdit={!isClinicalStaff}
                 clinicId={clinicId!}
               />
             )}
@@ -3958,14 +3982,14 @@ export default function PathologyPage() {
                                           isMale && p.minValueMale !== undefined
                                             ? p.minValueMale
                                             : isFemale &&
-                                              p.minValueFemale !== undefined
+                                                p.minValueFemale !== undefined
                                               ? p.minValueFemale
                                               : p.minValue;
                                         const maxVal =
                                           isMale && p.maxValueMale !== undefined
                                             ? p.maxValueMale
                                             : isFemale &&
-                                              p.maxValueFemale !== undefined
+                                                p.maxValueFemale !== undefined
                                               ? p.maxValueFemale
                                               : p.maxValue;
 
@@ -4128,12 +4152,13 @@ export default function PathologyPage() {
 
                                       return (
                                         <span
-                                          className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${flag.color === "danger"
+                                          className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-sm ${
+                                            flag.color === "danger"
                                               ? "bg-danger-50 text-danger-700 border-danger-200"
                                               : flag.color === "warning"
                                                 ? "bg-warning-50 text-warning-700 border-warning-200"
                                                 : "bg-success-50 text-success-700 border-success-200"
-                                            }`}
+                                          }`}
                                         >
                                           {flag.icon} {flag.label}
                                         </span>

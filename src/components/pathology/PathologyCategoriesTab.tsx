@@ -71,7 +71,11 @@ export default function PathologyCategoriesTab({
           />
         </div>
         {canEdit && (
-          <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
+          <Button
+            color="primary"
+            startContent={<IoAddOutline />}
+            onClick={onAdd}
+          >
             New Pathology Category
           </Button>
         )}
@@ -214,7 +218,9 @@ export default function PathologyCategoriesTab({
                                   <th className="px-4 py-1.5 text-[10px] font-bold text-danger uppercase tracking-wider text-left">
                                     Critical High
                                   </th>
-                                  {canEdit && <th className="px-4 py-1.5 w-16" />}
+                                  {canEdit && (
+                                    <th className="px-4 py-1.5 w-16" />
+                                  )}
                                 </tr>
                               </thead>
                               <tbody>

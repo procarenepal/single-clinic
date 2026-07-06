@@ -139,7 +139,8 @@ export default function DoctorsPage() {
   const loadDoctors = async () => {
     try {
       setLoading(true);
-      const doctorsData = await doctorService.getDoctors();
+      // Pass clinicId to ensure we use the correct cache key (which gets invalidated on create)
+      const doctorsData = await doctorService.getDoctors(clinicId);
 
       setDoctors(doctorsData);
     } catch (error) {

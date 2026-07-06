@@ -23,6 +23,7 @@ const PAID_LEAVE_TYPES = new Set(["annual", "sick", "casual", "maternity"]);
 function toDate(val: any): Date {
   if (!val) return new Date();
   if (val?.toDate) return val.toDate();
+
   return new Date(val);
 }
 
@@ -51,7 +52,10 @@ export const leaveRequestService = {
   // ─── Leave Requests ────────────────────────────────────────────────────────
 
   async createLeaveRequest(
-    req: Omit<LeaveRequest, "id" | "createdAt" | "updatedAt" | "status" | "isPaid">
+    req: Omit<
+      LeaveRequest,
+      "id" | "createdAt" | "updatedAt" | "status" | "isPaid"
+    >,
   ): Promise<string> {
     const isPaid = PAID_LEAVE_TYPES.has(req.leaveType);
     const docRef = await addDoc(collection(db, LEAVES_COLLECTION), {
@@ -63,44 +67,59 @@ export const leaveRequestService = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
     return docRef.id;
   },
 
-  async getLeavesByClinic(clinicId: string, branchId?: string): Promise<LeaveRequest[]> {
-    let q = query(
-      collection(db, LEAVES_COLLECTION),
-      where("clinicId", "==", clinicId)
-    );
-    if (branchId) {
-      q = query(q, where("branchId", "==", branchId));
-    }
-    const snap = await getDocs(q);
-    const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
-    return leaves.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  },
-
-  async getLeavesByStaff(staffId: string, clinicId: string): Promise<LeaveRequest[]> {
-    const q = query(
-      collection(db, LEAVES_COLLECTION),
-      where("staffId", "==", staffId),
-      where("clinicId", "==", clinicId)
-    );
-    const snap = await getDocs(q);
-    const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
-    return leaves.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  },
-
-  async getPendingLeaves(clinicId: string, branchId?: string): Promise<LeaveRequest[]> {
+  async getLeavesByClinic(
+    clinicId: string,
+    branchId?: string,
+  ): Promise<LeaveRequest[]> {
     let q = query(
       collection(db, LEAVES_COLLECTION),
       where("clinicId", "==", clinicId),
-      where("status", "==", "pending")
     );
+
     if (branchId) {
       q = query(q, where("branchId", "==", branchId));
     }
     const snap = await getDocs(q);
     const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
+
+    return leaves.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  },
+
+  async getLeavesByStaff(
+    staffId: string,
+    clinicId: string,
+  ): Promise<LeaveRequest[]> {
+    const q = query(
+      collection(db, LEAVES_COLLECTION),
+      where("staffId", "==", staffId),
+      where("clinicId", "==", clinicId),
+    );
+    const snap = await getDocs(q);
+    const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
+
+    return leaves.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  },
+
+  async getPendingLeaves(
+    clinicId: string,
+    branchId?: string,
+  ): Promise<LeaveRequest[]> {
+    let q = query(
+      collection(db, LEAVES_COLLECTION),
+      where("clinicId", "==", clinicId),
+      where("status", "==", "pending"),
+    );
+
+    if (branchId) {
+      q = query(q, where("branchId", "==", branchId));
+    }
+    const snap = await getDocs(q);
+    const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
+
     return leaves.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   },
 
@@ -112,10 +131,11 @@ export const leaveRequestService = {
     leaveId: string,
     reviewerId: string,
     reviewerName: string,
-    reviewNotes: string
+    reviewNotes: string,
   ): Promise<void> {
     const leaveRef = doc(db, LEAVES_COLLECTION, leaveId);
     const leaveSnap = await getDoc(leaveRef);
+
     if (!leaveSnap.exists()) throw new Error("Leave request not found");
 
     const leave = mapLeaveRequest(leaveId, leaveSnap.data());
@@ -137,9 +157,10 @@ export const leaveRequestService = {
         collection(db, BALANCES_COLLECTION),
         where("staffId", "==", leave.staffId),
         where("clinicId", "==", leave.clinicId),
-        where("year", "==", new Date(leave.startDate).getFullYear())
-      )
+        where("year", "==", new Date(leave.startDate).getFullYear()),
+      ),
     );
+
     if (!balanceSnap.empty) {
       const balanceRef = doc(db, BALANCES_COLLECTION, balanceSnap.docs[0].id);
       const fieldMap: Record<string, string> = {
@@ -152,6 +173,7 @@ export const leaveRequestService = {
       };
       const field = fieldMap[leave.leaveType] || "unpaidUsed";
       const current = balanceSnap.docs[0].data()[field] || 0;
+
       batch.update(balanceRef, {
         [field]: current + leave.totalDays,
         updatedAt: serverTimestamp(),
@@ -165,9 +187,10 @@ export const leaveRequestService = {
     leaveId: string,
     reviewerId: string,
     reviewerName: string,
-    reviewNotes: string
+    reviewNotes: string,
   ): Promise<void> {
     const leaveRef = doc(db, LEAVES_COLLECTION, leaveId);
+
     await updateDoc(leaveRef, {
       status: "rejected",
       reviewedBy: reviewerId,
@@ -180,6 +203,7 @@ export const leaveRequestService = {
 
   async cancelLeave(leaveId: string): Promise<void> {
     const leaveRef = doc(db, LEAVES_COLLECTION, leaveId);
+
     await updateDoc(leaveRef, {
       status: "cancelled",
       updatedAt: serverTimestamp(),
@@ -192,15 +216,16 @@ export const leaveRequestService = {
     staffId: string,
     staffName: string,
     clinicId: string,
-    year: number
+    year: number,
   ): Promise<LeaveBalance> {
     const q = query(
       collection(db, BALANCES_COLLECTION),
       where("staffId", "==", staffId),
       where("clinicId", "==", clinicId),
-      where("year", "==", year)
+      where("year", "==", year),
     );
     const snap = await getDocs(q);
+
     if (!snap.empty) {
       return mapLeaveBalance(snap.docs[0].id, snap.docs[0].data());
     }
@@ -220,7 +245,11 @@ export const leaveRequestService = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    const docRef = await addDoc(collection(db, BALANCES_COLLECTION), defaultBalance);
+    const docRef = await addDoc(
+      collection(db, BALANCES_COLLECTION),
+      defaultBalance,
+    );
+
     return {
       ...defaultBalance,
       id: docRef.id,
@@ -229,21 +258,26 @@ export const leaveRequestService = {
     };
   },
 
-  async getAllBalancesForClinic(clinicId: string, year: number): Promise<LeaveBalance[]> {
+  async getAllBalancesForClinic(
+    clinicId: string,
+    year: number,
+  ): Promise<LeaveBalance[]> {
     const q = query(
       collection(db, BALANCES_COLLECTION),
       where("clinicId", "==", clinicId),
-      where("year", "==", year)
+      where("year", "==", year),
     );
     const snap = await getDocs(q);
+
     return snap.docs.map((d) => mapLeaveBalance(d.id, d.data()));
   },
 
   async updateBalance(
     balanceId: string,
-    updates: Partial<Omit<LeaveBalance, "id" | "createdAt" | "updatedAt">>
+    updates: Partial<Omit<LeaveBalance, "id" | "createdAt" | "updatedAt">>,
   ): Promise<void> {
     const ref = doc(db, BALANCES_COLLECTION, balanceId);
+
     await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
   },
 };

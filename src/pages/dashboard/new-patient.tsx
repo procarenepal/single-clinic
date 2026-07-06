@@ -728,7 +728,12 @@ interface ConversionProgress {
 // ═════════════════════════════════════════════════════════════════════════════
 const NewPatientPage: React.FC = () => {
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
+  const {
+    clinicId,
+    currentUser,
+    userData,
+    isLoading: authLoading,
+  } = useAuthContext();
   const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
 
   // ── Loading states

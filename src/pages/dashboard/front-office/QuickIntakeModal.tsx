@@ -285,7 +285,10 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                               </AutocompleteItem>
                             ))}
                             {packages.map((pkg) => (
-                              <AutocompleteItem key={`pkg_${pkg.id}`} textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}>
+                              <AutocompleteItem
+                                key={`pkg_${pkg.id}`}
+                                textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}
+                              >
                                 📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
                               </AutocompleteItem>
                             ))}
@@ -517,13 +520,21 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 </AutocompleteItem>
                               ))}
                               {activePatientPackages.map((pkg) => (
-                                <AutocompleteItem key={`consume_pkg_${pkg.id}`} textValue={`⭐ Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`}>
-                                  ⭐ Consume Session: {pkg.packageName} ({pkg.usedSessions}/{pkg.totalSessions} used)
+                                <AutocompleteItem
+                                  key={`consume_pkg_${pkg.id}`}
+                                  textValue={`⭐ Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`}
+                                >
+                                  ⭐ Consume Session: {pkg.packageName} (
+                                  {pkg.usedSessions}/{pkg.totalSessions} used)
                                 </AutocompleteItem>
                               ))}
                               {packages.map((pkg) => (
-                                <AutocompleteItem key={`pkg_${pkg.id}`} textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}>
-                                  📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
+                                <AutocompleteItem
+                                  key={`pkg_${pkg.id}`}
+                                  textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}
+                                >
+                                  📦 {pkg.name} (NPR{" "}
+                                  {pkg.price.toLocaleString()})
                                 </AutocompleteItem>
                               ))}
                             </Autocomplete>

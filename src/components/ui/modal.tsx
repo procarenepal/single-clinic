@@ -40,7 +40,7 @@ interface ModalCtx {
 }
 
 const ModalContext = React.createContext<ModalCtx>({
-  onClose: () => { },
+  onClose: () => {},
   isDismissable: true,
   hideCloseButton: false,
   scrollBehavior: "inside",
@@ -109,7 +109,9 @@ export function Modal({
         }}
       />
       {/* Centering wrapper */}
-      <div className={`fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 overflow-hidden pointer-events-none ${classNames?.wrapper || ""}`}>
+      <div
+        className={`fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 overflow-hidden pointer-events-none ${classNames?.wrapper || ""}`}
+      >
         {children}
       </div>
     </ModalContext.Provider>,

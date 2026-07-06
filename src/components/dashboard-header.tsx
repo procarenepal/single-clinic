@@ -133,6 +133,7 @@ export const DashboardHeader = ({
 
           // Filter by role / user
           let isTargeted = false;
+
           if (data.targetUserId) {
             // Exact user match overrides role
             isTargeted =
@@ -144,7 +145,12 @@ export const DashboardHeader = ({
             isTargeted = data.targetRole === userData?.role;
           } else {
             // General broadcast - hide from clinical staff
-            const isClinicalStaff = !!currentDoctorId || !!currentExpertId || userData?.role === "doctor" || userData?.role === "expert";
+            const isClinicalStaff =
+              !!currentDoctorId ||
+              !!currentExpertId ||
+              userData?.role === "doctor" ||
+              userData?.role === "expert";
+
             isTargeted = !isClinicalStaff;
           }
 
@@ -557,12 +563,13 @@ export const DashboardHeader = ({
                       >
                         {/* Icon */}
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${result.type === "patient"
-                            ? "bg-primary/10 text-primary"
-                            : result.type === "doctor"
-                              ? "bg-success/10 text-success"
-                              : "bg-amber-500/10 text-amber-600"
-                            }`}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                            result.type === "patient"
+                              ? "bg-primary/10 text-primary"
+                              : result.type === "doctor"
+                                ? "bg-success/10 text-success"
+                                : "bg-amber-500/10 text-amber-600"
+                          }`}
                         >
                           {result.type === "patient" ? (
                             <IoPersonOutline className="w-3.5 h-3.5" />

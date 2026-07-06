@@ -1,5 +1,3 @@
-import { ImageGravity, ImageFormat } from "appwrite";
-
 import { storage, APPWRITE_BUCKET_ID, ID } from "@/config/appwrite";
 
 export interface UploadResult {

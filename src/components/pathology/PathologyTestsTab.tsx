@@ -44,7 +44,11 @@ export default function PathologyTestsTab({
           />
         </div>
         {canEdit && (
-          <Button color="primary" startContent={<IoAddOutline />} onClick={onAdd}>
+          <Button
+            color="primary"
+            startContent={<IoAddOutline />}
+            onClick={onAdd}
+          >
             New Pathology Tests
           </Button>
         )}

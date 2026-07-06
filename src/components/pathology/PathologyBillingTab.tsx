@@ -13,13 +13,6 @@ import {
   TableCell,
 } from "@heroui/table";
 import { Chip } from "@heroui/chip";
-import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-} from "@heroui/modal";
 import { addToast } from "@heroui/toast";
 import {
   IoAddOutline,
@@ -176,9 +169,12 @@ function ModalShell({
   };
 
   useEffect(() => {
-    const el = document.getElementById("dashboard-scroll-container") || document.body;
+    const el =
+      document.getElementById("dashboard-scroll-container") || document.body;
     const prev = el.style.overflow;
+
     el.style.overflow = "hidden";
+
     return () => {
       el.style.overflow = prev;
     };
@@ -299,17 +295,26 @@ export default function PathologyBillingTab({
     notes: "",
   });
 
-  const [paymentDiscountType, setPaymentDiscountType] = useState<"none" | "flat" | "percent">("none");
+  const [paymentDiscountType, setPaymentDiscountType] = useState<
+    "none" | "flat" | "percent"
+  >("none");
   const [paymentDiscountValue, setPaymentDiscountValue] = useState<string>("");
 
   const calculatedDiscountAmount = useMemo(() => {
-    if (paymentDiscountType === "none" || !paymentDiscountValue || !selectedBillingForPayment) return 0;
+    if (
+      paymentDiscountType === "none" ||
+      !paymentDiscountValue ||
+      !selectedBillingForPayment
+    )
+      return 0;
     const val = parseFloat(paymentDiscountValue);
+
     if (isNaN(val) || val < 0) return 0;
     if (paymentDiscountType === "flat") return val;
     if (paymentDiscountType === "percent") {
       return (selectedBillingForPayment.balanceAmount * val) / 100;
     }
+
     return 0;
   }, [paymentDiscountType, paymentDiscountValue, selectedBillingForPayment]);
 
@@ -317,10 +322,14 @@ export default function PathologyBillingTab({
     if (paymentModal.isOpen && selectedBillingForPayment) {
       const originalDue = selectedBillingForPayment.balanceAmount;
       const maxAllowed = Math.max(0, originalDue - calculatedDiscountAmount);
-      
+
       setPaymentForm((prev) => ({ ...prev, amount: maxAllowed.toString() }));
     }
-  }, [calculatedDiscountAmount, paymentModal.isOpen, selectedBillingForPayment]);
+  }, [
+    calculatedDiscountAmount,
+    paymentModal.isOpen,
+    selectedBillingForPayment,
+  ]);
 
   // Doctors & Partners list
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -1067,7 +1076,11 @@ export default function PathologyBillingTab({
       return;
     }
 
-    const maxAllowed = Math.max(0, selectedBillingForPayment.balanceAmount - calculatedDiscountAmount);
+    const maxAllowed = Math.max(
+      0,
+      selectedBillingForPayment.balanceAmount - calculatedDiscountAmount,
+    );
+
     if (amount > maxAllowed) {
       addToast({
         title: "Validation Error",
@@ -1088,7 +1101,7 @@ export default function PathologyBillingTab({
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
         currentUser.uid,
-        calculatedDiscountAmount
+        calculatedDiscountAmount,
       );
 
       addToast({
@@ -2213,9 +2226,6 @@ export default function PathologyBillingTab({
       {/* Payment Modal */}
       {paymentModal.isOpen && (
         <ModalShell
-          size="xl"
-          title="Record Payment"
-          onClose={paymentModal.close}
           footer={
             <div className="flex justify-end gap-2 w-full">
               <Button variant="light" onPress={paymentModal.close}>
@@ -2230,6 +2240,9 @@ export default function PathologyBillingTab({
               </Button>
             </div>
           }
+          size="xl"
+          title="Record Payment"
+          onClose={paymentModal.close}
         >
           <div className="space-y-4">
             {selectedBillingForPayment && (
@@ -2270,7 +2283,9 @@ export default function PathologyBillingTab({
                       className="h-10 w-full px-2.5 text-[14px] border-2 border-border-base rounded-xl bg-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 text-text-main"
                       value={paymentDiscountType}
                       onChange={(e) => {
-                        setPaymentDiscountType(e.target.value as "none" | "flat" | "percent");
+                        setPaymentDiscountType(
+                          e.target.value as "none" | "flat" | "percent",
+                        );
                         if (e.target.value === "none") {
                           setPaymentDiscountValue("");
                         }
@@ -2361,9 +2376,6 @@ export default function PathologyBillingTab({
       {/* View Invoice Modal */}
       {invoiceModal.isOpen && (
         <ModalShell
-          size="lg"
-          title={`Invoice Details - ${selectedBilling?.invoiceNumber}`}
-          onClose={invoiceModal.close}
           footer={
             <div className="flex justify-between items-center w-full">
               <div className="flex items-center gap-2">
@@ -2404,6 +2416,9 @@ export default function PathologyBillingTab({
               </div>
             </div>
           }
+          size="lg"
+          title={`Invoice Details - ${selectedBilling?.invoiceNumber}`}
+          onClose={invoiceModal.close}
         >
           {selectedBilling && (
             <div className="space-y-4">
@@ -2415,9 +2430,7 @@ export default function PathologyBillingTab({
                 <div>
                   <p className="text-sm text-text-muted">Invoice Date</p>
                   <p className="font-medium">
-                    {new Date(
-                      selectedBilling.invoiceDate,
-                    ).toLocaleDateString()}
+                    {new Date(selectedBilling.invoiceDate).toLocaleDateString()}
                   </p>
                 </div>
                 {selectedBilling.patientPhone && (
@@ -2439,9 +2452,7 @@ export default function PathologyBillingTab({
                 {selectedBilling.patientAge && (
                   <div>
                     <p className="text-sm text-text-muted">Age</p>
-                    <p className="font-medium">
-                      {selectedBilling.patientAge}
-                    </p>
+                    <p className="font-medium">{selectedBilling.patientAge}</p>
                   </div>
                 )}
                 {selectedBilling.patientGender && (

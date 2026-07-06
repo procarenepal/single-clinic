@@ -350,19 +350,19 @@ export default function AppointmentsPage() {
     };
 
     const unsubscribe = currentDoctorId
-      ? (isExpertUser
-          ? appointmentService.subscribeToExpertAppointments(
-              currentDoctorId,
-              effectiveBranchId,
-              handleSnapshot,
-              handleError,
-            )
-          : appointmentService.subscribeToDoctorAppointments(
-              currentDoctorId,
-              effectiveBranchId,
-              handleSnapshot,
-              handleError,
-            ))
+      ? isExpertUser
+        ? appointmentService.subscribeToExpertAppointments(
+            currentDoctorId,
+            effectiveBranchId,
+            handleSnapshot,
+            handleError,
+          )
+        : appointmentService.subscribeToDoctorAppointments(
+            currentDoctorId,
+            effectiveBranchId,
+            handleSnapshot,
+            handleError,
+          )
       : appointmentService.subscribeToClinicAppointments(
           undefined, // clinicId
           effectiveBranchId,
@@ -449,6 +449,7 @@ export default function AppointmentsPage() {
       );
 
       const appt = appointments.find((a) => a.id === appointmentId);
+
       if (appt && newStatus === "confirmed") {
         sendCheckInSMS(
           appt.patientId,

@@ -66,12 +66,12 @@ export interface SMSTemplate {
   name: string;
   message: string;
   type:
-  | "patient"
-  | "doctor"
-  | "general"
-  | "appointment"
-  | "reminder"
-  | "referral";
+    | "patient"
+    | "doctor"
+    | "general"
+    | "appointment"
+    | "reminder"
+    | "referral";
   language?: "en" | "ne";
   isActive: boolean;
   usageCount?: number;
@@ -146,13 +146,9 @@ export const smsService = {
         import.meta.env.VITE_SMS_API_URL ||
         "";
       const campaign =
-        settings?.campaign ||
-        import.meta.env.VITE_SMS_CAMPAIGN ||
-        "9569";
+        settings?.campaign || import.meta.env.VITE_SMS_CAMPAIGN || "9569";
       const routeId =
-        settings?.routeId ||
-        import.meta.env.VITE_SMS_ROUTE_ID ||
-        "10255";
+        settings?.routeId || import.meta.env.VITE_SMS_ROUTE_ID || "10255";
 
       // If it is Bit_Alert, or empty/falsy, treat it as wanting the fallback/clinic name
       if (!senderId || senderId.toLowerCase() === "bit_alert") {
@@ -684,16 +680,16 @@ export const smsService = {
     try {
       const q = branchId
         ? query(
-          collection(db, SMS_TEMPLATES_COLLECTION),
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        )
+            collection(db, SMS_TEMPLATES_COLLECTION),
+            where("clinicId", "==", clinicId),
+            where("branchId", "==", branchId),
+            where("isActive", "==", true),
+          )
         : query(
-          collection(db, SMS_TEMPLATES_COLLECTION),
-          where("clinicId", "==", clinicId),
-          where("isActive", "==", true),
-        );
+            collection(db, SMS_TEMPLATES_COLLECTION),
+            where("clinicId", "==", clinicId),
+            where("isActive", "==", true),
+          );
 
       const querySnapshot = await getDocs(q);
 
@@ -1049,7 +1045,7 @@ export const smsService = {
         remainingToday: Math.max(
           0,
           (smsSettings?.maxDailySMS || 100) -
-          (smsSettings?.currentDailySMS || 0),
+            (smsSettings?.currentDailySMS || 0),
         ),
         templatesCount: templates.length,
         activeTemplatesCount: templates.filter((template) => template.isActive)
@@ -1917,8 +1913,15 @@ export const smsService = {
         getDoc(doc(db, APPOINTMENTS_COLLECTION, appointmentId)),
       ]);
 
-      if (!patientDoc.exists() || !clinicDoc.exists() || !appointmentDoc.exists()) {
-        console.error("Missing patient, clinic, or appointment data for check-in SMS");
+      if (
+        !patientDoc.exists() ||
+        !clinicDoc.exists() ||
+        !appointmentDoc.exists()
+      ) {
+        console.error(
+          "Missing patient, clinic, or appointment data for check-in SMS",
+        );
+
         return false;
       }
 
@@ -1928,8 +1931,13 @@ export const smsService = {
 
       // Check if SMS settings are active
       const settings = await this.getSMSSettings(clinicId);
+
       if (!settings || !settings.isActive) {
-        console.log("SMS settings not active or not configured for clinic:", clinicId);
+        console.log(
+          "SMS settings not active or not configured for clinic:",
+          clinicId,
+        );
+
         return false;
       }
 
@@ -1939,14 +1947,19 @@ export const smsService = {
 
       if (!phoneNumber) {
         console.warn("No phone number found for patient:", patientId);
+
         return false;
       }
 
       // Format doctor name if assigned
       let doctorName = "";
+
       if (appointment.doctorId && appointment.doctorId !== "unassigned") {
         try {
-          const doctorDoc = await getDoc(doc(db, DOCTORS_COLLECTION, appointment.doctorId));
+          const doctorDoc = await getDoc(
+            doc(db, DOCTORS_COLLECTION, appointment.doctorId),
+          );
+
           if (doctorDoc.exists()) {
             doctorName = doctorDoc.data().name || "";
           }
@@ -1960,17 +1973,25 @@ export const smsService = {
 
       // Try to use a template if available
       let finalMessage = message;
+
       try {
         const templates = await this.getSMSTemplates(clinicId);
         const checkInTemplate = templates.find(
-          (t) => (t.name.toLowerCase().includes("check-in") || t.name.toLowerCase().includes("checkin") || t.name.toLowerCase().includes("arrival")) && (t.language || "en") === "en",
+          (t) =>
+            (t.name.toLowerCase().includes("check-in") ||
+              t.name.toLowerCase().includes("checkin") ||
+              t.name.toLowerCase().includes("arrival")) &&
+            (t.language || "en") === "en",
         );
 
         if (checkInTemplate) {
           finalMessage = checkInTemplate.message
             .replace(/{patientName}/g, patientName)
             .replace(/{clinicName}/g, clinicName)
-            .replace(/{doctorName}/g, doctorName ? `Dr. ${doctorName}` : "Clinician");
+            .replace(
+              /{doctorName}/g,
+              doctorName ? `Dr. ${doctorName}` : "Clinician",
+            );
         }
       } catch (err) {
         console.warn("Could not fetch check-in template, using default:", err);
@@ -2001,6 +2022,7 @@ export const smsService = {
       return isSuccess;
     } catch (error) {
       console.error("Error sending check-in SMS:", error);
+
       return false;
     }
   },
@@ -2145,4 +2167,3 @@ export const sendCheckInSMS = smsService.sendCheckInSMS.bind(smsService);
 
 // Default export
 export default smsService;
-

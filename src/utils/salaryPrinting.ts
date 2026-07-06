@@ -21,17 +21,20 @@ export const printSalarySlip = (
 ) => {
   // Create a hidden iframe to print directly from the current window, avoiding about:blank URLs
   const iframe = document.createElement("iframe");
+
   iframe.style.position = "absolute";
   iframe.style.width = "0";
   iframe.style.height = "0";
   iframe.style.border = "none";
   iframe.style.visibility = "hidden";
-  
+
   document.body.appendChild(iframe);
-  
+
   const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
+
   if (!iframeDoc) {
     console.error("Could not access iframe document");
+
     return;
   }
 
@@ -42,6 +45,7 @@ export const printSalarySlip = (
     if (typeof dateVal?.toDate === "function") {
       try {
         const d = dateVal.toDate();
+
         if (d instanceof Date && !isNaN(d.getTime())) return d;
       } catch (e) {}
     }
@@ -49,7 +53,9 @@ export const printSalarySlip = (
       return new Date(dateVal.seconds * 1000);
     }
     const parsed = new Date(dateVal);
+
     if (!isNaN(parsed.getTime())) return parsed;
+
     return new Date(); // fallback to current date instead of failing
   };
 

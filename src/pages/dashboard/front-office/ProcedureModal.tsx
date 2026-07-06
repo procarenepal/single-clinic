@@ -25,7 +25,10 @@ interface ProcedureModalProps {
   appointmentTypes: any[];
   modalActivePackages: any[];
   procedureSaving: boolean;
-  onSave: (e: React.MouseEvent, target: "doctor" | "billing" | "expert") => void;
+  onSave: (
+    e: React.MouseEvent,
+    target: "doctor" | "billing" | "expert",
+  ) => void;
   loadingHistory: boolean;
   historicalProcedures: any[];
   getApptTypeLabel: (id: string | undefined) => string;
@@ -177,35 +180,39 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                   </label>
                   <div className="w-full max-h-[140px] overflow-y-auto p-2 border rounded outline-none border-border-base bg-surface flex flex-col gap-2">
                     <input
-                      type="text"
+                      className="w-full h-8 px-2 text-[12px] border-b border-border-base outline-none bg-transparent mb-1 focus:border-primary transition-colors"
                       placeholder="Search procedure..."
+                      type="text"
                       value={procedureSearch}
                       onChange={(e) => setProcedureSearch(e.target.value)}
-                      className="w-full h-8 px-2 text-[12px] border-b border-border-base outline-none bg-transparent mb-1 focus:border-primary transition-colors"
                     />
                     {(() => {
                       const options = [];
-                      const procedureList = procedure.procedureType.split(", ").filter(x => x !== "");
+                      const procedureList = procedure.procedureType
+                        .split(", ")
+                        .filter((x) => x !== "");
 
                       // 1. Booked procedure
                       const bookedLabel = getBookedApptTypeOption();
+
                       if (bookedLabel) {
                         options.push({
                           type: "booked",
                           id: bookedLabel,
                           label: `${bookedLabel} (Booked)`,
-                          isChecked: procedureList.includes(bookedLabel)
+                          isChecked: procedureList.includes(bookedLabel),
                         });
                       }
 
                       // 2. Packages
                       modalActivePackages.forEach((pkg) => {
                         const val = `consume_pkg_${pkg.id}`;
+
                         options.push({
                           type: "package",
                           id: val,
                           label: `Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`,
-                          isChecked: procedureList.includes(val)
+                          isChecked: procedureList.includes(val),
                         });
                       });
 
@@ -215,7 +222,7 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                           type: "type",
                           id: type.name,
                           label: type.name,
-                          isChecked: procedureList.includes(type.name)
+                          isChecked: procedureList.includes(type.name),
                         });
                       });
 
@@ -224,7 +231,7 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                         type: "other",
                         id: "Other",
                         label: "Other",
-                        isChecked: procedureList.includes("Other")
+                        isChecked: procedureList.includes("Other"),
                       });
 
                       // Sort: Booked first, then Selected, then the rest
@@ -233,11 +240,14 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                         if (b.type === "booked") return 1;
                         if (a.isChecked && !b.isChecked) return -1;
                         if (!a.isChecked && b.isChecked) return 1;
+
                         return 0;
                       });
 
-                      const filteredOptions = options.filter(opt =>
-                        opt.label.toLowerCase().includes(procedureSearch.toLowerCase())
+                      const filteredOptions = options.filter((opt) =>
+                        opt.label
+                          .toLowerCase()
+                          .includes(procedureSearch.toLowerCase()),
                       );
 
                       if (filteredOptions.length === 0) {
@@ -254,7 +264,9 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                           isSelected={opt.isChecked}
                           onValueChange={() => handleToggleProcedure(opt.id)}
                         >
-                          <span className={`text-[12.5px] ${opt.type === "booked" ? "font-semibold text-primary" : "text-text-main"}`}>
+                          <span
+                            className={`text-[12.5px] ${opt.type === "booked" ? "font-semibold text-primary" : "text-text-main"}`}
+                          >
                             {opt.label}
                           </span>
                         </Checkbox>
@@ -396,7 +408,11 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                 type="button"
                 onClick={(e) => onSave(e, "doctor")}
               >
-                {procedureSaving ? "Saving..." : isDoctorCabin ? "Save Procedure" : "Save & Send to Doctor"}
+                {procedureSaving
+                  ? "Saving..."
+                  : isDoctorCabin
+                    ? "Save Procedure"
+                    : "Save & Send to Doctor"}
               </button>
               {isDoctorCabin && hasExpert && (
                 <button

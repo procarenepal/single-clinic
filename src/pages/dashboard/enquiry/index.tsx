@@ -481,10 +481,10 @@ export default function EnquiriesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        
+
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 border-r border-border-base pr-3">
-            <select 
+            <select
               className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
               value={dateField}
               onChange={(e) => setDateField(e.target.value as any)}
@@ -504,23 +504,27 @@ export default function EnquiriesPage() {
               }}
             >
               {DATE_PRESETS.map((p) => (
-                <option key={p.key} value={p.key}>{p.label}</option>
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
               ))}
               <option value="custom">Custom Range</option>
             </select>
 
             {datePreset === "custom" && (
               <div className="flex items-center gap-1.5 ml-1.5">
-                <input 
-                  type="date" 
+                <input
                   className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+                  type="date"
                   value={rangeStart}
                   onChange={(e) => setRangeStart(e.target.value)}
                 />
-                <span className="text-text-muted text-[11px] font-bold">TO</span>
-                <input 
-                  type="date" 
+                <span className="text-text-muted text-[11px] font-bold">
+                  TO
+                </span>
+                <input
                   className="h-9 border border-border-base rounded-lg px-2 text-[13px] text-text-main bg-surface-2 focus:outline-none focus:border-primary transition-all font-medium"
+                  type="date"
                   value={rangeEnd}
                   onChange={(e) => setRangeEnd(e.target.value)}
                 />

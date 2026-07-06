@@ -210,7 +210,12 @@ export default function InvoiceDetailPage() {
   const { id: invoiceId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { currentUser, clinicId, userData, isLoading: authLoading } = useAuthContext();
+  const {
+    currentUser,
+    clinicId,
+    userData,
+    isLoading: authLoading,
+  } = useAuthContext();
   const paymentModal = useModalState(false);
   const branchId = userData?.branchId ?? null;
   const isClinicAdmin = userData?.role === "system-owner";
@@ -235,24 +240,30 @@ export default function InvoiceDetailPage() {
   const [paymentSplits, setPaymentSplits] = useState([
     { id: "1", amount: "", method: "cash", reference: "", notes: "" },
   ]);
-  const [paymentDiscountType, setPaymentDiscountType] = useState<"none" | "flat" | "percent">("none");
+  const [paymentDiscountType, setPaymentDiscountType] = useState<
+    "none" | "flat" | "percent"
+  >("none");
   const [paymentDiscountValue, setPaymentDiscountValue] = useState("");
 
   const calculatedDiscountAmount = useMemo(() => {
-    if (paymentDiscountType === "none" || !paymentDiscountValue || !invoice) return 0;
+    if (paymentDiscountType === "none" || !paymentDiscountValue || !invoice)
+      return 0;
     const val = parseFloat(paymentDiscountValue);
+
     if (isNaN(val) || val < 0) return 0;
     if (paymentDiscountType === "flat") return val;
     if (paymentDiscountType === "percent") {
       return (invoice.balanceAmount * val) / 100;
     }
+
     return 0;
   }, [paymentDiscountType, paymentDiscountValue, invoice]);
 
   useEffect(() => {
     if (paymentSplits.length === 1 && invoice) {
       const maxAllowed = includePreviousDue
-        ? Math.max(0, invoice.balanceAmount - calculatedDiscountAmount) + previousDue
+        ? Math.max(0, invoice.balanceAmount - calculatedDiscountAmount) +
+          previousDue
         : Math.max(0, invoice.balanceAmount - calculatedDiscountAmount);
 
       setPaymentSplits((prev) => [
@@ -561,7 +572,10 @@ export default function InvoiceDetailPage() {
     const totalPayment = Math.round(
       validSplits.reduce((sum, s) => sum + parseFloat(s.amount), 0),
     );
-    const effectiveBalance = Math.max(0, invoice.balanceAmount - calculatedDiscountAmount);
+    const effectiveBalance = Math.max(
+      0,
+      invoice.balanceAmount - calculatedDiscountAmount,
+    );
     const maxAllowed = includePreviousDue
       ? effectiveBalance + previousDue
       : effectiveBalance;
@@ -594,12 +608,15 @@ export default function InvoiceDetailPage() {
         if (currentInvoiceRemaining > 0 && splitAmountRemaining > 0) {
           // If this is the first payment applied to the current invoice, pass the discount.
           // For subsequent splits on the same invoice, pass 0 discount so it's not double-counted.
-          const isFirstSplitForCurrentInvoice = (currentInvoiceRemaining === invoice.balanceAmount);
-          const discountToApply = isFirstSplitForCurrentInvoice ? calculatedDiscountAmount : 0;
-          
+          const isFirstSplitForCurrentInvoice =
+            currentInvoiceRemaining === invoice.balanceAmount;
+          const discountToApply = isFirstSplitForCurrentInvoice
+            ? calculatedDiscountAmount
+            : 0;
+
           // Max we can apply to this invoice is its remaining balance minus discount
-          const targetRemainingForCurrent = isFirstSplitForCurrentInvoice 
-            ? Math.max(0, currentInvoiceRemaining - discountToApply) 
+          const targetRemainingForCurrent = isFirstSplitForCurrentInvoice
+            ? Math.max(0, currentInvoiceRemaining - discountToApply)
             : currentInvoiceRemaining;
 
           const applyAmount = Math.min(
@@ -613,7 +630,7 @@ export default function InvoiceDetailPage() {
             split.method,
             split.reference || undefined,
             split.notes || undefined,
-            discountToApply
+            discountToApply,
           );
           splitAmountRemaining -= applyAmount;
           currentInvoiceRemaining = targetRemainingForCurrent - applyAmount;
@@ -1344,7 +1361,7 @@ export default function InvoiceDetailPage() {
                         checked &&
                         paymentSplits.length === 1 &&
                         parseFloat(paymentSplits[0].amount) ===
-                        invoice.balanceAmount
+                          invoice.balanceAmount
                       ) {
                         setPaymentSplits([
                           {
@@ -1358,7 +1375,7 @@ export default function InvoiceDetailPage() {
                         !checked &&
                         paymentSplits.length === 1 &&
                         parseFloat(paymentSplits[0].amount) ===
-                        invoice.balanceAmount + previousDue
+                          invoice.balanceAmount + previousDue
                       ) {
                         setPaymentSplits([
                           {
@@ -1377,7 +1394,7 @@ export default function InvoiceDetailPage() {
                   </label>
                 </div>
               )}
-              
+
               {paymentSplits.map((split, index) => (
                 <div
                   key={split.id}
@@ -1505,7 +1522,9 @@ export default function InvoiceDetailPage() {
                     className="h-8 w-full px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100 text-mountain-800"
                     value={paymentDiscountType}
                     onChange={(e) => {
-                      setPaymentDiscountType(e.target.value as "none" | "flat" | "percent");
+                      setPaymentDiscountType(
+                        e.target.value as "none" | "flat" | "percent",
+                      );
                       if (e.target.value === "none") {
                         setPaymentDiscountValue("");
                       }
@@ -1541,7 +1560,10 @@ export default function InvoiceDetailPage() {
                   const totalTargetBalance = includePreviousDue
                     ? invoice.balanceAmount + previousDue
                     : invoice.balanceAmount;
-                  const effectiveTargetBalance = Math.max(0, totalTargetBalance - calculatedDiscountAmount);
+                  const effectiveTargetBalance = Math.max(
+                    0,
+                    totalTargetBalance - calculatedDiscountAmount,
+                  );
                   const newBalance = effectiveTargetBalance - totalAmount;
 
                   return (
@@ -1571,7 +1593,9 @@ export default function InvoiceDetailPage() {
                       </div>
                       {calculatedDiscountAmount > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-mountain-600">Payment Discount:</span>
+                          <span className="text-mountain-600">
+                            Payment Discount:
+                          </span>
                           <span className="text-rose-500">
                             - {formatCurrency(calculatedDiscountAmount)}
                           </span>
@@ -1597,14 +1621,16 @@ export default function InvoiceDetailPage() {
                         <span>Remaining Balance:</span>
                         <span
                           className={
-                            newBalance < 0 
-                              ? "text-saffron-600" 
-                              : newBalance === 0 
-                                ? "text-health-600" 
+                            newBalance < 0
+                              ? "text-saffron-600"
+                              : newBalance === 0
+                                ? "text-health-600"
                                 : "text-red-600"
                           }
                         >
-                          {newBalance < 0 ? `Overpaid by ${formatCurrency(Math.abs(newBalance))}` : formatCurrency(newBalance)}
+                          {newBalance < 0
+                            ? `Overpaid by ${formatCurrency(Math.abs(newBalance))}`
+                            : formatCurrency(newBalance)}
                         </span>
                       </div>
                       <div className="flex justify-between text-[11px]">

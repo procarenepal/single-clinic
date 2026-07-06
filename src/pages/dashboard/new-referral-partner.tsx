@@ -18,7 +18,12 @@ export default function NewReferralPartnerPage() {
   const navigate = useNavigate();
   const { partnerId } = useParams();
   const isEdit = !!partnerId;
-  const { clinicId, currentUser, userData, isLoading: authLoading } = useAuthContext();
+  const {
+    clinicId,
+    currentUser,
+    userData,
+    isLoading: authLoading,
+  } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
   const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);

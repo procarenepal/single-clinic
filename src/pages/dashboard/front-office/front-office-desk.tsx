@@ -59,14 +59,17 @@ import SellPackageModal from "@/components/packages/SellPackageModal";
 
 export default function FrontOfficeDesk() {
   const navigate = useNavigate();
-  const { clinicId, currentUser, branchId, userData, hasPagePermissionByPath } = useAuthContext();
-  const isAdmin = userData?.role === "clinic-admin" || userData?.role === "system-owner";
-  const [hasFullFrontOfficeAccess, setHasFullFrontOfficeAccess] = useState(isAdmin);
+  const { clinicId, currentUser, branchId, userData, hasPagePermissionByPath } =
+    useAuthContext();
+  const isAdmin =
+    userData?.role === "clinic-admin" || userData?.role === "system-owner";
+  const [hasFullFrontOfficeAccess, setHasFullFrontOfficeAccess] =
+    useState(isAdmin);
 
   useEffect(() => {
     if (!isAdmin) {
       hasPagePermissionByPath("/dashboard/front-office/manage-visitors")
-        .then(hasAccess => setHasFullFrontOfficeAccess(hasAccess))
+        .then((hasAccess) => setHasFullFrontOfficeAccess(hasAccess))
         .catch(console.error);
     } else {
       setHasFullFrontOfficeAccess(true);
@@ -1375,11 +1378,15 @@ export default function FrontOfficeDesk() {
 
       // 1. Enforce workflow gating to verify clinical documentation
       const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
-      const hasExpert = appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
+      const hasExpert =
+        appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
 
-      const isTriageCompleted = appt.notes?.includes("[Triage Vitals Recorded]");
+      const isTriageCompleted = appt.notes?.includes(
+        "[Triage Vitals Recorded]",
+      );
 
       let isConsultationCompleted = true;
+
       if (hasDoctor) {
         isConsultationCompleted = appt.doctorConsultationCompleted === true;
       }
@@ -1390,28 +1397,36 @@ export default function FrontOfficeDesk() {
       if (!isTriageCompleted && hasDoctor) {
         addToast({
           title: "Incomplete Clinical Documentation",
-          description: "Cannot complete checkout. Patient triage vitals have not been recorded.",
+          description:
+            "Cannot complete checkout. Patient triage vitals have not been recorded.",
           color: "danger",
         });
+
         return;
       }
 
       if (hasDoctor && !isConsultationCompleted) {
         addToast({
           title: "Incomplete Clinical Documentation",
-          description: "Cannot complete checkout. Doctor consultation has not been marked as completed.",
+          description:
+            "Cannot complete checkout. Doctor consultation has not been marked as completed.",
           color: "danger",
         });
+
         return;
       }
 
       // Check state integrity to prevent premature settlement
-      const isFullyPaid = appt.billingStatus === "paid" || appt.paymentStatus === "paid";
+      const isFullyPaid =
+        appt.billingStatus === "paid" || appt.paymentStatus === "paid";
       let hasOutstandingBalance = !isFullyPaid;
 
-      const pendingBillId = appt.billingId || (appt as any).consultationBillingId;
+      const pendingBillId =
+        appt.billingId || (appt as any).consultationBillingId;
+
       if (pendingBillId) {
         const matchingBill = billings.find((b) => b.id === pendingBillId);
+
         if (matchingBill && matchingBill.totalAmount <= 0) {
           hasOutstandingBalance = false;
         }
@@ -1420,7 +1435,8 @@ export default function FrontOfficeDesk() {
       if (hasOutstandingBalance) {
         addToast({
           title: "Premature Settlement",
-          description: "Cannot complete checkout. Outstanding balance exists on this appointment.",
+          description:
+            "Cannot complete checkout. Outstanding balance exists on this appointment.",
           color: "warning",
         });
         // We will not block it entirely if it's a zero-amount bill or handled externally, but warn.
@@ -1489,7 +1505,8 @@ export default function FrontOfficeDesk() {
 
     if (recommended) {
       initialType = recommended.name || initialType;
-      initialFee = recommended.fee !== undefined ? String(recommended.fee) : initialFee;
+      initialFee =
+        recommended.fee !== undefined ? String(recommended.fee) : initialFee;
       initialArea = recommended.area || initialArea;
     }
 
@@ -1664,7 +1681,8 @@ export default function FrontOfficeDesk() {
         actualProcedureName = pkg ? pkg.packageName : "Package Session";
       }
 
-      const clinicianName = (userData as any)?.name || currentUser?.displayName || "Clinician";
+      const clinicianName =
+        (userData as any)?.name || currentUser?.displayName || "Clinician";
       const settingsStr = `Energy: ${procedure.energy || "N/A"} J/cm² | Spot: ${procedure.spotSize || "N/A"} mm | Pulse: ${procedure.pulseWidth || "N/A"} ms | Passes: ${procedure.passes || "N/A"}`;
       const procedureNoteContent = `Procedure: ${actualProcedureName}\nArea: ${procedure.area || "N/A"}\nLaser Settings: ${settingsStr}\nClinical Notes: ${procedure.notes || "None"}\nCharge: ${procedure.fee ? `${procedure.fee} NPR` : "Free/Included"}\nWritten By: ${clinicianName}`;
 
@@ -1738,15 +1756,22 @@ export default function FrontOfficeDesk() {
             : [{ name: actualProcedureName, fee: feeNum, id: "custom" }];
 
         const existingRec = (selectedAppointment as any).recommendedProcedure;
-        if (existingRec && existingRec.items && Array.isArray(existingRec.items)) {
+
+        if (
+          existingRec &&
+          existingRec.items &&
+          Array.isArray(existingRec.items)
+        ) {
           // Merge items, avoiding duplicates
           const mergedItems = [...existingRec.items];
+
           newItems.forEach((newItem) => {
             const exists = mergedItems.some(
               (existingItem: any) =>
                 (newItem.id !== "custom" && existingItem.id === newItem.id) ||
                 (newItem.id === "custom" && existingItem.name === newItem.name),
             );
+
             if (!exists) {
               mergedItems.push(newItem);
             }
@@ -1768,7 +1793,8 @@ export default function FrontOfficeDesk() {
         }
       } else {
         // If the expert logged settings but did not specify a fee, preserve the doctor's recommended procedure
-        recommendedProcedureData = (selectedAppointment as any).recommendedProcedure || null;
+        recommendedProcedureData =
+          (selectedAppointment as any).recommendedProcedure || null;
       }
       // End of procedure check
 
@@ -2120,7 +2146,19 @@ export default function FrontOfficeDesk() {
         appointment={selectedAppointment}
         appointmentTypes={appointmentTypes}
         getApptTypeLabel={getApptTypeLabel}
+        hasExpert={
+          selectedAppointment
+            ? !!selectedAppointment.assignedExpertId &&
+              selectedAppointment.assignedExpertId !== "unassigned"
+            : false
+        }
         historicalProcedures={historicalProcedures}
+        isDoctorCabin={
+          selectedAppointment
+            ? getPatientStage(selectedAppointment) === "doctor" ||
+              !!currentDoctorId
+            : false
+        }
         isOpen={isProcedureModalOpen}
         loadingHistory={loadingHistory}
         modalActivePackages={modalActivePackages}
@@ -2137,8 +2175,6 @@ export default function FrontOfficeDesk() {
           setHistoricalProcedures([]);
         }}
         onSave={(e, target) => handleSaveProcedure(e as any, target)}
-        isDoctorCabin={selectedAppointment ? getPatientStage(selectedAppointment) === "doctor" || !!currentDoctorId : false}
-        hasExpert={selectedAppointment ? !!selectedAppointment.assignedExpertId && selectedAppointment.assignedExpertId !== "unassigned" : false}
       />
     );
   };
@@ -2545,7 +2581,9 @@ export default function FrontOfficeDesk() {
             clinicId!,
             newApptId,
             branchId || undefined,
-          ).catch((err) => console.error("Auto check-in SMS failed for package session:", err));
+          ).catch((err) =>
+            console.error("Auto check-in SMS failed for package session:", err),
+          );
 
           // Generate consultation bill if a clinician is assigned and option is checked
           const hasDoctor =
@@ -2626,8 +2664,8 @@ export default function FrontOfficeDesk() {
           )
             ? "package-session"
             : quickIntakeForm.appointmentTypeId ||
-            appointmentTypes[0]?.id ||
-            "default",
+              appointmentTypes[0]?.id ||
+              "default",
           patientPackageId: quickIntakeForm.appointmentTypeId.startsWith(
             "consume_pkg_",
           )
@@ -2861,7 +2899,8 @@ export default function FrontOfficeDesk() {
 
           procedureItemsToAdd = billedItems.map((i: any) => ({
             id: crypto.randomUUID(),
-            appointmentTypeId: apptToFinalise.appointmentTypeId || "procedure-fee",
+            appointmentTypeId:
+              apptToFinalise.appointmentTypeId || "procedure-fee",
             appointmentTypeName: `${i.name} (Procedure Fee)`,
             price: i.fee,
             quantity: 1,
@@ -2871,20 +2910,26 @@ export default function FrontOfficeDesk() {
             discountAmount: 0,
             amount: i.fee,
           }));
-          totalFee = billedItems.reduce((sum: number, i: any) => sum + i.fee, 0);
+          totalFee = billedItems.reduce(
+            (sum: number, i: any) => sum + i.fee,
+            0,
+          );
         } else {
-          procedureItemsToAdd = [{
-            id: crypto.randomUUID(),
-            appointmentTypeId: apptToFinalise.appointmentTypeId || "procedure-fee",
-            appointmentTypeName: `${rec.name} (Procedure Fee)`,
-            price: rec.fee,
-            quantity: 1,
-            commission: 0,
-            discountValue: 0,
-            discountType: "percent" as const,
-            discountAmount: 0,
-            amount: rec.fee,
-          }];
+          procedureItemsToAdd = [
+            {
+              id: crypto.randomUUID(),
+              appointmentTypeId:
+                apptToFinalise.appointmentTypeId || "procedure-fee",
+              appointmentTypeName: `${rec.name} (Procedure Fee)`,
+              price: rec.fee,
+              quantity: 1,
+              commission: 0,
+              discountValue: 0,
+              discountType: "percent" as const,
+              discountAmount: 0,
+              amount: rec.fee,
+            },
+          ];
           totalFee = rec.fee;
         }
 
@@ -2896,7 +2941,10 @@ export default function FrontOfficeDesk() {
             await appointmentBillingService.getBillingById(billingId);
 
           if (billing) {
-            const updatedItems = [...(billing.items || []), ...procedureItemsToAdd];
+            const updatedItems = [
+              ...(billing.items || []),
+              ...procedureItemsToAdd,
+            ];
             const totals = appointmentBillingService.calculateInvoiceTotals(
               updatedItems,
               billing.discountType || "percent",
@@ -3436,7 +3484,7 @@ export default function FrontOfficeDesk() {
           icon: <IoTimeOutline className="w-4 h-4" />,
           colorClass:
             "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-          onClick: () => { },
+          onClick: () => {},
         };
       }
       const isOnlyCons =
@@ -3488,7 +3536,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => { },
+            onClick: () => {},
           };
         }
 
@@ -3521,7 +3569,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => { },
+            onClick: () => {},
           };
         }
 
@@ -3557,7 +3605,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => { },
+            onClick: () => {},
           };
         }
 
@@ -3574,7 +3622,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => { },
+            onClick: () => {},
           };
         }
 
@@ -3591,7 +3639,7 @@ export default function FrontOfficeDesk() {
           icon: <IoCheckmarkCircleOutline className="w-4 h-4 text-green-500" />,
           colorClass:
             "bg-green-500/10 text-green-600 border border-green-500/20 cursor-default",
-          onClick: () => { },
+          onClick: () => {},
         };
     }
   };
@@ -3684,10 +3732,14 @@ export default function FrontOfficeDesk() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className={`${title({ size: "lg" })} text-primary`}>
-            {hasFullFrontOfficeAccess ? "Front Office Dashboard" : currentExpertId ? "Expert Cabin Dashboard" : "Doctor Cabin Dashboard"}
+            {hasFullFrontOfficeAccess
+              ? "Front Office Dashboard"
+              : currentExpertId
+                ? "Expert Cabin Dashboard"
+                : "Doctor Cabin Dashboard"}
           </h1>
           <p className="text-[13.5px] text-text-muted mt-1">
-            {hasFullFrontOfficeAccess 
+            {hasFullFrontOfficeAccess
               ? "Live patient operational waitlist queue and lobby triage desk."
               : "Manage your daily queue, review triage vitals, and process clinical records."}
           </p>
@@ -3714,7 +3766,9 @@ export default function FrontOfficeDesk() {
               <button
                 className="clarity-btn clarity-btn-ghost flex items-center gap-1.5"
                 type="button"
-                onClick={() => navigate("/dashboard/front-office/manage-visitors")}
+                onClick={() =>
+                  navigate("/dashboard/front-office/manage-visitors")
+                }
               >
                 <IoPeopleOutline className="w-4 h-4" />
                 Visitors Log
@@ -3752,15 +3806,21 @@ export default function FrontOfficeDesk() {
           return true;
         };
 
-          const showExpertCard = !currentDoctorId || hasFullFrontOfficeAccess || currentExpertId;
-          const showBillingCards = hasFullFrontOfficeAccess || currentExpertId;
+        const showExpertCard =
+          !currentDoctorId || hasFullFrontOfficeAccess || currentExpertId;
+        const showBillingCards = hasFullFrontOfficeAccess || currentExpertId;
 
-          let gridColsClass = "lg:grid-cols-7";
-          if (!showExpertCard && !showBillingCards) gridColsClass = "lg:grid-cols-4";
-          else if (showExpertCard && !showBillingCards) gridColsClass = "lg:grid-cols-5";
+        let gridColsClass = "lg:grid-cols-7";
+
+        if (!showExpertCard && !showBillingCards)
+          gridColsClass = "lg:grid-cols-4";
+        else if (showExpertCard && !showBillingCards)
+          gridColsClass = "lg:grid-cols-5";
 
         return (
-          <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 ${gridColsClass} gap-3.5`}>
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 ${gridColsClass} gap-3.5`}
+          >
             <StatCard
               colorClass="bg-surface-3 text-text-muted"
               icon={<IoCalendarOutline className="w-5 h-5" />}
@@ -3784,12 +3844,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
+                        (b) => b.id === (a as any).consultationBillingId,
+                      )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
+                      consBill.paymentStatus === "paid"
                     : false;
                   const isConsBillPending =
                     hasDoc && consBill && !isConsBillPaid;
@@ -3820,7 +3880,9 @@ export default function FrontOfficeDesk() {
                   .filter((a) => getPatientStage(a) === "doctor").length
               }
             />
-            {(!currentDoctorId || hasFullFrontOfficeAccess || currentExpertId) && (
+            {(!currentDoctorId ||
+              hasFullFrontOfficeAccess ||
+              currentExpertId) && (
               <StatCard
                 colorClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
                 icon={<IoPeopleOutline className="w-5 h-5" />}
@@ -3877,10 +3939,10 @@ export default function FrontOfficeDesk() {
         const dateLabel = isSelectedToday
           ? "Today"
           : selectedDate.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          });
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            });
 
         const goToPrev = () => {
           const d = new Date(selectedDate);
@@ -3951,10 +4013,11 @@ export default function FrontOfficeDesk() {
                 }}
               />
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isSelectedToday
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  isSelectedToday
                     ? "bg-primary/10 text-primary"
                     : "bg-warning/10 text-warning-600"
-                  }`}
+                }`}
               >
                 {isSelectedToday ? "● Live" : "📅 Archive"}
               </span>
@@ -3997,12 +4060,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
+                        (b) => b.id === (a as any).consultationBillingId,
+                      )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
+                      consBill.paymentStatus === "paid"
                     : false;
 
                   if (
@@ -4048,12 +4111,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
+                        (b) => b.id === (a as any).consultationBillingId,
+                      )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
+                      consBill.paymentStatus === "paid"
                     : false;
                   const isConsBillPending =
                     hasDoc && consBill && !isConsBillPaid;
@@ -4071,12 +4134,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
+                        (b) => b.id === (a as any).consultationBillingId,
+                      )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
+                      consBill.paymentStatus === "paid"
                     : false;
 
                   return !(hasDoc && consBill && !isConsBillPaid);
@@ -4137,29 +4200,29 @@ export default function FrontOfficeDesk() {
 
                 if (currentDoctorId && currentExpertId)
                   return ["doctor", "expert"].includes(tab.id);
-                if (currentDoctorId)
-                  return ["doctor"].includes(tab.id);
-                if (currentExpertId)
-                  return ["expert"].includes(tab.id);
+                if (currentDoctorId) return ["doctor"].includes(tab.id);
+                if (currentExpertId) return ["expert"].includes(tab.id);
 
                 return true;
               })
               .map((tab) => (
                 <button
                   key={tab.id}
-                  className={`px-4 py-2 text-[12px] font-semibold rounded transition flex items-center gap-2 border border-transparent ${activeTab === tab.id
+                  className={`px-4 py-2 text-[12px] font-semibold rounded transition flex items-center gap-2 border border-transparent ${
+                    activeTab === tab.id
                       ? "bg-surface text-primary shadow-sm border-border-base/50"
                       : "text-text-muted hover:text-text-main hover:bg-surface-3/50"
-                    }`}
+                  }`}
                   type="button"
                   onClick={() => setActiveTab(tab.id as any)}
                 >
                   {tab.name}
                   <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === tab.id
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      activeTab === tab.id
                         ? "bg-primary/10 text-primary"
                         : "bg-surface-3 text-text-muted"
-                      }`}
+                    }`}
                   >
                     {tab.count}
                   </span>
@@ -4181,7 +4244,7 @@ export default function FrontOfficeDesk() {
             <div className="py-20 text-center flex flex-col items-center justify-center">
               <IoPeopleOutline className="w-12 h-12 text-text-muted/20 mb-3" />
               <p className="text-[14.5px] font-medium text-text-main">
-                {hasFullFrontOfficeAccess 
+                {hasFullFrontOfficeAccess
                   ? "No patients in this stage"
                   : "Your queue is currently empty"}
               </p>
@@ -4207,9 +4270,9 @@ export default function FrontOfficeDesk() {
               getStageBadge={getStageBadge}
               handleCompleteCheckout={handleCompleteCheckout}
               handleCompleteConsultation={handleCompleteConsultation}
+              handleOpenProcedure={handleOpenProcedure}
               handleSendToDoctor={handleSendToDoctor}
               handleSendToExpert={handleSendToExpert}
-              handleOpenProcedure={handleOpenProcedure}
               loading={loading}
             />
           )}
@@ -4246,9 +4309,9 @@ export default function FrontOfficeDesk() {
               </p>
               <div className="bg-surface-2 border border-border-base p-3 rounded mb-5">
                 {(apptToFinalise as any).recommendedProcedure?.items &&
-                  Array.isArray(
-                    (apptToFinalise as any).recommendedProcedure.items,
-                  ) ? (
+                Array.isArray(
+                  (apptToFinalise as any).recommendedProcedure.items,
+                ) ? (
                   <div className="flex flex-col gap-2">
                     {(apptToFinalise as any).recommendedProcedure.items.map(
                       (item: any) => (

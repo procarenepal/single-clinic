@@ -859,7 +859,9 @@ export default function PrintLayoutPage() {
                           isDisabled={isUploading}
                           size="sm"
                           variant="flat"
-                          onPress={() => document.getElementById("logo-upload")?.click()}
+                          onPress={() =>
+                            document.getElementById("logo-upload")?.click()
+                          }
                         >
                           {isUploading ? "Uploading..." : "Choose Logo"}
                         </Button>
