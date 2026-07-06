@@ -121,11 +121,10 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${
-          isInvalid
-            ? "border-red-300 focus-within:ring-red-100"
-            : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
-        } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
+        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${isInvalid
+          ? "border-red-300 focus-within:ring-red-100"
+          : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
+          } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
       >
         {startContent && (
           <div className="pl-3 pr-1 text-text-main flex items-center justify-center shrink-0">
@@ -752,7 +751,13 @@ export default function PharmacyPage() {
   const [adjustStockModalOpen, setAdjustStockModalOpen] = useState(false);
   const [selectedMedicineForAdjust, setSelectedMedicineForAdjust] =
     useState<Medicine | null>(null);
-  const [adjustForm, setAdjustForm] = useState({
+  const [adjustForm, setAdjustForm] = useState<{
+    type: "add" | "deduct" | "set";
+    regularStock: number;
+    schemeStock: number;
+    reason: string;
+  }>({
+    type: "add",
     regularStock: 0,
     schemeStock: 0,
     reason: "",
@@ -916,7 +921,7 @@ export default function PharmacyPage() {
         userData?.role === "clinic-admin"
           ? supplierPaymentForm.supplierId
             ? suppliers.find((s) => s.id === supplierPaymentForm.supplierId)
-                ?.branchId || ""
+              ?.branchId || ""
             : ""
           : userData?.branchId || "";
 
@@ -998,107 +1003,124 @@ export default function PharmacyPage() {
     if (!selectedMedicineForAdjust || !clinicId) return;
     setIsAdjustingStock(true);
     try {
-      const stockDoc = rawStocks.find(
-        (s) => s.medicineId === selectedMedicineForAdjust.id,
+      const stockDocs = await medicineService.getMedicineStocks(
+        selectedMedicineForAdjust.id,
+        clinicId
+      );
+      const branchStockDocs = stockDocs.filter(
+        (s) => !effectiveBranchId || s.branchId === effectiveBranchId
       );
 
-      if (stockDoc && stockDoc.id) {
-        await medicineService.updateMedicineStock(stockDoc.id, {
-          currentStock: adjustForm.regularStock,
-          schemeStock: adjustForm.schemeStock,
-        });
+      const totalCurrentRegular = branchStockDocs.reduce((sum, d) => sum + (d.currentStock || 0), 0);
+      const totalCurrentScheme = branchStockDocs.reduce((sum, d) => sum + (d.schemeStock || 0), 0);
 
-        const oldTotal =
-          (stockDoc.currentStock || 0) + (stockDoc.schemeStock || 0);
-        const newTotal = adjustForm.regularStock + adjustForm.schemeStock;
-        const diff = newTotal - oldTotal;
+      const inputReg = Math.abs(adjustForm.regularStock || 0);
+      const inputSch = Math.abs(adjustForm.schemeStock || 0);
 
-        if (diff !== 0) {
-          await medicineService.createStockTransaction({
-            medicineId: selectedMedicineForAdjust.id,
-            type: "adjustment",
-            quantity: Math.abs(diff),
-            previousStock: oldTotal,
-            newStock: newTotal,
-            unitPrice: selectedMedicineForAdjust.price || 0,
-            totalAmount:
-              Math.abs(diff) * (selectedMedicineForAdjust.price || 0),
-            referenceId: "MANUAL-ADJUST",
-            reason: adjustForm.reason || "Manual Inventory Reconciliation",
-            clinicId,
-            branchId: effectiveBranchId || "",
-            createdBy: currentUser?.uid || "",
-          });
+      let diffReg = 0;
+      let diffSch = 0;
+
+      if (adjustForm.type === "add") {
+        diffReg = inputReg;
+        diffSch = inputSch;
+      } else if (adjustForm.type === "deduct") {
+        diffReg = -Math.min(inputReg, totalCurrentRegular);
+        diffSch = -Math.min(inputSch, totalCurrentScheme);
+      } else if (adjustForm.type === "set") {
+        diffReg = Math.max(0, adjustForm.regularStock) - totalCurrentRegular;
+        diffSch = Math.max(0, adjustForm.schemeStock) - totalCurrentScheme;
+      }
+
+      const totalDiff = diffReg + diffSch;
+
+      if (totalDiff !== 0) {
+        if (diffReg > 0 || diffSch > 0) {
+           const firstDoc = branchStockDocs[0];
+           if (firstDoc && firstDoc.id) {
+             await medicineService.updateMedicineStock(firstDoc.id, {
+               currentStock: (firstDoc.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
+               schemeStock: (firstDoc.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
+             });
+           } else {
+             await medicineService.createMedicineStock({
+               medicineId: selectedMedicineForAdjust.id,
+               currentStock: diffReg > 0 ? diffReg : 0,
+               schemeStock: diffSch > 0 ? diffSch : 0,
+               minimumStock: 10,
+               reorderLevel: 20,
+               clinicId,
+               branchId: effectiveBranchId || "",
+               updatedBy: currentUser?.uid || "",
+             });
+           }
+        } 
+        
+        if (diffReg < 0 || diffSch < 0) {
+           let remainingRegToDeduct = Math.abs(diffReg < 0 ? diffReg : 0);
+           let remainingSchToDeduct = Math.abs(diffSch < 0 ? diffSch : 0);
+
+           const sortedDocs = [...branchStockDocs].sort((a, b) => {
+             const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+             const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+             return timeA - timeB;
+           });
+
+           for (const doc of sortedDocs) {
+             if (remainingRegToDeduct === 0 && remainingSchToDeduct === 0) break;
+             if (!doc.id) continue;
+
+             const deductReg = Math.min(doc.currentStock || 0, remainingRegToDeduct);
+             const deductSch = Math.min(doc.schemeStock || 0, remainingSchToDeduct);
+
+             if (deductReg > 0 || deductSch > 0) {
+               await medicineService.updateMedicineStock(doc.id, {
+                 currentStock: (doc.currentStock || 0) - deductReg,
+                 schemeStock: (doc.schemeStock || 0) - deductSch,
+               });
+               remainingRegToDeduct -= deductReg;
+               remainingSchToDeduct -= deductSch;
+             }
+           }
         }
 
-        addToast({
-          title: "Stock Adjusted",
-          description: `Successfully adjusted ${selectedMedicineForAdjust.name} stock level.`,
-          color: "success",
-        });
-
-        setAdjustStockModalOpen(false);
-        const sData = await medicineService.getStockByMedicineIds(
-          clinicId,
-          medicines.map((m) => m.id),
-          effectiveBranchId || undefined,
-        );
-        const sMap: Record<string, number> = {};
-
-        sData.forEach((s) => {
-          sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
-        });
-        setMedicineStocks(sMap);
-        setRawStocks(sData);
-      } else {
-        const stockId = await medicineService.createMedicineStock({
-          medicineId: selectedMedicineForAdjust.id,
-          currentStock: adjustForm.regularStock,
-          schemeStock: adjustForm.schemeStock,
-          minimumStock: 10,
-          reorderLevel: 20,
-          clinicId,
-          branchId: effectiveBranchId || "",
-          updatedBy: currentUser?.uid || "",
-        });
-
+        const oldTotal = totalCurrentRegular + totalCurrentScheme;
+        const newTotal = oldTotal + totalDiff;
+        
         await medicineService.createStockTransaction({
           medicineId: selectedMedicineForAdjust.id,
-          type: "adjustment",
-          quantity: adjustForm.regularStock + adjustForm.schemeStock,
-          previousStock: 0,
-          newStock: adjustForm.regularStock + adjustForm.schemeStock,
+          type: totalDiff > 0 ? "adjustment" : "deduction",
+          quantity: totalDiff,
+          previousStock: oldTotal,
+          newStock: newTotal,
           unitPrice: selectedMedicineForAdjust.price || 0,
-          totalAmount:
-            (adjustForm.regularStock + adjustForm.schemeStock) *
-            (selectedMedicineForAdjust.price || 0),
+          totalAmount: Math.abs(totalDiff) * (selectedMedicineForAdjust.price || 0),
           referenceId: "MANUAL-ADJUST",
-          reason: adjustForm.reason || "Initial Inventory Reconciliation",
+          reason: adjustForm.reason || "Manual Inventory Reconciliation",
           clinicId,
           branchId: effectiveBranchId || "",
           createdBy: currentUser?.uid || "",
         });
-
-        addToast({
-          title: "Stock Initialized",
-          description: `Successfully created stock level for ${selectedMedicineForAdjust.name}.`,
+      }
+      
+      addToast({
+          title: "Stock Adjusted",
+          description: `Successfully adjusted ${selectedMedicineForAdjust.name} stock level.`,
           color: "success",
-        });
+      });
 
-        setAdjustStockModalOpen(false);
-        const sData = await medicineService.getStockByMedicineIds(
-          clinicId,
-          medicines.map((m) => m.id),
-          effectiveBranchId || undefined,
-        );
-        const sMap: Record<string, number> = {};
+      setAdjustStockModalOpen(false);
+      const sData = await medicineService.getStockByMedicineIds(
+        clinicId,
+        medicines.map((m) => m.id),
+        effectiveBranchId || undefined,
+      );
+      const sMap: Record<string, number> = {};
 
-        sData.forEach((s) => {
+      sData.forEach((s) => {
           sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
         });
         setMedicineStocks(sMap);
         setRawStocks(sData);
-      }
     } catch (err) {
       console.error(err);
       addToast({
@@ -1217,7 +1239,7 @@ export default function PharmacyPage() {
         if (prescriptionsData) {
           setPrescriptions(
             (prescriptionsData as any[])?.filter((rx) => rx.sendToPharmacy) ||
-              [],
+            [],
           );
         }
         await loadSupplierLedgerBalances(effectiveBranchId);
@@ -3491,7 +3513,7 @@ export default function PharmacyPage() {
       (pm) =>
         pm.id !== editingPaymentMethod.id &&
         pm.name.trim().toLowerCase() ===
-          paymentMethodForm.name.trim().toLowerCase(),
+        paymentMethodForm.name.trim().toLowerCase(),
     );
 
     if (duplicateEdit) {
@@ -3680,23 +3702,16 @@ export default function PharmacyPage() {
               </Button>
             )}
 
-            {activeTab === "items" && (
-              <Button color="primary" onClick={addItemModalState.open}>
-                <IoAddOutline className="w-4 h-4 mr-1" />
-                Add Item
-              </Button>
-            )}
           </div>
         </div>
 
         {/* Daily Sales Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
-              activeFilter === "daily"
-                ? "border-primary shadow-sm ring-1 ring-primary/20"
-                : "border-border-base hover:border-border-strong hover:bg-surface-2"
-            }`}
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "daily"
+              ? "border-primary shadow-sm ring-1 ring-primary/20"
+              : "border-border-base hover:border-border-strong hover:bg-surface-2"
+              }`}
             onClick={() => handleStatCardClick("daily")}
           >
             <IoStorefrontOutline className="text-primary w-6 h-6 mb-2" />
@@ -3707,11 +3722,10 @@ export default function PharmacyPage() {
           </div>
 
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
-              activeFilter === "paid"
-                ? "border-primary shadow-sm ring-1 ring-primary/20"
-                : "border-border-base hover:border-border-strong hover:bg-surface-2"
-            }`}
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "paid"
+              ? "border-primary shadow-sm ring-1 ring-primary/20"
+              : "border-border-base hover:border-border-strong hover:bg-surface-2"
+              }`}
             onClick={() => handleStatCardClick("paid")}
           >
             <IoCheckmarkCircleOutline className="text-primary w-6 h-6 mb-2" />
@@ -3724,11 +3738,10 @@ export default function PharmacyPage() {
           </div>
 
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
-              activeFilter === "unpaid"
-                ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
-                : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
-            }`}
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "unpaid"
+              ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
+              : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
+              }`}
             onClick={() => handleStatCardClick("unpaid")}
           >
             <IoCloseCircleOutline className="text-red-500 w-6 h-6 mb-2" />
@@ -3765,11 +3778,6 @@ export default function PharmacyPage() {
                 id: "inventory",
                 label: "Inventory",
                 icon: <IoMedicalOutline className="w-4 h-4" />,
-              },
-              {
-                id: "items",
-                label: "Items",
-                icon: <IoTimeOutline className="w-4 h-4" />,
               },
               {
                 id: "daily_sales_report",
@@ -3967,10 +3975,10 @@ export default function PharmacyPage() {
                                 "number" && purchase.totalReturnedAmount > 0
                                 ? purchase.totalReturnedAmount
                                 : (purchase.returns ?? []).reduce(
-                                    (sum, r) =>
-                                      sum + Math.abs(r.totalAmount || 0),
-                                    0,
-                                  );
+                                  (sum, r) =>
+                                    sum + Math.abs(r.totalAmount || 0),
+                                  0,
+                                );
                             const netAfterReturns = Math.max(
                               0,
                               (purchase.netAmount || 0) - totalReturnedAmount,
@@ -4120,104 +4128,6 @@ export default function PharmacyPage() {
               </div>
             )}
 
-            {/* Items Tab */}
-            {activeTab === "items" && (
-              <div className="py-6">
-                {items.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-default-400 mb-4">
-                      <IoStorefrontOutline
-                        className="mx-auto opacity-50"
-                        size={48}
-                      />
-                    </div>
-                    <h3 className="text-stat-sm font-medium text-default-700 mb-2">
-                      No items added
-                    </h3>
-                    <p className="text-default-500 mb-4">
-                      Add items to your inventory to include them in purchases.
-                    </p>
-                    <Button
-                      color="primary"
-                      startContent={<IoAddOutline />}
-                      onPress={addItemModalState.open}
-                    >
-                      Add Your First Item
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto border border-border-base rounded">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
-                      <thead>
-                        <tr className="bg-surface-2 border-b border-border-base">
-                          {[
-                            "ITEM NAME",
-                            "DESCRIPTION",
-                            "CATEGORY",
-                            "PURCHASE PRICE",
-                            "SALE PRICE",
-                            "ACTION",
-                          ].map((h) => (
-                            <th
-                              key={h}
-                              className="px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider"
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border-base bg-surface">
-                        {items.map((item) => (
-                          <tr
-                            key={item.id}
-                            className="hover:bg-surface-2 transition-colors"
-                          >
-                            <td className="px-3 py-2.5 text-[12.5px] font-medium text-text-main">
-                              {item.name}
-                            </td>
-                            <td className="px-3 py-2.5 text-[12.5px] text-text-main">
-                              {item.description || "-"}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-medium bg-primary/10 text-primary border border-primary/20">
-                                {item.category}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 text-[12.5px] text-text-main">
-                              {item.purchasePrice
-                                ? `NPR ${item.purchasePrice.toLocaleString()}`
-                                : "-"}
-                            </td>
-                            <td className="px-3 py-2.5 text-[12.5px] font-semibold text-text-main">
-                              {item.salePrice
-                                ? `NPR ${item.salePrice.toLocaleString()}`
-                                : "-"}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
-                                  title="Edit"
-                                >
-                                  <IoCreateOutline />
-                                </button>
-                                <button
-                                  className="p-1.5 text-text-muted hover:text-red-600 hover:bg-red-500/10 rounded"
-                                  title="Delete"
-                                >
-                                  <IoTrashOutline />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Supplier Ledger Tab */}
             {activeTab === "supplier_ledger" && (
@@ -4448,17 +4358,16 @@ export default function PharmacyPage() {
                               Current Balance
                             </p>
                             <p
-                              className={`text-stat-sm font-semibold mt-1 ${
-                                supplierLedgerEntries[
+                              className={`text-stat-sm font-semibold mt-1 ${supplierLedgerEntries[
+                                supplierLedgerEntries.length - 1
+                              ].balanceAmount > 0
+                                ? "text-red-500"
+                                : supplierLedgerEntries[
                                   supplierLedgerEntries.length - 1
-                                ].balanceAmount > 0
-                                  ? "text-red-500"
-                                  : supplierLedgerEntries[
-                                        supplierLedgerEntries.length - 1
-                                      ].balanceAmount < 0
-                                    ? "text-primary"
-                                    : "text-text-main"
-                              }`}
+                                ].balanceAmount < 0
+                                  ? "text-primary"
+                                  : "text-text-main"
+                                }`}
                             >
                               NPR{" "}
                               {Math.round(
@@ -4557,13 +4466,12 @@ export default function PharmacyPage() {
                                     </td>
                                     <td className="px-3 py-2.5 text-[12.5px]">
                                       <span
-                                        className={`font-semibold ${
-                                          entry.balanceAmount > 0
-                                            ? "text-red-500"
-                                            : entry.balanceAmount < 0
-                                              ? "text-primary"
-                                              : "text-text-muted"
-                                        }`}
+                                        className={`font-semibold ${entry.balanceAmount > 0
+                                          ? "text-red-500"
+                                          : entry.balanceAmount < 0
+                                            ? "text-primary"
+                                            : "text-text-muted"
+                                          }`}
                                       >
                                         NPR{" "}
                                         {Math.round(
@@ -4735,8 +4643,8 @@ export default function PharmacyPage() {
                                 {patients.find((p) => p.id === rx.patientId)
                                   ?.name ||
                                   "Patient " +
-                                    (rx.patientId?.substring(0, 5) ||
-                                      "Unknown")}
+                                  (rx.patientId?.substring(0, 5) ||
+                                    "Unknown")}
                               </div>
                             </td>
                             <td className="px-4 py-3.5">
@@ -4761,9 +4669,9 @@ export default function PharmacyPage() {
                             <td className="px-4 py-3.5 text-[12px] text-text-muted">
                               {rx.createdAt
                                 ? format(
-                                    new Date(rx.createdAt),
-                                    "MMM d, yyyy h:mm a",
-                                  )
+                                  new Date(rx.createdAt),
+                                  "MMM d, yyyy h:mm a",
+                                )
                                 : "N/A"}
                             </td>
                             <td className="px-4 py-3.5 text-right">
@@ -5278,39 +5186,36 @@ export default function PharmacyPage() {
                                   </td>
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
-                                      className={`${
-                                        regular === 0
-                                          ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                          : regular <= 10
-                                            ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                            : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                      }`}
+                                      className={`${regular === 0
+                                        ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                        : regular <= 10
+                                          ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                        }`}
                                     >
                                       {regular}
                                     </span>
                                   </td>
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
-                                      className={`${
-                                        scheme === 0
-                                          ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                          : scheme <= 10
-                                            ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                            : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                      }`}
+                                      className={`${scheme === 0
+                                        ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                        : scheme <= 10
+                                          ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                        }`}
                                     >
                                       {scheme}
                                     </span>
                                   </td>
                                   <td className="px-5 py-4 text-center font-bold">
                                     <span
-                                      className={`${
-                                        total === 0
-                                          ? "text-red-600 text-sm"
-                                          : total <= 10
-                                            ? "text-amber-600 text-sm"
-                                            : "text-default-800 text-sm"
-                                      }`}
+                                      className={`${total === 0
+                                        ? "text-red-600 text-sm"
+                                        : total <= 10
+                                          ? "text-amber-600 text-sm"
+                                          : "text-default-800 text-sm"
+                                        }`}
                                     >
                                       {total}
                                     </span>
@@ -5338,10 +5243,9 @@ export default function PharmacyPage() {
                                           );
 
                                           setAdjustForm({
-                                            regularStock:
-                                              stockObj?.currentStock ?? 0,
-                                            schemeStock:
-                                              stockObj?.schemeStock ?? 0,
+                                            type: "add",
+                                            regularStock: 0,
+                                            schemeStock: 0,
                                             reason: "",
                                           });
                                           setSelectedMedicineForAdjust(m);
@@ -5609,47 +5513,47 @@ export default function PharmacyPage() {
 
                       {(!settingsForm.enabledPaymentMethods ||
                         settingsForm.enabledPaymentMethods.length === 0) && (
-                        <div className="text-center py-8">
-                          <div className="text-default-400 mb-4">
-                            <svg
-                              className="mx-auto opacity-50"
-                              fill="none"
-                              height="48"
-                              stroke="currentColor"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              viewBox="0 0 24 24"
-                              width="48"
-                              xmlns="http://www.w3.org/2000/svg"
+                          <div className="text-center py-8">
+                            <div className="text-default-400 mb-4">
+                              <svg
+                                className="mx-auto opacity-50"
+                                fill="none"
+                                height="48"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                viewBox="0 0 24 24"
+                                width="48"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <rect
+                                  height="16"
+                                  rx="2"
+                                  ry="2"
+                                  width="22"
+                                  x="1"
+                                  y="4"
+                                />
+                                <line x1="1" x2="23" y1="10" y2="10" />
+                              </svg>
+                            </div>
+                            <h3 className="text-stat-sm font-medium text-default-700 mb-2">
+                              No payment methods configured
+                            </h3>
+                            <p className="text-default-500 mb-4">
+                              Add payment methods to enable different payment
+                              options for purchases.
+                            </p>
+                            <Button
+                              color="primary"
+                              startContent={<IoAddOutline />}
+                              onPress={addPaymentMethodModalState.open}
                             >
-                              <rect
-                                height="16"
-                                rx="2"
-                                ry="2"
-                                width="22"
-                                x="1"
-                                y="4"
-                              />
-                              <line x1="1" x2="23" y1="10" y2="10" />
-                            </svg>
+                              Add Your First Payment Method
+                            </Button>
                           </div>
-                          <h3 className="text-stat-sm font-medium text-default-700 mb-2">
-                            No payment methods configured
-                          </h3>
-                          <p className="text-default-500 mb-4">
-                            Add payment methods to enable different payment
-                            options for purchases.
-                          </p>
-                          <Button
-                            color="primary"
-                            startContent={<IoAddOutline />}
-                            onPress={addPaymentMethodModalState.open}
-                          >
-                            Add Your First Payment Method
-                          </Button>
-                        </div>
-                      )}
+                        )}
                     </CardBody>
                   </Card>
 
@@ -5870,6 +5774,12 @@ export default function PharmacyPage() {
                         )
                         .reduce((sum, t) => sum + t.quantity, 0);
 
+                      const totalDeducted = stockTransactions
+                        .filter(
+                          (t) => t.type === "deduction" || (t.type === "adjustment" && t.quantity < 0),
+                        )
+                        .reduce((sum, t) => sum + Math.abs(t.quantity), 0);
+
                       const totalReturned = purchases.reduce((sum, p) => {
                         const returnQty = (p.returns || []).reduce(
                           (pSum, r) => {
@@ -5891,10 +5801,10 @@ export default function PharmacyPage() {
                       }, 0);
 
                       const netQuantity =
-                        totalPurchased - totalSold + totalReturned;
+                        totalPurchased - totalSold + totalReturned - totalDeducted;
 
                       return (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                           <Card className="border border-default-200">
                             <CardBody>
                               <div className="mb-4">
@@ -5923,6 +5833,18 @@ export default function PharmacyPage() {
                             <CardBody>
                               <div className="mb-4">
                                 <p className="text-sm text-default-500">
+                                  Total Deducted
+                                </p>
+                                <p className="text-stat-sm font-semibold text-danger mt-1">
+                                  {totalDeducted}
+                                </p>
+                              </div>
+                            </CardBody>
+                          </Card>
+                          <Card className="border border-default-200">
+                            <CardBody>
+                              <div className="mb-4">
+                                <p className="text-sm text-default-500">
                                   Total Purchased
                                 </p>
                                 <p className="text-stat-sm font-semibold text-success mt-1">
@@ -5938,13 +5860,12 @@ export default function PharmacyPage() {
                                   Net Quantity
                                 </p>
                                 <p
-                                  className={`text-stat-sm font-semibold mt-1 ${
-                                    netQuantity > 0
-                                      ? "text-success"
-                                      : netQuantity < 0
-                                        ? "text-danger"
-                                        : "text-default-600"
-                                  }`}
+                                  className={`text-stat-sm font-semibold mt-1 ${netQuantity > 0
+                                    ? "text-success"
+                                    : netQuantity < 0
+                                      ? "text-danger"
+                                      : "text-default-600"
+                                    }`}
                                 >
                                   {netQuantity}
                                 </p>
@@ -5995,16 +5916,16 @@ export default function PharmacyPage() {
                                   <TableCell>
                                     <div className="text-sm">
                                       {transaction.date instanceof Date &&
-                                      !isNaN(transaction.date.getTime())
+                                        !isNaN(transaction.date.getTime())
                                         ? format(
-                                            transaction.date,
-                                            "MMM dd, yyyy",
-                                          )
+                                          transaction.date,
+                                          "MMM dd, yyyy",
+                                        )
                                         : "N/A"}
                                     </div>
                                     <div className="text-xs text-default-500">
                                       {transaction.date instanceof Date &&
-                                      !isNaN(transaction.date.getTime())
+                                        !isNaN(transaction.date.getTime())
                                         ? format(transaction.date, "hh:mm a")
                                         : "N/A"}
                                     </div>
@@ -6035,11 +5956,10 @@ export default function PharmacyPage() {
                                   <TableCell>{transaction.party}</TableCell>
                                   <TableCell>
                                     <span
-                                      className={`font-medium ${
-                                        transaction.quantity < 0
-                                          ? "text-danger"
-                                          : "text-success"
-                                      }`}
+                                      className={`font-medium ${transaction.quantity < 0
+                                        ? "text-danger"
+                                        : "text-success"
+                                        }`}
                                     >
                                       {transaction.quantity > 0 ? "+" : ""}
                                       {transaction.quantity}
@@ -6076,15 +5996,15 @@ export default function PharmacyPage() {
                                         )}
                                         {transaction.expiryDate <
                                           new Date() && (
-                                          <Chip
-                                            className="ml-1"
-                                            color="danger"
-                                            size="sm"
-                                            variant="flat"
-                                          >
-                                            Expired
-                                          </Chip>
-                                        )}
+                                            <Chip
+                                              className="ml-1"
+                                              color="danger"
+                                              size="sm"
+                                              variant="flat"
+                                            >
+                                              Expired
+                                            </Chip>
+                                          )}
                                       </div>
                                     ) : (
                                       <span className="text-default-400">
@@ -6460,12 +6380,12 @@ export default function PharmacyPage() {
                                             purchase.paymentStatus === "paid"
                                               ? "success"
                                               : purchase.paymentStatus ===
-                                                    "unpaid" ||
-                                                  purchase.paymentStatus ===
-                                                    "pending"
+                                                "unpaid" ||
+                                                purchase.paymentStatus ===
+                                                "pending"
                                                 ? "danger"
                                                 : purchase.paymentStatus ===
-                                                    "partial"
+                                                  "partial"
                                                   ? "warning"
                                                   : "default"
                                           }
@@ -6680,7 +6600,7 @@ export default function PharmacyPage() {
 
                       {/* Daily Purchases Report Table */}
                       {refillTransactions.length === 0 &&
-                      !isLoadingRefillTransactions ? (
+                        !isLoadingRefillTransactions ? (
                         <Card>
                           <CardBody>
                             <div className="text-center py-12">
@@ -7101,18 +7021,18 @@ export default function PharmacyPage() {
                                 items={
                                   item.type === "medicine"
                                     ? medicines.map((m) => {
-                                        const stock = medicineStocks[m.id] || 0;
-                                        const isOutOfStock = stock <= 0;
+                                      const stock = medicineStocks[m.id] || 0;
+                                      const isOutOfStock = stock <= 0;
 
-                                        return {
-                                          id: m.id,
-                                          primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}${isOutOfStock ? " (Out of Stock)" : ""}`,
-                                        };
-                                      })
+                                      return {
+                                        id: m.id,
+                                        primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}${isOutOfStock ? " (Out of Stock)" : ""}`,
+                                      };
+                                    })
                                     : items.map((i) => ({
-                                        id: i.id,
-                                        primary: i.name,
-                                      }))
+                                      id: i.id,
+                                      primary: i.name,
+                                    }))
                                 }
                                 label={`${item.type === "medicine" ? "Medicine" : "Item"}`}
                                 placeholder={`Search ${item.type}…`}
@@ -7952,13 +7872,12 @@ export default function PharmacyPage() {
                             </TableCell>
                             <TableCell>
                               <span
-                                className={`font-semibold ${
-                                  entry.balanceAmount > 0
-                                    ? "text-danger"
-                                    : entry.balanceAmount < 0
-                                      ? "text-success"
-                                      : "text-default-600"
-                                }`}
+                                className={`font-semibold ${entry.balanceAmount > 0
+                                  ? "text-danger"
+                                  : entry.balanceAmount < 0
+                                    ? "text-success"
+                                    : "text-default-600"
+                                  }`}
                               >
                                 NPR{" "}
                                 {Math.round(
@@ -8642,10 +8561,36 @@ export default function PharmacyPage() {
                   {selectedMedicineForAdjust.genericName}
                 </p>
               )}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Adjustment Type</label>
+                <select
+                  className="w-full p-2 border border-default-200 rounded-md bg-default-100"
+                  value={adjustForm.type}
+                  onChange={(e) => {
+                    const val = e.target.value as "add" | "deduct" | "set";
+                    if (val === "set") {
+                      const stockObj = rawStocks.find((s) => s.medicineId === selectedMedicineForAdjust?.id);
+                      setAdjustForm(prev => ({
+                        ...prev,
+                        type: val,
+                        regularStock: stockObj?.currentStock || 0,
+                        schemeStock: stockObj?.schemeStock || 0,
+                      }));
+                    } else {
+                      setAdjustForm(prev => ({ ...prev, type: val }));
+                    }
+                  }}
+                >
+                  <option value="add">Add</option>
+                  <option value="deduct">Deduct</option>
+                  <option value="set">Set Exact Value</option>
+                </select>
+              </div>
+
 
               <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="Regular Stock Pool *"
+                  label={adjustForm.type === "set" ? "New Regular Stock *" : "Quantity (Regular) *"}
                   type="number"
                   value={adjustForm.regularStock.toString()}
                   variant="bordered"
@@ -8657,7 +8602,7 @@ export default function PharmacyPage() {
                   }
                 />
                 <Input
-                  label="Scheme Stock Pool *"
+                  label={adjustForm.type === "set" ? "New Scheme Stock *" : "Quantity (Scheme) *"}
                   type="number"
                   value={adjustForm.schemeStock.toString()}
                   variant="bordered"

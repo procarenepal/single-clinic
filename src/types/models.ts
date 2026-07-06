@@ -633,7 +633,7 @@ export interface MedicineStock {
 export interface StockTransaction {
   id: string;
   medicineId: string;
-  type: "purchase" | "sale" | "adjustment" | "expired" | "damaged" | "returned";
+  type: "purchase" | "sale" | "adjustment" | "deduction" | "expired" | "damaged" | "returned";
   quantity: number;
   previousStock: number;
   newStock: number;
