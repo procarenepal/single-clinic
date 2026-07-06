@@ -52,16 +52,11 @@ export const leaveRequestService = {
   // ─── Leave Requests ────────────────────────────────────────────────────────
 
   async createLeaveRequest(
-    req: Omit<
-      LeaveRequest,
-      "id" | "createdAt" | "updatedAt" | "status" | "isPaid"
-    >,
+    req: Omit<LeaveRequest, "id" | "createdAt" | "updatedAt" | "status">,
   ): Promise<string> {
-    const isPaid = PAID_LEAVE_TYPES.has(req.leaveType);
     const docRef = await addDoc(collection(db, LEAVES_COLLECTION), {
       ...req,
       status: "pending",
-      isPaid,
       startDate: Timestamp.fromDate(new Date(req.startDate)),
       endDate: Timestamp.fromDate(new Date(req.endDate)),
       createdAt: serverTimestamp(),
@@ -163,19 +158,36 @@ export const leaveRequestService = {
 
     if (!balanceSnap.empty) {
       const balanceRef = doc(db, BALANCES_COLLECTION, balanceSnap.docs[0].id);
-      const fieldMap: Record<string, string> = {
-        annual: "annualUsed",
-        sick: "sickUsed",
-        casual: "casualUsed",
-        unpaid: "unpaidUsed",
-        maternity: "annualUsed",
-        emergency: "casualUsed",
-      };
-      const field = fieldMap[leave.leaveType] || "unpaidUsed";
-      const current = balanceSnap.docs[0].data()[field] || 0;
+      const balanceData = balanceSnap.docs[0].data();
+      const assignments = balanceData.assignments || [];
+      let unpaidUsed = balanceData.unpaidUsed || 0;
+
+      if (!leave.isPaid) {
+        // If it's an explicitly unpaid leave type, it all goes to unpaid
+        unpaidUsed += leave.totalDays;
+      } else {
+        // If it's a paid leave type, find the assignment
+        const assignmentIdx = assignments.findIndex((a: any) => a.leaveTypeId === leave.leaveType);
+        if (assignmentIdx >= 0) {
+          const assignment = assignments[assignmentIdx];
+          const newUsedDays = assignment.usedDays + leave.totalDays;
+
+          // Check for overflow
+          if (newUsedDays > assignment.assignedDays) {
+            const overflow = newUsedDays - Math.max(assignment.usedDays, assignment.assignedDays);
+            if (overflow > 0) unpaidUsed += overflow;
+          }
+
+          assignments[assignmentIdx].usedDays = newUsedDays;
+        } else {
+          // If no assignment exists for this staff member, all days count as unpaid overflow
+          unpaidUsed += leave.totalDays;
+        }
+      }
 
       batch.update(balanceRef, {
-        [field]: current + leave.totalDays,
+        assignments,
+        unpaidUsed,
         updatedAt: serverTimestamp(),
       });
     }
@@ -235,12 +247,7 @@ export const leaveRequestService = {
       staffName,
       clinicId,
       year,
-      annualAllotted: 18,
-      sickAllotted: 12,
-      casualAllotted: 6,
-      annualUsed: 0,
-      sickUsed: 0,
-      casualUsed: 0,
+      assignments: [],
       unpaidUsed: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

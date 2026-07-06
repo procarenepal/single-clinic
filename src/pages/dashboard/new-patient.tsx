@@ -2354,7 +2354,7 @@ const NewPatientPage: React.FC = () => {
                                       <option value="">
                                         -- Choose Doctor --
                                       </option>
-                                      {doctors.map((d) => (
+                                      {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
                                         <option key={d.id} value={d.id}>
                                           Dr. {d.name}
                                         </option>
@@ -2366,7 +2366,7 @@ const NewPatientPage: React.FC = () => {
                                       <option value="">
                                         -- Choose Expert --
                                       </option>
-                                      {experts.map((exp) => (
+                                      {experts.filter((_e: any) => _e.isActive !== false).map((exp) => (
                                         <option key={exp.id} value={exp.id}>
                                           {exp.name}
                                         </option>
@@ -2445,14 +2445,14 @@ const NewPatientPage: React.FC = () => {
                                     -- Optional Referring Person --
                                   </option>
                                   <optgroup label="Internal Doctors">
-                                    {doctors.map((d) => (
+                                    {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
                                       <option key={d.id} value={d.id}>
                                         Dr. {d.name} ({d.speciality || "GP"})
                                       </option>
                                     ))}
                                   </optgroup>
                                   <optgroup label="External Experts">
-                                    {experts.map((exp) => (
+                                    {experts.filter((_e: any) => _e.isActive !== false).map((exp) => (
                                       <option key={exp.id} value={exp.id}>
                                         {exp.name} ({exp.expertType || "Expert"}
                                         )

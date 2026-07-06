@@ -891,7 +891,7 @@ export default function AppointmentsPage() {
               }}
             >
               <option value="all">All Doctors</option>
-              {doctors.map((d) => (
+              {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>

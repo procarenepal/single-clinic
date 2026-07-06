@@ -651,7 +651,7 @@ const SendSMSTab: React.FC = () => {
               onChange={(e) => handleAssociatedDoctorChange(e.target.value)}
             >
               <option value="">No doctor mentioned</option>
-              {doctors.map((d) => (
+              {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>

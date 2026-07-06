@@ -60,6 +60,7 @@ export default function FollowupModal({
     patientMobile: "",
     visitDate: "",
     session: "",
+    category: "general" as "general" | "appointment" | "pharmacy" | "pathology",
     initStatus: "good",
     updatedStatus: "",
     firstDate: "",
@@ -93,6 +94,7 @@ export default function FollowupModal({
           patientId: followup.patientId || "",
           patientName: followup.patientName || "",
           patientMobile: followup.patientMobile || "",
+          category: followup.category || "general",
           visitDate: followup.visitDate
             ? new Date(followup.visitDate).toISOString().split("T")[0]
             : "",
@@ -142,6 +144,7 @@ export default function FollowupModal({
           patientId: "",
           patientName: "",
           patientMobile: "",
+          category: "general",
           visitDate: new Date().toISOString().split("T")[0],
           session: "1st",
           initStatus: "good",
@@ -281,6 +284,7 @@ export default function FollowupModal({
           followup?.patientId || formData.patientId || `walkin_${Date.now()}`,
         patientName: formData.patientName,
         patientMobile: formData.patientMobile,
+        category: formData.category,
         visitDate: parseDate(formData.visitDate),
         session: formData.session,
         initStatus: formData.initStatus as FollowupInitStatus,
@@ -591,8 +595,25 @@ export default function FollowupModal({
                       }
                     />
                   </div>
-                  <div className="flex gap-4">
+                    <div className="flex gap-4">
                     <div className="flex-1">
+                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                        Category
+                      </label>
+                      <Select
+                        selectedKeys={[formData.category]}
+                        size="sm"
+                        onChange={(e) =>
+                          handleChange("category", e.target.value)
+                        }
+                      >
+                        <SelectItem key="general">General</SelectItem>
+                        <SelectItem key="appointment">Appointment</SelectItem>
+                        <SelectItem key="pharmacy">Pharmacy</SelectItem>
+                        <SelectItem key="pathology">Pathology</SelectItem>
+                      </Select>
+                    </div>
+                    <div className="w-1/3">
                       <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
                         Visit Date
                       </label>

@@ -45,6 +45,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Chip } from "@/components/ui/chip";
 import { title } from "@/components/primitives";
 const Divider = () => <hr className="border-border-base my-2" />;
@@ -627,6 +628,8 @@ export default function PharmacyPage() {
   const [selectedMedicineForStockBook, setSelectedMedicineForStockBook] =
     useState<Medicine | null>(null);
   const [stockBookSearchQuery, setStockBookSearchQuery] = useState<string>("");
+  const [stockBookPage, setStockBookPage] = useState(1);
+  const [stockBookRowsPerPage] = useState(10);
   const [stockTransactions, setStockTransactions] = useState<
     StockTransaction[]
   >([]);
@@ -1035,57 +1038,57 @@ export default function PharmacyPage() {
 
       if (totalDiff !== 0) {
         if (diffReg > 0 || diffSch > 0) {
-           const firstDoc = branchStockDocs[0];
-           if (firstDoc && firstDoc.id) {
-             await medicineService.updateMedicineStock(firstDoc.id, {
-               currentStock: (firstDoc.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
-               schemeStock: (firstDoc.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
-             });
-           } else {
-             await medicineService.createMedicineStock({
-               medicineId: selectedMedicineForAdjust.id,
-               currentStock: diffReg > 0 ? diffReg : 0,
-               schemeStock: diffSch > 0 ? diffSch : 0,
-               minimumStock: 10,
-               reorderLevel: 20,
-               clinicId,
-               branchId: effectiveBranchId || "",
-               updatedBy: currentUser?.uid || "",
-             });
-           }
-        } 
-        
+          const firstDoc = branchStockDocs[0];
+          if (firstDoc && firstDoc.id) {
+            await medicineService.updateMedicineStock(firstDoc.id, {
+              currentStock: (firstDoc.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
+              schemeStock: (firstDoc.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
+            });
+          } else {
+            await medicineService.createMedicineStock({
+              medicineId: selectedMedicineForAdjust.id,
+              currentStock: diffReg > 0 ? diffReg : 0,
+              schemeStock: diffSch > 0 ? diffSch : 0,
+              minimumStock: 10,
+              reorderLevel: 20,
+              clinicId,
+              branchId: effectiveBranchId || "",
+              updatedBy: currentUser?.uid || "",
+            });
+          }
+        }
+
         if (diffReg < 0 || diffSch < 0) {
-           let remainingRegToDeduct = Math.abs(diffReg < 0 ? diffReg : 0);
-           let remainingSchToDeduct = Math.abs(diffSch < 0 ? diffSch : 0);
+          let remainingRegToDeduct = Math.abs(diffReg < 0 ? diffReg : 0);
+          let remainingSchToDeduct = Math.abs(diffSch < 0 ? diffSch : 0);
 
-           const sortedDocs = [...branchStockDocs].sort((a, b) => {
-             const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-             const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-             return timeA - timeB;
-           });
+          const sortedDocs = [...branchStockDocs].sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeA - timeB;
+          });
 
-           for (const doc of sortedDocs) {
-             if (remainingRegToDeduct === 0 && remainingSchToDeduct === 0) break;
-             if (!doc.id) continue;
+          for (const doc of sortedDocs) {
+            if (remainingRegToDeduct === 0 && remainingSchToDeduct === 0) break;
+            if (!doc.id) continue;
 
-             const deductReg = Math.min(doc.currentStock || 0, remainingRegToDeduct);
-             const deductSch = Math.min(doc.schemeStock || 0, remainingSchToDeduct);
+            const deductReg = Math.min(doc.currentStock || 0, remainingRegToDeduct);
+            const deductSch = Math.min(doc.schemeStock || 0, remainingSchToDeduct);
 
-             if (deductReg > 0 || deductSch > 0) {
-               await medicineService.updateMedicineStock(doc.id, {
-                 currentStock: (doc.currentStock || 0) - deductReg,
-                 schemeStock: (doc.schemeStock || 0) - deductSch,
-               });
-               remainingRegToDeduct -= deductReg;
-               remainingSchToDeduct -= deductSch;
-             }
-           }
+            if (deductReg > 0 || deductSch > 0) {
+              await medicineService.updateMedicineStock(doc.id, {
+                currentStock: (doc.currentStock || 0) - deductReg,
+                schemeStock: (doc.schemeStock || 0) - deductSch,
+              });
+              remainingRegToDeduct -= deductReg;
+              remainingSchToDeduct -= deductSch;
+            }
+          }
         }
 
         const oldTotal = totalCurrentRegular + totalCurrentScheme;
         const newTotal = oldTotal + totalDiff;
-        
+
         await medicineService.createStockTransaction({
           medicineId: selectedMedicineForAdjust.id,
           type: totalDiff > 0 ? "adjustment" : "deduction",
@@ -1101,11 +1104,11 @@ export default function PharmacyPage() {
           createdBy: currentUser?.uid || "",
         });
       }
-      
+
       addToast({
-          title: "Stock Adjusted",
-          description: `Successfully adjusted ${selectedMedicineForAdjust.name} stock level.`,
-          color: "success",
+        title: "Stock Adjusted",
+        description: `Successfully adjusted ${selectedMedicineForAdjust.name} stock level.`,
+        color: "success",
       });
 
       setAdjustStockModalOpen(false);
@@ -1117,10 +1120,10 @@ export default function PharmacyPage() {
       const sMap: Record<string, number> = {};
 
       sData.forEach((s) => {
-          sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
-        });
-        setMedicineStocks(sMap);
-        setRawStocks(sData);
+        sMap[s.medicineId] = (s.currentStock || 0) + (s.schemeStock || 0);
+      });
+      setMedicineStocks(sMap);
+      setRawStocks(sData);
     } catch (err) {
       console.error(err);
       addToast({
@@ -1485,6 +1488,10 @@ export default function PharmacyPage() {
     setPurchasesPage(1);
   }, [searchQuery, activeFilter]);
 
+  useEffect(() => {
+    setStockBookPage(1);
+  }, [stockBookSearchQuery]);
+
   // Filter medicines for Stock Book tab
   const getFilteredMedicines = () => {
     if (!stockBookSearchQuery.trim()) {
@@ -1498,6 +1505,13 @@ export default function PharmacyPage() {
         medicine.genericName?.toLowerCase().includes(query),
     );
   };
+
+  const filteredMedicines = getFilteredMedicines();
+  const stockBookTotalPages = Math.ceil(filteredMedicines.length / stockBookRowsPerPage) || 1;
+  const paginatedMedicines = filteredMedicines.slice(
+    (stockBookPage - 1) * stockBookRowsPerPage,
+    stockBookPage * stockBookRowsPerPage
+  );
 
   // Filter purchases for Daily Report tab
   const getDailyReportPurchases = () => {
@@ -1825,7 +1839,6 @@ export default function PharmacyPage() {
     );
   };
 
-  const filteredMedicines = getFilteredMedicines();
   const selectedMedicinePurchaseDetails = selectedMedicineForStockBook
     ? getPurchaseDetailsForMedicine(selectedMedicineForStockBook.id)
     : [];
@@ -5682,54 +5695,65 @@ export default function PharmacyPage() {
                             </p>
                           </div>
                         ) : (
-                          <Table aria-label="Medicines list">
-                            <TableHeader>
-                              <TableRow>
-                                <TableColumn>MEDICINE NAME</TableColumn>
-                                <TableColumn>GENERIC NAME</TableColumn>
-                                <TableColumn>PRICE</TableColumn>
-                                <TableColumn>ACTIONS</TableColumn>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredMedicines.map((medicine) => (
-                                <TableRow key={medicine.id}>
-                                  <TableCell>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">
-                                        {medicine.name}
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-sm text-default-500">
-                                      {medicine.genericName || "N/A"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-sm">
-                                      NPR{" "}
-                                      {medicine.price?.toLocaleString() || "0"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button
-                                      color="primary"
-                                      size="sm"
-                                      variant="flat"
-                                      onPress={() =>
-                                        setSelectedMedicineForStockBook(
-                                          medicine,
-                                        )
-                                      }
-                                    >
-                                      View Transactions
-                                    </Button>
-                                  </TableCell>
+                          <>
+                            <Table aria-label="Medicines list">
+                              <TableHeader>
+                                <TableRow>
+                                  <TableColumn>MEDICINE NAME</TableColumn>
+                                  <TableColumn>GENERIC NAME</TableColumn>
+                                  <TableColumn>PRICE</TableColumn>
+                                  <TableColumn>ACTIONS</TableColumn>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {paginatedMedicines.map((medicine) => (
+                                  <TableRow key={medicine.id}>
+                                    <TableCell>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">
+                                          {medicine.name}
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-sm text-default-500">
+                                        {medicine.genericName || "N/A"}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-sm">
+                                        NPR{" "}
+                                        {medicine.price?.toLocaleString() || "0"}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        color="primary"
+                                        size="sm"
+                                        variant="flat"
+                                        onPress={() =>
+                                          setSelectedMedicineForStockBook(
+                                            medicine,
+                                          )
+                                        }
+                                      >
+                                        View Transactions
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                            {stockBookTotalPages > 1 && (
+                              <div className="flex w-full justify-center p-4">
+                                <Pagination
+                                  page={stockBookPage}
+                                  total={stockBookTotalPages}
+                                  onChange={(page) => setStockBookPage(page)}
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
                       </CardBody>
                     </Card>

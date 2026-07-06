@@ -430,7 +430,7 @@ const BulkMessagingTab: React.FC = () => {
                     onChange={(e) => setSelectedDoctorId(e.target.value)}
                   >
                     <option value="all">Any Doctor</option>
-                    {doctors.map((d) => (
+                    {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name}
                       </option>

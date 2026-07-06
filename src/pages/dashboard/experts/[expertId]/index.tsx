@@ -28,6 +28,7 @@ import { expertService } from "@/services/expertService";
 import { expertCommissionService } from "@/services/expertCommissionService";
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { Expert, ExpertCommission, Appointment, Patient } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
@@ -194,7 +195,41 @@ export default function ExpertProfilePage() {
     if (!expertId || !clinicId) return;
     try {
       setAppointmentsLoading(true);
-      const data = await appointmentService.getAppointmentsByExpert(expertId);
+      let data = (await appointmentService.getAppointmentsByExpert(expertId)) || [];
+
+      if (clinicId) {
+        try {
+          const billingData = await appointmentBillingService.getBillingByClinic(clinicId);
+          const expertBilling = billingData.filter(b => 
+            b.doctorId === expertId || 
+            (b.items && b.items.some(i => i.doctorId === expertId))
+          );
+          
+          const billingAsAppts: Appointment[] = expertBilling.map(b => ({
+            id: `billing-${b.id}`,
+            patientId: b.patientId,
+            doctorId: b.doctorId || 'unassigned', // Expert is not technically a doctor here, but maybe in items
+            assignedExpertId: expertId,
+            clinicId: b.clinicId,
+            appointmentDate: b.invoiceDate || b.createdAt,
+            startTime: '',
+            endTime: '',
+            status: b.paymentStatus === 'paid' ? 'completed' : 'scheduled',
+            appointmentTypeId: 'billing-direct',
+            appointmentType: 'Direct Billing',
+            notes: 'Generated from direct billing',
+            createdAt: b.createdAt,
+            updatedAt: b.updatedAt
+          } as unknown as Appointment));
+          
+          const existingBillingIds = new Set(data.map(a => a.billingId).filter(Boolean));
+          const newBillingAppts = billingAsAppts.filter(ba => !existingBillingIds.has(ba.id.replace('billing-', '')));
+          
+          data = [...data, ...newBillingAppts];
+        } catch (err) {
+          console.error("Failed to merge billing into expert appointments:", err);
+        }
+      }
 
       setAppointments(data);
 
@@ -214,9 +249,42 @@ export default function ExpertProfilePage() {
     if (!expertId) return;
     try {
       setPatientsLoading(true);
-      const data = await patientService.getPatientsByExpert(expertId);
+      let patientsData: Patient[] = [];
+      const directPatients = await patientService.getPatientsByExpert(expertId);
+      if (directPatients) patientsData.push(...directPatients);
 
-      setPatients(data || []);
+      let appointmentsData = (await appointmentService.getAppointmentsByExpert(expertId)) || [];
+      
+      if (clinicId) {
+        try {
+          const billingData = await appointmentBillingService.getBillingByClinic(clinicId);
+          const expertBilling = billingData.filter(b => 
+            b.doctorId === expertId || 
+            (b.items && b.items.some(i => i.doctorId === expertId))
+          );
+          appointmentsData = [
+            ...appointmentsData,
+            ...expertBilling.map(b => ({ patientId: b.patientId } as unknown as Appointment))
+          ];
+        } catch (err) {}
+      }
+
+      if (appointmentsData && appointmentsData.length > 0) {
+        const patientIds = [...new Set(appointmentsData.map(apt => apt.patientId))];
+        const missingIds = patientIds.filter(pid => !patientsData.some(p => p.id === pid));
+        
+        if (missingIds.length > 0) {
+          const patientPromises = missingIds.map(pid => patientService.getPatientById(pid));
+          const patientResults = await Promise.allSettled(patientPromises);
+          
+          const extraPatients = patientResults
+            .filter((r) => r.status === "fulfilled" && r.value !== null)
+            .map((r) => (r as PromiseFulfilledResult<Patient>).value);
+            
+          patientsData = [...patientsData, ...extraPatients];
+        }
+      }
+      setPatients(patientsData);
     } finally {
       setPatientsLoading(false);
     }

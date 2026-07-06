@@ -280,19 +280,22 @@ export const appointmentService = {
   async getAppointmentsByExpert(expertId: string): Promise<Appointment[]> {
     try {
       const appointmentsCollection = collection(db, "appointments");
-      const q = query(
+      const q1 = query(
         appointmentsCollection,
         where("assignedExpertId", "==", expertId),
       );
+      const q2 = query(
+        appointmentsCollection,
+        where("doctorId", "==", expertId),
+      );
 
-      const querySnapshot = await getDocs(q);
-      const appointments: Appointment[] = [];
+      const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+      const map = new Map<string, Appointment>();
 
-      querySnapshot.forEach((doc) => {
-        appointments.push(mapAppointmentDoc(doc));
-      });
+      snap1.forEach((doc) => map.set(doc.id, mapAppointmentDoc(doc)));
+      snap2.forEach((doc) => map.set(doc.id, mapAppointmentDoc(doc)));
 
-      return appointments.sort(
+      return Array.from(map.values()).sort(
         (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
       );
     } catch (error) {

@@ -885,7 +885,7 @@ export default function EditInvoicePage() {
                     <div className="flex-1 min-w-[160px]">
                       <SearchSelect
                         hideLabelDesktop={true}
-                        items={doctors.map((d) => ({
+                        items={doctors.filter((_d: any) => _d.isActive !== false).map((d) => ({
                           id: d.id,
                           primary: d.name,
                           secondary: d.speciality || d.doctorType,

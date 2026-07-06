@@ -93,11 +93,23 @@ export const doctorService = {
   async updateDoctor(id: string, updateData: Partial<Doctor>): Promise<void> {
     try {
       const docRef = doc(db, DOCTORS_COLLECTION, id);
+      
+      let clinicId = updateData.clinicId;
+      if (!clinicId) {
+        const doctorSnap = await getDoc(docRef);
+        if (doctorSnap.exists()) {
+          clinicId = doctorSnap.data().clinicId;
+        }
+      }
 
       await updateDoc(docRef, {
         ...updateData,
         updatedAt: serverTimestamp(),
       });
+      
+      if (clinicId) {
+        cacheService.invalidateClinicDoctors(clinicId);
+      }
     } catch (error) {
       console.error("Error updating doctor:", error);
       throw error;

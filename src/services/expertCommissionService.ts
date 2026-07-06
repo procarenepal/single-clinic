@@ -17,6 +17,108 @@ import { ExpertCommission, AppointmentBilling } from "@/types/models";
 class ExpertCommissionService {
   private collectionName = "expertCommissions";
 
+  // Create commission records for multiple items across multiple experts in an invoice
+  async createCommissionsFromBilling(
+    billing: AppointmentBilling,
+    defaultExpertCommissionPercent: number,
+    createdBy: string,
+  ): Promise<string[]> {
+    try {
+      // Group items by expertId
+      const expertGroups: Record<
+        string,
+        { expertName: string; items: typeof billing.items }
+      > = {};
+
+      billing.items.forEach((item) => {
+        const eId = item.doctorId || billing.doctorId;
+        const eName = item.doctorName || billing.doctorName;
+
+        if (!expertGroups[eId]) {
+          expertGroups[eId] = { expertName: eName, items: [] };
+        }
+        expertGroups[eId].items.push(item);
+      });
+
+      const promises = Object.entries(expertGroups).map(
+        async ([eId, group]) => {
+          // Calculate total commission amount for this expert's items
+          const groupCommissionAmount = group.items.reduce((total, item) => {
+            const percentage =
+              typeof item.commission === "number"
+                ? item.commission
+                : defaultExpertCommissionPercent;
+
+            if (!percentage || percentage <= 0) {
+              return total;
+            }
+
+            const itemCommissionAmount = (item.amount * percentage) / 100;
+
+            return total + itemCommissionAmount;
+          }, 0);
+
+          if (groupCommissionAmount <= 0) return null;
+
+          const groupSubtotal = group.items.reduce(
+            (sum, item) => sum + item.amount,
+            0,
+          );
+          const effectivePercentage =
+            groupSubtotal > 0
+              ? (groupCommissionAmount / groupSubtotal) * 100
+              : defaultExpertCommissionPercent;
+
+          const commissionData: Omit<ExpertCommission, "id"> = {
+            expertId: eId,
+            expertName: group.expertName,
+            clinicId: billing.clinicId,
+            branchId: billing.branchId || "",
+            billingId: billing.id,
+            billingType: "appointment",
+            invoiceNumber: billing.invoiceNumber || "",
+            date: billing.invoiceDate,
+            patientId: billing.patientId || "",
+            patientName: billing.patientName || "Unknown",
+            serviceNames: group.items.map((item) => item.appointmentTypeName),
+            totalInvoiceAmount: billing.totalAmount, // Total for the whole invoice
+            commissionPercentage: effectivePercentage,
+            commissionAmount: groupCommissionAmount,
+            status: "pending",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            createdBy,
+          };
+
+          const docRef = await addDoc(collection(db, this.collectionName), {
+            ...commissionData,
+            createdAt: Timestamp.fromDate(commissionData.createdAt),
+            updatedAt: Timestamp.fromDate(commissionData.updatedAt),
+            date: Timestamp.fromDate(commissionData.date),
+          });
+
+          // Update expert's balance and lifetime earnings
+          const expertRef = doc(db, "experts", eId);
+
+          await updateDoc(expertRef, {
+            totalCommissionEarned: increment(groupCommissionAmount),
+            totalCommissionBalance: increment(groupCommissionAmount),
+            updatedAt: Timestamp.now(),
+          });
+
+          return docRef.id;
+        },
+      );
+
+      const results = await Promise.all(promises);
+
+      return results.filter((r): r is string => r !== null);
+    } catch (error) {
+      console.error("Error creating expert commissions from billing:", error);
+      throw error;
+    }
+  }
+
   // Create commission records when invoice is created
   async createCommission(
     expertId: string,
@@ -143,7 +245,7 @@ class ExpertCommissionService {
         updatedAt: Timestamp.fromDate(new Date()),
         status:
           (currentCommission.paidAmount || 0) + paidAmount >=
-          currentCommission.commissionAmount
+            currentCommission.commissionAmount
             ? "paid"
             : "pending",
       };

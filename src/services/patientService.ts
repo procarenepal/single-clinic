@@ -466,35 +466,44 @@ export const patientService = {
   ): Promise<Patient[]> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
-      const q = query(patientsRef, where("assignedExpertId", "==", expertId));
-      const querySnapshot = await getDocs(q);
+      const q1 = query(patientsRef, where("assignedExpertId", "==", expertId));
+      const q2 = query(patientsRef, where("doctorId", "==", expertId));
 
-      const patients: Patient[] = [];
+      const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
 
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const createdAt = data.createdAt
-          ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
-        const updatedAt = data.updatedAt
-          ? new Date(data.updatedAt.seconds * 1000)
-          : new Date();
-        const dob = data.dob ? new Date(data.dob.seconds * 1000) : undefined;
-        const bsDate = data.bsDate
-          ? new Date(data.bsDate.seconds * 1000)
-          : undefined;
+      const map = new Map<string, Patient>();
 
-        patients.push({
-          id: docSnap.id,
-          ...data,
-          createdAt,
-          updatedAt,
-          dob,
-          bsDate,
-        } as Patient);
-      });
+      const processSnap = (snap: any) => {
+        snap.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          const createdAt = data.createdAt
+            ? new Date(data.createdAt.seconds * 1000)
+            : new Date();
+          const updatedAt = data.updatedAt
+            ? new Date(data.updatedAt.seconds * 1000)
+            : new Date();
+          const dob = data.dob ? new Date(data.dob.seconds * 1000) : undefined;
+          const bsDate = data.bsDate
+            ? new Date(data.bsDate.seconds * 1000)
+            : undefined;
 
-      return patients;
+          map.set(docSnap.id, {
+            id: docSnap.id,
+            ...data,
+            createdAt,
+            updatedAt,
+            dob,
+            bsDate,
+          } as Patient);
+        });
+      };
+
+      processSnap(snap1);
+      processSnap(snap2);
+
+      return Array.from(map.values()).sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     } catch (error) {
       console.error("Error getting patients by expert:", error);
       throw error;

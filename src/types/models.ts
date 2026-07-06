@@ -331,23 +331,23 @@ export interface Appointment {
   endTime?: string;
   appointmentTypeId: string; // Reference to AppointmentType
   appointmentType:
-    | "initial"
-    | "followup"
-    | "emergency"
-    | "routine"
-    | "screening"
-    | "vaccination"
-    | "lab-review"
-    | "pre-op"
-    | "post-op"
-    | "therapy"; // Keep for backward compatibility
+  | "initial"
+  | "followup"
+  | "emergency"
+  | "routine"
+  | "screening"
+  | "vaccination"
+  | "lab-review"
+  | "pre-op"
+  | "post-op"
+  | "therapy"; // Keep for backward compatibility
   status:
-    | "scheduled"
-    | "confirmed"
-    | "in-progress"
-    | "completed"
-    | "cancelled"
-    | "no-show";
+  | "scheduled"
+  | "confirmed"
+  | "in-progress"
+  | "completed"
+  | "cancelled"
+  | "no-show";
   reason?: string; // Reason for the appointment visit
   notes?: string;
   registrationDate: Date;
@@ -450,14 +450,14 @@ export interface MedicalReportField {
   fieldLabel: string; // Field name/label
   fieldKey: string; // Unique key for the field
   fieldType:
-    | "text"
-    | "textarea"
-    | "select"
-    | "checkbox"
-    | "radio"
-    | "number"
-    | "date"
-    | "yes-no";
+  | "text"
+  | "textarea"
+  | "select"
+  | "checkbox"
+  | "radio"
+  | "number"
+  | "date"
+  | "yes-no";
   options?: string[]; // For select, radio, checkbox types
   placeholder?: string;
   description?: string;
@@ -988,13 +988,13 @@ export type EnquiryStatus =
 export interface AccountBill {
   id: string;
   category:
-    | "medicine"
-    | "equipment"
-    | "utility"
-    | "salary"
-    | "rent"
-    | "office_supply"
-    | "other";
+  | "medicine"
+  | "equipment"
+  | "utility"
+  | "salary"
+  | "rent"
+  | "office_supply"
+  | "other";
   itemName?: string; // Generic name for equipment, inventory, or assets
   vendorName: string;
   vendorId?: string; // Optional link to a Vendor or Supplier record
@@ -1137,13 +1137,7 @@ export interface LeaveRequest {
   branchId: string;
 
   // Leave details
-  leaveType:
-    | "annual"
-    | "sick"
-    | "casual"
-    | "unpaid"
-    | "maternity"
-    | "emergency";
+  leaveType: string;
   startDate: Date;
   endDate: Date;
   totalDays: number;
@@ -1167,18 +1161,31 @@ export interface LeaveRequest {
 /**
  * LeaveBalance model for tracking annual leave quotas per staff
  */
+export interface LeaveType {
+  id: string;
+  clinicId: string;
+  name: string;
+  defaultDays: number;
+  color: string;
+  isPaid: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface StaffLeaveAssignment {
+  leaveTypeId: string;
+  assignedDays: number;
+  usedDays: number;
+  isActive: boolean;
+}
+
 export interface LeaveBalance {
   id: string;
   staffId: string;
   staffName: string;
   clinicId: string;
   year: number; // Calendar year e.g. 2025
-  annualAllotted: number;
-  sickAllotted: number;
-  casualAllotted: number;
-  annualUsed: number;
-  sickUsed: number;
-  casualUsed: number;
+  assignments: StaffLeaveAssignment[];
   unpaidUsed: number;
   createdAt: Date;
   updatedAt: Date;
@@ -1296,11 +1303,16 @@ export type FollowupUpdatedStatus =
   | "wrong-no"
   | "no-answer"
   | "neutral";
+export type FollowupCategory = "general" | "appointment" | "pharmacy" | "pathology";
+
 
 export interface PatientFollowup {
   id: string;
   clinicId: string;
   branchId: string;
+
+  // Category
+  category?: FollowupCategory;
 
   // Patient info (denormalized for performance)
   patientId: string;
@@ -1732,17 +1744,17 @@ export interface ExpertCommission {
 export interface AuditLog {
   id: string;
   eventType:
-    | "role_created"
-    | "role_updated"
-    | "role_deleted"
-    | "user_created"
-    | "user_updated"
-    | "user_deactivated"
-    | "user_activated"
-    | "roles_assigned"
-    | "roles_removed"
-    | "validation_failed"
-    | "operation_failed";
+  | "role_created"
+  | "role_updated"
+  | "role_deleted"
+  | "user_created"
+  | "user_updated"
+  | "user_deactivated"
+  | "user_activated"
+  | "roles_assigned"
+  | "roles_removed"
+  | "validation_failed"
+  | "operation_failed";
   performedBy: string; // User ID who performed the action
   performedByEmail?: string; // User email for display
   performedByName?: string; // User name for display
@@ -2009,12 +2021,12 @@ export interface PathologyBilling {
   sampleCollectionDate?: Date;
   expectedReportDate?: Date;
   reportStatus:
-    | "pending_collection"
-    | "collected"
-    | "in_lab"
-    | "partially_ready"
-    | "ready"
-    | "delivered";
+  | "pending_collection"
+  | "collected"
+  | "in_lab"
+  | "partially_ready"
+  | "ready"
+  | "delivered";
   paymentHistory?: PaymentEvent[]; // List of all payments made
 
   createdAt: Date;

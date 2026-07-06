@@ -680,17 +680,29 @@ export default function PatientsPage() {
 
       return true;
     })
-    .sort((a, b) =>
-      a.isCritical === b.isCritical ? 0 : a.isCritical ? -1 : 1,
-    );
+    .sort((a, b) => {
+      // Critical patients always first
+      if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
+      // Then sort by regNumber numerically ascending (lowest reg# first)
+      const aReg = parseInt(String(a.regNumber || "0"), 10) || 0;
+      const bReg = parseInt(String(b.regNumber || "0"), 10) || 0;
+      return aReg - bReg;
+    });
 
   const totalPages = useServerPagination
     ? totalCount != null
       ? Math.ceil(totalCount / PER_PAGE)
       : page + (patients.length === PER_PAGE ? 1 : 0)
     : Math.ceil(filtered.length / PER_PAGE);
+  const sortByReg = (arr: typeof patients) =>
+    [...arr].sort((a, b) => {
+      if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
+      const aReg = parseInt(String(a.regNumber || "0"), 10) || 0;
+      const bReg = parseInt(String(b.regNumber || "0"), 10) || 0;
+      return aReg - bReg;
+    });
   const pagePatients = useServerPagination
-    ? patients
+    ? sortByReg(patients)
     : filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const activeFilters = [
     genderFilter !== "all",

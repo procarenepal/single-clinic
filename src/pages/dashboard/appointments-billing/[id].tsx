@@ -35,6 +35,8 @@ import { clinicService } from "@/services/clinicService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
+import { doctorCommissionService } from "@/services/doctorCommissionService";
+import { expertCommissionService } from "@/services/expertCommissionService";
 import { AppointmentBilling, Patient } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { useAuthContext } from "@/context/AuthContext";
@@ -263,7 +265,7 @@ export default function InvoiceDetailPage() {
     if (paymentSplits.length === 1 && invoice) {
       const maxAllowed = includePreviousDue
         ? Math.max(0, invoice.balanceAmount - calculatedDiscountAmount) +
-          previousDue
+        previousDue
         : Math.max(0, invoice.balanceAmount - calculatedDiscountAmount);
 
       setPaymentSplits((prev) => [
@@ -669,6 +671,63 @@ export default function InvoiceDetailPage() {
             totalPaidToOldInvoices,
         } as any);
       }
+
+      // ── Generate commissions on first payment only ──────────────────────
+      if (invoice.paymentStatus === "unpaid") {
+        try {
+          const billingForCommission: AppointmentBilling = {
+            ...invoice,
+            createdAt: invoice.createdAt instanceof Date ? invoice.createdAt : new Date(),
+            updatedAt: new Date(),
+          };
+
+          // Load doctors and experts to classify clinicians
+          const [allDoctors, allExperts] = await Promise.all([
+            doctorService.getDoctorsByClinic(invoice.clinicId).catch(() => []),
+            expertService.getExpertsByClinic(invoice.clinicId).catch(() => []),
+          ]);
+
+          // Group items by clinician ID; default to doctor if not found in either array
+          const clinicianMap = new Map<string, { isExpert: boolean; items: typeof invoice.items }>();
+          for (const item of invoice.items) {
+            const cId = item.doctorId || invoice.doctorId;
+            if (!cId || cId === "unassigned") continue;
+            const sanitized = {
+              ...item,
+              commission: parseFloat(item.commission as any) || 0,
+              amount: parseFloat(item.amount as any) || 0,
+            };
+            if (!clinicianMap.has(cId)) {
+              const isExpert = allExperts.some((e: any) => e.id === cId) && !allDoctors.some((d: any) => d.id === cId);
+              clinicianMap.set(cId, { isExpert, items: [] });
+            }
+            clinicianMap.get(cId)!.items.push(sanitized);
+          }
+
+          for (const [cId, group] of clinicianMap.entries()) {
+            const clinician = (allDoctors as any[]).find((d: any) => d.id === cId) || (allExperts as any[]).find((e: any) => e.id === cId);
+            const defaultPct = clinician?.defaultCommission || 0;
+            const billingForClinician = { ...billingForCommission, items: group.items };
+            console.log(`[Commission] clinicianId=${cId} isExpert=${group.isExpert} items=${group.items.length}`);
+            if (group.isExpert) {
+              await expertCommissionService.createCommissionsFromBilling(billingForClinician, defaultPct, currentUser.uid).catch((e: any) => console.error("[Commission] Expert error:", e));
+              // Link patient to expert
+              if (invoice.patientId) {
+                await patientService.updatePatient(invoice.patientId, { assignedExpertId: cId }).catch(() => {});
+              }
+            } else {
+              await doctorCommissionService.createCommission(billingForClinician, defaultPct, currentUser.uid).catch((e: any) => console.error("[Commission] Doctor error:", e));
+              // Link patient to doctor
+              if (invoice.patientId) {
+                await patientService.updatePatient(invoice.patientId, { doctorId: cId }).catch(() => {});
+              }
+            }
+          }
+        } catch (commErr) {
+          console.error("[Commission] Commission generation failed:", commErr);
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────
 
       addToast({
         title: "Payment Recorded",
@@ -1361,7 +1420,7 @@ export default function InvoiceDetailPage() {
                         checked &&
                         paymentSplits.length === 1 &&
                         parseFloat(paymentSplits[0].amount) ===
-                          invoice.balanceAmount
+                        invoice.balanceAmount
                       ) {
                         setPaymentSplits([
                           {
@@ -1375,7 +1434,7 @@ export default function InvoiceDetailPage() {
                         !checked &&
                         paymentSplits.length === 1 &&
                         parseFloat(paymentSplits[0].amount) ===
-                          invoice.balanceAmount + previousDue
+                        invoice.balanceAmount + previousDue
                       ) {
                         setPaymentSplits([
                           {

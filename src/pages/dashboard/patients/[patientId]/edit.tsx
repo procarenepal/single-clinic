@@ -280,13 +280,12 @@ function ReferralSourceSelect({
                         </span>
                       </div>
                       <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                          p.rawType === "doctor"
-                            ? "bg-blue-50 text-blue-600 border border-blue-100"
-                            : p.rawType === "expert"
-                              ? "bg-purple-50 text-purple-600 border border-purple-100"
-                              : "bg-orange-50 text-orange-600 border border-orange-100"
-                        }`}
+                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${p.rawType === "doctor"
+                          ? "bg-blue-50 text-blue-600 border border-blue-100"
+                          : p.rawType === "expert"
+                            ? "bg-purple-50 text-purple-600 border border-purple-100"
+                            : "bg-orange-50 text-orange-600 border border-orange-100"
+                          }`}
                       >
                         {p.rawType}
                       </span>
@@ -478,10 +477,10 @@ export default function PatientEditPage() {
         referralType: patientData.referralPartnerId
           ? "partner"
           : patientData.referredBy &&
-              doctors.some((d) => d.name === patientData.referredBy)
+            doctors.some((d) => d.name === patientData.referredBy)
             ? "doctor"
             : patientData.referredBy &&
-                experts.some((e) => e.name === patientData.referredBy)
+              experts.some((e) => e.name === patientData.referredBy)
               ? "expert"
               : "",
         phone: patientData.phone || "",
@@ -1058,7 +1057,7 @@ export default function PatientEditPage() {
                   disabled={doctorsLoading}
                   label="Assigned Doctor"
                   name="doctor"
-                  options={doctors.map((d) => ({
+                  options={doctors.filter((_d: any) => _d.isActive !== false).map((d) => ({
                     value: d.id,
                     label: `${d.name} - ${d.speciality}`,
                   }))}
@@ -1069,7 +1068,7 @@ export default function PatientEditPage() {
                   disabled={expertsLoading}
                   label="Assigned Expert"
                   name="expert"
-                  options={experts.map((e) => ({
+                  options={experts.filter((_e: any) => _e.isActive !== false).map((e) => ({
                     value: e.id,
                     label: `${e.name} - ${e.speciality || "Expert"}`,
                   }))}

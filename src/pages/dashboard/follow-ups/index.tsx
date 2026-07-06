@@ -14,6 +14,8 @@ import {
   SelectItem,
   useDisclosure,
   Tooltip,
+  Tabs,
+  Tab,
 } from "@heroui/react";
 import { IoSearchOutline, IoAddOutline, IoTrashOutline } from "react-icons/io5";
 import { format } from "date-fns";
@@ -30,6 +32,7 @@ export default function FollowupsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [selectedFollowup, setSelectedFollowup] =
@@ -65,9 +68,12 @@ export default function FollowupsPage() {
       const matchesStatus =
         statusFilter === "all" || f.overallStatus === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      const matchesCategory =
+        categoryFilter === "all" || (f.category || "general") === categoryFilter;
+
+      return matchesSearch && matchesStatus && matchesCategory;
     });
-  }, [followups, searchQuery, statusFilter]);
+  }, [followups, searchQuery, statusFilter, categoryFilter]);
 
   const handleEdit = (followup: PatientFollowup) => {
     setSelectedFollowup(followup);
@@ -85,7 +91,7 @@ export default function FollowupsPage() {
 
   const handleInlineUpdate = async (
     item: PatientFollowup,
-    field: "session" | "initStatus" | "updatedStatus",
+    field: "session" | "initStatus" | "updatedStatus" | "category",
     value: string,
   ) => {
     const currentSession = item.session || "1st";
@@ -93,8 +99,8 @@ export default function FollowupsPage() {
 
     let currentValue;
 
-    if (field === "session") {
-      currentValue = item.session;
+    if (field === "session" || field === "category") {
+      currentValue = item[field];
     } else {
       if (sessionToUse === "1st") {
         currentValue = item.sessionStatuses?.["1st"]?.[field] || item[field];
@@ -108,7 +114,7 @@ export default function FollowupsPage() {
     const payload: Partial<PatientFollowup> = { [field]: value };
     const newSessionStatuses = { ...(item.sessionStatuses || {}) };
 
-    if (field !== "session") {
+    if (field !== "session" && field !== "category") {
       if (!newSessionStatuses[sessionToUse])
         newSessionStatuses[sessionToUse] = {};
       newSessionStatuses[sessionToUse] = {
@@ -121,7 +127,7 @@ export default function FollowupsPage() {
     // Auto-generate log for status/session change
     const newLog = {
       date: new Date(),
-      note: `${field === "session" ? "Session" : field === "initStatus" ? "Initial Status" : "Updated Status"} changed to '${value}'`,
+      note: `${field === "session" ? "Session" : field === "category" ? "Category" : field === "initStatus" ? "Initial Status" : "Updated Status"} changed to '${value}'`,
       user: currentUser?.displayName || "Staff",
     };
 
@@ -207,6 +213,27 @@ export default function FollowupsPage() {
         </Button>
       </div>
 
+      <div className="mb-6">
+        <Tabs
+          selectedKey={categoryFilter}
+          onSelectionChange={(key) => setCategoryFilter(key as string)}
+          color="primary"
+          variant="underlined"
+          classNames={{
+            tabList: "gap-6 w-full relative rounded-none p-0 border-b border-border-base",
+            cursor: "w-full bg-primary",
+            tab: "max-w-fit px-0 h-12",
+            tabContent: "group-data-[selected=true]:text-primary"
+          }}
+        >
+          <Tab key="all" title="All Follow-ups" />
+          <Tab key="appointment" title="Appointments" />
+          <Tab key="pharmacy" title="Pharmacy" />
+          <Tab key="pathology" title="Pathology" />
+          <Tab key="general" title="General" />
+        </Tabs>
+      </div>
+
       <div className="bg-surface-1 rounded-xl shadow-sm border border-border-base overflow-hidden">
         <div className="p-4 border-b border-border-base flex flex-col sm:flex-row gap-4">
           <Input
@@ -252,6 +279,7 @@ export default function FollowupsPage() {
           >
             <TableHeader>
               <TableColumn>PATIENT</TableColumn>
+              <TableColumn>CATEGORY</TableColumn>
               <TableColumn>DATE</TableColumn>
               <TableColumn>SESSION</TableColumn>
               <TableColumn>INIT STATUS</TableColumn>
@@ -276,6 +304,27 @@ export default function FollowupsPage() {
                         {item.patientMobile}
                       </p>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      aria-label="Select category"
+                      className="min-w-[100px]"
+                      classNames={{
+                        trigger:
+                          "h-6 min-h-0 shadow-none border border-border-light bg-surface",
+                        value: "text-[11px] capitalize",
+                      }}
+                      selectedKeys={item.category ? [item.category] : ["general"]}
+                      size="sm"
+                      onChange={(e) =>
+                        handleInlineUpdate(item, "category" as any, e.target.value)
+                      }
+                    >
+                      <SelectItem key="general">General</SelectItem>
+                      <SelectItem key="appointment">Appointment</SelectItem>
+                      <SelectItem key="pharmacy">Pharmacy</SelectItem>
+                      <SelectItem key="pathology">Pathology</SelectItem>
+                    </Select>
                   </TableCell>
                   <TableCell>{formatDate(item.visitDate)}</TableCell>
                   <TableCell>

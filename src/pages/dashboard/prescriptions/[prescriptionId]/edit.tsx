@@ -943,7 +943,7 @@ export default function EditPrescriptionPage() {
                   isDoctorAutoFilled ? "Auto-filled from appointment" : ""
                 }
                 disabled={!!appointmentId}
-                items={doctors.map((d) => ({
+                items={doctors.filter((_d: any) => _d.isActive !== false).map((d) => ({
                   id: d.id,
                   primary: d.name,
                   secondary: d.speciality,
