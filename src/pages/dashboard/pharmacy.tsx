@@ -6891,14 +6891,18 @@ export default function PharmacyPage() {
 
       {/* Purchase Medicine/Items Modal */}
       <Modal
+        classNames={{
+          base: "!m-4 !rounded-xl !w-[calc(100vw-2rem)] !max-w-[calc(100vw-2rem)] !h-[95vh] !max-h-[95vh] flex flex-col",
+          backdrop: "backdrop-blur-sm bg-black/30",
+        }}
+        size="full"
         hideCloseButton={isSubmitting}
         isDismissable={!isSubmitting}
         isOpen={purchaseModalState.isOpen}
         scrollBehavior="inside"
-        size="full"
         onClose={purchaseModalState.close}
       >
-        <ModalContent>
+        <ModalContent className="h-full flex flex-col">
           <ModalHeader>
             <span className="text-[13px] font-semibold text-[rgb(var(--color-text))] tracking-[-0.01em]">
               New Record
@@ -6908,7 +6912,7 @@ export default function PharmacyPage() {
             </span>
           </ModalHeader>
 
-          <ModalBody className="p-0 overflow-hidden">
+          <ModalBody className="p-0 overflow-hidden flex-grow">
             <div className="grid grid-cols-1 lg:grid-cols-12 h-full w-full">
               {/* Left Column: Customer Details & Cart Items (Takes 7/12 cols) */}
               <div className="lg:col-span-7 p-4 overflow-y-auto flex flex-col gap-4 border-r border-[rgb(var(--color-border))]">

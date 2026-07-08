@@ -328,9 +328,9 @@ export const medicineService = {
       const last =
         paginatedMedicines.length === pageSize
           ? querySnapshot.docs.find(
-              (d) =>
-                d.id === paginatedMedicines[paginatedMedicines.length - 1].id,
-            ) || null
+            (d) =>
+              d.id === paginatedMedicines[paginatedMedicines.length - 1].id,
+          ) || null
           : null;
 
       return { medicines: paginatedMedicines, lastDoc: last as any };
@@ -709,7 +709,7 @@ export const medicineService = {
         currentStock: number;
         schemeStock: number;
       }[] = [];
-      
+
       const promises = [];
 
       for (let i = 0; i < medicineIds.length; i += BATCH_SIZE) {
@@ -730,7 +730,7 @@ export const medicineService = {
       }
 
       const snapshots = await Promise.all(promises);
-      
+
       snapshots.forEach(snapshot => {
         snapshot.docs.forEach((d) => {
           const data = d.data();
