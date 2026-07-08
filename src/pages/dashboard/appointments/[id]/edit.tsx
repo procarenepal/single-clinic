@@ -549,11 +549,13 @@ export default function EditAppointmentPage() {
                 {/* Doctor Selection */}
                 <CustomSearchSelect
                   required
-                  items={doctors.filter((_d: any) => _d.isActive !== false).map((d) => ({
-                    id: d.id,
-                    primary: d.name,
-                    secondary: d.speciality,
-                  }))}
+                  items={doctors
+                    .filter((_d: any) => _d.isActive !== false)
+                    .map((d) => ({
+                      id: d.id,
+                      primary: d.name,
+                      secondary: d.speciality,
+                    }))}
                   label="Doctor"
                   placeholder="Search and select doctor"
                   value={formData.doctorId}

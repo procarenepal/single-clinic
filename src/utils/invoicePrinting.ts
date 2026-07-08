@@ -53,8 +53,8 @@ export const generateInvoiceHTML = (
       <td class="text-center" style="text-align: center;">${index + 1}</td>
       <td class="text-center" style="text-align: center;">${item.testName}${item.testType ? ` (${item.testType})` : ""}</td>
       <td class="text-center" style="text-align: center;">${item.quantity}</td>
-      ${!isThermal ? `<td class="text-center" style="text-align: center;">NPR ${item.price.toLocaleString()}</td>` : ""}
-      <td class="text-center" style="text-align: center;">NPR ${item.amount.toLocaleString()}</td>
+      ${!isThermal ? `<td class="text-center" style="text-align: center;">NPR ${(item.price || 0).toLocaleString()}</td>` : ""}
+      <td class="text-center" style="text-align: center;">NPR ${(item.amount || 0).toLocaleString()}</td>
     </tr>`,
     )
     .join("");
@@ -229,28 +229,27 @@ export const generateInvoiceHTML = (
         <table class="summary-table">
           <tr>
             <td>Subtotal</td>
-            <td class="text-right">NPR ${billing.subtotal.toLocaleString()}</td>
+            <td class="text-right">NPR ${(billing.subtotal || 0).toLocaleString()}</td>
           </tr>
-          ${billing.discountAmount > 0 ? `<tr><td>Discount</td><td class="text-right">- NPR ${billing.discountAmount.toLocaleString()}</td></tr>` : ""}
+          ${(billing.discountAmount || 0) > 0 ? `<tr><td>Discount</td><td class="text-right">- NPR ${(billing.discountAmount || 0).toLocaleString()}</td></tr>` : ""}
           <tr class="font-bold">
             <td>Total</td>
-            <td class="text-right">NPR ${billing.totalAmount.toLocaleString()}</td>
+            <td class="text-right">NPR ${(billing.totalAmount || 0).toLocaleString()}</td>
           </tr>
           <tr>
             <td>Paid</td>
-            <td class="text-right">NPR ${billing.paidAmount.toLocaleString()}</td>
+            <td class="text-right">NPR ${(billing.paidAmount || 0).toLocaleString()}</td>
           </tr>
           <tr class="font-bold">
             <td>Balance</td>
-            <td class="text-right">NPR ${billing.balanceAmount.toLocaleString()}</td>
+            <td class="text-right">NPR ${(billing.balanceAmount || 0).toLocaleString()}</td>
           </tr>
         </table>
       </div>
     </div>
     
-    ${
-      footerHTML ||
-      `
+    ${footerHTML ||
+    `
     <div class="footer">
       <p>Thank you for choosing us</p>
       <p>${new Date().toLocaleString()}</p>
@@ -368,8 +367,8 @@ export const generateAppointmentInvoiceHTML = (
     ) {
       const name =
         item.doctorName &&
-        item.doctorName !== "Unknown Doctor" &&
-        item.doctorName !== "Expert Cabin"
+          item.doctorName !== "Unknown Doctor" &&
+          item.doctorName !== "Expert Cabin"
           ? item.doctorName
           : "Expert Cabin";
 
@@ -602,10 +601,9 @@ export const generateAppointmentInvoiceHTML = (
       ${isThermal ? cliniciansHtml : ""}
     </div>
     
-    ${
-      !isThermal && footerHTML
-        ? footerHTML
-        : `
+    ${!isThermal && footerHTML
+      ? footerHTML
+      : `
     <div style="margin-top: 15px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 5px;">
       <p>Thank you for choosing us</p>
       ${isThermal ? `<p>${new Date().toLocaleString()}</p>` : ""}

@@ -43,14 +43,14 @@ export const labTechnicianService = {
       const techniciansRef = collection(db, LAB_TECHNICIANS_COLLECTION);
       let q = query(
         techniciansRef,
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       );
 
       if (branchId) {
         q = query(
           techniciansRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
         );

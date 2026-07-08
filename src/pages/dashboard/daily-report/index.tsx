@@ -308,6 +308,24 @@ export default function DailyReportPage() {
     clinicalDue: invoicesCreatedToday
       .filter((b) => b.type === "appointment")
       .reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
+    pathologyRevenue: invoicesCreatedToday
+      .filter((b) => b.type === "pathology")
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+    pathologyRevenueCollected: invoicesCreatedToday
+      .filter((b) => b.type === "pathology")
+      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+    pathologyDue: invoicesCreatedToday
+      .filter((b) => b.type === "pathology")
+      .reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
+    pharmacyRevenue: invoicesCreatedToday
+      .filter((b) => b.type === "pharmacy")
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+    pharmacyRevenueCollected: invoicesCreatedToday
+      .filter((b) => b.type === "pharmacy")
+      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+    pharmacyDue: invoicesCreatedToday
+      .filter((b) => b.type === "pharmacy")
+      .reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
   };
 
   // Branch-wise revenue breakdown: only when viewing all branches (no single branch selected)
@@ -628,6 +646,104 @@ export default function DailyReportPage() {
                   )}
                   {summaryStats.clinicalRevenueCollected === 0 &&
                     summaryStats.clinicalDue === 0 && (
+                      <span className="text-text-muted opacity-60">
+                        No revenue data
+                      </span>
+                    )}
+                </div>
+              </div>
+
+              {/* Pathology Revenue */}
+              <div
+                className="bg-surface border border-border-base rounded-md p-3.5 flex flex-col justify-between cursor-pointer hover:border-primary/40 transition-colors shadow-sm min-h-[90px]"
+                onClick={() =>
+                  navigate(
+                    `/dashboard/pathology/billing`,
+                  )
+                }
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p
+                      className="text-[10.5px] font-bold uppercase tracking-wider text-text-muted mb-1"
+                      title="Revenue from pathology lab"
+                    >
+                      Pathology Revenue
+                    </p>
+                    <p className="text-[15px] font-bold text-text-main leading-none">
+                      {formatCurrency(summaryStats.pathologyRevenue)}
+                    </p>
+                  </div>
+                  <div className="bg-surface-2 p-1.5 rounded flex items-center justify-center">
+                    <IoDocumentTextOutline className="w-4 h-4 text-primary" />
+                  </div>
+                </div>
+                <div className="space-y-1 text-[9.5px]">
+                  {summaryStats.pathologyRevenueCollected > 0 && (
+                    <div className="flex justify-between items-center bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-medium">
+                      <span>Collected</span>
+                      <span>
+                        {formatCurrency(summaryStats.pathologyRevenueCollected)}
+                      </span>
+                    </div>
+                  )}
+                  {summaryStats.pathologyDue > 0 && (
+                    <div className="flex justify-between items-center bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium">
+                      <span>Due</span>
+                      <span>{formatCurrency(summaryStats.pathologyDue)}</span>
+                    </div>
+                  )}
+                  {summaryStats.pathologyRevenueCollected === 0 &&
+                    summaryStats.pathologyDue === 0 && (
+                      <span className="text-text-muted opacity-60">
+                        No revenue data
+                      </span>
+                    )}
+                </div>
+              </div>
+
+              {/* Pharmacy Revenue */}
+              <div
+                className="bg-surface border border-border-base rounded-md p-3.5 flex flex-col justify-between cursor-pointer hover:border-primary/40 transition-colors shadow-sm min-h-[90px]"
+                onClick={() =>
+                  navigate(
+                    `/dashboard/pharmacy/billing`,
+                  )
+                }
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p
+                      className="text-[10.5px] font-bold uppercase tracking-wider text-text-muted mb-1"
+                      title="Revenue from pharmacy purchases"
+                    >
+                      Pharmacy Revenue
+                    </p>
+                    <p className="text-[15px] font-bold text-text-main leading-none">
+                      {formatCurrency(summaryStats.pharmacyRevenue)}
+                    </p>
+                  </div>
+                  <div className="bg-surface-2 p-1.5 rounded flex items-center justify-center">
+                    <IoDocumentTextOutline className="w-4 h-4 text-primary" />
+                  </div>
+                </div>
+                <div className="space-y-1 text-[9.5px]">
+                  {summaryStats.pharmacyRevenueCollected > 0 && (
+                    <div className="flex justify-between items-center bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-medium">
+                      <span>Collected</span>
+                      <span>
+                        {formatCurrency(summaryStats.pharmacyRevenueCollected)}
+                      </span>
+                    </div>
+                  )}
+                  {summaryStats.pharmacyDue > 0 && (
+                    <div className="flex justify-between items-center bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium">
+                      <span>Due</span>
+                      <span>{formatCurrency(summaryStats.pharmacyDue)}</span>
+                    </div>
+                  )}
+                  {summaryStats.pharmacyRevenueCollected === 0 &&
+                    summaryStats.pharmacyDue === 0 && (
                       <span className="text-text-muted opacity-60">
                         No revenue data
                       </span>

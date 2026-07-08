@@ -47,7 +47,7 @@ export const visitorService = {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);

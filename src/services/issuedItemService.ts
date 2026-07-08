@@ -75,7 +75,7 @@ export const issuedItemService = {
     try {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("status", "==", status),
       ];
 
@@ -336,14 +336,14 @@ export const issuedItemService = {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
       let q = query(
         issuedItemsRef,
-        where("clinicId", "==", clinicId),
+
         where("status", "==", "issued"),
       );
 
       if (branchId) {
         q = query(
           issuedItemsRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("status", "==", "issued"),
         );

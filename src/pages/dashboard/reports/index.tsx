@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
   IoCalendarOutline,
@@ -126,6 +127,7 @@ interface OverviewStats {
 }
 
 export default function ReportsPage() {
+  const navigate = useNavigate();
   const { clinicId, userData } = useAuthContext();
   const branchId = userData?.branchId ?? null;
 
@@ -301,9 +303,7 @@ export default function ReportsPage() {
             ),
           ]);
 
-          if (settings && settings.enabledByAdmin && settings.isActive) {
-            billings = data;
-          }
+          billings = data;
           billingSettings = settings;
         } catch (billingError) {
           console.warn("Appointment billing data not available:", billingError);
@@ -322,9 +322,7 @@ export default function ReportsPage() {
             ),
           ]);
 
-          if (pSettings && pSettings.enabledByAdmin && pSettings.isActive) {
-            pathologyBillings = pData;
-          }
+          pathologyBillings = pData;
           pathologyBillingSettings = pSettings;
         } catch (pBillingError) {
           console.warn("Pathology billing data not available:", pBillingError);
@@ -398,7 +396,9 @@ export default function ReportsPage() {
     return reportData.appointments.filter((appointment) => {
       const appointmentDate = new Date(appointment.appointmentDate);
       const startDate = new Date(dateRange.start);
+      startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(dateRange.end);
+      endDate.setHours(23, 59, 59, 999);
 
       const isInDateRange = allDates
         ? true
@@ -418,18 +418,33 @@ export default function ReportsPage() {
   // Filter patients by date range (createdAt), selected doctor, and selected appointment type
   const getFilteredPatients = () => {
     const startDate = new Date(dateRange.start);
+    startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(dateRange.end);
+    endDate.setHours(23, 59, 59, 999);
 
     return reportData.patients.filter((p) => {
-      // Date filter based on patient registration date
-      let createdOk = true;
+      // Date filter based on patient registration date OR appointment date
+      let dateOk = true;
 
       if (!allDates) {
-        if (!p.createdAt) return false;
-        const created = new Date(p.createdAt as any);
+        let createdOk = false;
+        if (p.createdAt) {
+          const created = new Date(p.createdAt as any);
+          if (!Number.isNaN(created.getTime())) {
+            createdOk = created >= startDate && created <= endDate;
+          }
+        }
 
-        if (Number.isNaN(created.getTime())) return false;
-        createdOk = created >= startDate && created <= endDate;
+        // Also check if they had an appointment in this date range
+        const hasAppointmentInDateRange = reportData.appointments.some(
+          (apt) => {
+            if (apt.patientId !== p.id) return false;
+            const aptDate = new Date(apt.appointmentDate);
+            return aptDate >= startDate && aptDate <= endDate;
+          },
+        );
+
+        dateOk = createdOk || hasAppointmentInDateRange;
       }
 
       // Doctor filter: assigned doctor OR has any appointment with selected doctor within date window
@@ -469,7 +484,7 @@ export default function ReportsPage() {
         });
       }
 
-      return createdOk && doctorOk && appointmentTypeOk;
+      return dateOk && doctorOk && appointmentTypeOk;
     });
   };
 
@@ -881,7 +896,9 @@ export default function ReportsPage() {
               ?.map((rd) => `${rd.doctorName} (${rd.type})`)
               .join(", ") || "None",
           "Attributed Revenue": `NPR ${Math.round(attributedRevenue).toLocaleString()}`,
-          "Total Amount": `NPR ${billing.totalAmount.toLocaleString()}`,
+          "Total Amount": `NPR ${(billing.subtotal || 0).toLocaleString()}`,
+          "Discount": `NPR ${(billing.discountAmount || 0).toLocaleString()}`,
+          "Net Amount": `NPR ${(billing.totalAmount || 0).toLocaleString()}`,
           "Paid Amount": `NPR ${(billing.paidAmount || 0).toLocaleString()}`,
           "Balance Amount": `NPR ${(billing.balanceAmount || 0).toLocaleString()}`,
           "Payment Status": billing.paymentStatus,
@@ -1066,10 +1083,10 @@ export default function ReportsPage() {
           "Attributed Doctor":
             selectedDoctor !== "all"
               ? reportData.doctors.find((d) => d.id === selectedDoctor)?.name ||
-                reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
-                reportData.referralPartners.find((p) => p.id === selectedDoctor)
-                  ?.name ||
-                "N/A"
+              reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
+              reportData.referralPartners.find((p) => p.id === selectedDoctor)
+                ?.name ||
+              "N/A"
               : billing.doctorName,
           "Doctor Type":
             billing.doctorType === "visitor" ? "Visiting" : "Regular",
@@ -1576,12 +1593,12 @@ export default function ReportsPage() {
                               <Chip
                                 color={
                                   statusColor as
-                                    | "success"
-                                    | "primary"
-                                    | "warning"
-                                    | "danger"
-                                    | "default"
-                                    | "secondary"
+                                  | "success"
+                                  | "primary"
+                                  | "warning"
+                                  | "danger"
+                                  | "default"
+                                  | "secondary"
                                 }
                                 size="sm"
                                 variant="flat"
@@ -1757,8 +1774,8 @@ export default function ReportsPage() {
                           <td className="whitespace-nowrap">
                             {patient.createdAt
                               ? new Date(
-                                  patient.createdAt as any,
-                                ).toLocaleDateString()
+                                patient.createdAt as any,
+                              ).toLocaleDateString()
                               : ""}
                           </td>
                         </tr>
@@ -2012,6 +2029,81 @@ export default function ReportsPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="clarity-card p-0 mt-4 overflow-hidden">
+                <div className="px-3 py-2 border-b border-mountain-200">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-mountain-600">
+                    Invoice Details
+                  </h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="clarity-table min-w-full w-full">
+                    <thead>
+                      <tr>
+                        <th>Invoice No</th>
+                        <th>Date</th>
+                        <th>Patient</th>
+                        <th>Items</th>
+                        <th>Total Amount</th>
+                        <th>Discount</th>
+                        <th>Net Amount</th>
+                        <th>Paid Amount</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPathologyBillings.map((billing) => {
+                        const date = billing.invoiceDate
+                          ? new Date(billing.invoiceDate).toLocaleDateString()
+                          : "N/A";
+                        const time = billing.invoiceDate
+                          ? new Date(billing.invoiceDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : "";
+                        const itemsCount = billing.items?.length || 0;
+
+                        const statusColor = billing.paymentStatus === "paid" ? "success" : billing.paymentStatus === "partial" ? "warning" : "danger";
+
+                        return (
+                          <tr
+                            key={billing.id}
+                            onClick={() => navigate('/dashboard/pathology')}
+                            className="cursor-pointer hover:bg-default-100 transition-colors"
+                          >
+                            <td className="whitespace-nowrap font-medium text-[13px]">{billing.invoiceNumber || "N/A"}</td>
+                            <td className="whitespace-nowrap">
+                              <div className="text-[13px] text-mountain-700">{date}</div>
+                              <div className="text-xs text-mountain-500">{time}</div>
+                            </td>
+                            <td>
+                              <div className="text-[13px] font-medium text-mountain-900">{billing.patientName || "Unknown"}</div>
+                              {billing.patientPhone && <div className="text-xs text-mountain-500">{billing.patientPhone}</div>}
+                            </td>
+                            <td>
+                              <div className="text-[13px]">{itemsCount} test{itemsCount !== 1 ? 's' : ''}</div>
+                            </td>
+                            <td className="text-[13px]">NPR {(billing.subtotal || 0).toLocaleString()}</td>
+                            <td className="text-[13px]">{(billing.discountAmount || 0) > 0 ? `NPR ${(billing.discountAmount || 0).toLocaleString()}` : "-"}</td>
+                            <td className="text-[13px] font-medium">NPR {(billing.totalAmount || 0).toLocaleString()}</td>
+                            <td className="text-[13px] text-health-600">NPR {(billing.paidAmount || 0).toLocaleString()}</td>
+                            <td>
+                              <Chip color={statusColor as any} size="sm" variant="flat" className="capitalize">
+                                {billing.paymentStatus || "Unpaid"}
+                              </Chip>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredPathologyBillings.length === 0 && (
+                        <tr>
+                          <td colSpan={9} className="text-center py-6 text-mountain-500">
+                            No invoice records found for the selected criteria.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </Tab>
 
@@ -2099,6 +2191,86 @@ export default function ReportsPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="clarity-card p-0 mt-4 overflow-hidden">
+                <div className="px-3 py-2 border-b border-mountain-200">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-mountain-600">
+                    Purchase Details
+                  </h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="clarity-table min-w-full w-full">
+                    <thead>
+                      <tr>
+                        <th>Purchase No</th>
+                        <th>Date</th>
+                        <th>Patient/Customer</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Discount</th>
+                        <th>Tax</th>
+                        <th>Net Amount</th>
+                        <th>Status</th>
+                        <th>Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPharmacyPurchases.map((purchase) => {
+                        const pDate = purchase.purchaseDate || (purchase as any).createdAt;
+                        const date = pDate
+                          ? new Date(pDate).toLocaleDateString()
+                          : "N/A";
+                        const time = pDate
+                          ? new Date(pDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : "";
+                        const itemsCount = purchase.items?.length || 0;
+                        const totalQty = purchase.items?.reduce((s, i) => s + (i.quantity || 0), 0) || 0;
+
+                        const statusColor = purchase.paymentStatus === "paid" ? "success" : purchase.paymentStatus === "partial" ? "warning" : "danger";
+
+                        return (
+                          <tr
+                            key={purchase.id}
+                            onClick={() => navigate(`/dashboard/pharmacy/purchase/${purchase.id}`)}
+                            className="cursor-pointer hover:bg-default-100 transition-colors"
+                          >
+                            <td className="whitespace-nowrap font-medium text-[13px]">{purchase.purchaseNo || "N/A"}</td>
+                            <td className="whitespace-nowrap">
+                              <div className="text-[13px] text-mountain-700">{date}</div>
+                              <div className="text-xs text-mountain-500">{time}</div>
+                            </td>
+                            <td>
+                              <div className="text-[13px] font-medium text-mountain-900">{purchase.patientName || (purchase as any).customerName || "Walk-in Customer"}</div>
+                              {(purchase.patientPhone || (purchase as any).customerPhone) && <div className="text-xs text-mountain-500">{purchase.patientPhone || (purchase as any).customerPhone}</div>}
+                            </td>
+                            <td>
+                              <div className="text-[13px]">{itemsCount} item{itemsCount !== 1 ? 's' : ''}</div>
+                              <div className="text-xs text-mountain-500">Qty: {totalQty}</div>
+                            </td>
+                            <td className="text-[13px]">NPR {(purchase.total || 0).toLocaleString()}</td>
+                            <td className="text-[13px]">{(purchase.discount || 0) > 0 ? `NPR ${(purchase.discount || 0).toLocaleString()}` : "-"}</td>
+                            <td className="text-[13px]">{(purchase.taxAmount || 0) > 0 ? `NPR ${(purchase.taxAmount || 0).toLocaleString()}` : "-"}</td>
+                            <td className="text-[13px] font-medium">NPR {(purchase.netAmount || 0).toLocaleString()}</td>
+                            <td>
+                              <Chip color={statusColor as any} size="sm" variant="flat" className="capitalize">
+                                {purchase.paymentStatus || "Unknown"}
+                              </Chip>
+                            </td>
+                            <td className="text-[13px] capitalize">{purchase.paymentType || "Cash"}</td>
+                          </tr>
+                        );
+                      })}
+                      {filteredPharmacyPurchases.length === 0 && (
+                        <tr>
+                          <td colSpan={10} className="text-center py-6 text-mountain-500">
+                            No purchase records found for the selected criteria.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </Tab>
 
@@ -2161,7 +2333,7 @@ export default function ReportsPage() {
                             const matchesType =
                               selectedAppointmentType === "all" ||
                               item.appointmentTypeId ===
-                                selectedAppointmentType;
+                              selectedAppointmentType;
 
                             if (matchesDoctor && matchesType) {
                               totalRevenue += (item.amount || 0) * revenueScale;
@@ -2490,6 +2662,84 @@ export default function ReportsPage() {
                         </p>
                         <p className="clarity-stat-label">Total Items Billed</p>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="clarity-card p-0 mt-4 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-mountain-200">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-mountain-600">
+                        Invoice Details
+                      </h4>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="clarity-table min-w-full w-full">
+                        <thead>
+                          <tr>
+                            <th>Invoice No</th>
+                            <th>Date</th>
+                            <th>Patient</th>
+                            <th>Doctor</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Discount</th>
+                            <th>Tax</th>
+                            <th>Paid Amount</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredBillings.map((billing) => {
+                            const date = billing.invoiceDate
+                              ? new Date(billing.invoiceDate).toLocaleDateString()
+                              : "N/A";
+                            const time = billing.invoiceDate
+                              ? new Date(billing.invoiceDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : "";
+                            const itemsCount = billing.items?.length || 0;
+
+                            const statusColor = billing.paymentStatus === "paid" ? "success" : billing.paymentStatus === "partial" ? "warning" : "danger";
+
+                            return (
+                              <tr
+                                key={billing.id}
+                                onClick={() => navigate(`/dashboard/billing/${billing.id}`)}
+                                className="cursor-pointer hover:bg-default-100 transition-colors"
+                              >
+                                <td className="whitespace-nowrap font-medium text-[13px]">{billing.invoiceNumber || "N/A"}</td>
+                                <td className="whitespace-nowrap">
+                                  <div className="text-[13px] text-mountain-700">{date}</div>
+                                  <div className="text-xs text-mountain-500">{time}</div>
+                                </td>
+                                <td>
+                                  <div className="text-[13px] font-medium text-mountain-900">{billing.patientName || "Unknown"}</div>
+                                </td>
+                                <td>
+                                  <div className="text-[13px] font-medium text-mountain-900">{billing.doctorName || "Unknown"}</div>
+                                </td>
+                                <td>
+                                  <div className="text-[13px]">{itemsCount} item{itemsCount !== 1 ? 's' : ''}</div>
+                                </td>
+                                <td className="text-[13px] font-medium">NPR {(billing.totalAmount || 0).toLocaleString()}</td>
+                                <td className="text-[13px]">{(billing.discountAmount || 0) > 0 ? `NPR ${(billing.discountAmount || 0).toLocaleString()}` : "-"}</td>
+                                <td className="text-[13px]">{(billing.taxAmount || 0) > 0 ? `NPR ${(billing.taxAmount || 0).toLocaleString()}` : "-"}</td>
+                                <td className="text-[13px] text-health-600">NPR {(billing.paidAmount || 0).toLocaleString()}</td>
+                                <td>
+                                  <Chip color={statusColor as any} size="sm" variant="flat" className="capitalize">
+                                    {billing.paymentStatus || "Unpaid"}
+                                  </Chip>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {filteredBillings.length === 0 && (
+                            <tr>
+                              <td colSpan={10} className="text-center py-6 text-mountain-500">
+                                No invoice records found for the selected criteria.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>

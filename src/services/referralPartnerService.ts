@@ -238,7 +238,7 @@ export const referralPartnerService = {
       const patientsRef = collection(db, "patients");
       const q = query(
         patientsRef,
-        where("clinicId", "==", clinicId),
+
         where("referralPartnerId", "==", partnerId),
         where("isActive", "==", true),
       );

@@ -88,7 +88,7 @@ export class PatientNotesService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         orderBy("lastModifiedAt", "desc"),
       );
 

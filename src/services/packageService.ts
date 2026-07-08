@@ -24,7 +24,7 @@ export const packageService = {
   ): Promise<TreatmentPackage[]> {
     try {
       const constraints = [
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       ];
 

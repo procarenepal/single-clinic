@@ -29,7 +29,7 @@ export const itemCategoryService = {
     try {
       const categoriesRef = collection(db, ITEM_CATEGORIES_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       ];
 
@@ -192,7 +192,7 @@ export const itemCategoryService = {
       const categoriesRef = collection(db, ITEM_CATEGORIES_COLLECTION);
       const q = query(
         categoriesRef,
-        where("clinicId", "==", clinicId),
+
         where("branchId", "==", branchId),
         where("name", "==", categoryName),
         where("isActive", "==", true),

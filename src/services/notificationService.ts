@@ -69,7 +69,7 @@ export class NotificationService {
     try {
       const q = query(
         collection(db, this.COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         where("read", "==", false),
       );
 

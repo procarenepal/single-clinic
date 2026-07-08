@@ -318,7 +318,7 @@ export default function FrontOfficeDesk() {
       // Alt + N for Quick Check-In
       if (e.altKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
-        setIsQuickIntakeOpen(true);
+        handleOpenQuickIntake();
 
         return;
       }
@@ -384,24 +384,42 @@ export default function FrontOfficeDesk() {
     addExpertCommission: true,
   });
 
-  // Auto-set default appointment type to Consultation when modal opens
-  useEffect(() => {
-    if (isQuickIntakeOpen && !quickIntakeForm.appointmentTypeId && appointmentTypes.length > 0) {
-      // Find consultation type
-      const consultType = appointmentTypes.find(t =>
+  const handleOpenQuickIntake = () => {
+    // Find consultation type
+    const consultType = appointmentTypes.find(
+      (t) =>
+        t.id === "consultation-fee" ||
         t.name.toLowerCase().includes("consultation") ||
-        t.name.toLowerCase().includes("consult")
-      );
+        t.name.toLowerCase().includes("consult"),
+    );
 
-      if (consultType) {
-        setQuickIntakeForm(prev => ({ ...prev, appointmentTypeId: consultType.id }));
-      } else {
-        // Fallback to first available type
-        setQuickIntakeForm(prev => ({ ...prev, appointmentTypeId: appointmentTypes[0].id }));
-      }
-    }
-  }, [isQuickIntakeOpen, appointmentTypes, quickIntakeForm.appointmentTypeId]);
+    // Reset the form strictly every time the modal is opened
+    setQuickIntakeForm({
+      name: "",
+      mobile: "",
+      age: "",
+      gender: "male",
+      appointmentDate: new Date().toISOString().split("T")[0],
+      doctorId: doctors.length > 0 ? doctors[0].id : "",
+      assignedExpertId: "unassigned",
+      appointmentTypeId: consultType ? consultType.id : (appointmentTypes[0]?.id || ""),
+      reason: "",
+      referralPartnerId: "",
+      referrals: [],
+      paymentMethod: "cash",
+      paymentReference: "",
+      generateConsultationBill: true,
+      startSessionInstantly: false,
+      sendDirectlyToCabin: false,
+      addDoctorCommission: true,
+      addExpertCommission: true,
+    });
 
+    setIntakeMode("new");
+    setPatientSearchQuery("");
+    setSelectedExistingPatient(null);
+    setIsQuickIntakeOpen(true);
+  };
 
   // Mobile duplicate state
   const [mobileStatus, setMobileStatus] = useState<
@@ -482,9 +500,18 @@ export default function FrontOfficeDesk() {
             }));
           }
           if (apptTypesData.length > 0) {
+            // Find consultation type, fallback to first available
+            const consultationType = apptTypesData.find(
+              (t) =>
+                t.id === "consultation-fee" ||
+                t.name.toLowerCase().includes("consultation")
+            );
+
             setQuickIntakeForm((prev) => ({
               ...prev,
-              appointmentTypeId: apptTypesData[0].id,
+              appointmentTypeId: consultationType
+                ? consultationType.id
+                : apptTypesData[0].id,
             }));
           }
         }
@@ -1418,13 +1445,27 @@ export default function FrontOfficeDesk() {
 
     const recommended = (appt as any).recommendedProcedure;
     let initialType = apptTypeName;
-    let initialFee = apptType ? String(apptType.price || "") : "";
     let initialArea = "Full Face";
+
+    // Check if the booked appointment type is a consultation or front-desk-billed type
+    // that was already charged. If so, start fee at 0 — the expert has no procedure to add.
+    const isBookedTypeAlreadyBilled = (() => {
+      if (!apptType) return false;
+      const nameLower = apptType.name.toLowerCase();
+      return (
+        apptType.billAtFrontDesk ||
+        nameLower.includes("consult") ||
+        nameLower.includes("hair analy") ||
+        nameLower.includes("skin analy")
+      );
+    })();
+
+    let initialFee = isBookedTypeAlreadyBilled ? "" : (apptType ? String(apptType.price || "") : "");
 
     if (recommended) {
       initialType = recommended.name || initialType;
       initialFee =
-        recommended.fee !== undefined ? String(recommended.fee) : initialFee;
+        recommended.fee !== undefined && recommended.fee > 0 ? String(recommended.fee) : initialFee;
       initialArea = recommended.area || initialArea;
     }
 
@@ -1659,56 +1700,66 @@ export default function FrontOfficeDesk() {
           }
         });
 
-        // If the expert manually altered the total fee, add an adjustment or just put it all into one line item
-        if (itemsList.length === 0 || calculatedFee !== feeNum) {
-          itemsList.push({
-            name: actualProcedureName,
-            fee: feeNum,
-            id: "custom",
-          });
+        // If the expert manually added extra fee on top of valid (non-already-billed) items,
+        // add an adjustment line. But if itemsList is empty because ALL items were already billed
+        // (e.g. only "Doctor Consultation" was selected), do NOT create a ghost custom item.
+        if (itemsList.length > 0 && calculatedFee !== feeNum) {
+          const adjustmentDiff = feeNum - calculatedFee;
+          if (adjustmentDiff > 0) {
+            itemsList.push({
+              name: `${actualProcedureName} (Additional Fee)`,
+              fee: adjustmentDiff,
+              id: "custom",
+            });
+          }
         }
 
-        const newItems =
-          itemsList.length > 0 && calculatedFee === feeNum
-            ? itemsList
-            : [{ name: actualProcedureName, fee: feeNum, id: "custom" }];
-
-        const existingRec = (selectedAppointment as any).recommendedProcedure;
-
-        if (
-          existingRec &&
-          existingRec.items &&
-          Array.isArray(existingRec.items)
-        ) {
-          // Merge items, avoiding duplicates
-          const mergedItems = [...existingRec.items];
-
-          newItems.forEach((newItem) => {
-            const exists = mergedItems.some(
-              (existingItem: any) =>
-                (newItem.id !== "custom" && existingItem.id === newItem.id) ||
-                (newItem.id === "custom" && existingItem.name === newItem.name),
-            );
-
-            if (!exists) {
-              mergedItems.push(newItem);
-            }
-          });
-
-          recommendedProcedureData = {
-            name: mergedItems.map((i: any) => i.name).join(", "),
-            fee: mergedItems.reduce((sum: number, i: any) => sum + i.fee, 0),
-            area: procedure.area || existingRec.area || "N/A",
-            items: mergedItems,
-          };
+        // If nothing is billable (all already-billed types), treat as fee=0 — no procedure to add
+        if (itemsList.length === 0) {
+          // No real procedure items; fall through to the feeNum=0 path below
+          recommendedProcedureData =
+            (selectedAppointment as any).recommendedProcedure || null;
+          // skip the rest of the feeNum>0 block
         } else {
-          recommendedProcedureData = {
-            name: actualProcedureName,
-            fee: feeNum,
-            area: procedure.area || "N/A",
-            items: newItems,
-          };
-        }
+          const newItems = itemsList;
+
+          const existingRec = (selectedAppointment as any).recommendedProcedure;
+
+          if (
+            existingRec &&
+            existingRec.items &&
+            Array.isArray(existingRec.items)
+          ) {
+            // Merge items, avoiding duplicates
+            const mergedItems = [...existingRec.items];
+
+            newItems.forEach((newItem) => {
+              const exists = mergedItems.some(
+                (existingItem: any) =>
+                  (newItem.id !== "custom" && existingItem.id === newItem.id) ||
+                  (newItem.id === "custom" && existingItem.name === newItem.name),
+              );
+
+              if (!exists) {
+                mergedItems.push(newItem);
+              }
+            });
+
+            recommendedProcedureData = {
+              name: mergedItems.map((i: any) => i.name).join(", "),
+              fee: mergedItems.reduce((sum: number, i: any) => sum + i.fee, 0),
+              area: procedure.area || existingRec.area || "N/A",
+              items: mergedItems,
+            };
+          } else {
+            recommendedProcedureData = {
+              name: actualProcedureName,
+              fee: feeNum,
+              area: procedure.area || "N/A",
+              items: newItems,
+            };
+          }
+        } // end: itemsList.length > 0 else block
       } else {
         // If the expert logged settings but did not specify a fee, preserve the doctor's recommended procedure
         recommendedProcedureData =
@@ -2802,6 +2853,15 @@ export default function FrontOfficeDesk() {
     try {
       const rec = (apptToFinalise as any).recommendedProcedure;
 
+      // Determine the clinician who performed the procedure
+      const isExpert = apptToFinalise.assignedExpertId && apptToFinalise.assignedExpertId !== "unassigned";
+      const clinicianId = isExpert ? apptToFinalise.assignedExpertId : (apptToFinalise.doctorId || "unassigned");
+      const docInfo = doctors.find((d) => d.id === clinicianId);
+      const expInfo = experts.find((e) => e.id === clinicianId);
+      const clinician = docInfo || expInfo;
+      const clinicianName = clinician?.name || "Clinician";
+      const defaultComm = clinician?.defaultCommission || 0;
+
       if (accept && rec && rec.fee > 0) {
         let procedureItemsToAdd: any[] = [];
         let totalFee = 0;
@@ -2822,7 +2882,9 @@ export default function FrontOfficeDesk() {
             appointmentTypeName: `${i.name} (Procedure Fee)`,
             price: i.fee,
             quantity: 1,
-            commission: 0,
+            commission: defaultComm,
+            doctorId: clinicianId,
+            doctorName: clinicianName,
             discountValue: 0,
             discountType: "percent" as const,
             discountAmount: 0,
@@ -2841,7 +2903,9 @@ export default function FrontOfficeDesk() {
               appointmentTypeName: `${rec.name} (Procedure Fee)`,
               price: rec.fee,
               quantity: 1,
-              commission: 0,
+              commission: defaultComm,
+              doctorId: clinicianId,
+              doctorName: clinicianName,
               discountValue: 0,
               discountType: "percent" as const,
               discountAmount: 0,
@@ -2878,8 +2942,41 @@ export default function FrontOfficeDesk() {
               newPaid >= newTotal ? "paid" : newPaid > 0 ? "partial" : "unpaid";
             const newStatus = newPaymentStatus === "paid" ? "paid" : "draft";
 
+            // If an expert performed the procedure, append the recommending doctor to referrals
+            let updatedReferrals = billing.referrals || [];
+            if (isExpert && apptToFinalise.doctorId && apptToFinalise.doctorId !== "unassigned") {
+              const recommendingDoctor = doctors.find((d) => d.id === apptToFinalise.doctorId);
+              if (recommendingDoctor) {
+                const defaultComm = recommendingDoctor.defaultCommission || 0;
+                if (defaultComm > 0) {
+                  // Only add if not already present
+                  const existingRef = updatedReferrals.find(r => r.id === recommendingDoctor.id && r.type === "doctor");
+                  if (!existingRef) {
+                    updatedReferrals = [
+                      ...updatedReferrals,
+                      {
+                        type: "doctor",
+                        id: recommendingDoctor.id,
+                        name: recommendingDoctor.name,
+                        commissionPercentage: defaultComm,
+                        commissionAmount: (totalFee * defaultComm) / 100,
+                      }
+                    ];
+                  } else {
+                    // Update commission amount for the new total fee if they already exist
+                    updatedReferrals = updatedReferrals.map(r =>
+                      (r.id === recommendingDoctor.id && r.type === "doctor")
+                        ? { ...r, commissionAmount: r.commissionAmount + ((totalFee * defaultComm) / 100) }
+                        : r
+                    );
+                  }
+                }
+              }
+            }
+
             await appointmentBillingService.updateBilling(billingId, {
               items: updatedItems,
+              referrals: updatedReferrals,
               subtotal: totals.subtotal,
               itemDiscountAmount: totals.itemDiscountAmount,
               mainDiscountAmount: totals.mainDiscountAmount,
@@ -2927,6 +3024,24 @@ export default function FrontOfficeDesk() {
             doctorName: docInfo?.name || "Clinician",
           }));
 
+          const referrals: any[] = [];
+          // If this is an expert procedure, automatically add the recommending doctor for commission
+          if (isExpert && apptToFinalise.doctorId && apptToFinalise.doctorId !== "unassigned") {
+            const recommendingDoctor = doctors.find((d) => d.id === apptToFinalise.doctorId);
+            if (recommendingDoctor) {
+              const defaultComm = recommendingDoctor.defaultCommission || 0;
+              if (defaultComm > 0) {
+                referrals.push({
+                  type: "doctor",
+                  id: recommendingDoctor.id,
+                  name: recommendingDoctor.name,
+                  commissionPercentage: defaultComm,
+                  commissionAmount: (totalFee * defaultComm) / 100,
+                });
+              }
+            }
+          }
+
           const billingData = {
             invoiceNumber: invoiceNo,
             clinicId: clinicId,
@@ -2940,6 +3055,7 @@ export default function FrontOfficeDesk() {
               | "visitor",
             invoiceDate: new Date(),
             items: draftBillingItems,
+            referrals: referrals,
             subtotal: totalFee,
             itemDiscountAmount: 0,
             mainDiscountAmount: 0,
@@ -3010,8 +3126,20 @@ export default function FrontOfficeDesk() {
           matchingBill.status === "paid" ||
           matchingBill.paymentStatus === "paid";
 
-        // If it's a paid consultation bill, ignore it so we don't navigate to it
+        // If it's a paid consultation bill, only discard if there IS a pending procedure
+        // (in that case we'll find/create a separate procedure invoice below).
+        // If there is NO pending procedure, just navigate to the paid bill for review.
         if (isConsBill && isPaid) {
+          const hasPendingProc = !!(appt as any).recommendedProcedure?.fee &&
+            (appt as any).recommendedProcedure?.fee > 0;
+
+          if (!hasPendingProc) {
+            // No procedure pending — consultation is fully settled. Navigate to it.
+            navigate(`/dashboard/appointments-billing/${targetBillingId}`);
+            return;
+          }
+
+          // Procedure IS pending — clear so we look for/create a procedure invoice
           targetBillingId = null;
         }
       }
@@ -3046,6 +3174,38 @@ export default function FrontOfficeDesk() {
       if (draftBilling) {
         navigate(`/dashboard/appointments-billing/${draftBilling.id}`);
       } else {
+        // Before auto-creating a new invoice, check if the consultation is already paid
+        // AND there is no pending procedure. In that case, don't create an empty ghost invoice —
+        // just navigate to the existing paid consultation bill.
+        const consultationBillingId = (appt as any).consultationBillingId;
+        const hasPendingProcedure = !!(appt as any).recommendedProcedure?.fee &&
+          (appt as any).recommendedProcedure?.fee > 0;
+
+        if (!hasPendingProcedure && consultationBillingId) {
+          const consBilling = patientBillings.find((b) => b.id === consultationBillingId);
+          if (consBilling) {
+            // Navigate to the existing consultation invoice (even if paid — for review)
+            navigate(`/dashboard/appointments-billing/${consultationBillingId}`);
+            return;
+          }
+        }
+
+        // Also check any paid billing for this appointment as a fallback
+        if (!hasPendingProcedure) {
+          const paidBilling = patientBillings.find(
+            (b) =>
+              (b.status === "paid" || b.paymentStatus === "paid") &&
+              b.items?.some(
+                (item: any) =>
+                  item.appointmentTypeName?.toLowerCase().includes("consultation"),
+              ),
+          );
+          if (paidBilling) {
+            navigate(`/dashboard/appointments-billing/${paidBilling.id}`);
+            return;
+          }
+        }
+
         // Automatically create a draft billing invoice for the procedure/appointment type!
         try {
           const isExpert =
@@ -3231,124 +3391,8 @@ export default function FrontOfficeDesk() {
           const newBillingId =
             await appointmentBillingService.createBilling(billingData);
 
-          // 1) Log Consulting Doctor Commission
-          if (docInfo?.defaultCommission && docInfo.defaultCommission > 0) {
-            try {
-              await doctorCommissionService.createCommission(
-                {
-                  id: newBillingId,
-                  ...billingData,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                } as any,
-                docInfo.defaultCommission,
-                currentUser?.uid || "system",
-              );
-            } catch (err) {
-              console.error(
-                "Error creating doctor commission on automatic procedure bill:",
-                err,
-              );
-            }
-          }
-
-          // 1.5) Log Assigned Expert Commission
-          const expertId = appt.assignedExpertId || pat?.assignedExpertId;
-
-          if (expertId) {
-            try {
-              const expertInfo = await expertService.getExpertById(expertId);
-
-              if (
-                expertInfo &&
-                expertInfo.defaultCommission &&
-                expertInfo.defaultCommission > 0
-              ) {
-                await expertCommissionService.createCommission(
-                  expertInfo.id,
-                  expertInfo.name,
-                  {
-                    id: newBillingId,
-                    ...billingData,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                  } as any,
-                  expertInfo.defaultCommission,
-                  currentUser?.uid || "system",
-                );
-              }
-            } catch (err) {
-              console.error(
-                "Error creating expert commission on automatic procedure bill:",
-                err,
-              );
-            }
-          }
-
-          // 2) Log Polymorphic Referrer Commissions
-          for (const r of processedReferrals) {
-            if (r.commissionAmount <= 0) continue;
-            const billingRecord = {
-              id: newBillingId,
-              ...billingData,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            } as any;
-
-            try {
-              if (r.type === "referral-partner") {
-                await referralCommissionService.createReferralCommission(
-                  billingRecord,
-                  {
-                    id: r.id,
-                    name: r.name,
-                    defaultCommission: r.commissionPercentage,
-                  } as any,
-                  r.commissionAmount,
-                  currentUser?.uid || "system",
-                );
-              } else if (r.type === "doctor") {
-                const refBillingRecord = {
-                  ...billingRecord,
-                  doctorId: r.id,
-                  doctorName: r.name,
-                };
-
-                await doctorCommissionService.createCommission(
-                  refBillingRecord,
-                  r.commissionPercentage,
-                  currentUser?.uid || "system",
-                );
-              } else if (r.type === "expert") {
-                await expertCommissionService.createCommission(
-                  r.id,
-                  r.name,
-                  billingRecord,
-                  r.commissionPercentage,
-                  currentUser?.uid || "system",
-                );
-              } else if (r.type === "staff") {
-                await staffCommissionService.createRegistrationCommission(
-                  r.id,
-                  r.name,
-                  billingRecord.clinicId,
-                  billingRecord.branchId,
-                  billingRecord.patientId,
-                  billingRecord.patientName,
-                  appointmentTypeName,
-                  price,
-                  r.commissionAmount,
-                  r.commissionPercentage,
-                  currentUser?.uid || "system",
-                );
-              }
-            } catch (err) {
-              console.error(
-                `Error logging polymorphic commission for ${r.name} (${r.type}):`,
-                err,
-              );
-            }
-          }
+          // COMMISSIONS REMOVED: Commissions must only be generated by the billing engine 
+          // when the invoice is actually settled (paid >= total), not when the draft is created.
 
           // Link new billing to appointment
           await appointmentService.updateAppointment(appt.id, {
@@ -3668,7 +3712,7 @@ export default function FrontOfficeDesk() {
               <button
                 className="clarity-btn clarity-btn-primary flex items-center gap-1.5"
                 type="button"
-                onClick={() => setIsQuickIntakeOpen(true)}
+                onClick={handleOpenQuickIntake}
               >
                 <IoAddOutline className="w-4 h-4" />
                 New Intake Check-In

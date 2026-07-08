@@ -179,7 +179,7 @@ class ReferralCommissionService {
       const simpleQuery = query(
         collection(db, this.collectionName),
         where("partnerId", "==", partnerId),
-        where("clinicId", "==", clinicId),
+
       );
 
       let querySnapshot;
@@ -188,7 +188,7 @@ class ReferralCommissionService {
         const orderedQuery = query(
           collection(db, this.collectionName),
           where("partnerId", "==", partnerId),
-          where("clinicId", "==", clinicId),
+
           orderBy("createdAt", "desc"),
         );
 
@@ -233,7 +233,7 @@ class ReferralCommissionService {
     try {
       const simpleQuery = query(
         collection(db, this.collectionName),
-        where("clinicId", "==", clinicId),
+
       );
 
       let querySnapshot;
@@ -241,7 +241,7 @@ class ReferralCommissionService {
       try {
         const q = query(
           collection(db, this.collectionName),
-          where("clinicId", "==", clinicId),
+
           orderBy("createdAt", "desc"),
         );
 

@@ -51,7 +51,7 @@ export const hrService = {
   ): Promise<StaffMember[]> {
     let q = query(
       collection(db, STAFF_COLLECTION),
-      where("clinicId", "==", clinicId),
+
     );
 
     if (branchId) {
@@ -166,7 +166,7 @@ export const hrService = {
   ): Promise<StaffAttendance[]> {
     let q = query(
       collection(db, ATTENDANCE_COLLECTION),
-      where("clinicId", "==", clinicId),
+
     );
 
     if (branchId) {
@@ -265,7 +265,7 @@ export const hrService = {
   async getHolidays(clinicId: string): Promise<ClinicHoliday[]> {
     const q = query(
       collection(db, HOLIDAY_COLLECTION),
-      where("clinicId", "==", clinicId),
+
     );
     const querySnapshot = await getDocs(q);
 

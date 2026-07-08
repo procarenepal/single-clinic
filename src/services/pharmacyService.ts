@@ -1043,7 +1043,7 @@ export const pharmacyService = {
       if (branchId) {
         q = query(
           settingsRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
         );
       }

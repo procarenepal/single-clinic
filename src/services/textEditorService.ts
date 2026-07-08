@@ -141,7 +141,7 @@ class TextEditorService {
     try {
       let q = query(
         collection(db, TEXT_DOCUMENTS_COLLECTION),
-        where("clinicId", "==", clinicId),
+
         limit(pageSize + 1), // fetch one extra to check hasMore
       );
 
@@ -149,7 +149,7 @@ class TextEditorService {
       if (branchId) {
         q = query(
           collection(db, TEXT_DOCUMENTS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           limit(pageSize + 1),
         );
@@ -198,7 +198,7 @@ class TextEditorService {
       // consider using Algolia or implementing full-text search with Firestore
       let q = query(
         collection(db, TEXT_DOCUMENTS_COLLECTION),
-        where("clinicId", "==", clinicId),
+
       );
 
       if (branchId) {

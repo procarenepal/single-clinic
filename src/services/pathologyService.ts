@@ -56,14 +56,14 @@ export const pathologyService = {
       const testsRef = collection(db, PATHOLOGY_TESTS_COLLECTION);
       let q = query(
         testsRef,
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       );
 
       if (branchId) {
         q = query(
           testsRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
         );
@@ -212,14 +212,14 @@ export const pathologyService = {
       const categoriesRef = collection(db, PATHOLOGY_CATEGORIES_COLLECTION);
       let q = query(
         categoriesRef,
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       );
 
       if (branchId) {
         q = query(
           categoriesRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
         );
@@ -359,14 +359,14 @@ export const pathologyService = {
       const unitsRef = collection(db, PATHOLOGY_UNITS_COLLECTION);
       let q = query(
         unitsRef,
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       );
 
       if (branchId) {
         q = query(
           unitsRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
         );
@@ -506,14 +506,14 @@ export const pathologyService = {
       const parametersRef = collection(db, PATHOLOGY_PARAMETERS_COLLECTION);
       let q = query(
         parametersRef,
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       );
 
       if (branchId) {
         q = query(
           parametersRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
         );
@@ -655,14 +655,14 @@ export const pathologyService = {
       const testTypesRef = collection(db, PATHOLOGY_TEST_TYPES_COLLECTION);
       let q = query(
         testTypesRef,
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       );
 
       if (branchId) {
         q = query(
           testTypesRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
         );

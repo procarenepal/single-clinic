@@ -48,7 +48,7 @@ export const medicalReportFieldService = {
       // Simplify query to avoid composite index requirement
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);
@@ -267,7 +267,7 @@ export const medicalReportFieldService = {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         where("fieldKey", "==", key),
       );
 

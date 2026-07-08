@@ -274,15 +274,17 @@ function Toggle({
   return (
     <label className="flex items-center gap-2 cursor-pointer select-none">
       <div
-        className={`relative inline-flex items-center w-10 h-[22px] rounded-full transition-colors duration-200 ease-in-out ${checked
-          ? "bg-primary border border-primary"
-          : "bg-gray-200 border border-gray-300 dark:bg-gray-600 dark:border-gray-500"
-          }`}
+        className={`relative inline-flex items-center w-10 h-[22px] rounded-full transition-colors duration-200 ease-in-out ${
+          checked
+            ? "bg-primary border border-primary"
+            : "bg-gray-200 border border-gray-300 dark:bg-gray-600 dark:border-gray-500"
+        }`}
         onClick={() => onChange(!checked)}
       >
         <div
-          className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${checked ? "translate-x-[18px]" : "translate-x-0"
-            }`}
+          className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${
+            checked ? "translate-x-[18px]" : "translate-x-0"
+          }`}
         />
       </div>
       <span className="text-[12.5px] text-text-main">{label}</span>
@@ -671,8 +673,10 @@ export default function AppointmentBillingPage() {
           price: 0,
           quantity: 1,
           commission:
-            (doctors.find((d) => d.id === formData.doctorId) || experts.find((e) => e.id === formData.doctorId))
-              ?.defaultCommission ??
+            (
+              doctors.find((d) => d.id === formData.doctorId) ||
+              experts.find((e) => e.id === formData.doctorId)
+            )?.defaultCommission ??
             billingSettings?.defaultCommission ??
             0,
           doctorId: formData.doctorId,
@@ -725,6 +729,16 @@ export default function AppointmentBillingPage() {
 
           item.commission = clinician?.defaultCommission || 0;
         }
+      }
+
+      // Auto-fetch commission if clinician changes
+      if ("doctorId" in updates) {
+        const doc = doctors.find((d) => d.id === updates.doctorId);
+        const exp = experts.find((e) => e.id === updates.doctorId);
+        const clinician = doc || exp;
+        
+        item.commission = clinician?.defaultCommission || 0;
+        item.doctorName = clinician?.name || "";
       }
 
       // Recalculate discount and final amount
@@ -825,13 +839,17 @@ export default function AppointmentBillingPage() {
       // Update patient's assigned clinician to ensure they appear in Expert/Doctor profiles
       if (formData.patientId && formData.patientId !== "walk-in") {
         try {
-          const isExpertRoot = experts.some(e => e.id === rootDoctorId);
-          const isDoctorRoot = doctors.some(d => d.id === rootDoctorId);
-          
+          const isExpertRoot = experts.some((e) => e.id === rootDoctorId);
+          const isDoctorRoot = doctors.some((d) => d.id === rootDoctorId);
+
           if (isExpertRoot) {
-            await patientService.updatePatient(formData.patientId, { assignedExpertId: rootDoctorId });
+            await patientService.updatePatient(formData.patientId, {
+              assignedExpertId: rootDoctorId,
+            });
           } else if (isDoctorRoot) {
-            await patientService.updatePatient(formData.patientId, { doctorId: rootDoctorId });
+            await patientService.updatePatient(formData.patientId, {
+              doctorId: rootDoctorId,
+            });
           }
         } catch (err) {
           console.error("Failed to update patient clinician assignment:", err);
@@ -869,18 +887,18 @@ export default function AppointmentBillingPage() {
 
   const filteredBillings = searchQuery.trim()
     ? billings.filter((b) => {
-      const patientName =
-        b.patientName === "Unknown Patient" || !b.patientName
-          ? patients.find((p) => p.id === b.patientId)?.name ||
-          b.patientName ||
-          "Unknown Patient"
-          : b.patientName;
+        const patientName =
+          b.patientName === "Unknown Patient" || !b.patientName
+            ? patients.find((p) => p.id === b.patientId)?.name ||
+              b.patientName ||
+              "Unknown Patient"
+            : b.patientName;
 
-      return (
-        patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    })
+        return (
+          patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      })
     : billings;
 
   const totalPages = Math.ceil(filteredBillings.length / itemsPerPage) || 1;
@@ -940,28 +958,41 @@ export default function AppointmentBillingPage() {
         paymentForm.notes || undefined,
       );
 
-      // Only generate commissions on the FIRST payment to avoid duplicates
-      if (selectedBillingForPayment.paymentStatus === "unpaid") {
+      // ── Generate commissions only when fully paid to prevent partial payment overpayment ──
+      const isNowFullyPaid = (selectedBillingForPayment.paidAmount + amount) >= selectedBillingForPayment.totalAmount;
+      if (selectedBillingForPayment.paymentStatus !== "paid" && isNowFullyPaid) {
         try {
           const billingDataForCommission = {
             ...selectedBillingForPayment,
-            createdAt: selectedBillingForPayment.createdAt instanceof Date ? selectedBillingForPayment.createdAt : new Date(),
+            createdAt:
+              selectedBillingForPayment.createdAt instanceof Date
+                ? selectedBillingForPayment.createdAt
+                : new Date(),
             updatedAt: new Date(),
           } as AppointmentBilling;
 
           // Group invoice items by unique clinician ID
-          const clinicianMap = new Map<string, { isExpert: boolean; items: typeof selectedBillingForPayment.items }>();
+          const clinicianMap = new Map<
+            string,
+            { isExpert: boolean; items: typeof selectedBillingForPayment.items }
+          >();
+
           for (const item of selectedBillingForPayment.items) {
             const cId = item.doctorId || selectedBillingForPayment.doctorId;
+
             if (!cId) continue;
             const sanitizedItem = {
               ...item,
               commission: parseFloat(item.commission as any) || 0,
               amount: parseFloat(item.amount as any) || 0,
             };
+
             if (!clinicianMap.has(cId)) {
               // Determine type: check in-memory arrays; default to doctor if not found in either
-              const isExpert = experts.some((e) => e.id === cId) && !doctors.some((d) => d.id === cId);
+              const isExpert =
+                experts.some((e) => e.id === cId) &&
+                !doctors.some((d) => d.id === cId);
+
               clinicianMap.set(cId, { isExpert, items: [] });
             }
             clinicianMap.get(cId)!.items.push(sanitizedItem);
@@ -969,29 +1000,56 @@ export default function AppointmentBillingPage() {
 
           // Create commissions for each clinician
           for (const [cId, group] of clinicianMap.entries()) {
-            const clinician = doctors.find((d) => d.id === cId) || experts.find((e) => e.id === cId);
+            const clinician =
+              doctors.find((d) => d.id === cId) ||
+              experts.find((e) => e.id === cId);
             const defaultPct = clinician?.defaultCommission || 0;
-            const billingForClinician = { ...billingDataForCommission, items: group.items };
-            console.log(`[Commission] clinicianId=${cId} isExpert=${group.isExpert} items=${group.items.length} defaultPct=${defaultPct}`);
+            const billingForClinician = {
+              ...billingDataForCommission,
+              items: group.items,
+            };
+
+            console.log(
+              `[Commission] clinicianId=${cId} isExpert=${group.isExpert} items=${group.items.length} defaultPct=${defaultPct}`,
+            );
             if (group.isExpert) {
               try {
-                await expertCommissionService.createCommissionsFromBilling(billingForClinician, defaultPct, currentUser.uid);
-                console.log(`[Commission] Expert commission created for ${cId}`);
+                await expertCommissionService.createCommissionsFromBilling(
+                  billingForClinician,
+                  defaultPct,
+                  currentUser.uid,
+                );
+                console.log(
+                  `[Commission] Expert commission created for ${cId}`,
+                );
               } catch (err) {
-                console.error(`[Commission] Expert commission error for ${cId}:`, err);
+                console.error(
+                  `[Commission] Expert commission error for ${cId}:`,
+                  err,
+                );
               }
             } else {
               try {
-                await doctorCommissionService.createCommission(billingForClinician, defaultPct, currentUser.uid);
-                console.log(`[Commission] Doctor commission created for ${cId}`);
+                await doctorCommissionService.createCommission(
+                  billingForClinician,
+                  defaultPct,
+                  currentUser.uid,
+                );
+                console.log(
+                  `[Commission] Doctor commission created for ${cId}`,
+                );
               } catch (err) {
-                console.error(`[Commission] Doctor commission error for ${cId}:`, err);
+                console.error(
+                  `[Commission] Doctor commission error for ${cId}:`,
+                  err,
+                );
               }
             }
           }
 
           // 2) Log Polymorphic Referrer Commissions
           const processedReferrals = selectedBillingForPayment.referrals || [];
+
           for (const r of processedReferrals) {
             if (r.commissionAmount <= 0) continue;
             try {
@@ -1007,11 +1065,32 @@ export default function AppointmentBillingPage() {
                   currentUser.uid,
                 );
               } else if (r.type === "doctor") {
-                await doctorCommissionService.createCommission(
-                  { ...billingDataForCommission, doctorId: r.id, doctorName: r.name },
-                  r.commissionPercentage,
-                  currentUser.uid,
+                // To ensure the commission goes to the referring doctor and not the expert on the items,
+                // we must strip the item-level doctorId so it falls back to the referring doctor's ID.
+                // WE MUST ALSO FILTER out items that already belong natively to the doctor to avoid double-commission.
+                const itemsForReferral = billingDataForCommission.items.filter(
+                  (item: any) => item.doctorId !== r.id
                 );
+
+                if (itemsForReferral.length > 0) {
+                  const referralBillingData = {
+                    ...billingDataForCommission,
+                    doctorId: r.id,
+                    doctorName: r.name,
+                    items: itemsForReferral.map((item: any) => ({
+                      ...item,
+                      doctorId: undefined,
+                      doctorName: undefined,
+                      commission: undefined, // Force fallback to r.commissionPercentage
+                    }))
+                  };
+                  
+                  await doctorCommissionService.createCommission(
+                    referralBillingData,
+                    r.commissionPercentage,
+                    currentUser.uid,
+                  );
+                }
               } else if (r.type === "expert") {
                 await expertCommissionService.createCommission(
                   r.id,
@@ -1342,16 +1421,20 @@ export default function AppointmentBillingPage() {
                       <div className="md:col-span-2">
                         <SearchSelect
                           items={[
-                            ...doctors.filter((_d: any) => _d.isActive !== false).map((d) => ({
-                              id: d.id,
-                              primary: d.name,
-                              secondary: `Doctor ${d.speciality ? `• ${d.speciality}` : ""}`,
-                            })),
-                            ...experts.filter((_e: any) => _e.isActive !== false).map((e) => ({
-                              id: e.id,
-                              primary: e.name,
-                              secondary: `Expert ${e.specialty || e.speciality ? `• ${e.specialty || e.speciality}` : ""}`,
-                            }))
+                            ...doctors
+                              .filter((_d: any) => _d.isActive !== false)
+                              .map((d) => ({
+                                id: d.id,
+                                primary: d.name,
+                                secondary: `Doctor ${d.speciality ? `• ${d.speciality}` : ""}`,
+                              })),
+                            ...experts
+                              .filter((_e: any) => _e.isActive !== false)
+                              .map((e) => ({
+                                id: e.id,
+                                primary: e.name,
+                                secondary: `Expert ${e.specialty || e.speciality ? `• ${e.specialty || e.speciality}` : ""}`,
+                              })),
                           ]}
                           label="Clinician"
                           placeholder="Select Doctor or Expert"
@@ -1664,11 +1747,11 @@ export default function AppointmentBillingPage() {
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                             {b.patientName === "Unknown Patient" ||
-                              !b.patientName
+                            !b.patientName
                               ? patients.find((p) => p.id === b.patientId)
-                                ?.name ||
-                              b.patientName ||
-                              "Unknown Patient"
+                                  ?.name ||
+                                b.patientName ||
+                                "Unknown Patient"
                               : b.patientName}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px]">
@@ -1679,10 +1762,10 @@ export default function AppointmentBillingPage() {
                                   b.doctorId && b.doctorId !== "unassigned"
                                     ? b.doctorId
                                     : b.items?.find(
-                                      (i) =>
-                                        i.doctorId &&
-                                        i.doctorId !== "unassigned",
-                                    )?.doctorId;
+                                        (i) =>
+                                          i.doctorId &&
+                                          i.doctorId !== "unassigned",
+                                      )?.doctorId;
 
                                 if (docId) {
                                   const foundDoc = doctors.find(
@@ -1738,12 +1821,12 @@ export default function AppointmentBillingPage() {
                                 new Set(
                                   b.items
                                     ? b.items
-                                      .filter(
-                                        (i) =>
-                                          i.doctorId &&
-                                          i.doctorId !== b.doctorId,
-                                      )
-                                      .map((i) => i.doctorName)
+                                        .filter(
+                                          (i) =>
+                                            i.doctorId &&
+                                            i.doctorId !== b.doctorId,
+                                        )
+                                        .map((i) => i.doctorName)
                                     : [],
                                 ),
                               );
@@ -1935,6 +2018,14 @@ export default function AppointmentBillingPage() {
                     </span>
                     <div className="flex gap-1">
                       <button
+                        className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main font-bold"
+                        disabled={currentPage === 1}
+                        type="button"
+                        onClick={() => setCurrentPage(1)}
+                      >
+                        &laquo;
+                      </button>
+                      <button
                         className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main"
                         disabled={currentPage === 1}
                         type="button"
@@ -1949,6 +2040,14 @@ export default function AppointmentBillingPage() {
                         onClick={() => setCurrentPage((p) => p + 1)}
                       >
                         Next
+                      </button>
+                      <button
+                        className="px-2 py-1 border border-border-base rounded hover:bg-surface-2 disabled:opacity-50 text-text-main font-bold"
+                        disabled={currentPage === totalPages}
+                        type="button"
+                        onClick={() => setCurrentPage(totalPages)}
+                      >
+                        &raquo;
                       </button>
                     </div>
                   </div>
@@ -2467,15 +2566,15 @@ export default function AppointmentBillingPage() {
             </div>
             {availableMethods.find((m) => m.key === paymentForm.method)
               ?.requiresReference && (
-                <FlatInput
-                  required
-                  label="Reference ID"
-                  value={paymentForm.reference}
-                  onChange={(v) =>
-                    setPaymentForm((p) => ({ ...p, reference: v }))
-                  }
-                />
-              )}
+              <FlatInput
+                required
+                label="Reference ID"
+                value={paymentForm.reference}
+                onChange={(v) =>
+                  setPaymentForm((p) => ({ ...p, reference: v }))
+                }
+              />
+            )}
             <FlatInput
               label="Notes"
               value={paymentForm.notes}

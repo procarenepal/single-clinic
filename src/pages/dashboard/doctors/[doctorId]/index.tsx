@@ -307,9 +307,9 @@ export default function DoctorProfilePage() {
       setDoctor(doctorData);
 
       const loadTasks = [
-        loadAppointments(doctorId).catch(() => { }),
-        loadPatients(doctorId).catch(() => { }),
-        loadCommissions(doctorId).catch(() => { }),
+        loadAppointments(doctorId).catch(() => {}),
+        loadPatients(doctorId).catch(() => {}),
+        loadCommissions(doctorId).catch(() => {}),
       ];
 
       await Promise.allSettled(loadTasks);
@@ -332,31 +332,40 @@ export default function DoctorProfilePage() {
 
       if (clinicId) {
         try {
-          const billingData = await appointmentBillingService.getBillingByClinic(clinicId);
-          const doctorBilling = billingData.filter(b =>
-            b.doctorId === doctorId ||
-            (b.items && b.items.some(i => i.doctorId === doctorId))
+          const billingData =
+            await appointmentBillingService.getBillingByClinic(clinicId);
+          const doctorBilling = billingData.filter(
+            (b) =>
+              b.doctorId === doctorId ||
+              (b.items && b.items.some((i) => i.doctorId === doctorId)),
           );
 
-          const billingAsAppts: Appointment[] = doctorBilling.map(b => ({
-            id: `billing-${b.id}`,
-            patientId: b.patientId,
-            doctorId: doctorId,
-            clinicId: b.clinicId,
-            appointmentDate: b.invoiceDate || b.createdAt,
-            startTime: '',
-            endTime: '',
-            status: b.paymentStatus === 'paid' ? 'completed' : 'scheduled',
-            appointmentTypeId: 'billing-direct',
-            appointmentType: 'Direct Billing',
-            notes: 'Generated from direct billing',
-            createdAt: b.createdAt,
-            updatedAt: b.updatedAt
-          } as unknown as Appointment));
+          const billingAsAppts: Appointment[] = doctorBilling.map(
+            (b) =>
+              ({
+                id: `billing-${b.id}`,
+                patientId: b.patientId,
+                doctorId: doctorId,
+                clinicId: b.clinicId,
+                appointmentDate: b.invoiceDate || b.createdAt,
+                startTime: "",
+                endTime: "",
+                status: b.paymentStatus === "paid" ? "completed" : "scheduled",
+                appointmentTypeId: "billing-direct",
+                appointmentType: "Direct Billing",
+                notes: "Generated from direct billing",
+                createdAt: b.createdAt,
+                updatedAt: b.updatedAt,
+              }) as unknown as Appointment,
+          );
 
           // Deduplicate if there's already an appointment with this billingId
-          const existingBillingIds = new Set(appointmentsData.map(a => a.billingId).filter(Boolean));
-          const newBillingAppts = billingAsAppts.filter(ba => !existingBillingIds.has(ba.id.replace('billing-', '')));
+          const existingBillingIds = new Set(
+            appointmentsData.map((a) => a.billingId).filter(Boolean),
+          );
+          const newBillingAppts = billingAsAppts.filter(
+            (ba) => !existingBillingIds.has(ba.id.replace("billing-", "")),
+          );
 
           appointmentsData = [...appointmentsData, ...newBillingAppts];
         } catch (err) {
@@ -416,6 +425,7 @@ export default function DoctorProfilePage() {
           clinicId,
           doctorId,
         );
+
         if (directPatients) patientsData.push(...directPatients);
       }
 
@@ -424,16 +434,21 @@ export default function DoctorProfilePage() {
 
       if (clinicId) {
         try {
-          const billingData = await appointmentBillingService.getBillingByClinic(clinicId);
-          const doctorBilling = billingData.filter(b =>
-            b.doctorId === doctorId ||
-            (b.items && b.items.some(i => i.doctorId === doctorId))
+          const billingData =
+            await appointmentBillingService.getBillingByClinic(clinicId);
+          const doctorBilling = billingData.filter(
+            (b) =>
+              b.doctorId === doctorId ||
+              (b.items && b.items.some((i) => i.doctorId === doctorId)),
           );
+
           appointmentsData = [
             ...appointmentsData,
-            ...doctorBilling.map(b => ({ patientId: b.patientId } as unknown as Appointment))
+            ...doctorBilling.map(
+              (b) => ({ patientId: b.patientId }) as unknown as Appointment,
+            ),
           ];
-        } catch (err) { }
+        } catch (err) {}
       }
 
       if (appointmentsData && appointmentsData.length > 0) {
@@ -442,7 +457,9 @@ export default function DoctorProfilePage() {
         ];
 
         // Only fetch patients we don't already have
-        const missingIds = patientIds.filter(pid => !patientsData.some(p => p.id === pid));
+        const missingIds = patientIds.filter(
+          (pid) => !patientsData.some((p) => p.id === pid),
+        );
 
         if (missingIds.length > 0) {
           const patientPromises = missingIds.map((pid) =>
@@ -568,14 +585,14 @@ export default function DoctorProfilePage() {
 
   // Business and Target Calculations
   const getCommissionBusiness = (c: DoctorCommission) => {
-    const percentage = c.commissionPercentage || 0;
+    const percentage = c.commissionPercentage || doctor?.defaultCommission || 0;
     const amt = c.commissionAmount || 0;
 
     if (percentage > 0) {
       return (amt * 100) / percentage;
     }
 
-    return c.totalInvoiceAmount || amt;
+    return amt;
   };
 
   const thisMonthBusiness = commissions
@@ -618,8 +635,8 @@ export default function DoctorProfilePage() {
 
   const filteredCommissionsForEarnings = commissions.filter((c) => {
     if (c.status === "cancelled") return false;
-    const startStr = earningsDateRange.start;
-    const endStr = earningsDateRange.end;
+    const startStr = earningsDateRange.start || globalDateRange.start;
+    const endStr = earningsDateRange.end || globalDateRange.end;
 
     if (startStr && endStr) {
       const date = new Date(c.appointmentDate || c.createdAt);
@@ -637,7 +654,8 @@ export default function DoctorProfilePage() {
   });
 
   const getSelectedRangeBusiness = () => {
-    if (earningsDateRange.start && earningsDateRange.end) {
+    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + getCommissionBusiness(c),
         0,
@@ -648,18 +666,23 @@ export default function DoctorProfilePage() {
   };
 
   const getSelectedRangeCommissionEarned = () => {
-    if (earningsDateRange.start && earningsDateRange.end) {
+    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + c.commissionAmount,
         0,
       );
     }
 
-    return commissionStats.totalCommission || 0;
+    // Safely calculate from actual records to avoid historical cached data drift
+    return commissions
+      .filter((c) => c.status !== "cancelled")
+      .reduce((sum, c) => sum + c.commissionAmount, 0);
   };
 
   const getSelectedRangeCommissionBalance = () => {
-    if (earningsDateRange.start && earningsDateRange.end) {
+    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    if (hasRange) {
       return filteredCommissionsForEarnings
         .filter((c) => c.status === "pending")
         .reduce(
@@ -668,7 +691,10 @@ export default function DoctorProfilePage() {
         );
     }
 
-    return commissionStats.pendingCommission || 0;
+    // Safely calculate from actual records to avoid historical cached data drift
+    return commissions
+      .filter((c) => c.status === "pending")
+      .reduce((sum, c) => sum + (c.commissionAmount - (c.paidAmount || 0)), 0);
   };
 
   const handleUpdateTarget = async (e: React.FormEvent) => {
@@ -829,11 +855,13 @@ export default function DoctorProfilePage() {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  const formatSpeciality = (speciality: string) =>
-    speciality
+  const formatSpeciality = (speciality: string) => {
+    if (!speciality) return "Unspecified Speciality";
+    return speciality
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
+  };
 
   if (loading) {
     return (
@@ -1000,10 +1028,11 @@ export default function DoctorProfilePage() {
                   {doctor.name}
                 </h2>
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 border rounded-full text-[11px] font-semibold tracking-wide uppercase ${doctor.isActive
-                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                    : "bg-red-500/10 text-red-500 border-red-500/20"
-                    }`}
+                  className={`inline-flex items-center px-2 py-0.5 border rounded-full text-[11px] font-semibold tracking-wide uppercase ${
+                    doctor.isActive
+                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                      : "bg-red-500/10 text-red-500 border-red-500/20"
+                  }`}
                 >
                   {doctor.isActive ? (
                     <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
@@ -1027,12 +1056,13 @@ export default function DoctorProfilePage() {
             {/* Badges Column */}
             <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-center">
               <span
-                className={`flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1 rounded border ${doctor.doctorType === "regular"
-                  ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
-                  : doctor.doctorType === "visiting"
-                    ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
-                    : "bg-primary/10 text-primary border-primary/20"
-                  }`}
+                className={`flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1 rounded border ${
+                  doctor.doctorType === "regular"
+                    ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
+                    : doctor.doctorType === "visiting"
+                      ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
+                      : "bg-primary/10 text-primary border-primary/20"
+                }`}
               >
                 <IoBusinessOutline className="w-3.5 h-3.5" />
                 <span className="capitalize">{doctor.doctorType}</span>
@@ -1128,10 +1158,11 @@ export default function DoctorProfilePage() {
           ].map((t) => (
             <button
               key={t.key}
-              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${selectedTab === t.key
-                ? "border-primary text-primary bg-primary/5"
-                : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
-                }`}
+              className={`px-5 py-4 text-[14px] font-semibold whitespace-nowrap transition-colors border-b-2 ${
+                selectedTab === t.key
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-2"
+              }`}
               onClick={() => handleTabChange(t.key)}
             >
               {t.label}
@@ -1229,7 +1260,7 @@ export default function DoctorProfilePage() {
 
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                   <span className="text-text-muted">
-                    {earningsDateRange.start && earningsDateRange.end
+                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Business"
                       : "This Month Business"}
                   </span>
@@ -1239,7 +1270,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                   <span className="text-text-muted">
-                    {earningsDateRange.start && earningsDateRange.end
+                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Commission"
                       : "Total Commission Earned"}
                   </span>
@@ -1249,7 +1280,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div className="flex justify-between text-[14px] pb-2">
                   <span className="text-text-muted font-medium">
-                    {earningsDateRange.start && earningsDateRange.end
+                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Balance"
                       : "Commission Balance"}
                   </span>
@@ -1509,16 +1540,16 @@ export default function DoctorProfilePage() {
                     {(appointmentDateRange.start ||
                       appointmentDateRange.end ||
                       appointmentTypeFilter !== "all") && (
-                        <button
-                          className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
-                          onClick={() => {
-                            setAppointmentDateRange({ start: "", end: "" });
-                            setAppointmentTypeFilter("all");
-                          }}
-                        >
-                          Clear
-                        </button>
-                      )}
+                      <button
+                        className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
+                        onClick={() => {
+                          setAppointmentDateRange({ start: "", end: "" });
+                          setAppointmentTypeFilter("all");
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1557,14 +1588,15 @@ export default function DoctorProfilePage() {
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <span
-                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${appointment.status === "completed"
-                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                  : appointment.status === "scheduled"
-                                    ? "bg-primary/10 text-primary border-primary/20"
-                                    : appointment.status === "cancelled"
-                                      ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                      : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                  }`}
+                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${
+                                  appointment.status === "completed"
+                                    ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                    : appointment.status === "scheduled"
+                                      ? "bg-primary/10 text-primary border-primary/20"
+                                      : appointment.status === "cancelled"
+                                        ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                        : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                }`}
                               >
                                 {appointment.status}
                               </span>
@@ -1819,7 +1851,7 @@ export default function DoctorProfilePage() {
                               Pending:{" "}
                               {formatCurrency(
                                 commission.commissionAmount -
-                                (commission.paidAmount || 0),
+                                  (commission.paidAmount || 0),
                               )}
                             </p>
                           )}
@@ -1876,7 +1908,7 @@ export default function DoctorProfilePage() {
                 <span className="font-bold text-amber-500">
                   {formatCurrency(
                     selectedCommission.commissionAmount -
-                    (selectedCommission.paidAmount || 0),
+                      (selectedCommission.paidAmount || 0),
                   )}
                 </span>
               </p>
@@ -1913,17 +1945,17 @@ export default function DoctorProfilePage() {
             />
             {(paymentForm.method === "bank_transfer" ||
               paymentForm.method === "cheque") && (
-                <CustomInput
-                  label="Reference / Transaction ID"
-                  value={paymentForm.reference}
-                  onChange={(e: any) =>
-                    setPaymentForm((prev) => ({
-                      ...prev,
-                      reference: e.target.value,
-                    }))
-                  }
-                />
-              )}
+              <CustomInput
+                label="Reference / Transaction ID"
+                value={paymentForm.reference}
+                onChange={(e: any) =>
+                  setPaymentForm((prev) => ({
+                    ...prev,
+                    reference: e.target.value,
+                  }))
+                }
+              />
+            )}
             <CustomInput
               label="Notes (Optional)"
               value={paymentForm.notes}

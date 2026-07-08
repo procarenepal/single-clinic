@@ -440,7 +440,7 @@ export const pathologyBillingService = {
       if (branchId) {
         q = query(
           billingRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
         );
       }

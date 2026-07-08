@@ -171,6 +171,7 @@ const FrontOfficeDeskPage = lazy(
   () => import("@/pages/dashboard/front-office/front-office-desk"),
 );
 const FollowupsPage = lazy(() => import("@/pages/dashboard/follow-ups/index"));
+const TestCommissionPage = lazy(() => import("@/pages/dashboard/test-commission"));
 
 // Lazy load invitation handler
 const InvitationPage = lazy(() => import("@/pages/invitation/index"));
@@ -751,6 +752,14 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="follow-ups"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/billing">
+                                <TestCommissionPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="test-commission"
                           />
                           {/* Core Settings Routes - No RBAC needed for basic settings */}
                           <Route element={<SettingsPage />} path="settings" />

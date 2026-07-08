@@ -595,7 +595,7 @@ export default function FollowupModal({
                       }
                     />
                   </div>
-                    <div className="flex gap-4">
+                  <div className="flex gap-4">
                     <div className="flex-1">
                       <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
                         Category

@@ -249,7 +249,7 @@ export const prescriptionService = {
       const prescriptionsCollection = collection(db, "prescriptions");
       const q = query(
         prescriptionsCollection,
-        where("clinicId", "==", clinicId),
+
       );
       const querySnapshot = await getDocs(q);
 
@@ -609,7 +609,7 @@ export const prescriptionService = {
       const templatesCollection = collection(db, "prescription_templates");
       const q = query(
         templatesCollection,
-        where("clinicId", "==", clinicId),
+
         where("doctorId", "==", doctorId),
       );
       const snapshot = await getDocs(q);

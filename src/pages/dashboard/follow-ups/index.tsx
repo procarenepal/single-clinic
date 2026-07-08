@@ -69,7 +69,8 @@ export default function FollowupsPage() {
         statusFilter === "all" || f.overallStatus === statusFilter;
 
       const matchesCategory =
-        categoryFilter === "all" || (f.category || "general") === categoryFilter;
+        categoryFilter === "all" ||
+        (f.category || "general") === categoryFilter;
 
       return matchesSearch && matchesStatus && matchesCategory;
     });
@@ -215,16 +216,17 @@ export default function FollowupsPage() {
 
       <div className="mb-6">
         <Tabs
-          selectedKey={categoryFilter}
-          onSelectionChange={(key) => setCategoryFilter(key as string)}
-          color="primary"
-          variant="underlined"
           classNames={{
-            tabList: "gap-6 w-full relative rounded-none p-0 border-b border-border-base",
+            tabList:
+              "gap-6 w-full relative rounded-none p-0 border-b border-border-base",
             cursor: "w-full bg-primary",
             tab: "max-w-fit px-0 h-12",
-            tabContent: "group-data-[selected=true]:text-primary"
+            tabContent: "group-data-[selected=true]:text-primary",
           }}
+          color="primary"
+          selectedKey={categoryFilter}
+          variant="underlined"
+          onSelectionChange={(key) => setCategoryFilter(key as string)}
         >
           <Tab key="all" title="All Follow-ups" />
           <Tab key="appointment" title="Appointments" />
@@ -314,10 +316,16 @@ export default function FollowupsPage() {
                           "h-6 min-h-0 shadow-none border border-border-light bg-surface",
                         value: "text-[11px] capitalize",
                       }}
-                      selectedKeys={item.category ? [item.category] : ["general"]}
+                      selectedKeys={
+                        item.category ? [item.category] : ["general"]
+                      }
                       size="sm"
                       onChange={(e) =>
-                        handleInlineUpdate(item, "category" as any, e.target.value)
+                        handleInlineUpdate(
+                          item,
+                          "category" as any,
+                          e.target.value,
+                        )
                       }
                     >
                       <SelectItem key="general">General</SelectItem>

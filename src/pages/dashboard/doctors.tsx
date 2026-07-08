@@ -271,7 +271,7 @@ export default function DoctorsPage() {
     const matchesSpeciality =
       selectedSpeciality === "all" ||
       doctor.speciality.toLowerCase().replace(/\s+/g, "-") ===
-      selectedSpeciality;
+        selectedSpeciality;
 
     const matchesStatus =
       selectedStatus === "all" ||
@@ -531,10 +531,11 @@ export default function DoctorsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${doctor.doctorType === "regular"
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium capitalize border ${
+                          doctor.doctorType === "regular"
                             ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
                             : "bg-purple-500/10 text-purple-600 border-purple-500/20"
-                          }`}
+                        }`}
                       >
                         {doctor.doctorType}
                       </span>
@@ -546,10 +547,11 @@ export default function DoctorsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${doctor.isActive
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11.5px] font-medium border ${
+                          doctor.isActive
                             ? "bg-green-500/10 text-green-600 border-green-500/20"
                             : "bg-red-500/10 text-red-600 border-red-500/20"
-                          }`}
+                        }`}
                       >
                         {doctor.isActive ? "Active" : "Inactive"}
                       </span>

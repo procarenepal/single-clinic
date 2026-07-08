@@ -591,14 +591,14 @@ export const smsService = {
     try {
       let q = query(
         collection(db, SMS_LOGS_COLLECTION),
-        where("clinicId", "==", clinicId),
+
         limit(limitCount),
       );
 
       if (branchId) {
         q = query(
           collection(db, SMS_LOGS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           limit(limitCount),
         );
@@ -681,13 +681,13 @@ export const smsService = {
       const q = branchId
         ? query(
             collection(db, SMS_TEMPLATES_COLLECTION),
-            where("clinicId", "==", clinicId),
+
             where("branchId", "==", branchId),
             where("isActive", "==", true),
           )
         : query(
             collection(db, SMS_TEMPLATES_COLLECTION),
-            where("clinicId", "==", clinicId),
+
             where("isActive", "==", true),
           );
 
@@ -1013,14 +1013,14 @@ export const smsService = {
         getDocs(
           query(
             collection(db, SMS_LOGS_COLLECTION),
-            where("clinicId", "==", clinicId),
+
             ...(branchId ? [where("branchId", "==", branchId)] : []),
           ),
         ),
         getDocs(
           query(
             collection(db, SMS_TEMPLATES_COLLECTION),
-            where("clinicId", "==", clinicId),
+
             ...(branchId ? [where("branchId", "==", branchId)] : []),
           ),
         ),

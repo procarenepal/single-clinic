@@ -62,7 +62,7 @@ export class PatientNoteEntriesService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         where("patientId", "==", patientId),
       );
 
@@ -102,7 +102,7 @@ export class PatientNoteEntriesService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         where("patientId", "==", patientId),
         where("sectionKey", "==", sectionKey),
       );
@@ -180,7 +180,7 @@ export class PatientNoteEntriesService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);

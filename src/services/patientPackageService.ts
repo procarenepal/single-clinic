@@ -29,7 +29,7 @@ export const patientPackageService = {
       const q = query(
         collection(db, PATIENT_PACKAGES_COLLECTION),
         where("patientId", "==", patientId),
-        where("clinicId", "==", clinicId),
+
       );
       const snapshot = await getDocs(q);
 

@@ -197,6 +197,14 @@ function Pagination({
   return (
     <div className="flex items-center gap-1.5">
       <button
+        aria-label="First page"
+        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-primary hover:text-primary hover:bg-surface-2 transition-all font-bold text-[13px]"
+        disabled={page === 1}
+        onClick={() => onChange(1)}
+      >
+        &laquo;
+      </button>
+      <button
         aria-label="Previous page"
         className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-primary hover:text-primary hover:bg-surface-2 transition-all"
         disabled={page === 1}
@@ -208,8 +216,8 @@ function Pagination({
         <button
           key={p}
           className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${p === page
-            ? "bg-primary text-white border-primary shadow-sm"
-            : "border-border-base text-text-muted hover:border-primary hover:text-primary hover:bg-surface-2"
+              ? "bg-primary text-white border-primary shadow-sm"
+              : "border-border-base text-text-muted hover:border-primary hover:text-primary hover:bg-surface-2"
             }`}
           onClick={() => onChange(p)}
         >
@@ -223,6 +231,14 @@ function Pagination({
         onClick={() => onChange(page + 1)}
       >
         <IoChevronForwardOutline className="w-4 h-4" />
+      </button>
+      <button
+        aria-label="Last page"
+        className="w-8 h-8 flex items-center justify-center rounded border border-border-base text-text-muted disabled:opacity-30 disabled:cursor-not-allowed hover:border-primary hover:text-primary hover:bg-surface-2 transition-all font-bold text-[13px]"
+        disabled={page === total}
+        onClick={() => onChange(total)}
+      >
+        &raquo;
       </button>
     </div>
   );
@@ -303,8 +319,7 @@ export default function PatientsPage() {
 
   // Bypass server-side pagination only for complex filters not supported by Firestore natively
   // Also bypass for search to use client-side comprehensive filtering (mobile, email, etc.)
-  const useServerPagination =
-    !search && !ageMin && !ageMax && !regStart && !regEnd;
+  const useServerPagination = false; // Disabled to allow direct page jumps (like last page)
 
   const fetchPatientsPaginated = useCallback(
     async (
@@ -686,6 +701,7 @@ export default function PatientsPage() {
       // Then sort by regNumber numerically ascending (lowest reg# first)
       const aReg = parseInt(String(a.regNumber || "0"), 10) || 0;
       const bReg = parseInt(String(b.regNumber || "0"), 10) || 0;
+
       return aReg - bReg;
     });
 
@@ -699,6 +715,7 @@ export default function PatientsPage() {
       if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
       const aReg = parseInt(String(a.regNumber || "0"), 10) || 0;
       const bReg = parseInt(String(b.regNumber || "0"), 10) || 0;
+
       return aReg - bReg;
     });
   const pagePatients = useServerPagination

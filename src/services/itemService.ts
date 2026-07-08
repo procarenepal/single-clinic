@@ -28,7 +28,7 @@ export const itemService = {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       ];
 
@@ -205,7 +205,7 @@ export const itemService = {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("category", "==", category),
         where("isActive", "==", true),
       ];
@@ -250,7 +250,7 @@ export const itemService = {
       const itemsRef = collection(db, ITEMS_COLLECTION);
       let q = query(
         itemsRef,
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
         orderBy("name"),
       );
@@ -258,7 +258,7 @@ export const itemService = {
       if (branchId) {
         q = query(
           itemsRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
           orderBy("name"),

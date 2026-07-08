@@ -32,14 +32,14 @@ export const treatmentCategoryService = {
       if (branchId) {
         q = query(
           categoriesRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("isActive", "==", true),
         );
       } else {
         q = query(
           categoriesRef,
-          where("clinicId", "==", clinicId),
+
           where("isActive", "==", true),
         );
       }

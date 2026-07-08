@@ -50,7 +50,7 @@ class DoctorCommissionService {
           // Calculate total commission amount for this doctor's items
           const groupCommissionAmount = group.items.reduce((total, item) => {
             const percentage =
-              typeof item.commission === "number"
+              typeof item.commission === "number" && item.commission > 0
                 ? item.commission
                 : doctorCommissionPercent;
 
@@ -58,7 +58,13 @@ class DoctorCommissionService {
               return total;
             }
 
-            const itemCommissionAmount = (item.amount * percentage) / 100;
+            // Pro-rate the global invoice discount (mainDiscountAmount) onto this item
+            const subtotal = billing.subtotal || 1; // Prevent division by zero
+            const mainDiscount = billing.mainDiscountAmount || 0;
+            const discountRatio = (subtotal - mainDiscount) / subtotal;
+            const effectiveItemAmount = item.amount * discountRatio;
+
+            const itemCommissionAmount = (effectiveItemAmount * percentage) / 100;
 
             return total + itemCommissionAmount;
           }, 0);
@@ -256,14 +262,13 @@ class DoctorCommissionService {
   // Get all commissions for a doctor
   async getCommissionsByDoctor(
     doctorId: string,
-    clinicId: string,
+    clinicId: string, // Kept for signature compatibility
   ): Promise<DoctorCommission[]> {
     try {
       // Try ordered query first, fallback to simple query if index doesn't exist
       const simpleQuery = query(
         collection(db, this.collectionName),
-        where("doctorId", "==", doctorId),
-        where("clinicId", "==", clinicId),
+        where("doctorId", "==", doctorId)
       );
 
       let querySnapshot;
@@ -273,7 +278,6 @@ class DoctorCommissionService {
         const orderedQuery = query(
           collection(db, this.collectionName),
           where("doctorId", "==", doctorId),
-          where("clinicId", "==", clinicId),
           orderBy("createdAt", "desc"),
         );
 
@@ -307,9 +311,9 @@ class DoctorCommissionService {
   // Get all commissions for a clinic
   async getCommissionsByClinic(clinicId: string): Promise<DoctorCommission[]> {
     try {
+      // Since it's a single clinic system, we fetch all commissions and rely on date sorting
       const q = query(
         collection(db, this.collectionName),
-        where("clinicId", "==", clinicId),
         orderBy("createdAt", "desc"),
       );
 
@@ -368,7 +372,7 @@ class DoctorCommissionService {
         updatedAt: Timestamp.fromDate(new Date()),
         status:
           (currentCommission.paidAmount || 0) + paidAmount >=
-          currentCommission.commissionAmount
+            currentCommission.commissionAmount
             ? "paid"
             : "pending",
       };

@@ -159,9 +159,9 @@ export default function ExpertProfilePage() {
       setExpert(data);
 
       const loadTasks = [
-        loadCommissions().catch(() => {}),
-        loadAppointments().catch(() => {}),
-        loadPatients().catch(() => {}),
+        loadCommissions().catch(() => { }),
+        loadAppointments().catch(() => { }),
+        loadPatients().catch(() => { }),
       ];
 
       await Promise.allSettled(loadTasks);
@@ -195,39 +195,52 @@ export default function ExpertProfilePage() {
     if (!expertId || !clinicId) return;
     try {
       setAppointmentsLoading(true);
-      let data = (await appointmentService.getAppointmentsByExpert(expertId)) || [];
+      let data =
+        (await appointmentService.getAppointmentsByExpert(expertId)) || [];
 
       if (clinicId) {
         try {
-          const billingData = await appointmentBillingService.getBillingByClinic(clinicId);
-          const expertBilling = billingData.filter(b => 
-            b.doctorId === expertId || 
-            (b.items && b.items.some(i => i.doctorId === expertId))
+          const billingData =
+            await appointmentBillingService.getBillingByClinic(clinicId);
+          const expertBilling = billingData.filter(
+            (b) =>
+              b.doctorId === expertId ||
+              (b.items && b.items.some((i) => i.doctorId === expertId)),
           );
-          
-          const billingAsAppts: Appointment[] = expertBilling.map(b => ({
-            id: `billing-${b.id}`,
-            patientId: b.patientId,
-            doctorId: b.doctorId || 'unassigned', // Expert is not technically a doctor here, but maybe in items
-            assignedExpertId: expertId,
-            clinicId: b.clinicId,
-            appointmentDate: b.invoiceDate || b.createdAt,
-            startTime: '',
-            endTime: '',
-            status: b.paymentStatus === 'paid' ? 'completed' : 'scheduled',
-            appointmentTypeId: 'billing-direct',
-            appointmentType: 'Direct Billing',
-            notes: 'Generated from direct billing',
-            createdAt: b.createdAt,
-            updatedAt: b.updatedAt
-          } as unknown as Appointment));
-          
-          const existingBillingIds = new Set(data.map(a => a.billingId).filter(Boolean));
-          const newBillingAppts = billingAsAppts.filter(ba => !existingBillingIds.has(ba.id.replace('billing-', '')));
-          
+
+          const billingAsAppts: Appointment[] = expertBilling.map(
+            (b) =>
+              ({
+                id: `billing-${b.id}`,
+                patientId: b.patientId,
+                doctorId: b.doctorId || "unassigned", // Expert is not technically a doctor here, but maybe in items
+                assignedExpertId: expertId,
+                clinicId: b.clinicId,
+                appointmentDate: b.invoiceDate || b.createdAt,
+                startTime: "",
+                endTime: "",
+                status: b.paymentStatus === "paid" ? "completed" : "scheduled",
+                appointmentTypeId: "billing-direct",
+                appointmentType: "Direct Billing",
+                notes: "Generated from direct billing",
+                createdAt: b.createdAt,
+                updatedAt: b.updatedAt,
+              }) as unknown as Appointment,
+          );
+
+          const existingBillingIds = new Set(
+            data.map((a) => a.billingId).filter(Boolean),
+          );
+          const newBillingAppts = billingAsAppts.filter(
+            (ba) => !existingBillingIds.has(ba.id.replace("billing-", "")),
+          );
+
           data = [...data, ...newBillingAppts];
         } catch (err) {
-          console.error("Failed to merge billing into expert appointments:", err);
+          console.error(
+            "Failed to merge billing into expert appointments:",
+            err,
+          );
         }
       }
 
@@ -251,36 +264,49 @@ export default function ExpertProfilePage() {
       setPatientsLoading(true);
       let patientsData: Patient[] = [];
       const directPatients = await patientService.getPatientsByExpert(expertId);
+
       if (directPatients) patientsData.push(...directPatients);
 
-      let appointmentsData = (await appointmentService.getAppointmentsByExpert(expertId)) || [];
-      
+      let appointmentsData =
+        (await appointmentService.getAppointmentsByExpert(expertId)) || [];
+
       if (clinicId) {
         try {
-          const billingData = await appointmentBillingService.getBillingByClinic(clinicId);
-          const expertBilling = billingData.filter(b => 
-            b.doctorId === expertId || 
-            (b.items && b.items.some(i => i.doctorId === expertId))
+          const billingData =
+            await appointmentBillingService.getBillingByClinic(clinicId);
+          const expertBilling = billingData.filter(
+            (b) =>
+              b.doctorId === expertId ||
+              (b.items && b.items.some((i) => i.doctorId === expertId)),
           );
+
           appointmentsData = [
             ...appointmentsData,
-            ...expertBilling.map(b => ({ patientId: b.patientId } as unknown as Appointment))
+            ...expertBilling.map(
+              (b) => ({ patientId: b.patientId }) as unknown as Appointment,
+            ),
           ];
-        } catch (err) {}
+        } catch (err) { }
       }
 
       if (appointmentsData && appointmentsData.length > 0) {
-        const patientIds = [...new Set(appointmentsData.map(apt => apt.patientId))];
-        const missingIds = patientIds.filter(pid => !patientsData.some(p => p.id === pid));
-        
+        const patientIds = [
+          ...new Set(appointmentsData.map((apt) => apt.patientId)),
+        ];
+        const missingIds = patientIds.filter(
+          (pid) => !patientsData.some((p) => p.id === pid),
+        );
+
         if (missingIds.length > 0) {
-          const patientPromises = missingIds.map(pid => patientService.getPatientById(pid));
+          const patientPromises = missingIds.map((pid) =>
+            patientService.getPatientById(pid),
+          );
           const patientResults = await Promise.allSettled(patientPromises);
-          
+
           const extraPatients = patientResults
             .filter((r) => r.status === "fulfilled" && r.value !== null)
             .map((r) => (r as PromiseFulfilledResult<Patient>).value);
-            
+
           patientsData = [...patientsData, ...extraPatients];
         }
       }
@@ -386,14 +412,14 @@ export default function ExpertProfilePage() {
 
   // Business and Target Calculations
   const getCommissionBusiness = (c: ExpertCommission) => {
-    const percentage = c.commissionPercentage || 0;
+    const percentage = c.commissionPercentage || expert?.defaultCommission || 0;
     const amt = c.commissionAmount || 0;
 
     if (percentage > 0) {
       return (amt * 100) / percentage;
     }
 
-    return c.totalInvoiceAmount || amt;
+    return amt;
   };
 
   const thisMonthBusiness = commissions
@@ -436,8 +462,8 @@ export default function ExpertProfilePage() {
 
   const filteredCommissionsForEarnings = commissions.filter((c) => {
     if (c.status === "cancelled") return false;
-    const startStr = earningsDateRange.start;
-    const endStr = earningsDateRange.end;
+    const startStr = earningsDateRange.start || globalDateRange.start;
+    const endStr = earningsDateRange.end || globalDateRange.end;
 
     if (startStr && endStr) {
       const date = new Date(c.date || c.createdAt);
@@ -455,7 +481,8 @@ export default function ExpertProfilePage() {
   });
 
   const getSelectedRangeBusiness = () => {
-    if (earningsDateRange.start && earningsDateRange.end) {
+    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + getCommissionBusiness(c),
         0,
@@ -466,18 +493,23 @@ export default function ExpertProfilePage() {
   };
 
   const getSelectedRangeCommissionEarned = () => {
-    if (earningsDateRange.start && earningsDateRange.end) {
+    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + c.commissionAmount,
         0,
       );
     }
 
-    return expert.totalCommissionEarned || 0;
+    // Safely calculate from actual records to avoid historical cached data drift
+    return commissions
+      .filter((c) => c.status !== "cancelled")
+      .reduce((sum, c) => sum + c.commissionAmount, 0);
   };
 
   const getSelectedRangeCommissionBalance = () => {
-    if (earningsDateRange.start && earningsDateRange.end) {
+    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    if (hasRange) {
       return filteredCommissionsForEarnings
         .filter((c) => c.status === "pending")
         .reduce(
@@ -486,7 +518,10 @@ export default function ExpertProfilePage() {
         );
     }
 
-    return expert.totalCommissionBalance || 0;
+    // Safely calculate from actual records to avoid historical cached data drift
+    return commissions
+      .filter((c) => c.status === "pending")
+      .reduce((sum, c) => sum + (c.commissionAmount - (c.paidAmount || 0)), 0);
   };
 
   // Stats for cards (responsive to global date range filter)
@@ -763,13 +798,12 @@ export default function ExpertProfilePage() {
             {/* Badges Column */}
             <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-center">
               <span
-                className={`flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1 rounded border ${
-                  expert.expertType === "regular"
-                    ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
-                    : expert.expertType === "visiting"
-                      ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
-                      : "bg-primary/10 text-primary border-primary/20"
-                }`}
+                className={`flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1 rounded border ${expert.expertType === "regular"
+                  ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
+                  : expert.expertType === "visiting"
+                    ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
+                    : "bg-primary/10 text-primary border-primary/20"
+                  }`}
               >
                 <IoBusinessOutline className="w-3.5 h-3.5" />
                 <span className="capitalize">{expert.expertType}</span>
@@ -949,7 +983,7 @@ export default function ExpertProfilePage() {
 
                 <div className="flex justify-between">
                   <span className="text-text-muted">
-                    {earningsDateRange.start && earningsDateRange.end
+                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Business"
                       : "This Month Business"}
                   </span>
@@ -959,7 +993,7 @@ export default function ExpertProfilePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-text-muted">
-                    {earningsDateRange.start && earningsDateRange.end
+                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Commission"
                       : "Lifetime Commission"}
                   </span>
@@ -969,7 +1003,7 @@ export default function ExpertProfilePage() {
                 </div>
                 <div className="flex justify-between border-t border-border-base/50 pt-2 mt-2">
                   <span className="text-text-muted font-medium">
-                    {earningsDateRange.start && earningsDateRange.end
+                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Balance"
                       : "Commission Balance"}
                   </span>
@@ -1208,16 +1242,16 @@ export default function ExpertProfilePage() {
                     {(appointmentDateRange.start ||
                       appointmentDateRange.end ||
                       appointmentTypeFilter !== "all") && (
-                      <button
-                        className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
-                        onClick={() => {
-                          setAppointmentDateRange({ start: "", end: "" });
-                          setAppointmentTypeFilter("all");
-                        }}
-                      >
-                        Clear
-                      </button>
-                    )}
+                        <button
+                          className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
+                          onClick={() => {
+                            setAppointmentDateRange({ start: "", end: "" });
+                            setAppointmentTypeFilter("all");
+                          }}
+                        >
+                          Clear
+                        </button>
+                      )}
                   </div>
                 </div>
               </div>
@@ -1256,15 +1290,14 @@ export default function ExpertProfilePage() {
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <span
-                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${
-                                  appointment.status === "completed"
-                                    ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                    : appointment.status === "scheduled"
-                                      ? "bg-primary/10 text-primary border-primary/20"
-                                      : appointment.status === "cancelled"
-                                        ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                        : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                }`}
+                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${appointment.status === "completed"
+                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                  : appointment.status === "scheduled"
+                                    ? "bg-primary/10 text-primary border-primary/20"
+                                    : appointment.status === "cancelled"
+                                      ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                      : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                  }`}
                               >
                                 {appointment.status}
                               </span>

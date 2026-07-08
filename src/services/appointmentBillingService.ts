@@ -609,7 +609,7 @@ export const appointmentBillingService = {
       const q = query(
         billingRef,
         where("patientId", "==", patientId),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);
@@ -646,6 +646,21 @@ export const appointmentBillingService = {
     try {
       const billingRef = doc(db, APPOINTMENT_BILLING_COLLECTION, id);
 
+      // 1. Delete associated doctor commissions
+      const docCommQuery = query(collection(db, "doctorCommissions"), where("billingId", "==", id));
+      const docCommDocs = await getDocs(docCommQuery);
+      for (const d of docCommDocs.docs) {
+        await deleteDoc(d.ref);
+      }
+
+      // 2. Delete associated expert commissions
+      const expCommQuery = query(collection(db, "expertCommissions"), where("billingId", "==", id));
+      const expCommDocs = await getDocs(expCommQuery);
+      for (const d of expCommDocs.docs) {
+        await deleteDoc(d.ref);
+      }
+
+      // 3. Finally delete the billing
       await deleteDoc(billingRef);
       console.log("Appointment billing deleted:", id);
     } catch (error) {

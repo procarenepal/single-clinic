@@ -15,14 +15,14 @@ function getVisiblePages(current: number, total: number) {
   }
 
   if (current <= 4) {
-    return [1, 2, 3, 4, 5, '...', total];
+    return [1, 2, 3, 4, 5, "...", total];
   }
 
   if (current >= total - 3) {
-    return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
   }
 
-  return [1, '...', current - 1, current, current + 1, '...', total];
+  return [1, "...", current - 1, current, current + 1, "...", total];
 }
 
 export const Pagination: React.FC<PaginationProps> = ({
@@ -60,13 +60,14 @@ export const Pagination: React.FC<PaginationProps> = ({
         <span>Prev</span>
       </button>
       {pages.map((p, index) => {
-        if (p === '...') {
+        if (p === "...") {
           return (
             <span key={`ellipsis-${index}`} className="px-1 text-text-muted">
               ...
             </span>
           );
         }
+
         return (
           <button
             key={p}

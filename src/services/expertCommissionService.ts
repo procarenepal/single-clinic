@@ -53,7 +53,13 @@ class ExpertCommissionService {
               return total;
             }
 
-            const itemCommissionAmount = (item.amount * percentage) / 100;
+            // Pro-rate the global invoice discount (mainDiscountAmount) onto this item
+            const subtotal = billing.subtotal || 1; // Prevent division by zero
+            const mainDiscount = billing.mainDiscountAmount || 0;
+            const discountRatio = (subtotal - mainDiscount) / subtotal;
+            const effectiveItemAmount = item.amount * discountRatio;
+
+            const itemCommissionAmount = (effectiveItemAmount * percentage) / 100;
 
             return total + itemCommissionAmount;
           }, 0);
@@ -175,13 +181,12 @@ class ExpertCommissionService {
   // Get all commissions for an expert
   async getCommissionsByExpert(
     expertId: string,
-    clinicId: string,
+    clinicId: string, // Kept for signature compatibility
   ): Promise<ExpertCommission[]> {
     try {
       const q = query(
         collection(db, this.collectionName),
-        where("expertId", "==", expertId),
-        where("clinicId", "==", clinicId),
+        where("expertId", "==", expertId)
       );
 
       const querySnapshot = await getDocs(q);

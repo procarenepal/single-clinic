@@ -486,7 +486,7 @@ export const medicineService = {
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
-          where("clinicId", "==", clinicId),
+
         );
       } else {
         q = query(
@@ -570,7 +570,7 @@ export const medicineService = {
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
-          where("clinicId", "==", clinicId),
+
         );
       } else {
         q = query(
@@ -629,7 +629,7 @@ export const medicineService = {
         collection(db, MEDICINE_STOCK_COLLECTION),
         where("medicineId", "==", medicineId),
         where("batchNumber", "==", batchNumber),
-        where("clinicId", "==", clinicId),
+
       );
       const querySnapshot = await getDocs(q);
 
@@ -709,11 +709,12 @@ export const medicineService = {
         currentStock: number;
         schemeStock: number;
       }[] = [];
+      
+      const promises = [];
 
       for (let i = 0; i < medicineIds.length; i += BATCH_SIZE) {
         const batch = medicineIds.slice(i, i + BATCH_SIZE);
         const constraints: any[] = [
-          where("clinicId", "==", clinicId),
           where("medicineId", "in", batch),
         ];
 
@@ -725,8 +726,12 @@ export const medicineService = {
           collection(db, MEDICINE_STOCK_COLLECTION),
           ...constraints,
         );
-        const snapshot = await getDocs(q);
+        promises.push(getDocs(q));
+      }
 
+      const snapshots = await Promise.all(promises);
+      
+      snapshots.forEach(snapshot => {
         snapshot.docs.forEach((d) => {
           const data = d.data();
           const existing = results.find(
@@ -744,7 +749,7 @@ export const medicineService = {
             });
           }
         });
-      }
+      });
 
       return results;
     } catch (error) {
@@ -1000,13 +1005,13 @@ export const medicineService = {
       if (branchId) {
         q = query(
           collection(db, SUPPLIERS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
         );
       } else {
         q = query(
           collection(db, SUPPLIERS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
         );
       }
       const querySnapshot = await getDocs(q);
@@ -1115,13 +1120,13 @@ export const medicineService = {
       if (branchId) {
         q = query(
           collection(db, PURCHASE_RECORDS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
         );
       } else {
         q = query(
           collection(db, PURCHASE_RECORDS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
         );
       }
 
@@ -1231,14 +1236,14 @@ export const medicineService = {
       if (branchId) {
         q = query(
           collection(db, PURCHASE_RECORDS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("paymentStatus", "in", ["pending", "partial"]),
         );
       } else {
         q = query(
           collection(db, PURCHASE_RECORDS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("paymentStatus", "in", ["pending", "partial"]),
         );
       }
@@ -1353,13 +1358,13 @@ export const medicineService = {
       if (branchId) {
         q = query(
           collection(db, SUPPLIER_PAYMENTS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
         );
       } else {
         q = query(
           collection(db, SUPPLIER_PAYMENTS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
         );
       }
 
@@ -1409,14 +1414,14 @@ export const medicineService = {
       if (branchId) {
         q = query(
           collection(db, SUPPLIER_PAYMENTS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("supplierId", "==", supplierId),
         );
       } else {
         q = query(
           collection(db, SUPPLIER_PAYMENTS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("supplierId", "==", supplierId),
         );
       }
@@ -1497,14 +1502,14 @@ export const medicineService = {
       if (branchId) {
         q = query(
           collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", branchId),
           where("supplierId", "==", supplierId),
         );
       } else {
         q = query(
           collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("supplierId", "==", supplierId),
         );
       }

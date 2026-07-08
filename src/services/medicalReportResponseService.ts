@@ -62,7 +62,7 @@ export class MedicalReportResponseService {
       // Use a query instead of direct document access to avoid permission issues with non-existent docs
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         where("patientId", "==", patientId),
       );
 
@@ -105,7 +105,7 @@ export class MedicalReportResponseService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         orderBy("updatedAt", "desc"),
       );
 

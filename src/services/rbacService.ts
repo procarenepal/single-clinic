@@ -857,7 +857,7 @@ export const rbacService = {
       const existingQuery = query(
         assignmentsRef,
         where("userId", "==", userId),
-        where("clinicId", "==", clinicId),
+
       );
       const existingSnapshot = await getDocs(existingQuery);
 
@@ -983,7 +983,7 @@ export const rbacService = {
       const q = query(
         assignmentsRef,
         where("userId", "==", userId),
-        where("clinicId", "==", clinicId),
+
       );
       const querySnapshot = await getDocs(q);
 
@@ -1010,7 +1010,7 @@ export const rbacService = {
       if (options?.branchId) {
         usersQuery = query(
           usersRef,
-          where("clinicId", "==", clinicId),
+
           where("branchId", "==", options.branchId),
         );
       }
@@ -1069,7 +1069,7 @@ export const rbacService = {
       const q = query(
         assignmentsRef,
         where("roleId", "==", roleId),
-        where("clinicId", "==", clinicId),
+
       );
       const querySnapshot = await getDocs(q);
 

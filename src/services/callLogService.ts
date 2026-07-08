@@ -47,7 +47,7 @@ export const callLogService = {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);
@@ -193,7 +193,7 @@ export const callLogService = {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where("clinicId", "==", clinicId),
+
         where("callType", "==", callType),
       );
 

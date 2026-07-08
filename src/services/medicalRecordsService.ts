@@ -259,7 +259,7 @@ export class MedicalRecordsService {
       const q = query(
         collection(db, DOCUMENTS_COLLECTION),
         where("patientId", "==", patientId),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);
@@ -315,7 +315,7 @@ export class MedicalRecordsService {
     try {
       const q = query(
         collection(db, DOCUMENTS_COLLECTION),
-        where("clinicId", "==", clinicId),
+
         orderBy("createdAt", "desc"),
       );
 
@@ -535,7 +535,7 @@ export class MedicalRecordsService {
       const q = query(
         collection(db, XRAYS_COLLECTION),
         where("patientId", "==", patientId),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);
@@ -585,7 +585,7 @@ export class MedicalRecordsService {
     try {
       const q = query(
         collection(db, XRAYS_COLLECTION),
-        where("clinicId", "==", clinicId),
+
         orderBy("createdAt", "desc"),
       );
 

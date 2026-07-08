@@ -108,10 +108,11 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                   {/* Intake Mode Switcher */}
                   <div className="flex bg-surface-2 p-1 rounded-lg border border-border-base w-full mb-2">
                     <button
-                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${intakeMode === "new"
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        intakeMode === "new"
                           ? "bg-primary text-white shadow-sm"
                           : "text-text-muted hover:text-text-main"
-                        }`}
+                      }`}
                       type="button"
                       onClick={() => {
                         setIntakeMode("new");
@@ -122,10 +123,11 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       New Patient Walk-in
                     </button>
                     <button
-                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${intakeMode === "existing"
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        intakeMode === "existing"
                           ? "bg-primary text-white shadow-sm"
                           : "text-text-muted hover:text-text-main"
-                        }`}
+                      }`}
                       type="button"
                       onClick={() => {
                         setIntakeMode("existing");
@@ -559,11 +561,13 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                         }
                       >
                         <option value="">None / Unassigned</option>
-                        {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
-                          <option key={d.id} value={d.id}>
-                            Dr. {d.name} ({d.speciality || "GP"})
-                          </option>
-                        ))}
+                        {doctors
+                          .filter((_d: any) => _d.isActive !== false)
+                          .map((d) => (
+                            <option key={d.id} value={d.id}>
+                              Dr. {d.name} ({d.speciality || "GP"})
+                            </option>
+                          ))}
                       </select>
                       {quickIntakeForm.doctorId &&
                         quickIntakeForm.doctorId !== "unassigned" && (
@@ -623,11 +627,13 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                         }
                       >
                         <option value="">None / Unassigned</option>
-                        {experts.filter((_e: any) => _e.isActive !== false).map((exp) => (
-                          <option key={exp.id} value={exp.id}>
-                            {exp.name} ({exp.speciality || "Consultant"})
-                          </option>
-                        ))}
+                        {experts
+                          .filter((_e: any) => _e.isActive !== false)
+                          .map((exp) => (
+                            <option key={exp.id} value={exp.id}>
+                              {exp.name} ({exp.speciality || "Consultant"})
+                            </option>
+                          ))}
                       </select>
                       {quickIntakeForm.assignedExpertId &&
                         quickIntakeForm.assignedExpertId !== "unassigned" && (
@@ -745,28 +751,28 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                   {quickIntakeForm.appointmentTypeId.startsWith(
                     "consume_pkg_",
                   ) && (
-                      <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-500/10 rounded border border-indigo-500/20">
-                        <input
-                          checked={quickIntakeForm.sendDirectlyToCabin}
-                          className="w-4 h-4 rounded border-border-base text-indigo-500 focus:ring-indigo-500 cursor-pointer"
-                          id="intakeSendDirect"
-                          type="checkbox"
-                          onChange={(e) =>
-                            setQuickIntakeForm((prev) => ({
-                              ...prev,
-                              sendDirectlyToCabin: e.target.checked,
-                            }))
-                          }
-                        />
-                        <label
-                          className="text-[12px] font-medium text-text-main cursor-pointer select-none"
-                          htmlFor="intakeSendDirect"
-                        >
-                          Skip Lobby/Triage (Send directly to Doctor or Expert
-                          Cabin)
-                        </label>
-                      </div>
-                    )}
+                    <div className="mt-3 flex items-center gap-2 p-2 bg-indigo-500/10 rounded border border-indigo-500/20">
+                      <input
+                        checked={quickIntakeForm.sendDirectlyToCabin}
+                        className="w-4 h-4 rounded border-border-base text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                        id="intakeSendDirect"
+                        type="checkbox"
+                        onChange={(e) =>
+                          setQuickIntakeForm((prev) => ({
+                            ...prev,
+                            sendDirectlyToCabin: e.target.checked,
+                          }))
+                        }
+                      />
+                      <label
+                        className="text-[12px] font-medium text-text-main cursor-pointer select-none"
+                        htmlFor="intakeSendDirect"
+                      >
+                        Skip Lobby/Triage (Send directly to Doctor or Expert
+                        Cabin)
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Column: Polymorphic Referrals Panel */}
@@ -874,11 +880,16 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                           <option value="">
                                             -- Choose Doctor --
                                           </option>
-                                          {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
-                                            <option key={d.id} value={d.id}>
-                                              Dr. {d.name}
-                                            </option>
-                                          ))}
+                                          {doctors
+                                            .filter(
+                                              (_d: any) =>
+                                                _d.isActive !== false,
+                                            )
+                                            .map((d) => (
+                                              <option key={d.id} value={d.id}>
+                                                Dr. {d.name}
+                                              </option>
+                                            ))}
                                         </>
                                       )}
                                       {ref.type === "expert" && (
@@ -886,11 +897,19 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                           <option value="">
                                             -- Choose Expert --
                                           </option>
-                                          {experts.filter((_e: any) => _e.isActive !== false).map((exp) => (
-                                            <option key={exp.id} value={exp.id}>
-                                              {exp.name}
-                                            </option>
-                                          ))}
+                                          {experts
+                                            .filter(
+                                              (_e: any) =>
+                                                _e.isActive !== false,
+                                            )
+                                            .map((exp) => (
+                                              <option
+                                                key={exp.id}
+                                                value={exp.id}
+                                              >
+                                                {exp.name}
+                                              </option>
+                                            ))}
                                         </>
                                       )}
                                       {ref.type === "staff" && (
@@ -965,19 +984,27 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                         -- Optional Referring Person --
                                       </option>
                                       <optgroup label="Internal Doctors">
-                                        {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
-                                          <option key={d.id} value={d.id}>
-                                            Dr. {d.name} ({d.speciality || "GP"}
-                                            )
-                                          </option>
-                                        ))}
+                                        {doctors
+                                          .filter(
+                                            (_d: any) => _d.isActive !== false,
+                                          )
+                                          .map((d) => (
+                                            <option key={d.id} value={d.id}>
+                                              Dr. {d.name} (
+                                              {d.speciality || "GP"})
+                                            </option>
+                                          ))}
                                       </optgroup>
                                       <optgroup label="External Experts">
-                                        {experts.filter((_e: any) => _e.isActive !== false).map((exp) => (
-                                          <option key={exp.id} value={exp.id}>
-                                            {exp.name}
-                                          </option>
-                                        ))}
+                                        {experts
+                                          .filter(
+                                            (_e: any) => _e.isActive !== false,
+                                          )
+                                          .map((exp) => (
+                                            <option key={exp.id} value={exp.id}>
+                                              {exp.name}
+                                            </option>
+                                          ))}
                                       </optgroup>
                                     </select>
                                   </div>

@@ -89,7 +89,7 @@ class StaffCommissionService {
       const q = query(
         collection(db, this.collectionName),
         where("staffId", "==", staffId),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);
@@ -122,7 +122,7 @@ class StaffCommissionService {
     try {
       const q = query(
         collection(db, this.collectionName),
-        where("clinicId", "==", clinicId),
+
       );
 
       const querySnapshot = await getDocs(q);

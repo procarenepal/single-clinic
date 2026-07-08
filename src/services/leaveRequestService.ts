@@ -72,7 +72,7 @@ export const leaveRequestService = {
   ): Promise<LeaveRequest[]> {
     let q = query(
       collection(db, LEAVES_COLLECTION),
-      where("clinicId", "==", clinicId),
+
     );
 
     if (branchId) {
@@ -91,7 +91,7 @@ export const leaveRequestService = {
     const q = query(
       collection(db, LEAVES_COLLECTION),
       where("staffId", "==", staffId),
-      where("clinicId", "==", clinicId),
+
     );
     const snap = await getDocs(q);
     const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
@@ -105,7 +105,7 @@ export const leaveRequestService = {
   ): Promise<LeaveRequest[]> {
     let q = query(
       collection(db, LEAVES_COLLECTION),
-      where("clinicId", "==", clinicId),
+
       where("status", "==", "pending"),
     );
 
@@ -167,14 +167,20 @@ export const leaveRequestService = {
         unpaidUsed += leave.totalDays;
       } else {
         // If it's a paid leave type, find the assignment
-        const assignmentIdx = assignments.findIndex((a: any) => a.leaveTypeId === leave.leaveType);
+        const assignmentIdx = assignments.findIndex(
+          (a: any) => a.leaveTypeId === leave.leaveType,
+        );
+
         if (assignmentIdx >= 0) {
           const assignment = assignments[assignmentIdx];
           const newUsedDays = assignment.usedDays + leave.totalDays;
 
           // Check for overflow
           if (newUsedDays > assignment.assignedDays) {
-            const overflow = newUsedDays - Math.max(assignment.usedDays, assignment.assignedDays);
+            const overflow =
+              newUsedDays -
+              Math.max(assignment.usedDays, assignment.assignedDays);
+
             if (overflow > 0) unpaidUsed += overflow;
           }
 
@@ -233,7 +239,7 @@ export const leaveRequestService = {
     const q = query(
       collection(db, BALANCES_COLLECTION),
       where("staffId", "==", staffId),
-      where("clinicId", "==", clinicId),
+
       where("year", "==", year),
     );
     const snap = await getDocs(q);
@@ -271,7 +277,7 @@ export const leaveRequestService = {
   ): Promise<LeaveBalance[]> {
     const q = query(
       collection(db, BALANCES_COLLECTION),
-      where("clinicId", "==", clinicId),
+
       where("year", "==", year),
     );
     const snap = await getDocs(q);

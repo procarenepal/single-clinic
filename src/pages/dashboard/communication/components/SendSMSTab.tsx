@@ -651,11 +651,13 @@ const SendSMSTab: React.FC = () => {
               onChange={(e) => handleAssociatedDoctorChange(e.target.value)}
             >
               <option value="">No doctor mentioned</option>
-              {doctors.filter((_d: any) => _d.isActive !== false).map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
+              {doctors
+                .filter((_d: any) => _d.isActive !== false)
+                .map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
             </select>
             <p className="text-[11px] text-[rgb(var(--color-text-muted))] mt-1">
               Fills the {"{doctorName}"} placeholder in your message

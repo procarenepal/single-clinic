@@ -47,7 +47,7 @@ export const bedService = {
     try {
       const categoriesRef = collection(db, BED_CATEGORIES_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       ];
 
@@ -183,7 +183,7 @@ export const bedService = {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("isActive", "==", true),
       ];
 
@@ -224,7 +224,7 @@ export const bedService = {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("status", "==", "available"),
         where("isActive", "==", true),
       ];
@@ -436,7 +436,7 @@ export const bedService = {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
       const constraints: any[] = [
-        where("clinicId", "==", clinicId),
+
         where("status", "==", "active"),
       ];
 

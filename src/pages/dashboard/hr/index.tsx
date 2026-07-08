@@ -75,6 +75,8 @@ import {
 } from "@heroui/table";
 import { IoPrintOutline } from "react-icons/io5";
 
+import { LeaveSettingsTab } from "./components/LeaveSettingsTab";
+
 import { FileUploadComponent } from "@/components/FileUploadComponent";
 import {
   StaffMember,
@@ -103,7 +105,6 @@ import {
 import { clinicService } from "@/services/clinicService";
 import { leaveRequestService } from "@/services/leaveRequestService";
 import { leaveTypeService } from "@/services/leaveTypeService";
-import { LeaveSettingsTab } from "./components/LeaveSettingsTab";
 
 export default function HRPage() {
   const { clinicId, userData, branchId } = useAuthContext();
@@ -268,14 +269,16 @@ export default function HRPage() {
 
   const handleEditStaff = async (staff: StaffMember) => {
     let assignments: StaffLeaveAssignment[] = [];
+
     try {
       const currentYear = new Date().getFullYear();
       const balance = await leaveRequestService.getOrCreateBalance(
         staff.id,
         staff.name,
         clinicId!,
-        currentYear
+        currentYear,
       );
+
       assignments = balance.assignments || [];
     } catch (e) {
       console.error("Failed to load staff leave assignments:", e);
@@ -676,17 +679,18 @@ export default function HRPage() {
 
       fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
-      const [staffData, attendanceData, billsData, typesData] = await Promise.all([
-        hrService.getStaffByClinic(clinicId!, branchId || undefined),
-        hrService.getAttendanceByRange(
-          clinicId!,
-          startOfDay(fiveYearsAgo),
-          new Date(),
-          branchId || undefined,
-        ),
-        accountService.getBillsByClinic(clinicId!, branchId || undefined),
-        leaveTypeService.getLeaveTypes(clinicId!),
-      ]);
+      const [staffData, attendanceData, billsData, typesData] =
+        await Promise.all([
+          hrService.getStaffByClinic(clinicId!, branchId || undefined),
+          hrService.getAttendanceByRange(
+            clinicId!,
+            startOfDay(fiveYearsAgo),
+            new Date(),
+            branchId || undefined,
+          ),
+          accountService.getBillsByClinic(clinicId!, branchId || undefined),
+          leaveTypeService.getLeaveTypes(clinicId!),
+        ]);
 
       setStaff(staffData);
       setGlobalLeaveTypes(typesData);
@@ -767,7 +771,9 @@ export default function HRPage() {
         clinicId: clinicId!,
         branchId: branchId || "",
         leaveType: leaveForm.leaveType,
-        isPaid: globalLeaveTypes.find(t => t.id === leaveForm.leaveType)?.isPaid ?? false,
+        isPaid:
+          globalLeaveTypes.find((t) => t.id === leaveForm.leaveType)?.isPaid ??
+          false,
         startDate: start,
         endDate: end,
         totalDays,
@@ -913,6 +919,7 @@ export default function HRPage() {
       };
 
       let newStaffId = "";
+
       if (staffForm.id) {
         await hrService.updateStaff(staffForm.id, staffData);
 
@@ -1023,15 +1030,17 @@ export default function HRPage() {
       try {
         const finalStaffId = staffForm.id || newStaffId;
         const currentYear = new Date().getFullYear();
+
         if (finalStaffId) {
           const balance = await leaveRequestService.getOrCreateBalance(
             finalStaffId,
             staffForm.name,
             clinicId!,
-            currentYear
+            currentYear,
           );
+
           await leaveRequestService.updateBalance(balance.id, {
-            assignments: staffForm.assignments
+            assignments: staffForm.assignments,
           });
         }
       } catch (err) {
@@ -1277,8 +1286,8 @@ export default function HRPage() {
         customBonusAmt;
       const taxAmt = payrollForm.applyTax
         ? Math.round(
-          Number(payrollForm.amount) * (payrollForm.taxPercentage / 100),
-        )
+            Number(payrollForm.amount) * (payrollForm.taxPercentage / 100),
+          )
         : 0;
       const totalPayout = subTotal - taxAmt - customDeductionAmt;
 
@@ -1838,10 +1847,10 @@ export default function HRPage() {
                 <span>Leave Management</span>
                 {leaveRequests.filter((l) => l.status === "pending").length >
                   0 && (
-                    <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-500 text-white">
-                      {leaveRequests.filter((l) => l.status === "pending").length}
-                    </span>
-                  )}
+                  <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-500 text-white">
+                    {leaveRequests.filter((l) => l.status === "pending").length}
+                  </span>
+                )}
               </div>
             }
           />
@@ -1914,7 +1923,7 @@ export default function HRPage() {
                             a.status === "late" ||
                             a.status === "on_break") &&
                           format(a.date, "yyyy-MM-dd") ===
-                          format(new Date(), "yyyy-MM-dd"),
+                            format(new Date(), "yyyy-MM-dd"),
                       );
 
                       return (
@@ -1986,7 +1995,7 @@ export default function HRPage() {
                                 (a) =>
                                   a.staffId === member.id &&
                                   format(a.date, "yyyy-MM-dd") ===
-                                  format(new Date(), "yyyy-MM-dd"),
+                                    format(new Date(), "yyyy-MM-dd"),
                               );
 
                               let statusLabel = "Off duty";
@@ -2051,7 +2060,7 @@ export default function HRPage() {
                                   (a) =>
                                     a.staffId === member.id &&
                                     format(a.date, "yyyy-MM-dd") ===
-                                    format(new Date(), "yyyy-MM-dd"),
+                                      format(new Date(), "yyyy-MM-dd"),
                                 )?.checkOut && (
                                   <Button
                                     className="font-semibold text-[10px] h-7 px-2 min-w-0"
@@ -2064,7 +2073,7 @@ export default function HRPage() {
                                       (a) =>
                                         a.staffId === member.id &&
                                         format(a.date, "yyyy-MM-dd") ===
-                                        format(new Date(), "yyyy-MM-dd"),
+                                          format(new Date(), "yyyy-MM-dd"),
                                     )?.status === "on_break"
                                       ? "Resume"
                                       : "Break"}
@@ -2075,7 +2084,7 @@ export default function HRPage() {
                                   (a) =>
                                     a.staffId === member.id &&
                                     format(a.date, "yyyy-MM-dd") ===
-                                    format(new Date(), "yyyy-MM-dd"),
+                                      format(new Date(), "yyyy-MM-dd"),
                                 );
                                 const hasEndedShift =
                                   todayAtt && todayAtt.checkOut;
@@ -2186,7 +2195,7 @@ export default function HRPage() {
                       (a) =>
                         a.status === "on_break" &&
                         format(a.date, "yyyy-MM-dd") ===
-                        format(new Date(), "yyyy-MM-dd"),
+                          format(new Date(), "yyyy-MM-dd"),
                     ).length
                   }{" "}
                   Members
@@ -2432,9 +2441,9 @@ export default function HRPage() {
                         <span className="text-[11px]">
                           {summary.lastPayment
                             ? format(
-                              new Date(summary.lastPayment),
-                              "MMM dd, yyyy",
-                            )
+                                new Date(summary.lastPayment),
+                                "MMM dd, yyyy",
+                              )
                             : "Never"}
                         </span>
                       </TableCell>
@@ -2470,29 +2479,29 @@ export default function HRPage() {
                   )),
                   ...(staffPayrollSummary.length > 0
                     ? [
-                      <TableRow
-                        key="total-payroll-summary-row"
-                        className="bg-primary/5 font-bold"
-                      >
-                        <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
-                        <TableCell>{""}</TableCell>
-                        <TableCell align="right">
-                          Rs.{" "}
-                          {staffPayrollSummary
-                            .reduce((acc, s) => acc + s.salary, 0)
-                            .toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" className="text-primary">
-                          Rs.{" "}
-                          {staffPayrollSummary
-                            .reduce((acc, s) => acc + s.totalPaid, 0)
-                            .toLocaleString()}
-                        </TableCell>
-                        <TableCell>{""}</TableCell>
-                        <TableCell>{""}</TableCell>
-                        <TableCell>{""}</TableCell>
-                      </TableRow>,
-                    ]
+                        <TableRow
+                          key="total-payroll-summary-row"
+                          className="bg-primary/5 font-bold"
+                        >
+                          <TableCell>TOTAL SYSTEM PAYROLL</TableCell>
+                          <TableCell>{""}</TableCell>
+                          <TableCell align="right">
+                            Rs.{" "}
+                            {staffPayrollSummary
+                              .reduce((acc, s) => acc + s.salary, 0)
+                              .toLocaleString()}
+                          </TableCell>
+                          <TableCell align="right" className="text-primary">
+                            Rs.{" "}
+                            {staffPayrollSummary
+                              .reduce((acc, s) => acc + s.totalPaid, 0)
+                              .toLocaleString()}
+                          </TableCell>
+                          <TableCell>{""}</TableCell>
+                          <TableCell>{""}</TableCell>
+                          <TableCell>{""}</TableCell>
+                        </TableRow>,
+                      ]
                     : []),
                 ]}
               </TableBody>
@@ -2580,10 +2589,11 @@ export default function HRPage() {
                 (f) => (
                   <button
                     key={f}
-                    className={`px-3 py-1 text-[11px] font-semibold rounded-full border capitalize transition-all ${leaveFilter === f
-                      ? "bg-primary text-white border-primary"
-                      : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))] hover:border-primary hover:text-primary"
-                      }`}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-full border capitalize transition-all ${
+                      leaveFilter === f
+                        ? "bg-primary text-white border-primary"
+                        : "bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))] hover:border-primary hover:text-primary"
+                    }`}
                     onClick={() => setLeaveFilter(f)}
                   >
                     {f === "all"
@@ -2774,14 +2784,20 @@ export default function HRPage() {
                           cls: "bg-slate-400/10 text-slate-500 border-slate-400/20",
                         },
                       };
-                      const actualLeaveType = globalLeaveTypes.find(t => t.id === leave.leaveType);
-                      const tc = actualLeaveType ? {
-                        label: actualLeaveType.name,
-                        cls: actualLeaveType.isPaid ? "bg-mountain-100 text-mountain-800 border-mountain-200" : "bg-rose-50 text-rose-600 border-rose-200"
-                      } : (typeConfig[leave.leaveType] || {
-                        label: leave.leaveType,
-                        cls: "bg-default-100 text-default-500",
-                      });
+                      const actualLeaveType = globalLeaveTypes.find(
+                        (t) => t.id === leave.leaveType,
+                      );
+                      const tc = actualLeaveType
+                        ? {
+                            label: actualLeaveType.name,
+                            cls: actualLeaveType.isPaid
+                              ? "bg-mountain-100 text-mountain-800 border-mountain-200"
+                              : "bg-rose-50 text-rose-600 border-rose-200",
+                          }
+                        : typeConfig[leave.leaveType] || {
+                            label: leave.leaveType,
+                            cls: "bg-default-100 text-default-500",
+                          };
                       const sc = statusConfig[leave.status] || {
                         label: leave.status,
                         cls: "bg-default-100 text-default-500",
@@ -2932,29 +2948,38 @@ export default function HRPage() {
 
                         <div className="space-y-3">
                           {bal.assignments && bal.assignments.length > 0 ? (
-                            bal.assignments.filter((a: any) => a.isActive).map((item: any) => {
-                              const remaining = Math.max(0, item.assignedDays - item.usedDays);
-                              return (
-                                <div key={item.leaveTypeId}>
-                                  <div className="flex justify-between text-[10px] font-semibold text-[rgb(var(--color-text-muted))] mb-1">
-                                    <span className="capitalize">
-                                      {globalLeaveTypes.find((lt) => lt.id === item.leaveTypeId)?.name || item.leaveTypeId}
-                                    </span>
-                                    <span>
-                                      {remaining} / {item.assignedDays} remaining
-                                    </span>
+                            bal.assignments
+                              .filter((a: any) => a.isActive)
+                              .map((item: any) => {
+                                const remaining = Math.max(
+                                  0,
+                                  item.assignedDays - item.usedDays,
+                                );
+
+                                return (
+                                  <div key={item.leaveTypeId}>
+                                    <div className="flex justify-between text-[10px] font-semibold text-[rgb(var(--color-text-muted))] mb-1">
+                                      <span className="capitalize">
+                                        {globalLeaveTypes.find(
+                                          (lt) => lt.id === item.leaveTypeId,
+                                        )?.name || item.leaveTypeId}
+                                      </span>
+                                      <span>
+                                        {remaining} / {item.assignedDays}{" "}
+                                        remaining
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-[rgb(var(--color-surface-2))] overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-primary transition-all"
+                                        style={{
+                                          width: `${Math.min(100, (item.usedDays / item.assignedDays) * 100)}%`,
+                                        }}
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="h-1.5 rounded-full bg-[rgb(var(--color-surface-2))] overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full bg-primary transition-all"
-                                      style={{
-                                        width: `${Math.min(100, (item.usedDays / item.assignedDays) * 100)}%`,
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })
+                                );
+                              })
                           ) : (
                             <div className="text-[11px] text-[rgb(var(--color-text-muted))] italic">
                               No leave types assigned.
@@ -3007,7 +3032,11 @@ export default function HRPage() {
                       <Select
                         aria-label="Select staff"
                         placeholder="Select staff member"
-                        selectedKeys={leaveForm.staffId ? new Set([leaveForm.staffId]) : new Set()}
+                        selectedKeys={
+                          leaveForm.staffId
+                            ? new Set([leaveForm.staffId])
+                            : new Set()
+                        }
                         size="sm"
                         onSelectionChange={(keys) =>
                           setLeaveForm({
@@ -3030,7 +3059,11 @@ export default function HRPage() {
                       <Select
                         aria-label="Leave type"
                         placeholder="Select leave type"
-                        selectedKeys={leaveForm.leaveType ? new Set([leaveForm.leaveType]) : new Set()}
+                        selectedKeys={
+                          leaveForm.leaveType
+                            ? new Set([leaveForm.leaveType])
+                            : new Set()
+                        }
                         size="sm"
                         onSelectionChange={(keys) =>
                           setLeaveForm({
@@ -3039,7 +3072,7 @@ export default function HRPage() {
                           })
                         }
                       >
-                        {globalLeaveTypes.map(type => (
+                        {globalLeaveTypes.map((type) => (
                           <SelectItem key={type.id} textValue={type.name}>
                             {type.name} {type.isPaid ? "(Paid)" : "(Unpaid)"}
                           </SelectItem>
@@ -3073,7 +3106,10 @@ export default function HRPage() {
                           type="date"
                           value={leaveForm.endDate}
                           onChange={(e) =>
-                            setLeaveForm({ ...leaveForm, endDate: e.target.value })
+                            setLeaveForm({
+                              ...leaveForm,
+                              endDate: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -3104,12 +3140,14 @@ export default function HRPage() {
                       {/* Duration Info */}
                       {leaveForm.startDate && leaveForm.endDate ? (
                         <div className="flex justify-between text-[12px] pb-3 border-b border-mountain-100">
-                          <span className="text-mountain-600">Total Duration:</span>
+                          <span className="text-mountain-600">
+                            Total Duration:
+                          </span>
                           <span className="font-semibold text-primary">
                             {Math.round(
                               (new Date(leaveForm.endDate).getTime() -
                                 new Date(leaveForm.startDate).getTime()) /
-                              86400000,
+                                86400000,
                             ) + 1}{" "}
                             Day(s)
                           </span>
@@ -3120,43 +3158,73 @@ export default function HRPage() {
                       {leaveForm.staffId && leaveForm.leaveType ? (
                         <div className="flex flex-col gap-2">
                           {(() => {
-                            const type = globalLeaveTypes.find(t => t.id === leaveForm.leaveType);
+                            const type = globalLeaveTypes.find(
+                              (t) => t.id === leaveForm.leaveType,
+                            );
+
                             if (!type?.isPaid) {
                               return (
                                 <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg">
                                   <p className="text-[11px] text-rose-600 font-medium">
-                                    Unpaid leave - unlimited, but salary will be deducted per day absent.
+                                    Unpaid leave - unlimited, but salary will be
+                                    deducted per day absent.
                                   </p>
                                 </div>
                               );
                             }
 
-                            const currentYear = new Date(leaveForm.startDate).getFullYear();
-                            const balance = leaveBalances.find(b => b.staffId === leaveForm.staffId && b.year === currentYear);
-                            const assignment = balance?.assignments?.find(a => a.leaveTypeId === leaveForm.leaveType);
+                            const currentYear = new Date(
+                              leaveForm.startDate,
+                            ).getFullYear();
+                            const balance = leaveBalances.find(
+                              (b) =>
+                                b.staffId === leaveForm.staffId &&
+                                b.year === currentYear,
+                            );
+                            const assignment = balance?.assignments?.find(
+                              (a) => a.leaveTypeId === leaveForm.leaveType,
+                            );
 
                             if (!assignment || !assignment.isActive) {
                               return (
                                 <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg text-[11px]">
-                                  <span className="text-danger font-medium">Staff is not assigned to this leave type.</span>
+                                  <span className="text-danger font-medium">
+                                    Staff is not assigned to this leave type.
+                                  </span>
                                 </div>
                               );
                             }
 
-                            const remaining = Math.max(0, assignment.assignedDays - assignment.usedDays);
+                            const remaining = Math.max(
+                              0,
+                              assignment.assignedDays - assignment.usedDays,
+                            );
+
                             return (
                               <div className="flex flex-col gap-3">
                                 <div className="flex justify-between text-[12px]">
-                                  <span className="text-mountain-600">Annual Quota:</span>
-                                  <span className="font-semibold text-mountain-900">{assignment.assignedDays} Days</span>
+                                  <span className="text-mountain-600">
+                                    Annual Quota:
+                                  </span>
+                                  <span className="font-semibold text-mountain-900">
+                                    {assignment.assignedDays} Days
+                                  </span>
                                 </div>
                                 <div className="flex justify-between text-[12px]">
-                                  <span className="text-mountain-600">Already Taken:</span>
-                                  <span className="font-semibold text-danger">{assignment.usedDays} Days</span>
+                                  <span className="text-mountain-600">
+                                    Already Taken:
+                                  </span>
+                                  <span className="font-semibold text-danger">
+                                    {assignment.usedDays} Days
+                                  </span>
                                 </div>
                                 <div className="flex justify-between text-[13px] pt-2 border-t border-mountain-100 font-bold">
-                                  <span className="text-mountain-800">Remaining Balance:</span>
-                                  <span className="text-success">{remaining} Days</span>
+                                  <span className="text-mountain-800">
+                                    Remaining Balance:
+                                  </span>
+                                  <span className="text-success">
+                                    {remaining} Days
+                                  </span>
                                 </div>
                               </div>
                             );
@@ -3164,7 +3232,8 @@ export default function HRPage() {
                         </div>
                       ) : (
                         <p className="text-[11px] text-mountain-400 italic text-center mt-4">
-                          Select a staff member and leave type to view quota details.
+                          Select a staff member and leave type to view quota
+                          details.
                         </p>
                       )}
                     </div>
@@ -3236,7 +3305,9 @@ export default function HRPage() {
                           Type:{" "}
                         </span>
                         <span className="font-semibold capitalize">
-                          {globalLeaveTypes.find((lt) => lt.id === reviewingLeave.leaveType)?.name || reviewingLeave.leaveType}
+                          {globalLeaveTypes.find(
+                            (lt) => lt.id === reviewingLeave.leaveType,
+                          )?.name || reviewingLeave.leaveType}
                         </span>
                         {reviewingLeave.isPaid && (
                           <span className="ml-1 text-emerald-500">(Paid)</span>
@@ -3269,56 +3340,81 @@ export default function HRPage() {
                 {reviewingLeave && (
                   <div className="bg-mountain-50 p-4 rounded-xl border border-mountain-100 mt-4">
                     <h3 className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest mb-3 border-b border-mountain-200 pb-2">
-                      Staff Leave Balance ({new Date(reviewingLeave.startDate).getFullYear()})
+                      Staff Leave Balance (
+                      {new Date(reviewingLeave.startDate).getFullYear()})
                     </h3>
                     <div className="space-y-3">
                       {(() => {
-                        const currentYear = new Date(reviewingLeave.startDate).getFullYear();
+                        const currentYear = new Date(
+                          reviewingLeave.startDate,
+                        ).getFullYear();
                         const balance = leaveBalances.find(
-                          (b) => b.staffId === reviewingLeave.staffId && b.year === currentYear
+                          (b) =>
+                            b.staffId === reviewingLeave.staffId &&
+                            b.year === currentYear,
                         );
 
-                        if (!balance || !balance.assignments || balance.assignments.length === 0) {
+                        if (
+                          !balance ||
+                          !balance.assignments ||
+                          balance.assignments.length === 0
+                        ) {
                           return (
                             <p className="text-[11px] text-mountain-400 italic">
-                              No leave types assigned to this staff member for {currentYear}.
+                              No leave types assigned to this staff member for{" "}
+                              {currentYear}.
                             </p>
                           );
                         }
 
-                        return balance.assignments.filter(a => a.isActive).map((assignment) => {
-                          const remaining = Math.max(0, assignment.assignedDays - assignment.usedDays);
-                          const isCurrentType = assignment.leaveTypeId === reviewingLeave.leaveType;
-                          const leaveTypeObj = globalLeaveTypes.find((lt) => lt.id === assignment.leaveTypeId);
+                        return balance.assignments
+                          .filter((a) => a.isActive)
+                          .map((assignment) => {
+                            const remaining = Math.max(
+                              0,
+                              assignment.assignedDays - assignment.usedDays,
+                            );
+                            const isCurrentType =
+                              assignment.leaveTypeId ===
+                              reviewingLeave.leaveType;
+                            const leaveTypeObj = globalLeaveTypes.find(
+                              (lt) => lt.id === assignment.leaveTypeId,
+                            );
 
-                          return (
-                            <div
-                              key={assignment.leaveTypeId}
-                              className={`p-2 rounded-lg border ${isCurrentType
-                                ? "bg-primary/5 border-primary/20"
-                                : "bg-white border-mountain-100"
+                            return (
+                              <div
+                                key={assignment.leaveTypeId}
+                                className={`p-2 rounded-lg border ${
+                                  isCurrentType
+                                    ? "bg-primary/5 border-primary/20"
+                                    : "bg-white border-mountain-100"
                                 }`}
-                            >
-                              <div className="flex justify-between items-center text-[11px] mb-1">
-                                <span className="font-semibold text-mountain-800">
-                                  {leaveTypeObj?.name || assignment.leaveTypeId}
-                                  {isCurrentType && <span className="ml-2 text-[9px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Requested</span>}
-                                </span>
-                                <span className="text-mountain-600">
-                                  {remaining} / {assignment.assignedDays} Days
-                                </span>
+                              >
+                                <div className="flex justify-between items-center text-[11px] mb-1">
+                                  <span className="font-semibold text-mountain-800">
+                                    {leaveTypeObj?.name ||
+                                      assignment.leaveTypeId}
+                                    {isCurrentType && (
+                                      <span className="ml-2 text-[9px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                                        Requested
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-mountain-600">
+                                    {remaining} / {assignment.assignedDays} Days
+                                  </span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-mountain-100 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${isCurrentType ? "bg-primary" : "bg-mountain-300"}`}
+                                    style={{
+                                      width: `${Math.min(100, (assignment.usedDays / assignment.assignedDays) * 100)}%`,
+                                    }}
+                                  />
+                                </div>
                               </div>
-                              <div className="h-1.5 rounded-full bg-mountain-100 overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all ${isCurrentType ? "bg-primary" : "bg-mountain-300"}`}
-                                  style={{
-                                    width: `${Math.min(100, (assignment.usedDays / assignment.assignedDays) * 100)}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        });
+                            );
+                          });
                       })()}
                     </div>
                   </div>
@@ -3559,11 +3655,11 @@ export default function HRPage() {
                       currentFile={
                         staffForm.photoUrl
                           ? {
-                            id: "",
-                            name: "Profile Photo",
-                            url: staffForm.photoUrl,
-                            type: "image/jpeg",
-                          }
+                              id: "",
+                              name: "Profile Photo",
+                              url: staffForm.photoUrl,
+                              type: "image/jpeg",
+                            }
                           : undefined
                       }
                       uploadType="image"
@@ -3646,59 +3742,89 @@ export default function HRPage() {
                   {/* Leave Assignments */}
                   <div className="col-span-6 mt-4 pt-4 border-t border-[rgb(var(--color-border))]">
                     <div className="flex items-center gap-2 mb-4">
-                      <IoLeafOutline size={16} className="text-gray-500" />
-                      <h3 className="text-[13px] font-bold text-gray-800 uppercase tracking-wider">Leave Assignments</h3>
+                      <IoLeafOutline className="text-gray-500" size={16} />
+                      <h3 className="text-[13px] font-bold text-gray-800 uppercase tracking-wider">
+                        Leave Assignments
+                      </h3>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {globalLeaveTypes.map(type => {
-                        const existing = staffForm.assignments.find(a => a.leaveTypeId === type.id);
+                      {globalLeaveTypes.map((type) => {
+                        const existing = staffForm.assignments.find(
+                          (a) => a.leaveTypeId === type.id,
+                        );
                         const isAssigned = existing ? existing.isActive : false;
-                        const assignedDays = existing ? existing.assignedDays : type.defaultDays;
+                        const assignedDays = existing
+                          ? existing.assignedDays
+                          : type.defaultDays;
 
                         return (
-                          <div key={type.id} className={`p-3 border rounded-xl flex flex-col gap-2 transition-colors ${isAssigned ? 'border-primary/30 bg-primary/5' : 'border-gray-200 bg-gray-50/50'}`}>
+                          <div
+                            key={type.id}
+                            className={`p-3 border rounded-xl flex flex-col gap-2 transition-colors ${isAssigned ? "border-primary/30 bg-primary/5" : "border-gray-200 bg-gray-50/50"}`}
+                          >
                             <div className="flex justify-between items-center">
                               <div className="flex items-center gap-2">
-                                <div className={`w-2.5 h-2.5 rounded-full ${type.color}`} />
-                                <span className="text-[12px] font-bold text-gray-700">{type.name}</span>
+                                <div
+                                  className={`w-2.5 h-2.5 rounded-full ${type.color}`}
+                                />
+                                <span className="text-[12px] font-bold text-gray-700">
+                                  {type.name}
+                                </span>
                               </div>
                               <Switch
-                                size="sm"
                                 isSelected={isAssigned}
+                                size="sm"
                                 onValueChange={(val) => {
-                                  setStaffForm(prev => {
-                                    const filtered = prev.assignments.filter(a => a.leaveTypeId !== type.id);
+                                  setStaffForm((prev) => {
+                                    const filtered = prev.assignments.filter(
+                                      (a) => a.leaveTypeId !== type.id,
+                                    );
+
                                     if (val) {
                                       filtered.push({
                                         leaveTypeId: type.id,
                                         assignedDays: type.defaultDays,
-                                        usedDays: existing ? existing.usedDays : 0,
-                                        isActive: true
+                                        usedDays: existing
+                                          ? existing.usedDays
+                                          : 0,
+                                        isActive: true,
                                       });
-                                    } else if (existing && existing.usedDays > 0) {
+                                    } else if (
+                                      existing &&
+                                      existing.usedDays > 0
+                                    ) {
                                       filtered.push({
                                         ...existing,
-                                        isActive: false
+                                        isActive: false,
                                       });
                                     }
+
                                     return { ...prev, assignments: filtered };
                                   });
                                 }}
                               />
                             </div>
 
-                            <div className={`flex items-center gap-2 ${!isAssigned && 'opacity-50 pointer-events-none'}`}>
-                              <span className="text-[10px] text-gray-500 flex-1">Days / Year:</span>
+                            <div
+                              className={`flex items-center gap-2 ${!isAssigned && "opacity-50 pointer-events-none"}`}
+                            >
+                              <span className="text-[10px] text-gray-500 flex-1">
+                                Days / Year:
+                              </span>
                               <Input
-                                type="number"
-                                size="sm"
                                 className="w-20"
+                                size="sm"
+                                type="number"
                                 value={assignedDays.toString()}
-                                onChange={e => {
+                                onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
-                                  setStaffForm(prev => {
+
+                                  setStaffForm((prev) => {
                                     const next = [...prev.assignments];
-                                    const idx = next.findIndex(a => a.leaveTypeId === type.id);
+                                    const idx = next.findIndex(
+                                      (a) => a.leaveTypeId === type.id,
+                                    );
+
                                     if (idx >= 0) {
                                       next[idx].assignedDays = val;
                                     } else {
@@ -3706,9 +3832,10 @@ export default function HRPage() {
                                         leaveTypeId: type.id,
                                         assignedDays: val,
                                         usedDays: 0,
-                                        isActive: true
+                                        isActive: true,
                                       });
                                     }
+
                                     return { ...prev, assignments: next };
                                   });
                                 }}
@@ -4119,7 +4246,7 @@ export default function HRPage() {
                               0,
                               Math.round(
                                 ((totalSessions - lateCount) / totalSessions) *
-                                100,
+                                  100,
                               ),
                             );
 
@@ -4246,7 +4373,7 @@ export default function HRPage() {
                                         className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${record.status === "present" || record.status === "late" ? (record.checkOut ? "bg-primary/10 text-primary" : record.status === "late" ? "bg-amber-500/10 text-amber-500" : "bg-success/10 text-success") : "bg-rose-500/10 text-rose-500"}`}
                                       >
                                         {record.status === "present" ||
-                                          record.status === "late"
+                                        record.status === "late"
                                           ? record.checkOut
                                             ? "Completed"
                                             : record.status === "late"
@@ -4408,10 +4535,10 @@ export default function HRPage() {
                             <span>Referral Commissions</span>
                             {(selectedStaff.totalCommissionBalance || 0) >
                               0 && (
-                                <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
-                                  Pending
-                                </span>
-                              )}
+                              <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                                Pending
+                              </span>
+                            )}
                           </div>
                         }
                       >
@@ -5007,143 +5134,143 @@ export default function HRPage() {
                       </div>
                       {getLeaveDetails(payrollForm.selectedMonths).absentDays >
                         0 && (
-                          <div className="flex flex-col gap-2 border-t border-b border-mountain-200/50 py-2 my-2">
-                            <div className="flex justify-between text-[12px] text-mountain-700 font-semibold">
-                              <span>Total Leave Breakdown:</span>
-                              <span>
-                                {
-                                  getLeaveDetails(payrollForm.selectedMonths)
-                                    .absentDays
-                                }{" "}
-                                Days Taken
-                              </span>
-                            </div>
-
-                            <div className="flex flex-col gap-1 pl-2 border-l-2 border-mountain-200">
-                              {getLeaveDetails(payrollForm.selectedMonths)
-                                .unpaidLeaves > 0 && (
-                                  <div className="flex justify-between text-[11px] text-rose-500">
-                                    <span>Unpaid Leaves:</span>
-                                    <span>
-                                      {
-                                        getLeaveDetails(payrollForm.selectedMonths)
-                                          .unpaidLeaves
-                                      }{" "}
-                                      Days
-                                    </span>
-                                  </div>
-                                )}
-                            </div>
-
-                            <div className="text-[9px] text-mountain-400 text-right leading-tight self-end mt-1 italic">
-                              Dates:{" "}
-                              {getLeaveDetails(
-                                payrollForm.selectedMonths,
-                              ).absentDates.join(", ")}
-                            </div>
+                        <div className="flex flex-col gap-2 border-t border-b border-mountain-200/50 py-2 my-2">
+                          <div className="flex justify-between text-[12px] text-mountain-700 font-semibold">
+                            <span>Total Leave Breakdown:</span>
+                            <span>
+                              {
+                                getLeaveDetails(payrollForm.selectedMonths)
+                                  .absentDays
+                              }{" "}
+                              Days Taken
+                            </span>
                           </div>
-                        )}
-                      {getLeaveDetails(payrollForm.selectedMonths)
-                        .deductionAmount > 0 && (
-                          <div className="flex flex-col gap-1 text-[12px] text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
-                            <div className="flex justify-between">
-                              <span className="font-semibold">
-                                Leave Salary Deduction:
-                              </span>
-                              <span className={`font-bold`}>
-                                - Rs.{" "}
-                                {Math.round(
-                                  Math.max(
-                                    0,
-                                    getLeaveDetails(payrollForm.selectedMonths)
-                                      .unpaidLeaves - payrollForm.waivedDays,
-                                  ) *
-                                  getLeaveDetails(payrollForm.selectedMonths)
-                                    .dailyWage,
-                                ).toLocaleString()}
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-rose-500/80 text-right">
-                              (
-                              {Math.max(
-                                0,
-                                getLeaveDetails(payrollForm.selectedMonths)
-                                  .unpaidLeaves - payrollForm.waivedDays,
-                              )}{" "}
-                              unpaid days @ Rs.{" "}
-                              {Math.round(
-                                getLeaveDetails(payrollForm.selectedMonths)
-                                  .dailyWage,
-                              ).toLocaleString()}
-                              /day)
-                            </div>
-                            <div className="flex items-center justify-between text-mountain-500 mt-1">
-                              <span className="text-[10px]">
-                                Waive deductions (Days):
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  isIconOnly
-                                  className="h-6 w-6 min-w-0"
-                                  isDisabled={payrollForm.waivedDays <= 0}
-                                  size="sm"
-                                  variant="flat"
-                                  onPress={() => {
-                                    setPayrollForm((prev) => ({
-                                      ...prev,
-                                      waivedDays: Math.max(
-                                        0,
-                                        prev.waivedDays - 1,
-                                      ),
-                                      amount: calculateExpectedAmount(
-                                        prev.selectedMonths,
-                                        prev.paymentType,
-                                        Math.max(0, prev.waivedDays - 1),
-                                      ),
-                                    }));
-                                  }}
-                                >
-                                  -
-                                </Button>
-                                <span className="font-bold w-4 text-center text-mountain-700">
-                                  {payrollForm.waivedDays}
-                                </span>
-                                <Button
-                                  isIconOnly
-                                  className="h-6 w-6 min-w-0"
-                                  isDisabled={
-                                    payrollForm.waivedDays >=
+
+                          <div className="flex flex-col gap-1 pl-2 border-l-2 border-mountain-200">
+                            {getLeaveDetails(payrollForm.selectedMonths)
+                              .unpaidLeaves > 0 && (
+                              <div className="flex justify-between text-[11px] text-rose-500">
+                                <span>Unpaid Leaves:</span>
+                                <span>
+                                  {
                                     getLeaveDetails(payrollForm.selectedMonths)
                                       .unpaidLeaves
-                                  }
-                                  size="sm"
-                                  variant="flat"
-                                  onPress={() => {
-                                    setPayrollForm((prev) => ({
-                                      ...prev,
-                                      waivedDays: Math.min(
+                                  }{" "}
+                                  Days
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="text-[9px] text-mountain-400 text-right leading-tight self-end mt-1 italic">
+                            Dates:{" "}
+                            {getLeaveDetails(
+                              payrollForm.selectedMonths,
+                            ).absentDates.join(", ")}
+                          </div>
+                        </div>
+                      )}
+                      {getLeaveDetails(payrollForm.selectedMonths)
+                        .deductionAmount > 0 && (
+                        <div className="flex flex-col gap-1 text-[12px] text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
+                          <div className="flex justify-between">
+                            <span className="font-semibold">
+                              Leave Salary Deduction:
+                            </span>
+                            <span className={`font-bold`}>
+                              - Rs.{" "}
+                              {Math.round(
+                                Math.max(
+                                  0,
+                                  getLeaveDetails(payrollForm.selectedMonths)
+                                    .unpaidLeaves - payrollForm.waivedDays,
+                                ) *
+                                  getLeaveDetails(payrollForm.selectedMonths)
+                                    .dailyWage,
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-rose-500/80 text-right">
+                            (
+                            {Math.max(
+                              0,
+                              getLeaveDetails(payrollForm.selectedMonths)
+                                .unpaidLeaves - payrollForm.waivedDays,
+                            )}{" "}
+                            unpaid days @ Rs.{" "}
+                            {Math.round(
+                              getLeaveDetails(payrollForm.selectedMonths)
+                                .dailyWage,
+                            ).toLocaleString()}
+                            /day)
+                          </div>
+                          <div className="flex items-center justify-between text-mountain-500 mt-1">
+                            <span className="text-[10px]">
+                              Waive deductions (Days):
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                isIconOnly
+                                className="h-6 w-6 min-w-0"
+                                isDisabled={payrollForm.waivedDays <= 0}
+                                size="sm"
+                                variant="flat"
+                                onPress={() => {
+                                  setPayrollForm((prev) => ({
+                                    ...prev,
+                                    waivedDays: Math.max(
+                                      0,
+                                      prev.waivedDays - 1,
+                                    ),
+                                    amount: calculateExpectedAmount(
+                                      prev.selectedMonths,
+                                      prev.paymentType,
+                                      Math.max(0, prev.waivedDays - 1),
+                                    ),
+                                  }));
+                                }}
+                              >
+                                -
+                              </Button>
+                              <span className="font-bold w-4 text-center text-mountain-700">
+                                {payrollForm.waivedDays}
+                              </span>
+                              <Button
+                                isIconOnly
+                                className="h-6 w-6 min-w-0"
+                                isDisabled={
+                                  payrollForm.waivedDays >=
+                                  getLeaveDetails(payrollForm.selectedMonths)
+                                    .unpaidLeaves
+                                }
+                                size="sm"
+                                variant="flat"
+                                onPress={() => {
+                                  setPayrollForm((prev) => ({
+                                    ...prev,
+                                    waivedDays: Math.min(
+                                      getLeaveDetails(prev.selectedMonths)
+                                        .unpaidLeaves,
+                                      prev.waivedDays + 1,
+                                    ),
+                                    amount: calculateExpectedAmount(
+                                      prev.selectedMonths,
+                                      prev.paymentType,
+                                      Math.min(
                                         getLeaveDetails(prev.selectedMonths)
                                           .unpaidLeaves,
                                         prev.waivedDays + 1,
                                       ),
-                                      amount: calculateExpectedAmount(
-                                        prev.selectedMonths,
-                                        prev.paymentType,
-                                        Math.min(
-                                          getLeaveDetails(prev.selectedMonths)
-                                            .unpaidLeaves,
-                                          prev.waivedDays + 1,
-                                        ),
-                                      ),
-                                    }));
-                                  }}
-                                >
-                                  +
-                                </Button>
-                              </div>
+                                    ),
+                                  }));
+                                }}
+                              >
+                                +
+                              </Button>
                             </div>
                           </div>
-                        )}
+                        </div>
+                      )}
                       {getPreviouslyPaid(payrollForm.selectedMonths) > 0 && (
                         <div className="flex justify-between text-[12px] text-health-600">
                           <span>Previously Paid (Advance):</span>
@@ -5226,7 +5353,7 @@ export default function HRPage() {
                             - Rs.{" "}
                             {Math.round(
                               payrollForm.amount *
-                              (payrollForm.taxPercentage / 100),
+                                (payrollForm.taxPercentage / 100),
                             ).toLocaleString()}
                           </span>
                         </div>
@@ -5256,9 +5383,9 @@ export default function HRPage() {
                               payrollForm.customBonus;
                             const taxAmt = payrollForm.applyTax
                               ? Math.round(
-                                payrollForm.amount *
-                                (payrollForm.taxPercentage / 100),
-                              )
+                                  payrollForm.amount *
+                                    (payrollForm.taxPercentage / 100),
+                                )
                               : 0;
 
                             return (
@@ -5477,10 +5604,11 @@ export default function HRPage() {
                   </span>
                   <div className="flex gap-1 ml-2">
                     <button
-                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${newHoliday.type === "paid"
-                        ? "bg-success/10 text-success border-success/30"
-                        : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
-                        }`}
+                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${
+                        newHoliday.type === "paid"
+                          ? "bg-success/10 text-success border-success/30"
+                          : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
+                      }`}
                       onClick={() =>
                         setNewHoliday({ ...newHoliday, type: "paid" })
                       }
@@ -5488,10 +5616,11 @@ export default function HRPage() {
                       Paid Holiday
                     </button>
                     <button
-                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${newHoliday.type === "unpaid"
-                        ? "bg-rose-500/10 text-rose-600 border-rose-300"
-                        : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
-                        }`}
+                      className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors ${
+                        newHoliday.type === "unpaid"
+                          ? "bg-rose-500/10 text-rose-600 border-rose-300"
+                          : "bg-mountain-100 text-mountain-400 border-mountain-200 hover:bg-mountain-200"
+                      }`}
                       onClick={() =>
                         setNewHoliday({ ...newHoliday, type: "unpaid" })
                       }
@@ -5589,10 +5718,11 @@ export default function HRPage() {
                           </td>
                           <td className="px-3 py-2">
                             <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${holiday.type === "unpaid"
-                                ? "bg-rose-50 text-rose-600 border-rose-200"
-                                : "bg-success/10 text-success border-success/20"
-                                }`}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                holiday.type === "unpaid"
+                                  ? "bg-rose-50 text-rose-600 border-rose-200"
+                                  : "bg-success/10 text-success border-success/20"
+                              }`}
                             >
                               {holiday.type === "unpaid" ? "Unpaid" : "Paid"}
                             </span>

@@ -120,13 +120,13 @@ export const followupService = {
   ): Promise<PatientFollowup[]> {
     let q = query(
       collection(db, COLLECTION),
-      where("clinicId", "==", clinicId),
+
     );
 
     if (branchId) {
       q = query(
         collection(db, COLLECTION),
-        where("clinicId", "==", clinicId),
+
         where("branchId", "==", branchId),
       );
     }

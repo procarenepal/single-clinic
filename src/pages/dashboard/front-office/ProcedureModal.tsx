@@ -55,6 +55,52 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
 }) => {
   const [procedureSearch, setProcedureSearch] = React.useState("");
 
+  // Stable option order: built once when modal opens, never re-sorted during interaction.
+  // This prevents items from jumping around when the user checks/unchecks them.
+  const stableOptionOrder = React.useRef<string[]>([]);
+
+  React.useEffect(() => {
+    if (!isOpen || !appointment) return;
+
+    const initialProcedureList = procedure.procedureType
+      .split(", ")
+      .filter((x) => x !== "");
+
+    const ids: string[] = [];
+
+    // 1. Booked procedure first (if not a standard type)
+    const bookedLabel = getApptTypeLabel(appointment.appointmentTypeId);
+    if (appointment.appointmentTypeId !== "package-session") {
+      const isDynamic = appointmentTypes.some((t) => t.name === bookedLabel);
+      if (!isDynamic && bookedLabel) ids.push(bookedLabel);
+    }
+
+    // 2. Pre-selected items next so they appear at the top on open
+    initialProcedureList.forEach((v) => {
+      if (!ids.includes(v)) ids.push(v);
+    });
+
+    // 3. Packages
+    modalActivePackages.forEach((pkg) => {
+      const val = `consume_pkg_${pkg.id}`;
+      if (!ids.includes(val)) ids.push(val);
+    });
+
+    // 4. Appointment types (sorted alphabetically)
+    [...appointmentTypes]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((type) => {
+        if (!ids.includes(type.name)) ids.push(type.name);
+      });
+
+    // 5. Other
+    if (!ids.includes("Other")) ids.push("Other");
+
+    stableOptionOrder.current = ids;
+  // Only rebuild when the modal opens for a different appointment
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, appointment?.id]);
+
   if (!isOpen || !appointment) return null;
 
   const modalRoot = document.body;
@@ -187,70 +233,49 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                       onChange={(e) => setProcedureSearch(e.target.value)}
                     />
                     {(() => {
-                      const options = [];
                       const procedureList = procedure.procedureType
                         .split(", ")
                         .filter((x) => x !== "");
 
-                      // 1. Booked procedure
+                      // Build a label map for each ID
                       const bookedLabel = getBookedApptTypeOption();
+                      const labelOf = (id: string): { label: string; type: string } => {
+                        if (bookedLabel && id === bookedLabel)
+                          return { label: `${bookedLabel} (Booked)`, type: "booked" };
+                        if (id.startsWith("consume_pkg_")) {
+                          const pkg = modalActivePackages.find(
+                            (p) => `consume_pkg_${p.id}` === id,
+                          );
+                          return {
+                            label: pkg
+                              ? `Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`
+                              : id,
+                            type: "package",
+                          };
+                        }
+                        if (id === "Other") return { label: "Other", type: "other" };
+                        return { label: id, type: "type" };
+                      };
 
-                      if (bookedLabel) {
-                        options.push({
-                          type: "booked",
-                          id: bookedLabel,
-                          label: `${bookedLabel} (Booked)`,
-                          isChecked: procedureList.includes(bookedLabel),
-                        });
-                      }
+                      // Use stable order; fall back to a simple list if not yet initialised
+                      const orderedIds =
+                        stableOptionOrder.current.length > 0
+                          ? stableOptionOrder.current
+                          : [
+                              ...(bookedLabel ? [bookedLabel] : []),
+                              ...modalActivePackages.map((p) => `consume_pkg_${p.id}`),
+                              ...appointmentTypes.map((t) => t.name),
+                              "Other",
+                            ];
 
-                      // 2. Packages
-                      modalActivePackages.forEach((pkg) => {
-                        const val = `consume_pkg_${pkg.id}`;
-
-                        options.push({
-                          type: "package",
-                          id: val,
-                          label: `Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`,
-                          isChecked: procedureList.includes(val),
-                        });
-                      });
-
-                      // 3. Appointment Types
-                      appointmentTypes.forEach((type) => {
-                        options.push({
-                          type: "type",
-                          id: type.name,
-                          label: type.name,
-                          isChecked: procedureList.includes(type.name),
-                        });
-                      });
-
-                      // 4. Other
-                      options.push({
-                        type: "other",
-                        id: "Other",
-                        label: "Other",
-                        isChecked: procedureList.includes("Other"),
-                      });
-
-                      // Sort: Booked first, then Selected, then the rest
-                      options.sort((a, b) => {
-                        if (a.type === "booked") return -1;
-                        if (b.type === "booked") return 1;
-                        if (a.isChecked && !b.isChecked) return -1;
-                        if (!a.isChecked && b.isChecked) return 1;
-
-                        return 0;
-                      });
-
-                      const filteredOptions = options.filter((opt) =>
-                        opt.label
+                      const filteredIds = orderedIds.filter((id) => {
+                        const { label } = labelOf(id);
+                        return label
                           .toLowerCase()
-                          .includes(procedureSearch.toLowerCase()),
-                      );
+                          .includes(procedureSearch.toLowerCase());
+                      });
 
-                      if (filteredOptions.length === 0) {
+                      if (filteredIds.length === 0) {
                         return (
                           <div className="text-[12px] text-text-muted text-center py-2">
                             No matching procedures
@@ -258,19 +283,22 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                         );
                       }
 
-                      return filteredOptions.map((opt) => (
-                        <Checkbox
-                          key={opt.id}
-                          isSelected={opt.isChecked}
-                          onValueChange={() => handleToggleProcedure(opt.id)}
-                        >
-                          <span
-                            className={`text-[12.5px] ${opt.type === "booked" ? "font-semibold text-primary" : "text-text-main"}`}
+                      return filteredIds.map((id) => {
+                        const { label, type } = labelOf(id);
+                        return (
+                          <Checkbox
+                            key={id}
+                            isSelected={procedureList.includes(id)}
+                            onValueChange={() => handleToggleProcedure(id)}
                           >
-                            {opt.label}
-                          </span>
-                        </Checkbox>
-                      ));
+                            <span
+                              className={`text-[12.5px] ${type === "booked" ? "font-semibold text-primary" : "text-text-main"}`}
+                            >
+                              {label}
+                            </span>
+                          </Checkbox>
+                        );
+                      });
                     })()}
                   </div>
                 </div>

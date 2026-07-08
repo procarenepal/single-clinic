@@ -2007,11 +2007,13 @@ export default function NewPrescriptionPage() {
                   appointmentId ? "Auto-filled from appointment" : ""
                 }
                 disabled={!!appointmentId}
-                items={doctors.filter((_d: any) => _d.isActive !== false).map((d) => ({
-                  id: d.id,
-                  primary: d.name,
-                  secondary: d.speciality,
-                }))}
+                items={doctors
+                  .filter((_d: any) => _d.isActive !== false)
+                  .map((d) => ({
+                    id: d.id,
+                    primary: d.name,
+                    secondary: d.speciality,
+                  }))}
                 label="Doctor"
                 placeholder="Search doctor..."
                 value={doctorId}

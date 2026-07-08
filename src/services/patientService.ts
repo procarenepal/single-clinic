@@ -195,7 +195,7 @@ export const patientService = {
         // Convert Firebase Timestamp objects to JavaScript Date objects
         const createdAt = data.createdAt
           ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
+          : new Date(0);
         const updatedAt = data.updatedAt
           ? new Date(data.updatedAt.seconds * 1000)
           : new Date();
@@ -252,7 +252,7 @@ export const patientService = {
         const data = docSnap.data() as any;
         const createdAt = data.createdAt
           ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
+          : new Date(0);
         const updatedAt = data.updatedAt
           ? new Date(data.updatedAt.seconds * 1000)
           : new Date();
@@ -428,7 +428,7 @@ export const patientService = {
         const data = docSnap.data();
         const createdAt = data.createdAt
           ? new Date(data.createdAt.seconds * 1000)
-          : new Date();
+          : new Date(0);
         const updatedAt = data.updatedAt
           ? new Date(data.updatedAt.seconds * 1000)
           : new Date();
@@ -478,7 +478,7 @@ export const patientService = {
           const data = docSnap.data();
           const createdAt = data.createdAt
             ? new Date(data.createdAt.seconds * 1000)
-            : new Date();
+            : new Date(0);
           const updatedAt = data.updatedAt
             ? new Date(data.updatedAt.seconds * 1000)
             : new Date();
@@ -620,7 +620,7 @@ export const patientService = {
       const data = docSnap.data() as any;
       const createdAt = data.createdAt
         ? new Date(data.createdAt.seconds * 1000)
-        : new Date();
+        : new Date(0);
       const updatedAt = data.updatedAt
         ? new Date(data.updatedAt.seconds * 1000)
         : new Date();
@@ -789,7 +789,7 @@ export const patientService = {
       for (const variant of variants) {
         const q = query(
           collection(db, PATIENTS_COLLECTION),
-          where("clinicId", "==", clinicId),
+
           where("mobile", "==", variant),
         );
         const snap = await getDocs(q);
@@ -827,7 +827,7 @@ export const patientService = {
     try {
       const q = query(
         collection(db, PATIENTS_COLLECTION),
-        where("clinicId", "==", clinicId),
+
         where("email", "==", email.trim().toLowerCase()),
       );
       const snap = await getDocs(q);

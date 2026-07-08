@@ -480,6 +480,13 @@ export const appointmentService = {
       // We only query by clinicId (and branchId) which are equality filters
       const constraints: any[] = [];
 
+      if (_clinicId && _clinicId !== "standalone" && _clinicId !== "default") {
+        constraints.push(where("clinicId", "==", _clinicId));
+      }
+      if (_branchId) {
+        constraints.push(where("branchId", "==", _branchId));
+      }
+
       // We remove the date range where() and orderBy() from the Firestore query
       // and handle them in memory to solve the index error immediately.
       const q = query(appointmentsCollection, ...constraints);
@@ -624,6 +631,13 @@ export const appointmentService = {
   ) {
     const appointmentsCollection = collection(db, "appointments");
     const constraints: any[] = [];
+
+    if (_clinicId && _clinicId !== "standalone" && _clinicId !== "default") {
+      constraints.push(where("clinicId", "==", _clinicId));
+    }
+    if (_branchId) {
+      constraints.push(where("branchId", "==", _branchId));
+    }
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
 
@@ -660,6 +674,10 @@ export const appointmentService = {
   ) {
     const appointmentsCollection = collection(db, "appointments");
     const constraints: any[] = [where("doctorId", "==", doctorId)];
+
+    if (branchId) {
+      constraints.push(where("branchId", "==", branchId));
+    }
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
 
@@ -696,6 +714,10 @@ export const appointmentService = {
   ) {
     const appointmentsCollection = collection(db, "appointments");
     const constraints: any[] = [where("assignedExpertId", "==", expertId)];
+
+    if (branchId) {
+      constraints.push(where("branchId", "==", branchId));
+    }
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
 

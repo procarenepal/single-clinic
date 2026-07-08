@@ -123,8 +123,8 @@ function CustomInput({
       )}
       <div
         className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${isInvalid
-          ? "border-red-300 focus-within:ring-red-100"
-          : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
+            ? "border-red-300 focus-within:ring-red-100"
+            : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
           } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
       >
         {startContent && (
@@ -744,6 +744,8 @@ export default function PharmacyPage() {
 
   const [rawStocks, setRawStocks] = useState<any[]>([]);
   const [inventorySearch, setInventorySearch] = useState("");
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const INVENTORY_ROWS_PER_PAGE = 25;
   const [inventoryStockFilter, setInventoryStockFilter] = useState<
     "all" | "out" | "low" | "good"
   >("all");
@@ -1008,14 +1010,20 @@ export default function PharmacyPage() {
     try {
       const stockDocs = await medicineService.getMedicineStocks(
         selectedMedicineForAdjust.id,
-        clinicId
+        clinicId,
       );
       const branchStockDocs = stockDocs.filter(
-        (s) => !effectiveBranchId || s.branchId === effectiveBranchId
+        (s) => !effectiveBranchId || s.branchId === effectiveBranchId,
       );
 
-      const totalCurrentRegular = branchStockDocs.reduce((sum, d) => sum + (d.currentStock || 0), 0);
-      const totalCurrentScheme = branchStockDocs.reduce((sum, d) => sum + (d.schemeStock || 0), 0);
+      const totalCurrentRegular = branchStockDocs.reduce(
+        (sum, d) => sum + (d.currentStock || 0),
+        0,
+      );
+      const totalCurrentScheme = branchStockDocs.reduce(
+        (sum, d) => sum + (d.schemeStock || 0),
+        0,
+      );
 
       const inputReg = Math.abs(adjustForm.regularStock || 0);
       const inputSch = Math.abs(adjustForm.schemeStock || 0);
@@ -1039,10 +1047,13 @@ export default function PharmacyPage() {
       if (totalDiff !== 0) {
         if (diffReg > 0 || diffSch > 0) {
           const firstDoc = branchStockDocs[0];
+
           if (firstDoc && firstDoc.id) {
             await medicineService.updateMedicineStock(firstDoc.id, {
-              currentStock: (firstDoc.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
-              schemeStock: (firstDoc.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
+              currentStock:
+                (firstDoc.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
+              schemeStock:
+                (firstDoc.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
             });
           } else {
             await medicineService.createMedicineStock({
@@ -1065,6 +1076,7 @@ export default function PharmacyPage() {
           const sortedDocs = [...branchStockDocs].sort((a, b) => {
             const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
             return timeA - timeB;
           });
 
@@ -1072,8 +1084,14 @@ export default function PharmacyPage() {
             if (remainingRegToDeduct === 0 && remainingSchToDeduct === 0) break;
             if (!doc.id) continue;
 
-            const deductReg = Math.min(doc.currentStock || 0, remainingRegToDeduct);
-            const deductSch = Math.min(doc.schemeStock || 0, remainingSchToDeduct);
+            const deductReg = Math.min(
+              doc.currentStock || 0,
+              remainingRegToDeduct,
+            );
+            const deductSch = Math.min(
+              doc.schemeStock || 0,
+              remainingSchToDeduct,
+            );
 
             if (deductReg > 0 || deductSch > 0) {
               await medicineService.updateMedicineStock(doc.id, {
@@ -1096,7 +1114,8 @@ export default function PharmacyPage() {
           previousStock: oldTotal,
           newStock: newTotal,
           unitPrice: selectedMedicineForAdjust.price || 0,
-          totalAmount: Math.abs(totalDiff) * (selectedMedicineForAdjust.price || 0),
+          totalAmount:
+            Math.abs(totalDiff) * (selectedMedicineForAdjust.price || 0),
           referenceId: "MANUAL-ADJUST",
           reason: adjustForm.reason || "Manual Inventory Reconciliation",
           clinicId,
@@ -1180,14 +1199,10 @@ export default function PharmacyPage() {
           medicinesData,
           itemsData,
           purchasesData,
-          usageData,
           settingsData,
           suppliersData,
-          supplierPurchaseRecordsData,
-          supplierPaymentsData,
           clinicData,
           layoutConfigData,
-          prescriptionsData,
         ] = await Promise.all([
           medicineService.getMedicinesByClinic(
             clinicId,
@@ -1199,17 +1214,10 @@ export default function PharmacyPage() {
             clinicId,
             effectiveBranchId,
           ),
-          pharmacyService.getMedicineUsageByClinic(clinicId, effectiveBranchId),
           pharmacyService.getPharmacySettings(clinicId, effectiveBranchId),
           medicineService.getSuppliersByClinic(clinicId, effectiveBranchId),
-          medicineService.getSupplierPurchaseRecords(
-            clinicId,
-            effectiveBranchId,
-          ),
-          medicineService.getSupplierPayments(clinicId, effectiveBranchId),
           clinicService.getClinicById(clinicId),
           clinicService.getPrintLayoutConfig(clinicId),
-          prescriptionService.getPrescriptionsByClinic(clinicId),
         ]);
 
         setMedicines(medicinesData as Medicine[]);
@@ -1231,21 +1239,9 @@ export default function PharmacyPage() {
 
         setItems(itemsData);
         setPurchases(purchasesData as MedicinePurchase[]);
-        setUsedMedicines(usageData as MedicineUsage[]);
         setSuppliers((suppliersData as Supplier[]) || []);
-        setSupplierPurchaseRecords(
-          (supplierPurchaseRecordsData as SupplierPurchaseRecord[]) || [],
-        );
-        setSupplierPayments((supplierPaymentsData as SupplierPayment[]) || []);
         setClinic(clinicData);
         setLayoutConfig(layoutConfigData);
-        if (prescriptionsData) {
-          setPrescriptions(
-            (prescriptionsData as any[])?.filter((rx) => rx.sendToPharmacy) ||
-            [],
-          );
-        }
-        await loadSupplierLedgerBalances(effectiveBranchId);
 
         if (settingsData) {
           setPharmacySettings(settingsData as PharmacySettings);
@@ -1283,7 +1279,47 @@ export default function PharmacyPage() {
     };
 
     loadData();
-  }, [clinicId, effectiveBranchId, currentUser, userData]);
+  }, [clinicId, currentUser, userData, effectiveBranchId]);
+
+  // Lazy load heavy datasets (usage, supplier ledgers, prescriptions) after initial render
+  useEffect(() => {
+    if (!clinicId || !currentUser || !userData) return;
+
+    const loadDeferredData = async () => {
+      try {
+        const [
+          usageData,
+          supplierPurchaseRecordsData,
+          supplierPaymentsData,
+          prescriptionsData,
+        ] = await Promise.all([
+          pharmacyService.getMedicineUsageByClinic(clinicId, effectiveBranchId),
+          medicineService.getSupplierPurchaseRecords(clinicId, effectiveBranchId),
+          medicineService.getSupplierPayments(clinicId, effectiveBranchId),
+          prescriptionService.getPrescriptionsByClinic(clinicId),
+        ]);
+
+        setUsedMedicines(usageData as MedicineUsage[]);
+        setSupplierPurchaseRecords(
+          (supplierPurchaseRecordsData as SupplierPurchaseRecord[]) || []
+        );
+        setSupplierPayments((supplierPaymentsData as SupplierPayment[]) || []);
+
+        if (prescriptionsData) {
+          setPrescriptions(
+            (prescriptionsData as any[])?.filter((rx) => rx.sendToPharmacy) || []
+          );
+        }
+
+        await loadSupplierLedgerBalances(effectiveBranchId);
+      } catch (error) {
+        console.error("Error loading deferred pharmacy data:", error);
+      }
+    };
+
+    const timer = setTimeout(loadDeferredData, 1000);
+    return () => clearTimeout(timer);
+  }, [clinicId, currentUser, userData, effectiveBranchId]);
 
   // Fetch patients when purchase modal opens and customerType is patient
   useEffect(() => {
@@ -1507,10 +1543,11 @@ export default function PharmacyPage() {
   };
 
   const filteredMedicines = getFilteredMedicines();
-  const stockBookTotalPages = Math.ceil(filteredMedicines.length / stockBookRowsPerPage) || 1;
+  const stockBookTotalPages =
+    Math.ceil(filteredMedicines.length / stockBookRowsPerPage) || 1;
   const paginatedMedicines = filteredMedicines.slice(
     (stockBookPage - 1) * stockBookRowsPerPage,
-    stockBookPage * stockBookRowsPerPage
+    stockBookPage * stockBookRowsPerPage,
   );
 
   // Filter purchases for Daily Report tab
@@ -3057,6 +3094,21 @@ export default function PharmacyPage() {
     inventoryExpiryFilter,
   ]);
 
+  useEffect(() => {
+    setInventoryPage(1);
+  }, [inventorySearch, inventoryStockFilter, inventoryExpiryFilter]);
+
+  const inventoryTotalPages = Math.ceil(
+    filteredInventoryMedicines.length / INVENTORY_ROWS_PER_PAGE,
+  );
+  const paginatedInventoryMedicines = useMemo(() => {
+    const start = (inventoryPage - 1) * INVENTORY_ROWS_PER_PAGE;
+    return filteredInventoryMedicines.slice(
+      start,
+      start + INVENTORY_ROWS_PER_PAGE,
+    );
+  }, [filteredInventoryMedicines, inventoryPage]);
+
   const getSupplierPaymentsForSupplier = (supplierId: string) =>
     supplierPayments
       .filter((payment) => payment.supplierId === supplierId)
@@ -3714,7 +3766,6 @@ export default function PharmacyPage() {
                 New Record
               </Button>
             )}
-
           </div>
         </div>
 
@@ -3722,8 +3773,8 @@ export default function PharmacyPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
             className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "daily"
-              ? "border-primary shadow-sm ring-1 ring-primary/20"
-              : "border-border-base hover:border-border-strong hover:bg-surface-2"
+                ? "border-primary shadow-sm ring-1 ring-primary/20"
+                : "border-border-base hover:border-border-strong hover:bg-surface-2"
               }`}
             onClick={() => handleStatCardClick("daily")}
           >
@@ -3736,8 +3787,8 @@ export default function PharmacyPage() {
 
           <div
             className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "paid"
-              ? "border-primary shadow-sm ring-1 ring-primary/20"
-              : "border-border-base hover:border-border-strong hover:bg-surface-2"
+                ? "border-primary shadow-sm ring-1 ring-primary/20"
+                : "border-border-base hover:border-border-strong hover:bg-surface-2"
               }`}
             onClick={() => handleStatCardClick("paid")}
           >
@@ -3752,8 +3803,8 @@ export default function PharmacyPage() {
 
           <div
             className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "unpaid"
-              ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
-              : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
+                ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
+                : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
               }`}
             onClick={() => handleStatCardClick("unpaid")}
           >
@@ -4141,7 +4192,6 @@ export default function PharmacyPage() {
               </div>
             )}
 
-
             {/* Supplier Ledger Tab */}
             {activeTab === "supplier_ledger" && (
               <div className="py-6 space-y-6">
@@ -4372,14 +4422,14 @@ export default function PharmacyPage() {
                             </p>
                             <p
                               className={`text-stat-sm font-semibold mt-1 ${supplierLedgerEntries[
-                                supplierLedgerEntries.length - 1
-                              ].balanceAmount > 0
-                                ? "text-red-500"
-                                : supplierLedgerEntries[
                                   supplierLedgerEntries.length - 1
-                                ].balanceAmount < 0
-                                  ? "text-primary"
-                                  : "text-text-main"
+                                ].balanceAmount > 0
+                                  ? "text-red-500"
+                                  : supplierLedgerEntries[
+                                    supplierLedgerEntries.length - 1
+                                  ].balanceAmount < 0
+                                    ? "text-primary"
+                                    : "text-text-main"
                                 }`}
                             >
                               NPR{" "}
@@ -4480,10 +4530,10 @@ export default function PharmacyPage() {
                                     <td className="px-3 py-2.5 text-[12.5px]">
                                       <span
                                         className={`font-semibold ${entry.balanceAmount > 0
-                                          ? "text-red-500"
-                                          : entry.balanceAmount < 0
-                                            ? "text-primary"
-                                            : "text-text-muted"
+                                            ? "text-red-500"
+                                            : entry.balanceAmount < 0
+                                              ? "text-primary"
+                                              : "text-text-muted"
                                           }`}
                                       >
                                         NPR{" "}
@@ -5142,7 +5192,7 @@ export default function PharmacyPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-default-200">
-                          {filteredInventoryMedicines.length === 0 ? (
+                          {paginatedInventoryMedicines.length === 0 ? (
                             <tr>
                               <td
                                 className="text-center py-12 px-4"
@@ -5161,7 +5211,7 @@ export default function PharmacyPage() {
                               </td>
                             </tr>
                           ) : (
-                            filteredInventoryMedicines.map((m) => {
+                            paginatedInventoryMedicines.map((m) => {
                               const stockObj = rawStocks.find(
                                 (s) => s.medicineId === m.id,
                               );
@@ -5200,10 +5250,10 @@ export default function PharmacyPage() {
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
                                       className={`${regular === 0
-                                        ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        : regular <= 10
-                                          ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                          : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          : regular <= 10
+                                            ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                            : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
                                         }`}
                                     >
                                       {regular}
@@ -5212,10 +5262,10 @@ export default function PharmacyPage() {
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
                                       className={`${scheme === 0
-                                        ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        : scheme <= 10
-                                          ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                          : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          : scheme <= 10
+                                            ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                            : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
                                         }`}
                                     >
                                       {scheme}
@@ -5224,10 +5274,10 @@ export default function PharmacyPage() {
                                   <td className="px-5 py-4 text-center font-bold">
                                     <span
                                       className={`${total === 0
-                                        ? "text-red-600 text-sm"
-                                        : total <= 10
-                                          ? "text-amber-600 text-sm"
-                                          : "text-default-800 text-sm"
+                                          ? "text-red-600 text-sm"
+                                          : total <= 10
+                                            ? "text-amber-600 text-sm"
+                                            : "text-default-800 text-sm"
                                         }`}
                                     >
                                       {total}
@@ -5292,6 +5342,37 @@ export default function PharmacyPage() {
                     </div>
                   </CardBody>
                 </Card>
+
+                {/* Pagination */}
+                {inventoryTotalPages > 1 && (
+                  <div className="flex items-center justify-between text-[12.5px] text-default-500 mt-2 px-1">
+                    <span>
+                      Showing{" "}
+                      {(inventoryPage - 1) * INVENTORY_ROWS_PER_PAGE + 1} to{" "}
+                      {Math.min(
+                        inventoryPage * INVENTORY_ROWS_PER_PAGE,
+                        filteredInventoryMedicines.length,
+                      )}{" "}
+                      of {filteredInventoryMedicines.length}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        className="px-2 py-1 border border-default-200 rounded hover:bg-default-100 disabled:opacity-50 text-default-700"
+                        disabled={inventoryPage === 1}
+                        onClick={() => setInventoryPage((p) => p - 1)}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        className="px-2 py-1 border border-default-200 rounded hover:bg-default-100 disabled:opacity-50 text-default-700"
+                        disabled={inventoryPage === inventoryTotalPages}
+                        onClick={() => setInventoryPage((p) => p + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -5723,7 +5804,8 @@ export default function PharmacyPage() {
                                     <TableCell>
                                       <span className="text-sm">
                                         NPR{" "}
-                                        {medicine.price?.toLocaleString() || "0"}
+                                        {medicine.price?.toLocaleString() ||
+                                          "0"}
                                       </span>
                                     </TableCell>
                                     <TableCell>
@@ -5800,7 +5882,9 @@ export default function PharmacyPage() {
 
                       const totalDeducted = stockTransactions
                         .filter(
-                          (t) => t.type === "deduction" || (t.type === "adjustment" && t.quantity < 0),
+                          (t) =>
+                            t.type === "deduction" ||
+                            (t.type === "adjustment" && t.quantity < 0),
                         )
                         .reduce((sum, t) => sum + Math.abs(t.quantity), 0);
 
@@ -5825,7 +5909,10 @@ export default function PharmacyPage() {
                       }, 0);
 
                       const netQuantity =
-                        totalPurchased - totalSold + totalReturned - totalDeducted;
+                        totalPurchased -
+                        totalSold +
+                        totalReturned -
+                        totalDeducted;
 
                       return (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -5885,10 +5972,10 @@ export default function PharmacyPage() {
                                 </p>
                                 <p
                                   className={`text-stat-sm font-semibold mt-1 ${netQuantity > 0
-                                    ? "text-success"
-                                    : netQuantity < 0
-                                      ? "text-danger"
-                                      : "text-default-600"
+                                      ? "text-success"
+                                      : netQuantity < 0
+                                        ? "text-danger"
+                                        : "text-default-600"
                                     }`}
                                 >
                                   {netQuantity}
@@ -5981,8 +6068,8 @@ export default function PharmacyPage() {
                                   <TableCell>
                                     <span
                                       className={`font-medium ${transaction.quantity < 0
-                                        ? "text-danger"
-                                        : "text-success"
+                                          ? "text-danger"
+                                          : "text-success"
                                         }`}
                                     >
                                       {transaction.quantity > 0 ? "+" : ""}
@@ -7897,10 +7984,10 @@ export default function PharmacyPage() {
                             <TableCell>
                               <span
                                 className={`font-semibold ${entry.balanceAmount > 0
-                                  ? "text-danger"
-                                  : entry.balanceAmount < 0
-                                    ? "text-success"
-                                    : "text-default-600"
+                                    ? "text-danger"
+                                    : entry.balanceAmount < 0
+                                      ? "text-success"
+                                      : "text-default-600"
                                   }`}
                               >
                                 NPR{" "}
@@ -8592,16 +8679,20 @@ export default function PharmacyPage() {
                   value={adjustForm.type}
                   onChange={(e) => {
                     const val = e.target.value as "add" | "deduct" | "set";
+
                     if (val === "set") {
-                      const stockObj = rawStocks.find((s) => s.medicineId === selectedMedicineForAdjust?.id);
-                      setAdjustForm(prev => ({
+                      const stockObj = rawStocks.find(
+                        (s) => s.medicineId === selectedMedicineForAdjust?.id,
+                      );
+
+                      setAdjustForm((prev) => ({
                         ...prev,
                         type: val,
                         regularStock: stockObj?.currentStock || 0,
                         schemeStock: stockObj?.schemeStock || 0,
                       }));
                     } else {
-                      setAdjustForm(prev => ({ ...prev, type: val }));
+                      setAdjustForm((prev) => ({ ...prev, type: val }));
                     }
                   }}
                 >
@@ -8611,10 +8702,13 @@ export default function PharmacyPage() {
                 </select>
               </div>
 
-
               <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label={adjustForm.type === "set" ? "New Regular Stock *" : "Quantity (Regular) *"}
+                  label={
+                    adjustForm.type === "set"
+                      ? "New Regular Stock *"
+                      : "Quantity (Regular) *"
+                  }
                   type="number"
                   value={adjustForm.regularStock.toString()}
                   variant="bordered"
@@ -8626,7 +8720,11 @@ export default function PharmacyPage() {
                   }
                 />
                 <Input
-                  label={adjustForm.type === "set" ? "New Scheme Stock *" : "Quantity (Scheme) *"}
+                  label={
+                    adjustForm.type === "set"
+                      ? "New Scheme Stock *"
+                      : "Quantity (Scheme) *"
+                  }
                   type="number"
                   value={adjustForm.schemeStock.toString()}
                   variant="bordered"
