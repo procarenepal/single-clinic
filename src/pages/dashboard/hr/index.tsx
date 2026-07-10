@@ -4621,7 +4621,10 @@ export default function HRPage() {
                                   </TableCell>
                                   <TableCell>
                                     <div className="font-medium text-primary">
-                                      {comm.commissionPercentage}%
+                                      {Number(comm.commissionPercentage)
+                                        .toFixed(2)
+                                        .replace(/\.00$/, "")}
+                                      %
                                     </div>
                                     <div className="text-[10px] text-text-muted">
                                       of Rs.{" "}

@@ -40,10 +40,6 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { doctorCommissionService } from "@/services/doctorCommissionService";
-import { expertCommissionService } from "@/services/expertCommissionService";
-import { referralCommissionService } from "@/services/referralCommissionService";
-import { staffCommissionService } from "@/services/staffCommissionService";
 import { branchService } from "@/services/branchService";
 import { treatmentCategoryService } from "@/services/treatmentCategoryService";
 import {
@@ -616,12 +612,78 @@ export default function AppointmentBillingPage() {
         );
 
         setPatientDue(totalDue);
+
+        // Auto-populate unbilled appointments
+        try {
+          const { appointmentService } = await import(
+            "@/services/appointmentService"
+          );
+          const allAppointments =
+            await appointmentService.getAppointmentsByPatient(id);
+          const unbilled = allAppointments.filter(
+            (app) =>
+              !app.billingId && // Not already billed
+              app.status !== "cancelled" &&
+              app.status !== "no-show",
+          );
+
+          if (unbilled.length > 0) {
+            const newItems = unbilled.map((app, index) => {
+              const at = appointmentTypes.find(
+                (t) => t.id === app.appointmentTypeId,
+              );
+              const doc = doctors.find((d) => d.id === app.doctorId);
+              const exp = experts.find((e) => e.id === app.doctorId);
+              const clinician = doc || exp;
+
+              const price = at?.price || 0;
+              const quantity = 1;
+              const commission =
+                clinician?.defaultCommission ||
+                billingSettings?.defaultCommission ||
+                0;
+
+              return {
+                id: `item_${Date.now()}_${index}`,
+                appointmentTypeId: app.appointmentTypeId || "",
+                appointmentTypeName: at?.name || "Consultation",
+                price,
+                quantity,
+                commission,
+                doctorId: app.doctorId || "",
+                doctorName: clinician?.name || "",
+                discountType: "percent" as "percent" | "flat",
+                discountValue: 0,
+                discountAmount: 0,
+                amount: price,
+                appointmentId: app.id,
+              } as any;
+            });
+
+            setFormData((prev) => ({
+              ...prev,
+              doctorId: newItems[0].doctorId,
+              doctorName: newItems[0].doctorName,
+              items: newItems,
+            }));
+          } else {
+            // No unbilled appointments found, clear items so user can manually add
+            setFormData((prev) => ({ ...prev, items: [] }));
+          }
+        } catch (e) {
+          console.error("Error auto-populating appointments:", e);
+        }
       } catch (e) {
         console.error("Error fetching patient due balance:", e);
         setPatientDue(0);
       }
     } else {
-      setFormData((prev) => ({ ...prev, patientId: "", patientName: "" }));
+      setFormData((prev) => ({
+        ...prev,
+        patientId: "",
+        patientName: "",
+        items: [],
+      }));
       setPatientDue(0);
     }
   };
@@ -736,7 +798,7 @@ export default function AppointmentBillingPage() {
         const doc = doctors.find((d) => d.id === updates.doctorId);
         const exp = experts.find((e) => e.id === updates.doctorId);
         const clinician = doc || exp;
-        
+
         item.commission = clinician?.defaultCommission || 0;
         item.doctorName = clinician?.name || "";
       }
@@ -855,6 +917,26 @@ export default function AppointmentBillingPage() {
           console.error("Failed to update patient clinician assignment:", err);
         }
       }
+
+      // Link the invoice to the appointments
+      try {
+        const { appointmentService } = await import(
+          "@/services/appointmentService"
+        );
+
+        for (const item of formData.items as any[]) {
+          if (item.appointmentId) {
+            await appointmentService.updateAppointment(item.appointmentId, {
+              billingId: id,
+              billingStatus: "unpaid",
+              status: "completed", // Automatically mark as completed since it has been billed
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to link appointment to invoice:", err);
+      }
+
       addToast({ title: "Invoice created", color: "success" });
       setFormData({
         ...emptyForm,
@@ -958,175 +1040,7 @@ export default function AppointmentBillingPage() {
         paymentForm.notes || undefined,
       );
 
-      // ── Generate commissions only when fully paid to prevent partial payment overpayment ──
-      const isNowFullyPaid = (selectedBillingForPayment.paidAmount + amount) >= selectedBillingForPayment.totalAmount;
-      if (selectedBillingForPayment.paymentStatus !== "paid" && isNowFullyPaid) {
-        try {
-          const billingDataForCommission = {
-            ...selectedBillingForPayment,
-            createdAt:
-              selectedBillingForPayment.createdAt instanceof Date
-                ? selectedBillingForPayment.createdAt
-                : new Date(),
-            updatedAt: new Date(),
-          } as AppointmentBilling;
-
-          // Group invoice items by unique clinician ID
-          const clinicianMap = new Map<
-            string,
-            { isExpert: boolean; items: typeof selectedBillingForPayment.items }
-          >();
-
-          for (const item of selectedBillingForPayment.items) {
-            const cId = item.doctorId || selectedBillingForPayment.doctorId;
-
-            if (!cId) continue;
-            const sanitizedItem = {
-              ...item,
-              commission: parseFloat(item.commission as any) || 0,
-              amount: parseFloat(item.amount as any) || 0,
-            };
-
-            if (!clinicianMap.has(cId)) {
-              // Determine type: check in-memory arrays; default to doctor if not found in either
-              const isExpert =
-                experts.some((e) => e.id === cId) &&
-                !doctors.some((d) => d.id === cId);
-
-              clinicianMap.set(cId, { isExpert, items: [] });
-            }
-            clinicianMap.get(cId)!.items.push(sanitizedItem);
-          }
-
-          // Create commissions for each clinician
-          for (const [cId, group] of clinicianMap.entries()) {
-            const clinician =
-              doctors.find((d) => d.id === cId) ||
-              experts.find((e) => e.id === cId);
-            const defaultPct = clinician?.defaultCommission || 0;
-            const billingForClinician = {
-              ...billingDataForCommission,
-              items: group.items,
-            };
-
-            console.log(
-              `[Commission] clinicianId=${cId} isExpert=${group.isExpert} items=${group.items.length} defaultPct=${defaultPct}`,
-            );
-            if (group.isExpert) {
-              try {
-                await expertCommissionService.createCommissionsFromBilling(
-                  billingForClinician,
-                  defaultPct,
-                  currentUser.uid,
-                );
-                console.log(
-                  `[Commission] Expert commission created for ${cId}`,
-                );
-              } catch (err) {
-                console.error(
-                  `[Commission] Expert commission error for ${cId}:`,
-                  err,
-                );
-              }
-            } else {
-              try {
-                await doctorCommissionService.createCommission(
-                  billingForClinician,
-                  defaultPct,
-                  currentUser.uid,
-                );
-                console.log(
-                  `[Commission] Doctor commission created for ${cId}`,
-                );
-              } catch (err) {
-                console.error(
-                  `[Commission] Doctor commission error for ${cId}:`,
-                  err,
-                );
-              }
-            }
-          }
-
-          // 2) Log Polymorphic Referrer Commissions
-          const processedReferrals = selectedBillingForPayment.referrals || [];
-
-          for (const r of processedReferrals) {
-            if (r.commissionAmount <= 0) continue;
-            try {
-              if (r.type === "referral-partner") {
-                await referralCommissionService.createReferralCommission(
-                  billingDataForCommission,
-                  {
-                    id: r.id,
-                    name: r.name,
-                    defaultCommission: r.commissionPercentage,
-                  } as any,
-                  r.commissionAmount,
-                  currentUser.uid,
-                );
-              } else if (r.type === "doctor") {
-                // To ensure the commission goes to the referring doctor and not the expert on the items,
-                // we must strip the item-level doctorId so it falls back to the referring doctor's ID.
-                // WE MUST ALSO FILTER out items that already belong natively to the doctor to avoid double-commission.
-                const itemsForReferral = billingDataForCommission.items.filter(
-                  (item: any) => item.doctorId !== r.id
-                );
-
-                if (itemsForReferral.length > 0) {
-                  const referralBillingData = {
-                    ...billingDataForCommission,
-                    doctorId: r.id,
-                    doctorName: r.name,
-                    items: itemsForReferral.map((item: any) => ({
-                      ...item,
-                      doctorId: undefined,
-                      doctorName: undefined,
-                      commission: undefined, // Force fallback to r.commissionPercentage
-                    }))
-                  };
-                  
-                  await doctorCommissionService.createCommission(
-                    referralBillingData,
-                    r.commissionPercentage,
-                    currentUser.uid,
-                  );
-                }
-              } else if (r.type === "expert") {
-                await expertCommissionService.createCommission(
-                  r.id,
-                  r.name,
-                  billingDataForCommission,
-                  r.commissionPercentage,
-                  currentUser.uid,
-                );
-              } else if (r.type === "staff") {
-                await staffCommissionService.createRegistrationCommission(
-                  r.id,
-                  r.name,
-                  billingDataForCommission.clinicId,
-                  billingDataForCommission.branchId,
-                  billingDataForCommission.patientId || "",
-                  billingDataForCommission.patientName,
-                  `Invoice Payment - Staff Referral`,
-                  billingDataForCommission.totalAmount,
-                  r.commissionAmount,
-                  r.commissionPercentage,
-                  currentUser.uid,
-                );
-              }
-            } catch (err) {
-              console.error("Error generating referrer commission:", err);
-            }
-          }
-        } catch (e) {
-          console.error("Error generating commission on payment:", e);
-          addToast({
-            title: "Warning",
-            description: "Payment recorded but commission logic failed.",
-            color: "warning",
-          });
-        }
-      }
+      // Commission generation has been safely migrated to the `recordPayment` flow in appointmentBillingService.ts
 
       addToast({ title: "Payment recorded", color: "success" });
       const up = await appointmentBillingService.getBillingByClinic(
@@ -2304,6 +2218,79 @@ export default function AppointmentBillingPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TEMPORARY WIPE BUTTON */}
+        {activeTab === "settings" && (
+          <div className="mt-8 mx-5 mb-5 p-6 border-2 border-red-500/20 bg-red-500/5 rounded-lg flex flex-col items-center">
+            <h3 className="text-red-500 font-bold mb-2">
+              Danger Zone (Temporary)
+            </h3>
+            <p className="text-[13px] text-text-muted mb-4 text-center max-w-md">
+              Click below to wipe all invoices, commissions, and appointments
+              for this clinic. This will reset doctor stats.
+            </p>
+            <Button
+              color="danger"
+              onClick={async () => {
+                if (
+                  confirm(
+                    "Are you SURE you want to wipe all billing and appointment data for this clinic?",
+                  )
+                ) {
+                  try {
+                    addToast({
+                      title: "Wiping Data...",
+                      description: "Please wait.",
+                      color: "warning",
+                    });
+                    const { collection, getDocs, deleteDoc, query, where } =
+                      await import("firebase/firestore");
+                    const { db } = await import("@/config/firebase");
+
+                    const collections = [
+                      "appointmentBilling",
+                      "pathologyBilling",
+                      "doctorCommissions",
+                      "expertCommissions",
+                      "referralCommissions",
+                      "staffCommissions",
+                      "appointments",
+                    ];
+
+                    for (const col of collections) {
+                      const snapshot = await getDocs(
+                        query(
+                          collection(db, col),
+                          where("clinicId", "==", clinicId),
+                        ),
+                      );
+
+                      for (const d of snapshot.docs) {
+                        await deleteDoc(d.ref);
+                      }
+                    }
+
+                    addToast({
+                      title: "Success",
+                      description:
+                        "All data wiped successfully. Please refresh the page.",
+                      color: "success",
+                    });
+                  } catch (e) {
+                    console.error(e);
+                    addToast({
+                      title: "Error",
+                      description: "Failed to wipe data.",
+                      color: "danger",
+                    });
+                  }
+                }
+              }}
+            >
+              WIPE ALL BILLING & APPOINTMENT DATA
+            </Button>
           </div>
         )}
       </div>

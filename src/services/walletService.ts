@@ -131,7 +131,6 @@ export const walletService = {
       const q = query(
         collection(db, WALLET_TRANSACTIONS_COLLECTION),
         where("patientId", "==", patientId),
-
       );
 
       const snapshot = await getDocs(q);

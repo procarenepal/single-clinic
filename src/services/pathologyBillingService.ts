@@ -597,6 +597,46 @@ export const pathologyBillingService = {
       }
 
       await this.updateBilling(id, updateData);
+
+      // Auto-create follow-up if paid
+      if (
+        paymentStatus === "paid" &&
+        billing.status !== "paid" &&
+        billing.patientId
+      ) {
+        try {
+          const { followupService } = await import("./followupService");
+          const { patientService } = await import("./patientService");
+
+          const patient = await patientService.getPatientById(
+            billing.patientId,
+          );
+
+          if (patient) {
+            const services = billing.items
+              .map((item) => item.testName)
+              .join(" | ");
+
+            await followupService.createFollowup({
+              clinicId: billing.clinicId,
+              branchId: billing.branchId || "",
+              category: "pathology",
+              patientId: billing.patientId,
+              patientName: patient.name,
+              patientMobile: patient.mobile || patient.phone || "",
+              visitDate: new Date(),
+              session: "1st",
+              initStatus: "good",
+              overallStatus: "pending",
+              service: services,
+              createdBy: recordedBy || "system",
+            } as any);
+            console.log("Auto-created pathology followup for billing", id);
+          }
+        } catch (e) {
+          console.error("Failed to auto-create followup:", e);
+        }
+      }
     } catch (error) {
       console.error("Error recording pathology payment:", error);
       throw error;

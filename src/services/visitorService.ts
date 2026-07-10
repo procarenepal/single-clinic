@@ -45,10 +45,7 @@ export const visitorService = {
   // Get all visitors for a clinic
   async getVisitorsByClinic(clinicId: string): Promise<Visitor[]> {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-
-      );
+      const q = query(collection(db, COLLECTION_NAME));
 
       const querySnapshot = await getDocs(q);
       const visitors: Visitor[] = [];

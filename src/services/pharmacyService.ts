@@ -375,6 +375,39 @@ export const pharmacyService = {
         return purchaseRef.id;
       });
 
+      // Auto-create follow-up if paid
+      if (purchaseData.paymentStatus === "paid" && purchaseData.patientName) {
+        try {
+          const { followupService } = await import("./followupService");
+
+          const products = purchaseData.items
+            .map((item) => item.medicineName || (item as any).description)
+            .filter(Boolean)
+            .join(", ");
+
+          await followupService.createFollowup({
+            clinicId: purchaseData.clinicId,
+            branchId: purchaseData.branchId || "",
+            category: "pharmacy",
+            patientId: (purchaseData as any).patientId || "walk-in-pharmacy",
+            patientName: purchaseData.patientName,
+            patientMobile: purchaseData.patientPhone || "",
+            visitDate: new Date(),
+            session: "1st",
+            initStatus: "good",
+            overallStatus: "pending",
+            product: products,
+            createdBy: purchaseData.createdBy || "system",
+          } as any);
+          console.log(
+            "Auto-created pharmacy followup for purchase",
+            purchaseId,
+          );
+        } catch (e) {
+          console.error("Failed to auto-create pharmacy followup:", e);
+        }
+      }
+
       return purchaseId;
     } catch (error) {
       console.error("Error creating medicine purchase:", error);
@@ -481,11 +514,55 @@ export const pharmacyService = {
   ): Promise<void> {
     try {
       const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, id);
+      const prevDoc = await getDoc(docRef);
+      const prevData = prevDoc.exists() ? prevDoc.data() : null;
 
       await updateDoc(docRef, {
         ...updateData,
         updatedAt: Timestamp.now(),
       });
+
+      // Auto-create follow-up if status changes to paid
+      if (
+        updateData.paymentStatus === "paid" &&
+        prevData &&
+        prevData.paymentStatus !== "paid" &&
+        (updateData.patientName || prevData.patientName)
+      ) {
+        try {
+          const { followupService } = await import("./followupService");
+
+          const patientName = updateData.patientName || prevData.patientName;
+          const patientPhone =
+            updateData.patientPhone || prevData.patientPhone || "";
+          const products =
+            prevData.items
+              ?.map((item: any) => item.medicineName || item.description)
+              .filter(Boolean)
+              .join(", ") || "";
+
+          await followupService.createFollowup({
+            clinicId: prevData.clinicId,
+            branchId: prevData.branchId || "",
+            category: "pharmacy",
+            patientId: prevData.patientId || "walk-in-pharmacy",
+            patientName: patientName,
+            patientMobile: patientPhone,
+            visitDate: new Date(),
+            session: "1st",
+            initStatus: "good",
+            overallStatus: "pending",
+            product: products,
+            createdBy: prevData.createdBy || "system",
+          } as any);
+          console.log(
+            "Auto-created pharmacy followup after update for purchase",
+            id,
+          );
+        } catch (e) {
+          console.error("Failed to auto-create pharmacy followup:", e);
+        }
+      }
     } catch (error) {
       console.error("Error updating medicine purchase:", error);
       throw error;

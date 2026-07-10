@@ -23,10 +23,7 @@ export const packageService = {
     branchId?: string,
   ): Promise<TreatmentPackage[]> {
     try {
-      const constraints = [
-
-        where("isActive", "==", true),
-      ];
+      const constraints = [where("isActive", "==", true)];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));

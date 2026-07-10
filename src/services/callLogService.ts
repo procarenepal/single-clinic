@@ -45,10 +45,7 @@ export const callLogService = {
   // Get all call logs for a clinic
   async getCallLogsByClinic(clinicId: string): Promise<CallLog[]> {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-
-      );
+      const q = query(collection(db, COLLECTION_NAME));
 
       const querySnapshot = await getDocs(q);
       const callLogs: CallLog[] = [];

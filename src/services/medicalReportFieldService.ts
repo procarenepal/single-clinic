@@ -46,10 +46,7 @@ export const medicalReportFieldService = {
   async getFieldsByClinic(clinicId: string): Promise<MedicalReportField[]> {
     try {
       // Simplify query to avoid composite index requirement
-      const q = query(
-        collection(db, COLLECTION_NAME),
-
-      );
+      const q = query(collection(db, COLLECTION_NAME));
 
       const querySnapshot = await getDocs(q);
 

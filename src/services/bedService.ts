@@ -46,10 +46,7 @@ export const bedService = {
   ): Promise<BedCategory[]> {
     try {
       const categoriesRef = collection(db, BED_CATEGORIES_COLLECTION);
-      const constraints: any[] = [
-
-        where("isActive", "==", true),
-      ];
+      const constraints: any[] = [where("isActive", "==", true)];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
@@ -182,10 +179,7 @@ export const bedService = {
   async getBedsByClinic(clinicId: string, branchId?: string): Promise<Bed[]> {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
-      const constraints: any[] = [
-
-        where("isActive", "==", true),
-      ];
+      const constraints: any[] = [where("isActive", "==", true)];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
@@ -224,7 +218,6 @@ export const bedService = {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
       const constraints: any[] = [
-
         where("status", "==", "available"),
         where("isActive", "==", true),
       ];
@@ -435,10 +428,7 @@ export const bedService = {
   ): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      const constraints: any[] = [
-
-        where("status", "==", "active"),
-      ];
+      const constraints: any[] = [where("status", "==", "active")];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));

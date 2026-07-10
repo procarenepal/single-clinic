@@ -70,10 +70,7 @@ export const leaveRequestService = {
     clinicId: string,
     branchId?: string,
   ): Promise<LeaveRequest[]> {
-    let q = query(
-      collection(db, LEAVES_COLLECTION),
-
-    );
+    let q = query(collection(db, LEAVES_COLLECTION));
 
     if (branchId) {
       q = query(q, where("branchId", "==", branchId));
@@ -91,7 +88,6 @@ export const leaveRequestService = {
     const q = query(
       collection(db, LEAVES_COLLECTION),
       where("staffId", "==", staffId),
-
     );
     const snap = await getDocs(q);
     const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));

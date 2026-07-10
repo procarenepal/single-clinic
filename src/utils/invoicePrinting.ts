@@ -248,8 +248,9 @@ export const generateInvoiceHTML = (
       </div>
     </div>
     
-    ${footerHTML ||
-    `
+    ${
+      footerHTML ||
+      `
     <div class="footer">
       <p>Thank you for choosing us</p>
       <p>${new Date().toLocaleString()}</p>
@@ -367,8 +368,8 @@ export const generateAppointmentInvoiceHTML = (
     ) {
       const name =
         item.doctorName &&
-          item.doctorName !== "Unknown Doctor" &&
-          item.doctorName !== "Expert Cabin"
+        item.doctorName !== "Unknown Doctor" &&
+        item.doctorName !== "Expert Cabin"
           ? item.doctorName
           : "Expert Cabin";
 
@@ -601,9 +602,10 @@ export const generateAppointmentInvoiceHTML = (
       ${isThermal ? cliniciansHtml : ""}
     </div>
     
-    ${!isThermal && footerHTML
-      ? footerHTML
-      : `
+    ${
+      !isThermal && footerHTML
+        ? footerHTML
+        : `
     <div style="margin-top: 15px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 5px;">
       <p>Thank you for choosing us</p>
       ${isThermal ? `<p>${new Date().toLocaleString()}</p>` : ""}

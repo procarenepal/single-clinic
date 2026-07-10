@@ -654,7 +654,10 @@ export default function DoctorProfilePage() {
   });
 
   const getSelectedRangeBusiness = () => {
-    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    const hasRange =
+      (earningsDateRange.start && earningsDateRange.end) ||
+      (globalDateRange.start && globalDateRange.end);
+
     if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + getCommissionBusiness(c),
@@ -666,7 +669,10 @@ export default function DoctorProfilePage() {
   };
 
   const getSelectedRangeCommissionEarned = () => {
-    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    const hasRange =
+      (earningsDateRange.start && earningsDateRange.end) ||
+      (globalDateRange.start && globalDateRange.end);
+
     if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + c.commissionAmount,
@@ -681,7 +687,10 @@ export default function DoctorProfilePage() {
   };
 
   const getSelectedRangeCommissionBalance = () => {
-    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    const hasRange =
+      (earningsDateRange.start && earningsDateRange.end) ||
+      (globalDateRange.start && globalDateRange.end);
+
     if (hasRange) {
       return filteredCommissionsForEarnings
         .filter((c) => c.status === "pending")
@@ -857,6 +866,7 @@ export default function DoctorProfilePage() {
     );
   const formatSpeciality = (speciality: string) => {
     if (!speciality) return "Unspecified Speciality";
+
     return speciality
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -1260,7 +1270,8 @@ export default function DoctorProfilePage() {
 
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                   <span className="text-text-muted">
-                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
+                    {(earningsDateRange.start && earningsDateRange.end) ||
+                    (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Business"
                       : "This Month Business"}
                   </span>
@@ -1270,7 +1281,8 @@ export default function DoctorProfilePage() {
                 </div>
                 <div className="flex justify-between text-[14px] border-b border-border-base/50 pb-2">
                   <span className="text-text-muted">
-                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
+                    {(earningsDateRange.start && earningsDateRange.end) ||
+                    (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Commission"
                       : "Total Commission Earned"}
                   </span>
@@ -1280,7 +1292,8 @@ export default function DoctorProfilePage() {
                 </div>
                 <div className="flex justify-between text-[14px] pb-2">
                   <span className="text-text-muted font-medium">
-                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
+                    {(earningsDateRange.start && earningsDateRange.end) ||
+                    (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Balance"
                       : "Commission Balance"}
                   </span>
@@ -1837,7 +1850,11 @@ export default function DoctorProfilePage() {
                           {(commission.serviceNames || []).join(", ")}
                         </p>
                         <p className="text-[12px] text-text-muted mt-1">
-                          Rate: {commission.commissionPercentage}% • Invoiced:{" "}
+                          Rate:{" "}
+                          {Number(commission.commissionPercentage)
+                            .toFixed(2)
+                            .replace(/\.00$/, "")}
+                          % • Invoiced:{" "}
                           {formatCurrency(commission.totalInvoiceAmount)}
                         </p>
                       </div>
@@ -1900,7 +1917,10 @@ export default function DoctorProfilePage() {
               <p>
                 <span className="text-text-muted">Rate:</span>{" "}
                 <span className="font-semibold text-text-main">
-                  {selectedCommission.commissionPercentage}%
+                  {Number(selectedCommission.commissionPercentage)
+                    .toFixed(2)
+                    .replace(/\.00$/, "")}
+                  %
                 </span>
               </p>
               <p className="mt-2 text-[15px]">

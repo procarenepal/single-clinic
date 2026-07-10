@@ -17,6 +17,7 @@ import { patientService } from "@/services/patientService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { branchService } from "@/services/branchService";
 import {
   scheduleAppointmentReminder,
@@ -64,10 +65,10 @@ function CustomSearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -603,6 +604,103 @@ export default function NewAppointmentPage() {
       const appointmentId =
         await appointmentService.createAppointment(appointmentData);
 
+      // ── Generate Draft Invoice for the Scheduled Appointment ──
+      try {
+        const selPat = patients.find((p) => p.id === appointmentInfo.patientId);
+        const selDoc = doctors.find((d) => d.id === appointmentInfo.doctorId);
+        const selApptType = appointmentTypes.find(
+          (t) => t.id === appointmentInfo.appointmentTypeId,
+        );
+
+        if (selApptType && selApptType.price >= 0) {
+          const invoiceNo = await appointmentBillingService.generateInvoiceNumber(
+            clinicId,
+          );
+
+          const billingItem = {
+            id: crypto.randomUUID(),
+            appointmentTypeId: selApptType.id,
+            appointmentTypeName: selApptType.name,
+            price: Number(selApptType.price),
+            quantity: 1,
+            commission: selDoc?.defaultCommission || 0,
+            doctorId: selDoc?.id || "unassigned",
+            doctorName: selDoc?.name || "Clinic",
+            amount: Number(selApptType.price),
+          };
+
+          const processedReferrals: any[] = [];
+
+          if (selPat?.referrals && Array.isArray(selPat.referrals)) {
+            for (const ref of selPat.referrals) {
+              processedReferrals.push({
+                type: ref.type,
+                id: ref.id,
+                name: ref.name,
+                commissionPercentage: ref.commissionPercentage || 0,
+                commissionAmount:
+                  (Number(selApptType.price) *
+                    (ref.commissionPercentage || 0)) /
+                  100,
+              });
+            }
+          }
+
+          const primaryPartner = processedReferrals.find(
+            (r) => r.type === "referral-partner",
+          );
+
+          const billingData = {
+            invoiceNumber: invoiceNo,
+            clinicId: clinicId,
+            branchId: defaultBranchId || userData?.branchId || clinicId,
+            patientId: selPat?.id || appointmentInfo.patientId,
+            patientName: selPat?.name || "Unknown Patient",
+            doctorId: selDoc?.id || "unassigned",
+            doctorName: selDoc?.name || "Clinic",
+            doctorType: ((selDoc as any)?.doctorType || "regular") as "regular" | "visitor",
+            referralPartnerId: primaryPartner
+              ? primaryPartner.id
+              : selPat?.referralPartnerId || undefined,
+            referralCommissionAmount: primaryPartner
+              ? primaryPartner.commissionAmount
+              : undefined,
+            referrals: processedReferrals,
+            invoiceDate: new Date(),
+            items: [billingItem],
+            subtotal: Number(selApptType.price),
+            itemDiscountAmount: 0,
+            mainDiscountAmount: 0,
+            discountType: "percent" as const,
+            discountValue: 0,
+            discountAmount: 0,
+            taxPercentage: 0,
+            taxAmount: 0,
+            totalAmount: Number(selApptType.price),
+            status: "draft" as const,
+            paymentStatus: "unpaid" as const,
+            paidAmount: 0,
+            balanceAmount: Number(selApptType.price),
+            createdBy: currentUser?.uid || "system",
+          };
+
+          const newBillingId = await appointmentBillingService.createBilling(
+            billingData,
+          );
+
+          await appointmentService.updateAppointment(appointmentId, {
+            billingId: newBillingId,
+            billingStatus: "unpaid",
+            paymentStatus: "unpaid",
+          } as any);
+        }
+      } catch (billingErr) {
+        console.error(
+          "Error generating draft invoice for scheduled appointment:",
+          billingErr,
+        );
+      }
+
       if (appointmentInfo.startTime) {
         try {
           await scheduleAppointmentReminder({
@@ -806,7 +904,7 @@ export default function NewAppointmentPage() {
                   }
                   endContent={
                     dateConversionState.isConverting &&
-                    dateConversionState.field === "appointmentBS" ? (
+                      dateConversionState.field === "appointmentBS" ? (
                       <Spinner size="sm" />
                     ) : appointmentInfo.appointmentBS &&
                       dateConversionState.lastConversion.timestamp > 0 ? (

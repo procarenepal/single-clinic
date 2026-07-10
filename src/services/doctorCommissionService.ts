@@ -64,17 +64,22 @@ class DoctorCommissionService {
             const discountRatio = (subtotal - mainDiscount) / subtotal;
             const effectiveItemAmount = item.amount * discountRatio;
 
-            const itemCommissionAmount = (effectiveItemAmount * percentage) / 100;
+            const itemCommissionAmount =
+              (effectiveItemAmount * percentage) / 100;
 
             return total + itemCommissionAmount;
           }, 0);
 
           if (groupCommissionAmount <= 0) return null;
 
-          const groupSubtotal = group.items.reduce(
-            (sum, item) => sum + item.amount,
-            0,
-          );
+          const groupSubtotal = group.items.reduce((sum, item) => {
+            const subtotal = billing.subtotal || 1;
+            const mainDiscount = billing.mainDiscountAmount || 0;
+            const discountRatio = (subtotal - mainDiscount) / subtotal;
+
+            return sum + item.amount * discountRatio;
+          }, 0);
+
           const effectivePercentage =
             groupSubtotal > 0
               ? (groupCommissionAmount / groupSubtotal) * 100
@@ -268,7 +273,7 @@ class DoctorCommissionService {
       // Try ordered query first, fallback to simple query if index doesn't exist
       const simpleQuery = query(
         collection(db, this.collectionName),
-        where("doctorId", "==", doctorId)
+        where("doctorId", "==", doctorId),
       );
 
       let querySnapshot;
@@ -372,7 +377,7 @@ class DoctorCommissionService {
         updatedAt: Timestamp.fromDate(new Date()),
         status:
           (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
+          currentCommission.commissionAmount
             ? "paid"
             : "pending",
       };

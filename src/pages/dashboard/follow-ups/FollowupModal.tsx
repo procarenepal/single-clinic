@@ -4,6 +4,7 @@ import type {
   FollowupInitStatus,
   FollowupUpdatedStatus,
   FollowupStatus,
+  User,
 } from "@/types/models";
 
 import React, { useState, useEffect } from "react";
@@ -17,7 +18,6 @@ import {
   Input,
   Select,
   SelectItem,
-  Textarea,
   Chip,
 } from "@heroui/react";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
@@ -27,6 +27,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { followupService } from "@/services/followupService";
 import { patientService } from "@/services/patientService";
 import { prescriptionService } from "@/services/prescriptionService";
+import { userService } from "@/services/userService";
 
 interface FollowupModalProps {
   isOpen: boolean;
@@ -46,10 +47,12 @@ export default function FollowupModal({
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientHistory, setPatientHistory] = useState<any>(null);
   const [activeFollowupId, setActiveFollowupId] = useState<string | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
 
   useEffect(() => {
     if (isOpen && clinicId) {
       patientService.getPatientsByClinic(clinicId).then(setPatients);
+      userService.getClinicUsers(clinicId).then(setUsers);
       setPatientHistory(null);
     }
   }, [isOpen, clinicId]);
@@ -74,6 +77,10 @@ export default function FollowupModal({
     overallStatus: "pending",
     logs: [] as any[],
     sessionStatuses: {} as Record<string, any>,
+    nextFollowupDate: "",
+    followedBy: "",
+    noteHistory: [] as any[],
+    newNote: "",
   });
 
   const filteredPatients = React.useMemo(() => {
@@ -137,6 +144,12 @@ export default function FollowupModal({
           notes: followup.notes || "",
           overallStatus: followup.overallStatus || "pending",
           logs: followup.logs || [],
+          nextFollowupDate: followup.nextFollowupDate
+            ? new Date(followup.nextFollowupDate).toISOString().split("T")[0]
+            : "",
+          followedBy: followup.followedBy || currentUser?.displayName || "",
+          noteHistory: followup.noteHistory || [],
+          newNote: "",
         });
       } else {
         setActiveFollowupId(null);
@@ -160,6 +173,10 @@ export default function FollowupModal({
           overallStatus: "pending",
           logs: [],
           sessionStatuses: {},
+          nextFollowupDate: "",
+          followedBy: currentUser?.displayName || "",
+          noteHistory: [],
+          newNote: "",
         });
         setPatientHistory(null);
       }
@@ -277,6 +294,16 @@ export default function FollowupModal({
 
     setLoading(true);
     try {
+      let finalNoteHistory = [...formData.noteHistory];
+
+      if (formData.newNote.trim()) {
+        finalNoteHistory.push({
+          date: new Date(),
+          note: formData.newNote.trim(),
+          user: currentUser?.displayName || "Staff",
+        });
+      }
+
       const payload: Omit<PatientFollowup, "id" | "createdAt" | "updatedAt"> = {
         clinicId: clinicId || "",
         branchId: branchId || "",
@@ -302,6 +329,9 @@ export default function FollowupModal({
         notes: formData.notes,
         overallStatus: formData.overallStatus as FollowupStatus,
         createdBy: followup?.createdBy || currentUser?.uid || "",
+        nextFollowupDate: parseDate(formData.nextFollowupDate),
+        followedBy: formData.followedBy,
+        noteHistory: finalNoteHistory,
       };
 
       if (followup || activeFollowupId) {
@@ -783,12 +813,46 @@ export default function FollowupModal({
                       <SelectItem key="cancelled">Cancelled</SelectItem>
                     </Select>
                   </div>
+                  <div className="mt-4">
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      Followed By
+                    </label>
+                    <Select
+                      placeholder="Select staff"
+                      selectedKeys={
+                        formData.followedBy ? [formData.followedBy] : []
+                      }
+                      size="sm"
+                      onChange={(e) =>
+                        handleChange("followedBy", e.target.value)
+                      }
+                    >
+                      {users.map((u) => (
+                        <SelectItem key={u.displayName || u.email || u.id}>
+                          {u.displayName || u.email}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   <h3 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2">
                     Follow-up Dates
                   </h3>
+                  <div className="mb-4">
+                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                      Next Follow-up Date
+                    </label>
+                    <Input
+                      size="sm"
+                      type="date"
+                      value={formData.nextFollowupDate}
+                      onChange={(e) =>
+                        handleChange("nextFollowupDate", e.target.value)
+                      }
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
@@ -884,16 +948,90 @@ export default function FollowupModal({
                   </div>
                   <div>
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Notes
+                      Add New Note
                     </label>
-                    <Textarea
-                      minRows={2}
-                      placeholder="Additional context or remarks"
-                      size="sm"
-                      value={formData.notes}
-                      onChange={(e) => handleChange("notes", e.target.value)}
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Enter new note here..."
+                        size="sm"
+                        value={formData.newNote}
+                        onChange={(e) =>
+                          handleChange("newNote", e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (formData.newNote.trim()) {
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                noteHistory: [
+                                  ...prev.noteHistory,
+                                  {
+                                    date: new Date(),
+                                    note: prev.newNote.trim(),
+                                    user: currentUser?.displayName || "Staff",
+                                  },
+                                ],
+                                newNote: "",
+                              }));
+                            }
+                          }
+                        }}
+                      />
+                      <Button
+                        color="primary"
+                        size="sm"
+                        onPress={() => {
+                          if (formData.newNote.trim()) {
+                            setFormData((prev: any) => ({
+                              ...prev,
+                              noteHistory: [
+                                ...prev.noteHistory,
+                                {
+                                  date: new Date(),
+                                  note: prev.newNote.trim(),
+                                  user: currentUser?.displayName || "Staff",
+                                },
+                              ],
+                              newNote: "",
+                            }));
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
                   </div>
+
+                  {formData.noteHistory && formData.noteHistory.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-[11px] font-bold text-primary uppercase tracking-wider mb-2">
+                        Notes History
+                      </h4>
+                      <div className="space-y-2">
+                        {formData.noteHistory.map((n: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="text-[12px] bg-primary/5 p-2 rounded-lg border border-primary/10"
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-semibold text-primary">
+                                {n.user}
+                              </span>
+                              <span className="text-[10px] text-[rgb(var(--color-text-muted))]">
+                                {new Date(n.date).toLocaleDateString()}{" "}
+                                {new Date(n.date).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <div className="text-text-main">{n.note}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {formData.logs && formData.logs.length > 0 && (
                     <div className="mt-6 pt-6 border-t border-[rgb(var(--color-border))]">

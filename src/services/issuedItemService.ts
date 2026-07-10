@@ -74,10 +74,7 @@ export const issuedItemService = {
   ): Promise<IssuedItem[]> {
     try {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
-      const constraints: any[] = [
-
-        where("status", "==", status),
-      ];
+      const constraints: any[] = [where("status", "==", status)];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));

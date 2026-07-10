@@ -606,11 +606,7 @@ export const appointmentBillingService = {
   ): Promise<AppointmentBilling[]> {
     try {
       const billingRef = collection(db, APPOINTMENT_BILLING_COLLECTION);
-      const q = query(
-        billingRef,
-        where("patientId", "==", patientId),
-
-      );
+      const q = query(billingRef, where("patientId", "==", patientId));
 
       const querySnapshot = await getDocs(q);
       const billingRecords: AppointmentBilling[] = [];
@@ -647,15 +643,23 @@ export const appointmentBillingService = {
       const billingRef = doc(db, APPOINTMENT_BILLING_COLLECTION, id);
 
       // 1. Delete associated doctor commissions
-      const docCommQuery = query(collection(db, "doctorCommissions"), where("billingId", "==", id));
+      const docCommQuery = query(
+        collection(db, "doctorCommissions"),
+        where("billingId", "==", id),
+      );
       const docCommDocs = await getDocs(docCommQuery);
+
       for (const d of docCommDocs.docs) {
         await deleteDoc(d.ref);
       }
 
       // 2. Delete associated expert commissions
-      const expCommQuery = query(collection(db, "expertCommissions"), where("billingId", "==", id));
+      const expCommQuery = query(
+        collection(db, "expertCommissions"),
+        where("billingId", "==", id),
+      );
       const expCommDocs = await getDocs(expCommQuery);
+
       for (const d of expCommDocs.docs) {
         await deleteDoc(d.ref);
       }
@@ -838,6 +842,209 @@ export const appointmentBillingService = {
           "Error updating associated appointment status:",
           apptError,
         );
+      }
+
+      // Auto-create follow-up and commissions if fully paid
+      if (paymentStatus === "paid" && billing.paymentStatus !== "paid") {
+        // 1. Follow-up Logic
+        if (billing.patientId) {
+          try {
+            const { followupService } = await import("./followupService");
+            const { patientService } = await import("./patientService");
+
+            const patient = await patientService.getPatientById(
+              billing.patientId,
+            );
+
+            if (patient) {
+              const services = billing.items
+                .map((item) => item.appointmentTypeName)
+                .join(" | ");
+
+              await followupService.createFollowup({
+                clinicId: billing.clinicId,
+                branchId: billing.branchId || "",
+                category: "appointment",
+                patientId: billing.patientId,
+                patientName: patient.name,
+                patientMobile: patient.mobile || patient.phone || "",
+                appointmentId: id, // using billing id as reference
+                visitDate: new Date(),
+                session: "1st",
+                initStatus: "good",
+                overallStatus: "pending",
+                service: services,
+                createdBy: auth.currentUser?.uid || "system",
+              } as any);
+              console.log("Auto-created appointment followup for billing", id);
+            }
+          } catch (e) {
+            console.error("Failed to auto-create followup:", e);
+          }
+        }
+
+        // 2. Commission Logic
+        try {
+          const { doctorService } = await import("./doctorService");
+          const { expertService } = await import("./expertService");
+          const { doctorCommissionService } = await import(
+            "./doctorCommissionService"
+          );
+          const { expertCommissionService } = await import(
+            "./expertCommissionService"
+          );
+          const { referralCommissionService } = await import(
+            "./referralCommissionService"
+          );
+          const { staffCommissionService } = await import(
+            "./staffCommissionService"
+          );
+
+          // We need ALL doctors and experts for this clinic to determine types and default commissions
+          const doctors = await doctorService.getDoctorsByClinic(
+            billing.clinicId,
+          );
+          const experts = await expertService.getExpertsByClinic(
+            billing.clinicId,
+          );
+
+          const clinicianMap = new Map<
+            string,
+            { isExpert: boolean; items: typeof billing.items }
+          >();
+
+          for (const item of billing.items) {
+            const cId = item.doctorId || billing.doctorId;
+
+            if (!cId) continue;
+
+            const clinician =
+              doctors.find((d) => d.id === cId) ||
+              experts.find((e) => e.id === cId);
+            const sanitizedItem = {
+              ...item,
+              doctorId: cId, // FORCE explicit assignment to prevent fallback
+              doctorName:
+                clinician?.name || item.doctorName || billing.doctorName,
+              commission:
+                typeof item.commission === "number"
+                  ? item.commission
+                  : parseFloat(item.commission as any) || 0,
+              amount:
+                typeof item.amount === "number"
+                  ? item.amount
+                  : parseFloat(item.amount as any) || 0,
+            };
+
+            if (!clinicianMap.has(cId)) {
+              const isExpert =
+                experts.some((e) => e.id === cId) &&
+                !doctors.some((d) => d.id === cId);
+
+              clinicianMap.set(cId, { isExpert, items: [] });
+            }
+            clinicianMap.get(cId)!.items.push(sanitizedItem);
+          }
+
+          const currentUserId = auth.currentUser?.uid || "system";
+
+          // Create commissions for each clinician
+          for (const [cId, group] of clinicianMap.entries()) {
+            const clinician =
+              doctors.find((d) => d.id === cId) ||
+              experts.find((e) => e.id === cId);
+            const defaultPct = clinician?.defaultCommission || 0;
+            const billingForClinician = {
+              ...billing,
+              items: group.items,
+            };
+
+            console.log(
+              `[Commission] clinicianId=${cId} isExpert=${group.isExpert} items=${group.items.length} defaultPct=${defaultPct}`,
+            );
+            if (group.isExpert) {
+              await expertCommissionService.createCommissionsFromBilling(
+                billingForClinician,
+                defaultPct,
+                currentUserId,
+              );
+            } else {
+              await doctorCommissionService.createCommission(
+                billingForClinician,
+                defaultPct,
+                currentUserId,
+              );
+            }
+          }
+
+          // Log Polymorphic Referrer Commissions
+          const processedReferrals = billing.referrals || [];
+
+          for (const r of processedReferrals) {
+            if (r.commissionAmount <= 0) continue;
+
+            if (r.type === "referral-partner") {
+              await referralCommissionService.createReferralCommission(
+                billing,
+                r as any,
+                r.commissionAmount,
+                currentUserId,
+              );
+            } else if (r.type === "doctor") {
+              // Prevent double-commission by removing items native to the referrer
+              const itemsForReferral = billing.items.filter(
+                (item: any) => item.doctorId !== r.id,
+              );
+
+              if (itemsForReferral.length > 0) {
+                const referralBillingData = {
+                  ...billing,
+                  doctorId: r.id,
+                  doctorName: r.name,
+                  items: itemsForReferral.map((i: any) => ({
+                    ...i,
+                    doctorId: undefined,
+                    doctorName: undefined,
+                    commission: undefined,
+                  })),
+                };
+
+                await doctorCommissionService.createCommission(
+                  referralBillingData,
+                  r.commissionPercentage,
+                  currentUserId,
+                );
+              }
+            } else if (r.type === "expert") {
+              await expertCommissionService.createCommission(
+                r.id,
+                r.name,
+                billing,
+                r.commissionPercentage,
+                currentUserId,
+              );
+            } else if (r.type === "staff") {
+              await staffCommissionService.createRegistrationCommission(
+                r.id,
+                r.name,
+                billing.clinicId,
+                billing.branchId || "",
+                billing.patientId || "",
+                billing.patientName,
+                "Invoice Payment - Staff Referral",
+                billing.totalAmount,
+                r.commissionAmount,
+                r.commissionPercentage,
+                currentUserId,
+              );
+            }
+          }
+        } catch (err) {
+          console.error(
+            "Error generating commissions inside recordPayment:",
+            err,
+          );
+        }
       }
     } catch (error) {
       console.error("Error recording payment:", error);
@@ -1099,3 +1306,99 @@ export const appointmentBillingService = {
     }
   },
 };
+
+// --- TEMPORARY WIPE FUNCTION FOR DEV CONSOLE ---
+if (typeof window !== "undefined") {
+  (window as any).wipeInvoices = async () => {
+    try {
+      console.log("Starting to wipe invoices and commissions...");
+      const collectionsToWipe = [
+        "appointmentBilling",
+        "pathologyBilling",
+        "doctorCommissions",
+        "expertCommissions",
+        "referralCommissions",
+        "staffCommissions",
+      ];
+
+      for (const colName of collectionsToWipe) {
+        console.log(`Fetching ${colName}...`);
+        const snapshot = await getDocs(collection(db, colName));
+
+        console.log(
+          `Found ${snapshot.size} documents in ${colName}. Deleting...`,
+        );
+        for (const docSnap of snapshot.docs) {
+          await deleteDoc(docSnap.ref);
+        }
+        console.log(`Wiped ${colName}.`);
+      }
+
+      console.log("Resetting appointments...");
+      const apptSnapshot = await getDocs(collection(db, "appointments"));
+      let updatedApptCount = 0;
+
+      for (const docSnap of apptSnapshot.docs) {
+        const data = docSnap.data();
+        let needsUpdate = false;
+        const updates: any = {};
+
+        if (data.billingId) {
+          updates.billingId = null;
+          needsUpdate = true;
+        }
+        if (data.consultationBillingId) {
+          updates.consultationBillingId = null;
+          needsUpdate = true;
+        }
+        if (data.billingStatus && data.billingStatus !== "unpaid") {
+          updates.billingStatus = "unpaid";
+          needsUpdate = true;
+        }
+        if (
+          data.consultationBillingStatus &&
+          data.consultationBillingStatus !== "unpaid"
+        ) {
+          updates.consultationBillingStatus = "unpaid";
+          needsUpdate = true;
+        }
+        if (data.paymentStatus && data.paymentStatus !== "unpaid") {
+          updates.paymentStatus = "unpaid";
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          await updateDoc(docSnap.ref, updates);
+          updatedApptCount++;
+        }
+      }
+      console.log(
+        `Reset billing references for ${updatedApptCount} appointments.`,
+      );
+      console.log("✅ Successfully wiped all invoices and commissions!");
+    } catch (e) {
+      console.error("❌ Failed to wipe:", e);
+    }
+  };
+
+  (window as any).wipeAppointments = async () => {
+    try {
+      console.log("Starting to wipe all appointments...");
+      const snapshot = await getDocs(collection(db, "appointments"));
+
+      console.log(`Found ${snapshot.size} appointments. Deleting...`);
+      for (const docSnap of snapshot.docs) {
+        await deleteDoc(docSnap.ref);
+      }
+      console.log(
+        "✅ Successfully wiped all appointments! The stats for doctors and experts will now show 0.",
+      );
+    } catch (e) {
+      console.error("❌ Failed to wipe appointments:", e);
+    }
+  };
+
+  console.log(
+    "🧹 wipeInvoices() and wipeAppointments() are now available in the console.",
+  );
+}

@@ -178,10 +178,7 @@ export class PatientNoteEntriesService {
     clinicId: string,
   ): Promise<PatientNoteEntry[]> {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-
-      );
+      const q = query(collection(db, COLLECTION_NAME));
 
       const querySnapshot = await getDocs(q);
 

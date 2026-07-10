@@ -46,10 +46,7 @@ export const notesSectionService = {
   async getSectionsByClinic(clinicId: string): Promise<NotesSection[]> {
     try {
       // Simplify query to avoid composite index requirement
-      const q = query(
-        collection(db, COLLECTION_NAME),
-
-      );
+      const q = query(collection(db, COLLECTION_NAME));
 
       const querySnapshot = await getDocs(q);
 
@@ -80,10 +77,7 @@ export const notesSectionService = {
   async getActiveSectionsByClinic(clinicId: string): Promise<NotesSection[]> {
     try {
       // Simplify query to avoid composite index requirement
-      const q = query(
-        collection(db, COLLECTION_NAME),
-
-      );
+      const q = query(collection(db, COLLECTION_NAME));
 
       const querySnapshot = await getDocs(q);
 

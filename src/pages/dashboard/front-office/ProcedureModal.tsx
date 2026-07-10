@@ -70,8 +70,10 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
 
     // 1. Booked procedure first (if not a standard type)
     const bookedLabel = getApptTypeLabel(appointment.appointmentTypeId);
+
     if (appointment.appointmentTypeId !== "package-session") {
       const isDynamic = appointmentTypes.some((t) => t.name === bookedLabel);
+
       if (!isDynamic && bookedLabel) ids.push(bookedLabel);
     }
 
@@ -83,6 +85,7 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
     // 3. Packages
     modalActivePackages.forEach((pkg) => {
       const val = `consume_pkg_${pkg.id}`;
+
       if (!ids.includes(val)) ids.push(val);
     });
 
@@ -97,8 +100,7 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
     if (!ids.includes("Other")) ids.push("Other");
 
     stableOptionOrder.current = ids;
-  // Only rebuild when the modal opens for a different appointment
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only rebuild when the modal opens for a different appointment
   }, [isOpen, appointment?.id]);
 
   if (!isOpen || !appointment) return null;
@@ -239,13 +241,19 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
 
                       // Build a label map for each ID
                       const bookedLabel = getBookedApptTypeOption();
-                      const labelOf = (id: string): { label: string; type: string } => {
+                      const labelOf = (
+                        id: string,
+                      ): { label: string; type: string } => {
                         if (bookedLabel && id === bookedLabel)
-                          return { label: `${bookedLabel} (Booked)`, type: "booked" };
+                          return {
+                            label: `${bookedLabel} (Booked)`,
+                            type: "booked",
+                          };
                         if (id.startsWith("consume_pkg_")) {
                           const pkg = modalActivePackages.find(
                             (p) => `consume_pkg_${p.id}` === id,
                           );
+
                           return {
                             label: pkg
                               ? `Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`
@@ -253,7 +261,9 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                             type: "package",
                           };
                         }
-                        if (id === "Other") return { label: "Other", type: "other" };
+                        if (id === "Other")
+                          return { label: "Other", type: "other" };
+
                         return { label: id, type: "type" };
                       };
 
@@ -263,13 +273,16 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                           ? stableOptionOrder.current
                           : [
                               ...(bookedLabel ? [bookedLabel] : []),
-                              ...modalActivePackages.map((p) => `consume_pkg_${p.id}`),
+                              ...modalActivePackages.map(
+                                (p) => `consume_pkg_${p.id}`,
+                              ),
                               ...appointmentTypes.map((t) => t.name),
                               "Other",
                             ];
 
                       const filteredIds = orderedIds.filter((id) => {
                         const { label } = labelOf(id);
+
                         return label
                           .toLowerCase()
                           .includes(procedureSearch.toLowerCase());
@@ -285,6 +298,7 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
 
                       return filteredIds.map((id) => {
                         const { label, type } = labelOf(id);
+
                         return (
                           <Checkbox
                             key={id}

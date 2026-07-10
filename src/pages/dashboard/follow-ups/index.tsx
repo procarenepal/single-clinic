@@ -281,16 +281,12 @@ export default function FollowupsPage() {
           >
             <TableHeader>
               <TableColumn>PATIENT</TableColumn>
-              <TableColumn>CATEGORY</TableColumn>
               <TableColumn>DATE</TableColumn>
               <TableColumn>SESSION</TableColumn>
               <TableColumn>INIT STATUS</TableColumn>
               <TableColumn>UPD. STATUS</TableColumn>
-              <TableColumn>1ST FU</TableColumn>
-              <TableColumn>2ND FU</TableColumn>
-              <TableColumn>3RD FU</TableColumn>
-              <TableColumn>4TH FU</TableColumn>
-              <TableColumn>5TH FU</TableColumn>
+              <TableColumn>NEXT FOLLOWUP</TableColumn>
+              <TableColumn>NOTES</TableColumn>
               <TableColumn>SERVICE/LABS/MEDS</TableColumn>
               <TableColumn align="end">ACTIONS</TableColumn>
             </TableHeader>
@@ -306,33 +302,6 @@ export default function FollowupsPage() {
                         {item.patientMobile}
                       </p>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      aria-label="Select category"
-                      className="min-w-[100px]"
-                      classNames={{
-                        trigger:
-                          "h-6 min-h-0 shadow-none border border-border-light bg-surface",
-                        value: "text-[11px] capitalize",
-                      }}
-                      selectedKeys={
-                        item.category ? [item.category] : ["general"]
-                      }
-                      size="sm"
-                      onChange={(e) =>
-                        handleInlineUpdate(
-                          item,
-                          "category" as any,
-                          e.target.value,
-                        )
-                      }
-                    >
-                      <SelectItem key="general">General</SelectItem>
-                      <SelectItem key="appointment">Appointment</SelectItem>
-                      <SelectItem key="pharmacy">Pharmacy</SelectItem>
-                      <SelectItem key="pathology">Pathology</SelectItem>
-                    </Select>
                   </TableCell>
                   <TableCell>{formatDate(item.visitDate)}</TableCell>
                   <TableCell>
@@ -466,30 +435,69 @@ export default function FollowupsPage() {
                       );
                     })()}
                   </TableCell>
-                  <TableCell>{formatDate(item.followupDates.first)}</TableCell>
-                  <TableCell>{formatDate(item.followupDates.second)}</TableCell>
-                  <TableCell>{formatDate(item.followupDates.third)}</TableCell>
-                  <TableCell>{formatDate(item.followupDates.fourth)}</TableCell>
-                  <TableCell>{formatDate(item.followupDates.fifth)}</TableCell>
                   <TableCell>
-                    <div className="max-w-[150px]">
-                      {item.service && (
-                        <p
-                          className="text-[10px] font-medium text-text-primary truncate"
-                          title={item.service}
-                        >
-                          S: {item.service}
-                        </p>
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium text-[11px] text-primary">
+                        {formatDate(item.nextFollowupDate)}
+                      </span>
+                      {item.followedBy && (
+                        <span className="text-[9px] text-text-muted">
+                          By: {item.followedBy}
+                        </span>
                       )}
-                      {item.product && (
-                        <p
-                          className="text-[10px] text-text-muted truncate"
-                          title={item.product}
-                        >
-                          P: {item.product}
-                        </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-[150px] max-h-[60px] overflow-y-auto pr-1">
+                      {item.noteHistory && item.noteHistory.length > 0 ? (
+                        <ol className="list-decimal list-inside text-[10px] text-text-main space-y-0.5">
+                          {item.noteHistory.map((n: any, idx: number) => (
+                            <li key={idx} className="truncate" title={n.note}>
+                              {n.note}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <span className="text-[10px] text-text-muted">-</span>
                       )}
-                      {!item.service && !item.product && "-"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-[150px] max-h-[60px] overflow-y-auto">
+                      {item.service || item.product ? (
+                        <ol className="list-decimal list-inside text-[10px] text-text-primary space-y-0.5">
+                          {item.service &&
+                            item.service
+                              .split("|")
+                              .map((s) => s.trim())
+                              .filter(Boolean)
+                              .map((s, i) => (
+                                <li
+                                  key={`s-${i}`}
+                                  className="truncate"
+                                  title={s}
+                                >
+                                  {s}
+                                </li>
+                              ))}
+                          {item.product &&
+                            item.product
+                              .split(",")
+                              .map((p) => p.trim())
+                              .filter(Boolean)
+                              .map((p, i) => (
+                                <li
+                                  key={`p-${i}`}
+                                  className="truncate text-text-muted"
+                                  title={p}
+                                >
+                                  {p}
+                                </li>
+                              ))}
+                        </ol>
+                      ) : (
+                        <span className="text-text-muted">-</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>

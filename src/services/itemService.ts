@@ -27,10 +27,7 @@ export const itemService = {
   async getItemsByClinic(clinicId: string, branchId?: string): Promise<Item[]> {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
-      const constraints: any[] = [
-
-        where("isActive", "==", true),
-      ];
+      const constraints: any[] = [where("isActive", "==", true)];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
@@ -205,7 +202,6 @@ export const itemService = {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
       const constraints: any[] = [
-
         where("category", "==", category),
         where("isActive", "==", true),
       ];

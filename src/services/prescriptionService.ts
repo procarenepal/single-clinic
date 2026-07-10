@@ -247,10 +247,7 @@ export const prescriptionService = {
     try {
       if (!clinicId) return [];
       const prescriptionsCollection = collection(db, "prescriptions");
-      const q = query(
-        prescriptionsCollection,
-
-      );
+      const q = query(prescriptionsCollection);
       const querySnapshot = await getDocs(q);
 
       const list = querySnapshot.docs.map((docSnap) => {

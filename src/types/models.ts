@@ -1355,10 +1355,19 @@ export interface PatientFollowup {
     fifth?: Date;
   };
 
+  nextFollowupDate?: Date; // Next explicitly set follow-up date
+  followedBy?: string; // ID/Name of the staff assigned
+
   // Clinical notes
   service?: string; // Service received (e.g. "HYDRAFACIAL ST", "PRP FACE")
   product?: string; // Product used/sold (e.g. "TPS NIACINAMIDE 5% serum")
   notes?: string; // General free-text notes
+
+  noteHistory?: {
+    date: Date;
+    note: string;
+    user?: string;
+  }[];
 
   // Computed status for the module view
   overallStatus: FollowupStatus;

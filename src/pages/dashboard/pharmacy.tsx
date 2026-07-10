@@ -122,10 +122,11 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${isInvalid
+        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${
+          isInvalid
             ? "border-red-300 focus-within:ring-red-100"
             : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
-          } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
+        } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
       >
         {startContent && (
           <div className="pl-3 pr-1 text-text-main flex items-center justify-center shrink-0">
@@ -926,7 +927,7 @@ export default function PharmacyPage() {
         userData?.role === "clinic-admin"
           ? supplierPaymentForm.supplierId
             ? suppliers.find((s) => s.id === supplierPaymentForm.supplierId)
-              ?.branchId || ""
+                ?.branchId || ""
             : ""
           : userData?.branchId || "";
 
@@ -1294,20 +1295,24 @@ export default function PharmacyPage() {
           prescriptionsData,
         ] = await Promise.all([
           pharmacyService.getMedicineUsageByClinic(clinicId, effectiveBranchId),
-          medicineService.getSupplierPurchaseRecords(clinicId, effectiveBranchId),
+          medicineService.getSupplierPurchaseRecords(
+            clinicId,
+            effectiveBranchId,
+          ),
           medicineService.getSupplierPayments(clinicId, effectiveBranchId),
           prescriptionService.getPrescriptionsByClinic(clinicId),
         ]);
 
         setUsedMedicines(usageData as MedicineUsage[]);
         setSupplierPurchaseRecords(
-          (supplierPurchaseRecordsData as SupplierPurchaseRecord[]) || []
+          (supplierPurchaseRecordsData as SupplierPurchaseRecord[]) || [],
         );
         setSupplierPayments((supplierPaymentsData as SupplierPayment[]) || []);
 
         if (prescriptionsData) {
           setPrescriptions(
-            (prescriptionsData as any[])?.filter((rx) => rx.sendToPharmacy) || []
+            (prescriptionsData as any[])?.filter((rx) => rx.sendToPharmacy) ||
+              [],
           );
         }
 
@@ -1318,6 +1323,7 @@ export default function PharmacyPage() {
     };
 
     const timer = setTimeout(loadDeferredData, 1000);
+
     return () => clearTimeout(timer);
   }, [clinicId, currentUser, userData, effectiveBranchId]);
 
@@ -3103,6 +3109,7 @@ export default function PharmacyPage() {
   );
   const paginatedInventoryMedicines = useMemo(() => {
     const start = (inventoryPage - 1) * INVENTORY_ROWS_PER_PAGE;
+
     return filteredInventoryMedicines.slice(
       start,
       start + INVENTORY_ROWS_PER_PAGE,
@@ -3578,7 +3585,7 @@ export default function PharmacyPage() {
       (pm) =>
         pm.id !== editingPaymentMethod.id &&
         pm.name.trim().toLowerCase() ===
-        paymentMethodForm.name.trim().toLowerCase(),
+          paymentMethodForm.name.trim().toLowerCase(),
     );
 
     if (duplicateEdit) {
@@ -3772,10 +3779,11 @@ export default function PharmacyPage() {
         {/* Daily Sales Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "daily"
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
+              activeFilter === "daily"
                 ? "border-primary shadow-sm ring-1 ring-primary/20"
                 : "border-border-base hover:border-border-strong hover:bg-surface-2"
-              }`}
+            }`}
             onClick={() => handleStatCardClick("daily")}
           >
             <IoStorefrontOutline className="text-primary w-6 h-6 mb-2" />
@@ -3786,10 +3794,11 @@ export default function PharmacyPage() {
           </div>
 
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "paid"
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
+              activeFilter === "paid"
                 ? "border-primary shadow-sm ring-1 ring-primary/20"
                 : "border-border-base hover:border-border-strong hover:bg-surface-2"
-              }`}
+            }`}
             onClick={() => handleStatCardClick("paid")}
           >
             <IoCheckmarkCircleOutline className="text-primary w-6 h-6 mb-2" />
@@ -3802,10 +3811,11 @@ export default function PharmacyPage() {
           </div>
 
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "unpaid"
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
+              activeFilter === "unpaid"
                 ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
                 : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
-              }`}
+            }`}
             onClick={() => handleStatCardClick("unpaid")}
           >
             <IoCloseCircleOutline className="text-red-500 w-6 h-6 mb-2" />
@@ -4039,10 +4049,10 @@ export default function PharmacyPage() {
                                 "number" && purchase.totalReturnedAmount > 0
                                 ? purchase.totalReturnedAmount
                                 : (purchase.returns ?? []).reduce(
-                                  (sum, r) =>
-                                    sum + Math.abs(r.totalAmount || 0),
-                                  0,
-                                );
+                                    (sum, r) =>
+                                      sum + Math.abs(r.totalAmount || 0),
+                                    0,
+                                  );
                             const netAfterReturns = Math.max(
                               0,
                               (purchase.netAmount || 0) - totalReturnedAmount,
@@ -4421,16 +4431,17 @@ export default function PharmacyPage() {
                               Current Balance
                             </p>
                             <p
-                              className={`text-stat-sm font-semibold mt-1 ${supplierLedgerEntries[
+                              className={`text-stat-sm font-semibold mt-1 ${
+                                supplierLedgerEntries[
                                   supplierLedgerEntries.length - 1
                                 ].balanceAmount > 0
                                   ? "text-red-500"
                                   : supplierLedgerEntries[
-                                    supplierLedgerEntries.length - 1
-                                  ].balanceAmount < 0
+                                        supplierLedgerEntries.length - 1
+                                      ].balanceAmount < 0
                                     ? "text-primary"
                                     : "text-text-main"
-                                }`}
+                              }`}
                             >
                               NPR{" "}
                               {Math.round(
@@ -4529,12 +4540,13 @@ export default function PharmacyPage() {
                                     </td>
                                     <td className="px-3 py-2.5 text-[12.5px]">
                                       <span
-                                        className={`font-semibold ${entry.balanceAmount > 0
+                                        className={`font-semibold ${
+                                          entry.balanceAmount > 0
                                             ? "text-red-500"
                                             : entry.balanceAmount < 0
                                               ? "text-primary"
                                               : "text-text-muted"
-                                          }`}
+                                        }`}
                                       >
                                         NPR{" "}
                                         {Math.round(
@@ -4706,8 +4718,8 @@ export default function PharmacyPage() {
                                 {patients.find((p) => p.id === rx.patientId)
                                   ?.name ||
                                   "Patient " +
-                                  (rx.patientId?.substring(0, 5) ||
-                                    "Unknown")}
+                                    (rx.patientId?.substring(0, 5) ||
+                                      "Unknown")}
                               </div>
                             </td>
                             <td className="px-4 py-3.5">
@@ -4732,9 +4744,9 @@ export default function PharmacyPage() {
                             <td className="px-4 py-3.5 text-[12px] text-text-muted">
                               {rx.createdAt
                                 ? format(
-                                  new Date(rx.createdAt),
-                                  "MMM d, yyyy h:mm a",
-                                )
+                                    new Date(rx.createdAt),
+                                    "MMM d, yyyy h:mm a",
+                                  )
                                 : "N/A"}
                             </td>
                             <td className="px-4 py-3.5 text-right">
@@ -5249,36 +5261,39 @@ export default function PharmacyPage() {
                                   </td>
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
-                                      className={`${regular === 0
+                                      className={`${
+                                        regular === 0
                                           ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
                                           : regular <= 10
                                             ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
                                             : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        }`}
+                                      }`}
                                     >
                                       {regular}
                                     </span>
                                   </td>
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
-                                      className={`${scheme === 0
+                                      className={`${
+                                        scheme === 0
                                           ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
                                           : scheme <= 10
                                             ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
                                             : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        }`}
+                                      }`}
                                     >
                                       {scheme}
                                     </span>
                                   </td>
                                   <td className="px-5 py-4 text-center font-bold">
                                     <span
-                                      className={`${total === 0
+                                      className={`${
+                                        total === 0
                                           ? "text-red-600 text-sm"
                                           : total <= 10
                                             ? "text-amber-600 text-sm"
                                             : "text-default-800 text-sm"
-                                        }`}
+                                      }`}
                                     >
                                       {total}
                                     </span>
@@ -5607,47 +5622,47 @@ export default function PharmacyPage() {
 
                       {(!settingsForm.enabledPaymentMethods ||
                         settingsForm.enabledPaymentMethods.length === 0) && (
-                          <div className="text-center py-8">
-                            <div className="text-default-400 mb-4">
-                              <svg
-                                className="mx-auto opacity-50"
-                                fill="none"
-                                height="48"
-                                stroke="currentColor"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                viewBox="0 0 24 24"
-                                width="48"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <rect
-                                  height="16"
-                                  rx="2"
-                                  ry="2"
-                                  width="22"
-                                  x="1"
-                                  y="4"
-                                />
-                                <line x1="1" x2="23" y1="10" y2="10" />
-                              </svg>
-                            </div>
-                            <h3 className="text-stat-sm font-medium text-default-700 mb-2">
-                              No payment methods configured
-                            </h3>
-                            <p className="text-default-500 mb-4">
-                              Add payment methods to enable different payment
-                              options for purchases.
-                            </p>
-                            <Button
-                              color="primary"
-                              startContent={<IoAddOutline />}
-                              onPress={addPaymentMethodModalState.open}
+                        <div className="text-center py-8">
+                          <div className="text-default-400 mb-4">
+                            <svg
+                              className="mx-auto opacity-50"
+                              fill="none"
+                              height="48"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              viewBox="0 0 24 24"
+                              width="48"
+                              xmlns="http://www.w3.org/2000/svg"
                             >
-                              Add Your First Payment Method
-                            </Button>
+                              <rect
+                                height="16"
+                                rx="2"
+                                ry="2"
+                                width="22"
+                                x="1"
+                                y="4"
+                              />
+                              <line x1="1" x2="23" y1="10" y2="10" />
+                            </svg>
                           </div>
-                        )}
+                          <h3 className="text-stat-sm font-medium text-default-700 mb-2">
+                            No payment methods configured
+                          </h3>
+                          <p className="text-default-500 mb-4">
+                            Add payment methods to enable different payment
+                            options for purchases.
+                          </p>
+                          <Button
+                            color="primary"
+                            startContent={<IoAddOutline />}
+                            onPress={addPaymentMethodModalState.open}
+                          >
+                            Add Your First Payment Method
+                          </Button>
+                        </div>
+                      )}
                     </CardBody>
                   </Card>
 
@@ -5971,12 +5986,13 @@ export default function PharmacyPage() {
                                   Net Quantity
                                 </p>
                                 <p
-                                  className={`text-stat-sm font-semibold mt-1 ${netQuantity > 0
+                                  className={`text-stat-sm font-semibold mt-1 ${
+                                    netQuantity > 0
                                       ? "text-success"
                                       : netQuantity < 0
                                         ? "text-danger"
                                         : "text-default-600"
-                                    }`}
+                                  }`}
                                 >
                                   {netQuantity}
                                 </p>
@@ -6027,16 +6043,16 @@ export default function PharmacyPage() {
                                   <TableCell>
                                     <div className="text-sm">
                                       {transaction.date instanceof Date &&
-                                        !isNaN(transaction.date.getTime())
+                                      !isNaN(transaction.date.getTime())
                                         ? format(
-                                          transaction.date,
-                                          "MMM dd, yyyy",
-                                        )
+                                            transaction.date,
+                                            "MMM dd, yyyy",
+                                          )
                                         : "N/A"}
                                     </div>
                                     <div className="text-xs text-default-500">
                                       {transaction.date instanceof Date &&
-                                        !isNaN(transaction.date.getTime())
+                                      !isNaN(transaction.date.getTime())
                                         ? format(transaction.date, "hh:mm a")
                                         : "N/A"}
                                     </div>
@@ -6067,10 +6083,11 @@ export default function PharmacyPage() {
                                   <TableCell>{transaction.party}</TableCell>
                                   <TableCell>
                                     <span
-                                      className={`font-medium ${transaction.quantity < 0
+                                      className={`font-medium ${
+                                        transaction.quantity < 0
                                           ? "text-danger"
                                           : "text-success"
-                                        }`}
+                                      }`}
                                     >
                                       {transaction.quantity > 0 ? "+" : ""}
                                       {transaction.quantity}
@@ -6107,15 +6124,15 @@ export default function PharmacyPage() {
                                         )}
                                         {transaction.expiryDate <
                                           new Date() && (
-                                            <Chip
-                                              className="ml-1"
-                                              color="danger"
-                                              size="sm"
-                                              variant="flat"
-                                            >
-                                              Expired
-                                            </Chip>
-                                          )}
+                                          <Chip
+                                            className="ml-1"
+                                            color="danger"
+                                            size="sm"
+                                            variant="flat"
+                                          >
+                                            Expired
+                                          </Chip>
+                                        )}
                                       </div>
                                     ) : (
                                       <span className="text-default-400">
@@ -6491,12 +6508,12 @@ export default function PharmacyPage() {
                                             purchase.paymentStatus === "paid"
                                               ? "success"
                                               : purchase.paymentStatus ===
-                                                "unpaid" ||
-                                                purchase.paymentStatus ===
-                                                "pending"
+                                                    "unpaid" ||
+                                                  purchase.paymentStatus ===
+                                                    "pending"
                                                 ? "danger"
                                                 : purchase.paymentStatus ===
-                                                  "partial"
+                                                    "partial"
                                                   ? "warning"
                                                   : "default"
                                           }
@@ -6711,7 +6728,7 @@ export default function PharmacyPage() {
 
                       {/* Daily Purchases Report Table */}
                       {refillTransactions.length === 0 &&
-                        !isLoadingRefillTransactions ? (
+                      !isLoadingRefillTransactions ? (
                         <Card>
                           <CardBody>
                             <div className="text-center py-12">
@@ -6895,11 +6912,11 @@ export default function PharmacyPage() {
           base: "!m-4 !rounded-xl !w-[calc(100vw-2rem)] !max-w-[calc(100vw-2rem)] !h-[95vh] !max-h-[95vh] flex flex-col",
           backdrop: "backdrop-blur-sm bg-black/30",
         }}
-        size="full"
         hideCloseButton={isSubmitting}
         isDismissable={!isSubmitting}
         isOpen={purchaseModalState.isOpen}
         scrollBehavior="inside"
+        size="full"
         onClose={purchaseModalState.close}
       >
         <ModalContent className="h-full flex flex-col">
@@ -7136,18 +7153,18 @@ export default function PharmacyPage() {
                                 items={
                                   item.type === "medicine"
                                     ? medicines.map((m) => {
-                                      const stock = medicineStocks[m.id] || 0;
-                                      const isOutOfStock = stock <= 0;
+                                        const stock = medicineStocks[m.id] || 0;
+                                        const isOutOfStock = stock <= 0;
 
-                                      return {
-                                        id: m.id,
-                                        primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}${isOutOfStock ? " (Out of Stock)" : ""}`,
-                                      };
-                                    })
+                                        return {
+                                          id: m.id,
+                                          primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}${isOutOfStock ? " (Out of Stock)" : ""}`,
+                                        };
+                                      })
                                     : items.map((i) => ({
-                                      id: i.id,
-                                      primary: i.name,
-                                    }))
+                                        id: i.id,
+                                        primary: i.name,
+                                      }))
                                 }
                                 label={`${item.type === "medicine" ? "Medicine" : "Item"}`}
                                 placeholder={`Search ${item.type}…`}
@@ -7987,12 +8004,13 @@ export default function PharmacyPage() {
                             </TableCell>
                             <TableCell>
                               <span
-                                className={`font-semibold ${entry.balanceAmount > 0
+                                className={`font-semibold ${
+                                  entry.balanceAmount > 0
                                     ? "text-danger"
                                     : entry.balanceAmount < 0
                                       ? "text-success"
                                       : "text-default-600"
-                                  }`}
+                                }`}
                               >
                                 NPR{" "}
                                 {Math.round(

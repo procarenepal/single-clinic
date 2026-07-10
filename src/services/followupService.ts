@@ -53,10 +53,18 @@ function mapDoc(id: string, data: any): PatientFollowup {
       fourth: toDate(data.followupDates?.fourth),
       fifth: toDate(data.followupDates?.fifth),
     },
+    nextFollowupDate: toDate(data.nextFollowupDate),
+    followedBy: data.followedBy,
     sessionStatuses: data.sessionStatuses || {},
     service: data.service,
     product: data.product,
     notes: data.notes,
+    noteHistory:
+      data.noteHistory?.map((n: any) => ({
+        date: toDate(n.date) || new Date(),
+        note: n.note,
+        user: n.user,
+      })) || [],
     overallStatus: (data.overallStatus as FollowupStatus) || "pending",
     logs:
       data.logs?.map((l: any) => ({
@@ -97,6 +105,20 @@ function serializeDates(followup: Partial<PatientFollowup>): any {
       : {};
   }
 
+  if ("nextFollowupDate" in followup) {
+    result.nextFollowupDate = followup.nextFollowupDate
+      ? toTimestamp(followup.nextFollowupDate)
+      : null;
+  }
+
+  if ("noteHistory" in followup) {
+    result.noteHistory =
+      followup.noteHistory?.map((n) => ({
+        ...n,
+        date: toTimestamp(n.date) || null,
+      })) || [];
+  }
+
   if ("logs" in followup) {
     result.logs =
       followup.logs?.map((l) => ({
@@ -118,10 +140,7 @@ export const followupService = {
     clinicId: string,
     branchId?: string,
   ): Promise<PatientFollowup[]> {
-    let q = query(
-      collection(db, COLLECTION),
-
-    );
+    let q = query(collection(db, COLLECTION));
 
     if (branchId) {
       q = query(

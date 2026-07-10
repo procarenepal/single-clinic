@@ -719,8 +719,11 @@ export default function ProfilePage() {
                               {(commission.serviceNames || []).join(", ")}
                             </p>
                             <p className="text-[12px] text-text-muted mt-1">
-                              Rate: {commission.commissionPercentage}% •
-                              Invoiced: NPR{" "}
+                              Rate:{" "}
+                              {Number(commission.commissionPercentage)
+                                .toFixed(2)
+                                .replace(/\.00$/, "")}
+                              % • Invoiced: NPR{" "}
                               {commission.totalInvoiceAmount.toLocaleString()}
                             </p>
                           </div>

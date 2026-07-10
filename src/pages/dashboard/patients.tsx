@@ -215,10 +215,11 @@ function Pagination({
       {pages.map((p) => (
         <button
           key={p}
-          className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${p === page
+          className={`w-8 h-8 text-[12px] font-medium rounded border transition-all ${
+            p === page
               ? "bg-primary text-white border-primary shadow-sm"
               : "border-border-base text-text-muted hover:border-primary hover:text-primary hover:bg-surface-2"
-            }`}
+          }`}
           onClick={() => onChange(p)}
         >
           {p}
@@ -329,10 +330,10 @@ export default function PatientsPage() {
       expertIdOverride?: string | null,
     ): Promise<
       | {
-        patients: Patient[];
-        lastDoc: QueryDocumentSnapshot | null;
-        totalCount?: number;
-      }
+          patients: Patient[];
+          lastDoc: QueryDocumentSnapshot | null;
+          totalCount?: number;
+        }
       | undefined
     > => {
       const searchPrefix = search.trim() || undefined;
@@ -780,10 +781,10 @@ export default function PatientsPage() {
           prev.map((p) =>
             p.id === selectedForCritical.id
               ? {
-                ...p,
-                isCritical: true,
-                criticalReason: criticalReason.trim(),
-              }
+                  ...p,
+                  isCritical: true,
+                  criticalReason: criticalReason.trim(),
+                }
               : p,
           ),
         );
@@ -1143,52 +1144,52 @@ export default function PatientsPage() {
             ageMax ||
             regStart ||
             regEnd) && (
-              <div className="flex flex-wrap gap-1.5 px-3 py-1.5 border-b border-border-base bg-surface-2">
-                {search && (
-                  <FilterChip
-                    label={`Search: "${search}"`}
-                    onRemove={() => setSearch("")}
-                  />
-                )}
-                {genderFilter !== "all" && (
-                  <FilterChip
-                    label={`Gender: ${genderFilter}`}
-                    onRemove={() => setGenderFilter("all")}
-                  />
-                )}
-                {criticalFilter !== "all" && (
-                  <FilterChip
-                    label={`Status: ${criticalFilter}`}
-                    onRemove={() => setCriticalFilter("all")}
-                  />
-                )}
-                {(ageMin || ageMax) && (
-                  <FilterChip
-                    label={`Age: ${ageMin || "0"}–${ageMax || "∞"}`}
-                    onRemove={() => {
-                      setAgeMin("");
-                      setAgeMax("");
-                    }}
-                  />
-                )}
-                {(regStart || regEnd) && (
-                  <FilterChip
-                    label={`Reg: ${regStart || "…"} – ${regEnd || "…"}`}
-                    onRemove={() => {
-                      setRegStart("");
-                      setRegEnd("");
-                    }}
-                  />
-                )}
-                <button
-                  className="text-[11px] text-text-muted hover:text-red-500 ml-1"
-                  type="button"
-                  onClick={clearFilters}
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-1.5 px-3 py-1.5 border-b border-border-base bg-surface-2">
+              {search && (
+                <FilterChip
+                  label={`Search: "${search}"`}
+                  onRemove={() => setSearch("")}
+                />
+              )}
+              {genderFilter !== "all" && (
+                <FilterChip
+                  label={`Gender: ${genderFilter}`}
+                  onRemove={() => setGenderFilter("all")}
+                />
+              )}
+              {criticalFilter !== "all" && (
+                <FilterChip
+                  label={`Status: ${criticalFilter}`}
+                  onRemove={() => setCriticalFilter("all")}
+                />
+              )}
+              {(ageMin || ageMax) && (
+                <FilterChip
+                  label={`Age: ${ageMin || "0"}–${ageMax || "∞"}`}
+                  onRemove={() => {
+                    setAgeMin("");
+                    setAgeMax("");
+                  }}
+                />
+              )}
+              {(regStart || regEnd) && (
+                <FilterChip
+                  label={`Reg: ${regStart || "…"} – ${regEnd || "…"}`}
+                  onRemove={() => {
+                    setRegStart("");
+                    setRegEnd("");
+                  }}
+                />
+              )}
+              <button
+                className="text-[11px] text-text-muted hover:text-red-500 ml-1"
+                type="button"
+                onClick={clearFilters}
+              >
+                Clear all
+              </button>
+            </div>
+          )}
 
           {/* ── Table ───────────────────────────────────────────────────── */}
           {loading ? (

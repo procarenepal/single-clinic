@@ -59,7 +59,8 @@ class ExpertCommissionService {
             const discountRatio = (subtotal - mainDiscount) / subtotal;
             const effectiveItemAmount = item.amount * discountRatio;
 
-            const itemCommissionAmount = (effectiveItemAmount * percentage) / 100;
+            const itemCommissionAmount =
+              (effectiveItemAmount * percentage) / 100;
 
             return total + itemCommissionAmount;
           }, 0);
@@ -186,7 +187,7 @@ class ExpertCommissionService {
     try {
       const q = query(
         collection(db, this.collectionName),
-        where("expertId", "==", expertId)
+        where("expertId", "==", expertId),
       );
 
       const querySnapshot = await getDocs(q);
@@ -250,7 +251,7 @@ class ExpertCommissionService {
         updatedAt: Timestamp.fromDate(new Date()),
         status:
           (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
+          currentCommission.commissionAmount
             ? "paid"
             : "pending",
       };

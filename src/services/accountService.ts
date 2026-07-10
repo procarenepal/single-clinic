@@ -47,10 +47,7 @@ export const accountService = {
     clinicId: string,
     branchId?: string,
   ): Promise<AccountBill[]> {
-    let q = query(
-      collection(db, BILLS_COLLECTION),
-
-    );
+    let q = query(collection(db, BILLS_COLLECTION));
 
     if (branchId) {
       q = query(q, where("branchId", "==", branchId));
@@ -97,10 +94,7 @@ export const accountService = {
     clinicId: string,
     branchId?: string,
   ): Promise<Vendor[]> {
-    let q = query(
-      collection(db, VENDORS_COLLECTION),
-
-    );
+    let q = query(collection(db, VENDORS_COLLECTION));
 
     if (branchId) {
       q = query(q, where("branchId", "==", branchId));

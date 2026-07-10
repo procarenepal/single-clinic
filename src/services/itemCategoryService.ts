@@ -28,10 +28,7 @@ export const itemCategoryService = {
   ): Promise<ItemCategory[]> {
     try {
       const categoriesRef = collection(db, ITEM_CATEGORIES_COLLECTION);
-      const constraints: any[] = [
-
-        where("isActive", "==", true),
-      ];
+      const constraints: any[] = [where("isActive", "==", true)];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));

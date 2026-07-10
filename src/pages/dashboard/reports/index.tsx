@@ -396,8 +396,10 @@ export default function ReportsPage() {
     return reportData.appointments.filter((appointment) => {
       const appointmentDate = new Date(appointment.appointmentDate);
       const startDate = new Date(dateRange.start);
+
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(dateRange.end);
+
       endDate.setHours(23, 59, 59, 999);
 
       const isInDateRange = allDates
@@ -418,8 +420,10 @@ export default function ReportsPage() {
   // Filter patients by date range (createdAt), selected doctor, and selected appointment type
   const getFilteredPatients = () => {
     const startDate = new Date(dateRange.start);
+
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(dateRange.end);
+
     endDate.setHours(23, 59, 59, 999);
 
     return reportData.patients.filter((p) => {
@@ -428,8 +432,10 @@ export default function ReportsPage() {
 
       if (!allDates) {
         let createdOk = false;
+
         if (p.createdAt) {
           const created = new Date(p.createdAt as any);
+
           if (!Number.isNaN(created.getTime())) {
             createdOk = created >= startDate && created <= endDate;
           }
@@ -440,6 +446,7 @@ export default function ReportsPage() {
           (apt) => {
             if (apt.patientId !== p.id) return false;
             const aptDate = new Date(apt.appointmentDate);
+
             return aptDate >= startDate && aptDate <= endDate;
           },
         );
@@ -897,7 +904,7 @@ export default function ReportsPage() {
               .join(", ") || "None",
           "Attributed Revenue": `NPR ${Math.round(attributedRevenue).toLocaleString()}`,
           "Total Amount": `NPR ${(billing.subtotal || 0).toLocaleString()}`,
-          "Discount": `NPR ${(billing.discountAmount || 0).toLocaleString()}`,
+          Discount: `NPR ${(billing.discountAmount || 0).toLocaleString()}`,
           "Net Amount": `NPR ${(billing.totalAmount || 0).toLocaleString()}`,
           "Paid Amount": `NPR ${(billing.paidAmount || 0).toLocaleString()}`,
           "Balance Amount": `NPR ${(billing.balanceAmount || 0).toLocaleString()}`,
@@ -1083,10 +1090,10 @@ export default function ReportsPage() {
           "Attributed Doctor":
             selectedDoctor !== "all"
               ? reportData.doctors.find((d) => d.id === selectedDoctor)?.name ||
-              reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
-              reportData.referralPartners.find((p) => p.id === selectedDoctor)
-                ?.name ||
-              "N/A"
+                reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
+                reportData.referralPartners.find((p) => p.id === selectedDoctor)
+                  ?.name ||
+                "N/A"
               : billing.doctorName,
           "Doctor Type":
             billing.doctorType === "visitor" ? "Visiting" : "Regular",
@@ -1593,12 +1600,12 @@ export default function ReportsPage() {
                               <Chip
                                 color={
                                   statusColor as
-                                  | "success"
-                                  | "primary"
-                                  | "warning"
-                                  | "danger"
-                                  | "default"
-                                  | "secondary"
+                                    | "success"
+                                    | "primary"
+                                    | "warning"
+                                    | "danger"
+                                    | "default"
+                                    | "secondary"
                                 }
                                 size="sm"
                                 variant="flat"
@@ -1774,8 +1781,8 @@ export default function ReportsPage() {
                           <td className="whitespace-nowrap">
                             {patient.createdAt
                               ? new Date(
-                                patient.createdAt as any,
-                              ).toLocaleDateString()
+                                  patient.createdAt as any,
+                                ).toLocaleDateString()
                               : ""}
                           </td>
                         </tr>
@@ -2057,36 +2064,73 @@ export default function ReportsPage() {
                           ? new Date(billing.invoiceDate).toLocaleDateString()
                           : "N/A";
                         const time = billing.invoiceDate
-                          ? new Date(billing.invoiceDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          ? new Date(billing.invoiceDate).toLocaleTimeString(
+                              [],
+                              { hour: "2-digit", minute: "2-digit" },
+                            )
                           : "";
                         const itemsCount = billing.items?.length || 0;
 
-                        const statusColor = billing.paymentStatus === "paid" ? "success" : billing.paymentStatus === "partial" ? "warning" : "danger";
+                        const statusColor =
+                          billing.paymentStatus === "paid"
+                            ? "success"
+                            : billing.paymentStatus === "partial"
+                              ? "warning"
+                              : "danger";
 
                         return (
                           <tr
                             key={billing.id}
-                            onClick={() => navigate('/dashboard/pathology')}
                             className="cursor-pointer hover:bg-default-100 transition-colors"
+                            onClick={() => navigate("/dashboard/pathology")}
                           >
-                            <td className="whitespace-nowrap font-medium text-[13px]">{billing.invoiceNumber || "N/A"}</td>
+                            <td className="whitespace-nowrap font-medium text-[13px]">
+                              {billing.invoiceNumber || "N/A"}
+                            </td>
                             <td className="whitespace-nowrap">
-                              <div className="text-[13px] text-mountain-700">{date}</div>
-                              <div className="text-xs text-mountain-500">{time}</div>
+                              <div className="text-[13px] text-mountain-700">
+                                {date}
+                              </div>
+                              <div className="text-xs text-mountain-500">
+                                {time}
+                              </div>
                             </td>
                             <td>
-                              <div className="text-[13px] font-medium text-mountain-900">{billing.patientName || "Unknown"}</div>
-                              {billing.patientPhone && <div className="text-xs text-mountain-500">{billing.patientPhone}</div>}
+                              <div className="text-[13px] font-medium text-mountain-900">
+                                {billing.patientName || "Unknown"}
+                              </div>
+                              {billing.patientPhone && (
+                                <div className="text-xs text-mountain-500">
+                                  {billing.patientPhone}
+                                </div>
+                              )}
                             </td>
                             <td>
-                              <div className="text-[13px]">{itemsCount} test{itemsCount !== 1 ? 's' : ''}</div>
+                              <div className="text-[13px]">
+                                {itemsCount} test{itemsCount !== 1 ? "s" : ""}
+                              </div>
                             </td>
-                            <td className="text-[13px]">NPR {(billing.subtotal || 0).toLocaleString()}</td>
-                            <td className="text-[13px]">{(billing.discountAmount || 0) > 0 ? `NPR ${(billing.discountAmount || 0).toLocaleString()}` : "-"}</td>
-                            <td className="text-[13px] font-medium">NPR {(billing.totalAmount || 0).toLocaleString()}</td>
-                            <td className="text-[13px] text-health-600">NPR {(billing.paidAmount || 0).toLocaleString()}</td>
+                            <td className="text-[13px]">
+                              NPR {(billing.subtotal || 0).toLocaleString()}
+                            </td>
+                            <td className="text-[13px]">
+                              {(billing.discountAmount || 0) > 0
+                                ? `NPR ${(billing.discountAmount || 0).toLocaleString()}`
+                                : "-"}
+                            </td>
+                            <td className="text-[13px] font-medium">
+                              NPR {(billing.totalAmount || 0).toLocaleString()}
+                            </td>
+                            <td className="text-[13px] text-health-600">
+                              NPR {(billing.paidAmount || 0).toLocaleString()}
+                            </td>
                             <td>
-                              <Chip color={statusColor as any} size="sm" variant="flat" className="capitalize">
+                              <Chip
+                                className="capitalize"
+                                color={statusColor as any}
+                                size="sm"
+                                variant="flat"
+                              >
                                 {billing.paymentStatus || "Unpaid"}
                               </Chip>
                             </td>
@@ -2095,7 +2139,10 @@ export default function ReportsPage() {
                       })}
                       {filteredPathologyBillings.length === 0 && (
                         <tr>
-                          <td colSpan={9} className="text-center py-6 text-mountain-500">
+                          <td
+                            className="text-center py-6 text-mountain-500"
+                            colSpan={9}
+                          >
                             No invoice records found for the selected criteria.
                           </td>
                         </tr>
@@ -2216,53 +2263,112 @@ export default function ReportsPage() {
                     </thead>
                     <tbody>
                       {filteredPharmacyPurchases.map((purchase) => {
-                        const pDate = purchase.purchaseDate || (purchase as any).createdAt;
+                        const pDate =
+                          purchase.purchaseDate || (purchase as any).createdAt;
                         const date = pDate
                           ? new Date(pDate).toLocaleDateString()
                           : "N/A";
                         const time = pDate
-                          ? new Date(pDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          ? new Date(pDate).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
                           : "";
                         const itemsCount = purchase.items?.length || 0;
-                        const totalQty = purchase.items?.reduce((s, i) => s + (i.quantity || 0), 0) || 0;
+                        const totalQty =
+                          purchase.items?.reduce(
+                            (s, i) => s + (i.quantity || 0),
+                            0,
+                          ) || 0;
 
-                        const statusColor = purchase.paymentStatus === "paid" ? "success" : purchase.paymentStatus === "partial" ? "warning" : "danger";
+                        const statusColor =
+                          purchase.paymentStatus === "paid"
+                            ? "success"
+                            : purchase.paymentStatus === "partial"
+                              ? "warning"
+                              : "danger";
 
                         return (
                           <tr
                             key={purchase.id}
-                            onClick={() => navigate(`/dashboard/pharmacy/purchase/${purchase.id}`)}
                             className="cursor-pointer hover:bg-default-100 transition-colors"
+                            onClick={() =>
+                              navigate(
+                                `/dashboard/pharmacy/purchase/${purchase.id}`,
+                              )
+                            }
                           >
-                            <td className="whitespace-nowrap font-medium text-[13px]">{purchase.purchaseNo || "N/A"}</td>
+                            <td className="whitespace-nowrap font-medium text-[13px]">
+                              {purchase.purchaseNo || "N/A"}
+                            </td>
                             <td className="whitespace-nowrap">
-                              <div className="text-[13px] text-mountain-700">{date}</div>
-                              <div className="text-xs text-mountain-500">{time}</div>
+                              <div className="text-[13px] text-mountain-700">
+                                {date}
+                              </div>
+                              <div className="text-xs text-mountain-500">
+                                {time}
+                              </div>
                             </td>
                             <td>
-                              <div className="text-[13px] font-medium text-mountain-900">{purchase.patientName || (purchase as any).customerName || "Walk-in Customer"}</div>
-                              {(purchase.patientPhone || (purchase as any).customerPhone) && <div className="text-xs text-mountain-500">{purchase.patientPhone || (purchase as any).customerPhone}</div>}
+                              <div className="text-[13px] font-medium text-mountain-900">
+                                {purchase.patientName ||
+                                  (purchase as any).customerName ||
+                                  "Walk-in Customer"}
+                              </div>
+                              {(purchase.patientPhone ||
+                                (purchase as any).customerPhone) && (
+                                <div className="text-xs text-mountain-500">
+                                  {purchase.patientPhone ||
+                                    (purchase as any).customerPhone}
+                                </div>
+                              )}
                             </td>
                             <td>
-                              <div className="text-[13px]">{itemsCount} item{itemsCount !== 1 ? 's' : ''}</div>
-                              <div className="text-xs text-mountain-500">Qty: {totalQty}</div>
+                              <div className="text-[13px]">
+                                {itemsCount} item{itemsCount !== 1 ? "s" : ""}
+                              </div>
+                              <div className="text-xs text-mountain-500">
+                                Qty: {totalQty}
+                              </div>
                             </td>
-                            <td className="text-[13px]">NPR {(purchase.total || 0).toLocaleString()}</td>
-                            <td className="text-[13px]">{(purchase.discount || 0) > 0 ? `NPR ${(purchase.discount || 0).toLocaleString()}` : "-"}</td>
-                            <td className="text-[13px]">{(purchase.taxAmount || 0) > 0 ? `NPR ${(purchase.taxAmount || 0).toLocaleString()}` : "-"}</td>
-                            <td className="text-[13px] font-medium">NPR {(purchase.netAmount || 0).toLocaleString()}</td>
+                            <td className="text-[13px]">
+                              NPR {(purchase.total || 0).toLocaleString()}
+                            </td>
+                            <td className="text-[13px]">
+                              {(purchase.discount || 0) > 0
+                                ? `NPR ${(purchase.discount || 0).toLocaleString()}`
+                                : "-"}
+                            </td>
+                            <td className="text-[13px]">
+                              {(purchase.taxAmount || 0) > 0
+                                ? `NPR ${(purchase.taxAmount || 0).toLocaleString()}`
+                                : "-"}
+                            </td>
+                            <td className="text-[13px] font-medium">
+                              NPR {(purchase.netAmount || 0).toLocaleString()}
+                            </td>
                             <td>
-                              <Chip color={statusColor as any} size="sm" variant="flat" className="capitalize">
+                              <Chip
+                                className="capitalize"
+                                color={statusColor as any}
+                                size="sm"
+                                variant="flat"
+                              >
                                 {purchase.paymentStatus || "Unknown"}
                               </Chip>
                             </td>
-                            <td className="text-[13px] capitalize">{purchase.paymentType || "Cash"}</td>
+                            <td className="text-[13px] capitalize">
+                              {purchase.paymentType || "Cash"}
+                            </td>
                           </tr>
                         );
                       })}
                       {filteredPharmacyPurchases.length === 0 && (
                         <tr>
-                          <td colSpan={10} className="text-center py-6 text-mountain-500">
+                          <td
+                            className="text-center py-6 text-mountain-500"
+                            colSpan={10}
+                          >
                             No purchase records found for the selected criteria.
                           </td>
                         </tr>
@@ -2333,7 +2439,7 @@ export default function ReportsPage() {
                             const matchesType =
                               selectedAppointmentType === "all" ||
                               item.appointmentTypeId ===
-                              selectedAppointmentType;
+                                selectedAppointmentType;
 
                             if (matchesDoctor && matchesType) {
                               totalRevenue += (item.amount || 0) * revenueScale;
@@ -2690,41 +2796,87 @@ export default function ReportsPage() {
                         <tbody>
                           {filteredBillings.map((billing) => {
                             const date = billing.invoiceDate
-                              ? new Date(billing.invoiceDate).toLocaleDateString()
+                              ? new Date(
+                                  billing.invoiceDate,
+                                ).toLocaleDateString()
                               : "N/A";
                             const time = billing.invoiceDate
-                              ? new Date(billing.invoiceDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              ? new Date(
+                                  billing.invoiceDate,
+                                ).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
                               : "";
                             const itemsCount = billing.items?.length || 0;
 
-                            const statusColor = billing.paymentStatus === "paid" ? "success" : billing.paymentStatus === "partial" ? "warning" : "danger";
+                            const statusColor =
+                              billing.paymentStatus === "paid"
+                                ? "success"
+                                : billing.paymentStatus === "partial"
+                                  ? "warning"
+                                  : "danger";
 
                             return (
                               <tr
                                 key={billing.id}
-                                onClick={() => navigate(`/dashboard/billing/${billing.id}`)}
                                 className="cursor-pointer hover:bg-default-100 transition-colors"
+                                onClick={() =>
+                                  navigate(`/dashboard/billing/${billing.id}`)
+                                }
                               >
-                                <td className="whitespace-nowrap font-medium text-[13px]">{billing.invoiceNumber || "N/A"}</td>
+                                <td className="whitespace-nowrap font-medium text-[13px]">
+                                  {billing.invoiceNumber || "N/A"}
+                                </td>
                                 <td className="whitespace-nowrap">
-                                  <div className="text-[13px] text-mountain-700">{date}</div>
-                                  <div className="text-xs text-mountain-500">{time}</div>
+                                  <div className="text-[13px] text-mountain-700">
+                                    {date}
+                                  </div>
+                                  <div className="text-xs text-mountain-500">
+                                    {time}
+                                  </div>
                                 </td>
                                 <td>
-                                  <div className="text-[13px] font-medium text-mountain-900">{billing.patientName || "Unknown"}</div>
+                                  <div className="text-[13px] font-medium text-mountain-900">
+                                    {billing.patientName || "Unknown"}
+                                  </div>
                                 </td>
                                 <td>
-                                  <div className="text-[13px] font-medium text-mountain-900">{billing.doctorName || "Unknown"}</div>
+                                  <div className="text-[13px] font-medium text-mountain-900">
+                                    {billing.doctorName || "Unknown"}
+                                  </div>
                                 </td>
                                 <td>
-                                  <div className="text-[13px]">{itemsCount} item{itemsCount !== 1 ? 's' : ''}</div>
+                                  <div className="text-[13px]">
+                                    {itemsCount} item
+                                    {itemsCount !== 1 ? "s" : ""}
+                                  </div>
                                 </td>
-                                <td className="text-[13px] font-medium">NPR {(billing.totalAmount || 0).toLocaleString()}</td>
-                                <td className="text-[13px]">{(billing.discountAmount || 0) > 0 ? `NPR ${(billing.discountAmount || 0).toLocaleString()}` : "-"}</td>
-                                <td className="text-[13px]">{(billing.taxAmount || 0) > 0 ? `NPR ${(billing.taxAmount || 0).toLocaleString()}` : "-"}</td>
-                                <td className="text-[13px] text-health-600">NPR {(billing.paidAmount || 0).toLocaleString()}</td>
+                                <td className="text-[13px] font-medium">
+                                  NPR{" "}
+                                  {(billing.totalAmount || 0).toLocaleString()}
+                                </td>
+                                <td className="text-[13px]">
+                                  {(billing.discountAmount || 0) > 0
+                                    ? `NPR ${(billing.discountAmount || 0).toLocaleString()}`
+                                    : "-"}
+                                </td>
+                                <td className="text-[13px]">
+                                  {(billing.taxAmount || 0) > 0
+                                    ? `NPR ${(billing.taxAmount || 0).toLocaleString()}`
+                                    : "-"}
+                                </td>
+                                <td className="text-[13px] text-health-600">
+                                  NPR{" "}
+                                  {(billing.paidAmount || 0).toLocaleString()}
+                                </td>
                                 <td>
-                                  <Chip color={statusColor as any} size="sm" variant="flat" className="capitalize">
+                                  <Chip
+                                    className="capitalize"
+                                    color={statusColor as any}
+                                    size="sm"
+                                    variant="flat"
+                                  >
                                     {billing.paymentStatus || "Unpaid"}
                                   </Chip>
                                 </td>
@@ -2733,8 +2885,12 @@ export default function ReportsPage() {
                           })}
                           {filteredBillings.length === 0 && (
                             <tr>
-                              <td colSpan={10} className="text-center py-6 text-mountain-500">
-                                No invoice records found for the selected criteria.
+                              <td
+                                className="text-center py-6 text-mountain-500"
+                                colSpan={10}
+                              >
+                                No invoice records found for the selected
+                                criteria.
                               </td>
                             </tr>
                           )}

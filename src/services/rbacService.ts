@@ -857,7 +857,6 @@ export const rbacService = {
       const existingQuery = query(
         assignmentsRef,
         where("userId", "==", userId),
-
       );
       const existingSnapshot = await getDocs(existingQuery);
 
@@ -980,11 +979,7 @@ export const rbacService = {
   ): Promise<UserRoleAssignment[]> {
     try {
       const assignmentsRef = collection(db, USER_ROLE_ASSIGNMENTS_COLLECTION);
-      const q = query(
-        assignmentsRef,
-        where("userId", "==", userId),
-
-      );
+      const q = query(assignmentsRef, where("userId", "==", userId));
       const querySnapshot = await getDocs(q);
 
       return querySnapshot.docs.map((doc) => doc.data() as UserRoleAssignment);
@@ -1066,11 +1061,7 @@ export const rbacService = {
     try {
       // Get all role assignments for this specific role in this clinic
       const assignmentsRef = collection(db, USER_ROLE_ASSIGNMENTS_COLLECTION);
-      const q = query(
-        assignmentsRef,
-        where("roleId", "==", roleId),
-
-      );
+      const q = query(assignmentsRef, where("roleId", "==", roleId));
       const querySnapshot = await getDocs(q);
 
       // Get user IDs from assignments

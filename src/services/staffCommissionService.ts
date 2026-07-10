@@ -89,7 +89,6 @@ class StaffCommissionService {
       const q = query(
         collection(db, this.collectionName),
         where("staffId", "==", staffId),
-
       );
 
       const querySnapshot = await getDocs(q);
@@ -120,10 +119,7 @@ class StaffCommissionService {
   // Get all commissions for a clinic
   async getCommissionsByClinic(clinicId: string): Promise<StaffCommission[]> {
     try {
-      const q = query(
-        collection(db, this.collectionName),
-
-      );
+      const q = query(collection(db, this.collectionName));
 
       const querySnapshot = await getDocs(q);
 

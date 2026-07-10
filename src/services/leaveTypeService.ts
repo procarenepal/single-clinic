@@ -5,7 +5,6 @@ import {
   deleteDoc,
   doc,
   query,
-  where,
   getDocs,
   serverTimestamp,
 } from "firebase/firestore";
@@ -26,10 +25,7 @@ function mapLeaveType(docId: string, data: any): LeaveType {
 
 export const leaveTypeService = {
   async getLeaveTypes(clinicId: string): Promise<LeaveType[]> {
-    const q = query(
-      collection(db, LEAVE_TYPES_COL),
-
-    );
+    const q = query(collection(db, LEAVE_TYPES_COL));
     const snap = await getDocs(q);
 
     // Default leaves if none exist

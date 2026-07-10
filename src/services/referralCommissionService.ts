@@ -179,7 +179,6 @@ class ReferralCommissionService {
       const simpleQuery = query(
         collection(db, this.collectionName),
         where("partnerId", "==", partnerId),
-
       );
 
       let querySnapshot;
@@ -231,10 +230,7 @@ class ReferralCommissionService {
     clinicId: string,
   ): Promise<ReferralCommission[]> {
     try {
-      const simpleQuery = query(
-        collection(db, this.collectionName),
-
-      );
+      const simpleQuery = query(collection(db, this.collectionName));
 
       let querySnapshot;
 

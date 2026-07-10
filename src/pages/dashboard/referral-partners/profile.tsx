@@ -724,8 +724,11 @@ export default function ReferralPartnerProfilePage() {
                           </span>
                         </p>
                         <p className="text-[12px] text-mountain-500 mt-1">
-                          Rate: {c.commissionPercentage}% • Total:{" "}
-                          {formatCurrency(c.totalInvoiceAmount)}
+                          Rate:{" "}
+                          {Number(c.commissionPercentage)
+                            .toFixed(2)
+                            .replace(/\.00$/, "")}
+                          % • Total: {formatCurrency(c.totalInvoiceAmount)}
                         </p>
                       </div>
                       <div className="text-left md:text-right flex flex-col md:items-end gap-2">

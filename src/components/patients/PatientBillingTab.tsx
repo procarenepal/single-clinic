@@ -27,10 +27,8 @@ import { useModalState } from "@/hooks/useModalState";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { doctorCommissionService } from "@/services/doctorCommissionService";
 import { patientService } from "@/services/patientService";
 import { referralPartnerService } from "@/services/referralPartnerService";
-import { referralCommissionService } from "@/services/referralCommissionService";
 import {
   AppointmentBilling,
   AppointmentBillingSettings,
@@ -166,29 +164,29 @@ function SearchSelect({
           <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-xl">
             {filtered.length === 0
               ? emptyContent || (
-                  <p className="px-3 py-2 text-[12px] text-text-muted/60">
-                    No results
-                  </p>
-                )
+                <p className="px-3 py-2 text-[12px] text-text-muted/60">
+                  No results
+                </p>
+              )
               : filtered.map((i) => (
-                  <button
-                    key={i.id}
-                    className={`w-full text-left px-3 py-2 hover:bg-primary/10 ${i.id === value ? "bg-primary/10" : ""}`}
-                    type="button"
-                    onClick={() => {
-                      onChange(i.id);
-                      setQ("");
-                      setOpen(false);
-                    }}
-                  >
-                    <p className="text-[12.5px] text-text-main">{i.primary}</p>
-                    {i.secondary && (
-                      <p className="text-[11px] text-text-muted">
-                        {i.secondary}
-                      </p>
-                    )}
-                  </button>
-                ))}
+                <button
+                  key={i.id}
+                  className={`w-full text-left px-3 py-2 hover:bg-primary/10 ${i.id === value ? "bg-primary/10" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    onChange(i.id);
+                    setQ("");
+                    setOpen(false);
+                  }}
+                >
+                  <p className="text-[12.5px] text-text-main">{i.primary}</p>
+                  {i.secondary && (
+                    <p className="text-[11px] text-text-muted">
+                      {i.secondary}
+                    </p>
+                  )}
+                </button>
+              ))}
           </div>
         </>
       )}
@@ -647,49 +645,15 @@ export default function PatientBillingTab({
         referralPartnerId: referralPartner?.id || "",
         referralCommissionAmount: referralPartner
           ? (calculations.totalAmount *
-              (referralPartner.defaultCommission || 0)) /
-            100
+            (referralPartner.defaultCommission || 0)) /
+          100
           : 0,
       };
       const billingId =
         await appointmentBillingService.createBilling(billingData);
 
-      try {
-        if (billingData.items.some((i) => (i.commission || 0) > 0)) {
-          await doctorCommissionService.createCommission(
-            {
-              id: billingId,
-              ...billingData,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-            rootDoctor?.defaultCommission || 0,
-            currentUser.uid,
-          );
-        }
+      // Commissions are now correctly generated ONLY when the invoice is paid via appointmentBillingService.recordPayment.
 
-        // Create referral commission record
-        if (referralPartner && billingData.referralCommissionAmount > 0) {
-          await referralCommissionService.createReferralCommission(
-            {
-              id: billingId,
-              ...billingData,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-            referralPartner,
-            billingData.referralCommissionAmount,
-            currentUser.uid,
-          );
-        }
-      } catch (err) {
-        console.error("Commission processing error:", err);
-        addToast({
-          title: "Warning",
-          description: "Invoice created, but some commission records failed.",
-          color: "warning",
-        });
-      }
       addToast({ title: "Invoice created", color: "success" });
       setFormData({
         ...emptyForm,
@@ -1274,27 +1238,27 @@ export default function PatientBillingTab({
                         ["Subtotal", fmtCur(calculations.subtotal)],
                         ...(calculations.itemDiscountAmount > 0
                           ? [
-                              [
-                                "Service Discounts",
-                                `– ${fmtCur(calculations.itemDiscountAmount)}`,
-                              ],
-                            ]
+                            [
+                              "Service Discounts",
+                              `– ${fmtCur(calculations.itemDiscountAmount)}`,
+                            ],
+                          ]
                           : []),
                         ...(calculations.mainDiscountAmount > 0
                           ? [
-                              [
-                                "Main Discount",
-                                `– ${fmtCur(calculations.mainDiscountAmount)}`,
-                              ],
-                            ]
+                            [
+                              "Main Discount",
+                              `– ${fmtCur(calculations.mainDiscountAmount)}`,
+                            ],
+                          ]
                           : []),
                         ...(billingSettings?.enableTax
                           ? [
-                              [
-                                `${billingSettings.taxLabel} (${billingSettings.defaultTaxPercentage}%)`,
-                                fmtCur(calculations.taxAmount),
-                              ],
-                            ]
+                            [
+                              `${billingSettings.taxLabel} (${billingSettings.defaultTaxPercentage}%)`,
+                              fmtCur(calculations.taxAmount),
+                            ],
+                          ]
                           : []),
                       ].map(([l, v]) => (
                         <div
@@ -1403,16 +1367,16 @@ export default function PatientBillingTab({
             {/* Conditional reference */}
             {availableMethods.find((m) => m.key === paymentForm.method)
               ?.requiresReference && (
-              <FlatInput
-                hint="Required for this payment method"
-                label="Transaction Reference *"
-                placeholder="Transaction ID / cheque number"
-                value={paymentForm.reference}
-                onChange={(v) =>
-                  setPaymentForm((p) => ({ ...p, reference: v }))
-                }
-              />
-            )}
+                <FlatInput
+                  hint="Required for this payment method"
+                  label="Transaction Reference *"
+                  placeholder="Transaction ID / cheque number"
+                  value={paymentForm.reference}
+                  onChange={(v) =>
+                    setPaymentForm((p) => ({ ...p, reference: v }))
+                  }
+                />
+              )}
 
             <FlatInput
               label="Notes"

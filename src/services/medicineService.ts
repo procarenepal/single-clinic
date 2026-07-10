@@ -328,9 +328,9 @@ export const medicineService = {
       const last =
         paginatedMedicines.length === pageSize
           ? querySnapshot.docs.find(
-            (d) =>
-              d.id === paginatedMedicines[paginatedMedicines.length - 1].id,
-          ) || null
+              (d) =>
+                d.id === paginatedMedicines[paginatedMedicines.length - 1].id,
+            ) || null
           : null;
 
       return { medicines: paginatedMedicines, lastDoc: last as any };
@@ -486,7 +486,6 @@ export const medicineService = {
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
-
         );
       } else {
         q = query(
@@ -570,7 +569,6 @@ export const medicineService = {
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
-
         );
       } else {
         q = query(
@@ -629,7 +627,6 @@ export const medicineService = {
         collection(db, MEDICINE_STOCK_COLLECTION),
         where("medicineId", "==", medicineId),
         where("batchNumber", "==", batchNumber),
-
       );
       const querySnapshot = await getDocs(q);
 
@@ -714,9 +711,7 @@ export const medicineService = {
 
       for (let i = 0; i < medicineIds.length; i += BATCH_SIZE) {
         const batch = medicineIds.slice(i, i + BATCH_SIZE);
-        const constraints: any[] = [
-          where("medicineId", "in", batch),
-        ];
+        const constraints: any[] = [where("medicineId", "in", batch)];
 
         if (branchId) {
           constraints.push(where("branchId", "==", branchId));
@@ -726,12 +721,13 @@ export const medicineService = {
           collection(db, MEDICINE_STOCK_COLLECTION),
           ...constraints,
         );
+
         promises.push(getDocs(q));
       }
 
       const snapshots = await Promise.all(promises);
 
-      snapshots.forEach(snapshot => {
+      snapshots.forEach((snapshot) => {
         snapshot.docs.forEach((d) => {
           const data = d.data();
           const existing = results.find(
@@ -1009,10 +1005,7 @@ export const medicineService = {
           where("branchId", "==", branchId),
         );
       } else {
-        q = query(
-          collection(db, SUPPLIERS_COLLECTION),
-
-        );
+        q = query(collection(db, SUPPLIERS_COLLECTION));
       }
       const querySnapshot = await getDocs(q);
 
@@ -1124,10 +1117,7 @@ export const medicineService = {
           where("branchId", "==", branchId),
         );
       } else {
-        q = query(
-          collection(db, PURCHASE_RECORDS_COLLECTION),
-
-        );
+        q = query(collection(db, PURCHASE_RECORDS_COLLECTION));
       }
 
       const querySnapshot = await getDocs(q);
@@ -1362,10 +1352,7 @@ export const medicineService = {
           where("branchId", "==", branchId),
         );
       } else {
-        q = query(
-          collection(db, SUPPLIER_PAYMENTS_COLLECTION),
-
-        );
+        q = query(collection(db, SUPPLIER_PAYMENTS_COLLECTION));
       }
 
       const snapshot = await getDocs(q);

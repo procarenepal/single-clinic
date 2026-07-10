@@ -159,9 +159,9 @@ export default function ExpertProfilePage() {
       setExpert(data);
 
       const loadTasks = [
-        loadCommissions().catch(() => { }),
-        loadAppointments().catch(() => { }),
-        loadPatients().catch(() => { }),
+        loadCommissions().catch(() => {}),
+        loadAppointments().catch(() => {}),
+        loadPatients().catch(() => {}),
       ];
 
       await Promise.allSettled(loadTasks);
@@ -286,7 +286,7 @@ export default function ExpertProfilePage() {
               (b) => ({ patientId: b.patientId }) as unknown as Appointment,
             ),
           ];
-        } catch (err) { }
+        } catch (err) {}
       }
 
       if (appointmentsData && appointmentsData.length > 0) {
@@ -481,7 +481,10 @@ export default function ExpertProfilePage() {
   });
 
   const getSelectedRangeBusiness = () => {
-    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    const hasRange =
+      (earningsDateRange.start && earningsDateRange.end) ||
+      (globalDateRange.start && globalDateRange.end);
+
     if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + getCommissionBusiness(c),
@@ -493,7 +496,10 @@ export default function ExpertProfilePage() {
   };
 
   const getSelectedRangeCommissionEarned = () => {
-    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    const hasRange =
+      (earningsDateRange.start && earningsDateRange.end) ||
+      (globalDateRange.start && globalDateRange.end);
+
     if (hasRange) {
       return filteredCommissionsForEarnings.reduce(
         (sum, c) => sum + c.commissionAmount,
@@ -508,7 +514,10 @@ export default function ExpertProfilePage() {
   };
 
   const getSelectedRangeCommissionBalance = () => {
-    const hasRange = (earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end);
+    const hasRange =
+      (earningsDateRange.start && earningsDateRange.end) ||
+      (globalDateRange.start && globalDateRange.end);
+
     if (hasRange) {
       return filteredCommissionsForEarnings
         .filter((c) => c.status === "pending")
@@ -798,12 +807,13 @@ export default function ExpertProfilePage() {
             {/* Badges Column */}
             <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-center">
               <span
-                className={`flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1 rounded border ${expert.expertType === "regular"
-                  ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
-                  : expert.expertType === "visiting"
-                    ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
-                    : "bg-primary/10 text-primary border-primary/20"
-                  }`}
+                className={`flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1 rounded border ${
+                  expert.expertType === "regular"
+                    ? "bg-violet-500/10 text-violet-600 border-violet-500/20"
+                    : expert.expertType === "visiting"
+                      ? "bg-teal-500/10 text-teal-600 border-teal-500/20"
+                      : "bg-primary/10 text-primary border-primary/20"
+                }`}
               >
                 <IoBusinessOutline className="w-3.5 h-3.5" />
                 <span className="capitalize">{expert.expertType}</span>
@@ -983,7 +993,8 @@ export default function ExpertProfilePage() {
 
                 <div className="flex justify-between">
                   <span className="text-text-muted">
-                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
+                    {(earningsDateRange.start && earningsDateRange.end) ||
+                    (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Business"
                       : "This Month Business"}
                   </span>
@@ -993,7 +1004,8 @@ export default function ExpertProfilePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-text-muted">
-                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
+                    {(earningsDateRange.start && earningsDateRange.end) ||
+                    (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Commission"
                       : "Lifetime Commission"}
                   </span>
@@ -1003,7 +1015,8 @@ export default function ExpertProfilePage() {
                 </div>
                 <div className="flex justify-between border-t border-border-base/50 pt-2 mt-2">
                   <span className="text-text-muted font-medium">
-                    {(earningsDateRange.start && earningsDateRange.end) || (globalDateRange.start && globalDateRange.end)
+                    {(earningsDateRange.start && earningsDateRange.end) ||
+                    (globalDateRange.start && globalDateRange.end)
                       ? "Filtered Balance"
                       : "Commission Balance"}
                   </span>
@@ -1242,16 +1255,16 @@ export default function ExpertProfilePage() {
                     {(appointmentDateRange.start ||
                       appointmentDateRange.end ||
                       appointmentTypeFilter !== "all") && (
-                        <button
-                          className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
-                          onClick={() => {
-                            setAppointmentDateRange({ start: "", end: "" });
-                            setAppointmentTypeFilter("all");
-                          }}
-                        >
-                          Clear
-                        </button>
-                      )}
+                      <button
+                        className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors ml-2"
+                        onClick={() => {
+                          setAppointmentDateRange({ start: "", end: "" });
+                          setAppointmentTypeFilter("all");
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1290,14 +1303,15 @@ export default function ExpertProfilePage() {
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <span
-                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${appointment.status === "completed"
-                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                  : appointment.status === "scheduled"
-                                    ? "bg-primary/10 text-primary border-primary/20"
-                                    : appointment.status === "cancelled"
-                                      ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                      : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                  }`}
+                                className={`inline-flex px-2 py-0.5 border rounded text-[11px] font-bold tracking-wide uppercase ${
+                                  appointment.status === "completed"
+                                    ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                    : appointment.status === "scheduled"
+                                      ? "bg-primary/10 text-primary border-primary/20"
+                                      : appointment.status === "cancelled"
+                                        ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                        : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                }`}
                               >
                                 {appointment.status}
                               </span>
