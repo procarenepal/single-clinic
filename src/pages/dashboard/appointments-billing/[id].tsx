@@ -1013,8 +1013,15 @@ export default function InvoiceDetailPage() {
                           <p className="font-medium text-[rgb(var(--color-text))] text-[13px]">
                             {item.appointmentTypeName}
                           </p>
+                          {item.doctorName &&
+                            item.doctorName !== "Unknown Doctor" &&
+                            item.doctorName !== "Expert Cabin" && (
+                              <p className="text-[12px] text-mountain-500 mt-0.5">
+                                Assigned: {item.doctorName}
+                              </p>
+                            )}
                           {item.commission > 0 && (
-                            <p className="text-[11px] text-[rgb(var(--color-text-muted))]">
+                            <p className="text-[11px] text-[rgb(var(--color-text-muted))] mt-0.5">
                               Commission: {item.commission}%
                             </p>
                           )}

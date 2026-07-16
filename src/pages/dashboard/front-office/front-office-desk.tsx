@@ -250,6 +250,23 @@ export default function FrontOfficeDesk() {
   const [finaliseSelectedItems, setFinaliseSelectedItems] = useState<string[]>(
     [],
   );
+  const [itemExperts, setItemExperts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (apptToFinalise) {
+      const rec = (apptToFinalise as any).recommendedProcedure;
+      if (rec?.items && Array.isArray(rec.items)) {
+        setFinaliseSelectedItems(rec.items.map((i: any) => i.id));
+        const initialExperts: Record<string, string> = {};
+        rec.items.forEach((i: any) => {
+          initialExperts[i.id] = "";
+        });
+        setItemExperts(initialExperts);
+      }
+    } else {
+      setItemExperts({});
+    }
+  }, [apptToFinalise]);
 
   const [procedure, setProcedure] = useState({
     procedureType: "CO2 Laser Resurfacing",
@@ -378,6 +395,16 @@ export default function FrontOfficeDesk() {
     sendDirectlyToCabin: false,
     addDoctorCommission: true,
     addExpertCommission: true,
+    clinicians: [
+      {
+        id: crypto.randomUUID(),
+        clinicianType: "doctor" as "doctor" | "expert",
+        clinicianId: "",
+        appointmentTypeId: "",
+        chargeConsultation: true,
+        addCommission: true,
+      },
+    ],
   });
 
   const handleOpenQuickIntake = () => {
@@ -411,6 +438,16 @@ export default function FrontOfficeDesk() {
       sendDirectlyToCabin: false,
       addDoctorCommission: true,
       addExpertCommission: true,
+      clinicians: [
+        {
+          id: crypto.randomUUID(),
+          clinicianType: "doctor",
+          clinicianId: doctors.length > 0 ? doctors[0].id : "",
+          appointmentTypeId: consultType ? consultType.id : (appointmentTypes[0]?.id || ""),
+          chargeConsultation: true,
+          addCommission: true,
+        },
+      ],
     });
 
     setIntakeMode("new");
@@ -783,12 +820,17 @@ export default function FrontOfficeDesk() {
 
           isApptTypeConsultation = nameLower.includes("consult");
 
-          if (
+          let shouldChargeThisItem =
             apptType.billAtFrontDesk ||
             nameLower.includes("hair analy") ||
             nameLower.includes("skin analy") ||
-            isApptTypeConsultation
-          ) {
+            isApptTypeConsultation;
+
+          if (isApptTypeConsultation && !generateConsultationFee) {
+            shouldChargeThisItem = false;
+          }
+
+          if (shouldChargeThisItem) {
             apptTypeItem = {
               id: crypto.randomUUID(),
               appointmentTypeId: apptType.id,
@@ -988,8 +1030,10 @@ export default function FrontOfficeDesk() {
         "confirmed",
       );
 
-      // Generate consultation bill if doctor is assigned
-      if (appt.doctorId && appt.doctorId !== "unassigned") {
+      // Generate consultation bill if doctor is assigned AND no bill exists yet
+      const hasExistingBill = !!appt.billingId || !!(appt as any).consultationBillingId;
+
+      if (appt.doctorId && appt.doctorId !== "unassigned" && !hasExistingBill) {
         await createConsultationBill(
           appt.patientId,
           appt.doctorId,
@@ -2125,14 +2169,14 @@ export default function FrontOfficeDesk() {
         hasExpert={
           selectedAppointment
             ? !!selectedAppointment.assignedExpertId &&
-              selectedAppointment.assignedExpertId !== "unassigned"
+            selectedAppointment.assignedExpertId !== "unassigned"
             : false
         }
         historicalProcedures={historicalProcedures}
         isDoctorCabin={
           selectedAppointment
             ? getPatientStage(selectedAppointment) === "doctor" ||
-              !!currentDoctorId
+            !!currentDoctorId
             : false
         }
         isOpen={isProcedureModalOpen}
@@ -2257,8 +2301,30 @@ export default function FrontOfficeDesk() {
   const handleQuickIntakeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const hasDoctor = !!quickIntakeForm.doctorId;
-    const hasExpert = !!quickIntakeForm.assignedExpertId;
+    const firstClinician = quickIntakeForm.clinicians?.[0] || {
+      clinicianType: "doctor",
+      clinicianId: "",
+      appointmentTypeId: quickIntakeForm.appointmentTypeId, // Fallback if missing
+      chargeConsultation: false,
+      addCommission: false
+    };
+    const mappedDoctorId = firstClinician.clinicianType === "doctor" ? firstClinician.clinicianId : "unassigned";
+    const mappedExpertId = firstClinician.clinicianType === "expert" ? firstClinician.clinicianId : "";
+    const addDocComm = firstClinician.clinicianType === "doctor" ? firstClinician.addCommission : false;
+    const addExpComm = firstClinician.clinicianType === "expert" ? firstClinician.addCommission : false;
+    const genConsBill = firstClinician.chargeConsultation || false;
+    const mappedApptTypeId = firstClinician.appointmentTypeId || quickIntakeForm.appointmentTypeId;
+
+    // We mutate the form object purely for the rest of the existing function logic to read from it
+    quickIntakeForm.doctorId = mappedDoctorId;
+    quickIntakeForm.assignedExpertId = mappedExpertId;
+    quickIntakeForm.appointmentTypeId = mappedApptTypeId;
+    quickIntakeForm.addDoctorCommission = addDocComm;
+    quickIntakeForm.addExpertCommission = addExpComm;
+    quickIntakeForm.generateConsultationBill = genConsBill;
+
+    const hasDoctor = !!quickIntakeForm.doctorId && quickIntakeForm.doctorId !== "unassigned";
+    const hasExpert = !!quickIntakeForm.assignedExpertId && quickIntakeForm.assignedExpertId !== "unassigned";
     const hasReferral = quickIntakeForm.referrals.length > 0;
 
     if (intakeMode === "new") {
@@ -2640,8 +2706,8 @@ export default function FrontOfficeDesk() {
           )
             ? "package-session"
             : quickIntakeForm.appointmentTypeId ||
-              appointmentTypes[0]?.id ||
-              "default",
+            appointmentTypes[0]?.id ||
+            "default",
           patientPackageId: quickIntakeForm.appointmentTypeId.startsWith(
             "consume_pkg_",
           )
@@ -2770,6 +2836,41 @@ export default function FrontOfficeDesk() {
           ).catch((err) => console.error("Auto check-in SMS failed:", err));
         }
 
+        if (quickIntakeForm.clinicians && quickIntakeForm.clinicians.length > 1) {
+          for (let i = 1; i < quickIntakeForm.clinicians.length; i++) {
+            const extraClin = quickIntakeForm.clinicians[i];
+            if (!extraClin.clinicianId || extraClin.clinicianId === "unassigned") continue;
+
+            const extraDocId = extraClin.clinicianType === "doctor" ? extraClin.clinicianId : "unassigned";
+            const extraExpId = extraClin.clinicianType === "expert" ? extraClin.clinicianId : undefined;
+
+            const extraApptData = {
+              ...apptData,
+              doctorId: extraDocId,
+              assignedExpertId: extraExpId,
+              appointmentTypeId: extraClin.appointmentTypeId || apptData.appointmentTypeId,
+            };
+
+            const extraApptId = await appointmentService.createAppointment(extraApptData);
+
+            if (extraClin.chargeConsultation || hasApptFee) {
+              try {
+                await createConsultationBill(
+                  patientIdToUse,
+                  extraClin.clinicianId,
+                  extraApptId,
+                  quickIntakeForm.reason.trim() || "Walk-in General Checkup",
+                  extraClin.addCommission,
+                  extraClin.appointmentTypeId || quickIntakeForm.appointmentTypeId,
+                  extraClin.chargeConsultation,
+                );
+              } catch (billErr) {
+                console.error("Error generating extra quick intake bill:", billErr);
+              }
+            }
+          }
+        }
+
         addToast({
           title: "Quick Check-In Successful",
           description: `${patientDisplayName} is checked in successfully (Reg# ${regNumberToUse}).`,
@@ -2807,6 +2908,16 @@ export default function FrontOfficeDesk() {
         addExpertCommission: true,
         startSessionInstantly: false,
         sendDirectlyToCabin: false,
+        clinicians: [
+          {
+            id: crypto.randomUUID(),
+            clinicianType: "doctor",
+            clinicianId: doctors.length > 0 ? doctors[0].id : "",
+            appointmentTypeId: appointmentTypes[0]?.id || "",
+            chargeConsultation: true,
+            addCommission: true,
+          },
+        ],
       });
     } catch (err) {
       console.error("Error creating walk-in intake:", err);
@@ -2886,21 +2997,39 @@ export default function FrontOfficeDesk() {
             finaliseSelectedItems.includes(i.id),
           );
 
-          procedureItemsToAdd = billedItems.map((i: any) => ({
-            id: crypto.randomUUID(),
-            appointmentTypeId:
-              apptToFinalise.appointmentTypeId || "procedure-fee",
-            appointmentTypeName: `${i.name} (Procedure Fee)`,
-            price: i.fee,
-            quantity: 1,
-            commission: defaultComm,
-            doctorId: clinicianId,
-            doctorName: clinicianName,
-            discountValue: 0,
-            discountType: "percent" as const,
-            discountAmount: 0,
-            amount: i.fee,
-          }));
+          procedureItemsToAdd = billedItems.map((i: any) => {
+            const assignedExpertId = itemExperts[i.id];
+            let itemClinicianId = clinicianId;
+            let itemClinicianName = clinicianName;
+            let itemComm = defaultComm;
+
+            if (assignedExpertId) {
+              const cl =
+                experts.find((e) => e.id === assignedExpertId) ||
+                doctors.find((d) => d.id === assignedExpertId);
+              if (cl) {
+                itemClinicianId = cl.id;
+                itemClinicianName = cl.name;
+                itemComm = cl.defaultCommission || 0;
+              }
+            }
+
+            return {
+              id: crypto.randomUUID(),
+              appointmentTypeId:
+                apptToFinalise.appointmentTypeId || "procedure-fee",
+              appointmentTypeName: `${i.name} (Procedure Fee)`,
+              price: i.fee,
+              quantity: 1,
+              commission: itemComm,
+              doctorId: itemClinicianId,
+              doctorName: itemClinicianName,
+              discountValue: 0,
+              discountType: "percent" as const,
+              discountAmount: 0,
+              amount: i.fee,
+            };
+          });
           totalFee = billedItems.reduce(
             (sum: number, i: any) => sum + i.fee,
             0,
@@ -2953,11 +3082,10 @@ export default function FrontOfficeDesk() {
               newPaid >= newTotal ? "paid" : newPaid > 0 ? "partial" : "unpaid";
             const newStatus = newPaymentStatus === "paid" ? "paid" : "draft";
 
-            // If an expert performed the procedure, append the recommending doctor to referrals
+            // Append the recommending doctor to referrals for commission
             let updatedReferrals = billing.referrals || [];
 
             if (
-              isExpert &&
               apptToFinalise.doctorId &&
               apptToFinalise.doctorId !== "unassigned"
             ) {
@@ -2991,11 +3119,11 @@ export default function FrontOfficeDesk() {
                     updatedReferrals = updatedReferrals.map((r) =>
                       r.id === recommendingDoctor.id && r.type === "doctor"
                         ? {
-                            ...r,
-                            commissionAmount:
-                              r.commissionAmount +
-                              (totalFee * defaultComm) / 100,
-                          }
+                          ...r,
+                          commissionAmount:
+                            r.commissionAmount +
+                            (totalFee * defaultComm) / 100,
+                        }
                         : r,
                     );
                   }
@@ -3046,18 +3174,12 @@ export default function FrontOfficeDesk() {
             doctors.find((d) => d.id === clinicianId) ||
             experts.find((e) => e.id === clinicianId);
 
-          const draftBillingItems = procedureItemsToAdd.map((item) => ({
-            ...item,
-            commission: (docInfo as any)?.defaultCommission || 0,
-            doctorId: clinicianId,
-            doctorName: docInfo?.name || "Clinician",
-          }));
+          const draftBillingItems = procedureItemsToAdd;
 
           const referrals: any[] = [];
 
-          // If this is an expert procedure, automatically add the recommending doctor for commission
+          // Automatically add the recommending doctor for commission
           if (
-            isExpert &&
             apptToFinalise.doctorId &&
             apptToFinalise.doctorId !== "unassigned"
           ) {
@@ -3122,9 +3244,25 @@ export default function FrontOfficeDesk() {
         }
       }
 
-      await appointmentService.updateAppointment(apptToFinalise.id, {
+      let firstAssignedExpert = "";
+      if (rec && rec.items && Array.isArray(rec.items)) {
+        for (const i of rec.items) {
+          if (finaliseSelectedItems.includes(i.id) && itemExperts[i.id]) {
+            firstAssignedExpert = itemExperts[i.id];
+            break;
+          }
+        }
+      }
+
+      const updates: any = {
         recommendedProcedure: null,
-      } as any);
+      };
+
+      if (firstAssignedExpert) {
+        updates.assignedExpertId = firstAssignedExpert;
+      }
+
+      await appointmentService.updateAppointment(apptToFinalise.id, updates);
 
       addToast({
         title: accept ? "Procedure Billed" : "Procedure Declined",
@@ -3496,7 +3634,7 @@ export default function FrontOfficeDesk() {
           icon: <IoTimeOutline className="w-4 h-4" />,
           colorClass:
             "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-          onClick: () => {},
+          onClick: () => { },
         };
       }
       const isOnlyCons =
@@ -3548,7 +3686,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => {},
+            onClick: () => { },
           };
         }
 
@@ -3581,7 +3719,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => {},
+            onClick: () => { },
           };
         }
 
@@ -3617,7 +3755,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => {},
+            onClick: () => { },
           };
         }
 
@@ -3634,7 +3772,7 @@ export default function FrontOfficeDesk() {
             icon: <IoTimeOutline className="w-4 h-4" />,
             colorClass:
               "bg-surface-3 text-text-muted cursor-not-allowed border border-border-base",
-            onClick: () => {},
+            onClick: () => { },
           };
         }
 
@@ -3651,7 +3789,7 @@ export default function FrontOfficeDesk() {
           icon: <IoCheckmarkCircleOutline className="w-4 h-4 text-green-500" />,
           colorClass:
             "bg-green-500/10 text-green-600 border border-green-500/20 cursor-default",
-          onClick: () => {},
+          onClick: () => { },
         };
     }
   };
@@ -3856,12 +3994,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                        (b) => b.id === (a as any).consultationBillingId,
-                      )
+                      (b) => b.id === (a as any).consultationBillingId,
+                    )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                      consBill.paymentStatus === "paid"
+                    consBill.paymentStatus === "paid"
                     : false;
                   const isConsBillPending =
                     hasDoc && consBill && !isConsBillPaid;
@@ -3895,21 +4033,21 @@ export default function FrontOfficeDesk() {
             {(!currentDoctorId ||
               hasFullFrontOfficeAccess ||
               currentExpertId) && (
-              <StatCard
-                colorClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                icon={<IoPeopleOutline className="w-5 h-5" />}
-                label="In Expert Cabin"
-                value={
-                  appointments
-                    .filter(
-                      (a) =>
-                        !currentExpertId ||
-                        a.assignedExpertId === currentExpertId,
-                    )
-                    .filter((a) => getPatientStage(a) === "expert").length
-                }
-              />
-            )}
+                <StatCard
+                  colorClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                  icon={<IoPeopleOutline className="w-5 h-5" />}
+                  label="In Expert Cabin"
+                  value={
+                    appointments
+                      .filter(
+                        (a) =>
+                          !currentExpertId ||
+                          a.assignedExpertId === currentExpertId,
+                      )
+                      .filter((a) => getPatientStage(a) === "expert").length
+                  }
+                />
+              )}
             {(hasFullFrontOfficeAccess || currentExpertId) && (
               <>
                 <StatCard
@@ -3951,10 +4089,10 @@ export default function FrontOfficeDesk() {
         const dateLabel = isSelectedToday
           ? "Today"
           : selectedDate.toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            });
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          });
 
         const goToPrev = () => {
           const d = new Date(selectedDate);
@@ -4025,11 +4163,10 @@ export default function FrontOfficeDesk() {
                 }}
               />
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                  isSelectedToday
-                    ? "bg-primary/10 text-primary"
-                    : "bg-warning/10 text-warning-600"
-                }`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isSelectedToday
+                  ? "bg-primary/10 text-primary"
+                  : "bg-warning/10 text-warning-600"
+                  }`}
               >
                 {isSelectedToday ? "● Live" : "📅 Archive"}
               </span>
@@ -4072,12 +4209,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                        (b) => b.id === (a as any).consultationBillingId,
-                      )
+                      (b) => b.id === (a as any).consultationBillingId,
+                    )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                      consBill.paymentStatus === "paid"
+                    consBill.paymentStatus === "paid"
                     : false;
 
                   if (
@@ -4123,12 +4260,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                        (b) => b.id === (a as any).consultationBillingId,
-                      )
+                      (b) => b.id === (a as any).consultationBillingId,
+                    )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                      consBill.paymentStatus === "paid"
+                    consBill.paymentStatus === "paid"
                     : false;
                   const isConsBillPending =
                     hasDoc && consBill && !isConsBillPaid;
@@ -4146,12 +4283,12 @@ export default function FrontOfficeDesk() {
                   const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
-                        (b) => b.id === (a as any).consultationBillingId,
-                      )
+                      (b) => b.id === (a as any).consultationBillingId,
+                    )
                     : null;
                   const isConsBillPaid = consBill
                     ? consBill.status === "paid" ||
-                      consBill.paymentStatus === "paid"
+                    consBill.paymentStatus === "paid"
                     : false;
 
                   return !(hasDoc && consBill && !isConsBillPaid);
@@ -4220,21 +4357,19 @@ export default function FrontOfficeDesk() {
               .map((tab) => (
                 <button
                   key={tab.id}
-                  className={`px-4 py-2 text-[12px] font-semibold rounded transition flex items-center gap-2 border border-transparent ${
-                    activeTab === tab.id
-                      ? "bg-surface text-primary shadow-sm border-border-base/50"
-                      : "text-text-muted hover:text-text-main hover:bg-surface-3/50"
-                  }`}
+                  className={`px-4 py-2 text-[12px] font-semibold rounded transition flex items-center gap-2 border border-transparent ${activeTab === tab.id
+                    ? "bg-surface text-primary shadow-sm border-border-base/50"
+                    : "text-text-muted hover:text-text-main hover:bg-surface-3/50"
+                    }`}
                   type="button"
                   onClick={() => setActiveTab(tab.id as any)}
                 >
                   {tab.name}
                   <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                      activeTab === tab.id
-                        ? "bg-primary/10 text-primary"
-                        : "bg-surface-3 text-text-muted"
-                    }`}
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === tab.id
+                      ? "bg-primary/10 text-primary"
+                      : "bg-surface-3 text-text-muted"
+                      }`}
                   >
                     {tab.count}
                   </span>
@@ -4321,9 +4456,9 @@ export default function FrontOfficeDesk() {
               </p>
               <div className="bg-surface-2 border border-border-base p-3 rounded mb-5">
                 {(apptToFinalise as any).recommendedProcedure?.items &&
-                Array.isArray(
-                  (apptToFinalise as any).recommendedProcedure.items,
-                ) ? (
+                  Array.isArray(
+                    (apptToFinalise as any).recommendedProcedure.items,
+                  ) ? (
                   <div className="flex flex-col gap-2">
                     {(apptToFinalise as any).recommendedProcedure.items.map(
                       (item: any) => (
@@ -4350,9 +4485,37 @@ export default function FrontOfficeDesk() {
                               {item.name}
                             </span>
                           </Checkbox>
-                          <span className="text-[12.5px] text-text-muted font-semibold">
-                            NPR {item.fee.toLocaleString()}
-                          </span>
+                          <div className="flex flex-col items-end gap-1 mt-2 sm:mt-0">
+                            <span className="text-[12.5px] text-text-muted font-semibold">
+                              NPR {item.fee.toLocaleString()}
+                            </span>
+                            <select
+                              className="text-[11px] border border-border-base rounded px-1 py-0.5 bg-surface-2 w-40 focus:outline-primary"
+                              value={itemExperts[item.id] || ""}
+                              onChange={(e) =>
+                                setItemExperts((prev) => ({
+                                  ...prev,
+                                  [item.id]: e.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Auto (Prescribing Clinician)</option>
+                              <optgroup label="Experts">
+                                {experts.map((exp) => (
+                                  <option key={exp.id} value={exp.id}>
+                                    {exp.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                              <optgroup label="Doctors">
+                                {doctors.map((doc) => (
+                                  <option key={doc.id} value={doc.id}>
+                                    {doc.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            </select>
+                          </div>
                         </div>
                       ),
                     )}

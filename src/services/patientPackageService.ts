@@ -176,6 +176,14 @@ export const patientPackageService = {
       const totalSessions = data.totalSessions || 0;
       const sessions = data.sessions || [];
 
+      if (data.status === "expired") {
+        throw new Error("Cannot consume session: Package is expired");
+      }
+
+      if (currentUsed >= totalSessions) {
+        throw new Error("Cannot consume session: No sessions remaining in this package");
+      }
+
       const updates: any = {
         usedSessions: increment(1),
         updatedAt: Timestamp.now(),

@@ -707,6 +707,11 @@ export const appointmentBillingService = {
         throw new Error("Billing record not found");
       }
 
+      if (billing.paymentStatus === "paid" && paymentAmount > 0) {
+        console.warn(`Attempted to record payment on already paid invoice: ${id}`);
+        throw new Error("This invoice is already fully paid.");
+      }
+
       // Handle discount
       const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
       const newMainDiscountAmount =

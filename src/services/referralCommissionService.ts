@@ -54,6 +54,19 @@ class ReferralCommissionService {
     try {
       if (commissionAmount <= 0) return null;
 
+      // Prevent duplicate commissions by checking if any already exist for this billingId
+      const existingCommissionsQuery = query(
+        collection(db, this.collectionName),
+        where("billingId", "==", billing.id),
+        where("partnerId", "==", partner.id)
+      );
+      const existingDocs = await getDocs(existingCommissionsQuery);
+      
+      if (!existingDocs.empty) {
+        console.warn(`Referral commission already exists for partner ${partner.id} on billing ID ${billing.id}. Skipping.`);
+        return null;
+      }
+
       const commissionData: Omit<ReferralCommission, "id"> = {
         partnerId: partner.id!,
         partnerName: partner.name,
@@ -290,6 +303,15 @@ class ReferralCommissionService {
 
       const currentCommission = commissionDoc.data() as ReferralCommission;
 
+      if (paidAmount <= 0) {
+        throw new Error("Payment amount must be greater than 0");
+      }
+
+      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
+      if (paidAmount > remainingAmount) {
+        throw new Error("Payment amount cannot exceed remaining commission balance.");
+      }
+
       const updateData: any = {
         paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
         paymentMethod,
@@ -396,6 +418,23 @@ class ReferralCommissionService {
   ): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+      
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+      
+      const commissionData = commissionDoc.data() as ReferralCommission;
+      
+      if (status === "cancelled" && commissionData.status !== "cancelled") {
+        // Revert the commission balances for the partner
+        const partnerRef = doc(db, "referralPartners", commissionData.partnerId);
+        await updateDoc(partnerRef, {
+          totalCommissionEarned: increment(-commissionData.commissionAmount),
+          totalCommissionBalance: increment(-(commissionData.commissionAmount - (commissionData.paidAmount || 0))),
+          updatedAt: Timestamp.now(),
+        });
+      }
 
       await updateDoc(docRef, {
         status,

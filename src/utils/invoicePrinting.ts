@@ -2,6 +2,7 @@ import {
   getPrintBrandingCSS,
   getPrintHeaderHTML,
   getPrintFooterHTML,
+  getPrintFontsLinkHTML,
 } from "./printBranding";
 
 import { PathologyBilling, AppointmentBilling } from "@/types/models";
@@ -62,6 +63,7 @@ export const generateInvoiceHTML = (
   return `<!DOCTYPE html>
 <html>
 <head>
+  ${layoutConfig ? getPrintFontsLinkHTML() : ""}
   <title>Invoice - ${billing.invoiceNumber}</title>
   <style>
     @page {
@@ -109,7 +111,7 @@ export const generateInvoiceHTML = (
       margin: 0;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #475569;
+      color: #1e293b;
     }
     .document-info {
       display: flex;
@@ -131,15 +133,15 @@ export const generateInvoiceHTML = (
     .bill-to-section h3 {
       margin: 0 0 4px 0;
       font-size: 11px;
-      font-weight: 700;
-      color: #64748b;
+      font-weight: 800;
+      color: #334155;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
     .bill-to-section p {
       margin: 1px 0;
       font-size: 12px;
-      color: #475569;
+      color: #1e293b;
     }
     .items-table {
       width: 100%;
@@ -150,16 +152,16 @@ export const generateInvoiceHTML = (
       border: ${isThermal ? "none" : "1px solid #e2e8f0"};
       padding: ${isThermal ? "2px 0" : "6px 8px"};
       font-size: ${isThermal ? "10px" : "12px"};
-      color: #475569;
+      color: #1e293b;
     }
     .items-table th {
       background-color: ${isThermal ? "transparent" : "#f8fafc"};
       text-align: center;
-      font-weight: 700;
+      font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       font-size: ${isThermal ? "10px" : "10px"};
-      color: #64748b;
+      color: #334155;
     }
     .summary-section {
       display: flex;
@@ -248,9 +250,8 @@ export const generateInvoiceHTML = (
       </div>
     </div>
     
-    ${
-      footerHTML ||
-      `
+    ${footerHTML ||
+    `
     <div class="footer">
       <p>Thank you for choosing us</p>
       <p>${new Date().toLocaleString()}</p>
@@ -261,7 +262,9 @@ export const generateInvoiceHTML = (
   
   <script>
     window.onload = () => {
-      setTimeout(() => { window.print(); window.close(); }, 500);
+      document.fonts.ready.then(() => {
+        setTimeout(() => { window.print(); window.close(); }, 800);
+      });
     }
   </script>
 </body>
@@ -321,7 +324,10 @@ export const generateAppointmentInvoiceHTML = (
       (item, index) =>
         `<tr>
           <td class="text-center" style="text-align: center;">${index + 1}</td>
-          <td class="text-center" style="text-align: center;">${item.appointmentTypeName}</td>
+          <td class="text-center" style="text-align: center;">
+            <div style="font-weight: 500;">${item.appointmentTypeName}</div>
+            ${item.doctorName && item.doctorName !== 'Unknown Doctor' && item.doctorName !== 'Expert Cabin' ? `<div style="font-size: 0.9em; color: #334155; font-weight: 600; margin-top: 2px;">Assigned: ${item.doctorName}</div>` : ''}
+          </td>
           <td class="text-center" style="text-align: center;">${item.quantity}</td>
           <td class="text-center" style="text-align: center;">${formatCurrency(item.price)}</td>
           <td class="text-center" style="text-align: center;">${formatCurrency(item.amount)}</td>
@@ -368,8 +374,8 @@ export const generateAppointmentInvoiceHTML = (
     ) {
       const name =
         item.doctorName &&
-        item.doctorName !== "Unknown Doctor" &&
-        item.doctorName !== "Expert Cabin"
+          item.doctorName !== "Unknown Doctor" &&
+          item.doctorName !== "Expert Cabin"
           ? item.doctorName
           : "Expert Cabin";
 
@@ -388,6 +394,7 @@ export const generateAppointmentInvoiceHTML = (
   return `<!DOCTYPE html>
 <html>
 <head>
+  ${layoutConfig ? getPrintFontsLinkHTML() : ""}
   <title>Invoice - ${invoice.invoiceNumber}</title>
   <style>
     @page {
@@ -450,8 +457,8 @@ export const generateAppointmentInvoiceHTML = (
     .bill-to-section h3 {
       margin: 0 0 6px 0;
       font-size: 11px;
-      font-weight: 700;
-      color: #64748b;
+      font-weight: 800;
+      color: #334155;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
@@ -474,12 +481,12 @@ export const generateAppointmentInvoiceHTML = (
     }
     .items-table th {
       background-color: #f1f5f9;
-      font-weight: 700;
+      font-weight: 800;
       text-align: center;
       text-transform: uppercase;
       font-size: 10px;
       letter-spacing: 0.05em;
-      color: #475569;
+      color: #1e293b;
     }
     .summary-section {
       display: flex;
@@ -602,10 +609,9 @@ export const generateAppointmentInvoiceHTML = (
       ${isThermal ? cliniciansHtml : ""}
     </div>
     
-    ${
-      !isThermal && footerHTML
-        ? footerHTML
-        : `
+    ${!isThermal && footerHTML
+      ? footerHTML
+      : `
     <div style="margin-top: 15px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 5px;">
       <p>Thank you for choosing us</p>
       ${isThermal ? `<p>${new Date().toLocaleString()}</p>` : ""}
@@ -616,7 +622,9 @@ export const generateAppointmentInvoiceHTML = (
   
   <script>
     window.onload = () => {
-      setTimeout(() => { window.print(); window.close(); }, 500);
+      document.fonts.ready.then(() => {
+        setTimeout(() => { window.print(); window.close(); }, 800);
+      });
     }
   </script>
 </body>
@@ -806,7 +814,9 @@ export const generatePatientSlipHTML = (
   
   <script>
     window.onload = () => {
-      setTimeout(() => { window.print(); window.close(); }, 500);
+      document.fonts.ready.then(() => {
+        setTimeout(() => { window.print(); window.close(); }, 800);
+      });
     }
   </script>
 </body>

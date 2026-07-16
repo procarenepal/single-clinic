@@ -165,6 +165,11 @@ class StaffCommissionService {
         throw new Error("Payment amount must be greater than 0");
       }
 
+      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
+      if (paidAmount > remainingAmount) {
+        throw new Error("Payment amount cannot exceed remaining commission balance.");
+      }
+
       const updateData: any = {
         paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
         paymentMethod,

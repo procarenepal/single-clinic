@@ -545,6 +545,11 @@ export const pathologyBillingService = {
         throw new Error("Billing record not found");
       }
 
+      if (billing.paymentStatus === "paid" && paymentAmount > 0) {
+        console.warn(`Attempted to record payment on already paid pathology invoice: ${id}`);
+        throw new Error("This invoice is already fully paid.");
+      }
+
       const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
       const newDiscountAmount = (billing.discountAmount || 0) + discountAmount;
       const newPaidAmount = (billing.paidAmount || 0) + paymentAmount;

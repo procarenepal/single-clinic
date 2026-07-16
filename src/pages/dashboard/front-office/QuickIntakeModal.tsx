@@ -262,38 +262,6 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                             }
                           />
                         </div>
-                        <div className="sm:col-span-2">
-                          <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                            Appointment Category
-                          </label>
-                          <Autocomplete
-                            className="w-full"
-                            placeholder="Search category..."
-                            selectedKey={quickIntakeForm.appointmentTypeId}
-                            onSelectionChange={(key) => {
-                              if (key) {
-                                setQuickIntakeForm((prev: any) => ({
-                                  ...prev,
-                                  appointmentTypeId: String(key),
-                                }));
-                              }
-                            }}
-                          >
-                            {appointmentTypes.map((t) => (
-                              <AutocompleteItem key={t.id} textValue={t.name}>
-                                {t.name}
-                              </AutocompleteItem>
-                            ))}
-                            {packages.map((pkg) => (
-                              <AutocompleteItem
-                                key={`pkg_${pkg.id}`}
-                                textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}
-                              >
-                                📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
-                              </AutocompleteItem>
-                            ))}
-                          </Autocomplete>
-                        </div>
                       </div>
                     </>
                   ) : (
@@ -497,168 +465,240 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                               }
                             />
                           </div>
-                          <div className="sm:col-span-2">
-                            <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                              Appointment Category
-                            </label>
-                            <Autocomplete
-                              className="w-full"
-                              placeholder="Search category..."
-                              selectedKey={quickIntakeForm.appointmentTypeId}
-                              onSelectionChange={(key) => {
-                                if (key) {
-                                  setQuickIntakeForm((prev: any) => ({
-                                    ...prev,
-                                    appointmentTypeId: String(key),
-                                  }));
-                                }
-                              }}
-                            >
-                              {appointmentTypes.map((t) => (
-                                <AutocompleteItem key={t.id} textValue={t.name}>
-                                  {t.name}
-                                </AutocompleteItem>
-                              ))}
-                              {activePatientPackages.map((pkg) => (
-                                <AutocompleteItem
-                                  key={`consume_pkg_${pkg.id}`}
-                                  textValue={`⭐ Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`}
-                                >
-                                  ⭐ Consume Session: {pkg.packageName} (
-                                  {pkg.usedSessions}/{pkg.totalSessions} used)
-                                </AutocompleteItem>
-                              ))}
-                              {packages.map((pkg) => (
-                                <AutocompleteItem
-                                  key={`pkg_${pkg.id}`}
-                                  textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}
-                                >
-                                  📦 {pkg.name} (NPR{" "}
-                                  {pkg.price.toLocaleString()})
-                                </AutocompleteItem>
-                              ))}
-                            </Autocomplete>
-                          </div>
                         </div>
                       </div>
                     </>
                   )}
 
-                  {/* Assigned Doctor & Assigned Expert */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                        Assigned Doctor (Internal)
-                      </label>
-                      <select
-                        className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                        value={quickIntakeForm.doctorId}
-                        onChange={(e) =>
-                          setQuickIntakeForm((prev) => ({
+                  {/* Assigned Clinicians */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center border-b border-border-base pb-1">
+                      <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider">
+                        Assigned Clinicians
+                      </h4>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-[11px] font-bold text-primary border border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 rounded transition-colors"
+                        onClick={() => {
+                          setQuickIntakeForm((prev: any) => ({
                             ...prev,
-                            doctorId: e.target.value,
-                          }))
-                        }
+                            clinicians: [
+                              ...(prev.clinicians || []),
+                              {
+                                id: crypto.randomUUID(),
+                                clinicianType: "doctor",
+                                clinicianId: "",
+                                chargeConsultation: true,
+                                addCommission: true,
+                              },
+                            ],
+                          }));
+                        }}
                       >
-                        <option value="">None / Unassigned</option>
-                        {doctors
-                          .filter((_d: any) => _d.isActive !== false)
-                          .map((d) => (
-                            <option key={d.id} value={d.id}>
-                              Dr. {d.name} ({d.speciality || "GP"})
-                            </option>
-                          ))}
-                      </select>
-                      {quickIntakeForm.doctorId &&
-                        quickIntakeForm.doctorId !== "unassigned" && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <input
-                              checked={quickIntakeForm.generateConsultationBill}
-                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                              id="generateConsultationBill"
-                              type="checkbox"
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  generateConsultationBill: e.target.checked,
-                                }))
-                              }
-                            />
-                            <label
-                              className="text-[11px] text-text-muted font-medium cursor-pointer select-none"
-                              htmlFor="generateConsultationBill"
-                            >
-                              Charge Consultation Fee
-                            </label>
+                        + Add Clinician
+                      </button>
+                    </div>
 
-                            <input
-                              checked={quickIntakeForm.addDoctorCommission}
-                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer ml-3"
-                              id="addClinicianCommissionDoc"
-                              type="checkbox"
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
+                    {(quickIntakeForm.clinicians || []).map(
+                      (row: any, idx: number) => (
+                        <div
+                          key={row.id}
+                          className="border border-border-base rounded p-3 bg-surface-2/30 relative mt-2"
+                        >
+                          {quickIntakeForm.clinicians.length > 1 && (
+                            <button
+                              type="button"
+                              className="absolute -top-2.5 -right-2.5 w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center border border-red-200 hover:bg-red-200"
+                              onClick={() => {
+                                setQuickIntakeForm((prev: any) => ({
                                   ...prev,
-                                  addDoctorCommission: e.target.checked,
-                                }))
-                              }
-                            />
-                            <label
-                              className="text-[11px] text-text-muted font-medium cursor-pointer select-none"
-                              htmlFor="addClinicianCommissionDoc"
+                                  clinicians: prev.clinicians.filter(
+                                    (c: any) => c.id !== row.id,
+                                  ),
+                                }));
+                              }}
                             >
-                              Add commission
-                            </label>
+                              <IoCloseOutline className="w-4 h-4" />
+                            </button>
+                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                                Clinician Type
+                              </label>
+                              <select
+                                className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                value={row.clinicianType}
+                                onChange={(e) => {
+                                  setQuickIntakeForm((prev: any) => ({
+                                    ...prev,
+                                    clinicians: prev.clinicians.map((c: any) =>
+                                      c.id === row.id
+                                        ? {
+                                            ...c,
+                                            clinicianType: e.target.value,
+                                            clinicianId: "",
+                                          }
+                                        : c,
+                                    ),
+                                  }));
+                                }}
+                              >
+                                <option value="doctor">Doctor</option>
+                                <option value="expert">Expert</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                                Select Clinician
+                              </label>
+                              <select
+                                className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
+                                value={row.clinicianId}
+                                onChange={(e) => {
+                                  setQuickIntakeForm((prev: any) => ({
+                                    ...prev,
+                                    clinicians: prev.clinicians.map((c: any) =>
+                                      c.id === row.id
+                                        ? {
+                                            ...c,
+                                            clinicianId: e.target.value,
+                                          }
+                                        : c,
+                                    ),
+                                  }));
+                                }}
+                              >
+                                <option value="">None / Unassigned</option>
+                                {row.clinicianType === "doctor"
+                                  ? doctors
+                                      .filter(
+                                        (_d: any) => _d.isActive !== false,
+                                      )
+                                      .map((d) => (
+                                        <option key={d.id} value={d.id}>
+                                          Dr. {d.name} ({d.speciality || "GP"})
+                                        </option>
+                                      ))
+                                  : experts
+                                      .filter(
+                                        (_e: any) => _e.isActive !== false,
+                                      )
+                                      .map((exp) => (
+                                        <option key={exp.id} value={exp.id}>
+                                          {exp.name} (
+                                          {exp.speciality || "Consultant"})
+                                        </option>
+                                      ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                                Appointment Category
+                              </label>
+                              <Autocomplete
+                                className="w-full h-9"
+                                placeholder="Search category..."
+                                selectedKey={row.appointmentTypeId || ""}
+                                onSelectionChange={(key) => {
+                                  if (key) {
+                                    setQuickIntakeForm((prev: any) => ({
+                                      ...prev,
+                                      clinicians: prev.clinicians.map((c: any) =>
+                                        c.id === row.id
+                                          ? {
+                                              ...c,
+                                              appointmentTypeId: String(key),
+                                            }
+                                          : c,
+                                      ),
+                                    }));
+                                  }
+                                }}
+                              >
+                                {appointmentTypes.map((t) => (
+                                  <AutocompleteItem key={t.id} textValue={t.name}>
+                                    {t.name}
+                                  </AutocompleteItem>
+                                ))}
+                                {activePatientPackages?.map((pkg) => (
+                                  <AutocompleteItem
+                                    key={`consume_pkg_${pkg.id}`}
+                                    textValue={`⭐ Consume Session: ${pkg.packageName} (${pkg.usedSessions}/${pkg.totalSessions} used)`}
+                                  >
+                                    ⭐ Consume Session: {pkg.packageName} (
+                                    {pkg.usedSessions}/{pkg.totalSessions} used)
+                                  </AutocompleteItem>
+                                ))}
+                                {packages?.map((pkg) => (
+                                  <AutocompleteItem
+                                    key={`pkg_${pkg.id}`}
+                                    textValue={`📦 ${pkg.name} (NPR ${pkg.price.toLocaleString()})`}
+                                  >
+                                    📦 {pkg.name} (NPR {pkg.price.toLocaleString()})
+                                  </AutocompleteItem>
+                                ))}
+                              </Autocomplete>
+                            </div>
                           </div>
-                        )}
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                        Assigned Expert (External)
-                      </label>
-                      <select
-                        className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
-                        value={quickIntakeForm.assignedExpertId}
-                        onChange={(e) =>
-                          setQuickIntakeForm((prev) => ({
-                            ...prev,
-                            assignedExpertId: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">None / Unassigned</option>
-                        {experts
-                          .filter((_e: any) => _e.isActive !== false)
-                          .map((exp) => (
-                            <option key={exp.id} value={exp.id}>
-                              {exp.name} ({exp.speciality || "Consultant"})
-                            </option>
-                          ))}
-                      </select>
-                      {quickIntakeForm.assignedExpertId &&
-                        quickIntakeForm.assignedExpertId !== "unassigned" && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <input
-                              checked={quickIntakeForm.addExpertCommission}
-                              className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
-                              id="addClinicianCommissionExp"
-                              type="checkbox"
-                              onChange={(e) =>
-                                setQuickIntakeForm((prev) => ({
-                                  ...prev,
-                                  addExpertCommission: e.target.checked,
-                                }))
-                              }
-                            />
-                            <label
-                              className="text-[11px] text-text-muted font-medium cursor-pointer select-none"
-                              htmlFor="addClinicianCommissionExp"
-                            >
-                              Add commission
-                            </label>
-                          </div>
-                        )}
-                    </div>
+                          {row.clinicianId &&
+                            row.clinicianId !== "unassigned" && (
+                              <div className="mt-2 flex items-center gap-4">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    checked={row.chargeConsultation}
+                                    className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                                    type="checkbox"
+                                    onChange={(e) => {
+                                      setQuickIntakeForm((prev: any) => ({
+                                        ...prev,
+                                        clinicians: prev.clinicians.map(
+                                          (c: any) =>
+                                            c.id === row.id
+                                              ? {
+                                                  ...c,
+                                                  chargeConsultation:
+                                                    e.target.checked,
+                                                }
+                                              : c,
+                                        ),
+                                      }));
+                                    }}
+                                  />
+                                  <span className="text-[11px] text-text-muted font-medium select-none">
+                                    Charge Fee
+                                  </span>
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    checked={row.addCommission}
+                                    className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                                    type="checkbox"
+                                    onChange={(e) => {
+                                      setQuickIntakeForm((prev: any) => ({
+                                        ...prev,
+                                        clinicians: prev.clinicians.map(
+                                          (c: any) =>
+                                            c.id === row.id
+                                              ? {
+                                                  ...c,
+                                                  addCommission:
+                                                    e.target.checked,
+                                                }
+                                              : c,
+                                        ),
+                                      }));
+                                    }}
+                                  />
+                                  <span className="text-[11px] text-text-muted font-medium select-none">
+                                    Add Commission
+                                  </span>
+                                </label>
+                              </div>
+                            )}
+                        </div>
+                      ),
+                    )}
                   </div>
 
                   {/* Payment details for Package Sales */}

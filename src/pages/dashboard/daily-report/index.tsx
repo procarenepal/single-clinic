@@ -284,11 +284,11 @@ export default function DailyReportPage() {
       (sum, b) => sum + (b.totalAmount || 0),
       0,
     ),
-    totalRevenueCollected: invoicesCreatedToday.reduce(
+    totalRevenueCollected: reportData.billing.reduce(
       (sum, b) => sum + (b.paidAmount || 0),
       0,
     ),
-    totalCashCollected: invoicesCreatedToday.reduce(
+    totalCashCollected: reportData.billing.reduce(
       (sum, b) => sum + (b.paidAmount || 0),
       0,
     ),
@@ -299,10 +299,10 @@ export default function DailyReportPage() {
     clinicalRevenue: invoicesCreatedToday
       .filter((b) => b.type === "appointment")
       .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    clinicalRevenueCollected: invoicesCreatedToday
+    clinicalRevenueCollected: reportData.billing
       .filter((b) => b.type === "appointment")
       .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    clinicalCashCollected: invoicesCreatedToday
+    clinicalCashCollected: reportData.billing
       .filter((b) => b.type === "appointment")
       .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
     clinicalDue: invoicesCreatedToday
@@ -311,7 +311,7 @@ export default function DailyReportPage() {
     pathologyRevenue: invoicesCreatedToday
       .filter((b) => b.type === "pathology")
       .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    pathologyRevenueCollected: invoicesCreatedToday
+    pathologyRevenueCollected: reportData.billing
       .filter((b) => b.type === "pathology")
       .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
     pathologyDue: invoicesCreatedToday
@@ -320,7 +320,7 @@ export default function DailyReportPage() {
     pharmacyRevenue: invoicesCreatedToday
       .filter((b) => b.type === "pharmacy")
       .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    pharmacyRevenueCollected: invoicesCreatedToday
+    pharmacyRevenueCollected: reportData.billing
       .filter((b) => b.type === "pharmacy")
       .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
     pharmacyDue: invoicesCreatedToday

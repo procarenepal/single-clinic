@@ -29,6 +29,8 @@ class DoctorCommissionService {
     createdBy: string,
   ): Promise<string[]> {
     try {
+
+
       // Group items by doctorId (fallback to billing.doctorId if not specified on item)
       const doctorGroups: Record<
         string,
@@ -48,21 +50,27 @@ class DoctorCommissionService {
       const promises = Object.entries(doctorGroups).map(
         async ([dId, group]) => {
           // Calculate total commission amount for this doctor's items
+          let groupSubtotal = 0;
           const groupCommissionAmount = group.items.reduce((total, item) => {
             const percentage =
               typeof item.commission === "number" && item.commission > 0
                 ? item.commission
                 : doctorCommissionPercent;
 
+            // Pro-rate the global invoice discount (mainDiscountAmount) onto this item
+            // item.amount is already reduced by itemDiscountAmount
+            // So we calculate the ratio based on the remaining total
+            const totalItemAmounts = (billing.subtotal || 1) - (billing.itemDiscountAmount || 0);
+            const validTotal = totalItemAmounts > 0 ? totalItemAmounts : 1;
+            const mainDiscount = billing.mainDiscountAmount || 0;
+            const discountRatio = (validTotal - mainDiscount) / validTotal;
+            const effectiveItemAmount = item.amount * discountRatio;
+
+            groupSubtotal += effectiveItemAmount;
+
             if (!percentage || percentage <= 0) {
               return total;
             }
-
-            // Pro-rate the global invoice discount (mainDiscountAmount) onto this item
-            const subtotal = billing.subtotal || 1; // Prevent division by zero
-            const mainDiscount = billing.mainDiscountAmount || 0;
-            const discountRatio = (subtotal - mainDiscount) / subtotal;
-            const effectiveItemAmount = item.amount * discountRatio;
 
             const itemCommissionAmount =
               (effectiveItemAmount * percentage) / 100;
@@ -71,14 +79,6 @@ class DoctorCommissionService {
           }, 0);
 
           if (groupCommissionAmount <= 0) return null;
-
-          const groupSubtotal = group.items.reduce((sum, item) => {
-            const subtotal = billing.subtotal || 1;
-            const mainDiscount = billing.mainDiscountAmount || 0;
-            const discountRatio = (subtotal - mainDiscount) / subtotal;
-
-            return sum + item.amount * discountRatio;
-          }, 0);
 
           const effectivePercentage =
             groupSubtotal > 0
@@ -365,8 +365,9 @@ class DoctorCommissionService {
         throw new Error("Payment amount must be greater than 0");
       }
 
-      if (paidAmount > currentCommission.commissionAmount) {
-        throw new Error("Payment amount cannot exceed commission amount");
+      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
+      if (paidAmount > remainingAmount) {
+        throw new Error("Payment amount cannot exceed remaining commission balance.");
       }
 
       // Update the commission record
@@ -471,6 +472,23 @@ class DoctorCommissionService {
   ): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+      
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+      
+      const commissionData = commissionDoc.data() as DoctorCommission;
+      
+      if (status === "cancelled" && commissionData.status !== "cancelled") {
+        // Revert the commission balances for the doctor
+        const doctorRef = doc(db, "doctors", commissionData.doctorId);
+        await updateDoc(doctorRef, {
+          totalCommissionEarned: increment(-commissionData.commissionAmount),
+          totalCommissionBalance: increment(-(commissionData.commissionAmount - (commissionData.paidAmount || 0))),
+          updatedAt: Timestamp.now(),
+        });
+      }
 
       await updateDoc(docRef, {
         status,

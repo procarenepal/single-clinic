@@ -609,6 +609,34 @@ export const pharmacyService = {
         }
         const originalPurchase = purchaseSnap.data() as MedicinePurchase;
 
+        // Calculate already returned quantities to prevent over-returning
+        const returnedQuantities = new Map<string, number>();
+        const existingReturns = originalPurchase.returns || [];
+        existingReturns.forEach((r: any) => {
+          r.items?.forEach((i: any) => {
+            if (i.purchaseItemId) {
+              returnedQuantities.set(
+                i.purchaseItemId,
+                (returnedQuantities.get(i.purchaseItemId) || 0) + i.quantity
+              );
+            }
+          });
+        });
+
+        // Validate that we aren't returning more than purchased
+        for (const item of medicineItems) {
+          const alreadyReturned = returnedQuantities.get(item.purchaseItemId) || 0;
+          const originalItem = originalPurchase.items?.find((i: any) => i.id === item.purchaseItemId);
+          
+          if (!originalItem) {
+            throw new Error(`Original purchase item not found for ${item.medicineName}`);
+          }
+          
+          if (alreadyReturned + item.quantity > originalItem.quantity) {
+            throw new Error(`Cannot return ${item.quantity} of ${item.medicineName}. Only ${originalItem.quantity - alreadyReturned} remaining to return.`);
+          }
+        }
+
         // 2. Read all Stock Documents
         const stockSnaps: Record<string, any> = {};
 
@@ -645,7 +673,6 @@ export const pharmacyService = {
           ...(returnData.notes && { notes: returnData.notes }),
         };
 
-        const existingReturns = originalPurchase.returns || [];
         const allReturns = [...existingReturns, returnRecord];
         const totalReturnedAmount = allReturns.reduce(
           (sum, r) => sum + Math.abs(r.totalAmount || 0),

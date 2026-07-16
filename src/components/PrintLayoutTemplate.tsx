@@ -1,7 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { PrintLayoutConfig } from "@/types/printLayout";
+
+const GOOGLE_FONTS_URL =
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Nunito:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Roboto:wght@400;500;700&family=Outfit:wght@400;600;700&display=swap";
 
 const SNAP_GRID = 5;
 const snapToGrid = (val: number) => Math.round(val / SNAP_GRID) * SNAP_GRID;
@@ -170,6 +173,19 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
   onWidthChange,
   zoom = 1,
 }) => {
+  // Inject Google Fonts <link> into the document head so the live preview
+  // renders the same font as the actual print output.
+  useEffect(() => {
+    const id = "print-layout-google-fonts";
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = GOOGLE_FONTS_URL;
+      document.head.appendChild(link);
+    }
+  }, []);
+
   const isEditable = !showInPrint && !!onTextChange;
 
   const logoX = layoutConfig.logoPos?.x || 0;
@@ -211,7 +227,7 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
           ? "26px"
           : "22px",
     fontWeight: "800",
-    color: layoutConfig.primaryColor || "#1e3a8a",
+    color: layoutConfig.titleColor || layoutConfig.primaryColor || "#1e3a8a",
     lineHeight: "1.1",
     letterSpacing: "0.05em",
     textTransform: "uppercase",
@@ -219,20 +235,23 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
     fontFamily: layoutConfig.fontFamily || "'Inter', sans-serif",
   });
 
+  const baseFontSize = layoutConfig.contentFontSize || 11;
+  const fontFamily = layoutConfig.fontFamily || "'Inter', sans-serif";
+
   const taglineStyle = getFieldStyle(layoutConfig, "tagline", {
-    fontSize: "11px",
+    fontSize: `${baseFontSize}px`,
     fontWeight: "700",
     color: layoutConfig.textColor || "#64748b",
     letterSpacing: "0.15em",
-    fontFamily: layoutConfig.fontFamily || "'Inter', sans-serif",
+    fontFamily,
   });
 
   const addressStyle = getFieldStyle(layoutConfig, "address", {
-    fontSize: "11px",
+    fontSize: `${baseFontSize}px`,
     lineHeight: "1.4",
     color: layoutConfig.textColor || "#475569",
     textAlign: "center" as any,
-    fontFamily: layoutConfig.fontFamily || "'Inter', sans-serif",
+    fontFamily,
   });
 
   return (
@@ -307,11 +326,11 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             selectedElementId={selectedElementId}
             style={{ position: "relative", zIndex: 30 }}
             x={clinicNameX}
-            y={clinicNameY}
+            y={0}
             onDragEnd={(info) =>
               onCoordinateChange?.("clinicName", {
                 x: snapToGrid(clinicNameX + info.offset.x),
-                y: snapToGrid(clinicNameY + info.offset.y),
+                y: 0,
               })
             }
             onElementClick={onElementClick}
@@ -337,11 +356,11 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
               selectedElementId={selectedElementId}
               style={{ position: "relative", zIndex: 29, marginTop: "4px" }}
               x={taglineX}
-              y={taglineY}
+              y={0}
               onDragEnd={(info) =>
                 onCoordinateChange?.("tagline", {
                   x: snapToGrid(taglineX + info.offset.x),
-                  y: snapToGrid(taglineY + info.offset.y),
+                  y: 0,
                 })
               }
               onElementClick={onElementClick}
@@ -367,11 +386,11 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             selectedElementId={selectedElementId}
             style={{ position: "relative", zIndex: 28, marginTop: "12px" }}
             x={addressX}
-            y={addressY}
+            y={0}
             onDragEnd={(info) =>
               onCoordinateChange?.("address", {
                 x: snapToGrid(addressX + info.offset.x),
-                y: snapToGrid(addressY + info.offset.y),
+                y: 0,
               })
             }
             onElementClick={onElementClick}
@@ -409,11 +428,11 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
               marginTop: "16px",
             }}
             x={contactsX}
-            y={contactsY}
+            y={0}
             onDragEnd={(info) =>
               onCoordinateChange?.("phone", {
                 x: snapToGrid(contactsX + info.offset.x),
-                y: snapToGrid(contactsY + info.offset.y),
+                y: 0,
               })
             }
             onElementClick={onElementClick}
@@ -421,13 +440,13 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             <div className="flex items-center gap-6 pt-4 border-t border-gray-100 max-w-md w-full justify-center">
               {layoutConfig.phone && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-gray-400 lowercase">
+                  <span style={{ fontSize: `${Math.max(baseFontSize - 1, 9)}px`, fontFamily, fontWeight: "bold", color: layoutConfig.textColor || "#94a3b8" }} className="lowercase">
                     phone:
                   </span>
                   <span
                     suppressContentEditableWarning
-                    className="text-[11px] font-bold text-[#475569]"
                     contentEditable={isEditable}
+                    style={{ fontSize: `${baseFontSize}px`, fontFamily, fontWeight: "bold", color: layoutConfig.titleColor || "#475569" }}
                     onBlur={(e) =>
                       onTextChange?.("phone", e.currentTarget.textContent || "")
                     }
@@ -438,13 +457,13 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
               )}
               {layoutConfig.email && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-gray-400 lowercase">
+                  <span style={{ fontSize: `${Math.max(baseFontSize - 1, 9)}px`, fontFamily, fontWeight: "bold", color: layoutConfig.textColor || "#94a3b8" }} className="lowercase">
                     email:
                   </span>
                   <span
                     suppressContentEditableWarning
-                    className="text-[11px] font-bold text-[#475569]"
                     contentEditable={isEditable}
+                    style={{ fontSize: `${baseFontSize}px`, fontFamily, fontWeight: "bold", color: layoutConfig.titleColor || "#475569" }}
                     onBlur={(e) =>
                       onTextChange?.("email", e.currentTarget.textContent || "")
                     }
@@ -465,11 +484,11 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
               selectedElementId={selectedElementId}
               style={{ position: "relative", zIndex: 27, marginTop: "8px" }}
               x={websiteX}
-              y={websiteY}
+              y={0}
               onDragEnd={(info) =>
                 onCoordinateChange?.("website", {
                   x: snapToGrid(websiteX + info.offset.x),
-                  y: snapToGrid(websiteY + info.offset.y),
+                  y: 0,
                 })
               }
               onElementClick={onElementClick}
@@ -478,16 +497,17 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
                 suppressContentEditableWarning
                 contentEditable={isEditable}
                 style={{
-                  color: "#475569",
+                  color: layoutConfig.primaryColor || "#475569",
                   fontWeight: "bold",
-                  fontSize: "11px",
+                  fontSize: `${baseFontSize}px`,
+                  fontFamily,
                   textAlign: "center",
                 }}
                 onBlur={(e) =>
                   onTextChange?.("website", e.currentTarget.textContent || "")
                 }
               >
-                <span className="text-[10px] font-bold text-gray-400 lowercase mr-1">
+                <span style={{ fontSize: `${Math.max(baseFontSize - 1, 9)}px`, fontFamily, fontWeight: "bold", color: layoutConfig.textColor || "#94a3b8" }} className="lowercase mr-1">
                   website:
                 </span>
                 {layoutConfig.website}
@@ -523,8 +543,9 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
         <div className="border-t border-gray-200 py-6 text-center mt-auto">
           <p
             suppressContentEditableWarning
-            className="text-[9px] text-gray-400 font-bold tracking-[0.3em] uppercase outline-none"
+            className="font-bold tracking-[0.3em] uppercase outline-none"
             contentEditable={isDesignMode}
+            style={{ fontSize: `${Math.max(baseFontSize - 2, 8)}px`, fontFamily, color: layoutConfig.textColor || "#94a3b8" }}
             onBlur={(e) =>
               onTextChange?.("footerText", e.currentTarget.textContent || "")
             }

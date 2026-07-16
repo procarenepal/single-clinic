@@ -2386,6 +2386,13 @@ export default function AppointmentBillingPage() {
                   >
                     <div>
                       <p className="font-medium">{i.appointmentTypeName}</p>
+                      {i.doctorName &&
+                        i.doctorName !== "Unknown Doctor" &&
+                        i.doctorName !== "Expert Cabin" && (
+                          <p className="text-[12px] text-mountain-500 my-0.5">
+                            Assigned: {i.doctorName}
+                          </p>
+                        )}
                       <p className="text-[11.5px] text-text-muted">
                         {fmtCur(i.price)} × {i.quantity}
                       </p>

@@ -82,6 +82,20 @@ export const walletService = {
   ): Promise<string> {
     try {
       const now = new Date();
+      const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
+      
+      const { getDoc } = await import("firebase/firestore");
+      const patientSnap = await getDoc(patientRef);
+      if (!patientSnap.exists()) {
+        throw new Error("Patient not found");
+      }
+      
+      const patientData = patientSnap.data();
+      const currentBalance = patientData.walletBalance || 0;
+      
+      if (currentBalance < amount) {
+        throw new Error("Insufficient wallet balance");
+      }
 
       // 1. Record the transaction
       const transaction: Omit<WalletTransaction, "id"> = {
@@ -105,7 +119,6 @@ export const walletService = {
       );
 
       // 2. Update the patient's wallet balance
-      const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
 
       await updateDoc(patientRef, {
         // Increment with a negative value to deduct

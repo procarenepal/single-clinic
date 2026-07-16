@@ -18,6 +18,7 @@ import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { expertService } from "@/services/expertService";
 import { branchService } from "@/services/branchService";
 import {
   scheduleAppointmentReminder,
@@ -31,7 +32,19 @@ import {
   validateADDate,
   debounce,
 } from "@/utils/dateConverterApi";
-import { Appointment, Patient, AppointmentType, Doctor } from "@/types/models";
+import { Appointment, Patient, AppointmentType, Doctor, Expert } from "@/types/models";
+import { IoAddOutline, IoTrashOutline } from "react-icons/io5";
+
+export type ClinicianType = "doctor" | "expert";
+
+export interface AppointmentRow {
+  id: string;
+  clinicianType: ClinicianType;
+  clinicianId: string;
+  appointmentTypeId: string;
+  startTime: string;
+  endTime: string;
+}
 
 // Define the ConversionProgress type
 interface ConversionProgress {
@@ -219,6 +232,7 @@ export default function NewAppointmentPage() {
   const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
     [],
   );
@@ -383,13 +397,20 @@ export default function NewAppointmentPage() {
     registrationDate: formattedDate,
     appointmentDate: "",
     appointmentBS: "",
-    startTime: "",
-    endTime: "",
-    doctorId: "",
-    appointmentTypeId: "",
     reason: "",
     notes: "",
   });
+
+  const [appointmentRows, setAppointmentRows] = useState<AppointmentRow[]>([
+    {
+      id: crypto.randomUUID(),
+      clinicianType: "doctor",
+      clinicianId: "",
+      appointmentTypeId: "",
+      startTime: "",
+      endTime: "",
+    },
+  ]);
 
   const [patientSearchInput, setPatientSearchInput] = useState("");
 
@@ -441,6 +462,13 @@ export default function NewAppointmentPage() {
         );
 
         setDoctors(doctorsData.filter((doctor) => doctor.isActive));
+
+        const expertsData = await expertService.getExpertsByClinic(
+          clinicId,
+          branchIdForData,
+        );
+
+        setExperts(expertsData.filter((expert) => expert.isActive));
 
         const appointmentTypesData =
           await appointmentTypeService.getActiveAppointmentTypesByClinic(
@@ -549,7 +577,6 @@ export default function NewAppointmentPage() {
           description: "Please select a patient.",
           color: "danger",
         });
-
         return;
       }
       if (!appointmentInfo.appointmentDate) {
@@ -558,177 +585,208 @@ export default function NewAppointmentPage() {
           description: "Please select a date.",
           color: "danger",
         });
-
         return;
       }
-      if (!appointmentInfo.doctorId) {
+      if (appointmentRows.length === 0) {
         addToast({
           title: "Error",
-          description: "Please select a doctor.",
+          description: "Please add at least one appointment.",
           color: "danger",
         });
-
-        return;
-      }
-      if (!appointmentInfo.appointmentTypeId) {
-        addToast({
-          title: "Error",
-          description: "Please select a type.",
-          color: "danger",
-        });
-
         return;
       }
 
-      const appointmentData: Partial<Appointment> = {
-        patientId: appointmentInfo.patientId,
-        clinicId: clinicId,
-        branchId: defaultBranchId || userData?.branchId || clinicId,
-        doctorId: appointmentInfo.doctorId,
-        appointmentDate: new Date(appointmentInfo.appointmentDate),
-        appointmentTypeId: appointmentInfo.appointmentTypeId,
-        status: "scheduled",
-        registrationDate: new Date(appointmentInfo.registrationDate),
-        createdBy: currentUser?.uid || "",
-      };
+      for (let i = 0; i < appointmentRows.length; i++) {
+        const row = appointmentRows[i];
 
-      if (appointmentInfo.startTime)
-        appointmentData.startTime = appointmentInfo.startTime;
-      if (appointmentInfo.endTime)
-        appointmentData.endTime = appointmentInfo.endTime;
-      if (appointmentInfo.reason && appointmentInfo.reason.trim())
-        appointmentData.reason = appointmentInfo.reason.trim();
-      if (appointmentInfo.notes && appointmentInfo.notes.trim())
-        appointmentData.notes = appointmentInfo.notes.trim();
+        if (!row.clinicianId) {
+          addToast({
+            title: "Validation Error",
+            description: `Please select a clinician for appointment #${i + 1}.`,
+            color: "danger",
+          });
 
-      const appointmentId =
-        await appointmentService.createAppointment(appointmentData);
+          return;
+        }
+        if (!row.appointmentTypeId) {
+          addToast({
+            title: "Validation Error",
+            description: `Please select an appointment type for appointment #${i + 1}.`,
+            color: "danger",
+          });
 
-      // ── Generate Draft Invoice for the Scheduled Appointment ──
-      try {
-        const selPat = patients.find((p) => p.id === appointmentInfo.patientId);
-        const selDoc = doctors.find((d) => d.id === appointmentInfo.doctorId);
+          return;
+        }
+      }
+
+      // Generate Invoice first if we have billable items
+      const selPat = patients.find((p) => p.id === appointmentInfo.patientId);
+
+      let invoiceNo = "";
+      let newBillingId = "";
+      const billingItems: any[] = [];
+      let totalAmount = 0;
+
+      for (const row of appointmentRows) {
         const selApptType = appointmentTypes.find(
-          (t) => t.id === appointmentInfo.appointmentTypeId,
+          (t) => t.id === row.appointmentTypeId,
         );
 
         if (selApptType && selApptType.price >= 0) {
-          const invoiceNo = await appointmentBillingService.generateInvoiceNumber(
-            clinicId,
-          );
+          const isDoctor = row.clinicianType === "doctor";
+          const selDoc = doctors.find((d) => d.id === row.clinicianId);
+          const selExp = experts.find((e) => e.id === row.clinicianId);
+          const clinicianToBill = isDoctor ? selDoc : selExp;
+          const clinicianName = clinicianToBill
+            ? clinicianToBill.name
+            : "Clinic";
+          const clinicianCommission = clinicianToBill?.defaultCommission || 0;
 
-          const billingItem = {
+          billingItems.push({
             id: crypto.randomUUID(),
             appointmentTypeId: selApptType.id,
             appointmentTypeName: selApptType.name,
             price: Number(selApptType.price),
             quantity: 1,
-            commission: selDoc?.defaultCommission || 0,
-            doctorId: selDoc?.id || "unassigned",
-            doctorName: selDoc?.name || "Clinic",
+            commission: clinicianCommission,
+            doctorId: row.clinicianId,
+            doctorName: clinicianName,
             amount: Number(selApptType.price),
-          };
-
-          const processedReferrals: any[] = [];
-
-          if (selPat?.referrals && Array.isArray(selPat.referrals)) {
-            for (const ref of selPat.referrals) {
-              processedReferrals.push({
-                type: ref.type,
-                id: ref.id,
-                name: ref.name,
-                commissionPercentage: ref.commissionPercentage || 0,
-                commissionAmount:
-                  (Number(selApptType.price) *
-                    (ref.commissionPercentage || 0)) /
-                  100,
-              });
-            }
-          }
-
-          const primaryPartner = processedReferrals.find(
-            (r) => r.type === "referral-partner",
-          );
-
-          const billingData = {
-            invoiceNumber: invoiceNo,
-            clinicId: clinicId,
-            branchId: defaultBranchId || userData?.branchId || clinicId,
-            patientId: selPat?.id || appointmentInfo.patientId,
-            patientName: selPat?.name || "Unknown Patient",
-            doctorId: selDoc?.id || "unassigned",
-            doctorName: selDoc?.name || "Clinic",
-            doctorType: ((selDoc as any)?.doctorType || "regular") as "regular" | "visitor",
-            referralPartnerId: primaryPartner
-              ? primaryPartner.id
-              : selPat?.referralPartnerId || undefined,
-            referralCommissionAmount: primaryPartner
-              ? primaryPartner.commissionAmount
-              : undefined,
-            referrals: processedReferrals,
-            invoiceDate: new Date(),
-            items: [billingItem],
-            subtotal: Number(selApptType.price),
-            itemDiscountAmount: 0,
-            mainDiscountAmount: 0,
-            discountType: "percent" as const,
-            discountValue: 0,
-            discountAmount: 0,
-            taxPercentage: 0,
-            taxAmount: 0,
-            totalAmount: Number(selApptType.price),
-            status: "draft" as const,
-            paymentStatus: "unpaid" as const,
-            paidAmount: 0,
-            balanceAmount: Number(selApptType.price),
-            createdBy: currentUser?.uid || "system",
-          };
-
-          const newBillingId = await appointmentBillingService.createBilling(
-            billingData,
-          );
-
-          await appointmentService.updateAppointment(appointmentId, {
-            billingId: newBillingId,
-            billingStatus: "unpaid",
-            paymentStatus: "unpaid",
-          } as any);
+          });
+          totalAmount += Number(selApptType.price);
         }
-      } catch (billingErr) {
-        console.error(
-          "Error generating draft invoice for scheduled appointment:",
-          billingErr,
+      }
+
+      if (billingItems.length > 0) {
+        invoiceNo =
+          await appointmentBillingService.generateInvoiceNumber(clinicId);
+        const processedReferrals: any[] = [];
+
+        if (selPat?.referrals && Array.isArray(selPat.referrals)) {
+          for (const ref of selPat.referrals) {
+            processedReferrals.push({
+              type: ref.type,
+              id: ref.id,
+              name: ref.name,
+              commissionPercentage: ref.commissionPercentage || 0,
+              commissionAmount:
+                (totalAmount * (ref.commissionPercentage || 0)) / 100,
+            });
+          }
+        }
+
+        const primaryPartner = processedReferrals.find(
+          (r) => r.type === "referral-partner",
+        );
+
+        const firstClinicianItem = billingItems[0];
+
+        const billingData = {
+          invoiceNumber: invoiceNo,
+          clinicId: clinicId,
+          branchId: defaultBranchId || userData?.branchId || clinicId,
+          patientId: selPat?.id || appointmentInfo.patientId,
+          patientName: selPat?.name || "Unknown Patient",
+          doctorId: firstClinicianItem.doctorId,
+          doctorName: firstClinicianItem.doctorName,
+          doctorType:
+            appointmentRows[0].clinicianType === "doctor"
+              ? "regular"
+              : "regular",
+          referralPartnerId: primaryPartner
+            ? primaryPartner.id
+            : selPat?.referralPartnerId || undefined,
+          referralCommissionAmount: primaryPartner
+            ? primaryPartner.commissionAmount
+            : undefined,
+          referrals: processedReferrals,
+          invoiceDate: new Date(),
+          items: billingItems,
+          subtotal: totalAmount,
+          itemDiscountAmount: 0,
+          mainDiscountAmount: 0,
+          discountType: "percent" as const,
+          discountValue: 0,
+          discountAmount: 0,
+          taxPercentage: 0,
+          taxAmount: 0,
+          totalAmount: totalAmount,
+          status: "draft" as const,
+          paymentStatus: "unpaid" as const,
+          paidAmount: 0,
+          balanceAmount: totalAmount,
+          createdBy: currentUser?.uid || "system",
+        };
+
+        newBillingId = await appointmentBillingService.createBilling(
+          billingData as any,
         );
       }
 
-      if (appointmentInfo.startTime) {
-        try {
-          await scheduleAppointmentReminder({
-            id: appointmentId,
-            appointmentDate: appointmentData.appointmentDate,
-            patientId: appointmentData.patientId,
-            doctorId: appointmentData.doctorId,
-            clinicId: appointmentData.clinicId,
-            branchId: appointmentData.branchId,
-            appointmentTypeId: appointmentData.appointmentTypeId,
-            startTime: appointmentInfo.startTime,
-          });
-        } catch (e) {
-          console.error("Error patient reminder:", e);
+      // Create appointments
+      for (const row of appointmentRows) {
+        const appointmentData: Partial<Appointment> = {
+          patientId: appointmentInfo.patientId,
+          clinicId: clinicId,
+          branchId: defaultBranchId || userData?.branchId || clinicId,
+          doctorId:
+            row.clinicianType === "doctor" ? row.clinicianId : "unassigned",
+          assignedExpertId:
+            row.clinicianType === "expert" ? row.clinicianId : undefined,
+          appointmentDate: new Date(appointmentInfo.appointmentDate),
+          appointmentTypeId: row.appointmentTypeId,
+          status: "scheduled",
+          registrationDate: new Date(appointmentInfo.registrationDate),
+          createdBy: currentUser?.uid || "",
+        };
+
+        if (row.startTime) appointmentData.startTime = row.startTime;
+        if (row.endTime) appointmentData.endTime = row.endTime;
+        if (appointmentInfo.reason && appointmentInfo.reason.trim())
+          appointmentData.reason = appointmentInfo.reason.trim();
+        if (appointmentInfo.notes && appointmentInfo.notes.trim())
+          appointmentData.notes = appointmentInfo.notes.trim();
+
+        if (newBillingId) {
+          appointmentData.billingId = newBillingId;
+          appointmentData.billingStatus = "unpaid";
+          appointmentData.paymentStatus = "unpaid";
         }
-        try {
-          await scheduleDoctorAppointmentReminder({
-            id: appointmentId,
-            appointmentDate: appointmentData.appointmentDate,
-            patientId: appointmentData.patientId,
-            doctorId: appointmentData.doctorId,
-            clinicId: appointmentData.clinicId,
-            branchId: appointmentData.branchId,
-            appointmentTypeId: appointmentData.appointmentTypeId,
-            startTime: appointmentInfo.startTime,
-          });
-        } catch (e) {
-          console.error("Error doctor reminder:", e);
+
+        const appointmentId =
+          await appointmentService.createAppointment(appointmentData);
+
+        if (row.startTime) {
+          try {
+            await scheduleAppointmentReminder({
+              id: appointmentId,
+              appointmentDate: appointmentData.appointmentDate as any,
+              patientId: appointmentData.patientId as any,
+              doctorId: appointmentData.doctorId as any,
+              clinicId: appointmentData.clinicId as any,
+              branchId: appointmentData.branchId as any,
+              appointmentTypeId: appointmentData.appointmentTypeId as any,
+              startTime: row.startTime,
+            });
+          } catch (e) {
+            console.error("Error patient reminder:", e);
+          }
+          if (row.clinicianType === "doctor") {
+            try {
+              await scheduleDoctorAppointmentReminder({
+                id: appointmentId,
+                appointmentDate: appointmentData.appointmentDate as any,
+                patientId: appointmentData.patientId as any,
+                doctorId: appointmentData.doctorId as any,
+                clinicId: appointmentData.clinicId as any,
+                branchId: appointmentData.branchId as any,
+                appointmentTypeId: appointmentData.appointmentTypeId as any,
+                startTime: row.startTime,
+              });
+            } catch (e) {
+              console.error("Error doctor reminder:", e);
+            }
+          }
         }
       }
 
@@ -841,8 +899,8 @@ export default function NewAppointmentPage() {
                 loading ||
                 !appointmentInfo.patientId ||
                 !appointmentInfo.appointmentDate ||
-                !appointmentInfo.doctorId ||
-                !appointmentInfo.appointmentTypeId
+                appointmentRows.length === 0 ||
+                appointmentRows.some((row) => !row.clinicianId || !row.appointmentTypeId)
               }
               type="submit"
             >
@@ -851,141 +909,250 @@ export default function NewAppointmentPage() {
           </div>
         </div>
 
-        {/* Form Container */}
-        <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-border-base bg-surface-2/50">
+        {/* Global Visit Details */}
+        <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-visible">
+          <div className="px-5 py-4 border-b border-border-base bg-surface-2/50 rounded-t-2xl">
             <h4 className="font-semibold text-[15px] text-text-main flex items-center gap-2">
               <IoCalendarOutline className="w-5 h-5 text-primary" />
-              Appointment Details
+              Visit Details
             </h4>
           </div>
 
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <CustomInput
+              disabled
+              readOnly
+              label="Registration Date"
+              name="registrationDate"
+              type="date"
+              value={appointmentInfo.registrationDate}
+            />
+
+            <div className="relative">
               <CustomInput
-                disabled
-                readOnly
-                label="Registration Date"
-                name="registrationDate"
-                type="date"
-                value={appointmentInfo.registrationDate}
-              />
-
-              <div className="relative">
-                <CustomInput
-                  required
-                  description="Automatically converts to BS Date"
-                  disabled={
-                    dateConversionState.isConverting &&
-                    dateConversionState.field === "appointmentDate"
-                  }
-                  endContent={
-                    dateConversionState.isConverting &&
-                    dateConversionState.field === "appointmentDate" && (
-                      <div className="flex items-center gap-2">
-                        <Spinner size="sm" />
-                      </div>
-                    )
-                  }
-                  label="Appointment Date *"
-                  name="appointmentDate"
-                  type="date"
-                  value={appointmentInfo.appointmentDate}
-                  onChange={handleAppointmentInfoChange}
-                />
-              </div>
-
-              <div className="relative">
-                <CustomInput
-                  description="Automatically converts to AD Date"
-                  disabled={
-                    dateConversionState.isConverting &&
-                    dateConversionState.field === "appointmentBS"
-                  }
-                  endContent={
-                    dateConversionState.isConverting &&
-                      dateConversionState.field === "appointmentBS" ? (
+                required
+                description="Automatically converts to BS Date"
+                disabled={
+                  dateConversionState.isConverting &&
+                  dateConversionState.field === "appointmentDate"
+                }
+                endContent={
+                  dateConversionState.isConverting &&
+                  dateConversionState.field === "appointmentDate" && (
+                    <div className="flex items-center gap-2">
                       <Spinner size="sm" />
-                    ) : appointmentInfo.appointmentBS &&
-                      dateConversionState.lastConversion.timestamp > 0 ? (
-                      <CheckCircleIcon className="w-4 h-4 text-health-600" />
-                    ) : null
-                  }
-                  label="Appointment B.S"
-                  name="appointmentBS"
-                  placeholder="YYYY/MM/DD"
-                  type="text"
-                  value={appointmentInfo.appointmentBS}
-                  onChange={handleAppointmentInfoChange}
-                />
-              </div>
-
-              <CustomInput
-                label="Start Time"
-                name="startTime"
-                type="time"
-                value={appointmentInfo.startTime}
-                onChange={handleAppointmentInfoChange}
-              />
-
-              <CustomInput
-                label="End Time"
-                name="endTime"
-                type="time"
-                value={appointmentInfo.endTime}
-                onChange={handleAppointmentInfoChange}
-              />
-
-              <CustomSearchSelect
-                required
-                items={patients.map((p) => ({
-                  id: p.id,
-                  primary: p.name,
-                  secondary: `Reg# ${p.regNumber}`,
-                }))}
-                label="Patient"
-                placeholder="Search and select patient"
-                value={appointmentInfo.patientId}
-                onChange={(id, primary) => {
-                  setAppointmentInfo((p) => ({ ...p, patientId: id }));
-                  setPatientSearchInput(primary);
-                }}
-              />
-
-              <CustomSearchSelect
-                required
-                items={doctors
-                  .filter((_d: any) => _d.isActive !== false)
-                  .map((d) => ({
-                    id: d.id,
-                    primary: d.name,
-                    secondary: d.speciality,
-                  }))}
-                label="Doctor"
-                placeholder="Search and select doctor"
-                value={appointmentInfo.doctorId}
-                onChange={(id) =>
-                  setAppointmentInfo((p) => ({ ...p, doctorId: id }))
+                    </div>
+                  )
                 }
-              />
-
-              <CustomSearchSelect
-                required
-                items={appointmentTypes.map((t) => ({
-                  id: t.id,
-                  primary: t.name,
-                  secondary: `NPR ${t.price.toLocaleString()}`,
-                }))}
-                label="Appointment Type"
-                placeholder="Search and select type"
-                value={appointmentInfo.appointmentTypeId}
-                onChange={(id) =>
-                  setAppointmentInfo((p) => ({ ...p, appointmentTypeId: id }))
-                }
+                label="Appointment Date *"
+                name="appointmentDate"
+                type="date"
+                value={appointmentInfo.appointmentDate}
+                onChange={handleAppointmentInfoChange}
               />
             </div>
 
-            <div className="mt-6 flex flex-col gap-1.5 w-full">
+            <div className="relative">
+              <CustomInput
+                description="Automatically converts to AD Date"
+                disabled={
+                  dateConversionState.isConverting &&
+                  dateConversionState.field === "appointmentBS"
+                }
+                endContent={
+                  dateConversionState.isConverting &&
+                    dateConversionState.field === "appointmentBS" ? (
+                    <Spinner size="sm" />
+                  ) : appointmentInfo.appointmentBS &&
+                    dateConversionState.lastConversion.timestamp > 0 ? (
+                    <CheckCircleIcon className="w-4 h-4 text-health-600" />
+                  ) : null
+                }
+                label="Appointment B.S"
+                name="appointmentBS"
+                placeholder="YYYY/MM/DD"
+                type="text"
+                value={appointmentInfo.appointmentBS}
+                onChange={handleAppointmentInfoChange}
+              />
+            </div>
+
+            <CustomSearchSelect
+              required
+              items={patients.map((p) => ({
+                id: p.id,
+                primary: p.name,
+                secondary: `Reg# ${p.regNumber}`,
+              }))}
+              label="Patient"
+              placeholder="Search and select patient"
+              value={appointmentInfo.patientId}
+              onChange={(id, primary) => {
+                setAppointmentInfo((p) => ({ ...p, patientId: id }));
+                setPatientSearchInput(primary);
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Dynamic Appointment Rows */}
+        <div className="bg-surface border border-border-base rounded-2xl shadow-sm overflow-visible">
+          <div className="px-5 py-4 border-b border-border-base bg-surface-2/50 rounded-t-2xl flex justify-between items-center">
+            <h4 className="font-semibold text-[15px] text-text-main flex items-center gap-2">
+              <IoAddOutline className="w-5 h-5 text-primary" />
+              Clinician Assignments
+            </h4>
+            <Button
+              size="sm"
+              variant="bordered"
+              type="button"
+              onClick={() => {
+                setAppointmentRows((prev) => [
+                  ...prev,
+                  {
+                    id: crypto.randomUUID(),
+                    clinicianType: "doctor",
+                    clinicianId: "",
+                    appointmentTypeId: "",
+                    startTime: "",
+                    endTime: "",
+                  },
+                ]);
+              }}
+            >
+              + Add Clinician
+            </Button>
+          </div>
+
+          <div className="p-6 flex flex-col gap-6">
+            {appointmentRows.map((row, index) => (
+              <div
+                key={row.id}
+                className="relative p-5 border border-border-base rounded-xl bg-surface-2/30 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4"
+              >
+                {/* Remove button if more than 1 */}
+                {appointmentRows.length > 1 && (
+                  <button
+                    type="button"
+                    className="absolute -top-3 -right-3 w-7 h-7 bg-red-100 text-red-600 rounded-full flex items-center justify-center border border-red-200 hover:bg-red-200 transition-colors z-10"
+                    onClick={() => {
+                      setAppointmentRows((prev) =>
+                        prev.filter((r) => r.id !== row.id),
+                      );
+                    }}
+                  >
+                    <IoTrashOutline className="w-4 h-4" />
+                  </button>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-medium text-text-main">
+                    Clinician Type
+                  </label>
+                  <select
+                    className="flex-1 w-full text-[13.5px] px-3 py-1.5 h-[38px] bg-surface border border-border-base rounded-xl outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    value={row.clinicianType}
+                    onChange={(e) => {
+                      const newType = e.target.value as "doctor" | "expert";
+                      setAppointmentRows((prev) =>
+                        prev.map((r) =>
+                          r.id === row.id
+                            ? { ...r, clinicianType: newType, clinicianId: "" }
+                            : r,
+                        ),
+                      );
+                    }}
+                  >
+                    <option value="doctor">Doctor</option>
+                    <option value="expert">Expert</option>
+                  </select>
+                </div>
+
+                <div className="xl:col-span-1">
+                  <CustomSearchSelect
+                    required
+                    items={
+                      row.clinicianType === "doctor"
+                        ? doctors
+                          .filter((_d: any) => _d.isActive !== false)
+                          .map((d) => ({
+                            id: d.id,
+                            primary: d.name,
+                            secondary: d.speciality,
+                          }))
+                        : experts
+                          .filter((_e: any) => _e.isActive !== false)
+                          .map((e) => ({
+                            id: e.id,
+                            primary: e.name,
+                            secondary: e.speciality || "Expert",
+                          }))
+                    }
+                    label={`Select ${row.clinicianType === "doctor" ? "Doctor" : "Expert"} *`}
+                    placeholder={`Search ${row.clinicianType}...`}
+                    value={row.clinicianId}
+                    onChange={(id) => {
+                      setAppointmentRows((prev) =>
+                        prev.map((r) =>
+                          r.id === row.id ? { ...r, clinicianId: id } : r,
+                        ),
+                      );
+                    }}
+                  />
+                </div>
+
+                <div className="xl:col-span-1">
+                  <CustomSearchSelect
+                    required
+                    items={appointmentTypes.map((t) => ({
+                      id: t.id,
+                      primary: t.name,
+                      secondary: `NPR ${t.price.toLocaleString()}`,
+                    }))}
+                    label="Appointment Type *"
+                    placeholder="Search type..."
+                    value={row.appointmentTypeId}
+                    onChange={(id) => {
+                      setAppointmentRows((prev) =>
+                        prev.map((r) =>
+                          r.id === row.id ? { ...r, appointmentTypeId: id } : r,
+                        ),
+                      );
+                    }}
+                  />
+                </div>
+
+                <CustomInput
+                  label="Start Time"
+                  name={`startTime-${row.id}`}
+                  type="time"
+                  value={row.startTime}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setAppointmentRows((prev) =>
+                      prev.map((r) =>
+                        r.id === row.id ? { ...r, startTime: e.target.value } : r,
+                      ),
+                    );
+                  }}
+                />
+
+                <CustomInput
+                  label="End Time"
+                  name={`endTime-${row.id}`}
+                  type="time"
+                  value={row.endTime}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setAppointmentRows((prev) =>
+                      prev.map((r) =>
+                        r.id === row.id ? { ...r, endTime: e.target.value } : r,
+                      ),
+                    );
+                  }}
+                />
+              </div>
+            ))}
+
+            <div className="mt-2 flex flex-col gap-1.5 w-full">
               <label className="text-[13px] font-medium text-text-main">
                 Reason for Visit
               </label>
@@ -998,7 +1165,7 @@ export default function NewAppointmentPage() {
               />
             </div>
 
-            <div className="mt-6 flex flex-col gap-1.5 w-full">
+            <div className="mt-2 flex flex-col gap-1.5 w-full">
               <label className="text-[13px] font-medium text-text-main">
                 Notes (Optional)
               </label>

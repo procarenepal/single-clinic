@@ -29,6 +29,7 @@ import {
   getPrintBrandingCSS,
   getPrintHeaderHTML,
   getPrintFooterHTML,
+  getPrintFontsLinkHTML,
 } from "@/utils/printBranding";
 import { useAuthContext } from "@/context/AuthContext";
 import { title } from "@/components/primitives";
@@ -307,6 +308,7 @@ export default function PrintLayoutPage() {
       <!DOCTYPE html>
       <html>
       <head>
+        ${getPrintFontsLinkHTML()}
         <title>Print Layout - ${clinic?.name || "Clinic"}</title>
         <style>
           @page { margin: 0; size: A4; }

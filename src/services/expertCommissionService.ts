@@ -24,6 +24,8 @@ class ExpertCommissionService {
     createdBy: string,
   ): Promise<string[]> {
     try {
+
+
       // Group items by expertId
       const expertGroups: Record<
         string,
@@ -43,21 +45,27 @@ class ExpertCommissionService {
       const promises = Object.entries(expertGroups).map(
         async ([eId, group]) => {
           // Calculate total commission amount for this expert's items
+          let groupSubtotal = 0;
           const groupCommissionAmount = group.items.reduce((total, item) => {
             const percentage =
               typeof item.commission === "number"
                 ? item.commission
                 : defaultExpertCommissionPercent;
 
+            // Pro-rate the global invoice discount (mainDiscountAmount) onto this item
+            // item.amount is already reduced by itemDiscountAmount
+            // So we calculate the ratio based on the remaining total
+            const totalItemAmounts = (billing.subtotal || 1) - (billing.itemDiscountAmount || 0);
+            const validTotal = totalItemAmounts > 0 ? totalItemAmounts : 1;
+            const mainDiscount = billing.mainDiscountAmount || 0;
+            const discountRatio = (validTotal - mainDiscount) / validTotal;
+            const effectiveItemAmount = item.amount * discountRatio;
+
+            groupSubtotal += effectiveItemAmount;
+
             if (!percentage || percentage <= 0) {
               return total;
             }
-
-            // Pro-rate the global invoice discount (mainDiscountAmount) onto this item
-            const subtotal = billing.subtotal || 1; // Prevent division by zero
-            const mainDiscount = billing.mainDiscountAmount || 0;
-            const discountRatio = (subtotal - mainDiscount) / subtotal;
-            const effectiveItemAmount = item.amount * discountRatio;
 
             const itemCommissionAmount =
               (effectiveItemAmount * percentage) / 100;
@@ -67,10 +75,6 @@ class ExpertCommissionService {
 
           if (groupCommissionAmount <= 0) return null;
 
-          const groupSubtotal = group.items.reduce(
-            (sum, item) => sum + item.amount,
-            0,
-          );
           const effectivePercentage =
             groupSubtotal > 0
               ? (groupCommissionAmount / groupSubtotal) * 100
@@ -133,8 +137,10 @@ class ExpertCommissionService {
     billing: AppointmentBilling,
     expertCommissionPercent: number,
     createdBy: string,
-  ): Promise<string> {
+  ): Promise<string | null> {
     try {
+
+
       const commissionData: Omit<ExpertCommission, "id"> = {
         expertId,
         expertName,
@@ -243,6 +249,15 @@ class ExpertCommissionService {
       }
 
       const currentCommission = commissionDoc.data() as ExpertCommission;
+
+      if (paidAmount <= 0) {
+        throw new Error("Payment amount must be greater than 0");
+      }
+
+      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
+      if (paidAmount > remainingAmount) {
+        throw new Error("Payment amount cannot exceed remaining commission balance.");
+      }
 
       const updateData: any = {
         paidAmount: (currentCommission.paidAmount || 0) + paidAmount,

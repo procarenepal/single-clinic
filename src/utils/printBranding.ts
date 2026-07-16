@@ -4,6 +4,15 @@ import { PrintLayoutConfig } from "@/types/printLayout";
  * Generates the CSS styles for the centralized clinical branding.
  * Uses the Slate-600 palette and centered-stack layout model.
  */
+/**
+ * Returns a <link> tag for all Google Fonts used in print layouts.
+ * Must be placed in the <head> BEFORE any <style> tag for fonts to load.
+ */
+export const getPrintFontsLinkHTML = (): string =>
+  `<link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Nunito:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Roboto:wght@400;500;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">`;
+
 export const getPrintBrandingCSS = (
   config: PrintLayoutConfig,
   isThermal: boolean = false,
@@ -28,8 +37,6 @@ export const getPrintBrandingCSS = (
     (fontSize === "small" ? 10 : fontSize === "large" ? 14 : 12);
 
   return `
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Nunito:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Roboto:wght@400;500;700&family=Outfit:wght@400;600;700&display=swap');
-
     * { box-sizing: border-box; }
 
     body {
@@ -89,7 +96,7 @@ export const getPrintBrandingCSS = (
       font-size: ${config.fontSize === "small" ? "20px" : config.fontSize === "large" ? "28px" : "24px"};
       margin: 0;
       font-weight: 800;
-      color: #0f172a;
+      color: ${titleColor};
       text-transform: uppercase;
       letter-spacing: 0.05em;
       line-height: 1.1;
@@ -100,7 +107,7 @@ export const getPrintBrandingCSS = (
     .tagline {
       font-size: 14px;
       font-weight: 600;
-      color: #1e293b;
+      color: ${titleColor};
       text-transform: uppercase;
       letter-spacing: 0.12em;
       margin: 4px 0 0 0;
@@ -113,9 +120,9 @@ export const getPrintBrandingCSS = (
     }
 
     .address {
-      font-size: 14px;
+      font-size: ${contentFontSize}px;
       font-weight: 500;
-      color: #1e293b;
+      color: ${textColor};
       line-height: 1.4;
       text-align: center;
       white-space: pre-wrap;
@@ -137,24 +144,27 @@ export const getPrintBrandingCSS = (
     }
 
     .contact-label {
-      font-size: 14px;
+      font-size: ${Math.max(contentFontSize - 1, 9)}px;
       font-weight: 600;
-      color: #334155;
+      color: ${textColor};
       text-transform: uppercase;
+      font-family: ${fontFamily};
     }
 
     .contact-value {
-      font-size: 14px;
+      font-size: ${contentFontSize}px;
       font-weight: 700;
-      color: #0f172a;
+      color: ${titleColor};
+      font-family: ${fontFamily};
     }
 
     .website {
-      font-size: 14px;
+      font-size: ${contentFontSize}px;
       font-weight: 700;
-      color: #0f172a;
+      color: ${primaryColor};
       margin-top: 2px;
       text-align: center;
+      font-family: ${fontFamily};
     }
 
     .pos-logo { 
@@ -166,11 +176,13 @@ export const getPrintBrandingCSS = (
       margin-left: ${effectiveLogoPosition === "center" ? `-${(config.logoWidth || 80) / 2}px` : "0px"};
       z-index: 100;
     }
-    .pos-clinicName { transform: ${isThermal ? "none" : `translate(${config.clinicNamePos?.x || 0}px, ${config.clinicNamePos?.y || 0}px)`}; position: relative; }
-    .pos-tagline { transform: ${isThermal ? "none" : `translate(${config.taglinePos?.x || 0}px, ${config.taglinePos?.y || 0}px)`}; position: relative; }
-    .pos-address { transform: ${isThermal ? "none" : `translate(${config.addressPos?.x || 0}px, ${config.addressPos?.y || 0}px)`}; position: relative; }
-    .pos-contacts { transform: ${isThermal ? "none" : `translate(${config.phonePos?.x || 0}px, ${config.phonePos?.y || 0}px)`}; position: relative; width: 100%; display: flex; justify-content: center; }
-    .pos-website { transform: ${isThermal ? "none" : `translate(${config.websitePos?.x || 0}px, ${config.websitePos?.y || 0}px)`}; position: relative; }
+    /* Identity-stack items: x-nudge only. Y-offset is intentionally ignored to
+       prevent saved drag positions from reordering flex-column elements. */
+    .pos-clinicName { transform: ${isThermal ? "none" : `translateX(${config.clinicNamePos?.x || 0}px)`}; position: relative; }
+    .pos-tagline { transform: ${isThermal ? "none" : `translateX(${config.taglinePos?.x || 0}px)`}; position: relative; }
+    .pos-address { transform: ${isThermal ? "none" : `translateX(${config.addressPos?.x || 0}px)`}; position: relative; }
+    .pos-contacts { transform: ${isThermal ? "none" : `translateX(${config.phonePos?.x || 0}px)`}; position: relative; width: 100%; display: flex; justify-content: center; }
+    .pos-website { transform: ${isThermal ? "none" : `translateX(${config.websitePos?.x || 0}px)`}; position: relative; }
 
     .footer-section {
       border-top: 1px solid #f1f5f9;
@@ -181,11 +193,12 @@ export const getPrintBrandingCSS = (
     }
 
     .footer-text {
-      font-size: 14px;
+      font-size: ${Math.max(contentFontSize - 2, 8)}px;
       font-weight: 600;
-      color: #334155;
+      color: ${textColor};
       text-transform: uppercase;
       letter-spacing: 0.1em;
+      font-family: ${fontFamily};
     }
   `;
 };
@@ -274,7 +287,7 @@ export const getPrintHeaderHTML = (
           <div class="pos-website">
             <div class="contact-item">
               <span class="contact-label" style="text-transform: lowercase;">website:</span>
-              <span class="contact-value">${config.website || clinic?.website}</span>
+              <span class="contact-value">${(config.website || clinic?.website || "").replace(/^:\s*/, "")}</span>
             </div>
           </div>
         `
