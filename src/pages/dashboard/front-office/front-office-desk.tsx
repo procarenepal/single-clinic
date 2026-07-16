@@ -774,11 +774,11 @@ export default function FrontOfficeDesk() {
       const cliniciansToProcess = (cliniciansList && cliniciansList.length > 0)
         ? cliniciansList
         : [{
-            clinicianId: doctorId,
-            appointmentTypeId: appointmentTypeId,
-            addCommission: addClinicianCommission,
-            chargeConsultation: generateConsultationFee,
-          }];
+          clinicianId: doctorId,
+          appointmentTypeId: appointmentTypeId,
+          addCommission: addClinicianCommission,
+          chargeConsultation: generateConsultationFee,
+        }];
 
       for (const cl of cliniciansToProcess) {
         if (!cl.clinicianId || cl.clinicianId === "unassigned") continue;
@@ -821,7 +821,7 @@ export default function FrontOfficeDesk() {
             const nameLower = apptType.name.toLowerCase();
             isApptTypeConsultation = nameLower.includes("consult");
             let shouldCharge = apptType.billAtFrontDesk || nameLower.includes("hair analy") || nameLower.includes("skin analy") || isApptTypeConsultation;
-            
+
             if (isApptTypeConsultation && !cl.chargeConsultation) {
               shouldCharge = false;
             }
@@ -901,7 +901,6 @@ export default function FrontOfficeDesk() {
           const partner = await referralPartnerService.getReferralPartnerById(
             pat.referralPartnerId,
           );
-
           if (partner) {
             const pct = partner.defaultCommission || 0;
             const amt = (totalInvoiceAmount * pct) / 100;
@@ -948,6 +947,7 @@ export default function FrontOfficeDesk() {
         doctorId: doctorId || "unassigned",
         doctorName: "Multiple/System",
         doctorType: "regular" as const,
+        appointmentId: appointmentId,
         referralPartnerId: refPartnerId,
         referralCommissionAmount:
           refCommissionAmt && refCommissionAmt > 0
@@ -2744,6 +2744,7 @@ export default function FrontOfficeDesk() {
         const shouldGenerateConsFee =
           quickIntakeForm.generateConsultationBill && (hasDoctor || hasExpert);
 
+        let primaryBillId: string | null = null;
         if (shouldGenerateConsFee || hasApptFee) {
           const clinicianIdToBill = hasDoctor
             ? quickIntakeForm.doctorId
@@ -2755,7 +2756,7 @@ export default function FrontOfficeDesk() {
             : quickIntakeForm.addExpertCommission;
 
           try {
-            await createConsultationBill(
+            primaryBillId = await createConsultationBill(
               patientIdToUse,
               clinicianIdToBill,
               newApptId,
@@ -2838,25 +2839,11 @@ export default function FrontOfficeDesk() {
               doctorId: extraDocId,
               assignedExpertId: extraExpId,
               appointmentTypeId: extraClin.appointmentTypeId || apptData.appointmentTypeId,
+              consultationBillingId: primaryBillId || undefined,
             };
 
             const extraApptId = await appointmentService.createAppointment(extraApptData);
-
-            if (extraClin.chargeConsultation || hasApptFee) {
-              try {
-                await createConsultationBill(
-                  patientIdToUse,
-                  extraClin.clinicianId,
-                  extraApptId,
-                  quickIntakeForm.reason.trim() || "Walk-in General Checkup",
-                  extraClin.addCommission,
-                  extraClin.appointmentTypeId || quickIntakeForm.appointmentTypeId,
-                  extraClin.chargeConsultation,
-                );
-              } catch (billErr) {
-                console.error("Error generating extra quick intake bill:", billErr);
-              }
-            }
+            // Skip creating a separate bill since all clinicians were included in the primary bill.
           }
         }
 
@@ -3030,18 +3017,18 @@ export default function FrontOfficeDesk() {
           );
         } else {
           let procComm = defaultComm;
-          
+
           if (rec.items && rec.items.length === 1) {
-             const pType = appointmentTypes.find((t) => t.id === rec.items[0].id);
-             if (pType && pType.calculateCommission === false) {
-               procComm = 0;
-             }
+            const pType = appointmentTypes.find((t) => t.id === rec.items[0].id);
+            if (pType && pType.calculateCommission === false) {
+              procComm = 0;
+            }
           } else {
-             // If multiple or unknown, try to match by name
-             const pType = appointmentTypes.find((t) => t.name === rec.name);
-             if (pType && pType.calculateCommission === false) {
-               procComm = 0;
-             }
+            // If multiple or unknown, try to match by name
+            const pType = appointmentTypes.find((t) => t.name === rec.name);
+            if (pType && pType.calculateCommission === false) {
+              procComm = 0;
+            }
           }
 
           procedureItemsToAdd = [
@@ -3550,6 +3537,7 @@ export default function FrontOfficeDesk() {
             branchId: branchId ?? clinicId,
             patientId: appt.patientId,
             patientName: pat?.name || "Unknown Patient",
+            appointmentId: appt.id,
             doctorId: clinicianId,
             doctorName: docInfo
               ? docInfo.name.startsWith("Dr.") || isExpert
