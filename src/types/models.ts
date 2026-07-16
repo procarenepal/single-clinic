@@ -312,6 +312,7 @@ export interface AppointmentType {
   categoryId?: string; // Reference to TreatmentCategory
   color?: string; // Color identifier for theme-dynamic blinking rows
   billAtFrontDesk?: boolean; // Whether to bill automatically at check-in
+  calculateCommission?: boolean; // Whether to include in doctor/expert commission calculations
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the appointment type

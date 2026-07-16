@@ -53,7 +53,7 @@ class DoctorCommissionService {
           let groupSubtotal = 0;
           const groupCommissionAmount = group.items.reduce((total, item) => {
             const percentage =
-              typeof item.commission === "number" && item.commission > 0
+              typeof item.commission === "number" && item.commission >= 0
                 ? item.commission
                 : doctorCommissionPercent;
 

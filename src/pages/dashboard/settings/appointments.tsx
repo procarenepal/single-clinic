@@ -7,6 +7,7 @@ import {
   IoArrowBackOutline,
   IoPencilOutline,
   IoSparklesOutline,
+  IoSearchOutline,
 } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
@@ -48,13 +49,16 @@ export default function AppointmentSettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [showInactive, setShowInactive] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
-  // Filter appointment types based on status
-  const filteredAppointmentTypes = appointmentTypes.filter((type) =>
-    showInactive ? true : type.isActive,
-  );
+  // Filter appointment types based on status and search query
+  const filteredAppointmentTypes = appointmentTypes.filter((type) => {
+    const matchesStatus = showInactive ? true : type.isActive;
+    const matchesSearch = type.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
 
   // Load appointment types on component mount
   useEffect(() => {
@@ -146,9 +150,10 @@ export default function AppointmentSettingsPage() {
         await appointmentTypeService.updateAppointmentType(editingType.id, {
           name: type.name,
           price: type.price,
-          isActive: type.isActive,
-          color: type.color,
-          billAtFrontDesk: type.billAtFrontDesk,
+          isActive: type.isActive ?? true,
+          color: type.color || "none",
+          billAtFrontDesk: type.billAtFrontDesk ?? false,
+          calculateCommission: type.calculateCommission ?? true,
         });
         savedId = editingType.id;
       } else {
@@ -161,6 +166,7 @@ export default function AppointmentSettingsPage() {
           isActive: type.isActive ?? true,
           color: type.color || "none",
           billAtFrontDesk: type.billAtFrontDesk ?? false,
+          calculateCommission: type.calculateCommission ?? true,
           clinicId,
           createdBy: currentUser.uid,
         };
@@ -533,6 +539,16 @@ export default function AppointmentSettingsPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <div className="w-64">
+                <Input
+                  isClearable
+                  placeholder="Search appointment types..."
+                  startContent={<IoSearchOutline className="text-text-muted" />}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onClear={() => setSearchQuery("")}
+                />
+              </div>
               {selectedTypes.size > 0 && (
                 <Button
                   color="danger"
@@ -745,6 +761,7 @@ function AppointmentTypeModal({
       isActive: true,
       color: "none",
       billAtFrontDesk: false,
+      calculateCommission: true,
     },
   );
 
@@ -756,6 +773,7 @@ function AppointmentTypeModal({
       isActive: true,
       color: "none",
       billAtFrontDesk: false,
+      calculateCommission: true,
     };
 
     setFormData(type || defaultFormData);
@@ -950,6 +968,24 @@ function AppointmentTypeModal({
               Select if this service should be billed instantly at check-in
               (e.g., Analyzers, Walk-in Services). Leave unselected for
               procedures billed later.
+            </p>
+          </div>
+          
+          <div className="flex flex-col gap-1 p-3 rounded-lg border border-border-base bg-surface-2/30 mt-2">
+            <Checkbox
+              className="font-medium"
+              isSelected={formData.calculateCommission ?? true}
+              onValueChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  calculateCommission: value,
+                }))
+              }
+            >
+              Calculate Commission
+            </Checkbox>
+            <p className="text-xs text-text-muted ml-7 leading-relaxed">
+              If checked, this service will be included in doctor/expert commission calculations. Uncheck to exclude (e.g., for basic registration fees).
             </p>
           </div>
         </div>

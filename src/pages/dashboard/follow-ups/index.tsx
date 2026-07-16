@@ -25,6 +25,7 @@ import FollowupModal from "./FollowupModal";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { followupService } from "@/services/followupService";
+import { rbacService } from "@/services/rbacService";
 
 export default function FollowupsPage() {
   const { currentUser, clinicId, branchId } = useAuthContext();
@@ -38,9 +39,86 @@ export default function FollowupsPage() {
   const [selectedFollowup, setSelectedFollowup] =
     useState<PatientFollowup | null>(null);
 
+  const [allowedCategories, setAllowedCategories] = useState<string[]>([
+    "all",
+    "appointment",
+    "pharmacy",
+    "pathology",
+    "general",
+  ]);
+
   useEffect(() => {
     loadFollowups();
   }, [clinicId, branchId]);
+
+  useEffect(() => {
+    if (clinicId && currentUser?.uid) {
+      const fetchRoles = async () => {
+        if (
+          currentUser.role === "system-owner" ||
+          currentUser.role === "clinic-admin"
+        ) {
+          setAllowedCategories([
+            "all",
+            "appointment",
+            "pharmacy",
+            "pathology",
+            "general",
+          ]);
+          return;
+        }
+
+        try {
+          const assignments = await rbacService.getUserRoleAssignments(
+            currentUser.uid,
+            clinicId
+          );
+          const roles = await Promise.all(
+            assignments.map((a) => rbacService.getRoleById(a.roleId))
+          );
+          const roleNames = roles
+            .filter((r) => r)
+            .map((r) => r!.name.toLowerCase());
+
+          let cats: string[] = [];
+          if (
+            roleNames.some(
+              (r) =>
+                r.includes("admin") ||
+                r.includes("manager") ||
+                r.includes("doctor")
+            )
+          ) {
+            cats = ["all", "appointment", "pharmacy", "pathology", "general"];
+          } else {
+            if (roleNames.some((r) => r.includes("pharmac"))) {
+              cats.push("pharmacy");
+            }
+            if (roleNames.some((r) => r.includes("patholog") || r.includes("lab"))) {
+              cats.push("pathology");
+            }
+            if (roleNames.some((r) => r.includes("reception") || r.includes("front"))) {
+              cats.push("appointment", "general");
+            }
+            if (cats.length === 0) {
+              cats = ["all", "appointment", "pharmacy", "pathology", "general"]; // Fallback if no specific role matched
+            } else if (cats.length > 1) {
+              cats = ["all", ...cats];
+            }
+          }
+          
+          setAllowedCategories(cats);
+          if (!cats.includes(categoryFilter) && cats.length > 0) {
+            setCategoryFilter(cats[0]);
+          }
+        } catch (err) {
+          console.error("Error fetching user roles for followups:", err);
+        }
+      };
+
+      fetchRoles();
+    }
+  }, [clinicId, currentUser]);
 
   const loadFollowups = async () => {
     if (!clinicId) return;
@@ -68,13 +146,17 @@ export default function FollowupsPage() {
       const matchesStatus =
         statusFilter === "all" || f.overallStatus === statusFilter;
 
+      const cat = f.category || "general";
+      
+      // If "all" is selected, only show allowed categories
       const matchesCategory =
-        categoryFilter === "all" ||
-        (f.category || "general") === categoryFilter;
+        categoryFilter === "all"
+          ? allowedCategories.includes(cat) || allowedCategories.includes("all")
+          : cat === categoryFilter;
 
       return matchesSearch && matchesStatus && matchesCategory;
     });
-  }, [followups, searchQuery, statusFilter, categoryFilter]);
+  }, [followups, searchQuery, statusFilter, categoryFilter, allowedCategories]);
 
   const handleEdit = (followup: PatientFollowup) => {
     setSelectedFollowup(followup);
@@ -228,11 +310,21 @@ export default function FollowupsPage() {
           variant="underlined"
           onSelectionChange={(key) => setCategoryFilter(key as string)}
         >
-          <Tab key="all" title="All Follow-ups" />
-          <Tab key="appointment" title="Appointments" />
-          <Tab key="pharmacy" title="Pharmacy" />
-          <Tab key="pathology" title="Pathology" />
-          <Tab key="general" title="General" />
+          {allowedCategories.includes("all") && (
+            <Tab key="all" title="All Follow-ups" />
+          )}
+          {allowedCategories.includes("appointment") && (
+            <Tab key="appointment" title="Appointments" />
+          )}
+          {allowedCategories.includes("pharmacy") && (
+            <Tab key="pharmacy" title="Pharmacy" />
+          )}
+          {allowedCategories.includes("pathology") && (
+            <Tab key="pathology" title="Pathology" />
+          )}
+          {allowedCategories.includes("general") && (
+            <Tab key="general" title="General" />
+          )}
         </Tabs>
       </div>
 
@@ -287,7 +379,15 @@ export default function FollowupsPage() {
               <TableColumn>UPD. STATUS</TableColumn>
               <TableColumn>NEXT FOLLOWUP</TableColumn>
               <TableColumn>NOTES</TableColumn>
-              <TableColumn>SERVICE/LABS/MEDS</TableColumn>
+              <TableColumn>
+                {categoryFilter === "pharmacy" 
+                  ? "MEDICINES" 
+                  : categoryFilter === "pathology" 
+                    ? "LAB TESTS" 
+                    : categoryFilter === "appointment"
+                      ? "SERVICES / MEDS"
+                      : "SERVICE/LABS/MEDS"}
+              </TableColumn>
               <TableColumn align="end">ACTIONS</TableColumn>
             </TableHeader>
             <TableBody isLoading={loading} items={filteredFollowups}>
@@ -529,6 +629,16 @@ export default function FollowupsPage() {
       </div>
 
       <FollowupModal
+        allowedCategories={allowedCategories}
+        defaultCategory={
+          categoryFilter === "all"
+            ? allowedCategories[0] === "all" && allowedCategories.length > 1
+              ? allowedCategories[1]
+              : allowedCategories[0] === "all"
+                ? "general"
+                : allowedCategories[0]
+            : categoryFilter
+        }
         followup={selectedFollowup}
         isOpen={isOpen}
         onOpenChange={onOpenChange}

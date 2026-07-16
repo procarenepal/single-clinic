@@ -539,7 +539,11 @@ export default function PatientBillingTab({
             (d) => d.id === (item.doctorId || p.doctorId),
           );
 
-          item.commission = doc?.defaultCommission || 0;
+          if (at.calculateCommission === false) {
+            item.commission = 0;
+          } else {
+            item.commission = doc?.defaultCommission || 0;
+          }
         }
       }
 
@@ -1092,9 +1096,19 @@ export default function PatientBillingTab({
                             label="Appointment Type"
                             placeholder="Search or seed services..."
                             value={item.appointmentTypeId}
-                            onChange={(id) =>
-                              updateItem(idx, { appointmentTypeId: id })
-                            }
+                            onChange={(id) => {
+                              const apptType = appointmentTypes.find((t) => t.id === id);
+                              const updateObj: any = { appointmentTypeId: id };
+                              if (apptType) {
+                                updateObj.appointmentTypeName = apptType.name;
+                                updateObj.price = apptType.price;
+                                updateObj.amount = apptType.price * item.quantity;
+                                if (apptType.calculateCommission === false) {
+                                  updateObj.commission = 0;
+                                }
+                              }
+                              updateItem(idx, updateObj);
+                            }}
                           />
                         </div>
                         <div className="sm:col-span-2">
@@ -1118,13 +1132,14 @@ export default function PatientBillingTab({
                             onChange={(id) => {
                               const d = doctors.find((doc) => doc.id === id);
 
+                              const apptType = appointmentTypes.find((t) => t.id === item.appointmentTypeId);
+                              
                               updateItem(idx, {
                                 doctorId: id,
                                 doctorName: d?.name || "",
-                                commission:
-                                  d?.defaultCommission ??
-                                  billingSettings?.defaultCommission ??
-                                  0,
+                                commission: apptType?.calculateCommission === false 
+                                  ? 0 
+                                  : (d?.defaultCommission ?? billingSettings?.defaultCommission ?? 0),
                               });
                             }}
                           />

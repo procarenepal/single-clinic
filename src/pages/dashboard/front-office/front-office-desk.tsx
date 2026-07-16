@@ -753,6 +753,7 @@ export default function FrontOfficeDesk() {
     addClinicianCommission: boolean = true,
     appointmentTypeId?: string,
     generateConsultationFee: boolean = true,
+    cliniciansList?: any[]
   ) => {
     if (!clinicId) return;
 
@@ -767,93 +768,104 @@ export default function FrontOfficeDesk() {
         }
       }
 
-      let docInfo = doctors.find((d) => d.id === doctorId);
-      let expInfo = experts.find((e) => e.id === doctorId);
-      let isExpert = false;
-
-      if (!docInfo && !expInfo && doctorId && doctorId !== "unassigned") {
-        try {
-          docInfo = (await doctorService.getDoctorById(doctorId)) || undefined;
-          if (!docInfo) {
-            expInfo =
-              (await expertService.getExpertById(doctorId)) || undefined;
-          }
-        } catch (err) {
-          console.error(
-            "Error loading clinician for consultation billing:",
-            err,
-          );
-        }
-      }
-
-      if (expInfo) isExpert = true;
-
-      // 1. Get consultation charge from clinician info (with a fallback to 500 NPR)
-      let doctorConsultationPrice = 0;
-
-      if (generateConsultationFee) {
-        if (docInfo && docInfo.id !== "unassigned") {
-          doctorConsultationPrice =
-            docInfo.consultationCharge !== undefined
-              ? Number(docInfo.consultationCharge)
-              : 500;
-        }
-      }
-
       let totalInvoiceAmount = 0;
-      let apptTypeItem: any = null;
-      let isApptTypeConsultation = false;
+      const items: any[] = [];
 
-      if (
-        appointmentTypeId &&
-        appointmentTypeId !== "default" &&
-        appointmentTypeId !== "consultation-fee" &&
-        !appointmentTypeId.startsWith("pkg_") &&
-        !appointmentTypeId.startsWith("consume_")
-      ) {
-        const apptType = appointmentTypes.find(
-          (t) => t.id === appointmentTypeId,
-        );
+      const cliniciansToProcess = (cliniciansList && cliniciansList.length > 0)
+        ? cliniciansList
+        : [{
+            clinicianId: doctorId,
+            appointmentTypeId: appointmentTypeId,
+            addCommission: addClinicianCommission,
+            chargeConsultation: generateConsultationFee,
+          }];
 
-        if (apptType && apptType.price > 0) {
-          const nameLower = apptType.name.toLowerCase();
+      for (const cl of cliniciansToProcess) {
+        if (!cl.clinicianId || cl.clinicianId === "unassigned") continue;
 
-          isApptTypeConsultation = nameLower.includes("consult");
+        let docInfo = doctors.find((d) => d.id === cl.clinicianId);
+        let expInfo = experts.find((e) => e.id === cl.clinicianId);
+        let isExpert = false;
 
-          let shouldChargeThisItem =
-            apptType.billAtFrontDesk ||
-            nameLower.includes("hair analy") ||
-            nameLower.includes("skin analy") ||
-            isApptTypeConsultation;
-
-          if (isApptTypeConsultation && !generateConsultationFee) {
-            shouldChargeThisItem = false;
+        if (!docInfo && !expInfo) {
+          try {
+            docInfo = (await doctorService.getDoctorById(cl.clinicianId)) || undefined;
+            if (!docInfo) {
+              expInfo = (await expertService.getExpertById(cl.clinicianId)) || undefined;
+            }
+          } catch (err) {
+            console.error("Error loading clinician:", err);
           }
+        }
+        if (expInfo) isExpert = true;
 
-          if (shouldChargeThisItem) {
-            apptTypeItem = {
-              id: crypto.randomUUID(),
-              appointmentTypeId: apptType.id,
-              appointmentTypeName: apptType.name,
-              price: Number(apptType.price),
-              quantity: 1,
-              commission: 0,
-              doctorId: doctorId,
-              doctorName: isExpert
-                ? expInfo?.name || "Expert"
-                : docInfo?.name || "GP",
-              amount: Number(apptType.price),
-            };
-            totalInvoiceAmount += Number(apptType.price);
+        let clConsultationPrice = 0;
+        if (cl.chargeConsultation) {
+          if (docInfo) {
+            clConsultationPrice = docInfo.consultationCharge !== undefined ? Number(docInfo.consultationCharge) : 500;
           }
+        }
+
+        let clApptTypeItem: any = null;
+        let isApptTypeConsultation = false;
+
+        if (
+          cl.appointmentTypeId &&
+          cl.appointmentTypeId !== "default" &&
+          cl.appointmentTypeId !== "consultation-fee" &&
+          !cl.appointmentTypeId.startsWith("pkg_") &&
+          !cl.appointmentTypeId.startsWith("consume_")
+        ) {
+          const apptType = appointmentTypes.find((t) => t.id === cl.appointmentTypeId);
+          if (apptType && apptType.price > 0) {
+            const nameLower = apptType.name.toLowerCase();
+            isApptTypeConsultation = nameLower.includes("consult");
+            let shouldCharge = apptType.billAtFrontDesk || nameLower.includes("hair analy") || nameLower.includes("skin analy") || isApptTypeConsultation;
+            
+            if (isApptTypeConsultation && !cl.chargeConsultation) {
+              shouldCharge = false;
+            }
+
+            if (shouldCharge) {
+              clApptTypeItem = {
+                id: crypto.randomUUID(),
+                appointmentTypeId: apptType.id,
+                appointmentTypeName: apptType.name,
+                price: Number(apptType.price),
+                quantity: 1,
+                commission: (cl.addCommission && apptType.calculateCommission !== false)
+                  ? (isExpert ? expInfo?.defaultCommission : docInfo?.defaultCommission) || 0
+                  : 0,
+                doctorId: cl.clinicianId,
+                doctorName: isExpert ? expInfo?.name || "Expert" : docInfo?.name || "GP",
+                amount: Number(apptType.price),
+              };
+              totalInvoiceAmount += Number(apptType.price);
+            }
+          }
+        }
+
+        if (clConsultationPrice > 0 && !clApptTypeItem) {
+          totalInvoiceAmount += clConsultationPrice;
+          items.push({
+            id: crypto.randomUUID(),
+            appointmentTypeId: "consultation-fee",
+            appointmentTypeName: `Doctor Consultation Fee - Dr. ${docInfo?.name || "GP"}`,
+            price: clConsultationPrice,
+            quantity: 1,
+            commission: cl.addCommission ? (docInfo?.defaultCommission || 0) : 0,
+            doctorId: cl.clinicianId,
+            doctorName: docInfo?.name || "Unknown Doctor",
+            amount: clConsultationPrice,
+          });
+        }
+
+        if (clApptTypeItem) {
+          items.push(clApptTypeItem);
         }
       }
 
-      if (doctorConsultationPrice > 0 && !apptTypeItem) {
-        totalInvoiceAmount += doctorConsultationPrice;
-      }
-
-      if (totalInvoiceAmount === 0 && !apptTypeItem) {
+      if (items.length === 0) {
         return null;
       }
 
@@ -925,32 +937,7 @@ export default function FrontOfficeDesk() {
         clinicId!,
       );
 
-      const clinicianName = isExpert ? expInfo?.name : docInfo?.name;
-      const defaultComm = isExpert
-        ? expInfo?.defaultCommission
-        : docInfo?.defaultCommission;
-
-      const items: any[] = [];
-
-      if (doctorConsultationPrice > 0 && !apptTypeItem) {
-        items.push({
-          id: crypto.randomUUID(),
-          appointmentTypeId: "consultation-fee",
-          appointmentTypeName: `Doctor Consultation Fee - Dr. ${docInfo?.name || "GP"}`,
-          price: doctorConsultationPrice,
-          quantity: 1,
-          commission: addClinicianCommission
-            ? docInfo?.defaultCommission || 0
-            : 0,
-          doctorId: docInfo?.id || doctorId,
-          doctorName: docInfo?.name || "Unknown Doctor",
-          amount: doctorConsultationPrice,
-        });
-      }
-
-      if (apptTypeItem) {
-        items.push(apptTypeItem);
-      }
+      // Items are already built above in the array loop
 
       const billingData = {
         invoiceNumber: invoiceNo,
@@ -958,9 +945,9 @@ export default function FrontOfficeDesk() {
         branchId: branchId || clinicId!,
         patientId: patientId,
         patientName: pat?.name || "Unknown Patient",
-        doctorId: doctorId,
-        doctorName: docInfo?.name || "Unknown Doctor",
-        doctorType: (docInfo?.doctorType || "regular") as "regular" | "visitor",
+        doctorId: doctorId || "unassigned",
+        doctorName: "Multiple/System",
+        doctorType: "regular" as const,
         referralPartnerId: refPartnerId,
         referralCommissionAmount:
           refCommissionAmt && refCommissionAmt > 0
@@ -2655,6 +2642,7 @@ export default function FrontOfficeDesk() {
                 addCommissionFlag,
                 "package-session",
                 true,
+                quickIntakeForm.clinicians
               );
             } catch (billErr) {
               console.error(
@@ -2775,6 +2763,7 @@ export default function FrontOfficeDesk() {
               addCommissionFlag,
               quickIntakeForm.appointmentTypeId,
               shouldGenerateConsFee,
+              quickIntakeForm.clinicians
             );
           } catch (billErr) {
             console.error(
@@ -3014,6 +3003,11 @@ export default function FrontOfficeDesk() {
               }
             }
 
+            const pType = appointmentTypes.find((t) => t.id === i.id);
+            if (pType && pType.calculateCommission === false) {
+              itemComm = 0;
+            }
+
             return {
               id: crypto.randomUUID(),
               appointmentTypeId:
@@ -3035,6 +3029,21 @@ export default function FrontOfficeDesk() {
             0,
           );
         } else {
+          let procComm = defaultComm;
+          
+          if (rec.items && rec.items.length === 1) {
+             const pType = appointmentTypes.find((t) => t.id === rec.items[0].id);
+             if (pType && pType.calculateCommission === false) {
+               procComm = 0;
+             }
+          } else {
+             // If multiple or unknown, try to match by name
+             const pType = appointmentTypes.find((t) => t.name === rec.name);
+             if (pType && pType.calculateCommission === false) {
+               procComm = 0;
+             }
+          }
+
           procedureItemsToAdd = [
             {
               id: crypto.randomUUID(),
@@ -3043,7 +3052,7 @@ export default function FrontOfficeDesk() {
               appointmentTypeName: `${rec.name} (Procedure Fee)`,
               price: rec.fee,
               quantity: 1,
-              commission: defaultComm,
+              commission: procComm,
               doctorId: clinicianId,
               doctorName: clinicianName,
               discountValue: 0,

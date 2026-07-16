@@ -38,6 +38,7 @@ function mapDoc(id: string, data: any): PatientFollowup {
     id,
     clinicId: data.clinicId || "",
     branchId: data.branchId || "",
+    category: data.category || "general",
     patientId: data.patientId || "",
     patientName: data.patientName || "",
     patientMobile: data.patientMobile || "",
@@ -96,12 +97,12 @@ function serializeDates(followup: Partial<PatientFollowup>): any {
   if ("followupDates" in followup) {
     result.followupDates = followup.followupDates
       ? {
-          first: toTimestamp(followup.followupDates.first),
-          second: toTimestamp(followup.followupDates.second),
-          third: toTimestamp(followup.followupDates.third),
-          fourth: toTimestamp(followup.followupDates.fourth),
-          fifth: toTimestamp(followup.followupDates.fifth),
-        }
+        first: toTimestamp(followup.followupDates.first),
+        second: toTimestamp(followup.followupDates.second),
+        third: toTimestamp(followup.followupDates.third),
+        fourth: toTimestamp(followup.followupDates.fourth),
+        fifth: toTimestamp(followup.followupDates.fifth),
+      }
       : {};
   }
 

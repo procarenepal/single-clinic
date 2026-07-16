@@ -33,6 +33,8 @@ interface FollowupModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   followup: PatientFollowup | null;
+  allowedCategories?: string[];
+  defaultCategory?: string;
   onSaved: () => void;
 }
 
@@ -40,6 +42,8 @@ export default function FollowupModal({
   isOpen,
   onOpenChange,
   followup,
+  allowedCategories = ["all", "appointment", "pharmacy", "pathology", "general"],
+  defaultCategory = "general",
   onSaved,
 }: FollowupModalProps) {
   const { clinicId, branchId, currentUser } = useAuthContext();
@@ -125,16 +129,16 @@ export default function FollowupModal({
             : "",
           secondDate: followup.followupDates?.second
             ? new Date(followup.followupDates.second)
-                .toISOString()
-                .split("T")[0]
+              .toISOString()
+              .split("T")[0]
             : "",
           thirdDate: followup.followupDates?.third
             ? new Date(followup.followupDates.third).toISOString().split("T")[0]
             : "",
           fourthDate: followup.followupDates?.fourth
             ? new Date(followup.followupDates.fourth)
-                .toISOString()
-                .split("T")[0]
+              .toISOString()
+              .split("T")[0]
             : "",
           fifthDate: followup.followupDates?.fifth
             ? new Date(followup.followupDates.fifth).toISOString().split("T")[0]
@@ -157,7 +161,7 @@ export default function FollowupModal({
           patientId: "",
           patientName: "",
           patientMobile: "",
-          category: "general",
+          category: (defaultCategory as any) || "general",
           visitDate: new Date().toISOString().split("T")[0],
           session: "1st",
           initStatus: "good",
@@ -468,8 +472,8 @@ export default function FollowupModal({
                                   ...prev,
                                   visitDate: existing.visitDate
                                     ? new Date(existing.visitDate)
-                                        .toISOString()
-                                        .split("T")[0]
+                                      .toISOString()
+                                      .split("T")[0]
                                     : prev.visitDate,
                                   session: existing.session || prev.session,
                                   initStatus:
@@ -531,7 +535,7 @@ export default function FollowupModal({
                               age: pt.age || "N/A",
                               gender: pt.gender
                                 ? pt.gender.charAt(0).toUpperCase() +
-                                  pt.gender.slice(1)
+                                pt.gender.slice(1)
                                 : "N/A",
                               diagnosis:
                                 latest?.diagnosis ||
@@ -539,8 +543,8 @@ export default function FollowupModal({
                                 "N/A",
                               date: latest?.prescriptionDate
                                 ? new Date(
-                                    latest.prescriptionDate,
-                                  ).toLocaleDateString()
+                                  latest.prescriptionDate,
+                                ).toLocaleDateString()
                                 : "No past visits",
                               medicines: items
                                 .map((i: any) => i.medicineName)
@@ -575,8 +579,8 @@ export default function FollowupModal({
                                   prev.product ||
                                   (items.length > 0
                                     ? items
-                                        .map((i: any) => i.medicineName)
-                                        .join(", ")
+                                      .map((i: any) => i.medicineName)
+                                      .join(", ")
                                     : ""),
                               }));
                             }
@@ -626,6 +630,7 @@ export default function FollowupModal({
                     />
                   </div>
                   <div className="flex gap-4">
+                    {/* Category Selection */}
                     <div className="flex-1">
                       <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
                         Category
@@ -637,10 +642,10 @@ export default function FollowupModal({
                           handleChange("category", e.target.value)
                         }
                       >
-                        <SelectItem key="general">General</SelectItem>
-                        <SelectItem key="appointment">Appointment</SelectItem>
-                        <SelectItem key="pharmacy">Pharmacy</SelectItem>
-                        <SelectItem key="pathology">Pathology</SelectItem>
+                        {(allowedCategories.includes("all") || allowedCategories.includes("general")) ? <SelectItem key="general">General</SelectItem> : <></>}
+                        {(allowedCategories.includes("all") || allowedCategories.includes("appointment")) ? <SelectItem key="appointment">Appointment</SelectItem> : <></>}
+                        {(allowedCategories.includes("all") || allowedCategories.includes("pharmacy")) ? <SelectItem key="pharmacy">Pharmacy</SelectItem> : <></>}
+                        {(allowedCategories.includes("all") || allowedCategories.includes("pathology")) ? <SelectItem key="pathology">Pathology</SelectItem> : <></>}
                       </Select>
                     </div>
                     <div className="w-1/3">
@@ -924,28 +929,34 @@ export default function FollowupModal({
                   <h3 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-[rgb(var(--color-border))] pb-2 mt-6">
                     Treatment Details
                   </h3>
-                  <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Service / Labs / Procedures
-                    </label>
-                    <Input
-                      placeholder="e.g. PRP FACE | Labs: CBC"
-                      size="sm"
-                      value={formData.service}
-                      onChange={(e) => handleChange("service", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
-                      Medicines / Products
-                    </label>
-                    <Input
-                      placeholder="e.g. Amoxicillin, TPS NIACINAMIDE 5%"
-                      size="sm"
-                      value={formData.product}
-                      onChange={(e) => handleChange("product", e.target.value)}
-                    />
-                  </div>
+
+                  {formData.category !== "pharmacy" && (
+                    <div>
+                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                        {formData.category === "pathology" ? "Lab Tests" : "Service / Procedures"}
+                      </label>
+                      <Input
+                        placeholder={formData.category === "pathology" ? "e.g. CBC, Lipid Profile" : "e.g. PRP FACE, Consultation"}
+                        size="sm"
+                        value={formData.service}
+                        onChange={(e) => handleChange("service", e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {(formData.category === "pharmacy" || formData.category === "general" || formData.category === "appointment") && (
+                    <div>
+                      <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
+                        Medicines / Products
+                      </label>
+                      <Input
+                        placeholder="e.g. Amoxicillin, TPS NIACINAMIDE 5%"
+                        size="sm"
+                        value={formData.product}
+                        onChange={(e) => handleChange("product", e.target.value)}
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
                       Add New Note

@@ -256,7 +256,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   },
                   "failure",
                   permissionValidation.error ||
-                    "One or more permissions are invalid",
+                  "One or more permissions are invalid",
                   {
                     branchId: undefined,
                   },
@@ -731,8 +731,8 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                           variant="flat"
                         >
                           {role.linkedToExpert ||
-                          (role.linkedToDoctor &&
-                            role.name.toLowerCase().includes("expert"))
+                            (role.linkedToDoctor &&
+                              role.name.toLowerCase().includes("expert"))
                             ? "Expert Linked"
                             : "Doctor Linked"}
                         </Chip>
@@ -759,9 +759,9 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                       // Check if branch admin can manage this role
                       const canManage = false
                         ? role.isBranchSpecific &&
-                          (!role.branchId ||
-                            role.branchId === userData?.branchId) &&
-                          !role.isDefault
+                        (!role.branchId ||
+                          role.branchId === userData?.branchId) &&
+                        !role.isDefault
                         : true;
 
                       if (!canManage && false) {
@@ -857,11 +857,10 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                 </div>
                 <button
                   aria-checked={formData.linkedToDoctor}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
-                    formData.linkedToDoctor
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${formData.linkedToDoctor
                       ? "bg-purple-600"
                       : "bg-gray-300 dark:bg-gray-600"
-                  }`}
+                    }`}
                   role="switch"
                   type="button"
                   onClick={() =>
@@ -875,11 +874,10 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   }
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      formData.linkedToDoctor
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${formData.linkedToDoctor
                         ? "translate-x-6"
                         : "translate-x-1"
-                    }`}
+                      }`}
                   />
                 </button>
               </label>
@@ -895,11 +893,10 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                 </div>
                 <button
                   aria-checked={formData.linkedToExpert}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
-                    formData.linkedToExpert
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${formData.linkedToExpert
                       ? "bg-blue-600"
                       : "bg-gray-300 dark:bg-gray-600"
-                  }`}
+                    }`}
                   role="switch"
                   type="button"
                   onClick={() =>
@@ -913,11 +910,10 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                   }
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      formData.linkedToExpert
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${formData.linkedToExpert
                         ? "translate-x-6"
                         : "translate-x-1"
-                    }`}
+                      }`}
                   />
                 </button>
               </label>
@@ -944,6 +940,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                       "medicine",
                       "bed",
                       "text-editor",
+                      "follow-up",
                     ],
                   },
                   {
@@ -987,6 +984,7 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                           "medicine",
                           "bed",
                           "text-editor",
+                          "follow-up",
                           "appointment",
                           "doctor",
                           "expert",
@@ -1028,11 +1026,10 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                           return (
                             <label
                               key={page.id}
-                              className={`relative flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all select-none ${
-                                isChecked
+                              className={`relative flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all select-none ${isChecked
                                   ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
                                   : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/40"
-                              }`}
+                                }`}
                             >
                               <input
                                 checked={isChecked}
@@ -1043,18 +1040,17 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                                     ...prev,
                                     permissions: isChecked
                                       ? prev.permissions.filter(
-                                          (id) => id !== page.id,
-                                        )
+                                        (id) => id !== page.id,
+                                      )
                                       : [...prev.permissions, page.id],
                                   }));
                                 }}
                               />
                               <div
-                                className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all ${
-                                  isChecked
+                                className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all ${isChecked
                                     ? "border-purple-600 bg-purple-600"
                                     : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                                }`}
+                                  }`}
                               >
                                 {isChecked && (
                                   <svg
@@ -1074,11 +1070,10 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
                               </div>
                               <div className="flex flex-col min-w-0">
                                 <span
-                                  className={`text-[12.5px] font-semibold leading-tight truncate ${
-                                    isChecked
+                                  className={`text-[12.5px] font-semibold leading-tight truncate ${isChecked
                                       ? "text-purple-700 dark:text-purple-300"
                                       : "text-gray-800 dark:text-gray-200"
-                                  }`}
+                                    }`}
                                 >
                                   {page.name}
                                 </span>
