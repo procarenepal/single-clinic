@@ -810,9 +810,11 @@ export default function ReportsPage() {
 
   const exportMedicinesReport = () => {
     const medicinesData = reportData.medicines.map((medicine) => {
-      const stock = reportData.medicineStock.find(
+      const stocks = reportData.medicineStock.filter(
         (s) => s.medicineId === medicine.id,
       );
+      const totalStock = stocks.reduce((sum, s) => sum + (s.currentStock || 0), 0);
+      const minStock = stocks.length > 0 ? stocks[0].minimumStock : 0;
 
       return {
         Name: medicine.name,
@@ -820,8 +822,8 @@ export default function ReportsPage() {
         Strength: medicine.strength || "N/A",
         Unit: medicine.unit || "N/A",
         Price: medicine.price ? `NPR ${medicine.price}` : "N/A",
-        "Current Stock": stock?.currentStock || 0,
-        "Minimum Stock": stock?.minimumStock || 0,
+        "Current Stock": totalStock,
+        "Minimum Stock": minStock,
         Status: medicine.isActive ? "Active" : "Inactive",
         "Expiry Date": medicine.expiryDate
           ? formatDate(medicine.expiryDate)
@@ -1934,12 +1936,19 @@ export default function ReportsPage() {
                   <div className="text-center">
                     <p className="clarity-stat-value text-health-600">
                       NPR{" "}
-                      {reportData.medicines
-                        .reduce(
-                          (sum, medicine) => sum + (medicine.price || 0),
-                          0,
-                        )
-                        .toLocaleString()}
+                      {reportData.medicineStock
+                        .reduce((sum, stock) => {
+                          const costPrice =
+                            stock.costPrice ??
+                            stock.medicine?.costPrice ??
+                            stock.medicine?.price ??
+                            0;
+                          return sum + (stock.currentStock || 0) * costPrice;
+                        }, 0)
+                        .toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                     </p>
                     <p className="clarity-stat-label">Total Inventory Value</p>
                   </div>

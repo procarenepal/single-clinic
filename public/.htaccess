@@ -7,3 +7,17 @@
   RewriteCond %{REQUEST_FILENAME} !-l
   RewriteRule . /index.html [L]
 </IfModule>
+
+<IfModule mod_headers.c>
+  # Strict-Transport-Security: Enforces HTTPS
+  Header set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+  
+  # X-Frame-Options: Prevents Clickjacking
+  Header set X-Frame-Options "SAMEORIGIN"
+  
+  # X-Content-Type-Options: Prevents MIME-sniffing
+  Header set X-Content-Type-Options "nosniff"
+  
+  # Referrer-Policy: Controls how much referrer info is included with requests
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

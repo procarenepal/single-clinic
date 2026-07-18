@@ -196,7 +196,7 @@ export default function DailyReportPage() {
             (b) =>
               b.type === "appointment" &&
               doctors.find((d) => d.name === b.doctorName)?.id ===
-                currentDoctorId,
+              currentDoctorId,
           );
         }
 
@@ -332,27 +332,27 @@ export default function DailyReportPage() {
   const branchRevenueBreakdown =
     isMultiBranch && isClinicAdmin && branches.length > 0 && !effectiveBranchId
       ? branches
-          .map((branch) => {
-            // DailyBillingSummary does not carry branchId; use total billing for the overview
-            const branchBilling = reportData.billing.filter((b) =>
-              isCreatedOnSelectedDate(b.date),
-            );
-            const revenue = branchBilling.reduce(
-              (sum, b) => sum + (b.totalAmount || 0),
-              0,
-            );
-            const invoiceCount = branchBilling.length;
+        .map((branch) => {
+          // DailyBillingSummary does not carry branchId; use total billing for the overview
+          const branchBilling = reportData.billing.filter((b) =>
+            isCreatedOnSelectedDate(b.date),
+          );
+          const revenue = branchBilling.reduce(
+            (sum, b) => sum + (b.totalAmount || 0),
+            0,
+          );
+          const invoiceCount = branchBilling.length;
 
-            return {
-              branchId: branch.id,
-              branchName: branch.name,
-              branchCode: branch.code,
-              isMainBranch: branch.isMainBranch,
-              revenue,
-              invoiceCount,
-            };
-          })
-          .filter((b) => b.revenue > 0 || b.invoiceCount > 0)
+          return {
+            branchId: branch.id,
+            branchName: branch.name,
+            branchCode: branch.code,
+            isMainBranch: branch.isMainBranch,
+            revenue,
+            invoiceCount,
+          };
+        })
+        .filter((b) => b.revenue > 0 || b.invoiceCount > 0)
       : [];
 
   // Handle export (pass branchName when report is branch-scoped)

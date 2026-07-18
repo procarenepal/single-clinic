@@ -112,12 +112,12 @@ interface MedicinesTabProps {
   clinicSettings: ClinicSettings | null;
   onStatsChange: () => void;
   filterType?:
-    | "lowStock"
-    | "expiring"
-    | "medicines"
-    | "brands"
-    | "categories"
-    | null;
+  | "lowStock"
+  | "expiring"
+  | "medicines"
+  | "brands"
+  | "categories"
+  | null;
   /**
    * Effective branch scope for this view.
    * For branch users this matches their fixed branchId.
@@ -1641,33 +1641,33 @@ export default function MedicinesTab({
   const filteredMedicines = useServerPagination
     ? medicines
     : medicines.filter((medicine) => {
-        const supplierOrManufacturer = getSupplierOrManufacturer(medicine);
-        const matchesSearch =
-          medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          medicine.genericName
-            ?.toLowerCase()
-            .includes(searchQuery.toLowerCase()) ||
-          supplierOrManufacturer
-            ?.toLowerCase()
-            .includes(searchQuery.toLowerCase());
+      const supplierOrManufacturer = getSupplierOrManufacturer(medicine);
+      const matchesSearch =
+        medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        medicine.genericName
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        supplierOrManufacturer
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase());
 
-        if (!matchesSearch) return false;
-        if (!activeFilterType) return true;
-        switch (activeFilterType) {
-          case "lowStock":
-            return isLowStock(medicine);
-          case "expiring":
-            return isExpiring(medicine);
-          case "expired":
-            return isExpired(medicine);
-          case "urgent":
-            return isUrgentExpiry(medicine);
-          case "warning":
-            return isWarningExpiry(medicine);
-          default:
-            return true;
-        }
-      });
+      if (!matchesSearch) return false;
+      if (!activeFilterType) return true;
+      switch (activeFilterType) {
+        case "lowStock":
+          return isLowStock(medicine);
+        case "expiring":
+          return isExpiring(medicine);
+        case "expired":
+          return isExpired(medicine);
+        case "urgent":
+          return isUrgentExpiry(medicine);
+        case "warning":
+          return isWarningExpiry(medicine);
+        default:
+          return true;
+      }
+    });
 
   const totalPages = useServerPagination
     ? Math.ceil((totalCount ?? 0) / rowsPerPage)
@@ -1729,11 +1729,10 @@ export default function MedicinesTab({
       {/* Medicine Summary Radar */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <button
-          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
-            activeFilterType === "expired"
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "expired"
               ? "bg-rose-500/10 border-rose-500/50 shadow-md shadow-rose-500/5"
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-rose-500/30"
-          }`}
+            }`}
           type="button"
           onClick={() =>
             setActiveFilterType(
@@ -1751,11 +1750,10 @@ export default function MedicinesTab({
               </span>
             </div>
             <span
-              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
-                expiryStats.expired > 0
+              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${expiryStats.expired > 0
                   ? "bg-rose-500 text-white"
                   : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
-              }`}
+                }`}
             >
               {expiryStats.expired} Items
             </span>
@@ -1766,11 +1764,10 @@ export default function MedicinesTab({
         </button>
 
         <button
-          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
-            activeFilterType === "urgent"
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "urgent"
               ? "bg-amber-500/10 border-amber-500/50 shadow-md shadow-amber-500/5"
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-amber-500/30"
-          }`}
+            }`}
           type="button"
           onClick={() =>
             setActiveFilterType(activeFilterType === "urgent" ? null : "urgent")
@@ -1786,11 +1783,10 @@ export default function MedicinesTab({
               </span>
             </div>
             <span
-              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
-                expiryStats.urgent > 0
+              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${expiryStats.urgent > 0
                   ? "bg-amber-500 text-white"
                   : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
-              }`}
+                }`}
             >
               {expiryStats.urgent} Items
             </span>
@@ -1801,11 +1797,10 @@ export default function MedicinesTab({
         </button>
 
         <button
-          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
-            activeFilterType === "warning"
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "warning"
               ? "bg-primary/10 border-primary/50 shadow-md shadow-primary/5"
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-primary/30"
-          }`}
+            }`}
           type="button"
           onClick={() =>
             setActiveFilterType(
@@ -1823,11 +1818,10 @@ export default function MedicinesTab({
               </span>
             </div>
             <span
-              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
-                activeFilterType === "warning"
+              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${activeFilterType === "warning"
                   ? "bg-primary text-white"
                   : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
-              }`}
+                }`}
             >
               {expiryStats.warning} Items
             </span>
@@ -1838,11 +1832,10 @@ export default function MedicinesTab({
         </button>
 
         <button
-          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${
-            activeFilterType === "lowStock"
+          className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "lowStock"
               ? "bg-teal-500/10 border-teal-500/50 shadow-md shadow-teal-500/5"
               : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-teal-500/30"
-          }`}
+            }`}
           type="button"
           onClick={() =>
             setActiveFilterType(
@@ -1860,11 +1853,10 @@ export default function MedicinesTab({
               </span>
             </div>
             <span
-              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${
-                activeFilterType === "lowStock"
+              className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${activeFilterType === "lowStock"
                   ? "bg-teal-500 text-white"
                   : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
-              }`}
+                }`}
             >
               {expiryStats.lowStock} Items
             </span>
@@ -1908,13 +1900,12 @@ export default function MedicinesTab({
       {filterType && (
         <div className="flex items-center gap-2">
           <span
-            className={`clarity-badge inline-flex items-center px-2 py-0.5 text-[11px] rounded ${
-              filterType === "lowStock"
+            className={`clarity-badge inline-flex items-center px-2 py-0.5 text-[11px] rounded ${filterType === "lowStock"
                 ? "bg-amber-50 text-amber-700 border border-amber-200"
                 : filterType === "expiring"
                   ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
                   : "bg-teal-50 text-teal-700 border border-teal-200"
-            }`}
+              }`}
           >
             {filterType === "lowStock"
               ? "Low Stock Medicines"
@@ -1944,13 +1935,12 @@ export default function MedicinesTab({
               : ""}
             {filterType && (
               <span
-                className={`ml-2 inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium ${
-                  filterType === "lowStock"
+                className={`ml-2 inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium ${filterType === "lowStock"
                     ? "bg-amber-50 text-amber-700 border border-amber-200"
                     : filterType === "expiring"
                       ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
                       : "bg-teal-50 text-teal-700 border border-teal-200"
-                }`}
+                  }`}
               >
                 {filterType === "lowStock"
                   ? "Low Stock"
@@ -2160,10 +2150,10 @@ export default function MedicinesTab({
                               {expiryDate instanceof Date
                                 ? expiryDate.toLocaleDateString()
                                 : typeof (expiryDate as any)?.toDate ===
-                                    "function"
+                                  "function"
                                   ? (expiryDate as any)
-                                      .toDate()
-                                      .toLocaleDateString()
+                                    .toDate()
+                                    .toLocaleDateString()
                                   : new Date(expiryDate).toLocaleDateString()}
                             </p>
                             {isExpired && (
@@ -2189,11 +2179,10 @@ export default function MedicinesTab({
                       {/* Status */}
                       <td className="px-5 py-3">
                         <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${
-                            medicine.isActive
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${medicine.isActive
                               ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                               : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                          }`}
+                            }`}
                         >
                           {medicine.isActive ? (
                             <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
@@ -2275,9 +2264,9 @@ export default function MedicinesTab({
                                       latestTx.expiryDate instanceof Date
                                         ? latestTx.expiryDate
                                         : (
-                                            latestTx.expiryDate as any
-                                          ).toDate?.() ||
-                                          new Date(latestTx.expiryDate);
+                                          latestTx.expiryDate as any
+                                        ).toDate?.() ||
+                                        new Date(latestTx.expiryDate);
 
                                     resolvedExpiryDate = date
                                       .toISOString()
@@ -2351,7 +2340,7 @@ export default function MedicinesTab({
                                     rawExp instanceof Date
                                       ? rawExp
                                       : (rawExp as any).toDate?.() ||
-                                        new Date(rawExp);
+                                      new Date(rawExp);
 
                                   resolvedExpiryDate = date
                                     .toISOString()
@@ -2394,11 +2383,10 @@ export default function MedicinesTab({
                             <span>Edit</span>
                           </button>
                           <button
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold transition-colors ${
-                              medicine.isActive
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold transition-colors ${medicine.isActive
                                 ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
                                 : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
-                            }`}
+                              }`}
                             title={
                               medicine.isActive ? "Deactivate" : "Activate"
                             }
@@ -3016,9 +3004,9 @@ export default function MedicinesTab({
                             NPR{" "}
                             {Math.round(
                               parseFloat(formDataList[0].costPrice) *
-                                (1 +
-                                  parseFloat(formDataList[0].vatPercentage) /
-                                    100),
+                              (1 +
+                                parseFloat(formDataList[0].vatPercentage) /
+                                100),
                             ).toLocaleString()}
                           </p>
                         </div>
@@ -3042,7 +3030,7 @@ export default function MedicinesTab({
                         Generic Name
                       </th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">
-                        Type
+                        Category
                       </th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[100px]">
                         Strength
@@ -3069,7 +3057,7 @@ export default function MedicinesTab({
                         Brand
                       </th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider min-w-[120px]">
-                        Category
+                        Type
                       </th>
                       <th className="px-3 py-2 text-[11px] font-semibold text-[rgb(var(--color-text-muted))] uppercase tracking-wider text-center">
                         Action
@@ -3170,35 +3158,35 @@ export default function MedicinesTab({
                         <td className="px-2 py-2">
                           <div className="flex gap-1 items-center">
                             <div className="flex-1">
-                              {formData.isAddingType ? (
+                              {formData.isAddingCategory ? (
                                 <input
                                   className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
-                                  placeholder="New type"
-                                  value={formData.newTypeName}
+                                  placeholder="New category"
+                                  value={formData.newCategoryName}
                                   onChange={(e) => {
                                     const newList = [...formDataList];
 
-                                    newList[index].newTypeName = e.target.value;
-                                    newList[index].type = e.target.value;
+                                    newList[index].newCategoryName =
+                                      e.target.value;
                                     setFormDataList(newList);
                                   }}
                                 />
                               ) : (
                                 <select
                                   className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                                  name="type"
-                                  value={formData.type}
+                                  value={formData.categoryId}
                                   onChange={(e) =>
                                     handleSelectChange(
                                       index,
-                                      "type",
+                                      "categoryId",
                                       e.target.value,
                                     )
                                   }
                                 >
-                                  {medicineTypes.map((item) => (
-                                    <option key={item.key} value={item.key}>
-                                      {item.label}
+                                  <option value="">No Category</option>
+                                  {categories.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>
+                                      {cat.name}
                                     </option>
                                   ))}
                                 </select>
@@ -3207,22 +3195,22 @@ export default function MedicinesTab({
                             <button
                               className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
                               title={
-                                formData.isAddingType
-                                  ? "Select Existing Type"
-                                  : "Add New Type"
+                                formData.isAddingCategory
+                                  ? "Select Existing Category"
+                                  : "Add New Category"
                               }
                               type="button"
                               onClick={() => {
                                 const newList = [...formDataList];
 
-                                newList[index].isAddingType =
-                                  !newList[index].isAddingType;
-                                if (!newList[index].isAddingType)
-                                  newList[index].newTypeName = "";
+                                newList[index].isAddingCategory =
+                                  !newList[index].isAddingCategory;
+                                if (!newList[index].isAddingCategory)
+                                  newList[index].newCategoryName = "";
                                 setFormDataList(newList);
                               }}
                             >
-                              {formData.isAddingType ? (
+                              {formData.isAddingCategory ? (
                                 <IoListOutline className="w-4 h-4" />
                               ) : (
                                 <IoAddOutline className="w-4 h-4" />
@@ -3404,35 +3392,35 @@ export default function MedicinesTab({
                         <td className="px-2 py-2">
                           <div className="flex gap-1 items-center">
                             <div className="flex-1">
-                              {formData.isAddingCategory ? (
+                              {formData.isAddingType ? (
                                 <input
                                   className="clarity-input h-8 w-full text-[12px] px-2 rounded border-primary/30"
-                                  placeholder="New category"
-                                  value={formData.newCategoryName}
+                                  placeholder="New type"
+                                  value={formData.newTypeName}
                                   onChange={(e) => {
                                     const newList = [...formDataList];
 
-                                    newList[index].newCategoryName =
-                                      e.target.value;
+                                    newList[index].newTypeName = e.target.value;
+                                    newList[index].type = e.target.value;
                                     setFormDataList(newList);
                                   }}
                                 />
                               ) : (
                                 <select
                                   className="clarity-input h-8 w-full text-[12px] px-2 rounded"
-                                  value={formData.categoryId}
+                                  name="type"
+                                  value={formData.type}
                                   onChange={(e) =>
                                     handleSelectChange(
                                       index,
-                                      "categoryId",
+                                      "type",
                                       e.target.value,
                                     )
                                   }
                                 >
-                                  <option value="">No Category</option>
-                                  {categories.map((cat) => (
-                                    <option key={cat.id} value={cat.id}>
-                                      {cat.name}
+                                  {medicineTypes.map((item) => (
+                                    <option key={item.key} value={item.key}>
+                                      {item.label}
                                     </option>
                                   ))}
                                 </select>
@@ -3441,22 +3429,22 @@ export default function MedicinesTab({
                             <button
                               className="w-7 h-8 flex items-center justify-center rounded border border-[rgb(var(--color-border))] text-primary hover:bg-primary/5 transition-colors"
                               title={
-                                formData.isAddingCategory
-                                  ? "Select Existing Category"
-                                  : "Add New Category"
+                                formData.isAddingType
+                                  ? "Select Existing Type"
+                                  : "Add New Type"
                               }
                               type="button"
                               onClick={() => {
                                 const newList = [...formDataList];
 
-                                newList[index].isAddingCategory =
-                                  !newList[index].isAddingCategory;
-                                if (!newList[index].isAddingCategory)
-                                  newList[index].newCategoryName = "";
+                                newList[index].isAddingType =
+                                  !newList[index].isAddingType;
+                                if (!newList[index].isAddingType)
+                                  newList[index].newTypeName = "";
                                 setFormDataList(newList);
                               }}
                             >
-                              {formData.isAddingCategory ? (
+                              {formData.isAddingType ? (
                                 <IoListOutline className="w-4 h-4" />
                               ) : (
                                 <IoAddOutline className="w-4 h-4" />
@@ -3599,7 +3587,7 @@ export default function MedicinesTab({
                         NPR{" "}
                         {Math.round(
                           purchaseSummary.grandTotal -
-                            (parseFloat(globalPurchaseDetails.paidAmount) || 0),
+                          (parseFloat(globalPurchaseDetails.paidAmount) || 0),
                         ).toLocaleString()}
                       </span>
                     </div>
