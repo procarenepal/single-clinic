@@ -1048,18 +1048,58 @@ export default function PrintLayoutPage() {
                     </div>
 
                     {layoutConfig.showFooter && (
-                      <Textarea
-                        label="Footer Text"
-                        minRows={2}
-                        placeholder="Enter footer text (e.g., Thank you for choosing our clinic)"
-                        value={layoutConfig.footerText || ""}
-                        onChange={(e) =>
-                          setLayoutConfig((prev) => ({
-                            ...prev,
-                            footerText: e.target.value,
-                          }))
-                        }
-                      />
+                      <div className="space-y-4">
+                        <Textarea
+                          label="General Footer Text"
+                          minRows={2}
+                          placeholder="Enter general footer text (e.g., Thank you for choosing our clinic)"
+                          value={layoutConfig.footerText || ""}
+                          onChange={(e) =>
+                            setLayoutConfig((prev) => ({
+                              ...prev,
+                              footerText: e.target.value,
+                            }))
+                          }
+                        />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <Textarea
+                            label="Pathology Footer Text"
+                            minRows={2}
+                            placeholder="Unique text for pathology reports (falls back to general footer if empty)"
+                            value={layoutConfig.pathologyFooterText || ""}
+                            onChange={(e) =>
+                              setLayoutConfig((prev) => ({
+                                ...prev,
+                                pathologyFooterText: e.target.value,
+                              }))
+                            }
+                          />
+                          <Textarea
+                            label="Pharmacy Footer Text"
+                            minRows={2}
+                            placeholder="Unique text for pharmacy receipts (falls back to general footer if empty)"
+                            value={layoutConfig.pharmacyFooterText || ""}
+                            onChange={(e) =>
+                              setLayoutConfig((prev) => ({
+                                ...prev,
+                                pharmacyFooterText: e.target.value,
+                              }))
+                            }
+                          />
+                          <Textarea
+                            label="Appointment/Consultation Footer Text"
+                            minRows={2}
+                            placeholder="Unique text for appointment bills (falls back to general footer if empty)"
+                            value={layoutConfig.appointmentFooterText || ""}
+                            onChange={(e) =>
+                              setLayoutConfig((prev) => ({
+                                ...prev,
+                                appointmentFooterText: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
 

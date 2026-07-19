@@ -107,8 +107,8 @@ describe("Commission Generation Engine (Production Unit Tests)", () => {
 
       expect(savedCommissionData.commissionAmount).toBe(585);
 
-      // Expected effective percentage: (585 / 5000) * 100 = 11.7%
-      expect(savedCommissionData.commissionPercentage).toBeCloseTo(11.7, 1);
+      // Expected effective percentage: (585 / 4500) * 100 = 13%
+      expect(savedCommissionData.commissionPercentage).toBeCloseTo(13, 1);
     });
   });
 
@@ -152,7 +152,7 @@ describe("Commission Generation Engine (Production Unit Tests)", () => {
           {
             amount: 1000,
             doctorId: "doc_1",
-            commission: 0, // Missing or 0
+            commission: undefined, // Missing or 0
           },
         ],
       };

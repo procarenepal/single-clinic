@@ -352,6 +352,9 @@ export const TextEditorComponent: React.FC<TextEditorComponentProps> = ({
       userData,
     } = data;
 
+    const rawClinicName = clinic?.name || layoutConfig?.clinicName || "Medical Clinic";
+    const formattedClinicName = rawClinicName.replace(/\s+(Pvt\.?\s*Ltd\.?)/i, "<br/>$1");
+
     // Format date
     const formatDateTime = (date: Date) => {
       return new Intl.DateTimeFormat("en-US", {
@@ -625,7 +628,7 @@ export const TextEditorComponent: React.FC<TextEditorComponentProps> = ({
         <div class="header-left">
           ${layoutConfig?.logoUrl ? `<img src="${layoutConfig.logoUrl}" alt="Logo" class="logo" />` : ""}
           <div class="clinic-info">
-            <h1 class="clinic-name">${clinic?.name || layoutConfig?.clinicName || "Medical Clinic"}</h1>
+            <h1 class="clinic-name">${formattedClinicName}</h1>
             ${layoutConfig?.tagline ? `<p class="tagline">${layoutConfig.tagline}</p>` : ""}
             <div class="clinic-details">
               <p>${layoutConfig?.address || clinic?.address || ""}</p>

@@ -59,12 +59,53 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
   // This prevents items from jumping around when the user checks/unchecks them.
   const stableOptionOrder = React.useRef<string[]>([]);
 
+  const getBookedApptTypeOption = () => {
+    const label = getApptTypeLabel(appointment?.appointmentTypeId);
+
+    if (appointment?.appointmentTypeId === "package-session") {
+      return null;
+    }
+    const isDynamicPresent = appointmentTypes.some((t) => t.name === label);
+
+    if (!isDynamicPresent) {
+      return label;
+    }
+
+    return null;
+  };
+
+  const getProcedureList = (typeStr: string): string[] => {
+    if (!typeStr) return [];
+    const bookedLabel = getBookedApptTypeOption();
+    const orderedIds = stableOptionOrder.current.length > 0
+      ? stableOptionOrder.current
+      : [
+          ...(bookedLabel ? [bookedLabel] : []),
+          ...modalActivePackages.map((p) => `consume_pkg_${p.id}`),
+          ...appointmentTypes.map((t) => t.name),
+          "Other",
+        ];
+
+    const sortedOptions = [...orderedIds].sort((a, b) => b.length - a.length);
+    const selected: string[] = [];
+    let remaining = typeStr;
+
+    for (const option of sortedOptions) {
+      if (!option) continue;
+      const idx = remaining.indexOf(option);
+      if (idx !== -1) {
+        selected.push(option);
+        remaining = remaining.substring(0, idx) + remaining.substring(idx + option.length);
+      }
+    }
+
+    return orderedIds.filter((id) => selected.includes(id));
+  };
+
   React.useEffect(() => {
     if (!isOpen || !appointment) return;
 
-    const initialProcedureList = procedure.procedureType
-      .split(", ")
-      .filter((x) => x !== "");
+    const initialProcedureList = getProcedureList(procedure.procedureType);
 
     const ids: string[] = [];
 
@@ -107,25 +148,8 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
 
   const modalRoot = document.body;
 
-  const getBookedApptTypeOption = () => {
-    const label = getApptTypeLabel(appointment.appointmentTypeId);
-
-    if (appointment.appointmentTypeId === "package-session") {
-      return null;
-    }
-    const isDynamicPresent = appointmentTypes.some((t) => t.name === label);
-
-    if (!isDynamicPresent) {
-      return label;
-    }
-
-    return null;
-  };
-
   const handleToggleProcedure = (val: string) => {
-    const currentList = procedure.procedureType
-      .split(", ")
-      .filter((x) => x !== "");
+    const currentList = getProcedureList(procedure.procedureType);
     const isSelected = currentList.includes(val);
     let newList: string[];
 
@@ -218,9 +242,7 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                     {procedure.procedureType && (
                       <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                         {
-                          procedure.procedureType
-                            .split(", ")
-                            .filter((x) => x !== "").length
+                          getProcedureList(procedure.procedureType).length
                         }{" "}
                         selected
                       </span>
@@ -235,9 +257,7 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                       onChange={(e) => setProcedureSearch(e.target.value)}
                     />
                     {(() => {
-                      const procedureList = procedure.procedureType
-                        .split(", ")
-                        .filter((x) => x !== "");
+                      const procedureList = getProcedureList(procedure.procedureType);
 
                       // Build a label map for each ID
                       const bookedLabel = getBookedApptTypeOption();

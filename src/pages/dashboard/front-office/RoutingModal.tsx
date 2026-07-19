@@ -14,6 +14,14 @@ interface RoutingModalProps {
   routingAddCommission: boolean;
   setRoutingAddCommission: React.Dispatch<React.SetStateAction<boolean>>;
   onConfirm: () => void;
+  doctors: any[];
+  routingDoctorId: string;
+  setRoutingDoctorId: React.Dispatch<React.SetStateAction<string>>;
+  routingChargeConsultation: boolean;
+  setRoutingChargeConsultation: React.Dispatch<React.SetStateAction<boolean>>;
+  experts?: any[];
+  routingExpertId?: string;
+  setRoutingExpertId?: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export const RoutingModal: React.FC<RoutingModalProps> = ({
@@ -28,6 +36,14 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
   routingAddCommission,
   setRoutingAddCommission,
   onConfirm,
+  doctors,
+  routingDoctorId,
+  setRoutingDoctorId,
+  routingChargeConsultation,
+  setRoutingChargeConsultation,
+  experts = [],
+  routingExpertId = "",
+  setRoutingExpertId,
 }) => {
   if (!isOpen || !appointment) return null;
 
@@ -60,6 +76,60 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
         </div>
 
         <div className="p-5 space-y-4">
+          {routingTarget === "doctor" && (
+            <div className="space-y-4 border-b border-border-base pb-4">
+              <div>
+                <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                  Select Doctor <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="w-full h-10 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
+                  value={routingDoctorId}
+                  onChange={(e) => setRoutingDoctorId(e.target.value)}
+                >
+                  <option value="">-- Select Doctor --</option>
+                  {doctors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-text-main font-medium">
+                <input
+                  checked={routingChargeConsultation}
+                  className="w-3.5 h-3.5 text-primary rounded focus:ring-primary border-border-base"
+                  type="checkbox"
+                  onChange={(e) => setRoutingChargeConsultation(e.target.checked)}
+                />
+                Charge Doctor Consultation Fee & Settle Bill
+              </label>
+            </div>
+          )}
+
+          {routingTarget === "expert" && setRoutingExpertId && (
+            <div className="space-y-4 border-b border-border-base pb-4">
+              <div>
+                <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                  Select Expert <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="w-full h-10 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
+                  value={routingExpertId}
+                  onChange={(e) => setRoutingExpertId(e.target.value)}
+                >
+                  <option value="">-- Select Expert --</option>
+                  {experts.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
               Select Consultation Room or Procedure Cabin

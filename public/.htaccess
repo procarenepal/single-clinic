@@ -9,15 +9,27 @@
 </IfModule>
 
 <IfModule mod_headers.c>
-  # Strict-Transport-Security: Enforces HTTPS
+  # Strict-Transport-Security: Enforces HTTPS for 1 year
   Header set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-  
+
   # X-Frame-Options: Prevents Clickjacking
   Header set X-Frame-Options "SAMEORIGIN"
-  
-  # X-Content-Type-Options: Prevents MIME-sniffing
+
+  # X-Content-Type-Options: Prevents MIME-sniffing attacks
   Header set X-Content-Type-Options "nosniff"
-  
-  # Referrer-Policy: Controls how much referrer info is included with requests
+
+  # Referrer-Policy: Limits referrer info sent with requests
   Header set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # X-XSS-Protection: Enables XSS filtering in older browsers
+  Header set X-XSS-Protection "1; mode=block"
+
+  # Permissions-Policy: Disables browser features not needed by the app
+  Header set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)"
+
+  # Content-Security-Policy: Prevents XSS and data injection attacks
+  # - Firebase services (firestore, auth, storage) are whitelisted
+  # - Google Fonts and APIs are whitelisted
+  # - Inline scripts/styles allowed (required for React + dynamic print windows)
+  Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com https://*.googleapis.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.googleapis.com https://*.firebaseapp.com https://*.firebasestorage.app https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebaseapp.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self';"
 </IfModule>

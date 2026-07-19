@@ -206,8 +206,8 @@ export const QueueList: React.FC<QueueListProps> = ({
                             stage === "triage" ||
                             stage === "doctor" ||
                             stage === "expert") && (
-                            <WaitTimeIndicator startTime={appt.createdAt} />
-                          )}
+                              <WaitTimeIndicator startTime={appt.createdAt} />
+                            )}
                         </p>
                       </div>
                     </div>
@@ -385,54 +385,62 @@ export const QueueList: React.FC<QueueListProps> = ({
                   (!currentExpertId || currentDoctorId)) ||
                   (stage === "expert" &&
                     (!currentDoctorId || currentExpertId))) && (
-                  <>
-                    {stage === "doctor" ? (
-                      <>
-                        <button
-                          className="h-9 px-3 rounded text-[12.5px] font-medium border border-blue-500/50 text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors outline-none flex items-center gap-1.5"
-                          type="button"
-                          onClick={() => handleOpenProcedure(appt)}
-                        >
-                          <IoCreateOutline className="w-4 h-4" />
-                          Record Procedure
-                        </button>
-                        <button
-                          className="h-9 px-3 rounded text-[12.5px] font-medium border border-amber-500/50 text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-colors outline-none flex items-center gap-1.5"
-                          type="button"
-                          onClick={() =>
-                            navigate(
-                              `/dashboard/prescriptions/new?appointmentId=${appt.id}`,
-                            )
-                          }
-                        >
-                          <IoDocumentTextOutline className="w-4 h-4" />
-                          Write Prescription
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                        type="button"
-                        onClick={() => handleCompleteConsultation(appt.id)}
-                      >
-                        Complete (No Log)
-                      </button>
-                    )}
-                    {stage === "doctor" &&
-                      appt.assignedExpertId &&
-                      appt.assignedExpertId !== "unassigned" && (
+                    <>
+                      {stage === "doctor" ? (
+                        <>
+                          <button
+                            className="h-9 px-3 rounded text-[12.5px] font-medium border border-blue-500/50 text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors outline-none flex items-center gap-1.5"
+                            type="button"
+                            onClick={() => handleOpenProcedure(appt)}
+                          >
+                            <IoCreateOutline className="w-4 h-4" />
+                            Record Procedure
+                          </button>
+                          <button
+                            className="h-9 px-3 rounded text-[12.5px] font-medium border border-amber-500/50 text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-colors outline-none flex items-center gap-1.5"
+                            type="button"
+                            onClick={() =>
+                              navigate(
+                                `/dashboard/prescriptions/new?appointmentId=${appt.id}`,
+                              )
+                            }
+                          >
+                            <IoDocumentTextOutline className="w-4 h-4" />
+                            Write Prescription
+                          </button>
+                          <button
+                            className="h-9 px-3 rounded text-[12.5px] font-medium border border-purple-500/50 text-purple-600 hover:text-purple-700 hover:bg-purple-50 transition-colors outline-none flex items-center gap-1.5"
+                            type="button"
+                            onClick={() => handleSendToExpert(appt.id)}
+                          >
+                            <IoPeopleOutline className="w-4 h-4" />
+                            Route to Expert
+                          </button>
+                        </>
+                      ) : (
                         <button
                           className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
                           type="button"
-                          onClick={() =>
-                            handleCompleteConsultation(appt.id, true)
-                          }
+                          onClick={() => handleCompleteConsultation(appt.id)}
                         >
-                          Send to Billing
+                          Complete (No Log)
                         </button>
                       )}
-                  </>
-                )}
+                      {stage === "doctor" &&
+                        appt.assignedExpertId &&
+                        appt.assignedExpertId !== "unassigned" && (
+                          <button
+                            className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                            type="button"
+                            onClick={() =>
+                              handleCompleteConsultation(appt.id, true)
+                            }
+                          >
+                            Send to Billing
+                          </button>
+                        )}
+                    </>
+                  )}
                 {stage === "billing" && (
                   <button
                     className="h-9 px-3 rounded text-[12.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"

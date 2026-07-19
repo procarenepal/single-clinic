@@ -232,6 +232,9 @@ export default function FrontOfficeDesk() {
     "doctor" | "expert" | "default"
   >("default");
   const [routingAddCommission, setRoutingAddCommission] = useState(true);
+  const [routingDoctorId, setRoutingDoctorId] = useState("");
+  const [routingExpertId, setRoutingExpertId] = useState("");
+  const [routingChargeConsultation, setRoutingChargeConsultation] = useState(true);
 
   // Procedure log modal state
   const [isProcedureModalOpen, setIsProcedureModalOpen] = useState(false);
@@ -1059,6 +1062,8 @@ export default function FrontOfficeDesk() {
     if (!appt) return;
     setRoutingAppointment(appt);
     setRoutingCabin(appt.cabinName || "");
+    setRoutingDoctorId(appt.doctorId && appt.doctorId !== "unassigned" ? appt.doctorId : "");
+    setRoutingChargeConsultation(true);
     setRoutingTarget("doctor");
     setIsRoutingModalOpen(true);
   };
@@ -1069,6 +1074,7 @@ export default function FrontOfficeDesk() {
     if (!appt) return;
     setRoutingAppointment(appt);
     setRoutingCabin(appt.cabinName || "");
+    setRoutingExpertId(appt.assignedExpertId && appt.assignedExpertId !== "unassigned" ? appt.assignedExpertId : "");
     setRoutingTarget("expert");
     setIsRoutingModalOpen(true);
   };
@@ -1082,20 +1088,70 @@ export default function FrontOfficeDesk() {
         updatedAt: new Date(),
       };
 
-      // If we are explicitly routing to expert in a dual-assigned appointment,
-      // mark doctor consultation as completed so the stage resolves to 'expert'
-      if (
-        routingTarget === "expert" &&
-        routingAppointment.doctorId &&
-        routingAppointment.doctorId !== "unassigned"
-      ) {
-        updateData.doctorConsultationCompleted = true;
+      if (routingTarget === "doctor") {
+        if (!routingDoctorId || routingDoctorId === "unassigned") {
+          addToast({
+            title: "Doctor Required",
+            description: "Please select a doctor to route the patient to.",
+            color: "warning",
+          });
+          return;
+        }
+        updateData.doctorId = routingDoctorId;
+        updateData.doctorConsultationCompleted = false;
+
+        let updatedNotes = routingAppointment.notes || "";
+        updatedNotes = updatedNotes.replace("[Routed to: Expert]", "").trim();
+        if (!updatedNotes.includes("[Routed to: Doctor]")) {
+          updatedNotes = (updatedNotes + " [Routed to: Doctor]").trim();
+        }
+        updateData.notes = updatedNotes;
+      }
+
+      if (routingTarget === "expert") {
+        if (!routingExpertId || routingExpertId === "unassigned") {
+          addToast({
+            title: "Expert Required",
+            description: "Please select an expert to route the patient to.",
+            color: "warning",
+          });
+          return;
+        }
+        updateData.assignedExpertId = routingExpertId;
+        updateData.status = "in-progress";
+
+        if (
+          routingAppointment.doctorId &&
+          routingAppointment.doctorId !== "unassigned"
+        ) {
+          updateData.doctorConsultationCompleted = true;
+
+          let updatedNotes = routingAppointment.notes || "";
+          updatedNotes = updatedNotes.replace("[Routed to: Doctor]", "").trim();
+          if (!updatedNotes.includes("[Routed to: Expert]")) {
+            updatedNotes = (updatedNotes + " [Routed to: Expert]").trim();
+          }
+          updateData.notes = updatedNotes;
+        }
       }
 
       await appointmentService.updateAppointment(
         routingAppointment.id,
         updateData,
       );
+
+      let createdBillingId = "";
+      if (routingTarget === "doctor" && routingChargeConsultation) {
+        createdBillingId = await createConsultationBill(
+          routingAppointment.patientId,
+          routingDoctorId,
+          routingAppointment.id,
+          routingAppointment.reason || "General consultation",
+          routingAddCommission,
+          routingAppointment.appointmentTypeId,
+          true
+        ) || "";
+      }
 
       addToast({
         title:
@@ -1108,6 +1164,12 @@ export default function FrontOfficeDesk() {
       setIsRoutingModalOpen(false);
       setRoutingAppointment(null);
       setRoutingTarget("default");
+      setRoutingExpertId("");
+      setRoutingDoctorId("");
+
+      if (routingTarget === "doctor" && routingChargeConsultation && createdBillingId) {
+        navigate(`/dashboard/appointments-billing/${createdBillingId}`);
+      }
     } catch (err) {
       console.error("Error routing patient:", err);
       addToast({
@@ -1699,7 +1761,31 @@ export default function FrontOfficeDesk() {
       let recommendedProcedureData: any = null;
 
       if (feeNum > 0) {
-        const procList = actualProcedureName.split(", ").filter(Boolean);
+        const apptTypeLabel = getApptTypeLabel(selectedAppointment.appointmentTypeId);
+        const allPossibleNames = [
+          ...(apptTypeLabel ? [apptTypeLabel] : []),
+          ...modalActivePackages.map((p) => `consume_pkg_${p.id}`),
+          ...appointmentTypes.map((t) => t.name),
+          "Other",
+        ];
+
+        const getProcedureList = (typeStr: string): string[] => {
+          if (!typeStr) return [];
+          const sortedOptions = [...allPossibleNames].sort((a, b) => b.length - a.length);
+          const selected: string[] = [];
+          let remaining = typeStr;
+          for (const option of sortedOptions) {
+            if (!option) continue;
+            const idx = remaining.indexOf(option);
+            if (idx !== -1) {
+              selected.push(option);
+              remaining = remaining.substring(0, idx) + remaining.substring(idx + option.length);
+            }
+          }
+          return allPossibleNames.filter((id) => selected.includes(id));
+        };
+
+        const procList = getProcedureList(actualProcedureName);
         const itemsList: any[] = [];
         let calculatedFee = 0;
 
@@ -1805,6 +1891,64 @@ export default function FrontOfficeDesk() {
       }
       // End of procedure check
 
+      if (target === "doctor") {
+        await appointmentService.updateAppointment(selectedAppointment.id, {
+          recommendedProcedure: recommendedProcedureData,
+          patientPackageId: packageIdToConsume,
+          updatedAt: new Date(),
+        } as any);
+
+        if (packageIdToConsume && clinicId) {
+          try {
+            await patientPackageService.consumeSession(packageIdToConsume, {
+              appointmentId: selectedAppointment.id,
+              clinicianId: currentUser?.uid,
+              clinicianName:
+                (userData as any)?.name ||
+                currentUser?.displayName ||
+                "Unknown Clinician",
+            });
+            addToast({
+              title: "Session Consumed",
+              description: "1 package session was automatically deducted.",
+              color: "success",
+            });
+          } catch (err) {
+            console.error("Error consuming session", err);
+          }
+        }
+
+        addToast({
+          title: "Procedure Log Saved",
+          description: "Procedure logged successfully. Please select a doctor to route to.",
+          color: "success",
+        });
+
+        setIsProcedureModalOpen(false);
+        setRoutingAppointment(selectedAppointment);
+        setRoutingCabin(selectedAppointment.cabinName || "");
+        setRoutingDoctorId(selectedAppointment.doctorId && selectedAppointment.doctorId !== "unassigned" ? selectedAppointment.doctorId : "");
+        setRoutingChargeConsultation(true);
+        setRoutingTarget("doctor");
+        setIsRoutingModalOpen(true);
+
+        setSelectedAppointment(null);
+        setHistoricalProcedures([]);
+        setModalActivePackages([]);
+        setProcedure({
+          procedureType: "CO2 Laser Resurfacing",
+          energy: "",
+          spotSize: "",
+          pulseWidth: "",
+          passes: "",
+          area: "Full Face",
+          fee: "",
+          notes: "",
+        });
+
+        return;
+      }
+
       // Mark appointment status based on target route
       let newStatus = target === "billing" ? "completed" : "in-progress";
       let updatedNotes = selectedAppointment.notes || "";
@@ -1813,13 +1957,7 @@ export default function FrontOfficeDesk() {
           ? true
           : selectedAppointment.doctorConsultationCompleted;
 
-      if (target === "doctor") {
-        updatedNotes = updatedNotes.replace("[Routed to: Expert]", "").trim();
-        if (!updatedNotes.includes("[Routed to: Doctor]")) {
-          updatedNotes = (updatedNotes + " [Routed to: Doctor]").trim();
-        }
-        doctorConsultationCompleted = false;
-      } else if (target === "expert") {
+      if (target === "expert") {
         updatedNotes = updatedNotes.replace("[Routed to: Doctor]", "").trim();
         if (!updatedNotes.includes("[Routed to: Expert]")) {
           updatedNotes = (updatedNotes + " [Routed to: Expert]").trim();
@@ -1880,14 +2018,6 @@ export default function FrontOfficeDesk() {
             targetRole: "expert",
             targetUserId: selectedAppointment.assignedExpertId,
           });
-        } else {
-          NotificationService.sendNotification(clinicId, {
-            title: "Patient Returned from Expert",
-            message: `Patient ${patName} has finished their procedure and returned to the doctor's cabin.`,
-            type: "doctor_queue",
-            targetRole: "doctor",
-            targetUserId: selectedAppointment.doctorId,
-          });
         }
       }
 
@@ -1896,9 +2026,7 @@ export default function FrontOfficeDesk() {
         description:
           target === "billing"
             ? "Laser & Procedure details logged successfully. Patient is routed to Billing Counter."
-            : target === "expert"
-              ? "Procedure logged successfully. Patient routed to the Expert."
-              : "Procedure logged successfully. Patient routed back to the Doctor.",
+            : "Procedure logged successfully. Patient routed to the Expert.",
         color: "success",
       });
 
@@ -2022,12 +2150,12 @@ export default function FrontOfficeDesk() {
     const isConsBillPaid = consBill
       ? consBill.status === "paid" || consBill.paymentStatus === "paid"
       : false;
-    const isConsBillPending = hasDoctor && consBill && !isConsBillPaid;
+    const isConsBillPending = consBill && !isConsBillPaid;
 
     if (activeTab === "urgent") {
       if (stage === "billing") return true;
       if (stage === "lobby" || stage === "scheduled") {
-        if (hasDoctor && consBill && !isConsBillPaid) return true;
+        if (consBill && !isConsBillPaid) return true;
       }
       if (
         appt.createdAt &&
@@ -2122,8 +2250,20 @@ export default function FrontOfficeDesk() {
         routingTarget={routingTarget}
         setRoutingAddCommission={setRoutingAddCommission}
         setRoutingCabin={setRoutingCabin}
-        onClose={() => setIsRoutingModalOpen(false)}
+        onClose={() => {
+          setIsRoutingModalOpen(false);
+          setRoutingExpertId("");
+          setRoutingDoctorId("");
+        }}
         onConfirm={handleConfirmRoute}
+        doctors={doctors}
+        routingDoctorId={routingDoctorId}
+        setRoutingDoctorId={setRoutingDoctorId}
+        routingChargeConsultation={routingChargeConsultation}
+        setRoutingChargeConsultation={setRoutingChargeConsultation}
+        experts={experts}
+        routingExpertId={routingExpertId}
+        setRoutingExpertId={setRoutingExpertId}
       />
     );
   };
@@ -3793,14 +3933,13 @@ export default function FrontOfficeDesk() {
 
   const getStageBadge = (stage: string, appt?: Appointment) => {
     if (appt) {
-      const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
       const consBill = (appt as any).consultationBillingId
         ? billings.find((b) => b.id === (appt as any).consultationBillingId)
         : null;
       const isConsBillPaid = consBill
         ? consBill.status === "paid" || consBill.paymentStatus === "paid"
         : false;
-      const isConsBillPending = hasDoctor && consBill && !isConsBillPaid;
+      const isConsBillPending = consBill && !isConsBillPaid;
 
       if (isConsBillPending) {
         const isOnlyCons =
@@ -3988,7 +4127,6 @@ export default function FrontOfficeDesk() {
 
                   if (s === "scheduled") return true;
                   if (s !== "lobby") return false;
-                  const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
                       (b) => b.id === (a as any).consultationBillingId,
@@ -3999,7 +4137,7 @@ export default function FrontOfficeDesk() {
                     consBill.paymentStatus === "paid"
                     : false;
                   const isConsBillPending =
-                    hasDoc && consBill && !isConsBillPaid;
+                    consBill && !isConsBillPaid;
 
                   return isConsBillPending;
                 }).length
@@ -4203,7 +4341,6 @@ export default function FrontOfficeDesk() {
 
                   if (s === "billing") return true;
 
-                  const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
                       (b) => b.id === (a as any).consultationBillingId,
@@ -4216,7 +4353,6 @@ export default function FrontOfficeDesk() {
 
                   if (
                     (s === "lobby" || s === "scheduled") &&
-                    hasDoc &&
                     consBill &&
                     !isConsBillPaid
                   )
@@ -4254,7 +4390,6 @@ export default function FrontOfficeDesk() {
 
                   if (s === "scheduled") return true;
                   if (s !== "lobby") return false;
-                  const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
                       (b) => b.id === (a as any).consultationBillingId,
@@ -4265,7 +4400,7 @@ export default function FrontOfficeDesk() {
                     consBill.paymentStatus === "paid"
                     : false;
                   const isConsBillPending =
-                    hasDoc && consBill && !isConsBillPaid;
+                    consBill && !isConsBillPaid;
 
                   return isConsBillPending;
                 }).length,
@@ -4277,7 +4412,6 @@ export default function FrontOfficeDesk() {
                   const s = getPatientStage(a);
 
                   if (s !== "lobby") return false;
-                  const hasDoc = a.doctorId && a.doctorId !== "unassigned";
                   const consBill = (a as any).consultationBillingId
                     ? billings.find(
                       (b) => b.id === (a as any).consultationBillingId,
@@ -4287,8 +4421,9 @@ export default function FrontOfficeDesk() {
                     ? consBill.status === "paid" ||
                     consBill.paymentStatus === "paid"
                     : false;
+                  const isConsBillPending = consBill && !isConsBillPaid;
 
-                  return !(hasDoc && consBill && !isConsBillPaid);
+                  return !isConsBillPending;
                 }).length,
               },
               {

@@ -300,4 +300,152 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
 
     expect(pathId).toBe("mocked_doc_id");
   });
+
+  it("Phase 5: Doctor routes patient directly to Expert Cabin (without prescription) and commission flows correctly", async () => {
+    // 1. Mock Appointment
+    const mockAppointment = {
+      id: "appt_e2e_1",
+      patientId: "pat_1",
+      doctorId: "doc_1",
+      doctorName: "Dr. Smith",
+      status: "in-progress" as const,
+      doctorConsultationCompleted: false,
+      notes: "[Routed to: Doctor]",
+      appointmentTypeId: "consultation-fee",
+      clinicId: "clinic_1",
+      branchId: "branch_1",
+    };
+
+    // 2. Doctor routes to Expert (simulating handleConfirmRoute)
+    // The doctor selects "expert_1" (Expert) and "PRP Cabin A"
+    const routingTarget = "expert";
+    const selectedExpertId = "expert_1";
+    const routingCabin = "PRP Cabin A";
+
+    const updateData: any = {
+      status: "in-progress",
+      cabinName: routingCabin,
+      updatedAt: new Date(),
+    };
+
+    if (routingTarget === "expert") {
+      updateData.assignedExpertId = selectedExpertId;
+      updateData.status = "in-progress";
+
+      if (mockAppointment.doctorId && mockAppointment.doctorId !== "unassigned") {
+        updateData.doctorConsultationCompleted = true;
+        let updatedNotes = mockAppointment.notes || "";
+        updatedNotes = updatedNotes.replace("[Routed to: Doctor]", "").trim();
+        if (!updatedNotes.includes("[Routed to: Expert]")) {
+          updatedNotes = (updatedNotes + " [Routed to: Expert]").trim();
+        }
+        updateData.notes = updatedNotes;
+      }
+    }
+
+    // Verify appointment updates reflect routing to expert
+    expect(updateData.assignedExpertId).toBe("expert_1");
+    expect(updateData.status).toBe("in-progress");
+    expect(updateData.doctorConsultationCompleted).toBe(true);
+    expect(updateData.notes).toContain("[Routed to: Expert]");
+    expect(updateData.cabinName).toBe("PRP Cabin A");
+
+    // Apply updates to simulate updated appointment
+    const updatedAppointment = {
+      ...mockAppointment,
+      ...updateData,
+    };
+
+    // 3. Simulating Expert performing a procedure and saving it
+    const recommendedProcedureData = {
+      name: "CO2 Laser Resurfacing",
+      fee: 4000,
+      area: "Full Face",
+      items: [
+        {
+          id: "laser-id",
+          name: "CO2 Laser Resurfacing",
+          fee: 4000,
+        }
+      ],
+    };
+
+    const finalAppointment = {
+      ...updatedAppointment,
+      recommendedProcedure: recommendedProcedureData,
+    };
+
+    // 4. Settle Billing & Settle Commission
+    // Simulate resolution of clinicianId:
+    const isExpert =
+      finalAppointment.assignedExpertId &&
+      finalAppointment.assignedExpertId !== "unassigned";
+    const clinicianId = isExpert
+      ? finalAppointment.assignedExpertId
+      : finalAppointment.doctorId || "unassigned";
+
+    expect(clinicianId).toBe("expert_1"); // Clinician should be the Expert
+
+    // Generate billing items
+    const billingItems = finalAppointment.recommendedProcedure.items.map((item) => ({
+      id: "item_laser_1",
+      appointmentTypeId: item.id,
+      appointmentTypeName: item.name,
+      price: item.fee,
+      quantity: 1,
+      commission: 30, // 30% Expert commission
+      doctorId: clinicianId,
+      doctorName: "Laser Expert",
+      amount: item.fee,
+    }));
+
+    // Recommending doctor referral
+    const referrals: any[] = [];
+    if (finalAppointment.doctorId && finalAppointment.doctorId !== "unassigned") {
+      referrals.push({
+        type: "doctor",
+        id: finalAppointment.doctorId,
+        name: finalAppointment.doctorName,
+        commissionPercentage: 10,
+        commissionAmount: (4000 * 10) / 100,
+      });
+    }
+
+    const billingData = {
+      invoiceNumber: "INV-1003",
+      clinicId: finalAppointment.clinicId,
+      branchId: finalAppointment.branchId,
+      patientId: finalAppointment.patientId,
+      patientName: "John Doe",
+      doctorId: clinicianId,
+      doctorName: "Laser Expert",
+      invoiceDate: new Date(),
+      items: billingItems,
+      referrals: referrals,
+      subtotal: 4000,
+      totalAmount: 4000,
+      status: "draft" as const,
+      paymentStatus: "unpaid" as const,
+    };
+
+    // Verify billing maps correct expert ID to the billing item
+    expect(billingData.doctorId).toBe("expert_1");
+    expect(billingData.items[0].doctorId).toBe("expert_1");
+    // Verify doctor referral maps correct doctor ID and referral commission
+    expect(billingData.referrals[0].id).toBe("doc_1");
+    expect(billingData.referrals[0].commissionAmount).toBe(400);
+
+    // 5. Trigger Expert Commission generation on payment settlement
+    const expertCommissionSpy = vi
+      .spyOn(expertCommissionService, "createCommissionsFromBilling")
+      .mockResolvedValue(["mock_commission_id"]);
+
+    await expertCommissionService.createCommissionsFromBilling(
+      billingData as any,
+      30,
+      "system"
+    );
+
+    expect(expertCommissionSpy).toHaveBeenCalled();
+  });
 });

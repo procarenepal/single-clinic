@@ -28,6 +28,9 @@ export interface PrintLayoutConfig {
   // Layout Settings
   headerHeight: "compact" | "standard" | "expanded";
   footerText?: string;
+  pathologyFooterText?: string;
+  pharmacyFooterText?: string;
+  appointmentFooterText?: string;
   showFooter: boolean;
   showTagline?: boolean;
   showAddress?: boolean;
@@ -100,6 +103,10 @@ export const DEFAULT_PRINT_LAYOUT: Omit<
   logoWidth: 80,
   headerHeight: "expanded",
   showFooter: true,
+  footerText: "",
+  pathologyFooterText: "",
+  pharmacyFooterText: "",
+  appointmentFooterText: "",
   showTagline: true,
   showAddress: true,
   showPhone: true,

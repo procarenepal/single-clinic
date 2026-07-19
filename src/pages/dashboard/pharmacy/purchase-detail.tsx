@@ -1135,7 +1135,7 @@ export default function PurchaseDetailPage() {
       const headerHTML = layoutConfig
         ? getPrintHeaderHTML(layoutConfig, clinic, isThermal)
         : "";
-      const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
+      const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig, "pharmacy") : "";
 
       // Generate the HTML content for printing with dynamic clinic data
       const printContent = `<!DOCTYPE html>
@@ -2476,10 +2476,20 @@ export default function PurchaseDetailPage() {
           </table>
 
           {/* Footer Area: Using Assigned Branding for A4, Fallback for Thermal */}
-          {receiptFormat === "A4" && layoutConfig ? (
+          {layoutConfig?.showFooter && (layoutConfig.pharmacyFooterText || layoutConfig.footerText) ? (
             <div
+              style={receiptFormat === "Thermal" ? {
+                borderTop: "1px dashed #000",
+                paddingTop: 4,
+                marginTop: 8,
+                textAlign: "center",
+                fontSize: 10,
+                fontWeight: 600,
+              } : undefined}
               dangerouslySetInnerHTML={{
-                __html: getPrintFooterHTML(layoutConfig),
+                __html: receiptFormat === "Thermal" 
+                  ? `<p style="margin: 0;">${layoutConfig.pharmacyFooterText || layoutConfig.footerText}</p>` 
+                  : getPrintFooterHTML(layoutConfig, "pharmacy"),
               }}
             />
           ) : (

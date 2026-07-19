@@ -174,7 +174,7 @@ export default function ReportsPage() {
   const [selectedDoctor, setSelectedDoctor] = useState("all");
   const [selectedAppointmentType, setSelectedAppointmentType] = useState("all");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [allDates, setAllDates] = useState(false);
+  const [allDates, setAllDates] = useState(true);
   const [showAllDoctorsAnalysis, setShowAllDoctorsAnalysis] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
 
@@ -1092,10 +1092,10 @@ export default function ReportsPage() {
           "Attributed Doctor":
             selectedDoctor !== "all"
               ? reportData.doctors.find((d) => d.id === selectedDoctor)?.name ||
-                reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
-                reportData.referralPartners.find((p) => p.id === selectedDoctor)
-                  ?.name ||
-                "N/A"
+              reportData.experts.find((e) => e.id === selectedDoctor)?.name ||
+              reportData.referralPartners.find((p) => p.id === selectedDoctor)
+                ?.name ||
+              "N/A"
               : billing.doctorName,
           "Doctor Type":
             billing.doctorType === "visitor" ? "Visiting" : "Regular",
@@ -1602,12 +1602,12 @@ export default function ReportsPage() {
                               <Chip
                                 color={
                                   statusColor as
-                                    | "success"
-                                    | "primary"
-                                    | "warning"
-                                    | "danger"
-                                    | "default"
-                                    | "secondary"
+                                  | "success"
+                                  | "primary"
+                                  | "warning"
+                                  | "danger"
+                                  | "default"
+                                  | "secondary"
                                 }
                                 size="sm"
                                 variant="flat"
@@ -1783,8 +1783,8 @@ export default function ReportsPage() {
                           <td className="whitespace-nowrap">
                             {patient.createdAt
                               ? new Date(
-                                  patient.createdAt as any,
-                                ).toLocaleDateString()
+                                patient.createdAt as any,
+                              ).toLocaleDateString()
                               : ""}
                           </td>
                         </tr>
@@ -2074,9 +2074,9 @@ export default function ReportsPage() {
                           : "N/A";
                         const time = billing.invoiceDate
                           ? new Date(billing.invoiceDate).toLocaleTimeString(
-                              [],
-                              { hour: "2-digit", minute: "2-digit" },
-                            )
+                            [],
+                            { hour: "2-digit", minute: "2-digit" },
+                          )
                           : "";
                         const itemsCount = billing.items?.length || 0;
 
@@ -2279,9 +2279,9 @@ export default function ReportsPage() {
                           : "N/A";
                         const time = pDate
                           ? new Date(pDate).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : "";
                         const itemsCount = purchase.items?.length || 0;
                         const totalQty =
@@ -2326,11 +2326,11 @@ export default function ReportsPage() {
                               </div>
                               {(purchase.patientPhone ||
                                 (purchase as any).customerPhone) && (
-                                <div className="text-xs text-mountain-500">
-                                  {purchase.patientPhone ||
-                                    (purchase as any).customerPhone}
-                                </div>
-                              )}
+                                  <div className="text-xs text-mountain-500">
+                                    {purchase.patientPhone ||
+                                      (purchase as any).customerPhone}
+                                  </div>
+                                )}
                             </td>
                             <td>
                               <div className="text-[13px]">
@@ -2448,7 +2448,7 @@ export default function ReportsPage() {
                             const matchesType =
                               selectedAppointmentType === "all" ||
                               item.appointmentTypeId ===
-                                selectedAppointmentType;
+                              selectedAppointmentType;
 
                             if (matchesDoctor && matchesType) {
                               totalRevenue += (item.amount || 0) * revenueScale;
@@ -2806,16 +2806,16 @@ export default function ReportsPage() {
                           {filteredBillings.map((billing) => {
                             const date = billing.invoiceDate
                               ? new Date(
-                                  billing.invoiceDate,
-                                ).toLocaleDateString()
+                                billing.invoiceDate,
+                              ).toLocaleDateString()
                               : "N/A";
                             const time = billing.invoiceDate
                               ? new Date(
-                                  billing.invoiceDate,
-                                ).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
+                                billing.invoiceDate,
+                              ).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
                               : "";
                             const itemsCount = billing.items?.length || 0;
 

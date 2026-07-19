@@ -213,77 +213,72 @@ export const getPrintHeaderHTML = (
 ) => {
   const logoUrl = config.logoUrl || clinic?.logoUrl;
   const logoWidth = config.logoWidth || 80;
+  const rawClinicName = config.clinicName || clinic?.name || "Clinic Name";
+  const formattedClinicName = rawClinicName.replace(/\s+(Pvt\.?\s*Ltd\.?)/i, "<br/>$1");
 
   return `
     <div class="header">
-      ${
-        logoUrl
-          ? `
+      ${logoUrl
+      ? `
         <div class="pos-logo logo-container">
           <img src="${logoUrl}" style="width: ${logoWidth}px;" alt="Logo" />
         </div>
       `
-          : ""
-      }
+      : ""
+    }
 
       <div class="identity-stack">
-        <h1 class="clinic-name pos-clinicName">${config.clinicName || clinic?.name || "Clinic Name"}</h1>
+        <h1 class="clinic-name pos-clinicName">${formattedClinicName}</h1>
         
-        ${
-          config.showTagline !== false && (config.tagline || clinic?.tagline)
-            ? `
+        ${config.showTagline !== false && (config.tagline || clinic?.tagline)
+      ? `
           <div class="pos-tagline">
             <p class="tagline">${config.tagline || clinic?.tagline || ""}</p>
           </div>
         `
-            : ""
-        }
+      : ""
+    }
 
-        ${
-          config.showAddress !== false && (config.address || clinic?.address)
-            ? `
+        ${config.showAddress !== false && (config.address || clinic?.address)
+      ? `
           <div class="pos-address">
             <div class="address">${config.address || clinic?.address || ""}</div>
           </div>
         `
-            : ""
-        }
+      : ""
+    }
 
-        ${
-          (config.showPhone !== false && (config.phone || clinic?.phone)) ||
-          (config.showEmail !== false && (config.email || clinic?.email))
-            ? `
+        ${(config.showPhone !== false && (config.phone || clinic?.phone)) ||
+      (config.showEmail !== false && (config.email || clinic?.email))
+      ? `
           <div class="pos-contacts">
             <div class="contact-row">
-              ${
-                config.showPhone !== false && (config.phone || clinic?.phone)
-                  ? `
+              ${config.showPhone !== false && (config.phone || clinic?.phone)
+        ? `
                 <div class="contact-item">
                   <span class="contact-label" style="text-transform: lowercase;">phone:</span>
                   <span class="contact-value">${config.phone || clinic?.phone}</span>
                 </div>
               `
-                  : ""
-              }
-              ${
-                config.showEmail !== false && (config.email || clinic?.email)
-                  ? `
+        : ""
+      }
+              ${config.showEmail !== false && (config.email || clinic?.email)
+        ? `
                 <div class="contact-item">
                   <span class="contact-label" style="text-transform: lowercase;">email:</span>
                   <span class="contact-value">${config.email || clinic?.email}</span>
                 </div>
               `
-                  : ""
-              }
+        : ""
+      }
             </div>
           </div>
         `
-            : ""
-        }
+      : ""
+    }
 
-        ${
-          config.showWebsite !== false && (config.website || clinic?.website)
-            ? `
+        ${config.showWebsite !== false && (config.website || clinic?.website)
+      ? `
           <div class="pos-website">
             <div class="contact-item">
               <span class="contact-label" style="text-transform: lowercase;">website:</span>
@@ -291,8 +286,8 @@ export const getPrintHeaderHTML = (
             </div>
           </div>
         `
-            : ""
-        }
+      : ""
+    }
       </div>
     </div>
   `;
@@ -301,12 +296,23 @@ export const getPrintHeaderHTML = (
 /**
  * Generates the HTML for the clinical branding footer.
  */
-export const getPrintFooterHTML = (config: PrintLayoutConfig) => {
-  if (!config.showFooter || !config.footerText) return "";
+export const getPrintFooterHTML = (
+  config: PrintLayoutConfig,
+  section?: "pathology" | "pharmacy" | "appointment",
+) => {
+  if (!config.showFooter) return "";
+
+  const footerText =
+    (section === "pathology" && config.pathologyFooterText) ||
+    (section === "pharmacy" && config.pharmacyFooterText) ||
+    (section === "appointment" && config.appointmentFooterText) ||
+    config.footerText;
+
+  if (!footerText) return "";
 
   return `
     <footer class="footer-section">
-      <p class="footer-text">${config.footerText}</p>
+      <p class="footer-text">${footerText}</p>
     </footer>
   `;
 };

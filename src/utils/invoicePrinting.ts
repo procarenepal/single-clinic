@@ -45,7 +45,7 @@ export const generateInvoiceHTML = (
   const headerHTML = layoutConfig
     ? getPrintHeaderHTML(layoutConfig, clinic, isThermal)
     : "";
-  const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
+  const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig, "pathology") : "";
 
   const itemsHtml = billing.items
     .map(
@@ -253,7 +253,7 @@ export const generateInvoiceHTML = (
     ${footerHTML ||
     `
     <div class="footer">
-      <p>Thank you for choosing us</p>
+      <p>${layoutConfig?.showFooter ? (layoutConfig.pathologyFooterText || layoutConfig.footerText || "Thank you for choosing us") : "Thank you for choosing us"}</p>
       <p>${new Date().toLocaleString()}</p>
     </div>
     `
@@ -303,7 +303,7 @@ export const generateAppointmentInvoiceHTML = (
   const headerHTML = layoutConfig
     ? getPrintHeaderHTML(layoutConfig, clinic, isThermal)
     : "";
-  const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig) : "";
+  const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig, "appointment") : "";
 
   // Helper to format currency
   const formatCurrency = (amount: number) => `NPR ${amount.toLocaleString()}`;
@@ -613,7 +613,7 @@ export const generateAppointmentInvoiceHTML = (
       ? footerHTML
       : `
     <div style="margin-top: 15px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 5px;">
-      <p>Thank you for choosing us</p>
+      <p>${layoutConfig?.showFooter ? (layoutConfig.appointmentFooterText || layoutConfig.footerText || "Thank you for choosing us") : "Thank you for choosing us"}</p>
       ${isThermal ? `<p>${new Date().toLocaleString()}</p>` : ""}
     </div>
     `

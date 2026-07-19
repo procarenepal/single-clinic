@@ -328,9 +328,9 @@ export const medicineService = {
       const last =
         paginatedMedicines.length === pageSize
           ? querySnapshot.docs.find(
-              (d) =>
-                d.id === paginatedMedicines[paginatedMedicines.length - 1].id,
-            ) || null
+            (d) =>
+              d.id === paginatedMedicines[paginatedMedicines.length - 1].id,
+          ) || null
           : null;
 
       return { medicines: paginatedMedicines, lastDoc: last as any };
