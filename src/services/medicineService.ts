@@ -208,6 +208,13 @@ export const medicineService = {
         updatedAt: serverTimestamp(),
       });
 
+      // Clear cache on mutation
+      if (typeof window !== "undefined") {
+        Object.keys(sessionStorage).forEach(key => {
+          if (key.startsWith("cache_medicines_")) sessionStorage.removeItem(key);
+        });
+      }
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating medicine:", error);
@@ -221,14 +228,25 @@ export const medicineService = {
     branchId?: string,
   ): Promise<Medicine[]> {
     try {
-      const constraints: any[] = [];
-      // Standalone mode: Fetch all medicines regardless of clinicId
-      /*
-      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
-        constraints.push(where("clinicId", "==", clinicId));
+      const cacheKey = `cache_medicines_${clinicId}_${isActive}_${branchId}`;
+      if (typeof window !== "undefined") {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          // 5-minute cache for medicine definitions (they rarely change)
+          if (Date.now() - timestamp < 5 * 60 * 1000) {
+            // Restore dates
+            return data.map((m: any) => ({
+              ...m,
+              createdAt: m.createdAt ? new Date(m.createdAt) : undefined,
+              updatedAt: m.updatedAt ? new Date(m.updatedAt) : undefined,
+              expiryDate: m.expiryDate ? new Date(m.expiryDate) : undefined,
+            }));
+          }
+        }
       }
-      */
 
+      const constraints: any[] = [];
       if (typeof isActive === "boolean") {
         constraints.push(where("isActive", "==", isActive));
       }
@@ -252,12 +270,16 @@ export const medicineService = {
         } as Medicine;
       });
 
-      console.log(
-        `[Diagnostic] clinicId: "${clinicId}", Found: ${medicines.length} medicines`,
-      );
+      const sortedMedicines = medicines.sort((a, b) => a.name.localeCompare(b.name));
 
-      // Sort in memory by name
-      return medicines.sort((a, b) => a.name.localeCompare(b.name));
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          data: sortedMedicines,
+          timestamp: Date.now()
+        }));
+      }
+
+      return sortedMedicines;
     } catch (error) {
       console.error("Error fetching medicines:", error);
       throw error;
@@ -421,8 +443,14 @@ export const medicineService = {
   async deleteMedicine(id: string): Promise<void> {
     try {
       const docRef = doc(db, MEDICINES_COLLECTION, id);
-
       await deleteDoc(docRef);
+
+      // Clear cache on mutation
+      if (typeof window !== "undefined") {
+        Object.keys(sessionStorage).forEach(key => {
+          if (key.startsWith("cache_medicines_")) sessionStorage.removeItem(key);
+        });
+      }
     } catch (error) {
       console.error("Error deleting medicine:", error);
       throw error;
@@ -700,6 +728,29 @@ export const medicineService = {
   > {
     if (medicineIds.length === 0) return [];
     try {
+      // Create a deterministic cache key
+      const sortedIds = [...medicineIds].sort().join(",");
+      // Use a hashing mechanism for the cache key to avoid excessively long strings in sessionStorage
+      let hash = 0;
+      for (let i = 0; i < sortedIds.length; i++) {
+        const char = sortedIds.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      const cacheKey = `cache_stock_${clinicId}_${branchId}_${hash}`;
+
+      if (typeof window !== "undefined") {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          // 2-minute cache for stock quantities 
+          // (Safe because actual checkout reads live DB inside runTransaction anyway)
+          if (Date.now() - timestamp < 2 * 60 * 1000) {
+            return data;
+          }
+        }
+      }
+
       const BATCH_SIZE = 30; // Firestore 'in' query limit
       const results: {
         medicineId: string;
@@ -746,6 +797,13 @@ export const medicineService = {
           }
         });
       });
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          data: results,
+          timestamp: Date.now()
+        }));
+      }
 
       return results;
     } catch (error) {

@@ -80,11 +80,11 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
     const orderedIds = stableOptionOrder.current.length > 0
       ? stableOptionOrder.current
       : [
-          ...(bookedLabel ? [bookedLabel] : []),
-          ...modalActivePackages.map((p) => `consume_pkg_${p.id}`),
-          ...appointmentTypes.map((t) => t.name),
-          "Other",
-        ];
+        ...(bookedLabel ? [bookedLabel] : []),
+        ...modalActivePackages.map((p) => `consume_pkg_${p.id}`),
+        ...appointmentTypes.map((t) => t.name),
+        "Other",
+      ];
 
     const sortedOptions = [...orderedIds].sort((a, b) => b.length - a.length);
     const selected: string[] = [];
@@ -99,13 +99,19 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
       }
     }
 
-    return orderedIds.filter((id) => selected.includes(id));
+    // Also pick up any items in the string that are NOT in orderedIds
+    // (e.g. procedures added before they were registered as appointment types)
+    const knownSelected = orderedIds.filter((id) => selected.includes(id));
+    const unknownTokens = remaining
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && !orderedIds.includes(s));
+
+    return [...knownSelected, ...unknownTokens];
   };
 
   React.useEffect(() => {
     if (!isOpen || !appointment) return;
-
-    const initialProcedureList = getProcedureList(procedure.procedureType);
 
     const ids: string[] = [];
 
@@ -118,10 +124,40 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
       if (!isDynamic && bookedLabel) ids.push(bookedLabel);
     }
 
-    // 2. Pre-selected items next so they appear at the top on open
-    initialProcedureList.forEach((v) => {
-      if (!ids.includes(v)) ids.push(v);
-    });
+    // 2. Parse any already-selected items from the current procedureType string
+    //    so pre-selected items (including those not in appointmentTypes) appear first
+    const apptTypeNames = new Set(appointmentTypes.map((t) => t.name));
+    const allKnownIds = new Set([
+      ...ids,
+      ...modalActivePackages.map((p) => `consume_pkg_${p.id}`),
+      ...apptTypeNames,
+      "Other",
+    ]);
+
+    // Extract already-selected items that aren't in the known list
+    if (procedure.procedureType) {
+      // First pass: strip known items out, leftovers are unknown tokens
+      let remaining = procedure.procedureType;
+      const knownSorted = [...allKnownIds].sort((a, b) => b.length - a.length);
+      const foundKnown: string[] = [];
+      for (const opt of knownSorted) {
+        const idx = remaining.indexOf(opt);
+        if (idx !== -1) {
+          foundKnown.push(opt);
+          remaining = remaining.substring(0, idx) + remaining.substring(idx + opt.length);
+        }
+      }
+      // Unknown tokens (comma-split what's left)
+      const unknownTokens = remaining
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      // Add found known items first (in stable order)
+      foundKnown.forEach((v) => { if (!ids.includes(v)) ids.push(v); });
+      // Then add unknown (not-in-DB) items right after so they appear in the list
+      unknownTokens.forEach((v) => { if (!ids.includes(v)) ids.push(v); });
+    }
 
     // 3. Packages
     modalActivePackages.forEach((pkg) => {
@@ -141,65 +177,67 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
     if (!ids.includes("Other")) ids.push("Other");
 
     stableOptionOrder.current = ids;
-    // Only rebuild when the modal opens for a different appointment
-  }, [isOpen, appointment?.id]);
+    // Rebuild when modal opens OR when appointmentTypes finishes loading
+  }, [isOpen, appointment?.id, appointmentTypes.length]);
 
   if (!isOpen || !appointment) return null;
 
   const modalRoot = document.body;
 
   const handleToggleProcedure = (val: string) => {
-    const currentList = getProcedureList(procedure.procedureType);
-    const isSelected = currentList.includes(val);
-    let newList: string[];
+    setProcedure((prev) => {
+      const currentList = getProcedureList(prev.procedureType);
+      const isSelected = currentList.includes(val);
+      let newList: string[];
 
-    if (isSelected) {
-      newList = currentList.filter((x) => x !== val);
-    } else {
-      newList = [...currentList, val];
-    }
-
-    const newTypeStr = newList.join(", ");
-
-    // Recalculate fee
-    let totalFee = 0;
-
-    newList.forEach((item) => {
-      if (item.startsWith("consume_pkg_")) {
-        // package consumption has 0 fee
+      if (isSelected) {
+        newList = currentList.filter((x) => x !== val);
       } else {
-        const matchingType = appointmentTypes.find((t) => t.name === item);
+        newList = [...currentList, val];
+      }
 
-        if (matchingType) {
-          let wasAlreadyBilled = false;
+      const newTypeStr = newList.join(", ");
 
-          // Check if this was the booked appointment type AND if it was billed at front desk
-          if (appointment.appointmentTypeId === matchingType.id) {
-            const nameLower = matchingType.name.toLowerCase();
-            const isConsult = nameLower.includes("consult");
+      // Recalculate fee
+      let totalFee = 0;
 
-            if (
-              matchingType.billAtFrontDesk ||
-              nameLower.includes("hair analy") ||
-              nameLower.includes("skin analy") ||
-              isConsult
-            ) {
-              wasAlreadyBilled = true;
+      newList.forEach((item) => {
+        if (item.startsWith("consume_pkg_")) {
+          // package consumption has 0 fee
+        } else {
+          const matchingType = appointmentTypes.find((t) => t.name === item);
+
+          if (matchingType) {
+            let wasAlreadyBilled = false;
+
+            // Check if this was the booked appointment type AND if it was billed at front desk
+            if (appointment.appointmentTypeId === matchingType.id) {
+              const nameLower = matchingType.name.toLowerCase();
+              const isConsult = nameLower.includes("consult");
+
+              if (
+                matchingType.billAtFrontDesk ||
+                nameLower.includes("hair analy") ||
+                nameLower.includes("skin analy") ||
+                isConsult
+              ) {
+                wasAlreadyBilled = true;
+              }
+            }
+
+            if (!wasAlreadyBilled) {
+              totalFee += Number(matchingType.price || 0);
             }
           }
-
-          if (!wasAlreadyBilled) {
-            totalFee += Number(matchingType.price || 0);
-          }
         }
-      }
-    });
+      });
 
-    setProcedure((p) => ({
-      ...p,
-      procedureType: newTypeStr,
-      fee: String(totalFee),
-    }));
+      return {
+        ...prev,
+        procedureType: newTypeStr,
+        fee: String(totalFee),
+      };
+    });
   };
 
   return createPortal(
@@ -292,13 +330,13 @@ export const ProcedureModal: React.FC<ProcedureModalProps> = ({
                         stableOptionOrder.current.length > 0
                           ? stableOptionOrder.current
                           : [
-                              ...(bookedLabel ? [bookedLabel] : []),
-                              ...modalActivePackages.map(
-                                (p) => `consume_pkg_${p.id}`,
-                              ),
-                              ...appointmentTypes.map((t) => t.name),
-                              "Other",
-                            ];
+                            ...(bookedLabel ? [bookedLabel] : []),
+                            ...modalActivePackages.map(
+                              (p) => `consume_pkg_${p.id}`,
+                            ),
+                            ...appointmentTypes.map((t) => t.name),
+                            "Other",
+                          ];
 
                       const filteredIds = orderedIds.filter((id) => {
                         const { label } = labelOf(id);

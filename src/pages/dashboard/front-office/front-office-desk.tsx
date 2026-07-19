@@ -234,7 +234,7 @@ export default function FrontOfficeDesk() {
   const [routingAddCommission, setRoutingAddCommission] = useState(true);
   const [routingDoctorId, setRoutingDoctorId] = useState("");
   const [routingExpertId, setRoutingExpertId] = useState("");
-  const [routingChargeConsultation, setRoutingChargeConsultation] = useState(true);
+  const [routingChargeConsultation, setRoutingChargeConsultation] = useState(false);
 
   // Procedure log modal state
   const [isProcedureModalOpen, setIsProcedureModalOpen] = useState(false);
@@ -761,6 +761,10 @@ export default function FrontOfficeDesk() {
     if (!clinicId) return;
 
     try {
+      const appt = appointments.find(a => a.id === appointmentId);
+      if (appt && appt.consultationBillingId) {
+        return appt.consultationBillingId;
+      }
       let pat = patients.find((p) => p.id === patientId);
 
       if (!pat && patientId) {
@@ -805,7 +809,7 @@ export default function FrontOfficeDesk() {
         let clConsultationPrice = 0;
         if (cl.chargeConsultation) {
           if (docInfo) {
-            clConsultationPrice = docInfo.consultationCharge !== undefined ? Number(docInfo.consultationCharge) : 500;
+            clConsultationPrice = docInfo.consultationCharge !== undefined ? Number(docInfo.consultationCharge) : 700;
           }
         }
 
@@ -830,20 +834,25 @@ export default function FrontOfficeDesk() {
             }
 
             if (shouldCharge) {
+              let finalPrice = Number(apptType.price);
+              if (isApptTypeConsultation && cl.chargeConsultation && docInfo?.consultationCharge !== undefined) {
+                finalPrice = Number(docInfo.consultationCharge);
+              }
+
               clApptTypeItem = {
                 id: crypto.randomUUID(),
                 appointmentTypeId: apptType.id,
                 appointmentTypeName: apptType.name,
-                price: Number(apptType.price),
+                price: finalPrice,
                 quantity: 1,
                 commission: (cl.addCommission && apptType.calculateCommission !== false)
                   ? (isExpert ? expInfo?.defaultCommission : docInfo?.defaultCommission) || 0
                   : 0,
                 doctorId: cl.clinicianId,
                 doctorName: isExpert ? expInfo?.name || "Expert" : docInfo?.name || "GP",
-                amount: Number(apptType.price),
+                amount: finalPrice,
               };
-              totalInvoiceAmount += Number(apptType.price);
+              totalInvoiceAmount += finalPrice;
             }
           }
         }
@@ -1063,7 +1072,7 @@ export default function FrontOfficeDesk() {
     setRoutingAppointment(appt);
     setRoutingCabin(appt.cabinName || "");
     setRoutingDoctorId(appt.doctorId && appt.doctorId !== "unassigned" ? appt.doctorId : "");
-    setRoutingChargeConsultation(true);
+    setRoutingChargeConsultation(false);
     setRoutingTarget("doctor");
     setIsRoutingModalOpen(true);
   };
@@ -1216,21 +1225,25 @@ export default function FrontOfficeDesk() {
 
       if (!billing) return null;
 
-      // Check if the booked appointment type is already in the billing items
-      const hasBookedItem = billing.items?.some(
-        (item: any) => item.appointmentTypeId === appt.appointmentTypeId,
-      );
-
-      if (hasBookedItem) {
-        return billing.paymentStatus || "unpaid";
-      }
-
-      // Get the price of the booked appointment type
+      // Get the price of the booked appointment type first to check if it's a consultation
       const apptType = appointmentTypes.find(
         (t) => t.id === appt.appointmentTypeId,
       );
 
       if (!apptType) return null;
+
+      const isApptTypeConsultation = apptType.name.toLowerCase().includes("consult");
+
+      // Check if the booked appointment type is already in the billing items
+      const hasBookedItem = billing.items?.some(
+        (item: any) =>
+          item.appointmentTypeId === appt.appointmentTypeId ||
+          (isApptTypeConsultation && item.appointmentTypeId === "consultation-fee")
+      );
+
+      if (hasBookedItem) {
+        return billing.paymentStatus || "unpaid";
+      }
 
       const price = Number(apptType.price) || 0;
 
@@ -1928,7 +1941,7 @@ export default function FrontOfficeDesk() {
         setRoutingAppointment(selectedAppointment);
         setRoutingCabin(selectedAppointment.cabinName || "");
         setRoutingDoctorId(selectedAppointment.doctorId && selectedAppointment.doctorId !== "unassigned" ? selectedAppointment.doctorId : "");
-        setRoutingChargeConsultation(true);
+        setRoutingChargeConsultation(false);
         setRoutingTarget("doctor");
         setIsRoutingModalOpen(true);
 
@@ -3488,25 +3501,19 @@ export default function FrontOfficeDesk() {
       if (draftBilling) {
         navigate(`/dashboard/appointments-billing/${draftBilling.id}`);
       } else {
-        // Before auto-creating a new invoice, check if the consultation is already paid
-        // AND there is no pending procedure. In that case, don't create an empty ghost invoice —
-        // just navigate to the existing paid consultation bill.
         const consultationBillingId = (appt as any).consultationBillingId;
         const hasPendingProcedure =
           !!(appt as any).recommendedProcedure?.fee &&
           (appt as any).recommendedProcedure?.fee > 0;
 
-        if (!hasPendingProcedure && consultationBillingId) {
+        // ALWAYS navigate to consultationBillingId if it exists (paid or unpaid)
+        // to prevent creating a duplicate invoice for the same visit.
+        if (consultationBillingId) {
           const consBilling = patientBillings.find(
             (b) => b.id === consultationBillingId,
           );
-
           if (consBilling) {
-            // Navigate to the existing consultation invoice (even if paid — for review)
-            navigate(
-              `/dashboard/appointments-billing/${consultationBillingId}`,
-            );
-
+            navigate(`/dashboard/appointments-billing/${consultationBillingId}`);
             return;
           }
         }
@@ -3525,7 +3532,6 @@ export default function FrontOfficeDesk() {
 
           if (paidBilling) {
             navigate(`/dashboard/appointments-billing/${paidBilling.id}`);
-
             return;
           }
         }
@@ -3585,6 +3591,10 @@ export default function FrontOfficeDesk() {
           if (apptType) {
             price = Number(apptType.price) || 500;
             appointmentTypeName = apptType.name || "General Consultation";
+          }
+
+          if (appointmentTypeName.toLowerCase().includes("consult") && docInfo?.consultationCharge !== undefined) {
+            price = Number(docInfo.consultationCharge);
           }
 
           // Resolve referrals

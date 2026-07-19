@@ -11,7 +11,7 @@ import {
   where,
   Timestamp,
   runTransaction,
-  serverTimestamp,
+  serverTimestamp, increment,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -92,6 +92,7 @@ export const pharmacyService = {
 
         // 2. Prepare data for updates
         const stockUpdates: { docRef: any; data: any }[] = [];
+        const medicineTotalUpdates: Record<string, { regularQty: number; schemeQty: number }> = {};
         const transactionLogs: any[] = [];
         const updatedPurchaseItems: any[] = [];
         let newGrossTotal = 0;
@@ -208,6 +209,10 @@ export const pharmacyService = {
             });
 
             // Queue batch-wise stock document updates
+            if (!medicineTotalUpdates[item.medicineId]) medicineTotalUpdates[item.medicineId] = { regularQty: 0, schemeQty: 0 };
+            if (stockType === 'scheme') medicineTotalUpdates[item.medicineId].schemeQty += qtyToDeduct;
+            else medicineTotalUpdates[item.medicineId].regularQty += qtyToDeduct;
+
             stockUpdates.push({
               docRef: batch.docRef,
               data: {
@@ -267,7 +272,7 @@ export const pharmacyService = {
 
             throw new Error(
               `Insufficient non-expired stock for "${item.medicineName}". ` +
-                `Requested: ${item.quantity}, Available: ${totalActiveStock + (item.quantity - remainingQty)}.`,
+              `Requested: ${item.quantity}, Available: ${totalActiveStock + (item.quantity - remainingQty)}.`,
             );
           }
 
@@ -356,6 +361,15 @@ export const pharmacyService = {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+
+        // Update Parent Medicine Totals
+        for (const [medId, deductions] of Object.entries(medicineTotalUpdates)) {
+          const medRef = doc(collection(db, 'medicines'), medId);
+          const updates: any = {};
+          if (deductions.regularQty > 0) updates.totalStock = increment(-deductions.regularQty);
+          if (deductions.schemeQty > 0) updates.totalSchemeStock = increment(-deductions.schemeQty);
+          if (Object.keys(updates).length > 0) transaction.update(medRef, updates);
+        }
 
         // Update Stock Batch Documents
         for (const update of stockUpdates) {
@@ -627,11 +641,11 @@ export const pharmacyService = {
         for (const item of medicineItems) {
           const alreadyReturned = returnedQuantities.get(item.purchaseItemId) || 0;
           const originalItem = originalPurchase.items?.find((i: any) => i.id === item.purchaseItemId);
-          
+
           if (!originalItem) {
             throw new Error(`Original purchase item not found for ${item.medicineName}`);
           }
-          
+
           if (alreadyReturned + item.quantity > originalItem.quantity) {
             throw new Error(`Cannot return ${item.quantity} of ${item.medicineName}. Only ${originalItem.quantity - alreadyReturned} remaining to return.`);
           }
