@@ -1303,14 +1303,34 @@ export type FollowupStatus =
   | "completed"
   | "no-answer"
   | "wrong-no"
-  | "cancelled";
-export type FollowupInitStatus = "good" | "complain" | "neutral";
+  | "cancelled"
+  | "satisfy"
+  | "not-satisfy"
+  | "will-come"
+  | "angry"
+  | "complain";
+
+export type FollowupInitStatus =
+  | "good"
+  | "complain"
+  | "neutral"
+  | "satisfy"
+  | "not-satisfy"
+  | "angry"
+  | "will-come";
+
 export type FollowupUpdatedStatus =
   | "good"
   | "solved"
+  | "not-solved"
   | "wrong-no"
   | "no-answer"
-  | "neutral";
+  | "neutral"
+  | "satisfy"
+  | "not-satisfy"
+  | "angry"
+  | "will-come"
+  | "complain";
 export type FollowupCategory =
   | "general"
   | "appointment"
@@ -1586,6 +1606,7 @@ export interface AppointmentBillingItem {
   price: number; // Price per appointment (auto-fetched from appointment type)
   quantity: number; // Number of appointments (default 1)
   commission: number; // Commission percentage for this item
+  calculateCommission?: boolean; // Whether to include in doctor/expert commission calculations
   doctorId?: string; // Specific doctor for this item (multi-doctor support)
   doctorName?: string; // Denormalized for display
   categoryId?: string; // Treatment category for this item

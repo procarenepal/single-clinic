@@ -137,11 +137,7 @@ export default function ExpertDashboard() {
         );
         setPrescriptions(
           (rxs as any[])
-            .filter(
-              (rx: any) =>
-                rx.assignedExpertId === doc.id ||
-                pts.some((p: any) => p.id === rx.patientId),
-            )
+            .filter((rx: any) => rx.doctorId === doc.id)
             .sort(
               (a: any, b: any) =>
                 new Date(b.createdAt).getTime() -

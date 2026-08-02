@@ -524,7 +524,7 @@ export default function AppointmentSettingsPage() {
         </div>
 
         {/* Appointment Types */}
-        <Card>
+        <Card disableAnimation>
           <CardHeader className="flex justify-between">
             <div className="flex items-center gap-2">
               <IoTimeOutline className="w-5 h-5" />
@@ -624,6 +624,7 @@ export default function AppointmentSettingsPage() {
                 {filteredAppointmentTypes.map((type) => (
                   <Card
                     key={type.id}
+                    disableAnimation
                     className={`border border-mountain-200 ${!type.isActive ? "opacity-60" : ""} ${
                       selectedTypes.has(type.id)
                         ? "ring-2 ring-teal-200 bg-teal-50/30"

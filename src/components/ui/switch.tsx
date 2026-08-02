@@ -48,7 +48,7 @@ export const Switch: React.FC<SwitchProps> = ({
           "relative inline-flex h-5 w-9 items-center rounded-full border transition-colors",
           value
             ? "bg-primary border-primary"
-            : "bg-surface-3 border-border-base",
+            : "bg-gray-300 dark:bg-gray-600 border-transparent",
         )}
       >
         <span

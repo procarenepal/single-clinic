@@ -4102,9 +4102,12 @@ export default function FrontOfficeDesk() {
           return true;
         };
 
+        const isDoc = userData?.role === "doctor" || currentDoctorId;
+        const isExp = userData?.role === "expert" || currentExpertId;
+
         const showExpertCard =
-          !currentDoctorId || hasFullFrontOfficeAccess || currentExpertId;
-        const showBillingCards = hasFullFrontOfficeAccess || currentExpertId;
+          (!isDoc && !isExp) || hasFullFrontOfficeAccess || isExp;
+        const showBillingCards = hasFullFrontOfficeAccess;
 
         let gridColsClass = "lg:grid-cols-7";
 
@@ -4489,12 +4492,14 @@ export default function FrontOfficeDesk() {
               .filter((tab) => {
                 if (hasFullFrontOfficeAccess) return true;
 
-                if (currentDoctorId && currentExpertId)
-                  return ["doctor", "expert"].includes(tab.id);
-                if (currentDoctorId) return ["doctor"].includes(tab.id);
-                if (currentExpertId) return ["expert"].includes(tab.id);
+                const isDoc = userData?.role === "doctor" || currentDoctorId;
+                const isExp = userData?.role === "expert" || currentExpertId;
 
-                return true;
+                if (isDoc && isExp) return ["doctor", "expert"].includes(tab.id);
+                if (isDoc) return ["doctor"].includes(tab.id);
+                if (isExp) return ["expert"].includes(tab.id);
+
+                return false; // Prevent unauthorized access to all tabs
               })
               .map((tab) => (
                 <button

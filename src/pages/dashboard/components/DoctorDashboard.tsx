@@ -129,7 +129,7 @@ export default function DoctorDashboard() {
         setDoctorName(doc.name || "");
 
         const [pts, appts, rxs] = await Promise.all([
-          patientService.getPatientsByDoctor(clinicId, doc.id),
+          patientService.getPatientsByDoctor(doc.id, clinicId),
           appointmentService.getAppointmentsByClinic(clinicId),
           prescriptionService.getPrescriptionsByClinic(clinicId),
         ]);
@@ -138,11 +138,7 @@ export default function DoctorDashboard() {
         setAppointments(appts.filter((a: any) => a.doctorId === doc.id));
         setPrescriptions(
           (rxs as any[])
-            .filter(
-              (rx: any) =>
-                rx.doctorId === doc.id ||
-                pts.some((p: any) => p.id === rx.patientId),
-            )
+            .filter((rx: any) => rx.doctorId === doc.id)
             .sort(
               (a: any, b: any) =>
                 new Date(b.createdAt).getTime() -

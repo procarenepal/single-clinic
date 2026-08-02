@@ -52,6 +52,11 @@ class DoctorCommissionService {
           // Calculate total commission amount for this doctor's items
           let groupSubtotal = 0;
           const groupCommissionAmount = group.items.reduce((total, item) => {
+            // Explicitly skip items where calculateCommission is false from the business total entirely
+            if (item.calculateCommission === false) {
+              return total;
+            }
+
             const percentage =
               typeof item.commission === "number" && item.commission >= 0
                 ? item.commission
@@ -96,8 +101,8 @@ class DoctorCommissionService {
             appointmentDate: billing.invoiceDate,
             patientId: billing.patientId || "",
             patientName: billing.patientName || "Unknown",
-            serviceNames: group.items.map((item) => item.appointmentTypeName),
-            totalInvoiceAmount: billing.totalAmount, // Total for the whole invoice
+            serviceNames: group.items.filter(i => i.calculateCommission !== false).map((item) => item.appointmentTypeName),
+            totalInvoiceAmount: groupSubtotal, // Use the post-discount eligible business subtotal instead of global billing.totalAmount
             commissionPercentage: effectivePercentage,
             commissionAmount: groupCommissionAmount,
             status: "pending",

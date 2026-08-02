@@ -9,6 +9,8 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   onPress?: () => void;
   /** Removes padding from CardBody — useful when embedding tables */
   isBlurred?: boolean;
+  /** Disables the Framer Motion animation (layout, initial, animate, whileHover) */
+  disableAnimation?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
@@ -18,6 +20,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
       isPressable,
       isHoverable,
       isBlurred,
+      disableAnimation,
       onPress,
       onClick,
       ...rest
@@ -29,33 +32,41 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
       if (!e.defaultPrevented) onPress?.();
     };
 
-    return (
-      <motion.div
-        ref={ref as any}
-        layout
-        animate={{ opacity: 1, y: 0 }}
-        className={clsx(
-          "bg-surface border border-border-base rounded-xl overflow-hidden transition-all duration-300",
-          isBlurred && "glass-morphism shadow-xl shadow-black/5",
-          isPressable && "cursor-pointer select-none",
-          (isPressable || isHoverable) && "hover-glow hover:border-primary/30",
-          className,
-        )}
-        initial={{ opacity: 0, y: 10 }}
-        role={isPressable ? "button" : undefined}
-        tabIndex={isPressable ? 0 : undefined}
-        whileHover={isHoverable || isPressable ? { y: -2 } : {}}
-        onClick={handleClick}
-        onKeyDown={
-          isPressable
-            ? (e) => {
-                if (e.key === "Enter") onPress?.();
-              }
-            : undefined
-        }
-        {...(rest as any)}
-      />
-    );
+      const cardClasses = clsx(
+        "bg-surface border border-border-base rounded-xl overflow-hidden transition-all duration-300",
+        isBlurred && "glass-morphism shadow-xl shadow-black/5",
+        isPressable && "cursor-pointer select-none",
+        (isPressable || isHoverable) && "hover-glow hover:border-primary/30",
+        className,
+      );
+
+      const commonProps = {
+        ref: ref as any,
+        className: cardClasses,
+        role: isPressable ? "button" : undefined,
+        tabIndex: isPressable ? 0 : undefined,
+        onClick: handleClick,
+        onKeyDown: isPressable
+          ? (e: React.KeyboardEvent<HTMLDivElement>) => {
+              if (e.key === "Enter") onPress?.();
+            }
+          : undefined,
+        ...(rest as any),
+      };
+
+      if (disableAnimation) {
+        return <div {...commonProps} />;
+      }
+
+      return (
+        <motion.div
+          layout
+          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 10 }}
+          whileHover={isHoverable || isPressable ? { y: -2 } : {}}
+          {...commonProps}
+        />
+      );
   },
 );
 Card.displayName = "Card";

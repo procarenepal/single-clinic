@@ -422,8 +422,8 @@ export default function DoctorProfilePage() {
 
       if (clinicId) {
         const directPatients = await patientService.getPatientsByDoctor(
-          clinicId,
           doctorId,
+          clinicId,
         );
 
         if (directPatients) patientsData.push(...directPatients);

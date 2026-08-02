@@ -260,6 +260,7 @@ export default function PatientsPage() {
   const {
     clinicId,
     userData,
+    currentUser,
     isSystemOwner: checkOwner,
     isClinicAdmin: checkAdmin,
   } = useAuthContext();
@@ -464,21 +465,22 @@ export default function PatientsPage() {
 
   // Resolve the logged-in user's doctorId once
   useEffect(() => {
+    const userEmail = userData?.email || currentUser?.email;
     console.log("isDoctorResolved effect triggered", {
       clinicId,
       hasUserData: !!userData,
       userRole: userData?.role,
-      email: userData?.email,
+      email: userEmail,
     });
     if (!clinicId || !userData) return;
 
     const isAdmin =
       userData.role === "clinic-admin" || userData.role === "system-owner";
 
-    if (isAdmin || !userData.email) {
+    if (isAdmin || !userEmail) {
       console.log("isDoctorResolved: resolved instantly", {
         isAdmin,
-        hasEmail: !!userData.email,
+        hasEmail: !!userEmail,
       });
       setIsDoctorResolved(true);
 
@@ -489,8 +491,8 @@ export default function PatientsPage() {
       try {
         const { expertService } = await import("@/services/expertService");
         const [matchingDoctor, matchingExpert] = await Promise.all([
-          doctorService.getDoctorByEmail(userData.email),
-          expertService.getExpertByEmail(userData.email),
+          doctorService.getDoctorByEmail(userEmail),
+          expertService.getExpertByEmail(userEmail),
         ]);
 
         if (matchingExpert) {
@@ -504,7 +506,7 @@ export default function PatientsPage() {
         setIsDoctorResolved(true);
       }
     })();
-  }, [clinicId, userData]);
+  }, [clinicId, userData, currentUser]);
 
   // Client-side path: fetch ALL patients once, let `filtered` handle search/filters in render
   useEffect(() => {

@@ -25,7 +25,7 @@ import {
   IoChevronDownOutline,
   IoChevronUpOutline,
 } from "react-icons/io5";
-import { format } from "date-fns";
+import { format, isToday, isTomorrow, isYesterday } from "date-fns";
 import toast from "react-hot-toast";
 
 import FollowupModal from "./FollowupModal";
@@ -41,7 +41,7 @@ const renderServiceProduct = (item: PatientFollowup, filter: string) => {
   const services = showService && item.service
     ? item.service.split("|").map((s) => s.trim()).filter(Boolean).filter((s) => s.toLowerCase() !== "test" && s.toLowerCase() !== "testing")
     : [];
-  
+
   const products = showProduct && item.product
     ? item.product.split(",").map((p) => p.trim()).filter(Boolean).filter((p) => p.toLowerCase() !== "test" && p.toLowerCase() !== "testing")
     : [];
@@ -73,6 +73,7 @@ export default function FollowupsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("today");
   const [isGrouped, setIsGrouped] = useState(true);
   const [expandedPatients, setExpandedPatients] = useState<Record<string, boolean>>({});
 
@@ -202,9 +203,33 @@ export default function FollowupsPage() {
           ? allowedCategories.includes(cat) || allowedCategories.includes("all")
           : cat === categoryFilter;
 
-      return matchesSearch && matchesStatus && matchesCategory;
+      let matchesDate = true;
+      if (dateFilter !== "all") {
+        const datesToCheck: Date[] = [];
+        if (f.nextFollowupDate) datesToCheck.push(new Date(f.nextFollowupDate));
+        if (f.followupDates) {
+          if (f.followupDates.first) datesToCheck.push(new Date(f.followupDates.first));
+          if (f.followupDates.second) datesToCheck.push(new Date(f.followupDates.second));
+          if (f.followupDates.third) datesToCheck.push(new Date(f.followupDates.third));
+          if (f.followupDates.fourth) datesToCheck.push(new Date(f.followupDates.fourth));
+          if (f.followupDates.fifth) datesToCheck.push(new Date(f.followupDates.fifth));
+        }
+
+        if (datesToCheck.length === 0) {
+          matchesDate = false;
+        } else {
+          matchesDate = datesToCheck.some((d) => {
+            if (dateFilter === "today") return isToday(d);
+            if (dateFilter === "tomorrow") return isTomorrow(d);
+            if (dateFilter === "yesterday") return isYesterday(d);
+            return false;
+          });
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesCategory && matchesDate;
     });
-  }, [followups, searchQuery, statusFilter, categoryFilter, allowedCategories]);
+  }, [followups, searchQuery, statusFilter, categoryFilter, dateFilter, allowedCategories]);
 
   const groupedFollowups = useMemo(() => {
     const groups: Record<
@@ -292,6 +317,10 @@ export default function FollowupsPage() {
       payload.sessionStatuses = newSessionStatuses;
     }
 
+    if (field === "updatedStatus" && value) {
+      payload.overallStatus = "completed";
+    }
+
     // Auto-generate log for status/session change
     const newLog = {
       date: new Date(),
@@ -344,18 +373,23 @@ export default function FollowupsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "satisfy":
       case "good":
-        return "primary"; // Blue matching Excel
+        return "primary";
       case "solved":
       case "completed":
-        return "success"; // Green matching Excel
+        return "success";
       case "complain":
+      case "angry":
       case "cancelled":
-        return "danger"; // Red matching Excel
+        return "danger";
+      case "not-solved":
+      case "not-satisfy":
       case "wrong-no":
-        return "secondary"; // Purple matching Excel
       case "no-answer":
         return "warning";
+      case "will-come":
+        return "secondary";
       default:
         return "default";
     }
@@ -414,28 +448,53 @@ export default function FollowupsPage() {
       </div>
 
       <div className="bg-surface-1 rounded-xl shadow-sm border border-border-base overflow-hidden">
-        <div className="p-4 border-b border-border-base flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+        <div className="p-4 border-b border-border-base flex flex-col xl:flex-row gap-4 items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-4 w-full flex-1">
             <Input
               isClearable
-              className="w-full sm:max-w-xs"
-              placeholder="Search by name or number..."
-              startContent={<IoSearchOutline className="text-default-300" />}
+              className="w-full sm:max-w-[400px] md:max-w-[500px]"
+              classNames={{
+                base: "flex-1",
+                inputWrapper: "bg-default-100 hover:bg-default-200 transition-colors shadow-none data-[focus=true]:border-transparent data-[focus=true]:ring-0 data-[focus=true]:outline-none",
+                input: "outline-none focus:outline-none focus:ring-0 border-transparent focus:border-transparent",
+              }}
+              placeholder="Search by patient name or mobile number..."
+              startContent={<IoSearchOutline className="text-default-400 text-xl pointer-events-none flex-shrink-0" />}
               value={searchQuery}
               onClear={() => setSearchQuery("")}
               onValueChange={setSearchQuery}
             />
             <Select
-              className="w-full sm:max-w-xs"
-              defaultSelectedKeys={["all"]}
+              className="w-full sm:max-w-[200px]"
+              selectedKeys={new Set([dateFilter])}
+              placeholder="Date Filter"
+              onChange={(e) => {
+                if (e.target.value) setDateFilter(e.target.value);
+              }}
+            >
+              <SelectItem key="today">Today</SelectItem>
+              <SelectItem key="tomorrow">Tomorrow</SelectItem>
+              <SelectItem key="yesterday">Yesterday</SelectItem>
+              <SelectItem key="all">All Dates</SelectItem>
+            </Select>
+            <Select
+              className="w-full sm:max-w-[200px]"
+              selectedKeys={new Set([statusFilter])}
               placeholder="Filter by status"
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value) setStatusFilter(e.target.value);
+              }}
             >
               <SelectItem key="all">All Statuses</SelectItem>
               <SelectItem key="pending">Pending</SelectItem>
               <SelectItem key="completed">Completed</SelectItem>
               <SelectItem key="no-answer">No Answer</SelectItem>
               <SelectItem key="wrong-no">Wrong Number</SelectItem>
+              <SelectItem key="satisfy">Satisfied</SelectItem>
+              <SelectItem key="not-satisfy">Not Satisfied</SelectItem>
+              <SelectItem key="complain">Complain</SelectItem>
+              <SelectItem key="angry">Angry</SelectItem>
+              <SelectItem key="will-come">Will Come</SelectItem>
               <SelectItem key="cancelled">Cancelled</SelectItem>
             </Select>
           </div>
@@ -550,7 +609,7 @@ export default function FollowupsPage() {
                             <TableColumn>SESSION</TableColumn>
                             <TableColumn>INIT STATUS</TableColumn>
                             <TableColumn>UPD. STATUS</TableColumn>
-                            <TableColumn>NEXT FOLLOWUP</TableColumn>
+                            <TableColumn>FOLLOW-UP DATES</TableColumn>
                             <TableColumn>NOTES</TableColumn>
                             <TableColumn>
                               {categoryFilter === "pharmacy"
@@ -597,10 +656,10 @@ export default function FollowupsPage() {
                                     return (
                                       <Select
                                         aria-label="Init Status"
-                                        className="min-w-[100px]"
+                                        className="min-w-[130px]"
                                         classNames={{
                                           trigger: "h-6 min-h-0 shadow-none rounded-full",
-                                          value: "text-[10px] font-bold uppercase",
+                                          value: "text-[11px] font-bold",
                                         }}
                                         color={getStatusColor(initStatus) as any}
                                         selectedKeys={initStatus ? [initStatus] : []}
@@ -614,9 +673,17 @@ export default function FollowupsPage() {
                                           )
                                         }
                                       >
-                                        <SelectItem key="good">GOOD</SelectItem>
-                                        <SelectItem key="complain">COMPLAIN</SelectItem>
-                                        <SelectItem key="neutral">NEUTRAL</SelectItem>
+                                        <SelectItem key="good">Good</SelectItem>
+                                        <SelectItem key="neutral">Neutral</SelectItem>
+                                        <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                                        <SelectItem key="no-answer">No Answer</SelectItem>
+                                        <SelectItem key="complain">Complain</SelectItem>
+                                        <SelectItem key="satisfy">Satisfy</SelectItem>
+                                        <SelectItem key="not-solved">Not Solved</SelectItem>
+                                        <SelectItem key="solved">Solved</SelectItem>
+                                        <SelectItem key="angry">Angry</SelectItem>
+                                        <SelectItem key="not-satisfy">Not Satisfy</SelectItem>
+                                        <SelectItem key="will-come">Will Visit For Followup</SelectItem>
                                       </Select>
                                     );
                                   })()}
@@ -632,10 +699,10 @@ export default function FollowupsPage() {
                                       <div className="relative flex items-center">
                                         <Select
                                           aria-label="Updated Status"
-                                          className="min-w-[110px]"
+                                          className="min-w-[130px]"
                                           classNames={{
                                             trigger: "h-6 min-h-0 shadow-none rounded-full",
-                                            value: "text-[10px] font-bold uppercase",
+                                            value: "text-[11px] font-bold",
                                           }}
                                           color={
                                             updStatus
@@ -654,11 +721,17 @@ export default function FollowupsPage() {
                                             )
                                           }
                                         >
-                                          <SelectItem key="good">GOOD</SelectItem>
-                                          <SelectItem key="solved">SOLVED</SelectItem>
-                                          <SelectItem key="wrong-no">WRONG NO.</SelectItem>
-                                          <SelectItem key="no-answer">NO ANSWER</SelectItem>
-                                          <SelectItem key="neutral">NEUTRAL</SelectItem>
+                                          <SelectItem key="good">Good</SelectItem>
+                                          <SelectItem key="neutral">Neutral</SelectItem>
+                                          <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                                          <SelectItem key="no-answer">No Answer</SelectItem>
+                                          <SelectItem key="complain">Complain</SelectItem>
+                                          <SelectItem key="satisfy">Satisfy</SelectItem>
+                                          <SelectItem key="not-solved">Not Solved</SelectItem>
+                                          <SelectItem key="solved">Solved</SelectItem>
+                                          <SelectItem key="angry">Angry</SelectItem>
+                                          <SelectItem key="not-satisfy">Not Satisfy</SelectItem>
+                                          <SelectItem key="will-come">Will Visit For Followup</SelectItem>
                                         </Select>
                                         {item.logs && item.logs.length > 0 && (
                                           <Tooltip
@@ -699,12 +772,30 @@ export default function FollowupsPage() {
                                   })()}
                                 </TableCell>
                                 <TableCell>
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-medium text-[11px] text-primary">
-                                      {formatDate(item.nextFollowupDate)}
-                                    </span>
+                                  <div className="flex flex-col gap-1 max-w-[150px] max-h-[60px] overflow-y-auto pr-1">
+                                    {(() => {
+                                      const dates = [];
+                                      if (item.followupDates?.fifth) dates.push({ s: "5th", d: item.followupDates.fifth });
+                                      if (item.followupDates?.fourth) dates.push({ s: "4th", d: item.followupDates.fourth });
+                                      if (item.followupDates?.third) dates.push({ s: "3rd", d: item.followupDates.third });
+                                      if (item.followupDates?.second) dates.push({ s: "2nd", d: item.followupDates.second });
+                                      if (item.followupDates?.first) dates.push({ s: "1st", d: item.followupDates.first });
+
+                                      if (dates.length > 0) {
+                                        return (
+                                          <ol className="list-decimal list-inside text-[10px] text-primary space-y-0.5">
+                                            {dates.map((dItem, idx) => (
+                                              <li key={idx} className="truncate font-medium" title={`${dItem.s}: ${formatDate(dItem.d)}`}>
+                                                {dItem.s}: {formatDate(dItem.d)}
+                                              </li>
+                                            ))}
+                                          </ol>
+                                        );
+                                      }
+                                      return <span className="text-[10px] text-text-muted">-</span>;
+                                    })()}
                                     {item.followedBy && (
-                                      <span className="text-[9px] text-text-muted">
+                                      <span className="text-[9px] text-text-muted mt-1 border-t border-border-light pt-1">
                                         By: {item.followedBy}
                                       </span>
                                     )}
@@ -786,7 +877,7 @@ export default function FollowupsPage() {
                 <TableColumn>SESSION</TableColumn>
                 <TableColumn>INIT STATUS</TableColumn>
                 <TableColumn>UPD. STATUS</TableColumn>
-                <TableColumn>NEXT FOLLOWUP</TableColumn>
+                <TableColumn>FOLLOW-UP DATES</TableColumn>
                 <TableColumn>NOTES</TableColumn>
                 <TableColumn>
                   {categoryFilter === "pharmacy"
@@ -843,10 +934,10 @@ export default function FollowupsPage() {
                         return (
                           <Select
                             aria-label="Init Status"
-                            className="min-w-[100px]"
+                            className="min-w-[130px]"
                             classNames={{
                               trigger: "h-6 min-h-0 shadow-none rounded-full",
-                              value: "text-[10px] font-bold uppercase",
+                              value: "text-[11px] font-bold",
                             }}
                             color={getStatusColor(initStatus) as any}
                             selectedKeys={initStatus ? [initStatus] : []}
@@ -860,9 +951,17 @@ export default function FollowupsPage() {
                               )
                             }
                           >
-                            <SelectItem key="good">GOOD</SelectItem>
-                            <SelectItem key="complain">COMPLAIN</SelectItem>
-                            <SelectItem key="neutral">NEUTRAL</SelectItem>
+                            <SelectItem key="good">Good</SelectItem>
+                            <SelectItem key="neutral">Neutral</SelectItem>
+                            <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                            <SelectItem key="no-answer">No Answer</SelectItem>
+                            <SelectItem key="complain">Complain</SelectItem>
+                            <SelectItem key="satisfy">Satisfy</SelectItem>
+                            <SelectItem key="not-solved">Not Solved</SelectItem>
+                            <SelectItem key="solved">Solved</SelectItem>
+                            <SelectItem key="angry">Angry</SelectItem>
+                            <SelectItem key="not-satisfy">Not Satisfy</SelectItem>
+                            <SelectItem key="will-come">Will Visit For Followup</SelectItem>
                           </Select>
                         );
                       })()}
@@ -878,10 +977,10 @@ export default function FollowupsPage() {
                           <div className="relative flex items-center">
                             <Select
                               aria-label="Updated Status"
-                              className="min-w-[110px]"
+                              className="min-w-[130px]"
                               classNames={{
                                 trigger: "h-6 min-h-0 shadow-none rounded-full",
-                                value: "text-[10px] font-bold uppercase",
+                                value: "text-[11px] font-bold",
                               }}
                               color={
                                 updStatus
@@ -900,11 +999,17 @@ export default function FollowupsPage() {
                                 )
                               }
                             >
-                              <SelectItem key="good">GOOD</SelectItem>
-                              <SelectItem key="solved">SOLVED</SelectItem>
-                              <SelectItem key="wrong-no">WRONG NO.</SelectItem>
-                              <SelectItem key="no-answer">NO ANSWER</SelectItem>
-                              <SelectItem key="neutral">NEUTRAL</SelectItem>
+                              <SelectItem key="good">Good</SelectItem>
+                              <SelectItem key="neutral">Neutral</SelectItem>
+                              <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                              <SelectItem key="no-answer">No Answer</SelectItem>
+                              <SelectItem key="complain">Complain</SelectItem>
+                              <SelectItem key="satisfy">Satisfy</SelectItem>
+                              <SelectItem key="not-solved">Not Solved</SelectItem>
+                              <SelectItem key="solved">Solved</SelectItem>
+                              <SelectItem key="angry">Angry</SelectItem>
+                              <SelectItem key="not-satisfy">Not Satisfy</SelectItem>
+                              <SelectItem key="will-come">Will Visit For Followup</SelectItem>
                             </Select>
                             {item.logs && item.logs.length > 0 && (
                               <Tooltip
@@ -945,12 +1050,30 @@ export default function FollowupsPage() {
                       })()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-[11px] text-primary">
-                          {formatDate(item.nextFollowupDate)}
-                        </span>
+                      <div className="flex flex-col gap-1 max-w-[150px] max-h-[60px] overflow-y-auto pr-1">
+                        {(() => {
+                          const dates = [];
+                          if (item.followupDates?.fifth) dates.push({ s: "5th", d: item.followupDates.fifth });
+                          if (item.followupDates?.fourth) dates.push({ s: "4th", d: item.followupDates.fourth });
+                          if (item.followupDates?.third) dates.push({ s: "3rd", d: item.followupDates.third });
+                          if (item.followupDates?.second) dates.push({ s: "2nd", d: item.followupDates.second });
+                          if (item.followupDates?.first) dates.push({ s: "1st", d: item.followupDates.first });
+
+                          if (dates.length > 0) {
+                            return (
+                              <ol className="list-decimal list-inside text-[10px] text-primary space-y-0.5">
+                                {dates.map((dItem, idx) => (
+                                  <li key={idx} className="truncate font-medium" title={`${dItem.s}: ${formatDate(dItem.d)}`}>
+                                    {dItem.s}: {formatDate(dItem.d)}
+                                  </li>
+                                ))}
+                              </ol>
+                            );
+                          }
+                          return <span className="text-[10px] text-text-muted">-</span>;
+                        })()}
                         {item.followedBy && (
-                          <span className="text-[9px] text-text-muted">
+                          <span className="text-[9px] text-text-muted mt-1 border-t border-border-light pt-1">
                             By: {item.followedBy}
                           </span>
                         )}

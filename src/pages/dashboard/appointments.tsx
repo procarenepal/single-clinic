@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   format,
@@ -183,23 +183,21 @@ function CustomModal({
 
 export default function AppointmentsPage() {
   const navigate = useNavigate();
-  const {
-    clinicId,
-    userData,
-    branchId,
-    isClinicAdmin: checkAdmin,
-    isSystemOwner: checkOwner,
-  } = useAuthContext();
+  const [searchParams] = useSearchParams();
+  const initialDoctorId = searchParams.get("doctorId") || "all";
+
+  const { clinicId, userData, currentUser, branchId, isClinicAdmin: checkAdmin, isSystemOwner: checkOwner } = useAuthContext();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedDoctor, setSelectedDoctor] = useState("all");
+  const [selectedDoctor, setSelectedDoctor] = useState(initialDoctorId);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
   const [isExpertUser, setIsExpertUser] = useState(false);
+  const [isDoctorResolved, setIsDoctorResolved] = useState(false);
 
   // Hover and status change state
   const [hoveredAppointment, setHoveredAppointment] = useState<string | null>(
@@ -278,11 +276,13 @@ export default function AppointmentsPage() {
         let doctorId: string | null = null;
         let isLocalExpert = false;
 
-        if (!isAdmin && userData.email) {
+        const userEmail = currentUser?.email || userData?.email;
+
+        if (!isAdmin && userEmail) {
           try {
             const [matchingDoctor, matchingExpert] = await Promise.all([
-              doctorService.getDoctorByEmail(userData.email),
-              expertService.getExpertByEmail(userData.email),
+              doctorService.getDoctorByEmail(userEmail),
+              expertService.getExpertByEmail(userEmail),
             ]);
 
             const matchingProvider = matchingDoctor || matchingExpert;
@@ -319,6 +319,8 @@ export default function AppointmentsPage() {
         console.error("Error loading appointments data:", err);
         setError("Failed to load appointments data. Please try again.");
         if (!cancelled) setLoading(false);
+      } finally {
+        setIsDoctorResolved(true);
       }
     };
 
@@ -332,6 +334,8 @@ export default function AppointmentsPage() {
   // Live sync
   useEffect(() => {
     if (!clinicId) return;
+    if (!isClinicAdmin && !isDoctorResolved) return;
+
     let isActive = true;
 
     setLoading(true);
@@ -352,29 +356,29 @@ export default function AppointmentsPage() {
     const unsubscribe = currentDoctorId
       ? isExpertUser
         ? appointmentService.subscribeToExpertAppointments(
-            currentDoctorId,
-            effectiveBranchId,
-            handleSnapshot,
-            handleError,
-          )
-        : appointmentService.subscribeToDoctorAppointments(
-            currentDoctorId,
-            effectiveBranchId,
-            handleSnapshot,
-            handleError,
-          )
-      : appointmentService.subscribeToClinicAppointments(
-          undefined, // clinicId
+          currentDoctorId,
           effectiveBranchId,
           handleSnapshot,
           handleError,
-        );
+        )
+        : appointmentService.subscribeToDoctorAppointments(
+          currentDoctorId,
+          effectiveBranchId,
+          handleSnapshot,
+          handleError,
+        )
+      : appointmentService.subscribeToClinicAppointments(
+        undefined, // clinicId
+        effectiveBranchId,
+        handleSnapshot,
+        handleError,
+      );
 
     return () => {
       isActive = false;
       unsubscribe?.();
     };
-  }, [clinicId, currentDoctorId, effectiveBranchId]);
+  }, [clinicId, currentDoctorId, effectiveBranchId, isClinicAdmin, isDoctorResolved]);
 
   const getPatientNameById = (patientId: string) =>
     patients.find((p) => p.id === patientId)?.name || "Unknown Patient";
@@ -519,7 +523,7 @@ export default function AppointmentsPage() {
       layoutType === "tabbed" ||
       !selectedDate ||
       format(appt.appointmentDate, "yyyy-MM-dd") ===
-        format(selectedDate, "yyyy-MM-dd");
+      format(selectedDate, "yyyy-MM-dd");
 
     return matchesSearch && matchesStatus && matchesDoctor && matchesDate;
   });
@@ -720,7 +724,7 @@ export default function AppointmentsPage() {
                         </span>
                       </DropdownItem>
                       {appointment.status.toLowerCase() !== "cancelled" &&
-                      appointment.status.toLowerCase() !== "completed" ? (
+                        appointment.status.toLowerCase() !== "completed" ? (
                         <DropdownItem
                           key="edit"
                           onClick={() =>
@@ -749,7 +753,7 @@ export default function AppointmentsPage() {
                         </span>
                       </DropdownItem>
                       {appointment.status.toLowerCase() !== "cancelled" &&
-                      appointment.status.toLowerCase() !== "completed" ? (
+                        appointment.status.toLowerCase() !== "completed" ? (
                         <DropdownItem
                           key="cancel"
                           onClick={() => {
@@ -1100,7 +1104,7 @@ export default function AppointmentsPage() {
                                 View Details
                               </DropdownItem>
                               {app.status.toLowerCase() !== "cancelled" &&
-                              app.status.toLowerCase() !== "completed" ? (
+                                app.status.toLowerCase() !== "completed" ? (
                                 <DropdownItem
                                   key="edit"
                                   onClick={() =>

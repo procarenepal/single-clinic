@@ -695,22 +695,24 @@ export const medicineService = {
       );
       const querySnapshot = await getDocs(q);
 
-      const stockWithMedicines = await Promise.all(
-        querySnapshot.docs.map(async (stockDoc) => {
-          const stockData = stockDoc.data();
-          const medicine = await this.getMedicineById(stockData.medicineId);
+      // Fetch all medicines once (this is cached) instead of N+1 individual queries
+      const allMedicines = await this.getMedicinesByClinic(clinicId, undefined, branchId);
+      const medicinesMap = new Map(allMedicines.map(m => [m.id, m]));
 
-          return {
-            id: stockDoc.id,
-            ...stockData,
-            schemeStock: stockData.schemeStock ?? 0, // Default to 0 for backward compatibility
-            createdAt: stockData.createdAt?.toDate(),
-            updatedAt: stockData.updatedAt?.toDate(),
-            lastRestocked: stockData.lastRestocked?.toDate(),
-            medicine: medicine!,
-          } as MedicineStock & { medicine: Medicine };
-        }),
-      );
+      const stockWithMedicines = querySnapshot.docs.map((stockDoc) => {
+        const stockData = stockDoc.data();
+        const medicine = medicinesMap.get(stockData.medicineId);
+
+        return {
+          id: stockDoc.id,
+          ...stockData,
+          schemeStock: stockData.schemeStock ?? 0, // Default to 0 for backward compatibility
+          createdAt: stockData.createdAt?.toDate(),
+          updatedAt: stockData.updatedAt?.toDate(),
+          lastRestocked: stockData.lastRestocked?.toDate(),
+          medicine: medicine!,
+        } as MedicineStock & { medicine: Medicine };
+      });
 
       return stockWithMedicines.filter((item) => item.medicine); // Filter out items where medicine is null
     } catch (error) {

@@ -1249,7 +1249,7 @@ export default function PharmacyPage() {
           setPurchaseForm((prev) => ({
             ...prev,
             paymentType: settingsData.defaultPaymentMethod || prev.paymentType,
-            taxPercentage: settingsData.defaultTaxPercentage,
+            taxPercentage: settingsData.enableTax ? settingsData.defaultTaxPercentage : 0,
           }));
         } else {
           const defaultSettings = pharmacyService.getDefaultPharmacySettings();
@@ -1263,7 +1263,7 @@ export default function PharmacyPage() {
             ...prev,
             paymentType:
               defaultSettings.defaultPaymentMethod || prev.paymentType,
-            taxPercentage: defaultSettings.defaultTaxPercentage,
+            taxPercentage: defaultSettings.enableTax ? defaultSettings.defaultTaxPercentage : 0,
           }));
         }
       } catch (error) {
@@ -1405,12 +1405,12 @@ export default function PharmacyPage() {
       discountAmount = (total * purchaseForm.discountPercentage) / 100;
     }
 
-    const taxableAmount = Math.round(Math.max(0, total - discountAmount));
-    const taxAmount = Math.round(
-      (taxableAmount * purchaseForm.taxPercentage) / 100,
+    const taxableAmount = Number(Math.max(0, total - discountAmount).toFixed(2));
+    const taxAmount = Number(
+      ((taxableAmount * purchaseForm.taxPercentage) / 100).toFixed(2),
     );
-    const netAmount = Math.round(
-      taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0),
+    const netAmount = Number(
+      (taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0)).toFixed(2),
     );
 
     setPurchaseForm((prev) => ({
@@ -1753,13 +1753,22 @@ export default function PharmacyPage() {
   const getDailyReportSummary = () => {
     const dailyPurchases = getDailyReportPurchases();
     const totalSales = dailyPurchases.reduce(
-      (sum, purchase) => sum + (purchase.netAmount || 0),
+      (sum, purchase) => {
+        const returnedAmount = purchase.totalReturnedAmount && purchase.totalReturnedAmount > 0
+          ? purchase.totalReturnedAmount
+          : (purchase.returns ?? []).reduce((retSum, r) => retSum + Math.abs(r.totalAmount || 0), 0);
+        return sum + Math.max(0, (purchase.netAmount || 0) - returnedAmount);
+      },
       0,
     );
     const totalItems = dailyPurchases.reduce(
-      (sum, purchase) =>
-        sum +
-        purchase.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+      (sum, purchase) => {
+        const returnedQty = (purchase.returns ?? []).reduce((retSum, r) => {
+          return retSum + (r.items ?? []).reduce((iSum, i) => iSum + (i.quantity || 0), 0);
+        }, 0);
+        const purchasedQty = purchase.items.reduce((itemSum, item) => itemSum + item.quantity, 0);
+        return sum + Math.max(0, purchasedQty - returnedQty);
+      },
       0,
     );
     const paidCount = dailyPurchases.filter(
@@ -2611,7 +2620,7 @@ export default function PharmacyPage() {
         discount: 0,
         discountType: "flat",
         discountPercentage: 0,
-        taxPercentage: pharmacySettings?.defaultTaxPercentage || 0,
+        taxPercentage: pharmacySettings?.enableTax ? (pharmacySettings.defaultTaxPercentage || 0) : 0,
         taxAmount: 0,
         handlingAmount: 0,
         taxableAmount: 0,

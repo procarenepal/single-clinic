@@ -253,6 +253,10 @@ export default function FollowupModal({
           (sessionToUse === "1st" ? prev.updatedStatus : "");
       }
 
+      if (field === "updatedStatus" && value) {
+        next.overallStatus = "completed";
+      }
+
       if (field === "initStatus" || field === "updatedStatus") {
         const currentSession = prev.session || "1st";
         const newSessionStatuses = { ...prev.sessionStatuses };
@@ -388,7 +392,7 @@ export default function FollowupModal({
     <Modal
       backdrop="blur"
       classNames={{
-        base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]",
+        base: "bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] !max-w-[1100px]",
         header: "border-b border-[rgb(var(--color-border))] py-4",
         footer: "border-t border-[rgb(var(--color-border))] py-3",
       }}
@@ -774,8 +778,15 @@ export default function FollowupModal({
                         }
                       >
                         <SelectItem key="good">Good</SelectItem>
-                        <SelectItem key="complain">Complain</SelectItem>
                         <SelectItem key="neutral">Neutral</SelectItem>
+                        <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                        <SelectItem key="no-answer">No Answer</SelectItem>
+                        <SelectItem key="complain">Complain</SelectItem>
+                        <SelectItem key="satisfy">Satisfy</SelectItem>
+                        <SelectItem key="not-solved">Not Solved</SelectItem>
+                        <SelectItem key="angry">Angry</SelectItem>
+                        <SelectItem key="not-satisfy">Not Satisfy</SelectItem>
+                        <SelectItem key="will-come">Will Visit For Followup</SelectItem>
                       </Select>
                     </div>
                     <div className="flex-1">
@@ -794,9 +805,15 @@ export default function FollowupModal({
                       >
                         <SelectItem key="good">Good</SelectItem>
                         <SelectItem key="solved">Solved</SelectItem>
-                        <SelectItem key="wrong-no">Wrong No.</SelectItem>
-                        <SelectItem key="no-answer">No Answer</SelectItem>
                         <SelectItem key="neutral">Neutral</SelectItem>
+                        <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                        <SelectItem key="no-answer">No Answer</SelectItem>
+                        <SelectItem key="complain">Complain</SelectItem>
+                        <SelectItem key="satisfy">Satisfy</SelectItem>
+                        <SelectItem key="not-solved">Not Solved</SelectItem>
+                        <SelectItem key="angry">Angry</SelectItem>
+                        <SelectItem key="not-satisfy">Not Satisfy</SelectItem>
+                        <SelectItem key="will-come">Will Visit For Followup</SelectItem>
                       </Select>
                     </div>
                   </div>
@@ -815,6 +832,11 @@ export default function FollowupModal({
                       <SelectItem key="completed">Completed</SelectItem>
                       <SelectItem key="no-answer">No Answer</SelectItem>
                       <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                      <SelectItem key="satisfy">Satisfied</SelectItem>
+                      <SelectItem key="not-satisfy">Not Satisfied</SelectItem>
+                      <SelectItem key="complain">Complain</SelectItem>
+                      <SelectItem key="angry">Angry</SelectItem>
+                      <SelectItem key="will-come">Will Come</SelectItem>
                       <SelectItem key="cancelled">Cancelled</SelectItem>
                     </Select>
                   </div>

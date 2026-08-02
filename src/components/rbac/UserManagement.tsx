@@ -366,11 +366,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
           return;
         }
 
-        // Prepare user data with appropriate branch assignment
+        let baseRole: UserRole = "staff";
+        if (isRoleLinkedToExpert()) baseRole = "expert";
+        else if (isRoleLinkedToDoctor()) baseRole = "doctor";
+
         const newUserData: any = {
           displayName: formData.displayName,
           clinicId,
-          role: "staff" as UserRole, // Default role for system access
+          role: baseRole,
           isActive: true,
         };
 
@@ -481,8 +484,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
       } else {
         // Update existing user
         try {
+          let baseRole: UserRole = "staff";
+          if (isRoleLinkedToExpert()) baseRole = "expert";
+          else if (isRoleLinkedToDoctor()) baseRole = "doctor";
+
           await userService.updateUser(selectedUser!.id, {
             displayName: formData.displayName,
+            role: baseRole,
           });
         } catch (updateError) {
           const errorMessage =
@@ -635,11 +643,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({ clinicId }) => {
 
     try {
       setIsSubmitting(true);
-      await rbacService.assignRolesToUser(
-        selectedUser.id,
-        formData.selectedRoles,
-        clinicId,
-      );
+      
+      let baseRole: UserRole = "staff";
+      if (isRoleLinkedToExpert()) baseRole = "expert";
+      else if (isRoleLinkedToDoctor()) baseRole = "doctor";
+
+      await Promise.all([
+        rbacService.assignRolesToUser(
+          selectedUser.id,
+          formData.selectedRoles,
+          clinicId,
+        ),
+        userService.updateUser(selectedUser.id, { role: baseRole })
+      ]);
       addToast({
         title: "Roles updated",
         description: "User roles updated successfully",

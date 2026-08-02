@@ -163,7 +163,7 @@ function ModalShell({ isOpen, onClose, title, children, size = "md" }: any) {
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function PrescriptionsPage() {
   const navigate = useNavigate();
-  const { clinicId, userData, branchId: contextBranchId } = useAuthContext();
+  const { clinicId, userData, currentUser, branchId: contextBranchId } = useAuthContext();
 
   const branchId = userData?.branchId ?? contextBranchId ?? null;
   const isClinicAdmin =
@@ -267,6 +267,7 @@ export default function PrescriptionsPage() {
 
   // Load all doctors for the filter and determine current doctor if any
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  const [isDoctorResolved, setIsDoctorResolved] = useState(false);
 
   useEffect(() => {
     if (!clinicId) return;
@@ -288,11 +289,13 @@ export default function PrescriptionsPage() {
 
         setAllDoctors([...formattedDoctors, ...formattedExperts]);
 
-        if (!isClinicAdmin && userData?.email) {
+        const userEmail = currentUser?.email || userData?.email;
+
+        if (!isClinicAdmin && userEmail) {
           try {
             const [matchingDoctor, matchingExpert] = await Promise.all([
-              doctorService.getDoctorByEmail(userData.email),
-              expertService.getExpertByEmail(userData.email),
+              doctorService.getDoctorByEmail(userEmail),
+              expertService.getExpertByEmail(userEmail),
             ]);
             const matchingProvider = matchingDoctor || matchingExpert;
 
@@ -305,11 +308,15 @@ export default function PrescriptionsPage() {
         }
       } catch (err) {
         console.error("Error fetching doctors:", err);
+      } finally {
+        setIsDoctorResolved(true);
       }
     })();
-  }, [clinicId, isClinicAdmin, userData]);
+  }, [clinicId, isClinicAdmin, userData, currentUser]);
 
   useEffect(() => {
+    if (!isClinicAdmin && !isDoctorResolved) return;
+    
     const fetchPrescriptions = async () => {
       if (!clinicId) return;
       try {
@@ -385,7 +392,7 @@ export default function PrescriptionsPage() {
     };
 
     fetchPrescriptions();
-  }, [clinicId, effectiveBranchId, currentDoctorId]);
+  }, [clinicId, effectiveBranchId, currentDoctorId, isClinicAdmin, isDoctorResolved]);
 
   const formatDate = (date: Date | string): string => {
     if (!date) return "N/A";
