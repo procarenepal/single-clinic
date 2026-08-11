@@ -1897,6 +1897,117 @@ export const smsService = {
   },
 
   /**
+   * Send a Confirmed Appointment SMS
+   */
+  async sendConfirmedSMS(
+    patientId: string,
+    clinicId: string,
+    appointmentId: string,
+    branchId?: string,
+  ): Promise<boolean> {
+    try {
+      // Get patient, clinic, and appointment information
+      const [patientDoc, clinicDoc, appointmentDoc] = await Promise.all([
+        getDoc(doc(db, PATIENTS_COLLECTION, patientId)),
+        getDoc(doc(db, CLINICS_COLLECTION, clinicId)),
+        getDoc(doc(db, APPOINTMENTS_COLLECTION, appointmentId)),
+      ]);
+
+      if (
+        !patientDoc.exists() ||
+        !clinicDoc.exists() ||
+        !appointmentDoc.exists()
+      ) {
+        console.error(
+          "Missing patient, clinic, or appointment data for confirmed SMS",
+        );
+        return false;
+      }
+
+      const patient = patientDoc.data();
+      const clinic = clinicDoc.data();
+      const appointment = appointmentDoc.data();
+
+      // Check if SMS settings are active
+      const settings = await this.getSMSSettings(clinicId);
+
+      if (!settings || !settings.isActive) {
+        console.log(
+          "SMS settings not active or not configured for clinic:",
+          clinicId,
+        );
+        return false;
+      }
+
+      const patientName = patient.name || "Patient";
+      const phoneNumber = patient.mobile || patient.phone;
+
+      if (!phoneNumber) {
+        console.warn("No phone number found for patient:", patientId);
+        return false;
+      }
+
+      // Format doctor name if assigned
+      let doctorName = "";
+
+      if (appointment.doctorId && appointment.doctorId !== "unassigned" && appointment.doctorId !== "unknown") {
+        try {
+          const doctorDoc = await getDoc(
+            doc(db, DOCTORS_COLLECTION, appointment.doctorId),
+          );
+
+          if (doctorDoc.exists()) {
+            doctorName = doctorDoc.data().name || "";
+          }
+        } catch (err) {
+          console.error("Error fetching doctor for confirmed SMS:", err);
+        }
+      }
+
+      const docSnippet = doctorName ? ` with Dr. ${doctorName}` : "";
+      
+      let dateStr = "your scheduled time";
+      if (appointment.appointmentDate) {
+        try {
+          const d = appointment.appointmentDate.toDate ? appointment.appointmentDate.toDate() : new Date(appointment.appointmentDate);
+          dateStr = d.toLocaleDateString();
+        } catch (e) {
+          console.warn("Date parse error", e);
+        }
+      }
+
+      const finalMessage = `Hello ${patientName}, your appointment for ${dateStr}${docSnippet} has been confirmed. Thank you for choosing us.`;
+
+      // Send the SMS
+      const response = await this.sendMessage(
+        phoneNumber,
+        finalMessage,
+        settings,
+      );
+      const isSuccess = response.success || response.isRawText;
+
+      // Log the SMS
+      await this.createSMSLog({
+        clinicId,
+        branchId: branchId || patient.branchId,
+        patientId,
+        patientName,
+        patientPhone: phoneNumber,
+        message: finalMessage,
+        status: isSuccess ? "sent" : "failed",
+        type: "appointment",
+        recipientType: "patient",
+        createdBy: "system",
+      });
+
+      return isSuccess;
+    } catch (error) {
+      console.error("Error sending confirmed SMS:", error);
+      return false;
+    }
+  },
+
+  /**
    * Send a Check-In / Arrival SMS to a checked-in patient
    */
   async sendCheckInSMS(
@@ -2164,6 +2275,7 @@ export const scheduleDoctorAppointmentReminder =
 export const seedSMSTemplates = smsService.seedTemplates.bind(smsService);
 export const sendWelcomeSMS = smsService.sendWelcomeSMS.bind(smsService);
 export const sendCheckInSMS = smsService.sendCheckInSMS.bind(smsService);
+export const sendConfirmedSMS = smsService.sendConfirmedSMS.bind(smsService);
 
 // Default export
 export default smsService;

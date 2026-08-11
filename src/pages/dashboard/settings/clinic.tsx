@@ -51,6 +51,11 @@ interface FormData {
   country: string;
   address: string;
   description: string;
+  panNumber: string;
+  irdEnabled: boolean;
+  irdApiUrl: string;
+  irdApiUsername: string;
+  irdApiPassword: string;
 }
 
 interface ValidationErrors {
@@ -63,6 +68,10 @@ interface ValidationErrors {
   country?: string;
   address?: string;
   description?: string;
+  panNumber?: string;
+  irdApiUrl?: string;
+  irdApiUsername?: string;
+  irdApiPassword?: string;
 }
 
 interface LoadingStates {
@@ -131,6 +140,22 @@ const VALIDATION_RULES: Record<keyof FormData, ValidationRule> = {
     required: false,
     maxLength: 500,
   },
+  panNumber: {
+    required: false,
+    maxLength: 20,
+  },
+  irdEnabled: {
+    required: false,
+  },
+  irdApiUrl: {
+    required: false,
+  },
+  irdApiUsername: {
+    required: false,
+  },
+  irdApiPassword: {
+    required: false,
+  },
 };
 
 export default function ClinicSettingsPage() {
@@ -160,6 +185,11 @@ export default function ClinicSettingsPage() {
     country: "Nepal",
     address: "",
     description: "",
+    panNumber: "",
+    irdEnabled: false,
+    irdApiUrl: "",
+    irdApiUsername: "",
+    irdApiPassword: "",
   });
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {},
@@ -177,6 +207,11 @@ export default function ClinicSettingsPage() {
     country: "Nepal",
     address: "",
     description: "",
+    panNumber: "",
+    irdEnabled: false,
+    irdApiUrl: "",
+    irdApiUsername: "",
+    irdApiPassword: "",
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -215,8 +250,13 @@ export default function ClinicSettingsPage() {
   );
 
   const validateField = useCallback(
-    (field: keyof FormData, value: string): string | undefined => {
+    (field: keyof FormData, value: string | boolean): string | undefined => {
       const rules = VALIDATION_RULES[field];
+
+      if (typeof value === "boolean") {
+        return undefined;
+      }
+
       const sanitizedValue = sanitizeInput(value, field);
 
       if (rules.required && !sanitizedValue) {
@@ -343,6 +383,11 @@ export default function ClinicSettingsPage() {
           country: clinicData.country || "Nepal",
           address: clinicData.address || "",
           description: clinicData.description || "",
+          panNumber: clinicData.panNumber || "",
+          irdEnabled: clinicData.irdEnabled || false,
+          irdApiUrl: clinicData.irdApiUrl || "",
+          irdApiUsername: clinicData.irdApiUsername || "",
+          irdApiPassword: clinicData.irdApiPassword || "",
         };
 
         setFormData(initialFormData);
@@ -516,6 +561,11 @@ export default function ClinicSettingsPage() {
         country: formData.country.trim(),
         address: formData.address.trim(),
         description: formData.description.trim(),
+        panNumber: formData.panNumber.trim(),
+        irdEnabled: formData.irdEnabled,
+        irdApiUrl: formData.irdApiUrl.trim(),
+        irdApiUsername: formData.irdApiUsername.trim(),
+        irdApiPassword: formData.irdApiPassword.trim(),
       };
 
       await retryOperation(() =>
@@ -704,7 +754,7 @@ export default function ClinicSettingsPage() {
   const formIsValid = useMemo(() => {
     // Check if form data is loaded (not all empty strings)
     const isFormLoaded = Object.values(formData).some(
-      (value) => value.trim() !== "",
+      (value) => typeof value === "string" && value.trim() !== "",
     );
 
     if (!isFormLoaded) {
@@ -712,12 +762,12 @@ export default function ClinicSettingsPage() {
     }
 
     // Check if all required fields are filled
-    const requiredFields: Array<keyof FormData> = [
+    const requiredFields = [
       "name",
       "email",
       "phone",
       "city",
-    ];
+    ] as const;
     const allRequiredFieldsFilled = requiredFields.every(
       (field) => formData[field] && formData[field].trim() !== "",
     );
@@ -985,6 +1035,28 @@ export default function ClinicSettingsPage() {
                     {clinic.createdAt?.toLocaleDateString()}
                   </p>
                 </div>
+
+                <div>
+                  <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                    PAN Number
+                  </p>
+                  <p className="text-[rgb(var(--color-text))] text-sm">
+                    {clinic.panNumber || "N/A"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                    IRD Sync
+                  </p>
+                  <Chip
+                    color={clinic.irdEnabled ? "success" : "default"}
+                    size="sm"
+                    variant="flat"
+                  >
+                    {clinic.irdEnabled ? "Enabled" : "Disabled"}
+                  </Chip>
+                </div>
               </CardBody>
             </Card>
 
@@ -1047,131 +1119,97 @@ export default function ClinicSettingsPage() {
               </CardBody>
             </Card>
 
-            {!clinic ? (
-              /* Empty State / Setup CTA */
-              <Card className="border-dashed border-2 border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface-2))]">
-                <CardBody className="flex items-center justify-center py-16">
-                  <div className="text-center max-w-sm mx-auto">
-                    <div className="w-16 h-16 rounded-full bg-[rgb(var(--color-surface-3))] flex items-center justify-center mx-auto mb-4">
-                      <IoBusinessOutline className="w-8 h-8 text-[rgb(var(--color-text-muted))]" />
-                    </div>
-                    <h3 className="text-lg font-bold text-[rgb(var(--color-text))] mb-2">
-                      Setup Your Clinic
-                    </h3>
-                    <p className="text-[rgb(var(--color-text-muted))] text-sm mb-6">
-                      You haven't configured your clinic information yet. Add
-                      your clinic name, logo, and contact details to get
-                      started.
+            {/* Subscription Information */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="flex gap-3">
+                <IoCheckmarkCircleOutline className="w-5 h-5 text-health-600" />
+                <div>
+                  <h3 className="text-stat-sm font-semibold text-[rgb(var(--color-text))]">
+                    Subscription Information
+                  </h3>
+                  <p className="text-sm text-[rgb(var(--color-text-muted))]">
+                    Your current subscription details
+                  </p>
+                </div>
+              </CardHeader>
+              <Divider className="opacity-50" />
+              <CardBody className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                      Status
                     </p>
-                    <Button
-                      color="primary"
-                      size="lg"
-                      startContent={<IoPencilOutline />}
-                      onPress={onOpen}
+                    <Chip
+                      color={
+                        clinic.subscriptionStatus === "active"
+                          ? "success"
+                          : clinic.subscriptionStatus === "suspended"
+                            ? "warning"
+                            : "danger"
+                      }
+                      size="sm"
+                      variant="flat"
                     >
-                      Enter Clinic Details
-                    </Button>
+                      {clinic.subscriptionStatus
+                        ? clinic.subscriptionStatus.charAt(0).toUpperCase() +
+                        clinic.subscriptionStatus.slice(1)
+                        : "Unknown"}
+                    </Chip>
                   </div>
-                </CardBody>
-              </Card>
-            ) : (
-              /* ... previous refactored code ... */
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Subscription Information */}
-                <Card className="lg:col-span-2">
-                  <CardHeader className="flex gap-3">
-                    <IoCheckmarkCircleOutline className="w-5 h-5 text-health-600" />
+
+                  <div>
+                    <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                      Plan
+                    </p>
+                    <p className="text-[rgb(var(--color-text))]">
+                      {getSubscriptionPlanName(clinic.subscriptionPlan)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                      Billing Type
+                    </p>
+                    <Chip
+                      color={
+                        clinic.subscriptionType === "yearly"
+                          ? "primary"
+                          : "default"
+                      }
+                      size="sm"
+                      variant="flat"
+                    >
+                      {clinic.subscriptionType === "yearly"
+                        ? "Yearly"
+                        : "Monthly"}
+                    </Chip>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                      Start Date
+                    </p>
+                    <p className="text-[rgb(var(--color-text))] text-sm">
+                      {clinic.subscriptionStartDate?.toLocaleDateString() ||
+                        "N/A"}
+                    </p>
+                  </div>
+
+                  {clinic.subscriptionEndDate && (
                     <div>
-                      <h3 className="text-stat-sm font-semibold text-[rgb(var(--color-text))]">
-                        Subscription Information
-                      </h3>
-                      <p className="text-sm text-[rgb(var(--color-text-muted))]">
-                        Your current subscription details
+                      <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
+                        End Date
+                      </p>
+                      <p className="text-[rgb(var(--color-text))] text-sm">
+                        {clinic.subscriptionEndDate?.toLocaleDateString()}
                       </p>
                     </div>
-                  </CardHeader>
-                  <Divider className="opacity-50" />
-                  <CardBody className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                          Status
-                        </p>
-                        <Chip
-                          color={
-                            clinic.subscriptionStatus === "active"
-                              ? "success"
-                              : clinic.subscriptionStatus === "suspended"
-                                ? "warning"
-                                : "danger"
-                          }
-                          size="sm"
-                          variant="flat"
-                        >
-                          {clinic.subscriptionStatus
-                            ? clinic.subscriptionStatus
-                                .charAt(0)
-                                .toUpperCase() +
-                              clinic.subscriptionStatus.slice(1)
-                            : "Unknown"}
-                        </Chip>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                          Plan
-                        </p>
-                        <p className="text-[rgb(var(--color-text))]">
-                          {getSubscriptionPlanName(clinic.subscriptionPlan)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                          Billing Type
-                        </p>
-                        <Chip
-                          color={
-                            clinic.subscriptionType === "yearly"
-                              ? "primary"
-                              : "default"
-                          }
-                          size="sm"
-                          variant="flat"
-                        >
-                          {clinic.subscriptionType === "yearly"
-                            ? "Yearly"
-                            : "Monthly"}
-                        </Chip>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                          Start Date
-                        </p>
-                        <p className="text-[rgb(var(--color-text))] text-sm">
-                          {clinic.subscriptionStartDate?.toLocaleDateString() ||
-                            "N/A"}
-                        </p>
-                      </div>
-
-                      {clinic.subscriptionEndDate && (
-                        <div>
-                          <p className="text-sm font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                            End Date
-                          </p>
-                          <p className="text-[rgb(var(--color-text))] text-sm">
-                            {clinic.subscriptionEndDate?.toLocaleDateString()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardBody>
-                </Card>
-              </div>
-            )}
+                  )}
+                </div>
+              </CardBody>
+            </Card>
           </div>
         )}
       </div>
@@ -1419,6 +1457,83 @@ export default function ClinicSettingsPage() {
                   {VALIDATION_RULES.description.maxLength} characters
                 </p>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[rgb(var(--color-text))] mb-1.5">
+                  PAN / VAT Number
+                </label>
+                <Input
+                  errorMessage={
+                    touchedFields.has("panNumber")
+                      ? validationErrors.panNumber
+                      : ""
+                  }
+                  isInvalid={
+                    touchedFields.has("panNumber") &&
+                    !!validationErrors.panNumber
+                  }
+                  name="panNumber"
+                  onChange={handleInputChange}
+                  placeholder="Enter Clinic PAN Number"
+                  value={formData.panNumber}
+                />
+              </div>
+            </div>
+
+            <Divider className="my-2" />
+            <h3 className="text-sm font-semibold text-[rgb(var(--color-text))] mb-2">IRD CBMS Configuration</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="irdEnabled"
+                    checked={formData.irdEnabled}
+                    onChange={(e) => setFormData(prev => ({ ...prev, irdEnabled: e.target.checked }))}
+                    className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                  />
+                  <span className="text-sm font-medium text-[rgb(var(--color-text))]">Enable IRD CBMS Sync</span>
+                </label>
+              </div>
+
+              {formData.irdEnabled && (
+                <>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-[rgb(var(--color-text))] mb-1.5">
+                      IRD API URL
+                    </label>
+                    <Input
+                      name="irdApiUrl"
+                      onChange={handleInputChange}
+                      placeholder="https://cbms.ird.gov.np/api"
+                      value={formData.irdApiUrl}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[rgb(var(--color-text))] mb-1.5">
+                      API Username
+                    </label>
+                    <Input
+                      name="irdApiUsername"
+                      onChange={handleInputChange}
+                      placeholder="Taxpayer Portal Username"
+                      value={formData.irdApiUsername}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[rgb(var(--color-text))] mb-1.5">
+                      API Password
+                    </label>
+                    <Input
+                      name="irdApiPassword"
+                      type="password"
+                      onChange={handleInputChange}
+                      placeholder="Taxpayer Portal Password"
+                      value={formData.irdApiPassword}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </ModalBody>
           <ModalFooter>

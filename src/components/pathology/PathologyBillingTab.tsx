@@ -14,6 +14,7 @@ import {
 } from "@heroui/table";
 import { Chip } from "@heroui/chip";
 import { addToast } from "@heroui/toast";
+import toast from "react-hot-toast";
 import {
   IoAddOutline,
   IoTrashOutline,
@@ -243,12 +244,12 @@ interface InvoiceFormData {
   sampleCollectionDate: string;
   expectedReportDate: string;
   reportStatus:
-    | "pending_collection"
-    | "collected"
-    | "in_lab"
-    | "partially_ready"
-    | "ready"
-    | "delivered";
+  | "pending_collection"
+  | "collected"
+  | "in_lab"
+  | "partially_ready"
+  | "ready"
+  | "delivered";
 }
 
 export default function PathologyBillingTab({
@@ -2066,6 +2067,7 @@ export default function PathologyBillingTab({
                   <TableColumn>PAID</TableColumn>
                   <TableColumn>BALANCE</TableColumn>
                   <TableColumn>STATUS</TableColumn>
+                  <TableColumn>IRD STATUS</TableColumn>
                   <TableColumn align="center">Actions</TableColumn>
                 </TableHeader>
                 <TableBody>
@@ -2121,6 +2123,45 @@ export default function PathologyBillingTab({
                           >
                             {billing.paymentStatus.toUpperCase()}
                           </Chip>
+                        </TableCell>
+                        <TableCell>
+                          {billing.status === "finalized" ? (
+                            <div className="flex flex-col gap-1 items-start">
+                              {billing.irdSynced ? (
+                                <span className="text-[10px] bg-success-50 text-success-600 px-1.5 py-0.5 rounded font-medium border border-success-200">
+                                  ✅ Synced
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="text-[10px] bg-danger-50 text-danger-600 px-1.5 py-0.5 rounded font-medium border border-danger-200">
+                                    ⚠️ Failed
+                                  </span>
+                                  <button
+                                    className="text-[10px] text-primary hover:underline"
+                                    onClick={async () => {
+                                      try {
+                                        const { retryIrdSync } = await import("@/services/irdCbmsService");
+                                        const res = await retryIrdSync(billing.id, "pathology");
+                                        if (res.success) {
+                                          toast.success("IRD Sync successful!");
+                                        } else {
+                                          toast.error("IRD Sync failed: " + res.message);
+                                        }
+                                      } catch (e) {
+                                        toast.error("Error during retry sync");
+                                      }
+                                    }}
+                                  >
+                                    Retry Sync
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-default-400">
+                              ➖ N/A
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 justify-center">

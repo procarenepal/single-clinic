@@ -37,6 +37,8 @@ export interface PrintLayoutConfig {
   showPhone?: boolean;
   showEmail?: boolean;
   showWebsite?: boolean;
+  showPan?: boolean;
+  panNumber?: string;
 
   // Content spacing when printing without letterhead (for preprinted paper)
   contentTopMarginWithoutLetterheadMm?: number;

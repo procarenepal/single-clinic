@@ -3138,6 +3138,95 @@ match /platform_config/{configId} {
   allow write: if isPlatformAdmin();
 }
 
+// Billing Collections for IRD Compliance (Strict Rules)
+
+// Appointment Billing
+match /appointmentBilling/{billId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+  
+  allow read: if isAuthenticated() && 
+              (isSuperAdmin() || 
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+               
+  allow create: if isAuthenticated() && 
+                 (isSuperAdmin() || 
+                  (request.resource.data.clinicId != null && 
+                   belongsToClinic(request.resource.data.clinicId)));
+
+  // CRITICAL IRD RULE: No one can ever delete a billing record
+  allow delete: if false;
+  
+  // CRITICAL IRD RULE: Cannot modify a finalized bill, except to update its IRD Sync status
+  allow update: if isAuthenticated() && (
+                  isSuperAdmin() || belongsToClinic(resource.data.clinicId)
+                ) && (
+                  resource.data.status != 'finalized' || 
+                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['irdSynced', 'irdSyncDate', 'cbmsResponseCode'])
+                );
+}
+
+// Pathology Billing
+match /pathologyBilling/{billId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+  
+  allow read: if isAuthenticated() && 
+              (isSuperAdmin() || 
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+               
+  allow create: if isAuthenticated() && 
+                 (isSuperAdmin() || 
+                  (request.resource.data.clinicId != null && 
+                   belongsToClinic(request.resource.data.clinicId)));
+
+  // CRITICAL IRD RULE: No one can ever delete a billing record
+  allow delete: if false;
+  
+  // CRITICAL IRD RULE: Cannot modify a finalized bill, except to update its IRD Sync status
+  allow update: if isAuthenticated() && (
+                  isSuperAdmin() || belongsToClinic(resource.data.clinicId)
+                ) && (
+                  resource.data.status != 'finalized' || 
+                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['irdSynced', 'irdSyncDate', 'cbmsResponseCode'])
+                );
+}
+
+// Pharmacy Billing (Medicine Purchases)
+match /medicinePurchases/{purchaseId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+  
+  allow read: if isAuthenticated() && 
+              (isSuperAdmin() || 
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+               
+  allow create: if isAuthenticated() && 
+                 (isSuperAdmin() || 
+                  (request.resource.data.clinicId != null && 
+                   belongsToClinic(request.resource.data.clinicId)));
+
+  // CRITICAL IRD RULE: No one can ever delete a pharmacy bill
+  allow delete: if false;
+  
+  // CRITICAL IRD RULE: Cannot modify a paid bill, except to update its IRD Sync status
+  allow update: if isAuthenticated() && (
+                  isSuperAdmin() || belongsToClinic(resource.data.clinicId)
+                ) && (
+                  resource.data.paymentStatus != 'paid' || 
+                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['irdSynced', 'irdSyncDate', 'cbmsResponseCode'])
+                );
+}
+
 // Default deny rule - deny all other access
 match /{document=**} {
 allow read, write: if false                  ;

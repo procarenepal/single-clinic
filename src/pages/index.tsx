@@ -8,9 +8,13 @@ import {
   ClipboardList,
   Stethoscope,
   Building,
-  Sparkles,
   ShieldCheck,
   ArrowRight,
+  Star,
+  Phone,
+  Mail,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 
 import { Carousel } from "@/components/ui/Carousel";
@@ -18,19 +22,22 @@ import {
   landingPageService,
   LandingPageContent,
 } from "@/services/landingPageService";
+import { clinicService } from "@/services/clinicService";
+import BeforeAfterGallery from "@/components/BeforeAfterGallery";
+import MeetTheTeam from "@/components/MeetTheTeam";
+
 
 export default function IndexPage() {
   const [content, setContent] = useState<LandingPageContent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [clinicAddress, setClinicAddress] = useState<string | null>(null);
 
-  // In a single-clinic system, we use a fixed ID or fetch the primary clinic
   const CLINIC_ID = "main-clinic";
 
   useEffect(() => {
     const fetchContent = async () => {
       try {
         const data = await landingPageService.getHomepageContent(CLINIC_ID);
-
         setContent(data);
       } catch (error) {
         console.error("Failed to fetch landing page content:", error);
@@ -38,8 +45,24 @@ export default function IndexPage() {
         setLoading(false);
       }
     };
-
     fetchContent();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchClinicAddress = async () => {
+      try {
+        const all = await clinicService.getAllClinics();
+        if (cancelled || all.length === 0) return;
+        const clinic = all[0];
+        const parts = [clinic.address, clinic.city, clinic.state, clinic.country].filter(Boolean);
+        if (parts.length > 0) setClinicAddress(parts.join(", "));
+      } catch {
+        /* silently fall back to landing page content */
+      }
+    };
+    fetchClinicAddress();
+    return () => { cancelled = true; };
   }, []);
 
   const testimonials = [
@@ -47,309 +70,241 @@ export default function IndexPage() {
       name: "Ji-Su Park",
       role: "Patient",
       text: "The glass skin facial here is incredible. My skin has never looked this radiant. The clinicians are so professional and the products they use are clearly premium.",
-      image:
-        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
+      image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
+      rating: 5,
     },
     {
       name: "Sarah Jenkins",
       role: "Patient",
       text: "I was struggling with pigmentation for years. After just three sessions of their laser therapy, I see a massive difference. Highly recommend this clinic!",
-      image:
-        "https://images.unsplash.com/photo-1554151228-14d9def656e4?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
+      image: "https://images.unsplash.com/photo-1554151228-14d9def656e4?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80",
+      rating: 5,
     },
   ];
 
   if (loading || !content) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[rgb(var(--color-bg))]">
-        <div className="w-8 h-8 border-4 border-[rgb(var(--color-primary))] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "rgb(var(--color-bg))" }}>
+        <div className="w-6 h-6 rounded-full border-2 border-t-transparent" style={{ borderColor: "rgb(var(--color-primary))", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
+  const resolveIcon = (name: string) =>
+    name === "Users" ? Users
+      : name === "ClipboardList" ? ClipboardList
+        : name === "Building2" ? Building2
+          : name === "Stethoscope" ? Stethoscope
+            : name === "Building" ? Building
+              : name === "Calendar" ? Calendar
+                : MapPin;
+
   return (
-    <div className="min-h-screen bg-[rgb(var(--color-bg))] selection:bg-[rgb(var(--color-primary)/0.2)] selection:text-[rgb(var(--color-primary))]">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden pt-16 pb-24 lg:pt-24 lg:pb-32 bg-[rgb(var(--color-bg))]">
-        {/* Subtle Background Tints */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <div className="absolute top-0 right-0 w-1/2 h-full bg-[rgb(var(--color-primary)/0.02)] rounded-bl-[100px]" />
-          <div className="absolute bottom-0 left-0 w-1/4 h-1/2 bg-[rgb(var(--color-primary)/0.01)] rounded-tr-[100px]" />
-        </div>
+    <div className="min-h-screen" style={{ background: "rgb(var(--color-bg))", color: "rgb(var(--color-text))" }}>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
-          <div className="flex-1 text-center lg:text-left max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] mb-6">
-              <span className="flex h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-primary))]" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[rgb(var(--color-text-muted))]">
-                Seoul's Aesthetic Excellence
-              </span>
-            </div>
+      {/* ─────────────────────────────────────────────────────────────────────
+          HERO
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="border-b" style={{ borderColor: "rgb(var(--color-border))" }}>
+        <div className="max-w-7xl mx-auto px-5 lg:px-8 py-12 lg:py-28 flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
 
-            <h1 className="text-4xl lg:text-5xl font-bold mb-6 text-[rgb(var(--color-text))] leading-[1.2] tracking-tight">
-              {content.hero.title.split(" ").slice(0, -1).join(" ")}{" "}
-              <span className="text-[rgb(var(--color-primary))]">
-                {content.hero.title.split(" ").pop()}
-              </span>
+          {/* Copy */}
+          <div className="flex-1 max-w-xl text-center lg:text-left">
+            {/* Eyebrow */}
+            <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "rgb(var(--color-primary))" }}>
+              Advanced Aesthetic Medicine
+            </p>
+
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-5 leading-tight tracking-tight" style={{ color: "rgb(var(--color-text))" }}>
+              {content.hero.title}
             </h1>
 
-            <p className="mb-8 text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed max-w-xl mx-auto lg:mx-0">
+            <p className="text-base lg:text-lg leading-relaxed mb-8" style={{ color: "rgb(var(--color-text-muted))" }}>
               {content.hero.subtitle}
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
+            {/* CTA row */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-8 lg:mb-12 items-center lg:items-start">
               <Link
-                className="inline-flex items-center justify-center px-8 py-4 font-bold text-white transition-all bg-[rgb(var(--color-primary))] rounded-xl hover:bg-[rgb(var(--color-primary-hover))] shadow-lg shadow-[rgb(var(--color-primary)/0.2)] hover:shadow-[rgb(var(--color-primary)/0.4)] hover:-translate-y-1 active:translate-y-0"
                 to={content.hero.ctaLink}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 text-sm font-semibold text-white rounded-lg transition-opacity duration-150 hover:opacity-90"
+                style={{ background: "rgb(var(--color-primary))" }}
               >
                 {content.hero.ctaText}
+                <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
-                className="inline-flex items-center justify-center px-8 py-4 font-bold text-[rgb(var(--color-text))] transition-all bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl hover:bg-[rgb(var(--color-surface-2))] hover:-translate-y-1 active:translate-y-0"
                 to="/features"
+                className="inline-flex items-center justify-center px-7 py-3.5 text-sm font-semibold rounded-lg border transition-colors duration-150"
+                style={{ color: "rgb(var(--color-text))", borderColor: "rgb(var(--color-border))", background: "rgb(var(--color-surface))" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgb(var(--color-surface-2))"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgb(var(--color-surface))"; }}
               >
-                Our Procedures
+                View Services
               </Link>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-8">
-              <div className="flex -space-x-3">
+            {/* Trust row */}
+            <div className="flex items-center justify-center lg:justify-start gap-6 pt-6 lg:pt-8 border-t" style={{ borderColor: "rgb(var(--color-border))" }}>
+              <div className="flex -space-x-2">
                 {[1, 2, 3, 4].map((i) => (
-                  <div
+                  <img
                     key={i}
-                    className="w-10 h-10 rounded-full border-2 border-[rgb(var(--color-bg))] overflow-hidden bg-[rgb(var(--color-surface-2))] shadow-sm transition-transform hover:scale-110 hover:z-10 duration-300"
-                  >
-                    <img
-                      alt="Specialist"
-                      className="w-full h-full object-cover"
-                      src={`https://i.pravatar.cc/100?u=skin-doc${i}`}
-                    />
-                  </div>
+                    alt="Patient"
+                    className="w-9 h-9 rounded-full border-2 object-cover"
+                    src={`https://i.pravatar.cc/100?u=skin-doc${i}`}
+                    style={{ borderColor: "rgb(var(--color-bg))" }}
+                  />
                 ))}
               </div>
-              <div className="text-left border-l border-[rgb(var(--color-border))] pl-8 py-1">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <p className="text-sm font-black text-[rgb(var(--color-primary))] tracking-tight">
-                    5k+ Glowing Results
-                  </p>
-                  <div className="w-4 h-4 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center">
-                    <ShieldCheck className="w-2.5 h-2.5" />
-                  </div>
+              <div>
+                <div className="flex items-center gap-1 mb-0.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  ))}
+                  <span className="text-sm font-bold ml-1">4.9</span>
                 </div>
-                <p className="text-[10px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-60">
-                  Certified Aesthetic Specialists
+                <p className="text-xs" style={{ color: "rgb(var(--color-text-muted))" }}>
+                  Trusted by 5,000+ patients
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex-1 w-full relative">
-            <div className="relative bg-[rgb(var(--color-surface))] p-2 rounded-2xl border border-[rgb(var(--color-border))] shadow-[0_10px_40px_-10px_rgba(var(--color-primary)/0.15)] overflow-hidden">
-              <div className="h-[400px] lg:h-[500px]">
+          {/* Carousel */}
+          <div className="flex-1 w-full max-w-2xl">
+            <div
+              className="rounded-2xl overflow-hidden border"
+              style={{ borderColor: "rgb(var(--color-border))", background: "rgb(var(--color-surface))" }}
+            >
+              <div className="h-[260px] sm:h-[340px] lg:h-[500px]">
                 <Carousel
                   autoPlayInterval={5000}
                   items={[
-                    <div className="w-full h-full relative group">
-                      <img
-                        alt="Glass Skin"
-                        className="w-full h-full object-cover rounded-xl"
-                        src="/images/banner_1.png"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                        <p className="text-[10px] font-bold uppercase tracking-widest">
-                          Natural Glow
-                        </p>
-                        <p className="text-lg font-bold">
-                          The Signature Glass Skin
-                        </p>
+                    <div key="1" className="relative w-full h-full group">
+                      <img alt="Glass Skin" className="w-full h-full object-cover" src="/images/banner_1.png" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">Natural Glow</p>
+                        <p className="text-lg font-bold">The Signature Glass Skin</p>
                       </div>
                     </div>,
-                    <div className="w-full h-full relative group">
-                      <img
-                        alt="Advanced Tech"
-                        className="w-full h-full object-cover rounded-xl"
-                        src="/images/banner_2.png"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                        <p className="text-[10px] font-bold uppercase tracking-widest">
-                          Medical Grade
-                        </p>
-                        <p className="text-lg font-bold">
-                          Advanced K-Laser Therapy
-                        </p>
+                    <div key="2" className="relative w-full h-full group">
+                      <img alt="Advanced Tech" className="w-full h-full object-cover" src="/images/banner_2.png" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">Medical Grade</p>
+                        <p className="text-lg font-bold">Advanced K-Laser Therapy</p>
                       </div>
                     </div>,
-                    <div className="w-full h-full relative group">
-                      <img
-                        alt="Clinic Interior"
-                        className="w-full h-full object-cover rounded-xl"
-                        src="/images/banner_3.png"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                        <p className="text-[10px] font-bold uppercase tracking-widest">
-                          Serene Wellness
-                        </p>
-                        <p className="text-lg font-bold">
-                          Premium Aesthetic Sanctuary
-                        </p>
+                    <div key="3" className="relative w-full h-full group">
+                      <img alt="Clinic Interior" className="w-full h-full object-cover" src="/images/banner_3.png" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                      <div className="absolute bottom-6 left-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <p className="text-xs font-semibold uppercase tracking-wider opacity-75 mb-1">Serene Wellness</p>
+                        <p className="text-lg font-bold">Premium Aesthetic Sanctuary</p>
                       </div>
                     </div>,
                   ]}
                 />
               </div>
             </div>
-            <div className="absolute -bottom-4 -left-4 bg-[rgb(var(--color-surface))] px-5 py-4 pr-8 rounded-xl border border-[rgb(var(--color-border))] shadow-md hidden lg:block z-20">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-[rgb(var(--color-primary)/0.1)] flex items-center justify-center text-[rgb(var(--color-primary))]">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-[9px] font-bold text-[rgb(var(--color-text-muted))] uppercase">
-                    Next Available
-                  </p>
-                  <p className="text-sm font-bold text-[rgb(var(--color-text))]">
-                    Consult Today
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
 
-      {/* Trust Indicators / Stats */}
-      <div className="max-w-7xl mx-auto px-4 relative z-20 -mt-10 lg:-mt-12">
-        <div className="grid grid-cols-2 lg:grid-cols-4 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl shadow-sm overflow-hidden divide-x divide-y lg:divide-y-0 divide-[rgb(var(--color-border))]">
-          {content.stats.map((stat, index) => {
-            const IconComponent =
-              stat.icon === "Users"
-                ? Users
-                : stat.icon === "ClipboardList"
-                  ? ClipboardList
-                  : stat.icon === "Building2"
-                    ? Building2
-                    : Stethoscope;
-
-            const statImages = [
-              "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // Happy Clients
-              "https://images.unsplash.com/photo-1579684385127-1ef15d508118?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // Years Expertise
-              "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // K-Certified Products
-              "https://images.unsplash.com/photo-1516533075015-a3838414c3ca?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", // Patient Rating
-            ];
-
-            return (
-              <div
-                key={index}
-                className="group relative flex items-center gap-4 p-6 lg:p-8 justify-center hover:bg-[rgb(var(--color-surface-2))] transition-all duration-300 overflow-hidden"
-              >
-                {/* Individual Background Image */}
-                <div className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity duration-700 pointer-events-none">
-                  <img
-                    alt=""
-                    className="w-full h-full object-cover"
-                    src={statImages[index]}
-                  />
-                </div>
-                <div className="absolute inset-0 bg-white/60 z-[1] pointer-events-none" />
-
-                <div className="relative z-10 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-white backdrop-blur-sm text-[rgb(var(--color-primary))] flex items-center justify-center border border-[rgb(var(--color-border))] shadow-sm">
-                    <IconComponent className="w-4 h-4" />
+      {/* ─────────────────────────────────────────────────────────────────────
+          STATS
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="border-b" style={{ background: "rgb(var(--color-surface))", borderColor: "rgb(var(--color-border))" }}>
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-[rgb(var(--color-border))]">
+            {content.stats.map((stat, index) => {
+              const IconComponent = resolveIcon(stat.icon);
+              return (
+                <div key={index} className="flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-7 lg:py-10">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgba(var(--color-primary),0.08)" }}
+                  >
+                    <IconComponent className="w-5 h-5" style={{ color: "rgb(var(--color-primary))" }} />
                   </div>
                   <div>
-                    <p className="text-xl lg:text-2xl font-bold text-[rgb(var(--color-primary))] tabular-nums">
+                    <p className="text-xl sm:text-2xl font-bold tabular-nums" style={{ color: "rgb(var(--color-text))" }}>
                       {stat.number}
                     </p>
-                    <p className="text-[10px] font-bold uppercase tracking-tight text-[rgb(var(--color-text-muted))]">
+                    <p className="text-[11px] sm:text-xs font-medium mt-0.5 leading-snug" style={{ color: "rgb(var(--color-text-muted))" }}>
                       {stat.label}
                     </p>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      </section>
 
-      <section className="py-24 px-4 bg-[rgb(var(--color-bg))] relative overflow-hidden">
-        {/* Decorative Background Elements */}
-        <div className="absolute top-0 right-0 w-1/3 h-1/3 bg-[rgb(var(--color-primary)/0.02)] rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-1/4 h-1/4 bg-[rgb(var(--color-primary)/0.03)] rounded-full blur-[100px] pointer-events-none" />
-
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20 max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-primary))] text-[10px] font-bold uppercase tracking-widest mb-6 border border-[rgb(var(--color-border))]">
-              <Sparkles className="w-3 h-3" />
-              Professional Portfolio
-            </div>
-            <h2 className="text-3xl lg:text-5xl font-black text-[rgb(var(--color-primary))] mb-6 tracking-tight leading-tight">
+      {/* ─────────────────────────────────────────────────────────────────────
+          SERVICES
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="py-14 lg:py-24">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          {/* Header */}
+          <div className="mb-10 lg:mb-16 text-center lg:text-left max-w-2xl lg:max-w-2xl mx-auto lg:mx-0">
+            <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "rgb(var(--color-primary))" }}>
+              Our Services
+            </p>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-4" style={{ color: "rgb(var(--color-text))" }}>
               Medical Aesthetic Services
             </h2>
-            <p className="text-base lg:text-lg text-[rgb(var(--color-text-muted))] leading-relaxed font-medium">
-              Precision-engineered protocols fusing high-altitude environmental
-              science with world-leading Korean dermatological innovation.
+            <p className="text-sm sm:text-base leading-relaxed" style={{ color: "rgb(var(--color-text-muted))" }}>
+              Precision-engineered protocols fusing advanced dermatological science with Korean aesthetic innovation.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {content.services.map((service, index) => {
-              const IconComponent =
-                service.icon === "Users"
-                  ? Users
-                  : service.icon === "Stethoscope"
-                    ? Stethoscope
-                    : service.icon === "Building"
-                      ? Building
-                      : service.icon === "ClipboardList"
-                        ? ClipboardList
-                        : service.icon === "Calendar"
-                          ? Calendar
-                          : MapPin;
-
+              const IconComponent = resolveIcon(service.icon);
               return (
                 <div
                   key={index}
-                  className="group relative flex flex-col bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-[rgb(var(--color-primary)/0.08)] transition-all duration-500 hover:-translate-y-2"
+                  className="group flex flex-col rounded-xl border overflow-hidden transition-shadow duration-200 hover:shadow-lg"
+                  style={{ background: "rgb(var(--color-surface))", borderColor: "rgb(var(--color-border))" }}
                 >
-                  {/* Service Image Container */}
-                  <div className="aspect-[16/11] w-full overflow-hidden relative">
+                  {/* Image */}
+                  <div className="aspect-[16/10] overflow-hidden">
                     <img
                       alt={service.title}
-                      className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       src={`/images/service_${index + 1}.png`}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[rgb(var(--color-surface))] via-transparent to-transparent opacity-60" />
-
-                    {/* Floating Icon Badge */}
-                    <div className="absolute -bottom-6 left-8 w-14 h-14 rounded-2xl bg-white flex items-center justify-center border border-[rgb(var(--color-border))] shadow-xl group-hover:rotate-6 transition-transform duration-500 z-10">
-                      <div className="w-10 h-10 rounded-xl bg-[rgb(var(--color-primary)/0.05)] flex items-center justify-center text-[rgb(var(--color-primary))]">
-                        <IconComponent className="w-5 h-5" />
-                      </div>
-                    </div>
                   </div>
 
-                  <div className="p-8 pt-12 flex flex-col flex-1">
-                    <h3 className="text-xl font-extrabold text-[rgb(var(--color-primary))] mb-4 tracking-tight">
+                  {/* Content */}
+                  <div className="p-7 flex flex-col flex-1">
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center mb-5"
+                      style={{ background: "rgba(var(--color-primary),0.08)" }}
+                    >
+                      <IconComponent className="w-5 h-5" style={{ color: "rgb(var(--color-primary))" }} />
+                    </div>
+
+                    <h3 className="text-lg font-bold mb-3 tracking-tight" style={{ color: "rgb(var(--color-text))" }}>
                       {service.title}
                     </h3>
-                    <p className="text-[rgb(var(--color-text-muted))] leading-relaxed text-base mb-8 font-medium flex-1">
+                    <p className="text-sm leading-relaxed flex-1" style={{ color: "rgb(var(--color-text-muted))" }}>
                       {service.description}
                     </p>
 
-                    <div className="pt-6 border-t border-[rgb(var(--color-border))] flex items-center justify-between">
+                    <div className="mt-6 pt-5 border-t" style={{ borderColor: "rgb(var(--color-border))" }}>
                       <Link
-                        className="text-[11px] font-black uppercase tracking-widest text-[rgb(var(--color-primary))] flex items-center gap-2 group/link"
                         to="/features"
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-75"
+                        style={{ color: "rgb(var(--color-primary))" }}
                       >
-                        Explore Treatment
-                        <ArrowRight className="w-3 h-3 transition-transform group-hover/link:translate-x-1" />
+                        Learn more <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
-                      <span className="text-[9px] font-black text-[rgb(var(--color-text-muted))] uppercase tracking-widest opacity-40">
-                        K-Certified
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -359,254 +314,254 @@ export default function IndexPage() {
         </div>
       </section>
 
-      {/* Promotional Ads Banner */}
-      <section className="py-12 px-4 max-w-7xl mx-auto">
-        <div className="relative h-[300px] lg:h-[400px] rounded-2xl overflow-hidden shadow-sm border border-[rgb(var(--color-border))] group">
+      {/* ─────────────────────────────────────────────────────────────────────
+          PROMO BANNER
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="py-4 px-5 lg:px-8 max-w-7xl mx-auto mb-6 lg:mb-10">
+        <div
+          className="relative h-[220px] sm:h-[280px] lg:h-[360px] rounded-2xl overflow-hidden border"
+          style={{ borderColor: "rgb(var(--color-border))" }}
+        >
           <img
-            alt="Glass Skin Promotion"
-            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+            alt="Promotion"
+            className="absolute inset-0 w-full h-full object-cover"
             src="/images/promo_banner.png"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/45 to-transparent" />
 
-          <div className="absolute inset-0 flex items-center p-8 lg:p-20">
-            <div className="max-w-md text-white">
-              <div className="inline-block px-4 py-1.5 bg-[rgb(var(--color-primary))] text-white text-[10px] font-bold uppercase tracking-widest rounded mb-6 shadow-lg shadow-[rgb(var(--color-primary)/0.2)]">
-                Exclusive Treatment Offer
-              </div>
-              <h2 className="text-3xl lg:text-5xl font-bold mb-6 tracking-tight leading-tight">
-                Signature{" "}
-                <span className="text-[rgb(var(--color-primary-light))]">
-                  Glass Skin
-                </span>{" "}
-                Protocol
+          <div className="absolute inset-0 flex items-center px-7 sm:px-10 lg:px-16">
+            <div className="max-w-xs sm:max-w-sm text-white">
+              <span
+                className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded mb-3 sm:mb-5"
+                style={{ background: "rgb(var(--color-primary))" }}
+              >
+                Limited Offer
+              </span>
+              <h2 className="text-lg sm:text-2xl lg:text-4xl font-bold mb-2 sm:mb-4 leading-tight">
+                Signature Glass Skin Protocol
               </h2>
-              <p className="text-white/80 text-sm lg:text-lg mb-10 font-medium leading-relaxed">
-                Unlock your natural radiance with our medical-grade facial
-                series.
-                <span className="block mt-2 text-white font-bold">
-                  First-time clients: Save 20% this month.
-                </span>
+              <p className="text-xs sm:text-sm text-white/80 mb-4 sm:mb-7 leading-relaxed hidden sm:block">
+                First-time clients save 20% this month on our medical-grade facial series.
               </p>
               <Link
-                className="inline-flex items-center justify-center px-10 py-4 bg-white text-[rgb(var(--color-text))] font-bold text-[10px] uppercase tracking-widest rounded-md hover:bg-[rgb(var(--color-surface-2))] transition-all shadow-xl hover:-translate-y-1 active:translate-y-0"
                 to="/contact"
+                className="inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-opacity hover:opacity-90"
+                style={{ background: "white", color: "rgb(var(--color-text))" }}
               >
-                Claim Your Offer <span>→</span>
+                Claim Offer <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section className="py-24 bg-[rgb(var(--color-surface-2))] border-y border-[rgb(var(--color-border))]">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-2xl lg:text-3xl font-bold text-[rgb(var(--color-primary))] mb-2 tracking-tight">
-              Your Glow Journey
+      {/* ─────────────────────────────────────────────────────────────────────
+          HOW IT WORKS
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="py-14 lg:py-24 border-t border-b" style={{ background: "rgb(var(--color-surface))", borderColor: "rgb(var(--color-border))" }}>
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="mb-10 lg:mb-14 text-center lg:text-left">
+            <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "rgb(var(--color-primary))" }}>
+              Process
+            </p>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-4" style={{ color: "rgb(var(--color-text))" }}>
+              Your Treatment Journey
             </h2>
-            <p className="text-base text-[rgb(var(--color-text-muted))]">
-              Experience the clinical standard of Seoul's skincare excellence.
+            <p className="text-sm sm:text-base" style={{ color: "rgb(var(--color-text-muted))" }}>
+              A structured, evidence-based approach to skin health and aesthetic excellence.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
             {content.process.map((item, i) => (
-              <div
-                key={i}
-                className="bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] overflow-hidden group hover:shadow-md transition-all duration-300"
-              >
-                <div className="aspect-[16/10] w-full overflow-hidden relative">
-                  <img
-                    alt={item.title}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    src={`/images/step_${i + 1}.png`}
-                  />
-                  <div className="absolute top-4 left-4 w-8 h-8 rounded-full bg-[rgb(var(--color-primary))] text-white flex items-center justify-center font-bold text-sm shadow-lg">
+              <div key={i} className="flex flex-col">
+                {/* Step indicator */}
+                <div className="flex items-center gap-4 mb-5">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                    style={{ background: "rgb(var(--color-primary))" }}
+                  >
                     {item.step}
                   </div>
+                  {i < content.process.length - 1 && (
+                    <div className="hidden md:block flex-1 h-px" style={{ background: "rgb(var(--color-border))" }} />
+                  )}
                 </div>
-                <div className="p-8">
-                  <h4 className="text-lg font-bold text-[rgb(var(--color-primary))] mb-3 tracking-tight">
-                    {item.title}
-                  </h4>
-                  <p className="text-[rgb(var(--color-text-muted))] text-sm leading-relaxed">
-                    {item.desc}
-                  </p>
+
+                {/* Image */}
+                <div className="aspect-[16/10] rounded-xl overflow-hidden mb-6 border" style={{ borderColor: "rgb(var(--color-border))" }}>
+                  <img
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                    src={`/images/step_${i + 1}.png`}
+                  />
                 </div>
+
+                <h4 className="text-base font-bold mb-2" style={{ color: "rgb(var(--color-text))" }}>
+                  {item.title}
+                </h4>
+                <p className="text-sm leading-relaxed" style={{ color: "rgb(var(--color-text-muted))" }}>
+                  {item.desc}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Contextual & Tech Section */}
-      <section className="py-24 bg-[rgb(var(--color-surface))] border-y border-[rgb(var(--color-border))] overflow-hidden transition-colors">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          <div className="relative group">
-            <div className="absolute inset-0 bg-[rgb(var(--color-surface-2))] rounded-xl transform -rotate-2 group-hover:-rotate-3 transition-transform duration-500 border border-[rgb(var(--color-border))]" />
-            <div className="p-3 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl relative z-10 transition-transform duration-500 group-hover:translate-y-1">
-              <div className="rounded-lg border border-[rgb(var(--color-border)/0.5)] overflow-hidden bg-[rgb(var(--color-surface-2))]">
-                <img
-                  alt={content.precisionSection.title}
-                  className="w-full h-auto object-cover"
-                  src={content.precisionSection.imageUrl}
-                />
-              </div>
-            </div>
+      {/* ─────────────────────────────────────────────────────────────────────
+          PRECISION / TECH
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="py-14 lg:py-24 border-b" style={{ borderColor: "rgb(var(--color-border))" }}>
+        <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+
+          {/* Image */}
+          <div className="rounded-2xl overflow-hidden border" style={{ borderColor: "rgb(var(--color-border))" }}>
+            <img
+              alt={content.precisionSection.title}
+              className="w-full h-auto object-cover"
+              src={content.precisionSection.imageUrl}
+            />
           </div>
 
-          <div>
-            <div className="inline-block px-3 py-1 bg-[rgb(var(--color-primary-light))] border border-[rgb(var(--color-primary)/0.2)] text-[rgb(var(--color-primary))] text-xs font-bold uppercase tracking-widest rounded mb-6">
-              Aesthetic Precision
-            </div>
-            <h2 className="text-3xl font-bold text-[rgb(var(--color-primary))] mb-6 tracking-tight">
+          {/* Copy */}
+          <div className="text-center lg:text-left">
+            <p className="text-xs font-bold uppercase tracking-widest mb-4 lg:mb-5" style={{ color: "rgb(var(--color-primary))" }}>
+              Why Choose Us
+            </p>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 lg:mb-5 tracking-tight leading-tight" style={{ color: "rgb(var(--color-text))" }}>
               {content.precisionSection.title}
             </h2>
-            <p className="text-lg text-[rgb(var(--color-text-muted))] mb-8 leading-relaxed">
+            <p className="text-sm sm:text-base leading-relaxed mb-7 lg:mb-10" style={{ color: "rgb(var(--color-text-muted))" }}>
               {content.precisionSection.description}
             </p>
 
-            <div className="space-y-6">
+            <ul className="space-y-4 lg:space-y-5 text-left">
               {[
-                {
-                  title: "K-Beauty Innovation",
-                  desc: "Latest medical technologies from Seoul's top aesthetic labs.",
-                },
-                {
-                  title: "Certified Experts",
-                  desc: "Dermatologists trained in the latest Korean skincare protocols.",
-                },
-                {
-                  title: "Holistic Approach",
-                  desc: "We focus on long-term skin health and natural-looking results.",
-                },
+                { title: "K-Beauty Innovation", desc: "Latest medical technologies from Seoul's top aesthetic laboratories." },
+                { title: "Certified Experts", desc: "Dermatologists trained in the latest Korean skincare protocols." },
+                { title: "Holistic Approach", desc: "Focused on long-term skin health and natural-looking results." },
               ].map((item, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className="w-6 h-6 flex-shrink-0 rounded-full bg-[rgb(var(--color-primary-light))] border border-[rgb(var(--color-primary)/0.2)] flex items-center justify-center mt-1">
-                    <ShieldCheck className="w-3 h-3 text-[rgb(var(--color-primary))]" />
-                  </div>
+                <li key={i} className="flex items-start gap-3.5">
+                  <CheckCircle2 className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: "rgb(var(--color-primary))" }} />
                   <div>
-                    <h4 className="font-bold text-[rgb(var(--color-text))] mb-1 tracking-tight">
-                      {item.title}
-                    </h4>
-                    <p className="text-sm text-[rgb(var(--color-text-muted))]">
-                      {item.desc}
+                    <p className="text-sm font-semibold mb-0.5" style={{ color: "rgb(var(--color-text))" }}>{item.title}</p>
+                    <p className="text-sm" style={{ color: "rgb(var(--color-text-muted))" }}>{item.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          BEFORE & AFTER
+      ───────────────────────────────────────────────────────────────────── */}
+      <BeforeAfterGallery />
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          TESTIMONIALS
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="py-14 lg:py-24 border-b" style={{ background: "rgb(var(--color-surface))", borderColor: "rgb(var(--color-border))" }}>
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="mb-8 lg:mb-14 text-center lg:text-left">
+            <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "rgb(var(--color-primary))" }}>
+              Testimonials
+            </p>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-3" style={{ color: "rgb(var(--color-text))" }}>
+              Patient Experiences
+            </h2>
+            <p className="text-sm sm:text-base" style={{ color: "rgb(var(--color-text-muted))" }}>
+              Confidence restored, skin transformed through expert care.
+            </p>
+          </div>
+
+          <div className="min-h-[280px] lg:h-72">
+            <Carousel
+              autoPlayInterval={8000}
+              items={testimonials.map((t, i) => (
+                <div key={i} className="h-full px-1 sm:px-2">
+                  <div
+                    className="h-full rounded-2xl border p-5 sm:p-8 lg:p-12 flex flex-col justify-center"
+                    style={{ background: "rgb(var(--color-bg))", borderColor: "rgb(var(--color-border))" }}
+                  >
+                    {/* Stars */}
+                    <div className="flex gap-1 mb-6">
+                      {Array.from({ length: t.rating }).map((_, s) => (
+                        <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      ))}
+                    </div>
+
+                    <p className="text-sm sm:text-base lg:text-xl font-medium leading-relaxed mb-5 sm:mb-8" style={{ color: "rgb(var(--color-text))" }}>
+                      "{t.text}"
                     </p>
+
+                    <div className="flex items-center gap-4">
+                      <img
+                        alt={t.name}
+                        className="w-12 h-12 rounded-full object-cover border"
+                        src={t.image}
+                        style={{ borderColor: "rgb(var(--color-border))" }}
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold" style={{ color: "rgb(var(--color-text))" }}>{t.name}</p>
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                            <ShieldCheck className="w-2.5 h-2.5" /> Verified
+                          </div>
+                        </div>
+                        <p className="text-xs mt-0.5" style={{ color: "rgb(var(--color-text-muted))" }}>{t.role}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
-            </div>
+            />
           </div>
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-24 bg-[rgb(var(--color-surface-2)/0.3)] border-y border-[rgb(var(--color-border))] relative overflow-hidden">
-        {/* Decorative Background Elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[rgb(var(--color-primary)/0.03)] rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[rgb(var(--color-primary)/0.03)] rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl" />
+      {/* ─────────────────────────────────────────────────────────────────────
+          MEET THE TEAM
+      ───────────────────────────────────────────────────────────────────── */}
+      <MeetTheTeam />
 
-        <div className="text-center mb-16 max-w-2xl mx-auto px-4 relative z-10">
-          <div className="inline-block px-3 py-1 rounded-full bg-[rgb(var(--color-primary)/0.05)] text-[rgb(var(--color-primary))] text-[10px] font-bold uppercase tracking-wider mb-4 border border-[rgb(var(--color-primary)/0.1)]">
-            Results That Speak
-          </div>
-          <h2 className="text-3xl lg:text-4xl font-bold text-[rgb(var(--color-primary))] mb-2 tracking-tight">
-            Client Success Stories
-          </h2>
-          <p className="text-base text-[rgb(var(--color-text-muted))]">
-            Confidence restored, skin transformed through expert care.
-          </p>
-        </div>
+      {/* ─────────────────────────────────────────────────────────────────────
+          CONTACT
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="py-14 lg:py-24 border-b" style={{ borderColor: "rgb(var(--color-border))" }}>
+        <div className="max-w-7xl mx-auto px-5 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start">
 
-        <div className="max-w-5xl mx-auto px-4 h-80 relative z-10">
-          <Carousel
-            autoPlayInterval={8000}
-            items={testimonials.map((t, i) => (
-              <div key={i} className="h-full px-4">
-                <div className="h-full p-10 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-2xl shadow-[0_4px_20px_-4px_rgba(var(--color-primary)/0.05)] flex flex-col justify-center items-center text-center relative overflow-hidden group">
-                  {/* Quote Icon */}
-                  <div className="absolute top-6 left-10 text-[rgb(var(--color-primary)/0.1)] group-hover:text-[rgb(var(--color-primary)/0.2)] transition-colors duration-500">
-                    <svg
-                      fill="currentColor"
-                      height="40"
-                      viewBox="0 0 24 24"
-                      width="40"
-                    >
-                      <path d="M14.017 21L14.017 18C14.017 16.8954 14.9124 16 16.017 16H19.017C19.5693 16 20.017 15.5523 20.017 15V9C20.017 8.44772 19.5693 8 19.017 8H16.017C15.4647 8 15.017 8.44772 15.017 9V12C15.017 12.5523 14.5693 13 14.017 13H12.017V9C12.017 6.79086 13.8079 5 16.017 5H19.017C21.2261 5 23.017 6.79086 23.017 9V15C23.017 18.3137 20.3307 21 17.017 21H14.017ZM2.01697 21L2.01697 18C2.01697 16.8954 2.9124 16 4.01697 16H7.01697C7.56925 16 8.01697 15.5523 8.01697 15V9C8.01697 8.44772 7.56925 8 7.01697 8H4.01697C3.46469 8 3.01697 8.44772 3.01697 9V12C3.01697 12.5523 2.56925 13 2.01697 13H0.0169678V9C0.0169678 6.79086 1.80783 5 4.01697 5H7.01697C9.22611 5 11.017 6.79086 11.017 9V15C11.017 18.3137 8.33068 21 5.01697 21H2.01697Z" />
-                    </svg>
-                  </div>
-
-                  <div className="w-20 h-20 rounded-full overflow-hidden mb-6 border-2 border-[rgb(var(--color-primary)/0.1)] p-1 bg-white">
-                    <img
-                      alt={t.name}
-                      className="w-full h-full object-cover rounded-full"
-                      src={t.image}
-                    />
-                  </div>
-
-                  <p className="text-lg lg:text-xl font-medium text-[rgb(var(--color-text))] mb-8 leading-relaxed max-w-2xl">
-                    "{t.text}"
-                  </p>
-
-                  <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-bold text-[rgb(var(--color-text))] uppercase tracking-widest text-xs">
-                        {t.name}
-                      </h4>
-                      <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 text-green-600 text-[8px] font-bold uppercase tracking-tighter border border-green-100">
-                        <ShieldCheck className="w-2.5 h-2.5" />
-                        Verified
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-[rgb(var(--color-primary))] font-bold uppercase tracking-widest">
-                      {t.role}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          />
-        </div>
-      </section>
-
-      {/* Contact & Location Section */}
-      <section className="py-24 px-4 max-w-7xl mx-auto border-t border-[rgb(var(--color-border))]">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
-          <div>
-            <h2 className="text-2xl lg:text-3xl font-bold text-[rgb(var(--color-primary))] mb-8 tracking-tight">
-              Visit Our Aesthetic Clinic
+          {/* Info */}
+          <div className="text-center lg:text-left">
+            <p className="text-xs font-bold uppercase tracking-widest mb-4 lg:mb-5" style={{ color: "rgb(var(--color-primary))" }}>
+              Location & Contact
+            </p>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-7 lg:mb-10 tracking-tight" style={{ color: "rgb(var(--color-text))" }}>
+              Visit Our Clinic
             </h2>
 
-            <div className="space-y-6">
+            <div className="space-y-5 lg:space-y-6 text-left">
               {[
-                {
-                  icon: <MapPin className="w-5 h-5" />,
-                  title: "Clinic Location",
-                  content: content.contact.location,
-                },
-                {
-                  icon: <Building2 className="w-5 h-5" />,
-                  title: "Opening Hours",
-                  content: content.contact.hours,
-                },
-                {
-                  icon: <Stethoscope className="w-5 h-5" />,
-                  title: "Concierge Desk",
-                  content: `Phone: ${content.contact.phone} • ${content.contact.email}`,
-                },
+                { icon: <MapPin className="w-4 h-4" />, label: "Address", value: clinicAddress ?? content.contact.location },
+                { icon: <Clock className="w-4 h-4" />, label: "Hours", value: content.contact.hours },
+                { icon: <Phone className="w-4 h-4" />, label: "Phone", value: content.contact.phone },
+                { icon: <Mail className="w-4 h-4" />, label: "Email", value: content.contact.email },
               ].map((item, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className="w-10 h-10 rounded-md bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] flex items-center justify-center shrink-0 text-[rgb(var(--color-primary))]">
+                <div key={i} className="flex items-start gap-4">
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgba(var(--color-primary),0.08)", color: "rgb(var(--color-primary))" }}
+                  >
                     {item.icon}
                   </div>
                   <div>
-                    <h4 className="font-bold text-[rgb(var(--color-text))] mb-1">
-                      {item.title}
-                    </h4>
-                    <p className="text-sm text-[rgb(var(--color-text-muted))]">
-                      {item.content}
+                    <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: "rgb(var(--color-text-muted))" }}>
+                      {item.label}
+                    </p>
+                    <p className="text-sm font-medium" style={{ color: "rgb(var(--color-text))" }}>
+                      {item.value}
                     </p>
                   </div>
                 </div>
@@ -614,83 +569,87 @@ export default function IndexPage() {
             </div>
           </div>
 
-          <div className="w-full h-[400px] bg-[rgb(var(--color-surface))] rounded-2xl border border-[rgb(var(--color-border))] overflow-hidden relative shadow-sm flex flex-col group">
-            {/* Background Image Layer */}
-            <div className="absolute inset-0">
-              <img
-                alt="Clinic Interior"
-                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-              />
-              <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] group-hover:bg-white/70 transition-colors duration-500" />
-            </div>
-
-            <div className="relative flex-1 flex flex-col items-center justify-center text-center p-8 z-10">
-              <div className="w-14 h-14 bg-[rgb(var(--color-primary))] rounded-xl shadow-lg flex items-center justify-center mb-6">
+          {/* Map placeholder */}
+          <div
+            className="w-full h-[260px] sm:h-[320px] lg:h-[380px] rounded-2xl overflow-hidden border relative"
+            style={{ background: "rgb(var(--color-surface))", borderColor: "rgb(var(--color-border))" }}
+          >
+            <img
+              alt="Clinic"
+              className="absolute inset-0 w-full h-full object-cover opacity-30"
+              src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-8 text-center">
+              <div
+                className="w-14 h-14 rounded-xl flex items-center justify-center"
+                style={{ background: "rgb(var(--color-primary))" }}
+              >
                 <MapPin className="w-7 h-7 text-white" />
               </div>
-
-              <h3 className="font-bold text-lg text-[rgb(var(--color-text))] mb-2">
-                Location Map
-              </h3>
-              <p className="text-xs text-[rgb(var(--color-text-muted))] max-w-xs mx-auto mb-6">
-                {content.contact.location}
-              </p>
-
-              <button className="px-6 py-2 bg-[rgb(var(--color-primary))] text-white rounded-md font-bold text-[10px] uppercase tracking-wider hover:bg-[rgb(var(--color-primary)/0.9)] transition-colors shadow-sm">
-                Get Directions
+              <div>
+                <p className="font-bold mb-1" style={{ color: "rgb(var(--color-text))" }}>Clinic Location</p>
+                <p className="text-sm mb-5" style={{ color: "rgb(var(--color-text-muted))" }}>{clinicAddress ?? content.contact.location}</p>
+              </div>
+              <button
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: "rgb(var(--color-primary))" }}
+              >
+                <MapPin className="w-4 h-4" /> Get Directions
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Layer */}
-      <section className="py-24 px-4">
-        <div className="max-w-7xl mx-auto rounded-3xl relative overflow-hidden h-[400px] lg:h-[500px] flex items-center justify-center group">
-          {/* Background Image with Overlay */}
-          <div className="absolute inset-0 z-0">
+      {/* ─────────────────────────────────────────────────────────────────────
+          CTA
+      ───────────────────────────────────────────────────────────────────── */}
+      <section className="py-14 lg:py-24">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div
+            className="relative rounded-2xl overflow-hidden border"
+            style={{ borderColor: "rgb(var(--color-border))" }}
+          >
+            {/* Background */}
             <img
-              alt="Glowing Skin Background"
-              className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+              alt="CTA background"
+              className="absolute inset-0 w-full h-full object-cover"
               src="/images/cta_bg.png"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-[rgb(var(--color-primary)/0.9)] to-[rgb(var(--color-primary)/0.6)] mix-blend-multiply" />
-            <div className="absolute inset-0 bg-black/20" />
-          </div>
+            <div
+              className="absolute inset-0"
+              style={{ background: "rgba(var(--color-primary),0.88)" }}
+            />
 
-          {/* Decorative Glow Bubbles */}
-          <div className="absolute top-10 left-10 w-32 h-32 bg-white/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-10 right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl animate-pulse" />
-
-          {/* Glass Content */}
-          <div className="relative z-10 text-center text-white px-8 py-12 lg:py-20 backdrop-blur-[2px] bg-white/5 border border-white/10 rounded-2xl max-w-3xl mx-4">
-            <div className="inline-block px-3 py-1 bg-white/20 border border-white/30 text-white text-[10px] font-bold uppercase tracking-widest rounded-full mb-6">
-              Start Your Journey
-            </div>
-            <h2 className="text-3xl lg:text-5xl font-bold mb-6 tracking-tight leading-tight">
-              Begin your journey to{" "}
-              <span className="text-[rgb(var(--color-surface))] underline decoration-white/30 underline-offset-8">
-                glowing skin.
-              </span>
-            </h2>
-            <p className="text-white/90 text-lg mb-10 max-w-2xl mx-auto font-medium leading-relaxed">
-              Join thousands of clients who have achieved their skin goals with
-              our signature Korean aesthetic protocols.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                className="px-8 py-4 bg-white text-[rgb(var(--color-primary))] font-bold text-xs uppercase tracking-widest rounded-md hover:bg-[rgb(var(--color-surface-2))] transition-all shadow-lg hover:-translate-y-0.5 active:translate-y-0"
-                to={content.hero.ctaLink}
-              >
-                Book Consultation
-              </Link>
-              <Link
-                className="px-8 py-4 bg-[rgb(var(--color-primary))] text-white border border-white/20 font-bold text-xs uppercase tracking-widest rounded-md hover:bg-[rgb(var(--color-primary)/0.9)] transition-all backdrop-blur-sm shadow-sm hover:-translate-y-0.5 active:translate-y-0"
-                to="/contact"
-              >
-                Inquire Services
-              </Link>
+            {/* Content */}
+            <div className="relative z-10 px-5 sm:px-8 py-14 sm:py-20 lg:py-24 text-center text-white max-w-2xl mx-auto">
+              <p className="text-xs font-bold uppercase tracking-widest mb-4 sm:mb-5 opacity-75">
+                Get Started
+              </p>
+              <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold mb-4 sm:mb-6 tracking-tight leading-tight">
+                Begin Your Journey to Healthier Skin
+              </h2>
+              <p className="text-sm sm:text-base text-white/75 mb-7 sm:mb-10 leading-relaxed">
+                Join thousands of patients who have transformed their skin with our evidence-based Korean aesthetic protocols.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link
+                  to={content.hero.ctaLink}
+                  className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+                  style={{ background: "white", color: "rgb(var(--color-primary))" }}
+                >
+                  Book Consultation <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center justify-center px-8 py-3.5 rounded-lg text-sm font-semibold border border-white/30 text-white transition-colors"
+                  style={{ background: "rgba(255,255,255,0.1)" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.2)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
+                >
+                  Contact Us
+                </Link>
+              </div>
             </div>
           </div>
         </div>

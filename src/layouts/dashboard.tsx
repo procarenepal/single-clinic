@@ -22,6 +22,7 @@ import { NavItem } from "@/services/navigationService";
 import { prefetchChunks } from "@/utils/prefetchRoutes";
 // Custom UI components — no HeroUI
 import { Button } from "@/components/ui/button";
+import { appointmentService } from "@/services/appointmentService";
 
 export interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -35,6 +36,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
   const [pendingPrescriptionCount, setPendingPrescriptionCount] = useState(0);
   const [pendingPathologyCount, setPendingPathologyCount] = useState(0);
+  const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
 
   const { navItems, loading, error, refreshNavigation } = useNavigation();
 
@@ -62,6 +64,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     return () => unsubscribe();
   }, [clinicId]);
+
+  // Listen to pending web appointments for notification badge
+  useEffect(() => {
+    if (!clinicId && !userData?.role?.includes("owner")) return;
+
+    const unsubscribe = appointmentService.subscribeToClinicAppointments(
+      undefined,
+      undefined,
+      (appointments) => {
+        let count = 0;
+        appointments.forEach((data) => {
+          if (data.status === "scheduled" && data.createdBy === "website") {
+            count++;
+          }
+        });
+        setPendingAppointmentsCount(count);
+      },
+      (error) => {
+        console.error("Error listening to pending appointments:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [clinicId, userData?.role]);
 
   // Listen to pending pathology bills for notification badge
   useEffect(() => {
@@ -230,6 +256,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   {pendingPathologyCount}
                 </span>
               )}
+              {item.title === "Appointments" && pendingAppointmentsCount > 0 && (
+                <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-teal-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
+                  {pendingAppointmentsCount}
+                </span>
+              )}
             </Link>
 
             {/* Subtree toggle */}
@@ -279,6 +310,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {item.title === "Pathology" && pendingPathologyCount > 0 && (
               <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
                 {pendingPathologyCount}
+              </span>
+            )}
+            {item.title === "Appointments" && pendingAppointmentsCount > 0 && (
+              <span className="relative z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-teal-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/10 animate-pulse">
+                {pendingAppointmentsCount}
               </span>
             )}
           </Link>

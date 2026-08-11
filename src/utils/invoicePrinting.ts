@@ -198,7 +198,7 @@ export const generateInvoiceHTML = (
     
     <div class="content">
       <div class="document-title">
-        <h2>Invoice</h2>
+        <h2>TAX INVOICE</h2>
         <div class="document-info">
           <span># ${billing.invoiceNumber}</span>
           <span>Date: ${new Date(billing.invoiceDate).toLocaleDateString()}</span>
@@ -552,7 +552,7 @@ export const generateAppointmentInvoiceHTML = (
     
     <div class="content">
       <div class="document-title">
-        <h2>Invoice</h2>
+        <h2>TAX INVOICE</h2>
         <div class="document-info" style="display: flex; justify-content: space-between; margin-top: 10px;">
           <span># ${invoice.invoiceNumber}</span>
           <span>Date: ${formatDate(invoice.invoiceDate)}</span>
@@ -563,6 +563,7 @@ export const generateAppointmentInvoiceHTML = (
         <div>
           <h3>Bill To:</h3>
           <p><strong>${patient?.name || (invoice.patientName && invoice.patientName !== "Unknown Patient" ? invoice.patientName : "Unknown Patient")}</strong></p>
+          ${invoice.buyerPan ? `<p>Buyer PAN: ${invoice.buyerPan}</p>` : ""}
           ${patient?.mobile ? `<p>Phone: ${patient.mobile}</p>` : ""}
           ${patient?.address ? `<p>Address: ${patient.address}</p>` : ""}
         </div>
@@ -587,12 +588,14 @@ export const generateAppointmentInvoiceHTML = (
       <div class="summary-section">
         <table class="summary-table">
           <tr>
-            <td>Subtotal</td>
+            <td>Gross Amount</td>
             <td class="text-right">${formatCurrency(invoice.subtotal)}</td>
           </tr>
           ${invoice.discountAmount > 0 ? `<tr><td>Discount</td><td class="text-right">- ${formatCurrency(invoice.discountAmount)}</td></tr>` : ""}
+          ${invoice.taxPercentage > 0 ? `<tr><td>Taxable Amount</td><td class="text-right">${formatCurrency(invoice.subtotal - invoice.discountAmount)}</td></tr>` : ""}
+          ${invoice.taxPercentage > 0 ? `<tr><td>VAT (${invoice.taxPercentage}%)</td><td class="text-right">${formatCurrency(invoice.taxAmount)}</td></tr>` : ""}
           <tr class="font-bold">
-            <td>Total</td>
+            <td>Total Amount</td>
             <td class="text-right">${formatCurrency(invoice.totalAmount)}</td>
           </tr>
           ${(invoice as any).previousDuePaidAmount > 0 ? `<tr><td>Previous Due Settled</td><td class="text-right">${formatCurrency((invoice as any).previousDuePaidAmount)}</td></tr>` : ""}

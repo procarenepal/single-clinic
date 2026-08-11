@@ -399,6 +399,7 @@ export default function NewAppointmentPage() {
     appointmentBS: "",
     reason: "",
     notes: "",
+    buyerPan: "",
   });
 
   const [appointmentRows, setAppointmentRows] = useState<AppointmentRow[]>([
@@ -708,9 +709,14 @@ export default function NewAppointmentPage() {
           discountType: "percent" as const,
           discountValue: 0,
           discountAmount: 0,
-          taxPercentage: 0,
+          taxPercentage: 0, // Note: You can compute VAT here based on ClinicSettings
           taxAmount: 0,
           totalAmount: totalAmount,
+          
+          buyerPan: appointmentInfo.buyerPan.trim(),
+          cbmsSyncStatus: "pending",
+          isPrinted: false,
+          
           status: "draft" as const,
           paymentStatus: "unpaid" as const,
           paidAmount: 0,

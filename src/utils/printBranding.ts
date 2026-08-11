@@ -248,6 +248,15 @@ export const getPrintHeaderHTML = (
       : ""
     }
 
+        ${config.showPan !== false && (config.panNumber || clinic?.panNumber)
+      ? `
+          <div class="pos-pan" style="font-weight: 700; font-size: 13px; margin-top: 4px; color: #1e293b;">
+            <span style="font-size: 11px; color: #64748b; font-weight: 600;">PAN/VAT:</span> ${config.panNumber || clinic?.panNumber}
+          </div>
+        `
+      : ""
+    }
+
         ${(config.showPhone !== false && (config.phone || clinic?.phone)) ||
       (config.showEmail !== false && (config.email || clinic?.email))
       ? `

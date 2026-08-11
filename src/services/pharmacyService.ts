@@ -421,6 +421,41 @@ export const pharmacyService = {
           console.error("Failed to auto-create pharmacy followup:", e);
         }
       }
+      // Hook IRD Sync
+      try {
+        const { clinicSettingsService } = await import("./clinicSettingsService");
+        const { clinicService } = await import("./clinicService");
+        const { syncInvoiceToIRD } = await import("./irdCbmsService");
+
+        const clinicSettings = await clinicSettingsService.getClinicSettings(purchaseData.clinicId);
+        const clinic = await clinicService.getClinicById(purchaseData.clinicId);
+
+        if (clinicSettings && clinic && clinicSettings.irdEnabled) {
+          const result = await syncInvoiceToIRD({
+            clinicSettings,
+            clinic,
+            invoiceData: {
+              buyerName: purchaseData.patientName || "Cash Sales",
+              buyerPan: "", // Optional for simple patient purchases
+              invoiceNumber: purchaseData.purchaseNo,
+              invoiceDate: purchaseData.purchaseDate || new Date(),
+              totalAmount: purchaseData.netAmount, // IRD payload expects total amount including VAT
+              taxAmount: purchaseData.taxAmount || 0,
+              isTaxEnabled: (purchaseData.taxPercentage || 0) > 0,
+            }
+          });
+
+          // Update the purchase record with IRD sync status
+          const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseId);
+          await updateDoc(docRef, {
+            irdSynced: result.success,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: result.responseCode
+          });
+        }
+      } catch (irdError) {
+        console.error("Failed to sync pharmacy purchase to IRD:", irdError);
+      }
 
       return purchaseId;
     } catch (error) {
@@ -752,6 +787,42 @@ export const pharmacyService = {
 
         return generatedId;
       });
+      // Hook IRD Sync for Return
+      try {
+        const { clinicSettingsService } = await import("./clinicSettingsService");
+        const { clinicService } = await import("./clinicService");
+        const { syncInvoiceToIRD } = await import("./irdCbmsService");
+
+        const clinicSettings = await clinicSettingsService.getClinicSettings(returnData.clinicId);
+        const clinic = await clinicService.getClinicById(returnData.clinicId);
+
+        if (clinicSettings && clinic && clinicSettings.irdEnabled) {
+          const purchaseDoc = await getDoc(purchaseRef);
+          if (purchaseDoc.exists()) {
+             const purchase = purchaseDoc.data() as MedicinePurchase;
+             const result = await syncInvoiceToIRD({
+               clinicSettings,
+               clinic,
+               invoiceData: {
+                 buyerName: purchase.patientName || "Cash Sales",
+                 buyerPan: "", 
+                 invoiceNumber: purchase.purchaseNo,
+                 invoiceDate: purchase.purchaseDate || new Date(),
+                 totalAmount: Math.abs(returnData.totalAmount), // Amount returned
+                 taxAmount: 0, // Simplified tax handling for returns
+                 isTaxEnabled: (purchase.taxPercentage || 0) > 0,
+               },
+               isReturn: true
+             });
+
+             // Optionally we could update the return record with irdSynced, but it's nested in returns array.
+             // For now, logging the result is sufficient.
+             console.log("Pharmacy return IRD sync result:", result);
+          }
+        }
+      } catch (irdError) {
+        console.error("Failed to sync pharmacy return to IRD:", irdError);
+      }
 
       return returnId;
     } catch (error) {

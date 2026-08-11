@@ -46,6 +46,7 @@ const PricingPage = lazy(() => import("@/pages/pricing"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const AboutPage = lazy(() => import("@/pages/about"));
 const ContactPage = lazy(() => import("@/pages/contact"));
+const BookPage = lazy(() => import("@/pages/book"));
 const LoginPage = lazy(() => import("./pages/login"));
 const ForgotPasswordPage = lazy(() => import("./pages/forgot-password"));
 const ResetPasswordPage = lazy(() => import("./pages/reset-password"));
@@ -313,6 +314,16 @@ export default function App() {
                 </DefaultLayout>
               }
               path="/about"
+            />
+            <Route
+              element={
+                <DefaultLayout>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <BookPage />
+                  </Suspense>
+                </DefaultLayout>
+              }
+              path="/book"
             />
             <Route
               element={

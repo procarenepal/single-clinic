@@ -14,6 +14,13 @@ export interface Clinic {
   country?: string; // Added country
   logo?: string;
   panNumber?: string;
+  
+  // IRD CBMS Integration Settings
+  irdEnabled?: boolean;
+  irdApiUrl?: string; // Live or Test URL
+  irdApiUsername?: string; // Taxpayer Portal Username
+  irdApiPassword?: string; // Taxpayer Portal Password
+  
   description?: string;
   subscriptionStatus: "active" | "suspended" | "cancelled";
   subscriptionPlan: string;
@@ -729,6 +736,7 @@ export interface ClinicSettings {
   requireBatchTracking: boolean;
   requireExpiryTracking: boolean;
   autoGenerateBarcode: boolean;
+
   createdAt: Date;
   updatedAt: Date;
   updatedBy: string;
@@ -904,6 +912,12 @@ export interface MedicinePurchase {
   purchaseDate: Date;
   clinicId: string;
   branchId: string; // Associated branch
+
+  // IRD CBMS Tracking
+  irdSynced?: boolean;
+  irdSyncDate?: Date;
+  cbmsResponseCode?: string;
+
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -1656,6 +1670,16 @@ export interface AppointmentBilling {
   taxAmount: number; // Calculated tax amount in NPR
   totalAmount: number; // Final amount after discount and tax
 
+  // IRD CBMS Sync Fields
+  buyerPan?: string;
+  taxableAmount?: number;
+  vatAmount?: number;
+  exemptAmount?: number;
+  cbmsSyncStatus?: "pending" | "success" | "failed";
+  cbmsSyncResponse?: any;
+  isPrinted?: boolean;
+  printCount?: number;
+
   // Status and Audit
   status: "draft" | "finalized" | "paid" | "cancelled";
   paymentStatus: "unpaid" | "partial" | "paid";
@@ -1671,6 +1695,12 @@ export interface AppointmentBilling {
 
   // Metadata
   notes?: string; // General notes about the invoice
+  
+  // IRD CBMS Tracking
+  irdSynced?: boolean;
+  irdSyncDate?: Date;
+  cbmsResponseCode?: string;
+
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the invoice
@@ -2056,6 +2086,11 @@ export interface PathologyBilling {
 
   // Metadata
   notes?: string; // General notes about the invoice
+
+  // IRD CBMS Tracking
+  irdSynced?: boolean;
+  irdSyncDate?: Date;
+  cbmsResponseCode?: string;
 
   // Robust Pathology Workflow Fields
   labReferenceNo?: string; // Internal Lab tracking ID

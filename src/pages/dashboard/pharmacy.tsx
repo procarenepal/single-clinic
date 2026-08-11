@@ -8,6 +8,7 @@ import {
   format,
   subDays,
 } from "date-fns";
+import toast from "react-hot-toast";
 import {
   IoAddOutline,
   IoDownloadOutline,
@@ -455,12 +456,17 @@ interface MedicinePurchase {
   purchaseDate: Date;
   clinicId: string;
   branchId: string;
+  // IRD CBMS Tracking
+  irdSynced?: boolean;
+  irdSyncDate?: Date;
+  cbmsResponseCode?: string;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
   returns?: MedicinePurchaseReturn[];
   totalReturnedAmount?: number;
 }
+
 
 interface MedicineUsage {
   id: string;
@@ -1135,6 +1141,7 @@ export default function PharmacyPage() {
         clinicId,
         medicines.map((m) => m.id),
         effectiveBranchId || undefined,
+        true // force refresh
       );
       const sMap: Record<string, number> = {};
 
@@ -4021,6 +4028,7 @@ export default function PharmacyPage() {
                               "TOTAL",
                               "PAYMENT STATUS",
                               "NET AMOUNT",
+                              "IRD STATUS",
                               "ACTION",
                             ].map((h) => (
                               <th
@@ -4126,6 +4134,45 @@ export default function PharmacyPage() {
                                       </span>
                                     )}
                                   </div>
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  {purchase.paymentStatus === "paid" ? (
+                                    <div className="flex flex-col gap-1 items-start">
+                                      {purchase.irdSynced ? (
+                                        <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded font-medium border border-green-500/20">
+                                          ✅ Synced
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <span className="text-[10px] bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium border border-red-500/20">
+                                            ⚠️ Failed
+                                          </span>
+                                          <button
+                                            className="text-[10px] text-primary hover:underline"
+                                            onClick={async () => {
+                                                try {
+                                                  const { retryIrdSync } = await import("@/services/irdCbmsService");
+                                                  const res = await retryIrdSync(purchase.id, "pharmacy");
+                                                  if (res.success) {
+                                                    toast.success("IRD Sync successful!");
+                                                  } else {
+                                                    toast.error("IRD Sync failed: " + res.message);
+                                                  }
+                                                } catch (e) {
+                                                  toast.error("Error during retry sync");
+                                                }
+                                              }}
+                                            >
+                                            Retry Sync
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-text-muted/60">
+                                      ➖ N/A
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-3 py-2.5">
                                   <div className="flex items-center gap-1.5">
@@ -7150,15 +7197,10 @@ export default function PharmacyPage() {
                                 required
                                 items={
                                   item.type === "medicine"
-                                    ? medicines.map((m) => {
-                                      const stock = medicineStocks[m.id] || 0;
-                                      const isOutOfStock = stock <= 0;
-
-                                      return {
+                                    ? medicines.map((m) => ({
                                         id: m.id,
-                                        primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}${isOutOfStock ? " (Out of Stock)" : ""}`,
-                                      };
-                                    })
+                                        primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
+                                      }))
                                     : items.map((i) => ({
                                       id: i.id,
                                       primary: i.name,

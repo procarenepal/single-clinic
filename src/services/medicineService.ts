@@ -247,6 +247,9 @@ export const medicineService = {
       }
 
       const constraints: any[] = [];
+      if (clinicId) {
+        constraints.push(where("clinicId", "==", clinicId));
+      }
       if (typeof isActive === "boolean") {
         constraints.push(where("isActive", "==", isActive));
       }
@@ -725,6 +728,7 @@ export const medicineService = {
     clinicId: string,
     medicineIds: string[],
     branchId?: string,
+    forceRefresh: boolean = false,
   ): Promise<
     { medicineId: string; currentStock: number; schemeStock: number }[]
   > {
@@ -741,7 +745,7 @@ export const medicineService = {
       }
       const cacheKey = `cache_stock_${clinicId}_${branchId}_${hash}`;
 
-      if (typeof window !== "undefined") {
+      if (!forceRefresh && typeof window !== "undefined") {
         const cached = sessionStorage.getItem(cacheKey);
         if (cached) {
           const { data, timestamp } = JSON.parse(cached);

@@ -1311,7 +1311,7 @@ export default function PurchaseDetailPage() {
       ${headerHTML}
     
     <div class="document-title">
-      <h2>Invoice</h2>
+      <h2>TAX INVOICE</h2>
     </div>
 
     <div class="invoice-info-section">

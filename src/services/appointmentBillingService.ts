@@ -683,6 +683,43 @@ export const appointmentBillingService = {
         finalizedBy,
         finalizedAt: new Date(),
       });
+
+      // Hook IRD Sync
+      const billing = await this.getBillingById(id);
+      if (billing) {
+        try {
+          const { clinicSettingsService } = await import("./clinicSettingsService");
+          const { clinicService } = await import("./clinicService");
+          const { syncInvoiceToIRD } = await import("./irdCbmsService");
+
+          const clinicSettings = await clinicSettingsService.getClinicSettings(billing.clinicId);
+          const clinic = await clinicService.getClinicById(billing.clinicId);
+
+          if (clinicSettings && clinic && clinicSettings.irdEnabled) {
+             const result = await syncInvoiceToIRD({
+               clinicSettings,
+               clinic,
+               invoiceData: {
+                 buyerName: billing.patientName,
+                 buyerPan: "", // Optional for simple patient appointments
+                 invoiceNumber: billing.invoiceNumber,
+                 invoiceDate: billing.invoiceDate,
+                 totalAmount: billing.totalAmount,
+                 taxAmount: billing.taxAmount || 0,
+                 isTaxEnabled: billing.taxPercentage > 0,
+               }
+             });
+
+             await this.updateBilling(id, {
+               irdSynced: result.success,
+               irdSyncDate: new Date(),
+               cbmsResponseCode: result.responseCode
+             });
+          }
+        } catch (irdError) {
+          console.error("Failed to sync invoice to IRD:", irdError);
+        }
+      }
     } catch (error) {
       console.error("Error finalizing invoice:", error);
       throw error;

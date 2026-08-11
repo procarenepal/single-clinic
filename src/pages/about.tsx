@@ -299,12 +299,12 @@ export default function AboutPage() {
       </section>
 
       {/* Terminal CTA */}
-      <section className="py-24 bg-[rgb(var(--color-text))] text-[rgb(var(--color-bg))] px-4 relative overflow-hidden">
-        <div className="max-w-4xl mx-auto text-center relative z-10">
-          <h2 className="text-4xl font-bold mb-8 tracking-tight">
+      <section className="py-24 relative overflow-hidden bg-gradient-to-br from-[rgb(var(--color-bg))] via-[rgb(var(--color-bg))] to-[rgba(var(--color-primary),0.1)] border-t border-[rgba(var(--color-border))]">
+        <div className="max-w-4xl mx-auto text-center relative z-10 px-4">
+          <h2 className="text-4xl font-extrabold mb-6 tracking-tight text-[rgb(var(--color-text))]">
             Begin Your Glow Journey
           </h2>
-          <p className="text-[rgb(var(--color-bg))] opacity-70 text-lg mb-12 font-medium leading-relaxed max-w-2xl mx-auto">
+          <p className="text-[rgb(var(--color-text-muted))] text-lg mb-12 font-medium leading-relaxed max-w-2xl mx-auto">
             Book your comprehensive digital skin analysis and experience the
             standard of authentic Korean clinical care.
           </p>

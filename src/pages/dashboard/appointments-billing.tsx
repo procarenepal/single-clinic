@@ -8,6 +8,7 @@ import type { Branch } from "@/types/models";
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   IoReceiptOutline,
   IoAddOutline,
@@ -270,17 +271,15 @@ function Toggle({
   return (
     <label className="flex items-center gap-2 cursor-pointer select-none">
       <div
-        className={`relative inline-flex items-center w-10 h-[22px] rounded-full transition-colors duration-200 ease-in-out ${
-          checked
+        className={`relative inline-flex items-center w-10 h-[22px] rounded-full transition-colors duration-200 ease-in-out ${checked
             ? "bg-primary border border-primary"
             : "bg-gray-200 border border-gray-300 dark:bg-gray-600 dark:border-gray-500"
-        }`}
+          }`}
         onClick={() => onChange(!checked)}
       >
         <div
-          className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${
-            checked ? "translate-x-[18px]" : "translate-x-0"
-          }`}
+          className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${checked ? "translate-x-[18px]" : "translate-x-0"
+            }`}
         />
       </div>
       <span className="text-[12.5px] text-text-main">{label}</span>
@@ -969,18 +968,18 @@ export default function AppointmentBillingPage() {
 
   const filteredBillings = searchQuery.trim()
     ? billings.filter((b) => {
-        const patientName =
-          b.patientName === "Unknown Patient" || !b.patientName
-            ? patients.find((p) => p.id === b.patientId)?.name ||
-              b.patientName ||
-              "Unknown Patient"
-            : b.patientName;
+      const patientName =
+        b.patientName === "Unknown Patient" || !b.patientName
+          ? patients.find((p) => p.id === b.patientId)?.name ||
+          b.patientName ||
+          "Unknown Patient"
+          : b.patientName;
 
-        return (
-          patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-      })
+      return (
+        patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    })
     : billings;
 
   const totalPages = Math.ceil(filteredBillings.length / itemsPerPage) || 1;
@@ -1639,6 +1638,7 @@ export default function AppointmentBillingPage() {
                           "AMOUNT",
                           "STATUS",
                           "PAYMENT",
+                          "IRD STATUS",
                           "ACTIONS",
                         ].map((h) => (
                           <th
@@ -1661,11 +1661,11 @@ export default function AppointmentBillingPage() {
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                             {b.patientName === "Unknown Patient" ||
-                            !b.patientName
+                              !b.patientName
                               ? patients.find((p) => p.id === b.patientId)
-                                  ?.name ||
-                                b.patientName ||
-                                "Unknown Patient"
+                                ?.name ||
+                              b.patientName ||
+                              "Unknown Patient"
                               : b.patientName}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px]">
@@ -1676,10 +1676,10 @@ export default function AppointmentBillingPage() {
                                   b.doctorId && b.doctorId !== "unassigned"
                                     ? b.doctorId
                                     : b.items?.find(
-                                        (i) =>
-                                          i.doctorId &&
-                                          i.doctorId !== "unassigned",
-                                      )?.doctorId;
+                                      (i) =>
+                                        i.doctorId &&
+                                        i.doctorId !== "unassigned",
+                                    )?.doctorId;
 
                                 if (docId) {
                                   const foundDoc = doctors.find(
@@ -1735,12 +1735,12 @@ export default function AppointmentBillingPage() {
                                 new Set(
                                   b.items
                                     ? b.items
-                                        .filter(
-                                          (i) =>
-                                            i.doctorId &&
-                                            i.doctorId !== b.doctorId,
-                                        )
-                                        .map((i) => i.doctorName)
+                                      .filter(
+                                        (i) =>
+                                          i.doctorId &&
+                                          i.doctorId !== b.doctorId,
+                                      )
+                                      .map((i) => i.doctorName)
                                     : [],
                                 ),
                               );
@@ -1782,6 +1782,45 @@ export default function AppointmentBillingPage() {
                                 </span>
                               )}
                             </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {b.status === "finalized" ? (
+                              <div className="flex flex-col gap-1 items-start">
+                                {b.irdSynced ? (
+                                  <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded font-medium border border-green-500/20">
+                                    ✅ Synced
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-[10px] bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium border border-red-500/20">
+                                      ⚠️ Failed
+                                    </span>
+                                    <button
+                                      className="text-[10px] text-primary hover:underline"
+                                      onClick={async () => {
+                                        try {
+                                          const { retryIrdSync } = await import("@/services/irdCbmsService");
+                                          const res = await retryIrdSync(b.id, "appointment");
+                                          if (res.success) {
+                                            toast.success("IRD Sync successful!");
+                                          } else {
+                                            toast.error("IRD Sync failed: " + res.message);
+                                          }
+                                        } catch (e) {
+                                          toast.error("Error during retry sync");
+                                        }
+                                      }}
+                                    >
+                                      Retry Sync
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-text-muted/60">
+                                ➖ N/A
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1.5">
@@ -2560,15 +2599,15 @@ export default function AppointmentBillingPage() {
             </div>
             {availableMethods.find((m) => m.key === paymentForm.method)
               ?.requiresReference && (
-              <FlatInput
-                required
-                label="Reference ID"
-                value={paymentForm.reference}
-                onChange={(v) =>
-                  setPaymentForm((p) => ({ ...p, reference: v }))
-                }
-              />
-            )}
+                <FlatInput
+                  required
+                  label="Reference ID"
+                  value={paymentForm.reference}
+                  onChange={(v) =>
+                    setPaymentForm((p) => ({ ...p, reference: v }))
+                  }
+                />
+              )}
             <FlatInput
               label="Notes"
               value={paymentForm.notes}

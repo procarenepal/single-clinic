@@ -46,7 +46,7 @@ import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
-import { sendCheckInSMS } from "@/services/sendMessageService";
+import { sendCheckInSMS, sendConfirmedSMS } from "@/services/sendMessageService";
 import {
   Appointment,
   Patient,
@@ -380,17 +380,49 @@ export default function AppointmentsPage() {
     };
   }, [clinicId, currentDoctorId, effectiveBranchId, isClinicAdmin, isDoctorResolved]);
 
+  // Refetch patients if a new appointment comes in with an unknown patient ID
+  const [attemptedMissingPatientIds, setAttemptedMissingPatientIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!clinicId || patients.length === 0 || appointments.length === 0) return;
+    
+    const missingPatientIds = appointments
+      .map(appt => appt.patientId)
+      .filter(id => !patients.some(p => p.id === id))
+      .filter(id => !attemptedMissingPatientIds.has(id));
+
+    if (missingPatientIds.length > 0) {
+      // Mark as attempted to prevent infinite loops if patient is actually deleted
+      setAttemptedMissingPatientIds(prev => new Set([...prev, ...missingPatientIds]));
+      
+      // Fetch specifically the missing patients to bypass local list caches
+      Promise.all(missingPatientIds.map(id => patientService.getPatientById(id)))
+        .then(newPatients => {
+          const validNewPatients = newPatients.filter(Boolean) as Patient[];
+          if (validNewPatients.length > 0) {
+            setPatients(prev => [...prev, ...validNewPatients]);
+          }
+        })
+        .catch(err => console.error("Error fetching missing patients:", err));
+    }
+  }, [appointments, clinicId, patients, attemptedMissingPatientIds]);
+
   const getPatientNameById = (patientId: string) =>
     patients.find((p) => p.id === patientId)?.name || "Unknown Patient";
   const getPatientRegNumberById = (patientId: string) =>
     patients.find((p) => p.id === patientId)?.regNumber || "N/A";
-  const getDoctorNameById = (doctorId: string) =>
-    doctors.find((d) => d.id === doctorId)?.name || "Unknown Doctor";
-  const getDoctorSpecialityById = (doctorId: string) =>
-    doctors.find((d) => d.id === doctorId)?.speciality || "Unknown Speciality";
-  const getAppointmentTypeNameById = (appointmentTypeId: string) =>
-    appointmentTypes.find((at) => at.id === appointmentTypeId)?.name ||
-    "General";
+  const getDoctorNameById = (doctorId: string) => {
+    if (!doctorId || doctorId === "unknown") return "Unassigned";
+    return doctors.find((d) => d.id === doctorId)?.name || "Unknown Doctor";
+  };
+  const getDoctorSpecialityById = (doctorId: string) => {
+    if (!doctorId || doctorId === "unknown") return "Pending Assignment";
+    return doctors.find((d) => d.id === doctorId)?.speciality || "Unknown Speciality";
+  };
+  const getAppointmentTypeNameById = (appointmentTypeId: string) => {
+    if (!appointmentTypeId || appointmentTypeId === "unknown") return "General Consultation";
+    return appointmentTypes.find((at) => at.id === appointmentTypeId)?.name || "General";
+  };
 
   const formatTimeTo12Hour = (time24: string): string => {
     if (!time24) return "Time not set";
@@ -455,12 +487,12 @@ export default function AppointmentsPage() {
       const appt = appointments.find((a) => a.id === appointmentId);
 
       if (appt && newStatus === "confirmed") {
-        sendCheckInSMS(
+        sendConfirmedSMS(
           appt.patientId,
           appt.clinicId || clinicId || "standalone",
           appointmentId,
           appt.branchId || branchId || undefined,
-        ).catch((err) => console.error("Auto check-in SMS failed:", err));
+        ).catch((err) => console.error("Auto confirmation SMS failed:", err));
       }
 
       addToast({
@@ -637,7 +669,7 @@ export default function AppointmentsPage() {
                     </div>
                     <div>
                       <p className="text-[13px] font-medium text-text-main leading-none mb-1">
-                        Dr. {doctorName}
+                        {doctorName === "Unassigned" ? "Unassigned" : `Dr. ${doctorName}`}
                       </p>
                       <p className="text-[11.5px] text-text-muted">
                         {getDoctorSpecialityById(appointment.doctorId)}

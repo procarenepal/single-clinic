@@ -180,7 +180,7 @@ function CustomInput({
 export default function EditAppointmentPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, branchId } = useAuthContext();
+  const { clinicId, currentUser, userData, branchId, isSystemOwner } = useAuthContext();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -244,8 +244,8 @@ export default function EditAppointmentPage() {
           return;
         }
 
-        // Check if appointment belongs to this clinic
-        if (appointmentData.clinicId !== clinicId) {
+        // Check if appointment belongs to this clinic (system owners can bypass)
+        if (appointmentData.clinicId !== clinicId && !isSystemOwner()) {
           setError("Appointment not found");
 
           return;

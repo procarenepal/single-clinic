@@ -1730,8 +1730,8 @@ export default function MedicinesTab({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <button
           className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "expired"
-              ? "bg-rose-500/10 border-rose-500/50 shadow-md shadow-rose-500/5"
-              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-rose-500/30"
+            ? "bg-rose-500/10 border-rose-500/50 shadow-md shadow-rose-500/5"
+            : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-rose-500/30"
             }`}
           type="button"
           onClick={() =>
@@ -1751,8 +1751,8 @@ export default function MedicinesTab({
             </div>
             <span
               className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${expiryStats.expired > 0
-                  ? "bg-rose-500 text-white"
-                  : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+                ? "bg-rose-500 text-white"
+                : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
                 }`}
             >
               {expiryStats.expired} Items
@@ -1765,8 +1765,8 @@ export default function MedicinesTab({
 
         <button
           className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "urgent"
-              ? "bg-amber-500/10 border-amber-500/50 shadow-md shadow-amber-500/5"
-              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-amber-500/30"
+            ? "bg-amber-500/10 border-amber-500/50 shadow-md shadow-amber-500/5"
+            : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-amber-500/30"
             }`}
           type="button"
           onClick={() =>
@@ -1784,8 +1784,8 @@ export default function MedicinesTab({
             </div>
             <span
               className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${expiryStats.urgent > 0
-                  ? "bg-amber-500 text-white"
-                  : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+                ? "bg-amber-500 text-white"
+                : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
                 }`}
             >
               {expiryStats.urgent} Items
@@ -1798,8 +1798,8 @@ export default function MedicinesTab({
 
         <button
           className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "warning"
-              ? "bg-primary/10 border-primary/50 shadow-md shadow-primary/5"
-              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-primary/30"
+            ? "bg-primary/10 border-primary/50 shadow-md shadow-primary/5"
+            : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-primary/30"
             }`}
           type="button"
           onClick={() =>
@@ -1819,8 +1819,8 @@ export default function MedicinesTab({
             </div>
             <span
               className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${activeFilterType === "warning"
-                  ? "bg-primary text-white"
-                  : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+                ? "bg-primary text-white"
+                : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
                 }`}
             >
               {expiryStats.warning} Items
@@ -1833,8 +1833,8 @@ export default function MedicinesTab({
 
         <button
           className={`px-3 py-2 rounded-xl border transition-all text-left flex flex-col justify-center h-[68px] ${activeFilterType === "lowStock"
-              ? "bg-teal-500/10 border-teal-500/50 shadow-md shadow-teal-500/5"
-              : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-teal-500/30"
+            ? "bg-teal-500/10 border-teal-500/50 shadow-md shadow-teal-500/5"
+            : "bg-[rgb(var(--color-surface-2))/0.4] border-[rgb(var(--color-border))] hover:border-teal-500/30"
             }`}
           type="button"
           onClick={() =>
@@ -1854,8 +1854,8 @@ export default function MedicinesTab({
             </div>
             <span
               className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full ${activeFilterType === "lowStock"
-                  ? "bg-teal-500 text-white"
-                  : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
+                ? "bg-teal-500 text-white"
+                : "bg-[rgb(var(--color-surface-3))] text-[rgb(var(--color-text-muted))]"
                 }`}
             >
               {expiryStats.lowStock} Items
@@ -1901,10 +1901,10 @@ export default function MedicinesTab({
         <div className="flex items-center gap-2">
           <span
             className={`clarity-badge inline-flex items-center px-2 py-0.5 text-[11px] rounded ${filterType === "lowStock"
-                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                : filterType === "expiring"
-                  ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
-                  : "bg-teal-50 text-teal-700 border border-teal-200"
+              ? "bg-amber-50 text-amber-700 border border-amber-200"
+              : filterType === "expiring"
+                ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                : "bg-teal-50 text-teal-700 border border-teal-200"
               }`}
           >
             {filterType === "lowStock"
@@ -1936,10 +1936,10 @@ export default function MedicinesTab({
             {filterType && (
               <span
                 className={`ml-2 inline-flex px-2 py-0.5 rounded text-[11.5px] font-medium ${filterType === "lowStock"
-                    ? "bg-amber-50 text-amber-700 border border-amber-200"
-                    : filterType === "expiring"
-                      ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
-                      : "bg-teal-50 text-teal-700 border border-teal-200"
+                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                  : filterType === "expiring"
+                    ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                    : "bg-teal-50 text-teal-700 border border-teal-200"
                   }`}
               >
                 {filterType === "lowStock"
@@ -2180,8 +2180,8 @@ export default function MedicinesTab({
                       <td className="px-5 py-3">
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${medicine.isActive
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                              : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                             }`}
                         >
                           {medicine.isActive ? (
@@ -2384,8 +2384,8 @@ export default function MedicinesTab({
                           </button>
                           <button
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-semibold transition-colors ${medicine.isActive
-                                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
-                                : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                              ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
                               }`}
                             title={
                               medicine.isActive ? "Deactivate" : "Activate"
