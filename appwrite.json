@@ -89,6 +89,23 @@
                 "APPWRITE_PROJECT_ID": "YOUR_PROJECT_ID",
                 "APPWRITE_API_KEY": "YOUR_APPWRITE_API_KEY"
             }
+        },
+        {
+            "$id": "ird-proxy",
+            "execute": [],
+            "name": "ird-proxy",
+            "enabled": true,
+            "logging": true,
+            "runtime": "node-18.0",
+            "scopes": [],
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "entrypoint": "src/main.js",
+            "commands": "",
+            "specification": "s-1vcpu-512mb",
+            "path": "functions/ird-proxy",
+            "variables": {}
         }
     ],
     "databases": [

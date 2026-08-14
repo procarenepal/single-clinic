@@ -153,28 +153,35 @@ export const syncInvoiceToIRD = async ({
     }
     // --------------------------
 
-    const response = await axios.post(endpoint, payload, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      timeout: 10000, // 10 seconds timeout for CBMS
-    });
+    // --- PROXY VIA FIREBASE FUNCTIONS ---
+    const functionsUrl = import.meta.env.VITE_FIREBASE_FUNCTIONS_URL || `https://us-central1-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
+    const proxyPayload = {
+      endpoint,
+      payload
+    };
 
-    // IRD returns success typically with code 200
-    const responseCode = response.data?.ResponseCode || response.status;
+    const execution = await axios.post(`${functionsUrl}/irdProxy`, proxyPayload);
+
+    if (execution.status !== 200 || !execution.data.success) {
+      throw new Error(execution.data?.message || execution.data?.error || "Proxy failed to connect to IRD");
+    }
+
+    const response = execution.data;
+    const responseData = response.data;
+    const responseCode = responseData?.ResponseCode || response.status;
     const isSuccess = responseCode === 200 || responseCode === "200";
 
     return {
       success: isSuccess,
       responseCode: String(responseCode),
-      message: response.data?.Message || "Success",
+      message: responseData?.Message || "Success",
     };
   } catch (error: any) {
     console.error("Error syncing to IRD:", error);
     return {
       success: false,
       responseCode: error.response?.status ? String(error.response.status) : "500",
-      message: error.response?.data?.Message || error.message || "Unknown network error",
+      message: error.message || "Unknown network error",
     };
   }
 };

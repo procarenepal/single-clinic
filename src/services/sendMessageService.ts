@@ -1475,37 +1475,19 @@ export const smsService = {
         return false;
       }
 
-      // Import Appwrite client here to avoid circular dependencies
-      const { Client, Functions } = await import("appwrite");
+      // Import smsTestService here to avoid circular dependencies
+      const { smsTestService } = await import("./smsTestService");
 
-      const client = new Client()
-        .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
-        .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
-
-      const functions = new Functions(client);
-
-      // Schedule the SMS using the sms-tester function
-      const response = await functions.createExecution(
-        "sms-tester",
-        JSON.stringify({
-          action: "schedule_test",
-          phoneNumber: phoneNumber,
-          message: message,
-          scheduledTime: scheduledTime,
-        }),
-        false,
-        "POST",
+      // Schedule the SMS using our Firebase-backed test service
+      const response = await smsTestService.scheduleTest(
+        phoneNumber,
+        message,
+        scheduledTime
       );
 
-      if (response.status === "completed") {
-        const result = JSON.parse(response.responseBody);
-
-        return result.success;
-      }
-
-      return false;
+      return response.success;
     } catch (error) {
-      console.error("Error scheduling SMS via Appwrite:", error);
+      console.error("Error scheduling SMS via Firebase:", error);
 
       return false;
     }
@@ -1605,37 +1587,19 @@ export const smsService = {
         return false;
       }
 
-      // Import Appwrite client here to avoid circular dependencies
-      const { Client, Functions } = await import("appwrite");
+      // Import smsTestService here to avoid circular dependencies
+      const { smsTestService } = await import("./smsTestService");
 
-      const client = new Client()
-        .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
-        .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
-
-      const functions = new Functions(client);
-
-      // Schedule the SMS using the sms-tester function
-      const response = await functions.createExecution(
-        "sms-tester",
-        JSON.stringify({
-          action: "schedule_test",
-          phoneNumber: phoneNumber,
-          message: message,
-          scheduledTime: scheduledTime,
-        }),
-        false,
-        "POST",
+      // Schedule the SMS using our Firebase-backed test service
+      const response = await smsTestService.scheduleTest(
+        phoneNumber,
+        message,
+        scheduledTime
       );
 
-      if (response.status === "completed") {
-        const result = JSON.parse(response.responseBody);
-
-        return result.success;
-      }
-
-      return false;
+      return response.success;
     } catch (error) {
-      console.error("Error scheduling doctor SMS via Appwrite:", error);
+      console.error("Error scheduling doctor SMS via Firebase:", error);
 
       return false;
     }

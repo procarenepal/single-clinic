@@ -7,6 +7,7 @@ import {
 
 import { PathologyBilling, AppointmentBilling } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
+import { numberToWords } from "./numberToWords";
 
 export type PrintFormat =
   | "A4"
@@ -198,7 +199,7 @@ export const generateInvoiceHTML = (
     
     <div class="content">
       <div class="document-title">
-        <h2>TAX INVOICE</h2>
+        <h2>कर बिजक (TAX INVOICE)</h2>
         <div class="document-info">
           <span># ${billing.invoiceNumber}</span>
           <span>Date: ${new Date(billing.invoiceDate).toLocaleDateString()}</span>
@@ -248,11 +249,23 @@ export const generateInvoiceHTML = (
           </tr>
         </table>
       </div>
+      
+      <div style="margin-top: 10px; font-size: ${isThermal ? "10px" : "12px"}; color: #1e293b;">
+        <strong>In words:</strong> Rupees ${numberToWords(billing.totalAmount || 0)} Only
+      </div>
+
+      <div style="margin-top: ${isThermal ? "20px" : "40px"}; display: flex; justify-content: space-between; font-size: ${isThermal ? "10px" : "12px"}; color: #334155;">
+        <div>
+          <p style="margin: 0;">Prepared By</p>
+          <p style="margin: 5px 0 0 0;">___________________</p>
+        </div>
+      </div>
     </div>
     
     ${footerHTML ||
     `
     <div class="footer">
+      <p style="font-weight: bold;">Computerized Billing System</p>
       <p>${layoutConfig?.showFooter ? (layoutConfig.pathologyFooterText || layoutConfig.footerText || "Thank you for choosing us") : "Thank you for choosing us"}</p>
       <p>${new Date().toLocaleString()}</p>
     </div>
@@ -552,7 +565,7 @@ export const generateAppointmentInvoiceHTML = (
     
     <div class="content">
       <div class="document-title">
-        <h2>TAX INVOICE</h2>
+        <h2>कर बिजक (TAX INVOICE)</h2>
         <div class="document-info" style="display: flex; justify-content: space-between; margin-top: 10px;">
           <span># ${invoice.invoiceNumber}</span>
           <span>Date: ${formatDate(invoice.invoiceDate)}</span>
@@ -609,6 +622,17 @@ export const generateAppointmentInvoiceHTML = (
           </tr>
         </table>
       </div>
+      
+      <div style="margin-top: 10px; font-size: ${isThermal ? "10px" : "12px"}; color: #1e293b;">
+        <strong>In words:</strong> Rupees ${numberToWords(invoice.totalAmount || 0)} Only
+      </div>
+
+      <div style="margin-top: ${isThermal ? "20px" : "40px"}; display: flex; justify-content: space-between; font-size: ${isThermal ? "10px" : "12px"}; color: #334155;">
+        <div>
+          <p style="margin: 0;">Prepared By</p>
+          <p style="margin: 5px 0 0 0;">___________________</p>
+        </div>
+      </div>
       ${isThermal ? cliniciansHtml : ""}
     </div>
     
@@ -616,6 +640,7 @@ export const generateAppointmentInvoiceHTML = (
       ? footerHTML
       : `
     <div style="margin-top: 15px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #eee; padding-top: 5px;">
+      <p style="font-weight: bold; margin: 2px 0;">Computerized Billing System</p>
       <p>${layoutConfig?.showFooter ? (layoutConfig.appointmentFooterText || layoutConfig.footerText || "Thank you for choosing us") : "Thank you for choosing us"}</p>
       ${isThermal ? `<p>${new Date().toLocaleString()}</p>` : ""}
     </div>

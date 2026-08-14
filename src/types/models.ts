@@ -497,7 +497,7 @@ export interface MedicalDocument {
   patientId: string;
   clinicId: string;
   note: string; // Simple note/description
-  file?: string; // Single Appwrite file ID
+  file?: string; // Firebase Storage File URL
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -509,7 +509,7 @@ export interface XrayRecord {
   patientId: string;
   clinicId: string;
   note: string; // Simple note/description
-  file?: string; // Single Appwrite file ID for X-ray image
+  file?: string; // Firebase Storage File URL for X-ray image
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -736,6 +736,11 @@ export interface ClinicSettings {
   requireBatchTracking: boolean;
   requireExpiryTracking: boolean;
   autoGenerateBarcode: boolean;
+
+  irdEnabled?: boolean;
+  irdApiUrl?: string;
+  irdApiUsername?: string;
+  irdApiPassword?: string;
 
   createdAt: Date;
   updatedAt: Date;

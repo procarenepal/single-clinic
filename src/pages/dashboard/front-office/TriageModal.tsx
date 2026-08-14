@@ -23,6 +23,8 @@ interface TriageModalProps {
   isOpen: boolean;
   onClose: () => void;
   appointment: any;
+  hasDoctor?: boolean;
+  hasExpert?: boolean;
   patientName: string;
   vitals: VitalsState;
   setVitals: React.Dispatch<React.SetStateAction<VitalsState>>;
@@ -42,6 +44,8 @@ export const TriageModal: React.FC<TriageModalProps> = ({
   setVitals,
   onSave,
   saving,
+  hasDoctor,
+  hasExpert,
 }) => {
   if (!isOpen || !appointment) return null;
 
@@ -285,8 +289,9 @@ export const TriageModal: React.FC<TriageModalProps> = ({
                 {saving ? "Saving..." : "Save Vitals Only"}
               </button>
 
-              {appointment?.doctorId &&
-                appointment.doctorId !== "unassigned" && (
+              {(hasDoctor ??
+                (appointment?.doctorId &&
+                  appointment.doctorId !== "unassigned")) && (
                   <button
                     className="h-9 w-full md:w-auto px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 transition-colors whitespace-nowrap"
                     disabled={saving}
@@ -296,8 +301,9 @@ export const TriageModal: React.FC<TriageModalProps> = ({
                     Save & Send to Doctor
                   </button>
                 )}
-              {appointment?.assignedExpertId &&
-                appointment.assignedExpertId !== "unassigned" && (
+              {(hasExpert ??
+                (appointment?.assignedExpertId &&
+                  appointment.assignedExpertId !== "unassigned")) && (
                   <button
                     className="h-9 w-full md:w-auto px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 transition-colors whitespace-nowrap"
                     disabled={saving}
@@ -307,10 +313,16 @@ export const TriageModal: React.FC<TriageModalProps> = ({
                     Save & Send to Expert
                   </button>
                 )}
-              {(!appointment?.doctorId ||
-                appointment.doctorId === "unassigned") &&
-                (!appointment?.assignedExpertId ||
-                  appointment.assignedExpertId === "unassigned") && (
+              {!(
+                hasDoctor ??
+                (appointment?.doctorId &&
+                  appointment.doctorId !== "unassigned")
+              ) &&
+                !(
+                  hasExpert ??
+                  (appointment?.assignedExpertId &&
+                    appointment.assignedExpertId !== "unassigned")
+                ) && (
                   <button
                     className="h-9 w-full md:w-auto px-4 rounded bg-primary text-white text-[12.5px] font-medium hover:bg-primary/95 transition-colors whitespace-nowrap"
                     disabled={saving}

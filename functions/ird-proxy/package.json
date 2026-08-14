@@ -1,0 +1,8 @@
+{
+  "name": "ird-proxy",
+  "version": "1.0.0",
+  "description": "Appwrite function to proxy requests to Nepal IRD CBMS API",
+  "main": "src/main.js",
+  "type": "module",
+  "dependencies": {}
+}

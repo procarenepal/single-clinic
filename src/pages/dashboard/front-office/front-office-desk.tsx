@@ -2282,10 +2282,18 @@ export default function FrontOfficeDesk() {
   };
 
   const renderTriageModal = () => {
+    const patientAppts = selectedAppointment
+      ? appointments.filter((a) => a.patientId === selectedAppointment.patientId)
+      : [];
+    const hasDoctor = patientAppts.some((a) => a.doctorId && a.doctorId !== "unassigned");
+    const hasExpert = patientAppts.some((a) => a.assignedExpertId && a.assignedExpertId !== "unassigned");
+
     return (
       <TriageModal
         appointment={selectedAppointment}
         isOpen={isTriageModalOpen}
+        hasDoctor={hasDoctor}
+        hasExpert={hasExpert}
         patientName={
           selectedAppointment
             ? getPatientName(selectedAppointment.patientId)
@@ -3797,7 +3805,7 @@ export default function FrontOfficeDesk() {
           ? "Settle Consultation Bill"
           : "Settle Billing Invoice",
         icon: <IoCardOutline className="w-4 h-4" />,
-        colorClass: "bg-red-500 text-white hover:bg-red-600 animate-pulse",
+        colorClass: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
         onClick: () =>
           navigate(`/dashboard/appointments-billing/${consBill.id}`),
       };
@@ -3961,7 +3969,7 @@ export default function FrontOfficeDesk() {
           );
 
         return (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 animate-pulse whitespace-nowrap shrink-0">
+          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap shrink-0">
             {isOnlyCons
               ? "Consultation Fee Pending"
               : "Billing Invoice Pending"}

@@ -102,8 +102,8 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
 
           <form onSubmit={handleQuickIntakeSubmit}>
             <div className="p-4 sm:p-5 max-h-[calc(100vh-10rem)] overflow-y-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                {/* Left Column: Demographics & Intake Details */}
+              <div className="flex flex-col gap-4 sm:gap-6 max-w-4xl mx-auto">
+                {/* Demographics & Intake Details */}
                 <div className="space-y-4">
                   {/* Intake Mode Switcher */}
                   <div className="flex bg-surface-2 p-1 rounded-lg border border-border-base w-full mb-2">
@@ -313,14 +313,9 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                         patientSearchQuery.toLowerCase();
                                       const filteredPatients = patients.filter(
                                         (p) =>
-                                          p.name
-                                            .toLowerCase()
-                                            .includes(query) ||
-                                          (p.regNumber &&
-                                            p.regNumber
-                                              .toLowerCase()
-                                              .includes(query)) ||
-                                          p.mobile.includes(query),
+                                          (p.name && p.name.toLowerCase().includes(query)) ||
+                                          (p.regNumber && p.regNumber.toLowerCase().includes(query)) ||
+                                          (p.mobile && p.mobile.includes(query)),
                                       );
 
                                       if (filteredPatients.length === 0) {
@@ -503,7 +498,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       (row: any, idx: number) => (
                         <div
                           key={row.id}
-                          className="border border-border-base rounded p-3 bg-surface-2/30 relative mt-2"
+                          className="border border-border-base rounded p-2 bg-surface-2/30 relative mt-2"
                         >
                           {quickIntakeForm.clinicians.length > 1 && (
                             <button
@@ -815,7 +810,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                   )}
                 </div>
 
-                {/* Right Column: Polymorphic Referrals Panel */}
+                {/* Polymorphic Referrals Panel */}
                 <div className="space-y-4 flex flex-col justify-between">
                   <div className="space-y-3">
                     <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider border-b border-border-base pb-1">
