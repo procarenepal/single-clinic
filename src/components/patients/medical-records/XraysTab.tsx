@@ -45,7 +45,7 @@ function XrayFilePreview({
     const load = async () => {
       if (fileId) {
         try {
-          const url = MedicalRecordsService.getFileViewUrl(fileId);
+          const url = await MedicalRecordsService.getFileViewUrl(fileId);
           const img = fileName
             ? /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName)
             : true;
@@ -112,9 +112,9 @@ export default function XraysTab({
       day: "numeric",
     });
 
-  const handleDownload = (fileId: string) => {
+  const handleDownload = async (fileId: string) => {
     try {
-      const url = MedicalRecordsService.getFileDownloadUrl(fileId);
+      const url = await MedicalRecordsService.getFileDownloadUrl(fileId);
       const a = document.createElement("a");
 
       a.href = url;
@@ -127,9 +127,10 @@ export default function XraysTab({
     }
   };
 
-  const handleView = (fileId: string) => {
+  const handleView = async (fileId: string) => {
     try {
-      window.open(MedicalRecordsService.getFileViewUrl(fileId), "_blank");
+      const url = await MedicalRecordsService.getFileViewUrl(fileId);
+      window.open(url, "_blank");
     } catch (e) {
       console.error(e);
     }

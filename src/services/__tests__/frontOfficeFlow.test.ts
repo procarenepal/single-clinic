@@ -56,6 +56,12 @@ vi.mock("@/config/firebase", () => ({
   db: {},
 }));
 
+vi.mock("../api/billingApi", () => ({
+  billingApi: {
+    createInvoice: vi.fn().mockResolvedValue({ id: "mocked_doc_id" }),
+  },
+}));
+
 describe("Front Office Patient Journey (End-to-End Flow)", () => {
   beforeEach(() => {
     vi.clearAllMocks();

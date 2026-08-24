@@ -14,13 +14,14 @@ export interface Clinic {
   country?: string; // Added country
   logo?: string;
   panNumber?: string;
-  
+
   // IRD CBMS Integration Settings
   irdEnabled?: boolean;
+  irdEnvironment?: "mock" | "sandbox" | "live";
   irdApiUrl?: string; // Live or Test URL
   irdApiUsername?: string; // Taxpayer Portal Username
   irdApiPassword?: string; // Taxpayer Portal Password
-  
+
   description?: string;
   subscriptionStatus: "active" | "suspended" | "cancelled";
   subscriptionPlan: string;
@@ -205,6 +206,7 @@ export interface Patient {
   age: string | number;
   referredBy?: string;
   phone?: string;
+  patientPanVat?: string;
   picture?: string; // URL to the patient's picture
   doctorId: string; // ID of the assigned doctor
   assignedExpertId?: string; // ID of the assigned expert (optional)
@@ -738,6 +740,7 @@ export interface ClinicSettings {
   autoGenerateBarcode: boolean;
 
   irdEnabled?: boolean;
+  irdEnvironment?: "mock" | "sandbox" | "live";
   irdApiUrl?: string;
   irdApiUsername?: string;
   irdApiPassword?: string;
@@ -909,6 +912,7 @@ export interface MedicinePurchase {
   patientName?: string;
   patientPhone?: string;
   patientAddress?: string;
+  patientPanVat?: string;
   /**
    * Number of days the prescribed medicines are expected to last.
    * Used for dashboard reminders when the course is about to end.
@@ -922,6 +926,8 @@ export interface MedicinePurchase {
   irdSynced?: boolean;
   irdSyncDate?: Date;
   cbmsResponseCode?: string;
+
+  printCount?: number;
 
   createdBy: string;
   createdAt: Date;
@@ -1277,6 +1283,7 @@ export interface PharmacySettings {
   // Invoice Settings
   invoicePrefix?: string; // Prefix for purchase numbers (e.g., "PUR")
   nextInvoiceNumber: number; // Next invoice number sequence
+  currentFiscalYear?: string; // Current fiscal year for sequence reset
 
   createdAt: Date;
   updatedAt: Date;
@@ -1597,6 +1604,7 @@ export interface AppointmentBillingSettings {
   // Invoice Settings
   invoicePrefix: string; // Prefix for invoice numbers (e.g., "INV")
   nextInvoiceNumber: number; // Next invoice number sequence (shared across branches)
+  currentFiscalYear?: string; // Current fiscal year for sequence reset
 
   // Default Settings
   defaultDiscountType: "flat" | "percent";
@@ -1632,6 +1640,7 @@ export interface AppointmentBillingItem {
   discountType?: "flat" | "percent";
   discountValue?: number;
   discountAmount?: number;
+  isTaxable?: boolean; // Whether tax applies to this item
   amount: number; // (price * quantity) - discountAmount
 }
 
@@ -1645,6 +1654,7 @@ export interface AppointmentBilling {
   // Patient and Doctor Information
   patientId: string;
   patientName: string; // Denormalized for easy display
+  patientPanVat?: string;
   doctorId: string;
   doctorName: string; // Denormalized for easy display
   doctorType: "regular" | "visitor"; // Default: regular
@@ -1700,11 +1710,17 @@ export interface AppointmentBilling {
 
   // Metadata
   notes?: string; // General notes about the invoice
-  
+
   // IRD CBMS Tracking
   irdSynced?: boolean;
   irdSyncDate?: Date;
   cbmsResponseCode?: string;
+  javaInvoiceId?: number;
+
+  // Credit Note / Returns
+  isCreditNote?: boolean;
+  linkedInvoiceId?: string; // ID of the original invoice this credit note reverses
+  creditNoteReason?: string;
 
   createdAt: Date;
   updatedAt: Date;
@@ -1830,7 +1846,12 @@ export interface AuditLog {
   | "roles_assigned"
   | "roles_removed"
   | "validation_failed"
-  | "operation_failed";
+  | "operation_failed"
+  | "invoice_created"
+  | "payment_recorded"
+  | "ird_synced"
+  | "ird_sync_failed"
+  | "refund_issued";
   performedBy: string; // User ID who performed the action
   performedByEmail?: string; // User email for display
   performedByName?: string; // User name for display
@@ -2000,6 +2021,7 @@ export interface PathologyBillingSettings {
   // Invoice Settings
   invoicePrefix: string; // Prefix for invoice numbers (e.g., "PATH-INV")
   nextInvoiceNumber: number; // Next invoice number sequence (shared across branches)
+  currentFiscalYear?: string; // Current fiscal year for sequence reset
 
   // Default Settings
   defaultDiscountType: "flat" | "percent";
@@ -2056,6 +2078,7 @@ export interface PathologyBilling {
   // Patient Information (can be external/outsider)
   patientId?: string; // Reference to existing patient if available
   patientName: string; // Required - can be any name
+  patientPanVat?: string;
   patientEmail?: string;
   patientPhone?: string;
   patientAddress?: string;
@@ -2091,11 +2114,17 @@ export interface PathologyBilling {
 
   // Metadata
   notes?: string; // General notes about the invoice
+  printCount?: number; // Number of times the invoice has been printed
 
   // IRD CBMS Tracking
   irdSynced?: boolean;
   irdSyncDate?: Date;
   cbmsResponseCode?: string;
+
+  // Credit Note / Returns
+  isCreditNote?: boolean;
+  linkedInvoiceId?: string; // ID of the original invoice this credit note reverses
+  creditNoteReason?: string;
 
   // Robust Pathology Workflow Fields
   labReferenceNo?: string; // Internal Lab tracking ID

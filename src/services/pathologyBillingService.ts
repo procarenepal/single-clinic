@@ -10,6 +10,7 @@ import {
   where,
   Timestamp,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -246,24 +247,45 @@ export const pathologyBillingService = {
    */
   async generateInvoiceNumber(clinicId: string): Promise<string> {
     try {
+      const { getNepaliFiscalYear } = await import("./irdCbmsService");
+      const currentRealFiscalYear = getNepaliFiscalYear(new Date());
+
       const settingsRef = doc(
         db,
         PATHOLOGY_BILLING_SETTINGS_COLLECTION,
         clinicId,
       );
-      const settingsDoc = await getDoc(settingsRef);
 
-      if (!settingsDoc.exists()) {
-        throw new Error("Pathology billing settings not found for clinic");
-      }
+      const invoiceNumber = await runTransaction(db, async (transaction) => {
+        const settingsDoc = await transaction.get(settingsRef);
 
-      const settings = settingsDoc.data() as PathologyBillingSettings;
-      const invoiceNumber = `${settings.invoicePrefix}-${settings.nextInvoiceNumber.toString().padStart(4, "0")}`;
+        if (!settingsDoc.exists()) {
+          throw new Error("Pathology billing settings not found for clinic");
+        }
 
-      // Increment the next invoice number
-      await updateDoc(settingsRef, {
-        nextInvoiceNumber: increment(1),
-        updatedAt: Timestamp.now(),
+        const settings = settingsDoc.data() as PathologyBillingSettings;
+
+        let nextInvoiceNum = settings.nextInvoiceNumber || 1;
+        const updates: any = {
+          updatedAt: Timestamp.now(),
+        };
+
+        if (settings.currentFiscalYear !== currentRealFiscalYear) {
+          nextInvoiceNum = 1;
+          updates.currentFiscalYear = currentRealFiscalYear;
+          updates.nextInvoiceNumber = 2; // Next will be 2
+        } else {
+          updates.nextInvoiceNumber = nextInvoiceNum + 1;
+        }
+
+        // Format fiscal year from "2080.81" to "80/81"
+        const formattedFiscalYear = currentRealFiscalYear.substring(2).replace('.', '/');
+        const generatedInvoiceNumber = `${formattedFiscalYear}-${settings.invoicePrefix}-${nextInvoiceNum.toString().padStart(4, "0")}`;
+
+        // Increment the next invoice number atomically
+        transaction.update(settingsRef, updates);
+
+        return generatedInvoiceNumber;
       });
 
       return invoiceNumber;
@@ -326,6 +348,68 @@ export const pathologyBillingService = {
 
       console.log("Pathology billing created with ID:", docRef.id);
 
+      // Attempt Java backend sync asynchronously
+      try {
+        const { billingApi } = await import("./api/billingApi");
+        const { clinicSettingsService } = await import("./clinicSettingsService");
+        const { getNepaliFiscalYear } = await import("./irdCbmsService");
+
+        const clinicSettings = await clinicSettingsService.getClinicSettings(billingData.clinicId);
+
+        let irdSettings = {};
+        if (clinicSettings && clinicSettings.irdEnabled) {
+          const { clinicService } = await import("./clinicService");
+          const clinic = await clinicService.getClinicById(billingData.clinicId);
+          irdSettings = {
+            irdEnabled: true,
+            irdApiUrl: clinicSettings.irdApiUrl,
+            irdApiUsername: clinicSettings.irdApiUsername,
+            irdApiPassword: clinicSettings.irdApiPassword,
+            sellerPan: clinic?.panNumber || "",
+            fiscalYear: getNepaliFiscalYear(new Date()),
+          };
+        }
+
+        const taxPercentage = billingData.taxPercentage || 0;
+        const taxAmount = billingData.taxAmount || 0;
+        const totalAmount = billingData.totalAmount || 0;
+        let taxableAmount = 0;
+        let exemptAmount = 0;
+
+        if (taxPercentage > 0) {
+          taxableAmount = totalAmount - taxAmount;
+        } else {
+          exemptAmount = totalAmount;
+        }
+
+        const payload = {
+          firebasePatientId: billingData.patientId || "",
+          buyerName: billingData.patientName || "Cash Sales",
+          buyerPan: "",
+          totalAmount,
+          taxableAmount,
+          taxAmount,
+          exemptAmount,
+          ...irdSettings,
+          items: (billingData.items || []).map((item) => ({
+            itemName: item.testName || "Pathology Test",
+            quantity: 1,
+            rate: item.price || 0,
+            totalAmount: item.price || 0,
+            isTaxable: taxPercentage > 0,
+          })),
+        };
+
+        const result = await billingApi.createInvoice(payload);
+
+        if (result?.id) {
+          await this.updateBilling(docRef.id, { javaInvoiceId: result.id });
+          console.log("Pathology billing synced to Java backend with ID:", result.id);
+        }
+      } catch (javaError: any) {
+        console.warn("Java backend submission skipped or offline:", javaError.message || javaError);
+      }
+
       return docRef.id;
     } catch (error) {
       console.error("Error creating pathology billing:", error);
@@ -342,6 +426,28 @@ export const pathologyBillingService = {
   ): Promise<void> {
     try {
       const billingRef = doc(db, PATHOLOGY_BILLING_COLLECTION, id);
+
+      // IRD COMPLIANCE: Block financial field edits on finalized/synced invoices
+      const existing = await getDoc(billingRef);
+      if (existing.exists()) {
+        const existingData = existing.data() as PathologyBilling;
+        const isFinalized =
+          existingData.irdSynced ||
+          existingData.status === "paid" ||
+          existingData.status === "finalized";
+        const financialFieldsChanged =
+          ("totalAmount" in billingData && billingData.totalAmount !== existingData.totalAmount) ||
+          ("subtotal" in billingData && billingData.subtotal !== existingData.subtotal) ||
+          ("taxAmount" in billingData && billingData.taxAmount !== existingData.taxAmount) ||
+          ("discountAmount" in billingData && billingData.discountAmount !== existingData.discountAmount) ||
+          ("items" in billingData && JSON.stringify(billingData.items) !== JSON.stringify(existingData.items));
+
+        if (isFinalized && financialFieldsChanged) {
+          throw new Error(
+            "IRD Tax Compliance Error: Financial fields of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
+          );
+        }
+      }
 
       // Recursive function to remove undefined values from objects and arrays
       const cleanUndefined = (obj: any): any => {
@@ -492,39 +598,7 @@ export const pathologyBillingService = {
         finalizedAt: new Date(),
       });
 
-      // Hook IRD Sync
-      try {
-        const { clinicSettingsService } = await import("./clinicSettingsService");
-        const { clinicService } = await import("./clinicService");
-        const { syncInvoiceToIRD } = await import("./irdCbmsService");
-
-        const clinicSettings = await clinicSettingsService.getClinicSettings(billing.clinicId);
-        const clinic = await clinicService.getClinicById(billing.clinicId);
-
-        if (clinicSettings && clinic && clinicSettings.irdEnabled) {
-           const result = await syncInvoiceToIRD({
-             clinicSettings,
-             clinic,
-             invoiceData: {
-               buyerName: billing.patientName,
-               buyerPan: "", // Optional for simple patient pathology
-               invoiceNumber: billing.invoiceNumber,
-               invoiceDate: billing.invoiceDate,
-               totalAmount: billing.totalAmount,
-               taxAmount: billing.taxAmount || 0,
-               isTaxEnabled: billing.taxPercentage > 0,
-             }
-           });
-
-           await this.updateBilling(id, {
-             irdSynced: result.success,
-             irdSyncDate: new Date(),
-             cbmsResponseCode: result.responseCode
-           });
-        }
-      } catch (irdError) {
-        console.error("Failed to sync invoice to IRD:", irdError);
-      }
+      // Note: IRD Sync is now handled by the Java Backend upon creation.
 
       // Create commissions for referring sources
       if (billing.referringDoctors && billing.referringDoctors.length > 0) {
@@ -556,6 +630,115 @@ export const pathologyBillingService = {
       }
     } catch (error) {
       console.error("Error finalizing pathology invoice:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Issue a Credit Note (Sales Return) for a finalized/synced invoice
+   */
+  async issueCreditNote(originalBillingId: string, reason: string, createdBy: string): Promise<string> {
+    try {
+      const original = await this.getBillingById(originalBillingId);
+      if (!original) throw new Error("Original billing record not found");
+
+      if (!original.irdSynced) {
+        throw new Error("Can only issue Credit Notes for IRD-synced invoices. For unsynced invoices, simply edit or cancel them.");
+      }
+
+      // Generate negative items
+      const negativeItems = original.items.map(item => ({
+        ...item,
+        price: -Math.abs(item.price || 0),
+        amount: -Math.abs(item.amount),
+      }));
+
+      // Generate invoice number
+      const nextInvoiceNumber = await this.generateInvoiceNumber(original.clinicId);
+      const creditNoteInvoiceNumber = `CN-${nextInvoiceNumber}`;
+
+      const creditNoteData: Omit<PathologyBilling, "id" | "createdAt" | "updatedAt"> = {
+        ...original,
+        invoiceNumber: creditNoteInvoiceNumber,
+        invoiceDate: new Date(),
+        items: negativeItems,
+        
+        // Reverse amounts
+        subtotal: -Math.abs(original.subtotal),
+        discountAmount: -Math.abs(original.discountAmount),
+        taxAmount: -Math.abs(original.taxAmount),
+        totalAmount: -Math.abs(original.totalAmount),
+        
+        // Mark as paid since it's a refund
+        status: "finalized",
+        paymentStatus: "paid",
+        paidAmount: -Math.abs(original.totalAmount),
+        balanceAmount: 0,
+        
+        // Credit note links
+        isCreditNote: true,
+        linkedInvoiceId: original.id,
+        creditNoteReason: reason,
+        notes: `Credit Note for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
+        
+        // Reset sync status
+        irdSynced: false,
+        irdSyncDate: undefined,
+        cbmsResponseCode: undefined,
+        
+        createdBy,
+        finalizedBy: createdBy,
+        finalizedAt: new Date(),
+        
+        // Remove old payment history
+        paymentHistory: [],
+      };
+
+      const newCreditNoteId = await this.createBilling(creditNoteData);
+
+      // Trigger IRD CBMS Sync for Sales Return (Credit Note)
+      try {
+        const { clinicSettingsService } = await import("./clinicSettingsService");
+        const { clinicService } = await import("./clinicService");
+        const { syncInvoiceToIRD } = await import("./irdCbmsService");
+
+        const clinicSettings = await clinicSettingsService.getClinicSettings(original.clinicId);
+        const clinic = await clinicService.getClinicById(original.clinicId);
+
+        if (clinicSettings && clinic && clinicSettings.irdEnabled) {
+          const syncRes = await syncInvoiceToIRD({
+            clinicSettings,
+            clinic,
+            invoiceData: {
+              buyerName: original.patientName || "Cash Sales",
+              buyerPan: "",
+              invoiceNumber: creditNoteInvoiceNumber,
+              invoiceDate: new Date(),
+              totalAmount: Math.abs(original.totalAmount),
+              taxAmount: Math.abs(original.taxAmount || 0),
+              isTaxEnabled: (original.taxPercentage || 0) > 0,
+            },
+            isReturn: true,
+          });
+
+          await this.updateBilling(newCreditNoteId, {
+            irdSynced: syncRes.success,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: syncRes.responseCode,
+          });
+        }
+      } catch (irdErr) {
+        console.warn("Failed to sync Pathology Credit Note to IRD API:", irdErr);
+      }
+
+      // Update original invoice to note it has been reversed
+      await this.updateBilling(original.id, {
+        notes: (original.notes ? original.notes + '\n' : '') + `Reversed by Credit Note ${creditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
+      });
+
+      return newCreditNoteId;
+    } catch (error) {
+      console.error("Error issuing credit note:", error);
       throw error;
     }
   },

@@ -37,8 +37,7 @@ import { clinicTypeService } from "@/services/clinicTypeService";
 import { subscriptionService } from "@/services/subscriptionService";
 import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
-import { uploadImage } from "@/services/appwriteStorageService";
-import { storage, APPWRITE_BUCKET_ID } from "@/config/appwrite";
+import { uploadFileToFirebase } from "@/services/firebaseStorageService";
 
 // Types for better type safety
 interface FormData {
@@ -53,6 +52,7 @@ interface FormData {
   description: string;
   panNumber: string;
   irdEnabled: boolean;
+  irdEnvironment: "mock" | "sandbox" | "live";
   irdApiUrl: string;
   irdApiUsername: string;
   irdApiPassword: string;
@@ -147,6 +147,9 @@ const VALIDATION_RULES: Record<keyof FormData, ValidationRule> = {
   irdEnabled: {
     required: false,
   },
+  irdEnvironment: {
+    required: false,
+  },
   irdApiUrl: {
     required: false,
   },
@@ -187,6 +190,7 @@ export default function ClinicSettingsPage() {
     description: "",
     panNumber: "",
     irdEnabled: false,
+    irdEnvironment: "mock",
     irdApiUrl: "",
     irdApiUsername: "",
     irdApiPassword: "",
@@ -209,6 +213,7 @@ export default function ClinicSettingsPage() {
     description: "",
     panNumber: "",
     irdEnabled: false,
+    irdEnvironment: "mock",
     irdApiUrl: "",
     irdApiUsername: "",
     irdApiPassword: "",
@@ -385,6 +390,7 @@ export default function ClinicSettingsPage() {
           description: clinicData.description || "",
           panNumber: clinicData.panNumber || "",
           irdEnabled: clinicData.irdEnabled || false,
+          irdEnvironment: (clinicData.irdEnvironment as "mock" | "sandbox" | "live") || "mock",
           irdApiUrl: clinicData.irdApiUrl || "",
           irdApiUsername: clinicData.irdApiUsername || "",
           irdApiPassword: clinicData.irdApiPassword || "",
@@ -397,20 +403,7 @@ export default function ClinicSettingsPage() {
 
         // Get logo preview URL if logo exists
         if (clinicData.logo) {
-          if (clinicData.logo.startsWith("http")) {
-            setLogoPreview(clinicData.logo);
-          } else {
-            try {
-              const url = storage.getFileView(
-                APPWRITE_BUCKET_ID,
-                clinicData.logo,
-              );
-
-              setLogoPreview(url.toString());
-            } catch (err) {
-              console.error("Error getting logo preview:", err);
-            }
-          }
+          setLogoPreview(clinicData.logo);
         }
 
         // Clear any existing validation errors since we're loading fresh data
@@ -563,6 +556,7 @@ export default function ClinicSettingsPage() {
         description: formData.description.trim(),
         panNumber: formData.panNumber.trim(),
         irdEnabled: formData.irdEnabled,
+        irdEnvironment: formData.irdEnvironment,
         irdApiUrl: formData.irdApiUrl.trim(),
         irdApiUsername: formData.irdApiUsername.trim(),
         irdApiPassword: formData.irdApiPassword.trim(),
@@ -635,20 +629,18 @@ export default function ClinicSettingsPage() {
 
     setIsUploadingLogo(true);
     try {
-      // 1. Upload to Appwrite
-      const result = await uploadImage(
+      // 1. Upload to Firebase
+      const result = await uploadFileToFirebase(
         file,
-        `clinic-logo-${clinicId}-${Date.now()}`,
-        400,
-        400,
+        "clinic-logos"
       );
 
       // 2. Update Clinic Record in Firestore
-      await clinicService.updateClinic(clinicId, { logo: result.fileId });
+      await clinicService.updateClinic(clinicId, { logo: result.url });
 
       // 3. Update Local State
-      setLogoPreview(result.fileUrl);
-      setClinic((prev) => (prev ? { ...prev, logo: result.fileId } : null));
+      setLogoPreview(result.url);
+      setClinic((prev) => (prev ? { ...prev, logo: result.url } : null));
 
       addToast({
         title: "Logo updated",
@@ -1498,14 +1490,47 @@ export default function ClinicSettingsPage() {
 
               {formData.irdEnabled && (
                 <>
+                  {/* IRD Environment Selector */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-[rgb(var(--color-text))] mb-1.5">
-                      IRD API URL
+                      IRD Environment
+                    </label>
+                    <div className="flex gap-2">
+                      {(["mock", "sandbox", "live"] as const).map((env) => (
+                        <button
+                          key={env}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, irdEnvironment: env }))}
+                          className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium capitalize transition-all ${formData.irdEnvironment === env
+                              ? env === "live"
+                                ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                                : env === "sandbox"
+                                  ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400"
+                                  : "border-gray-500 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                              : "border-gray-200 text-gray-400 dark:border-gray-600 dark:text-gray-500 hover:border-gray-400"
+                            }`}
+                        >
+                          {env === "mock" ? "🔵 Mock (Dev)" : env === "sandbox" ? "🟡 Sandbox (Test)" : "🟢 Live (Production)"}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-500">
+                      {formData.irdEnvironment === "mock"
+                        ? "Simulated responses only — no real IRD calls will be made."
+                        : formData.irdEnvironment === "sandbox"
+                          ? "Calls IRD Sandbox API. Safe for testing with real credentials."
+                          : "⚠️ LIVE mode — all invoices will be submitted to IRD CBMS in real-time."}
+                    </p>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-[rgb(var(--color-text))] mb-1.5">
+                      IRD API URL <span className="text-xs text-gray-400 font-normal">(auto-set by environment, or override manually)</span>
                     </label>
                     <Input
                       name="irdApiUrl"
                       onChange={handleInputChange}
-                      placeholder="https://cbms.ird.gov.np/api"
+                      placeholder="https://cbapi.ird.gov.np"
                       value={formData.irdApiUrl}
                     />
                   </div>

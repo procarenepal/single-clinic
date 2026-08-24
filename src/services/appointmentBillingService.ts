@@ -11,6 +11,7 @@ import {
   where,
   Timestamp,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db, auth } from "../config/firebase";
@@ -24,6 +25,7 @@ import {
 import { patientService } from "./patientService";
 import { walletService } from "./walletService";
 import { navigationService } from "./navigationService";
+import { calculateTaxBreakdown } from "../utils/taxEngine";
 
 const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
@@ -378,24 +380,45 @@ export const appointmentBillingService = {
    */
   async generateInvoiceNumber(clinicId: string): Promise<string> {
     try {
+      const { getNepaliFiscalYear } = await import("./irdCbmsService");
+      const currentRealFiscalYear = getNepaliFiscalYear(new Date());
+
       const settingsRef = doc(
         db,
         APPOINTMENT_BILLING_SETTINGS_COLLECTION,
         clinicId,
       );
-      const settingsDoc = await getDoc(settingsRef);
 
-      if (!settingsDoc.exists()) {
-        throw new Error("Billing settings not found for clinic");
-      }
+      const invoiceNumber = await runTransaction(db, async (transaction) => {
+        const settingsDoc = await transaction.get(settingsRef);
 
-      const settings = settingsDoc.data() as AppointmentBillingSettings;
-      const invoiceNumber = `${settings.invoicePrefix}-${settings.nextInvoiceNumber.toString().padStart(4, "0")}`;
+        if (!settingsDoc.exists()) {
+          throw new Error("Billing settings not found for clinic");
+        }
 
-      // Increment the next invoice number
-      await updateDoc(settingsRef, {
-        nextInvoiceNumber: increment(1),
-        updatedAt: Timestamp.now(),
+        const settings = settingsDoc.data() as AppointmentBillingSettings;
+        
+        let nextInvoiceNum = settings.nextInvoiceNumber || 1;
+        const updates: any = {
+          updatedAt: Timestamp.now(),
+        };
+
+        if (settings.currentFiscalYear !== currentRealFiscalYear) {
+          nextInvoiceNum = 1;
+          updates.currentFiscalYear = currentRealFiscalYear;
+          updates.nextInvoiceNumber = 2; // Next will be 2
+        } else {
+          updates.nextInvoiceNumber = nextInvoiceNum + 1;
+        }
+
+        // Format fiscal year from "2080.81" to "80/81"
+        const formattedFiscalYear = currentRealFiscalYear.substring(2).replace('.', '/');
+        const generatedInvoiceNumber = `${formattedFiscalYear}-${settings.invoicePrefix}-${nextInvoiceNum.toString().padStart(4, "0")}`;
+
+        // Update settings in transaction
+        transaction.update(settingsRef, updates);
+
+        return generatedInvoiceNumber;
       });
 
       return invoiceNumber;
@@ -413,29 +436,90 @@ export const appointmentBillingService = {
   ): Promise<string> {
     try {
       const billingRef = collection(db, APPOINTMENT_BILLING_COLLECTION);
-
-      // Filter out undefined values to prevent Firestore errors
       const cleanedData = this.deepClean(billingData);
 
-      const now = Timestamp.now();
       const data = {
         ...cleanedData,
-        invoiceDate: Timestamp.fromDate(billingData.invoiceDate),
-        paymentDate: billingData.paymentDate
-          ? Timestamp.fromDate(billingData.paymentDate)
-          : null,
-        finalizedAt: billingData.finalizedAt
-          ? Timestamp.fromDate(billingData.finalizedAt)
-          : null,
-        createdAt: now,
-        updatedAt: now,
+        invoiceDate: billingData.invoiceDate
+          ? Timestamp.fromDate(billingData.invoiceDate)
+          : Timestamp.now(),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
       };
 
       const docRef = await addDoc(billingRef, data);
+      const billingId = docRef.id;
 
-      console.log("Appointment billing created with ID:", docRef.id);
+      console.log("Appointment billing created in Firestore with ID:", billingId);
 
-      return docRef.id;
+      // Attempt Java backend sync asynchronously
+      try {
+        const { billingApi } = await import("./api/billingApi");
+
+        const taxPercentage = billingData.taxPercentage || 0;
+        const calc = calculateTaxBreakdown({
+          items: (billingData.items || []).map((i) => ({
+            itemName: i.appointmentTypeName || "Service",
+            quantity: i.quantity,
+            price: i.price,
+            discountType: i.discountType,
+            discountValue: i.discountValue,
+            isTaxable: i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
+            taxRate: taxPercentage,
+          })),
+          discountType: billingData.discountType || "flat",
+          discountValue: billingData.discountValue || 0,
+          defaultTaxPercentage: taxPercentage,
+          isTaxEnabled: taxPercentage > 0,
+        });
+
+        const { clinicSettingsService } = await import("./clinicSettingsService");
+        const { getNepaliFiscalYear } = await import("./irdCbmsService");
+        const clinicSettings = await clinicSettingsService.getClinicSettings(billingData.clinicId);
+        
+        let irdSettings = {};
+        if (clinicSettings && clinicSettings.irdEnabled) {
+          const { clinicService } = await import("./clinicService");
+          const clinic = await clinicService.getClinicById(billingData.clinicId);
+          irdSettings = {
+            irdEnabled: true,
+            irdApiUrl: clinicSettings.irdApiUrl,
+            irdApiUsername: clinicSettings.irdApiUsername,
+            irdApiPassword: clinicSettings.irdApiPassword,
+            sellerPan: clinic?.panNumber || "",
+            fiscalYear: getNepaliFiscalYear(new Date()),
+          };
+        }
+
+        const payload = {
+          firebasePatientId: billingData.patientId || "",
+          buyerName: billingData.patientName || "Cash Sales",
+          buyerPan: "",
+          totalAmount: calc.totalAmount,
+          taxableAmount: calc.taxableAmount,
+          taxAmount: calc.taxAmount,
+          exemptAmount: calc.exemptAmount,
+          ...irdSettings,
+          items: (billingData.items || []).map((item) => ({
+            itemName: item.appointmentTypeName || "Service",
+            quantity: item.quantity || 1,
+            rate: item.price || 0,
+            totalAmount: item.amount || 0,
+            isTaxable: item.isTaxable !== undefined ? item.isTaxable : taxPercentage > 0,
+          })),
+        };
+
+        const result = await billingApi.createInvoice(payload);
+
+        if (result?.id) {
+          await this.updateBilling(billingId, { javaInvoiceId: result.id });
+          console.log("Appointment billing synced to Java backend with ID:", result.id);
+        }
+      } catch (javaError: any) {
+        console.warn("Java backend submission skipped or offline:", javaError.message || javaError);
+      }
+
+      return billingId;
     } catch (error) {
       console.error("Error creating appointment billing:", error);
       throw error;
@@ -450,6 +534,28 @@ export const appointmentBillingService = {
     billingData: Partial<AppointmentBilling>,
   ): Promise<void> {
     try {
+      const existing = await this.getBillingById(id);
+      let isAlteringFinancials = false;
+
+      if (existing) {
+        const financialKeys = ["totalAmount", "subtotal", "taxAmount", "discountAmount"];
+        const simpleValuesChanged = financialKeys.some((k) => {
+          if (k in billingData) {
+            return (billingData as any)[k] !== (existing as any)[k];
+          }
+          return false;
+        });
+        
+        const itemsChanged = "items" in billingData && JSON.stringify(billingData.items) !== JSON.stringify(existing.items);
+        isAlteringFinancials = simpleValuesChanged || itemsChanged;
+
+        if (isAlteringFinancials && (existing.irdSynced || existing.status === "finalized")) {
+          throw new Error(
+            "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead."
+          );
+        }
+      }
+
       const billingRef = doc(db, APPOINTMENT_BILLING_COLLECTION, id);
 
       // Filter out undefined values to prevent Firestore errors
@@ -640,6 +746,13 @@ export const appointmentBillingService = {
    */
   async deleteBilling(id: string): Promise<void> {
     try {
+      const existing = await this.getBillingById(id);
+      if (existing && (existing.irdSynced || existing.status === "finalized")) {
+        throw new Error(
+          "IRD Tax Compliance Error: Finalized or IRD-synced invoices cannot be deleted. You must issue a Credit Note (Sales Return) instead."
+        );
+      }
+
       const billingRef = doc(db, APPOINTMENT_BILLING_COLLECTION, id);
 
       // 1. Delete associated doctor commissions
@@ -681,45 +794,8 @@ export const appointmentBillingService = {
       await this.updateBilling(id, {
         status: "finalized",
         finalizedBy,
-        finalizedAt: new Date(),
+        finalizedAt: new Date(), // Note: IRD Sync is now handled by the Java Backend upon creation.
       });
-
-      // Hook IRD Sync
-      const billing = await this.getBillingById(id);
-      if (billing) {
-        try {
-          const { clinicSettingsService } = await import("./clinicSettingsService");
-          const { clinicService } = await import("./clinicService");
-          const { syncInvoiceToIRD } = await import("./irdCbmsService");
-
-          const clinicSettings = await clinicSettingsService.getClinicSettings(billing.clinicId);
-          const clinic = await clinicService.getClinicById(billing.clinicId);
-
-          if (clinicSettings && clinic && clinicSettings.irdEnabled) {
-             const result = await syncInvoiceToIRD({
-               clinicSettings,
-               clinic,
-               invoiceData: {
-                 buyerName: billing.patientName,
-                 buyerPan: "", // Optional for simple patient appointments
-                 invoiceNumber: billing.invoiceNumber,
-                 invoiceDate: billing.invoiceDate,
-                 totalAmount: billing.totalAmount,
-                 taxAmount: billing.taxAmount || 0,
-                 isTaxEnabled: billing.taxPercentage > 0,
-               }
-             });
-
-             await this.updateBilling(id, {
-               irdSynced: result.success,
-               irdSyncDate: new Date(),
-               cbmsResponseCode: result.responseCode
-             });
-          }
-        } catch (irdError) {
-          console.error("Failed to sync invoice to IRD:", irdError);
-        }
-      }
     } catch (error) {
       console.error("Error finalizing invoice:", error);
       throw error;
@@ -1087,6 +1163,72 @@ export const appointmentBillingService = {
             err,
           );
         }
+
+        // 3. IRD Sync Logic
+        try {
+          const { clinicSettingsService } = await import("./clinicSettingsService");
+          const { clinicService } = await import("./clinicService");
+          const { syncInvoiceToIRD } = await import("./irdCbmsService");
+
+          const clinicSettings = await clinicSettingsService.getClinicSettings(billing.clinicId);
+          const clinic = await clinicService.getClinicById(billing.clinicId);
+
+          if (clinicSettings && clinic && clinicSettings.irdEnabled) {
+            const result = await syncInvoiceToIRD({
+              clinicSettings,
+              clinic,
+              invoiceData: {
+                buyerName: billing.patientName || "Cash Sales",
+                buyerPan: "",
+                invoiceNumber: billing.invoiceNumber,
+                invoiceDate: billing.invoiceDate,
+                totalAmount: newTotalAmount,
+                taxAmount: billing.taxAmount || 0,
+                isTaxEnabled: billing.taxPercentage > 0,
+              },
+            });
+
+            await this.updateBilling(id, {
+              irdSynced: result.success,
+              irdSyncDate: new Date(),
+              cbmsResponseCode: result.responseCode,
+            });
+
+            // Also update Java Backend SQL database row if javaInvoiceId is linked
+            if (billing.javaInvoiceId) {
+              try {
+                const { billingApi } = await import("./api/billingApi");
+                await billingApi.updateIrdSyncStatus(
+                  billing.javaInvoiceId,
+                  result.success,
+                  result.responseCode,
+                );
+              } catch (jErr) {
+                console.warn("Failed to sync IRD status to Java backend DB:", jErr);
+              }
+            }
+          }
+        } catch (irdError) {
+          console.error("Failed to sync invoice to IRD inside recordPayment:", irdError);
+        }
+
+        // 4. Audit Log Payment Event
+        try {
+          const { auditLogService } = await import("./auditLogService");
+          await auditLogService.logPayment({
+            performedBy: auth.currentUser?.uid || "system",
+            performedByName: auth.currentUser?.displayName || "Staff Cashier",
+            performedByEmail: auth.currentUser?.email || "",
+            clinicId: billing.clinicId,
+            branchId: billing.branchId,
+            invoiceNumber: billing.invoiceNumber,
+            amountPaid: paymentAmount,
+            paymentMethod,
+            patientName: billing.patientName,
+          });
+        } catch (auditErr) {
+          console.warn("Failed to record payment audit log:", auditErr);
+        }
       }
     } catch (error) {
       console.error("Error recording payment:", error);
@@ -1111,39 +1253,34 @@ export const appointmentBillingService = {
     totalDiscount: number;
     taxAmount: number;
     totalAmount: number;
+    taxableAmount: number;
+    exemptAmount: number;
   } {
-    // Subtotal is the sum of (price * quantity) of all items BEFORE discounts
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0,
-    );
-
-    // Item-level discounts sum
-    const itemDiscounts = items.reduce(
-      (sum, item) => sum + (item.discountAmount || 0),
-      0,
-    );
-
-    let mainDiscountAmount = 0;
-
-    if (discountType === "flat") {
-      mainDiscountAmount = Math.min(discountValue, subtotal - itemDiscounts);
-    } else {
-      mainDiscountAmount = ((subtotal - itemDiscounts) * discountValue) / 100;
-    }
-
-    const totalDiscount = itemDiscounts + mainDiscountAmount;
-    const afterDiscount = subtotal - totalDiscount;
-    const taxAmount = (afterDiscount * taxPercentage) / 100;
-    const totalAmount = afterDiscount + taxAmount;
+    const calc = calculateTaxBreakdown({
+      items: items.map((i) => ({
+        itemName: i.appointmentTypeName || "Service",
+        quantity: i.quantity,
+        price: i.price,
+        discountType: i.discountType,
+        discountValue: i.discountValue,
+        isTaxable: i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
+        taxRate: taxPercentage,
+      })),
+      discountType,
+      discountValue,
+      defaultTaxPercentage: taxPercentage,
+      isTaxEnabled: taxPercentage > 0,
+    });
 
     return {
-      subtotal,
-      itemDiscountAmount: itemDiscounts,
-      mainDiscountAmount,
-      totalDiscount,
-      taxAmount,
-      totalAmount,
+      subtotal: calc.subtotal,
+      itemDiscountAmount: calc.itemDiscountAmount,
+      mainDiscountAmount: calc.mainDiscountAmount,
+      totalDiscount: calc.totalDiscountAmount,
+      taxAmount: calc.taxAmount,
+      totalAmount: calc.totalAmount,
+      taxableAmount: calc.taxableAmount,
+      exemptAmount: calc.exemptAmount,
     };
   },
 
@@ -1320,6 +1457,117 @@ export const appointmentBillingService = {
       );
     } catch (error) {
       console.error("Error deleting payment method:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Issue a Credit Note (Sales Return) for a finalized/synced invoice
+   */
+  async issueCreditNote(originalBillingId: string, reason: string, createdBy: string): Promise<string> {
+    try {
+      const original = await this.getBillingById(originalBillingId);
+      if (!original) throw new Error("Original billing record not found");
+
+      if (!original.irdSynced) {
+        throw new Error("Can only issue Credit Notes for IRD-synced invoices.");
+      }
+
+      // Generate negative items
+      const negativeItems = original.items.map(item => ({
+        ...item,
+        price: -Math.abs(item.price || 0),
+        amount: -Math.abs(item.amount),
+      }));
+
+      // Generate invoice number
+      const nextInvoiceNumber = await this.generateInvoiceNumber(original.clinicId);
+      const creditNoteInvoiceNumber = `CN-${nextInvoiceNumber}`;
+
+      const creditNoteData: Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt"> = {
+        ...original,
+        invoiceNumber: creditNoteInvoiceNumber,
+        invoiceDate: new Date(),
+        items: negativeItems,
+        
+        // Reverse amounts
+        subtotal: -Math.abs(original.subtotal),
+        itemDiscountAmount: -Math.abs(original.itemDiscountAmount || 0),
+        mainDiscountAmount: -Math.abs(original.mainDiscountAmount || 0),
+        discountAmount: -Math.abs(original.discountAmount),
+        taxAmount: -Math.abs(original.taxAmount),
+        totalAmount: -Math.abs(original.totalAmount),
+        
+        // Mark as paid since it's a refund
+        status: "finalized",
+        paymentStatus: "paid",
+        paidAmount: -Math.abs(original.totalAmount),
+        balanceAmount: 0,
+        
+        // Credit note links
+        isCreditNote: true,
+        linkedInvoiceId: original.id,
+        creditNoteReason: reason,
+        notes: `Credit Note for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
+        
+        // Reset sync status
+        irdSynced: false,
+        irdSyncDate: undefined,
+        cbmsResponseCode: undefined,
+        
+        createdBy,
+        finalizedBy: createdBy,
+        finalizedAt: new Date(),
+        
+        // Remove old payment history
+        paymentHistory: [],
+      };
+
+      const newCreditNoteId = await this.createBilling(creditNoteData);
+
+      // Trigger IRD CBMS Sync for Sales Return (Credit Note)
+      try {
+        const { clinicSettingsService } = await import("./clinicSettingsService");
+        const { clinicService } = await import("./clinicService");
+        const { syncInvoiceToIRD } = await import("./irdCbmsService");
+
+        const clinicSettings = await clinicSettingsService.getClinicSettings(original.clinicId);
+        const clinic = await clinicService.getClinicById(original.clinicId);
+
+        if (clinicSettings && clinic && clinicSettings.irdEnabled) {
+          const syncRes = await syncInvoiceToIRD({
+            clinicSettings,
+            clinic,
+            invoiceData: {
+              buyerName: original.patientName || "Cash Sales",
+              buyerPan: "",
+              invoiceNumber: creditNoteInvoiceNumber,
+              invoiceDate: new Date(),
+              totalAmount: Math.abs(original.totalAmount),
+              taxAmount: Math.abs(original.taxAmount || 0),
+              isTaxEnabled: (original.taxPercentage || 0) > 0,
+            },
+            isReturn: true,
+          });
+
+          await this.updateBilling(newCreditNoteId, {
+            irdSynced: syncRes.success,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: syncRes.responseCode,
+          });
+        }
+      } catch (irdErr) {
+        console.warn("Failed to sync Credit Note to IRD API:", irdErr);
+      }
+
+      // Update original invoice to note it has been reversed
+      await this.updateBilling(original.id, {
+        notes: (original.notes ? original.notes + '\n' : '') + `Reversed by Credit Note ${creditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
+      });
+
+      return newCreditNoteId;
+    } catch (error) {
+      console.error("Error issuing credit note:", error);
       throw error;
     }
   },

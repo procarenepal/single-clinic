@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 
 import { db, auth } from "@/config/firebase";
-import { storage, APPWRITE_BUCKET_ID, ID } from "@/config/appwrite";
+import { uploadFileToFirebase, deleteFileFromFirebase, getFileUrlFromFirebase } from "./firebaseStorageService";
 import { MedicalDocument, XrayRecord } from "@/types/models";
 
 const DOCUMENTS_COLLECTION = "medical_documents";
@@ -31,109 +31,72 @@ export class MedicalRecordsService {
   // =================== FILE UPLOAD METHODS ===================
 
   /**
-   * Upload file to Appwrite storage
+   * Upload file to Firebase storage
    */
   static async uploadFile(file: File): Promise<UploadFileResult> {
     try {
-      const fileId = ID.unique();
-
-      const uploadedFile = await storage.createFile(
-        APPWRITE_BUCKET_ID,
-        fileId,
-        file,
-      );
-
-      // Get file view URL
-      const fileUrl = storage.getFileView(APPWRITE_BUCKET_ID, fileId);
+      const { fileId, url } = await uploadFileToFirebase(file, "medical_records");
 
       return {
-        fileId: uploadedFile.$id,
+        fileId: fileId,
         fileName: file.name,
-        fileUrl: fileUrl.toString(),
+        fileUrl: url,
         fileSize: file.size,
         mimeType: file.type,
       };
     } catch (error) {
-      console.error("Error uploading file to Appwrite:", error);
+      console.error("Error uploading file to Firebase:", error);
       throw new Error("Failed to upload file");
     }
   }
 
   /**
-   * Upload file to Appwrite storage with progress callback
+   * Upload file to Firebase storage with progress callback
    */
   static async uploadFileWithProgress(
     file: File,
     onProgress?: (progress: number) => void,
   ): Promise<UploadFileResult> {
     try {
-      const fileId = ID.unique();
-
-      // Simulate progress for Appwrite upload since it doesn't provide native progress
-      let currentProgress = 0;
-      const progressInterval = setInterval(() => {
-        if (onProgress && currentProgress < 90) {
-          // Simulate realistic upload progress with variable speed
-          const increment = Math.random() * 15 + 5; // Between 5-20% increments
-
-          currentProgress = Math.min(90, currentProgress + increment);
-          onProgress(currentProgress);
-        }
-      }, 200);
-
-      const uploadedFile = await storage.createFile(
-        APPWRITE_BUCKET_ID,
-        fileId,
-        file,
-      );
-
-      clearInterval(progressInterval);
-
-      // Complete progress
-      if (onProgress) {
-        onProgress(100);
-      }
-
-      // Get file view URL
-      const fileUrl = storage.getFileView(APPWRITE_BUCKET_ID, fileId);
+      const { fileId, url } = await uploadFileToFirebase(file, "medical_records", onProgress);
 
       return {
-        fileId: uploadedFile.$id,
+        fileId: fileId,
         fileName: file.name,
-        fileUrl: fileUrl.toString(),
+        fileUrl: url,
         fileSize: file.size,
         mimeType: file.type,
       };
     } catch (error) {
-      console.error("Error uploading file to Appwrite:", error);
+      console.error("Error uploading file to Firebase:", error);
       throw new Error("Failed to upload file");
     }
   }
 
   /**
-   * Delete file from Appwrite storage
+   * Delete file from Firebase storage
    */
   static async deleteFile(fileId: string): Promise<void> {
     try {
-      await storage.deleteFile(APPWRITE_BUCKET_ID, fileId);
+      await deleteFileFromFirebase(fileId);
     } catch (error) {
-      console.error("Error deleting file from Appwrite:", error);
+      console.error("Error deleting file from Firebase:", error);
       throw new Error("Failed to delete file");
     }
   }
 
   /**
-   * Get file download URL from Appwrite
+   * Get file download URL from Firebase
    */
-  static getFileDownloadUrl(fileId: string): string {
-    return storage.getFileDownload(APPWRITE_BUCKET_ID, fileId).toString();
+  static getFileDownloadUrl(fileId: string): Promise<string> {
+    return getFileUrlFromFirebase(fileId);
   }
 
   /**
-   * Get file view URL from Appwrite
+   * Get file view URL from Firebase
    */
-  static getFileViewUrl(fileId: string): string {
-    return storage.getFileView(APPWRITE_BUCKET_ID, fileId).toString();
+  static getFileViewUrl(fileId: string): Promise<string> {
+    return getFileUrlFromFirebase(fileId);
   }
 
   // =================== MEDICAL DOCUMENTS METHODS ===================

@@ -23,7 +23,7 @@ import { useNavigate } from "react-router-dom";
 import { addToast } from "@heroui/toast";
 import { Progress } from "@heroui/progress";
 
-import { uploadImage } from "@/services/appwriteStorageService";
+import { uploadFileToFirebase } from "@/services/firebaseStorageService";
 import { clinicService } from "@/services/clinicService";
 import {
   getPrintBrandingCSS,
@@ -223,24 +223,22 @@ export default function PrintLayoutPage() {
         color: "primary",
       });
 
-      // Upload to Appwrite with optimization (max 800px width for logos)
-      const uploadResult = await uploadImage(
+      // Upload to Firebase
+      const uploadResult = await uploadFileToFirebase(
         file,
-        `clinic-${clinicId}-logo-${Date.now()}`,
-        800, // max width
-        800, // max height
+        `logos/clinic-${clinicId}-logo-${Date.now()}`
       );
 
       // Update layout config with the new URL
       setLayoutConfig((prev) => ({
         ...prev,
-        logoUrl: uploadResult.fileUrl,
+        logoUrl: uploadResult.url,
         logoFileId: uploadResult.fileId, // Store file ID for future deletion if needed
       }));
 
       addToast({
         title: "Upload Successful!",
-        description: `Logo uploaded and optimized. File size: ${(uploadResult.fileSize / 1024).toFixed(1)}KB`,
+        description: `Logo uploaded successfully.`,
         color: "success",
       });
     } catch (error) {
@@ -764,7 +762,6 @@ export default function PrintLayoutPage() {
                     />
                     <Input
                       label="Content Font Size (px)"
-                      max={18}
                       min={8}
                       type="number"
                       value={layoutConfig.contentFontSize?.toString() || "12"}
@@ -1245,7 +1242,7 @@ export default function PrintLayoutPage() {
 
           {/* Preview - Full width in preview mode */}
           <div
-            className={`lg:sticky lg:top-6 ${previewMode ? "lg:col-span-2" : ""}`}
+            className={`lg:sticky lg:top-24 z-10 ${previewMode ? "lg:col-span-2" : ""}`}
           >
             <Card>
               <CardHeader className="bg-default-50 border-b border-default-200">
@@ -1313,7 +1310,7 @@ export default function PrintLayoutPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardBody className="p-0 overflow-auto bg-slate-50 flex justify-center">
+              <CardBody className="p-0 overflow-auto bg-slate-50 flex justify-center bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] shadow-inner">
                 <div
                   ref={containerRef}
                   className="relative p-10 transition-all duration-300 origin-top"
@@ -1333,22 +1330,64 @@ export default function PrintLayoutPage() {
                     onTextChange={handleTextChange}
                     onWidthChange={handleWidthChange}
                   >
-                    {/* Sample Content - This will take up the remaining space */}
-                    <div className="flex-1 flex items-center justify-center p-10">
-                      <div className="text-center w-full max-w-md">
-                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-slate-200">
-                          <IoBusinessOutline className="w-8 h-8 text-slate-300" />
+                    {/* Realistic Sample Content */}
+                    <div className="flex-1 p-8 bg-white flex flex-col">
+                      <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Bill To</p>
+                          <h3 className="text-sm font-bold text-gray-800">John Doe</h3>
+                          <p className="text-xs text-gray-500">Age: 32 / Male</p>
+                          <p className="text-xs text-gray-500">Phone: 9876543210</p>
                         </div>
-                        <h2 className="text-stat-sm font-bold text-slate-400 mb-2 uppercase tracking-tight">
-                          Document Content Area
-                        </h2>
-                        <div className="h-0.5 w-12 bg-slate-100 mx-auto mb-4" />
-                        <p className="text-sm text-slate-400 leading-relaxed">
-                          This area represents where your clinical findings,
-                          prescriptions, and reports will be rendered. The
-                          header and footer above are what you are currently
-                          customizing.
-                        </p>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Invoice Details</p>
+                          <p className="text-xs text-gray-800 font-medium">INV-2026-089</p>
+                          <p className="text-xs text-gray-500">Date: Aug 23, 2026</p>
+                        </div>
+                      </div>
+
+                      <table className="w-full mb-6 text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Description</th>
+                            <th className="text-center py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Qty</th>
+                            <th className="text-right py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-gray-700">
+                          <tr className="border-b border-gray-50">
+                            <td className="py-3">Complete Blood Count (CBC)</td>
+                            <td className="text-center py-3">1</td>
+                            <td className="text-right py-3">NPR 500.00</td>
+                          </tr>
+                          <tr className="border-b border-gray-50">
+                            <td className="py-3">Lipid Profile</td>
+                            <td className="text-center py-3">1</td>
+                            <td className="text-right py-3">NPR 850.00</td>
+                          </tr>
+                          <tr className="border-b border-gray-50">
+                            <td className="py-3">Doctor Consultation</td>
+                            <td className="text-center py-3">1</td>
+                            <td className="text-right py-3">NPR 600.00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      <div className="flex justify-end mt-auto pt-4 border-t border-gray-100">
+                        <div className="w-48">
+                          <div className="flex justify-between text-xs mb-1 text-gray-500">
+                            <span>Subtotal</span>
+                            <span>NPR 1,950.00</span>
+                          </div>
+                          <div className="flex justify-between text-xs mb-1 text-gray-500">
+                            <span>Discount</span>
+                            <span>NPR 0.00</span>
+                          </div>
+                          <div className="flex justify-between text-sm font-bold mt-2 pt-2 border-t border-gray-200 text-gray-800">
+                            <span>Total</span>
+                            <span>NPR 1,950.00</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </PrintLayoutTemplate>

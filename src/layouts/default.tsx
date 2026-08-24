@@ -79,13 +79,13 @@ export default function DefaultLayout({
       <main className="flex-grow flex flex-col pt-6">{children}</main>
 
       {/* Footer Area */}
-      <footer className="w-full mt-20 transition-colors duration-300" style={{ background: "rgb(var(--color-surface))", borderTop: "1px solid rgb(var(--color-border))" }}>
+      <footer className="w-full mt-12 lg:mt-20 transition-colors duration-300" style={{ background: "rgb(var(--color-surface))", borderTop: "1px solid rgb(var(--color-border))" }}>
         {/* Gradient accent bar */}
         <div style={{ height: "3px", background: "linear-gradient(90deg, rgb(var(--color-primary)) 0%, rgba(var(--color-primary),0.4) 50%, transparent 100%)" }} />
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8 mb-14">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-10 pb-8 lg:pt-16 lg:pb-10">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-10 lg:gap-8 mb-10 lg:mb-14">
             {/* ── Brand & Mission ── */}
-            <div className="lg:col-span-2">
+            <div className="col-span-2 lg:col-span-2">
               <div className="flex items-center gap-4 mb-5">
                 <div
                   className="relative w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0"
@@ -149,7 +149,7 @@ export default function DefaultLayout({
 
             {/* ── Platform Links ── */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest mb-6" style={{ color: "rgb(var(--color-primary))" }}>
+              <h4 className="text-xs font-bold uppercase tracking-widest mb-4 lg:mb-6" style={{ color: "rgb(var(--color-primary))" }}>
                 Platform
               </h4>
               <ul className="space-y-3">
@@ -177,7 +177,7 @@ export default function DefaultLayout({
 
             {/* ── Company Links ── */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest mb-6" style={{ color: "rgb(var(--color-primary))" }}>
+              <h4 className="text-xs font-bold uppercase tracking-widest mb-4 lg:mb-6" style={{ color: "rgb(var(--color-primary))" }}>
                 Company
               </h4>
               <ul className="space-y-3">
@@ -204,8 +204,8 @@ export default function DefaultLayout({
             </div>
 
             {/* ── Support & Contact ── */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest mb-6" style={{ color: "rgb(var(--color-primary))" }}>
+            <div className="col-span-2 lg:col-span-1">
+              <h4 className="text-xs font-bold uppercase tracking-widest mb-4 lg:mb-6" style={{ color: "rgb(var(--color-primary))" }}>
                 Support
               </h4>
               <ul className="space-y-3 mb-6">
@@ -300,7 +300,7 @@ export default function DefaultLayout({
                 <span className="font-semibold">Nepal</span>
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center flex-wrap justify-center gap-1">
               {[
                 { label: "Terms", to: "/terms" },
                 { label: "Privacy", to: "/privacy" },
@@ -378,7 +378,7 @@ function WhatsAppButton({ phone, name }: { phone: string; name: string }) {
         }}
       >
         <div
-          className="w-72 rounded-2xl p-5"
+          className="w-72 max-w-[calc(100vw-3rem)] rounded-2xl p-5"
           style={{
             background: "white",
             border: "1px solid #e5e7eb",

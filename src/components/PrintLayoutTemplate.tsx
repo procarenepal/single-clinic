@@ -86,74 +86,73 @@ const DesignHandle: React.FC<{
   showResizeHandle = false,
   currentZoom = 1,
 }) => {
-  const isSelected = selectedElementId === elementId;
-  const [isHovered, setIsHovered] = useState(false);
-  const startWidthRef = useRef(0);
+    const isSelected = selectedElementId === elementId;
+    const [isHovered, setIsHovered] = useState(false);
+    const startWidthRef = useRef(0);
 
-  return (
-    <motion.div
-      className={`group ${isDesignMode ? "cursor-move" : ""} ${className}`}
-      drag={isDesignMode}
-      dragElastic={0}
-      dragMomentum={false}
-      style={{ x, y, ...style }}
-      onClick={(e) => {
-        if (!isDesignMode) return;
-        e.stopPropagation();
-        onElementClick?.(elementId);
-      }}
-      onDragEnd={(_, info) => {
-        if (!isDesignMode || !onDragEnd) return;
-        onDragEnd(info);
-      }}
-      onHoverEnd={() => setIsHovered(false)}
-      onHoverStart={() => setIsHovered(true)}
-    >
-      <AnimatePresence>
-        {isDesignMode && (
-          <motion.div
-            animate={{ opacity: 1 }}
-            className={`absolute -inset-2 rounded-lg pointer-events-none transition-all ${
-              isSelected
+    return (
+      <motion.div
+        className={`group ${isDesignMode ? "cursor-move" : ""} ${className}`}
+        drag={isDesignMode}
+        dragElastic={0}
+        dragMomentum={false}
+        style={{ x, y, ...style }}
+        onClick={(e) => {
+          if (!isDesignMode) return;
+          e.stopPropagation();
+          onElementClick?.(elementId);
+        }}
+        onDragEnd={(_, info) => {
+          if (!isDesignMode || !onDragEnd) return;
+          onDragEnd(info);
+        }}
+        onHoverEnd={() => setIsHovered(false)}
+        onHoverStart={() => setIsHovered(true)}
+      >
+        <AnimatePresence>
+          {isDesignMode && (
+            <motion.div
+              animate={{ opacity: 1 }}
+              className={`absolute -inset-2 rounded-lg pointer-events-none transition-all ${isSelected
                 ? "border-2 border-primary bg-primary/5 shadow-lg"
                 : isHovered
-                  ? "border border-dashed border-primary/40 bg-primary/2"
-                  : "border border-dashed border-slate-200/50"
-            }`}
-            exit={{ opacity: 0 }}
-            initial={{ opacity: 0 }}
-          >
-            {isSelected && (
-              <div className="absolute -top-7 left-0 bg-primary text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider z-[100]">
-                {label}
-              </div>
-            )}
-            {showResizeHandle && (
-              <motion.div
-                className="absolute -bottom-2 -right-2 w-6 h-6 bg-primary rounded-full cursor-nwse-resize shadow-lg z-[200] border-2 border-white flex items-center justify-center hover:bg-primary-600 transition-colors"
-                drag="x"
-                dragMomentum={false}
-                whileDrag={{ scale: 1.5 }}
-                onDrag={(_, info) => {
-                  const delta = info.offset.x / currentZoom;
+                  ? "border border-dashed border-primary/40 bg-primary/5"
+                  : "border border-transparent"
+                }`}
+              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }}
+            >
+              {isSelected && (
+                <div className="absolute -top-7 left-0 bg-primary text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider z-[100]">
+                  {label}
+                </div>
+              )}
+              {showResizeHandle && (
+                <motion.div
+                  className="absolute -bottom-2 -right-2 w-6 h-6 bg-primary rounded-full cursor-nwse-resize shadow-lg z-[200] border-2 border-white flex items-center justify-center hover:bg-primary-600 transition-colors"
+                  drag="x"
+                  dragMomentum={false}
+                  whileDrag={{ scale: 1.5 }}
+                  onDrag={(_, info) => {
+                    const delta = info.offset.x / currentZoom;
 
-                  onResize?.(startWidthRef.current + delta);
-                }}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  startWidthRef.current = (style.width as number) || 80;
-                }}
-              >
-                <div className="w-2 h-2 bg-white rounded-full" />
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {children}
-    </motion.div>
-  );
-};
+                    onResize?.(startWidthRef.current + delta);
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    startWidthRef.current = (style.width as number) || 80;
+                  }}
+                >
+                  <div className="w-2 h-2 bg-white rounded-full" />
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {children}
+      </motion.div>
+    );
+  };
 
 export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
   layoutConfig,
@@ -437,7 +436,7 @@ export const PrintLayoutTemplate: React.FC<PrintLayoutTemplateProps> = ({
             }
             onElementClick={onElementClick}
           >
-            <div className="flex items-center gap-6 pt-4 border-t border-gray-100 max-w-md w-full justify-center">
+            <div className="flex items-center gap-6 pt-4 border-t border-gray-100 max-w-2xl w-full justify-center whitespace-nowrap">
               {layoutConfig.phone && (
                 <div className="flex items-center gap-2">
                   <span style={{ fontSize: `${Math.max(baseFontSize - 1, 9)}px`, fontFamily, fontWeight: "bold", color: layoutConfig.textColor || "#94a3b8" }} className="lowercase">

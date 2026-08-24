@@ -34,6 +34,11 @@ import { Clinic } from "@/types/models";
 
 const EVENT_TYPE_OPTIONS = [
   { key: "all", label: "All Events" },
+  { key: "payment_recorded", label: "Payment Recorded" },
+  { key: "invoice_created", label: "Invoice Created" },
+  { key: "ird_synced", label: "IRD Sync Success" },
+  { key: "ird_sync_failed", label: "IRD Sync Failed" },
+  { key: "refund_issued", label: "Refund / Return" },
   { key: "role_created", label: "Role Created" },
   { key: "role_updated", label: "Role Updated" },
   { key: "role_deleted", label: "Role Deleted" },
@@ -192,6 +197,9 @@ export default function AdminLogsPage() {
   const getEventTypeColor = (
     eventType: AuditLog["eventType"],
   ): "default" | "primary" | "secondary" | "success" | "warning" | "danger" => {
+    if (eventType === "payment_recorded" || eventType === "ird_synced") return "success";
+    if (eventType === "invoice_created") return "primary";
+    if (eventType === "ird_sync_failed" || eventType === "refund_issued") return "danger";
     if (eventType.includes("created")) return "success";
     if (eventType.includes("updated")) return "primary";
     if (eventType.includes("deleted") || eventType.includes("removed"))
@@ -205,11 +213,13 @@ export default function AdminLogsPage() {
   };
 
   const getEventTypeIcon = (eventType: AuditLog["eventType"]) => {
+    if (eventType === "payment_recorded" || eventType === "ird_synced") return <IoCheckmarkCircleOutline className="text-success" />;
+    if (eventType === "invoice_created") return <IoInformationCircleOutline className="text-primary" />;
+    if (eventType === "ird_sync_failed" || eventType.includes("failed")) return <IoAlertCircleOutline className="text-danger" />;
     if (eventType.includes("created")) return <IoCheckmarkCircleOutline />;
     if (eventType.includes("updated")) return <IoInformationCircleOutline />;
     if (eventType.includes("deleted") || eventType.includes("removed"))
       return <IoCloseCircleOutline />;
-    if (eventType.includes("failed")) return <IoAlertCircleOutline />;
 
     return <IoInformationCircleOutline />;
   };
@@ -361,9 +371,67 @@ export default function AdminLogsPage() {
           {logs.length === 0 ? (
             <div className="text-center py-12">
               <IoInformationCircleOutline className="w-16 h-16 text-default-300 mx-auto mb-4" />
-              <p className="text-default-500">
-                No logs found matching your filters
+              <p className="text-default-500 mb-4">
+                No logs found matching your filters or no audit events recorded yet.
               </p>
+              <Button
+                color="primary"
+                variant="flat"
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const cid = clinics[0]?.id || "main-clinic";
+                    await auditLogService.createLog({
+                      eventType: "payment_recorded",
+                      performedBy: "cashier_01",
+                      performedByName: "Front Desk Cashier",
+                      performedByEmail: "cashier@procaresoft.com",
+                      clinicId: cid,
+                      status: "success",
+                      details: {
+                        invoiceNumber: "INV-2026-0001",
+                        amountPaid: 2500,
+                        paymentMethod: "Fonepay QR",
+                        patientName: "Ram Sharma",
+                      },
+                    });
+                    await auditLogService.createLog({
+                      eventType: "ird_synced",
+                      performedBy: "system",
+                      performedByName: "IRD CBMS Service",
+                      performedByEmail: "ird-sync@procaresoft.com",
+                      clinicId: cid,
+                      status: "success",
+                      details: {
+                        invoiceNumber: "INV-2026-0001",
+                        responseCode: "200",
+                        fiscalYear: "2083.84",
+                        vatAmount: 287.61,
+                      },
+                    });
+                    await auditLogService.createLog({
+                      eventType: "invoice_created",
+                      performedBy: "admin",
+                      performedByName: "System Admin",
+                      performedByEmail: "admin@procaresoft.com",
+                      clinicId: cid,
+                      status: "success",
+                      details: {
+                        invoiceNumber: "INV-2026-0001",
+                        totalAmount: 2500,
+                        itemsCount: 2,
+                      },
+                    });
+                    await loadLogs(true);
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                Generate Demo Payment & Financial Logs
+              </Button>
             </div>
           ) : (
             <div className="space-y-2">

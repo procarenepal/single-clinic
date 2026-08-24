@@ -15,6 +15,7 @@ import {
   Spinner,
   Chip,
   Input,
+  Pagination,
 } from "@/components/ui";
 import { auditLogService } from "@/services/auditLogService";
 import { AuditLog } from "@/types/models";
@@ -28,6 +29,8 @@ export const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ clinicId }) => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const rowsPerPage = 10;
 
   useEffect(() => {
     loadLogs();
@@ -92,8 +95,16 @@ export const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ clinicId }) => {
     return searchableText.includes(query);
   });
 
+  const totalPages = Math.ceil(filteredLogs.length / rowsPerPage);
+  
+  const paginatedLogs = React.useMemo(() => {
+    const start = (page - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    return filteredLogs.slice(start, end);
+  }, [page, filteredLogs]);
+
   return (
-    <Card className="shadow-none border border-divider h-[600px] flex flex-col">
+    <Card className="shadow-none border border-divider min-h-[750px] flex flex-col">
       <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4">
         <div>
           <h3 className="text-xl font-semibold flex items-center gap-2">
@@ -110,7 +121,10 @@ export const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ clinicId }) => {
             placeholder="Search logs..."
             startContent={<SearchIcon className="text-gray-400" size={18} />}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1); // Reset page on search
+            }}
           />
         </div>
       </CardHeader>
@@ -133,7 +147,7 @@ export const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ clinicId }) => {
                 </TableRow>
               </TableHeader>
               <TableBody emptyContent="No audit logs found.">
-                {filteredLogs.map((log) => (
+                {paginatedLogs.map((log) => (
                   <TableRow key={log.id} className="hover:bg-gray-50/50">
                     <TableCell className="whitespace-nowrap">
                       <div className="flex flex-col">
@@ -185,8 +199,8 @@ export const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ clinicId }) => {
                           </span>
                         )}
                         {log.errorMessage && (
-                          <span className="block text-red-600 truncate mt-1 text-xs">
-                            <strong>Error:</strong> {log.errorMessage}
+                          <span className={`block truncate mt-1 text-xs ${log.status === "success" ? "text-green-600" : "text-red-600"}`}>
+                            <strong>{log.status === "success" ? "Message:" : "Error:"}</strong> {log.errorMessage}
                           </span>
                         )}
                         {!log.details?.roleName && !log.details?.userName && (
@@ -209,6 +223,15 @@ export const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ clinicId }) => {
                 ))}
               </TableBody>
             </Table>
+            {totalPages > 1 && (
+              <div className="flex w-full justify-center mt-6">
+                <Pagination
+                  page={page}
+                  total={totalPages}
+                  onChange={setPage}
+                />
+              </div>
+            )}
           </div>
         )}
       </CardBody>

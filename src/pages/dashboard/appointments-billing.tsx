@@ -57,6 +57,7 @@ import {
 interface InvoiceFormData {
   patientId: string;
   patientName: string;
+  patientPanVat?: string;
   doctorId: string;
   doctorName: string;
   doctorType: "regular" | "visitor";
@@ -119,7 +120,11 @@ function SearchSelect({
   const [open, setOpen] = useState(false);
   const filtered = (
     q
-      ? items.filter((i) => i.primary.toLowerCase().includes(q.toLowerCase()))
+      ? items.filter(
+          (i) =>
+            (i.primary || "").toLowerCase().includes(q.toLowerCase()) ||
+            (i.secondary || "").toLowerCase().includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -139,7 +144,7 @@ function SearchSelect({
           className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full"
           disabled={disabled}
           placeholder={placeholder || `Search…`}
-          value={selected && !open ? selected.primary : q}
+          value={selected && !open ? (selected.primary || "") : q}
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -435,6 +440,7 @@ export default function AppointmentBillingPage() {
   const emptyForm: InvoiceFormData = {
     patientId: "",
     patientName: "",
+    patientPanVat: "",
     doctorId: "",
     doctorName: "",
     doctorType: "regular",
@@ -2396,6 +2402,9 @@ export default function AppointmentBillingPage() {
               <div>
                 <p className="text-[11px] text-text-muted">Patient</p>
                 <p className="font-semibold">{selectedBilling.patientName}</p>
+                {selectedBilling.patientPanVat && (
+                  <p className="text-[11px] text-text-muted mt-0.5">PAN/VAT: {selectedBilling.patientPanVat}</p>
+                )}
               </div>
               <div>
                 <p className="text-[11px] text-text-muted">Doctor</p>

@@ -57,14 +57,14 @@ export const getPrintBrandingCSS = (
     .header {
       position: relative;
       width: 100%;
-      height: ${headerHeight}px;
+      min-height: ${headerHeight}px;
+      padding: 20px 0;
       background: #fff;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       border-bottom: 1px solid #f1f5f9;
-      overflow: hidden;
     }
 
     .identity-stack {
@@ -250,8 +250,8 @@ export const getPrintHeaderHTML = (
 
         ${config.showPan !== false && (config.panNumber || clinic?.panNumber)
       ? `
-          <div class="pos-pan" style="font-weight: 700; font-size: 13px; margin-top: 4px; color: #1e293b;">
-            <span style="font-size: 11px; color: #64748b; font-weight: 600;">PAN/VAT:</span> ${config.panNumber || clinic?.panNumber}
+          <div class="pos-pan" style="font-weight: 700; font-size: 1.1em; margin-top: 4px; color: #1e293b;">
+            <span style="font-size: 0.85em; color: #64748b; font-weight: 600;">PAN/VAT:</span> ${config.panNumber || clinic?.panNumber}
           </div>
         `
       : ""

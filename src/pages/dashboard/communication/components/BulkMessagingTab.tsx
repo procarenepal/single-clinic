@@ -17,7 +17,7 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
 import { smsService, SMSTemplate } from "@/services/sendMessageService";
-import { smsTestService } from "@/services/smsTestService";
+
 import { clinicService } from "@/services/clinicService";
 import { addToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
@@ -244,10 +244,7 @@ const BulkMessagingTab: React.FC = () => {
 
         if (!phone) continue;
 
-        const response = await smsTestService.sendTestSMS(
-          phone,
-          patientMessage,
-        );
+        const response = { success: false, error: "SMS disabled" };
 
         await smsService.createSMSLog({
           clinicId: clinicId!,

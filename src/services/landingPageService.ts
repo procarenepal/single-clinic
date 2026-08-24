@@ -109,11 +109,23 @@ const DEFAULT_CONTENT: LandingPageContent = {
   },
 };
 
+// Firestore's getDoc() has no built-in timeout and can hang indefinitely on a poor
+// or interrupted connection (a real risk for mobile clients on cellular networks),
+// leaving the landing page stuck on its loading spinner forever. Bound it so a slow
+// network degrades to the default content instead of hanging.
+const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("Request timed out")), ms),
+    ),
+  ]);
+
 export const landingPageService = {
   getHomepageContent: async (clinicId: string): Promise<LandingPageContent> => {
     try {
       const docRef = doc(db, "landing_pages", clinicId);
-      const docSnap = await getDoc(docRef);
+      const docSnap = await withTimeout(getDoc(docRef), 10000);
 
       if (docSnap.exists()) {
         return docSnap.data() as LandingPageContent;

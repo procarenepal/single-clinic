@@ -309,4 +309,62 @@ export const auditLogService = {
       // Don't throw - logging failures shouldn't break operations
     }
   },
+
+  /**
+   * Helper to log payment events
+   */
+  async logPayment(data: {
+    performedBy: string;
+    performedByName?: string;
+    performedByEmail?: string;
+    clinicId: string;
+    branchId?: string;
+    invoiceNumber: string;
+    amountPaid: number;
+    paymentMethod: string;
+    patientName?: string;
+  }): Promise<string> {
+    return this.createLog({
+      eventType: "payment_recorded",
+      performedBy: data.performedBy,
+      performedByName: data.performedByName,
+      performedByEmail: data.performedByEmail,
+      clinicId: data.clinicId,
+      branchId: data.branchId,
+      status: "success",
+      details: {
+        invoiceNumber: data.invoiceNumber,
+        amountPaid: data.amountPaid,
+        paymentMethod: data.paymentMethod,
+        patientName: data.patientName,
+      },
+    });
+  },
+
+  /**
+   * Helper to log IRD Sync events
+   */
+  async logIrdSync(data: {
+    performedBy?: string;
+    clinicId: string;
+    invoiceNumber: string;
+    status: "success" | "failure";
+    responseCode?: string;
+    errorMessage?: string;
+    details?: any;
+  }): Promise<string> {
+    return this.createLog({
+      eventType: data.status === "success" ? "ird_synced" : "ird_sync_failed",
+      performedBy: data.performedBy || "system",
+      performedByName: "IRD CBMS Sync Engine",
+      clinicId: data.clinicId,
+      status: data.status,
+      errorMessage: data.errorMessage,
+      details: {
+        invoiceNumber: data.invoiceNumber,
+        responseCode: data.responseCode,
+        ...data.details,
+      },
+    });
+  },
 };

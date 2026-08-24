@@ -31,7 +31,6 @@ import { enquiryService } from "@/services/enquiryService";
 import { clinicService } from "@/services/clinicService";
 import { expertService } from "@/services/expertService";
 import { Clinic } from "@/types/models";
-import { storage, APPWRITE_BUCKET_ID } from "@/config/appwrite";
 // Custom UI — zero HeroUI
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -285,14 +284,8 @@ export const DashboardHeader = ({
   const getLogoUrl = (logo?: string) => {
     if (!logo) return null;
     if (logo.startsWith("http")) return logo;
-    try {
-      // Add timestamp to bust cache
-      const url = storage.getFileView(APPWRITE_BUCKET_ID, logo);
-
-      return `${url.toString()}&t=${Date.now()}`;
-    } catch {
-      return null;
-    }
+    // Legacy Appwrite IDs are no longer supported
+    return null;
   };
 
   // ── Search ────────────────────────────────────────────────────────────────

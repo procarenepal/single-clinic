@@ -71,9 +71,19 @@ function PatientSearchBox({
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
   const filtered = (
-    q
-      ? patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()))
-      : patients
+    q && Array.isArray(patients)
+      ? patients.filter((p) => {
+        const name = p?.name || (p as any)?.patientName || "";
+        const phone = p?.phone || (p as any)?.patientPhone || "";
+        const query = q.toLowerCase();
+        return (
+          name.toLowerCase().includes(query) ||
+          phone.toLowerCase().includes(query)
+        );
+      })
+      : Array.isArray(patients)
+        ? patients
+        : []
   ).slice(0, 80);
 
   return (
@@ -85,6 +95,7 @@ function PatientSearchBox({
           placeholder="Search patient…"
           value={open ? q : value}
           onChange={(e) => {
+
             setQ(e.target.value);
             onChange(e.target.value);
             setOpen(true);
@@ -228,6 +239,7 @@ interface PathologyBillingTabProps {
 interface InvoiceFormData {
   patientId?: string;
   patientName: string;
+  patientPanVat?: string;
   patientEmail: string;
   patientPhone: string;
   patientAddress: string;
@@ -342,6 +354,7 @@ export default function PathologyBillingTab({
   // Form data
   const [formData, setFormData] = useState<InvoiceFormData>({
     patientName: "",
+    patientPanVat: "",
     patientEmail: "",
     patientPhone: "",
     patientAddress: "",
@@ -825,12 +838,38 @@ export default function PathologyBillingTab({
     try {
       setSubmitting(true);
 
+      let patientIdToUse = formData.patientId || null;
+
+      // Auto-create new patient if not selected
+      if (!patientIdToUse && formData.patientName.trim()) {
+        try {
+          patientIdToUse = await patientService.createPatient({
+            clinicId,
+            branchId,
+            name: formData.patientName.trim(),
+            email: formData.patientEmail.trim() || null,
+            phone: formData.patientPhone.trim() || null,
+            mobile: formData.patientPhone.trim() || null,
+            address: formData.patientAddress.trim() || null,
+            age: formData.patientAge ? parseInt(formData.patientAge) : null,
+            gender: (formData.patientGender.trim() as "male" | "female" | "other") || null,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } catch (e) {
+          console.error("Failed to auto-create patient", e);
+          // Continue without a patient ID if it fails, or you could return early
+        }
+      }
+
       // Base billing data for both create and update
       let billingData: any = {
         clinicId,
         branchId,
-        patientId: formData.patientId || null,
+        patientId: patientIdToUse,
         patientName: formData.patientName.trim(),
+        patientPanVat: formData.patientPanVat?.trim() || null,
         patientEmail: formData.patientEmail.trim() || null,
         patientPhone: formData.patientPhone.trim() || null,
         patientAddress: formData.patientAddress.trim() || null,
@@ -1016,6 +1055,36 @@ export default function PathologyBillingTab({
         addToast({
           title: "Error",
           description: "Failed to cancel invoice.",
+          color: "danger",
+        });
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
+  const handleIssueCreditNote = async (billing: PathologyBilling) => {
+    const reason = prompt("Enter the reason for issuing this Credit Note:");
+    if (!reason) return;
+
+    if (confirm("Are you sure you want to issue a Credit Note? This will reverse the invoice and create a new negative invoice.")) {
+      setSubmitting(true);
+      try {
+        await pathologyBillingService.issueCreditNote(billing.id, reason, currentUser?.uid || 'unknown');
+
+        // Refresh billings
+        const updatedBillings = await pathologyBillingService.getBillingByClinic(clinicId, branchId);
+        setBillings(updatedBillings);
+
+        addToast({
+          title: "Success",
+          description: "Credit Note issued successfully",
+          color: "success",
+        });
+      } catch (err: any) {
+        addToast({
+          title: "Error",
+          description: err.message || "Failed to issue Credit Note",
           color: "danger",
         });
       } finally {
@@ -1219,6 +1288,13 @@ export default function PathologyBillingTab({
   const handlePrint = (billing: PathologyBilling) => {
     if (!billing) return;
 
+    const isCopy = (billing.printCount || 0) > 0;
+
+    // Update print count in background
+    pathologyBillingService.updateBilling(billing.id, {
+      printCount: (billing.printCount || 0) + 1
+    }).catch(console.error);
+
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     if (!printWindow) {
@@ -1232,11 +1308,15 @@ export default function PathologyBillingTab({
       return;
     }
 
+    const printedByText = userData ? `${userData.displayName} (${userData.role})` : "";
+    
     const printContent = generateInvoiceHTML(
       billing,
       selectedPrintFormat,
       clinic,
       layoutConfig,
+      isCopy,
+      printedByText
     );
 
     printWindow.document.write(printContent);
@@ -1308,6 +1388,7 @@ export default function PathologyBillingTab({
                         ...prev,
                         patientId: p.id,
                         patientName: p.name,
+                        patientPanVat: p.patientPanVat || "",
                         patientPhone: p.mobile || p.phone || "",
                         patientEmail: p.email || "",
                         patientAddress: p.address || "",
@@ -1329,6 +1410,22 @@ export default function PathologyBillingTab({
                       setFormData((p) => ({
                         ...p,
                         patientPhone: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-medium text-text-muted">
+                    PAN/VAT (Optional)
+                  </label>
+                  <input
+                    className="h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 text-text-main"
+                    placeholder="PAN/VAT"
+                    value={formData.patientPanVat || ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        patientPanVat: e.target.value,
                       }))
                     }
                   />
@@ -2211,6 +2308,7 @@ export default function PathologyBillingTab({
                                   size="sm"
                                   title="Cancel Invoice"
                                   variant="light"
+                                  isDisabled={billing.irdSynced}
                                   onPress={() => handleCancelInvoice(billing)}
                                 >
                                   <IoCloseCircleOutline className="text-lg" />
@@ -2221,6 +2319,7 @@ export default function PathologyBillingTab({
                               size="sm"
                               title="Edit"
                               variant="light"
+                              isDisabled={billing.irdSynced}
                               onPress={() => handleEditInvoice(billing)}
                             >
                               <IoPencilOutline className="text-lg text-default-500 hover:text-primary" />
@@ -2246,6 +2345,19 @@ export default function PathologyBillingTab({
                             >
                               <IoEyeOutline className="text-lg text-default-500 hover:text-primary" />
                             </Button>
+                            {billing.status === "finalized" && billing.irdSynced && !billing.isCreditNote && (
+                              <Button
+                                isIconOnly
+                                color="danger"
+                                size="sm"
+                                title="Issue Credit Note (Sales Return)"
+                                variant="light"
+                                isLoading={submitting}
+                                onPress={() => handleIssueCreditNote(billing)}
+                              >
+                                <span className="font-bold text-sm">CN</span>
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2467,6 +2579,9 @@ export default function PathologyBillingTab({
                 <div>
                   <p className="text-sm text-text-muted">Patient Name</p>
                   <p className="font-medium">{selectedBilling.patientName}</p>
+                  {selectedBilling.patientPanVat && (
+                    <p className="text-xs text-text-muted mt-0.5">PAN/VAT: {selectedBilling.patientPanVat}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm text-text-muted">Invoice Date</p>

@@ -1475,17 +1475,10 @@ export const smsService = {
         return false;
       }
 
-      // Import smsTestService here to avoid circular dependencies
-      const { smsTestService } = await import("./smsTestService");
+      // SMS scheduling via backend is no longer available
+      console.warn("SMS scheduling is disabled: sms-backend has been removed");
 
-      // Schedule the SMS using our Firebase-backed test service
-      const response = await smsTestService.scheduleTest(
-        phoneNumber,
-        message,
-        scheduledTime
-      );
-
-      return response.success;
+      return false;
     } catch (error) {
       console.error("Error scheduling SMS via Firebase:", error);
 
@@ -1587,17 +1580,10 @@ export const smsService = {
         return false;
       }
 
-      // Import smsTestService here to avoid circular dependencies
-      const { smsTestService } = await import("./smsTestService");
+      // SMS scheduling via backend is no longer available
+      console.warn("SMS scheduling is disabled: sms-backend has been removed");
 
-      // Schedule the SMS using our Firebase-backed test service
-      const response = await smsTestService.scheduleTest(
-        phoneNumber,
-        message,
-        scheduledTime
-      );
-
-      return response.success;
+      return false;
     } catch (error) {
       console.error("Error scheduling doctor SMS via Firebase:", error);
 

@@ -45,6 +45,7 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
 import { expertService } from "@/services/expertService";
+import { IrdAnnexureReport } from "./IrdAnnexureReport";
 
 // Types
 import {
@@ -3044,6 +3045,22 @@ export default function ReportsPage() {
                 )}
               </div>
             </div>
+          </Tab>
+
+          <Tab
+            key="ird-annexure"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                IRD Reports (Annexure 13 & 14)
+              </span>
+            }
+          >
+            <IrdAnnexureReport
+              billings={filteredBillings}
+              pathologyBillings={filteredPathologyBillings}
+              medicinePurchases={reportData.medicinePurchases}
+            />
           </Tab>
         </Tabs>
       </div>

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:backend": "node scripts/billing-backend-server.cjs",
     "build": "tsc && vite build",
     "build:suppress": "tsc --noEmit || true && vite build",
     "build:force": "vite build",
@@ -17,15 +18,10 @@
     "initialize-admin": "node scripts/initialize-admin.js",
     "migrate:auto-assign": "tsx src/scripts/migrate-auto-assign.ts",
     "seed:pages": "tsx src/scripts/seed-pages.ts",
-    "deploy:sms-function": "node scripts/deploy-sms-function.cjs",
     "configure:firebase-reset": "node scripts/configure-firebase-password-reset.js",
     "test:impersonation-sync": "node scripts/test-impersonation-sync.js",
     "rules:dev": "node scripts/switch-firestore-rules.js dev",
     "rules:prod": "node scripts/switch-firestore-rules.js prod",
-    "railway:build": "npm run build && npm install --prefix sms-backend",
-    "railway:start": "node railway-server.js",
-    "railway:dev": "concurrently \"npm run dev\" \"cd sms-backend && npm run dev\"",
-    "start": "node railway-server.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

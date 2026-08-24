@@ -564,7 +564,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
     return () => {
       off();
     };
-  }, [dataOnly, currentUser, clinicId]);
+  }, [dataOnly]);
 
   // Memoize the return value to prevent unnecessary re-renders in consumers
   return useMemo(

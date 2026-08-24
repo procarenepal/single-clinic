@@ -256,7 +256,7 @@ function SearchSelect({
   const [open, setOpen] = useState(false);
   const filtered = (
     q
-      ? items.filter((i) => i.primary.toLowerCase().includes(q.toLowerCase()))
+      ? items.filter((i) => (i.primary || "").toLowerCase().includes(q.toLowerCase()))
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -831,9 +831,9 @@ export default function PurchaseDetailPage() {
     purchase?.totalReturnedAmount && purchase.totalReturnedAmount > 0
       ? purchase.totalReturnedAmount
       : (purchase?.returns ?? []).reduce(
-          (sum, r) => sum + Math.abs(r.totalAmount || 0),
-          0,
-        ),
+        (sum, r) => sum + Math.abs(r.totalAmount || 0),
+        0,
+      ),
   );
   const netAfterReturns = Math.max(0, totalAmount - totalReturnedAmount);
   const paidAmount = Math.round(
@@ -1000,13 +1000,13 @@ export default function PurchaseDetailPage() {
       setPurchase((prev) =>
         prev
           ? {
-              ...prev,
-              paymentStatus: newStatus,
-              ...(calculatedDiscountAmount > 0 && {
-                discount: newDiscountTotal,
-                netAmount: newNetAmount,
-              }),
-            }
+            ...prev,
+            paymentStatus: newStatus,
+            ...(calculatedDiscountAmount > 0 && {
+              discount: newDiscountTotal,
+              netAmount: newNetAmount,
+            }),
+          }
           : null,
       );
 
@@ -1036,8 +1036,19 @@ export default function PurchaseDetailPage() {
     }
   };
 
-  const handlePrint = (format: string = "A4") => {
+  const handlePrint = async (format: string = "A4") => {
     if (!purchase) return;
+
+    const isCopy = (purchase.printCount || 0) > 0;
+
+    try {
+      await pharmacyService.updateMedicinePurchase(purchase.id, {
+        printCount: (purchase.printCount || 0) + 1
+      });
+      setPurchase((prev) => prev ? { ...prev, printCount: (prev.printCount || 0) + 1 } : prev);
+    } catch (err) {
+      console.error("Failed to update print count", err);
+    }
 
     const isThermal =
       format.startsWith("THERMAL") ||
@@ -1073,19 +1084,18 @@ export default function PurchaseDetailPage() {
           <td style="text-align: center;">${index + 1}</td>
           <td>
             <div style="font-weight: bold;">${item.medicineName}</div>
-            ${
-              item.batchNumber || item.expiryDate
-                ? `
-              <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">
+            ${item.batchNumber || item.expiryDate
+              ? `
+              <div style="font-size: 0.85em; color: #64748b; margin-top: 2px;">
                 ${item.expiryDate ? `<strong>Exp:</strong> ${item.expiryDate}` : ""}
                 ${item.batchNumber ? `${item.expiryDate ? " | " : ""}<strong>Batch:</strong> ${item.batchNumber}` : ""}
               </div>`
-                : ""
+              : ""
             }
           </td>
-          <td style="text-align: center;">${item.quantity}</td>
-          <td style="text-align: right;">NPR ${formattedPrice}</td>
-          <td style="text-align: right;">NPR ${item.amount.toLocaleString()}</td>
+          <td style="text-align: center; white-space: nowrap;">${item.quantity}</td>
+          <td style="text-align: center; white-space: nowrap;">NPR ${formattedPrice}</td>
+          <td style="text-align: center; white-space: nowrap;">NPR ${item.amount.toLocaleString()}</td>
         </tr>`;
         })
         .join("");
@@ -1093,38 +1103,36 @@ export default function PurchaseDetailPage() {
       // Build the summary rows (right side)
       const summaryRowsHtml = `
         <tr>
-          <td style="text-align: left; padding: 4px 0;">Subtotal</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(purchase.total).toLocaleString()}</td>
+          <td style="text-align: left; padding: 2px 0;">Subtotal</td>
+          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(purchase.total).toLocaleString()}</td>
         </tr>
-        ${
-          purchase.discount > 0
-            ? `
+        ${purchase.discount > 0
+          ? `
         <tr>
-          <td style="text-align: left; padding: 4px 0;">Discount</td>
-          <td style="text-align: right; padding: 4px 0;">- NPR ${Math.round(purchase.discount).toLocaleString()}</td>
+          <td style="text-align: left; padding: 2px 0;">Discount</td>
+          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">- NPR ${Math.round(purchase.discount).toLocaleString()}</td>
         </tr>`
-            : ""
+          : ""
         }
-        ${
-          purchase.taxAmount > 0
-            ? `
+        ${purchase.taxAmount > 0
+          ? `
         <tr>
-          <td style="text-align: left; padding: 4px 0;">Tax (${purchase.taxPercentage}%)</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(purchase.taxAmount).toLocaleString()}</td>
+          <td style="text-align: left; padding: 2px 0;">Tax (${purchase.taxPercentage}%)</td>
+          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(purchase.taxAmount).toLocaleString()}</td>
         </tr>`
-            : ""
+          : ""
         }
-        <tr style="font-weight: bold; font-size: 14px;">
-          <td style="text-align: left; padding: 8px 0; border-top: 1px solid #e2e8f0;">Total</td>
-          <td style="text-align: right; padding: 8px 0; border-top: 1px solid #e2e8f0;">NPR ${Math.round(purchase.netAmount).toLocaleString()}</td>
+        <tr style="font-weight: bold; font-size: 1.1em;">
+          <td style="text-align: left; padding: 4px 0; border-top: 1px solid #e2e8f0;">Total</td>
+          <td style="text-align: right; padding: 4px 0; border-top: 1px solid #e2e8f0; white-space: nowrap;">NPR ${Math.round(purchase.netAmount).toLocaleString()}</td>
         </tr>
         <tr>
-          <td style="text-align: left; padding: 4px 0;">Paid (${purchase.paymentType.toUpperCase()})</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(paidAmount).toLocaleString()}</td>
+          <td style="text-align: left; padding: 2px 0;">Paid (${purchase.paymentType.toUpperCase()})</td>
+          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(paidAmount).toLocaleString()}</td>
         </tr>
-        <tr style="font-weight: bold; font-size: 14px;">
-          <td style="text-align: left; padding: 4px 0;">Balance</td>
-          <td style="text-align: right; padding: 4px 0;">NPR ${Math.round(dueAmount).toLocaleString()}</td>
+        <tr style="font-weight: bold; font-size: 1.1em;">
+          <td style="text-align: left; padding: 2px 0;">Balance</td>
+          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(dueAmount).toLocaleString()}</td>
         </tr>
       `;
 
@@ -1158,7 +1166,7 @@ export default function PurchaseDetailPage() {
     body {
       font-family: Arial, sans-serif;
       color: #333;
-      font-size: ${isThermal ? "11px" : "13px"};
+      font-size: ${layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : isThermal ? "11px" : "13px"};
     }
     .print-container {
       width: ${isThermal ? thermalWidth : "100%"};
@@ -1177,6 +1185,7 @@ export default function PurchaseDetailPage() {
       margin: 8px 0 2px 0;
       border-bottom: 2px solid #7c3aed;
       padding-bottom: 4px;
+      width: 100%;
     }
     .document-title h2 {
       font-size: 16px;
@@ -1186,108 +1195,74 @@ export default function PurchaseDetailPage() {
       letter-spacing: 0.15em;
       color: #7c3aed;
     }
-    
-    .invoice-info-section {
+    .document-info {
       display: flex;
       justify-content: space-between;
-      align-items: stretch;
-      margin: 8px 0;
-      gap: 12px;
+      margin-top: 8px;
+      margin-bottom: 12px;
+      font-size: 0.95em;
+      font-weight: 500;
+      color: #334155;
     }
 
-    .bill-to-block {
-      flex: 1;
-      background-color: #f8fafc;
+    .bill-to-section {
+      background-color: ${isThermal ? "transparent" : "#f8fafc"};
       border-radius: 6px;
-      padding: 8px 12px;
-      border: 1px dashed #cbd5e1;
+      padding: ${isThermal ? "2px 0" : "10px 12px"};
+      margin-bottom: 16px;
+      border: ${isThermal ? "none" : "1px dashed #cbd5e1"};
     }
-    .bill-to-title {
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
       color: #64748b;
-      font-weight: 700;
-      margin-bottom: 2px;
-    }
-    .bill-to-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-    .bill-to-detail {
-      font-size: 11px;
-      color: #475569;
-      margin-top: 1px;
-    }
-
-    .invoice-details-block {
-      width: 240px;
-      background-color: #f8fafc;
-      border-radius: 6px;
-      padding: 8px 12px;
-      border: 1px solid #e2e8f0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 3px;
-    }
-    .detail-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11px;
-    }
-    .detail-label {
-      color: #64748b;
+      font-size: 0.85em;
       font-weight: 600;
     }
     .detail-val {
-      color: #0f172a;
       font-weight: 700;
-      text-align: right;
+      color: #1e293b;
+      font-size: 0.9em;
     }
 
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
+      margin-top: 6px;
     }
     .items-table th {
       background-color: #f8fafc;
       border: 1px solid #e2e8f0;
-      padding: 10px;
+      padding: 6px;
       text-align: center;
-      font-size: 11px;
+      font-size: 0.85em;
       font-weight: 700;
       text-transform: uppercase;
       color: #64748b;
     }
     .items-table td {
       border: 1px solid #e2e8f0;
-      padding: 12px 10px;
-      font-size: 12px;
+      padding: 6px;
+      font-size: 0.9em;
       color: #334155;
     }
 
     .summary-container {
       display: flex;
       justify-content: flex-end;
-      margin-top: 20px;
+      margin-top: 8px;
     }
     .summary-table {
-      width: 250px;
+      min-width: 280px;
+      width: auto;
       border-collapse: collapse;
     }
     .summary-table td {
-      font-size: 13px;
+      font-size: 1em;
       color: #334155;
     }
     
     .footer-note {
       text-align: center;
       margin-top: 40px;
-      font-size: 11px;
+      font-size: 0.85em;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: #94a3b8;
@@ -1295,15 +1270,6 @@ export default function PurchaseDetailPage() {
     }
     
     ${brandingCSS}
-
-    .document-info {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        margin-top: 5px;
-        font-size: 11px;
-    }
   </style>
 </head>
 <body>
@@ -1312,35 +1278,26 @@ export default function PurchaseDetailPage() {
     
     <div class="document-title">
       <h2>TAX INVOICE</h2>
+      ${isCopy ? `<div style="text-align: center; font-weight: bold; font-size: 16px; margin-top: 10px; margin-bottom: 10px; text-transform: uppercase;">[ COPY OF ORIGINAL ]</div>` : ""}
     </div>
 
-    <div class="invoice-info-section">
-      <div class="bill-to-block">
-        <div class="bill-to-title">Bill To</div>
-        <div class="bill-to-name">${purchase.patientName || "Cash Customer"}</div>
-        ${purchase.patientPhone ? `<div class="bill-to-detail">Phone: ${purchase.patientPhone}</div>` : ""}
-        ${purchase.patientAddress ? `<div class="bill-to-detail">Address: ${purchase.patientAddress}</div>` : ""}
-      </div>
-      
-      <div class="invoice-details-block">
-        <div class="detail-row">
-          <span class="detail-label">Invoice No:</span>
-          <span class="detail-val">#${purchase.purchaseNo}</span>
+    <div class="document-info">
+      <span># ${purchase.purchaseNo}</span>
+      <span>Date: ${purchase.purchaseDate.toLocaleDateString()}</span>
+    </div>
+
+    <div class="bill-to-section">
+      <div style="display: grid; grid-template-columns: ${isThermal ? '1fr' : '1fr 1fr'}; gap: ${isThermal ? '2px' : '20px'};">
+        <div style="display: grid; grid-template-columns: max-content 1fr; column-gap: 8px; row-gap: 4px; align-items: baseline;">
+          <div style="font-weight: 700; font-size: 0.8em; color: #64748b; text-transform: uppercase;">BILL TO:</div>
+          <div style="font-weight: 700; font-size: 1.1em; color: #0f172a;">${purchase.patientName || "Cash Customer"}</div>
+          
+          ${purchase.patientPanVat ? `<div style="font-size: 0.85em; color: #64748b;">Buyer PAN:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${purchase.patientPanVat}</div>` : ""}
         </div>
-        <div class="detail-row">
-          <span class="detail-label">Date:</span>
-          <span class="detail-val">${purchase.purchaseDate.toLocaleDateString()}</span>
+        <div style="display: grid; grid-template-columns: max-content 1fr; column-gap: 8px; row-gap: 4px; align-items: baseline;">
+          ${purchase.patientPhone ? `<div style="font-size: 0.85em; color: #64748b;">Phone:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${purchase.patientPhone}</div>` : ""}
+          ${purchase.patientAddress ? `<div style="font-size: 0.85em; color: #64748b;">Address:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${purchase.patientAddress}</div>` : ""}
         </div>
-        ${
-          clinic?.panNumber
-            ? `
-        <div class="detail-row">
-          <span class="detail-label">Clinic PAN:</span>
-          <span class="detail-val">${clinic.panNumber}</span>
-        </div>
-        `
-            : ""
-        }
       </div>
     </div>
 
@@ -1349,9 +1306,9 @@ export default function PurchaseDetailPage() {
         <tr>
           <th style="width: 50px;">S.N.</th>
           <th style="text-align: left;">Medicine</th>
-          <th style="width: 60px;">Qty</th>
-          <th style="width: 100px; text-align: right;">Price</th>
-          <th style="width: 110px; text-align: right;">Total</th>
+          <th style="width: 60px; white-space: nowrap;">Qty</th>
+          <th style="width: 15%; text-align: center; white-space: nowrap;">Price</th>
+          <th style="width: 15%; text-align: center; white-space: nowrap;">Total</th>
         </tr>
       </thead>
       <tbody>
@@ -1367,9 +1324,9 @@ export default function PurchaseDetailPage() {
       </table>
     </div>
 
-    <div style="margin-top: 30px; text-align: center;">
-      ${!layoutConfig?.showFooter ? '<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; font-weight: 600;">Thank you for choosing us.</div>' : ""}
-      <div style="font-size: 9.5px; margin-top: 10px; color: #64748b; text-align: right; font-weight: 500;">
+    <div style="margin-top: 15px; text-align: center;">
+      ${!layoutConfig?.showFooter ? '<div style="font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; font-weight: 600;">Thank you for choosing us.</div>' : ""}
+      <div style="font-size: 0.75em; margin-top: 10px; color: #64748b; text-align: right; font-weight: 500;">
         Print Date: ${new Date().toLocaleString()}
       </div>
     </div>
@@ -1551,6 +1508,14 @@ export default function PurchaseDetailPage() {
                     <span>•</span>
                     <span className="font-semibold text-mountain-900">
                       Patient: {purchase.patientName}
+                    </span>
+                  </>
+                )}
+                {purchase.patientPanVat && (
+                  <>
+                    <span>•</span>
+                    <span className="font-semibold text-mountain-900">
+                      PAN/VAT: {purchase.patientPanVat}
                     </span>
                   </>
                 )}
@@ -2119,6 +2084,11 @@ export default function PurchaseDetailPage() {
                     Patient: {purchase.patientName}
                   </span>
                 )}
+                {purchase.patientPanVat && (
+                  <span style={{ fontWeight: "bold" }}>
+                    PAN/VAT: {purchase.patientPanVat}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -2487,8 +2457,8 @@ export default function PurchaseDetailPage() {
                 fontWeight: 600,
               } : undefined}
               dangerouslySetInnerHTML={{
-                __html: receiptFormat === "Thermal" 
-                  ? `<p style="margin: 0;">${layoutConfig.pharmacyFooterText || layoutConfig.footerText}</p>` 
+                __html: receiptFormat === "Thermal"
+                  ? `<p style="margin: 0;">${layoutConfig.pharmacyFooterText || layoutConfig.footerText}</p>`
                   : getPrintFooterHTML(layoutConfig, "pharmacy"),
               }}
             />

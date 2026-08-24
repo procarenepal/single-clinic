@@ -97,7 +97,31 @@ export function useAuthContext() {
   const context = useContext(AuthContext);
 
   if (context === undefined) {
-    throw new Error("useAuthContext must be used within an AuthProvider");
+    // Return a safe fallback context during Vite HMR module re-evaluations to avoid crashing the tree
+    return {
+      currentUser: null,
+      userData: null,
+      clinicId: null,
+      branchId: null,
+      isLoading: true,
+      subscriptionValid: null,
+      subscriptionLastChecked: null,
+      permissionsReady: false,
+      register: async () => {},
+      login: async () => {},
+      logout: async () => {},
+      isClinicAdmin: () => false,
+      isSystemOwner: () => false,
+      hasPermission: () => false,
+      hasPagePermission: async () => false,
+      hasPagePermissionSync: () => null,
+      hasPagePermissionByPath: async () => false,
+      preloadPermissions: async () => {},
+      getAccessiblePages: async () => [],
+      checkClinicSubscription: async () => false,
+      updateProfileInfo: async () => ({ success: false }),
+      updateEmailInfo: async () => ({ success: false }),
+    } as AuthContextType;
   }
 
   return context;

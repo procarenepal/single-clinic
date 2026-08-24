@@ -3,6 +3,13 @@ import { Link } from "react-router-dom";
 import { ArrowRight, GraduationCap, Award, Stethoscope, ChevronRight } from "lucide-react";
 import { clsx } from "clsx";
 
+import { Reveal } from "@/components/ui/Reveal";
+import { useParallax } from "@/hooks/useParallax";
+
+const SERIF = { fontFamily: "'Fraunces', serif" };
+const BRAND_GRADIENT =
+  "linear-gradient(135deg, rgb(var(--color-primary)) 0%, color-mix(in srgb, rgb(var(--color-primary)) 70%, #a78bfa) 100%)";
+
 const team = [
   {
     name: "Dr. Ji-Yeon Park",
@@ -118,30 +125,32 @@ export default function MeetTheTeam() {
   const [active, setActive] = useState(0);
   const member = team[active];
   const badge = BADGE_COLORS[member.badge] ?? BADGE_COLORS["Specialist"];
+  const blobParallax = useParallax<HTMLDivElement>(-0.1, "translate(30%, -30%)");
 
   return (
-    <section className="py-20 lg:py-32 relative overflow-hidden" id="team">
+    <section className="py-12 lg:py-32 relative overflow-hidden" id="team">
       {/* Background Decorative Elements */}
-      <div 
-        className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10 pointer-events-none" 
-        style={{ background: "rgb(var(--color-primary))", transform: "translate(30%, -30%)" }} 
+      <div
+        ref={blobParallax}
+        className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10 pointer-events-none"
+        style={{ background: "rgb(var(--color-primary))" }}
       />
-      <div 
-        className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full blur-[150px] opacity-[0.07] pointer-events-none" 
-        style={{ background: "rgb(var(--color-primary))", transform: "translate(-20%, 20%)" }} 
+      <div
+        className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full blur-[150px] opacity-[0.07] pointer-events-none"
+        style={{ background: "rgb(var(--color-primary))", transform: "translate(-20%, 20%)" }}
       />
 
       <div className="max-w-7xl mx-auto px-5 lg:px-8 relative z-10">
         {/* Header */}
-        <div className="mb-14 lg:mb-20 text-center lg:text-left flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+        <Reveal className="mb-8 lg:mb-20 text-center lg:text-left flex flex-col lg:flex-row lg:items-end justify-between gap-6">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 mb-4">
-              <span className="w-8 h-px bg-[rgb(var(--color-primary))]" />
-              <p className="text-xs font-bold uppercase tracking-widest text-[rgb(var(--color-primary))]">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5" style={{ background: "rgba(var(--color-primary),0.08)", border: "1px solid rgba(var(--color-primary),0.18)" }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "rgb(var(--color-primary))" }} />
+              <span className="text-xs font-bold uppercase tracking-widest text-[rgb(var(--color-primary))]">
                 Our Specialists
-              </p>
+              </span>
             </div>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-[rgb(var(--color-text))] mb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl tracking-tight text-[rgb(var(--color-text))] mb-4" style={{ ...SERIF, fontWeight: 600 }}>
               Meet the Team
             </h2>
             <p className="text-base sm:text-lg text-[rgb(var(--color-text-muted))]">
@@ -162,7 +171,7 @@ export default function MeetTheTeam() {
                 <ChevronRight className="w-5 h-5" />
              </button>
           </div>
-        </div>
+        </Reveal>
 
         {/* Main layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
@@ -170,7 +179,9 @@ export default function MeetTheTeam() {
           {/* Left Cards */}
           <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-5 lg:gap-6">
             {team.map((m, i) => (
-              <TeamCard key={m.name} member={m} active={active === i} onSelect={() => setActive(i)} />
+              <Reveal key={m.name} delay={i * 100} direction="up" className={i === 1 ? "sm:-mt-6" : ""}>
+                <TeamCard member={m} active={active === i} onSelect={() => setActive(i)} />
+              </Reveal>
             ))}
           </div>
 
@@ -178,12 +189,13 @@ export default function MeetTheTeam() {
           <div className="lg:col-span-5 relative">
             <div
               key={active} // Force re-render for simple animation
-              className="rounded-[2rem] p-8 sm:p-10 border border-[rgba(var(--color-border))] bg-[rgb(var(--color-bg))]/80 backdrop-blur-xl shadow-xl shadow-[rgba(var(--color-primary),0.03)] animate-in fade-in slide-in-from-bottom-4 duration-500"
+              className="rounded-[2rem] p-6 sm:p-10 border border-[rgba(var(--color-border))] bg-[rgb(var(--color-bg))]/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-500"
+              style={{ boxShadow: "0 32px 64px -32px rgba(var(--color-primary),0.25)" }}
             >
               {/* Doctor name & badge */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
                 <div>
-                  <h3 className="text-2xl sm:text-3xl font-bold text-[rgb(var(--color-text))] mb-2">
+                  <h3 className="text-2xl sm:text-3xl mb-2 text-[rgb(var(--color-text))]" style={{ ...SERIF, fontWeight: 600 }}>
                     {member.name}
                   </h3>
                   <p className="text-base text-[rgb(var(--color-text-muted))] font-medium">
@@ -199,14 +211,14 @@ export default function MeetTheTeam() {
               </div>
 
               {/* Bio */}
-              <p className="text-[15px] sm:text-base leading-relaxed text-[rgb(var(--color-text-muted))] mb-8">
+              <p className="text-[15px] sm:text-base leading-relaxed text-[rgb(var(--color-text-muted))] mb-6 sm:mb-8">
                 {member.bio}
               </p>
 
-              <hr className="border-[rgba(var(--color-border))] mb-8" />
+              <hr className="border-[rgba(var(--color-border))] mb-6 sm:mb-8" />
 
               {/* Credentials */}
-              <div className="mb-8">
+              <div className="mb-6 sm:mb-8">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="p-2 rounded-lg bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]">
                     <GraduationCap className="w-4 h-4" />
@@ -226,7 +238,7 @@ export default function MeetTheTeam() {
               </div>
 
               {/* Specializations */}
-              <div className="mb-10">
+              <div className="mb-6 sm:mb-10">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="p-2 rounded-lg bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]">
                     <Stethoscope className="w-4 h-4" />
@@ -255,8 +267,8 @@ export default function MeetTheTeam() {
               {/* CTA */}
               <Link
                 to="/contact"
-                className="group relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-white overflow-hidden transition-all hover:shadow-lg hover:shadow-[rgba(var(--color-primary),0.3)] w-full"
-                style={{ background: "rgb(var(--color-primary))" }}
+                className="group relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-white overflow-hidden transition-transform duration-200 hover:-translate-y-0.5 w-full"
+                style={{ background: BRAND_GRADIENT, boxShadow: "0 16px 32px -12px rgba(var(--color-primary),0.5)" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
                   Book with {member.name.split(" ")[1]} 

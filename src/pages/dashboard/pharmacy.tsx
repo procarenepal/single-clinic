@@ -182,7 +182,7 @@ function SearchSelect({
   const [open, setOpen] = useState(false);
   const filtered = (
     q
-      ? items.filter((i) => i.primary.toLowerCase().includes(q.toLowerCase()))
+      ? items.filter((i) => (i.primary || "").toLowerCase().includes(q.toLowerCase()))
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -452,6 +452,9 @@ interface MedicinePurchase {
   paymentStatus: "paid" | "pending" | "partial" | "unpaid";
   paymentNote: string;
   patientName?: string;
+  patientPhone?: string;
+  patientAddress?: string;
+  patientPanVat?: string;
   medicationDurationDays?: number;
   purchaseDate: Date;
   clinicId: string;
@@ -465,6 +468,7 @@ interface MedicinePurchase {
   updatedAt: Date;
   returns?: MedicinePurchaseReturn[];
   totalReturnedAmount?: number;
+  printCount?: number;
 }
 
 
@@ -742,6 +746,7 @@ export default function PharmacyPage() {
     patientName: "",
     patientPhone: "",
     patientAddress: "",
+    patientPanVat: "",
     medicationDurationDays: 0,
     customerType: "walk-in" as "walk-in" | "patient",
     patientId: "",
@@ -2494,9 +2499,6 @@ export default function PharmacyPage() {
     try {
       setIsSubmitting(true);
 
-      // Generate purchase number
-      const purchaseNo = `PUR-${Date.now()}`;
-
       // Convert PurchaseItem to MedicinePurchaseItem format for backward compatibility
       const purchaseItems_formatted = purchaseItems
         .filter((item) => item.productId && item.quantity > 0)
@@ -2525,7 +2527,6 @@ export default function PharmacyPage() {
       }
 
       const purchaseData: any = {
-        purchaseNo,
         items: purchaseItems_formatted,
         total: purchaseForm.total,
         discount: discountAmount,
@@ -2556,6 +2557,9 @@ export default function PharmacyPage() {
       }
       if (purchaseForm.patientAddress && purchaseForm.patientAddress.trim()) {
         purchaseData.patientAddress = purchaseForm.patientAddress.trim();
+      }
+      if (purchaseForm.patientPanVat && purchaseForm.patientPanVat.trim()) {
+        purchaseData.patientPanVat = purchaseForm.patientPanVat.trim();
       }
       if (
         purchaseForm.medicationDurationDays &&
@@ -2637,6 +2641,7 @@ export default function PharmacyPage() {
         patientName: "",
         patientPhone: "",
         patientAddress: "",
+        patientPanVat: "",
         medicationDurationDays: 0,
         customerType: "walk-in",
         patientId: "",
@@ -4150,19 +4155,19 @@ export default function PharmacyPage() {
                                           <button
                                             className="text-[10px] text-primary hover:underline"
                                             onClick={async () => {
-                                                try {
-                                                  const { retryIrdSync } = await import("@/services/irdCbmsService");
-                                                  const res = await retryIrdSync(purchase.id, "pharmacy");
-                                                  if (res.success) {
-                                                    toast.success("IRD Sync successful!");
-                                                  } else {
-                                                    toast.error("IRD Sync failed: " + res.message);
-                                                  }
-                                                } catch (e) {
-                                                  toast.error("Error during retry sync");
+                                              try {
+                                                const { retryIrdSync } = await import("@/services/irdCbmsService");
+                                                const res = await retryIrdSync(purchase.id, "pharmacy");
+                                                if (res.success) {
+                                                  toast.success("IRD Sync successful!");
+                                                } else {
+                                                  toast.error("IRD Sync failed: " + res.message);
                                                 }
-                                              }}
-                                            >
+                                              } catch (e) {
+                                                toast.error("Error during retry sync");
+                                              }
+                                            }}
+                                          >
                                             Retry Sync
                                           </button>
                                         </>
@@ -6989,9 +6994,7 @@ export default function PharmacyPage() {
                   <div
                     className={clsx(
                       "grid gap-3",
-                      purchaseForm.customerType === "patient"
-                        ? "grid-cols-1 md:grid-cols-3"
-                        : "grid-cols-1 md:grid-cols-2",
+                      "grid-cols-1 md:grid-cols-2",
                     )}
                   >
                     <CustomSelect
@@ -7100,6 +7103,18 @@ export default function PharmacyPage() {
                     )}
 
                     <CustomInput
+                      label="PAN/VAT No (optional)"
+                      placeholder="Enter PAN/VAT"
+                      value={purchaseForm.patientPanVat || ""}
+                      onChange={(e: any) =>
+                        setPurchaseForm((prev) => ({
+                          ...prev,
+                          patientPanVat: e.target.value,
+                        }))
+                      }
+                    />
+
+                    <CustomInput
                       label="Medication Duration (days)"
                       min="0"
                       placeholder="e.g. 30 (leave blank if N/A)"
@@ -7198,9 +7213,9 @@ export default function PharmacyPage() {
                                 items={
                                   item.type === "medicine"
                                     ? medicines.map((m) => ({
-                                        id: m.id,
-                                        primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
-                                      }))
+                                      id: m.id,
+                                      primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
+                                    }))
                                     : items.map((i) => ({
                                       id: i.id,
                                       primary: i.name,

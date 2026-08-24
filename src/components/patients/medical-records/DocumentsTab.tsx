@@ -10,6 +10,7 @@ import {
   IoDownloadOutline,
   IoTrashOutline,
 } from "react-icons/io5";
+import { addToast } from "@heroui/toast";
 
 import AddDocumentModal from "./AddDocumentModal.tsx";
 
@@ -43,26 +44,30 @@ export default function DocumentsTab({
       day: "numeric",
     });
 
-  const handleDownload = (fileId: string) => {
+  const handleDownload = async (fileId: string, fileName: string) => {
+    if (!fileId) return;
     try {
-      const url = MedicalRecordsService.getFileDownloadUrl(fileId);
+      const url = await MedicalRecordsService.getFileDownloadUrl(fileId);
       const a = document.createElement("a");
-
       a.href = url;
-      a.download = `document-${fileId}`;
+      a.download = fileName || "document";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error("Error getting download URL", error);
+      addToast({ title: "Error", description: "Failed to download document", color: "danger" });
     }
   };
 
-  const handleView = (fileId: string) => {
+  const handleView = async (fileId: string) => {
+    if (!fileId) return;
     try {
-      window.open(MedicalRecordsService.getFileViewUrl(fileId), "_blank");
-    } catch (e) {
-      console.error(e);
+      const url = await MedicalRecordsService.getFileViewUrl(fileId);
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Error getting view URL", error);
+      addToast({ title: "Error", description: "Failed to open document", color: "danger" });
     }
   };
 
@@ -155,7 +160,9 @@ export default function DocumentsTab({
                         size="sm"
                         startContent={<IoDownloadOutline className="w-3 h-3" />}
                         variant="bordered"
-                        onClick={() => handleDownload(record.file!)}
+                        onClick={() =>
+                          handleDownload(record.file!, `document-${record.id}`)
+                        }
                       >
                         Download
                       </Button>

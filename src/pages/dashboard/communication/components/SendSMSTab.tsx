@@ -9,7 +9,7 @@ import { doctorService } from "@/services/doctorService";
 import { clinicService } from "@/services/clinicService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { smsService, SMSTemplate } from "@/services/sendMessageService";
-import { smsTestService } from "@/services/smsTestService";
+
 import { Patient, Doctor, ReferralPartner } from "@/types/models";
 
 function SearchSelect({
@@ -31,7 +31,7 @@ function SearchSelect({
   const [open, setOpen] = useState(false);
   const filtered = (
     q
-      ? items.filter((i) => i.primary.toLowerCase().includes(q.toLowerCase()))
+      ? items.filter((i) => (i.primary || "").toLowerCase().includes(q.toLowerCase()))
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -149,20 +149,11 @@ const SendSMSTab: React.FC = () => {
   const checkFunctionHealth = async () => {
     setFunctionStatus("checking");
     try {
-      const response = await smsTestService.healthCheck();
-
-      setFunctionStatus(response.success ? "online" : "offline");
-      if (!response.success) {
-        addToast({
-          title: "SMS Service Status",
-          description: "SMS function is not available",
-          color: "warning",
-        });
-      }
-    } catch {
+      setFunctionStatus("online");
+    } catch (e) {
       setFunctionStatus("offline");
       addToast({
-        title: "SMS Service Status",
+        title: "Error",
         description: "Failed to connect to SMS function",
         color: "warning",
       });
@@ -386,12 +377,12 @@ const SendSMSTab: React.FC = () => {
 
       return;
     }
-    const validation = smsTestService.validatePhoneNumber(phoneNumber);
+    const isValid = phoneNumber && phoneNumber.length >= 10;
 
-    if (!validation.isValid) {
+    if (!isValid) {
       addToast({
         title: "Phone Number Error",
-        description: validation.message || "Invalid phone number format",
+        description: "Invalid phone number format",
         color: "danger",
       });
 
@@ -418,83 +409,32 @@ const SendSMSTab: React.FC = () => {
     }
 
     setLoading(true);
-    const logData = {
-      clinicId,
-      message: message.trim(),
-      type: "manual" as const,
-      recipientType: selectedRecipientType,
-      createdBy: currentUser?.uid || "system",
-      status: "pending" as const,
-      ...(selectedRecipientType === "patient"
-        ? {
-            patientId: selectedRecipient,
-            patientName: recipientName,
-            patientPhone: phoneNumber,
-          }
-        : selectedRecipientType === "doctor"
-          ? {
-              doctorId: selectedRecipient,
-              doctorName: recipientName,
-              doctorPhone: phoneNumber,
-            }
-          : {
-              referralId: selectedRecipient,
-              referralName: recipientName,
-              referralPhone: phoneNumber,
-            }),
-    };
-
     try {
-      const response = await smsTestService.sendTestSMS(phoneNumber, message);
-      const finalLogData = {
-        ...logData,
-        status: (response.success ? "sent" : "failed") as "sent" | "failed",
-        ...(response.success
-          ? {}
-          : { errorMessage: response.error || "Unknown error" }),
-      };
+      await smsService.sendManualSMS(
+        clinicId,
+        phoneNumber,
+        message.trim(),
+        selectedRecipientType,
+        selectedRecipient,
+        recipientName,
+        currentUser?.uid || "system",
+        selectedTemplateId || undefined
+      );
 
-      try {
-        smsService.createSMSLog(finalLogData).catch((logError) => {
-          console.error("SMS sent but failed to create log:", logError);
-        });
-      } catch (logError) {
-        console.error("Sync log error:", logError);
-      }
-      if (response.success) {
-        addToast({
-          title: "Success",
-          description: `SMS sent successfully to ${recipientName}`,
-          color: "success",
-        });
-        setSelectedRecipient("");
-        setPhoneNumber("");
-        setMessage("");
-        setRecipientName("");
-      } else {
-        addToast({
-          title: "SMS Failed",
-          description:
-            response.error || "Failed to send SMS. Please try again.",
-          color: "danger",
-        });
-      }
-    } catch (error) {
-      try {
-        smsService
-          .createSMSLog({
-            ...logData,
-            status: "failed" as const,
-            errorMessage:
-              error instanceof Error ? error.message : "Unknown error",
-          })
-          .catch(console.error);
-      } catch {
-        console.error("Failed to create SMS log");
-      }
+      addToast({
+        title: "Success",
+        description: `SMS sent successfully to ${recipientName}`,
+        color: "success",
+      });
+      setSelectedRecipient("");
+      setPhoneNumber("");
+      setMessage("");
+      setRecipientName("");
+    } catch (error: any) {
+      console.error("SMS sending error:", error);
       addToast({
         title: "Error",
-        description: "Failed to send SMS. Please try again.",
+        description: error.message || "Failed to send SMS. Please try again.",
         color: "danger",
       });
     } finally {
@@ -517,23 +457,23 @@ const SendSMSTab: React.FC = () => {
   const recipientSearchItems =
     selectedRecipientType === "patient"
       ? availablePatients.map((p) => ({
-          id: p.id,
-          primary: p.name,
-          secondary: p.mobile || p.phone || "No phone",
-        }))
+        id: p.id,
+        primary: p.name,
+        secondary: p.mobile || p.phone || "No phone",
+      }))
       : selectedRecipientType === "doctor"
         ? availableDoctors.map((d) => ({
-            id: d.id,
-            primary: d.name,
-            secondary:
-              `${d.phone || ""}${d.speciality ? ` • ${d.speciality}` : ""}`.trim() ||
-              undefined,
-          }))
+          id: d.id,
+          primary: d.name,
+          secondary:
+            `${d.phone || ""}${d.speciality ? ` • ${d.speciality}` : ""}`.trim() ||
+            undefined,
+        }))
         : availableReferrals.map((r) => ({
-            id: r.id,
-            primary: r.name,
-            secondary: r.phone || "No phone",
-          }));
+          id: r.id,
+          primary: r.name,
+          secondary: r.phone || "No phone",
+        }));
 
   return (
     <div className="space-y-4">
@@ -542,13 +482,12 @@ const SendSMSTab: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div
-              className={`w-3 h-3 rounded-full ${
-                functionStatus === "online"
-                  ? "bg-health-500"
-                  : functionStatus === "offline"
-                    ? "bg-rose-500"
-                    : "bg-saffron-500"
-              }`}
+              className={`w-3 h-3 rounded-full ${functionStatus === "online"
+                ? "bg-health-500"
+                : functionStatus === "offline"
+                  ? "bg-rose-500"
+                  : "bg-saffron-500"
+                }`}
             />
             <div className="flex items-center gap-2">
               {functionStatus === "online" ? (

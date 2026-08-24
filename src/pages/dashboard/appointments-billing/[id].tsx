@@ -449,6 +449,7 @@ export default function InvoiceDetailPage() {
   useEffect(() => {
     if (!loading && invoice && searchParams.get("print") === "true") {
       // Overwrite current window with the generated invoice HTML
+      const printedByText = userData ? `${userData.displayName} (${userData.role})` : "";
       const html = generateAppointmentInvoiceHTML(
         invoice,
         clinic,
@@ -456,6 +457,8 @@ export default function InvoiceDetailPage() {
         patient,
         printFormat,
         doctor,
+        false,
+        printedByText
       );
 
       document.open();
@@ -727,16 +730,27 @@ export default function InvoiceDetailPage() {
   const handlePrint = () => {
     if (!invoice) return;
 
+    const isCopy = (invoice.printCount || 0) > 0;
+    
+    // Update print count in background
+    appointmentBillingService.updateBilling(invoice.id, {
+      printCount: (invoice.printCount || 0) + 1
+    }).catch(console.error);
+
     // Create a new window for printing
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     if (printWindow) {
+      const printedByText = userData ? `${userData.displayName} (${userData.role})` : "";
       const printContent = generateAppointmentInvoiceHTML(
         invoice,
         clinic,
         layoutConfig,
         patient,
         printFormat,
+        undefined,
+        isCopy,
+        printedByText
       );
 
       printWindow.document.write(printContent);

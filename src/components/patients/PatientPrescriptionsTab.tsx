@@ -140,7 +140,7 @@ function SearchSelect({
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const filtered = q
-    ? items.filter((i) => i.primary.toLowerCase().includes(q.toLowerCase()))
+    ? items.filter((i) => (i.primary || "").toLowerCase().includes(q.toLowerCase()))
     : items;
   const selected = items.find((i) => i.id === value);
 

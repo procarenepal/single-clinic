@@ -38,9 +38,11 @@ export const pharmacyService = {
    * Also decreases stock for medicine items and creates stock transactions
    */
   async createMedicinePurchase(
-    purchaseData: Omit<MedicinePurchase, "id" | "createdAt" | "updatedAt">,
+    purchaseData: Omit<MedicinePurchase, "id" | "createdAt" | "updatedAt"> & { purchaseNo?: string },
   ): Promise<string> {
     try {
+      const { getNepaliFiscalYear } = await import("./irdCbmsService");
+      const currentRealFiscalYear = getNepaliFiscalYear(new Date());
       const medicineItems = purchaseData.items.filter(
         (item) => item.type === "medicine" || !item.type,
       );
@@ -65,7 +67,7 @@ export const pharmacyService = {
         }));
       }
 
-      const purchaseId = await runTransaction(db, async (transaction) => {
+      const purchaseIdObj = await runTransaction(db, async (transaction) => {
         // 1. Read all active stock documents for transaction consistency
         const activeBatchesByMedicine: Record<
           string,
@@ -88,6 +90,34 @@ export const pharmacyService = {
             }
           }
           activeBatchesByMedicine[medicineId] = loadedBatches;
+        }
+
+        // 1.5. Read Pharmacy Settings for Atomic Invoice Number Generation
+        const settingsRef = doc(db, PHARMACY_SETTINGS_COLLECTION, purchaseData.clinicId);
+        const settingsSnap = await transaction.get(settingsRef);
+        let settings = settingsSnap.exists() ? settingsSnap.data() as PharmacySettings : null;
+        
+        let generatedPurchaseNo = purchaseData.purchaseNo; // fallback to provided
+
+        if (settings) {
+          let nextInvoiceNum = settings.nextInvoiceNumber || 1;
+          const settingsUpdates: any = { updatedAt: serverTimestamp() };
+
+          if (settings.currentFiscalYear !== currentRealFiscalYear) {
+            nextInvoiceNum = 1;
+            settingsUpdates.currentFiscalYear = currentRealFiscalYear;
+            settingsUpdates.nextInvoiceNumber = 2;
+          } else {
+            settingsUpdates.nextInvoiceNumber = nextInvoiceNum + 1;
+          }
+
+          const formattedFiscalYear = currentRealFiscalYear.substring(2).replace('.', '/');
+          const prefix = settings.invoicePrefix || "PUR";
+          generatedPurchaseNo = `${formattedFiscalYear}-${prefix}-${nextInvoiceNum.toString().padStart(4, "0")}`;
+          
+          transaction.update(settingsRef, settingsUpdates);
+        } else if (!generatedPurchaseNo) {
+           generatedPurchaseNo = `PUR-${Date.now()}`;
         }
 
         // 2. Prepare data for updates
@@ -240,7 +270,7 @@ export const pharmacyService = {
               totalAmount: batchPrice * qtyToDeduct,
               batchNumber: batchStockData.batchNumber || "DEFAULT",
               expiryDate: batchStockData.expiryDate || null,
-              referenceId: purchaseData.purchaseNo,
+              referenceId: generatedPurchaseNo,
               clinicId: purchaseData.clinicId,
               branchId: purchaseData.branchId,
               createdBy: purchaseData.createdBy,
@@ -352,6 +382,7 @@ export const pharmacyService = {
 
         transaction.set(purchaseRef, {
           ...purchaseData,
+          purchaseNo: generatedPurchaseNo,
           items: updatedPurchaseItems,
           total: newGrossTotal,
           discount: finalDiscount,
@@ -386,7 +417,7 @@ export const pharmacyService = {
           });
         }
 
-        return purchaseRef.id;
+        return { id: purchaseRef.id, purchaseNo: generatedPurchaseNo };
       });
 
       // Auto-create follow-up if paid
@@ -415,7 +446,7 @@ export const pharmacyService = {
           } as any);
           console.log(
             "Auto-created pharmacy followup for purchase",
-            purchaseId,
+            purchaseIdObj.id,
           );
         } catch (e) {
           console.error("Failed to auto-create pharmacy followup:", e);
@@ -437,16 +468,17 @@ export const pharmacyService = {
             invoiceData: {
               buyerName: purchaseData.patientName || "Cash Sales",
               buyerPan: "", // Optional for simple patient purchases
-              invoiceNumber: purchaseData.purchaseNo,
+              invoiceNumber: purchaseIdObj.purchaseNo || "N/A",
               invoiceDate: purchaseData.purchaseDate || new Date(),
-              totalAmount: purchaseData.netAmount, // IRD payload expects total amount including VAT
+              totalAmount: purchaseData.netAmount || 0, // IRD payload expects total amount including VAT
               taxAmount: purchaseData.taxAmount || 0,
               isTaxEnabled: (purchaseData.taxPercentage || 0) > 0,
-            }
+            },
+            isReturn: false
           });
 
           // Update the purchase record with IRD sync status
-          const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseId);
+          const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseIdObj.id);
           await updateDoc(docRef, {
             irdSynced: result.success,
             irdSyncDate: new Date(),
@@ -457,7 +489,38 @@ export const pharmacyService = {
         console.error("Failed to sync pharmacy purchase to IRD:", irdError);
       }
 
-      return purchaseId;
+      // Attempt Java backend sync asynchronously (SQL Ledger)
+      try {
+        const { billingApi } = await import("./api/billingApi");
+        const payload = {
+          firebasePatientId: (purchaseData as any).patientId || "",
+          buyerName: purchaseData.patientName || "Cash Sales",
+          buyerPan: "",
+          totalAmount: purchaseData.netAmount || 0,
+          taxableAmount: (purchaseData.taxAmount || 0) > 0 ? (purchaseData.netAmount || 0) - (purchaseData.taxAmount || 0) : 0,
+          taxAmount: purchaseData.taxAmount || 0,
+          exemptAmount: (purchaseData.taxAmount || 0) === 0 ? (purchaseData.netAmount || 0) : 0,
+          items: purchaseData.items.map((item) => ({
+            itemName: item.medicineName || (item as any).description || "Medicine",
+            quantity: item.quantity || 1,
+            rate: item.amount / item.quantity || 0,
+            totalAmount: item.amount || 0,
+            isTaxable: (purchaseData.taxPercentage || 0) > 0,
+          })),
+        };
+
+        const result = await billingApi.createInvoice(payload);
+
+        if (result?.id) {
+          const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseIdObj.id);
+          await updateDoc(docRef, { javaInvoiceId: result.id });
+          console.log("Pharmacy purchase synced to Java backend with ID:", result.id);
+        }
+      } catch (javaError: any) {
+        console.warn("Java backend submission skipped or offline:", javaError.message || javaError);
+      }
+
+      return purchaseIdObj.id;
     } catch (error) {
       console.error("Error creating medicine purchase:", error);
       throw error;
@@ -822,6 +885,40 @@ export const pharmacyService = {
         }
       } catch (irdError) {
         console.error("Failed to sync pharmacy return to IRD:", irdError);
+      }
+
+      // Attempt Java backend sync asynchronously (SQL Ledger)
+      try {
+        const purchaseDoc = await getDoc(purchaseRef);
+        if (purchaseDoc.exists()) {
+           const purchase = purchaseDoc.data() as MedicinePurchase;
+           const { billingApi } = await import("./api/billingApi");
+           const payload = {
+             firebasePatientId: (purchase as any).patientId || "",
+             buyerName: purchase.patientName || "Cash Sales",
+             buyerPan: "",
+             totalAmount: -Math.abs(returnData.totalAmount),
+             taxableAmount: 0,
+             taxAmount: 0,
+             exemptAmount: -Math.abs(returnData.totalAmount),
+             items: returnData.items.map((item) => ({
+               itemName: "Return Item",
+               quantity: -Math.abs(item.quantity || 1),
+               rate: item.amount / item.quantity || 0,
+               totalAmount: -Math.abs(item.amount || 0),
+               isTaxable: false,
+             })),
+           };
+   
+           const result = await billingApi.createInvoice(payload);
+           if (result?.id) {
+             console.log("Pharmacy return synced to Java backend with ID:", result.id);
+             // We could update the return record with javaInvoiceId, but since it's nested in an array, 
+             // simply logging the successful dump to SQL is sufficient for the ledger.
+           }
+        }
+      } catch (javaError: any) {
+        console.warn("Java backend submission skipped or offline:", javaError.message || javaError);
       }
 
       return returnId;

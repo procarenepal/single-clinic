@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { useAuthContext } from "@/context/AuthContext";
-import { uploadImage } from "@/services/appwriteStorageService";
+import { uploadFileToFirebase } from "@/services/firebaseStorageService";
 import { addToast } from "@/components/ui/toast";
 
 interface EditProfileModalProps {
@@ -49,14 +49,12 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
     setUploading(true);
     try {
-      const result = await uploadImage(
+      const result = await uploadFileToFirebase(
         file,
-        `avatar-${currentUser?.uid}`,
-        200,
-        200,
+        `avatars/${currentUser?.uid || "guest"}`
       );
 
-      setPhotoURL(result.fileUrl);
+      setPhotoURL(result.url);
       addToast({
         title: "Success",
         description: "Profile picture uploaded successfully",

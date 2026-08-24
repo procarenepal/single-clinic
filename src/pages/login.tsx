@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, AlertTriangle, Cross } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  Cross,
+  Mail,
+  Lock,
+  ShieldCheck,
+  CheckCircle2,
+  Clock,
+} from "lucide-react";
 import { FirebaseError } from "firebase/app";
 
 import { useAuthContext } from "@/context/AuthContext";
@@ -26,7 +36,16 @@ if (!document.getElementById(STYLE_ID)) {
     .login-fade-up  { animation: login-fade-up 0.55s cubic-bezier(.22,.68,0,1.2) both; }
     .login-delay-1  { animation-delay: 0.08s; }
     .login-delay-2  { animation-delay: 0.16s; }
+    .login-delay-3  { animation-delay: 0.24s; }
     .login-glow     { animation: login-glow-pulse 4s ease-in-out infinite; }
+
+    /* brand mark */
+    .login-mark {
+      background: linear-gradient(135deg,
+        rgb(var(--color-primary)) 0%,
+        color-mix(in srgb, rgb(var(--color-primary)) 70%, #a78bfa) 100%);
+      box-shadow: 0 10px 24px -8px rgba(var(--color-primary) / 0.55);
+    }
 
     /* gradient submit button */
     .login-btn {
@@ -49,11 +68,20 @@ if (!document.getElementById(STYLE_ID)) {
     .login-input:focus {
       box-shadow: 0 0 0 3px rgba(var(--color-primary) / 0.18);
     }
+    .login-input-wrap .login-input-icon {
+      transition: color 0.15s ease;
+    }
+    .login-input-wrap:focus-within .login-input-icon {
+      color: rgb(var(--color-primary));
+    }
 
     /* card accent top border */
     .login-card {
       position: relative;
       overflow: hidden;
+      box-shadow:
+        0 24px 48px -24px rgba(var(--color-primary) / 0.3),
+        0 8px 20px -12px rgba(0, 0, 0, 0.18);
     }
     .login-card::before {
       content: '';
@@ -248,19 +276,39 @@ export default function LoginPage() {
           filter: "blur(40px)",
         }}
       />
+      <div
+        className="login-glow pointer-events-none absolute rounded-full"
+        style={{
+          width: 260,
+          height: 260,
+          top: "12%",
+          left: "8%",
+          background:
+            "radial-gradient(circle at center, rgba(var(--color-primary) / 0.14) 0%, transparent 70%)",
+          filter: "blur(50px)",
+          animationDelay: "1.4s",
+        }}
+      />
+      <div
+        className="login-glow pointer-events-none absolute rounded-full"
+        style={{
+          width: 220,
+          height: 220,
+          bottom: "10%",
+          right: "10%",
+          background:
+            "radial-gradient(circle at center, rgba(var(--color-primary) / 0.12) 0%, transparent 70%)",
+          filter: "blur(45px)",
+          animationDelay: "2.2s",
+        }}
+      />
 
       <div className="w-full max-w-md relative z-10">
         {/* ── Header ── */}
         <div className="text-center mb-8 login-fade-up">
           {/* Icon badge */}
-          <div
-            className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-4"
-            style={{
-              background: "rgba(var(--color-primary) / 0.12)",
-              border: "1px solid rgba(var(--color-primary) / 0.25)",
-            }}
-          >
-            <Cross className="w-5 h-5 text-[rgb(var(--color-primary))]" />
+          <div className="login-mark inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4">
+            <Cross className="w-5 h-5 text-white" />
           </div>
 
           <h1 className="text-3xl font-bold mb-2 text-[rgb(var(--color-text))] tracking-tight">
@@ -282,15 +330,18 @@ export default function LoginPage() {
               <label className="text-sm font-semibold text-[rgb(var(--color-text))] block">
                 Official Email
               </label>
-              <input
-                required
-                autoComplete="email"
-                className="login-input w-full h-11 px-3 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-lg text-sm text-[rgb(var(--color-text))] focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary))] transition-all"
-                placeholder="your.name@clinic.com.np"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              <div className="login-input-wrap relative">
+                <Mail className="login-input-icon pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgb(var(--color-text-muted))]" />
+                <input
+                  required
+                  autoComplete="email"
+                  className="login-input w-full h-11 pl-10 pr-3 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-lg text-sm text-[rgb(var(--color-text))] focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary))] transition-all"
+                  placeholder="your.name@clinic.com.np"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
             </div>
 
             {/* Password */}
@@ -306,11 +357,12 @@ export default function LoginPage() {
                   Reset password?
                 </Link>
               </div>
-              <div className="relative">
+              <div className="login-input-wrap relative">
+                <Lock className="login-input-icon pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgb(var(--color-text-muted))]" />
                 <input
                   required
                   autoComplete="current-password"
-                  className="login-input w-full h-11 px-3 pr-10 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-lg text-sm text-[rgb(var(--color-text))] focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary))] transition-all"
+                  className="login-input w-full h-11 pl-10 pr-10 bg-[rgb(var(--color-surface-2))] border border-[rgb(var(--color-border))] rounded-lg text-sm text-[rgb(var(--color-text))] focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary))] transition-all"
                   placeholder="••••••••••••"
                   type={showPassword ? "text" : "password"}
                   value={password}
@@ -351,11 +403,10 @@ export default function LoginPage() {
             {/* Error */}
             {errorMessage && (
               <div
-                className={`p-4 border rounded-lg ${
-                  errorMessage.includes("subscription")
-                    ? "text-[rgb(var(--color-warning))] bg-[rgb(var(--color-warning)/0.1)] border-[rgb(var(--color-warning)/0.2)]"
-                    : "text-[rgb(var(--color-danger))] bg-[rgb(var(--color-danger)/0.1)] border-[rgb(var(--color-danger)/0.2)]"
-                }`}
+                className={`p-4 border rounded-lg ${errorMessage.includes("subscription")
+                  ? "text-[rgb(var(--color-warning))] bg-[rgb(var(--color-warning)/0.1)] border-[rgb(var(--color-warning)/0.2)]"
+                  : "text-[rgb(var(--color-danger))] bg-[rgb(var(--color-danger)/0.1)] border-[rgb(var(--color-danger)/0.2)]"
+                  }`}
               >
                 {errorMessage.includes("subscription") && (
                   <div className="flex items-center gap-1.5 mb-1.5 font-bold">
@@ -382,9 +433,8 @@ export default function LoginPage() {
 
             {/* Submit */}
             <button
-              className={`login-btn w-full mt-2 text-white font-bold h-11 rounded-lg text-sm tracking-wide focus:outline-none flex items-center justify-center ${
-                loading ? "opacity-70 cursor-not-allowed" : ""
-              }`}
+              className={`login-btn w-full mt-2 text-white font-bold h-11 rounded-lg text-sm tracking-wide focus:outline-none flex items-center justify-center ${loading ? "opacity-70 cursor-not-allowed" : ""
+                }`}
               disabled={loading}
               type="submit"
             >
@@ -418,8 +468,24 @@ export default function LoginPage() {
           </form>
         </div>
 
+        {/* ── Trust badges ── */}
+        <div className="flex items-center justify-center gap-2 mb-6 flex-wrap login-fade-up login-delay-2">
+          <span className="login-badge inline-flex items-center gap-1.5 text-xs font-medium text-[rgb(var(--color-text-muted))]">
+            <ShieldCheck className="w-3.5 h-3.5 text-[rgb(var(--color-primary))]" />
+            Encrypted
+          </span>
+          <span className="login-badge inline-flex items-center gap-1.5 text-xs font-medium text-[rgb(var(--color-text-muted))]">
+            <CheckCircle2 className="w-3.5 h-3.5 text-[rgb(var(--color-primary))]" />
+            Verified Access
+          </span>
+          <span className="login-badge inline-flex items-center gap-1.5 text-xs font-medium text-[rgb(var(--color-text-muted))]">
+            <Clock className="w-3.5 h-3.5 text-[rgb(var(--color-primary))]" />
+            24/7 Support
+          </span>
+        </div>
+
         {/* ── Footer ── */}
-        <div className="text-center login-fade-up login-delay-2">
+        <div className="text-center login-fade-up login-delay-3">
           <p className="text-xs text-[rgb(var(--color-text-muted))] font-medium opacity-50">
             Protected by stringent medical privacy protocols.{" "}
             <Link

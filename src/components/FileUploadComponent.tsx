@@ -11,12 +11,14 @@ import {
 } from "react-icons/io5";
 
 import {
-  uploadFile,
-  uploadImage,
-  uploadDocument,
-  deleteFile,
-  UploadResult,
-} from "@/services/appwriteStorageService";
+  uploadFileToFirebase,
+  deleteFileFromFirebase,
+} from "@/services/firebaseStorageService";
+
+interface UploadResult {
+  fileId: string;
+  fileUrl: string;
+}
 
 interface FileUploadComponentProps {
   onUploadComplete?: (result: UploadResult) => void;
@@ -110,19 +112,10 @@ export const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     try {
       setIsUploading(true);
 
-      let result: UploadResult;
-
-      // Choose upload method based on type
-      switch (uploadType) {
-        case "image":
-          result = await uploadImage(file, undefined, 1200, 1200); // Optimize images
-          break;
-        case "document":
-          result = await uploadDocument(file);
-          break;
-        default:
-          result = await uploadFile(file);
-      }
+      const folder =
+        uploadType === "image" ? "images" : uploadType === "document" ? "documents" : "files";
+      const uploaded = await uploadFileToFirebase(file, folder);
+      const result: UploadResult = { fileId: uploaded.fileId, fileUrl: uploaded.url };
 
       addToast({
         title: "Success",
@@ -166,7 +159,7 @@ export const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     if (!currentFile?.id) return;
 
     try {
-      await deleteFile(currentFile.id);
+      await deleteFileFromFirebase(currentFile.id);
       addToast({
         title: "Success",
         description: "File deleted successfully",

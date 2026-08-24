@@ -37,6 +37,7 @@ import {
 interface InvoiceFormData {
   patientId: string;
   patientName: string;
+  patientPanVat?: string;
   doctorId: string;
   doctorName: string;
   doctorType: "regular" | "visitor";
@@ -78,10 +79,10 @@ function SearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -109,8 +110,8 @@ function SearchSelect({
               ? selected.primary
               : allowCustom && value && value.startsWith("custom_")
                 ? items.find((i) => i.id === value)?.primary ||
-                  placeholder ||
-                  "Custom Service"
+                placeholder ||
+                "Custom Service"
                 : placeholder || `Search…`
           }
           value={
@@ -120,7 +121,7 @@ function SearchSelect({
                 ? selected.primary
                 : allowCustom && value && value.startsWith("custom_")
                   ? items.find((i) => i.id === value)?.primary ||
-                    "Custom Service"
+                  "Custom Service"
                   : ""
           }
           onChange={(e) => {
@@ -185,7 +186,7 @@ function SearchSelect({
                 {allowCustom &&
                   q &&
                   !items.find(
-                    (i) => i.primary.toLowerCase() === q.toLowerCase(),
+                    (i) => (i.primary || "").toLowerCase() === q.toLowerCase(),
                   ) && (
                     <button
                       className="flex flex-col w-full text-left px-3 py-2 hover:bg-teal-50 border-t border-mountain-100"
@@ -329,6 +330,7 @@ export default function EditInvoicePage() {
   const [formData, setFormData] = useState<InvoiceFormData>({
     patientId: "",
     patientName: "",
+    patientPanVat: "",
     doctorId: "",
     doctorName: "",
     doctorType: "regular",
@@ -434,6 +436,7 @@ export default function EditInvoicePage() {
       setFormData({
         patientId: invoiceData.patientId,
         patientName: invoiceData.patientName,
+        patientPanVat: invoiceData.patientPanVat || "",
         doctorId: invoiceData.doctorId,
         doctorName: invoiceData.doctorName,
         doctorType: invoiceData.doctorType,
@@ -560,6 +563,7 @@ export default function EditInvoicePage() {
       ...prev,
       patientId,
       patientName: patient ? patient.name : "",
+      patientPanVat: patient?.patientPanVat || "",
     }));
   };
 
@@ -638,6 +642,7 @@ export default function EditInvoicePage() {
       const updateData: Partial<AppointmentBilling> = {
         patientId: formData.patientId,
         patientName: formData.patientName,
+        patientPanVat: formData.patientPanVat || undefined,
         doctorId: rootDoctorId,
         doctorName: rootDoctorName,
         doctorType: rootDoctorType,
@@ -776,6 +781,18 @@ export default function EditInvoicePage() {
               placeholder="Search patient"
               value={formData.patientId}
               onChange={(id) => handlePatientChange(id)}
+            />
+
+            <CustomInput
+              label="PAN/VAT (Optional)"
+              name="patientPanVat"
+              value={formData.patientPanVat || ""}
+              onChange={(e: any) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  patientPanVat: e.target.value,
+                }))
+              }
             />
 
             <CustomInput

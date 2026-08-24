@@ -51,9 +51,7 @@ const LoginPage = lazy(() => import("./pages/login"));
 const ForgotPasswordPage = lazy(() => import("./pages/forgot-password"));
 const ResetPasswordPage = lazy(() => import("./pages/reset-password"));
 const DemoPage = lazy(() => import("./pages/demo"));
-const AppwriteTestPage = lazy(() => import("./pages/appwrite-test"));
-const SMSTesterPage = lazy(() => import("./pages/sms-tester"));
-const SMSBackendTesterPage = lazy(() => import("./pages/sms-backend-tester"));
+
 
 // Lazy load dashboard pages
 const DashboardIndexPage = lazy(() => import("@/pages/dashboard/index"));
@@ -204,6 +202,7 @@ const EditPrescriptionPage = lazy(
 );
 
 // Lazy load inventory page
+const AdminLogsPage = lazy(() => import("@/pages/admin/logs/index"));
 const InventoryPage = lazy(() => import("@/pages/dashboard/inventory"));
 const CommunicationPage = lazy(
   () => import("@/pages/dashboard/communication/index"),
@@ -335,34 +334,7 @@ export default function App() {
               }
               path="/contact"
             />
-            <Route
-              element={
-                <Suspense fallback={<LoadingSpinner />}>
-                  <BasicProtectedRoute>
-                    <DashboardLayout>
-                      <Suspense fallback={<LoadingSpinner />}>
-                        <SMSTesterPage />
-                      </Suspense>
-                    </DashboardLayout>
-                  </BasicProtectedRoute>
-                </Suspense>
-              }
-              path="/sms-tester"
-            />
-            <Route
-              element={
-                <Suspense fallback={<LoadingSpinner />}>
-                  <BasicProtectedRoute>
-                    <DashboardLayout>
-                      <Suspense fallback={<LoadingSpinner />}>
-                        <SMSBackendTesterPage />
-                      </Suspense>
-                    </DashboardLayout>
-                  </BasicProtectedRoute>
-                </Suspense>
-              }
-              path="/sms-backend-tester"
-            />
+
             <Route
               element={
                 <DefaultLayout>
@@ -948,6 +920,24 @@ export default function App() {
                             path="text-editor/:documentId/edit"
                           />
 
+                          {/* Logs Routes */}
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/logs">
+                                <AdminLogsPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="logs"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/logs">
+                                <AdminLogsPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="admin/logs"
+                          />
+
                           {/* Dashboard catch-all route for 404 Not Found */}
                           <Route element={<DashboardNotFoundPage />} path="*" />
                         </Routes>
@@ -957,6 +947,20 @@ export default function App() {
                 </Suspense>
               }
               path="/dashboard/*"
+            />
+
+            {/* Top-Level Admin Logs Route */}
+            <Route
+              element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <BasicProtectedRoute>
+                    <DashboardLayout>
+                      <AdminLogsPage />
+                    </DashboardLayout>
+                  </BasicProtectedRoute>
+                </Suspense>
+              }
+              path="/admin/logs"
             />
 
             {/* Catch-all route for 404 Not Found */}
