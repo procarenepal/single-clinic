@@ -468,8 +468,7 @@ export default function DashboardIndexPage() {
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const { clinicId, userData, branchId, currentUser } = useAuthContext();
-  const isClinicAdmin =
-    userData?.role === "system-owner" || userData?.role === "clinic-admin";
+  const isClinicAdmin = userData?.role === "clinic-admin";
 
   const isDoctor = userData?.role === "doctor";
   const isExpert = userData?.role === "expert";

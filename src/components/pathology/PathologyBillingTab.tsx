@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
@@ -17,6 +18,7 @@ import { addToast } from "@heroui/toast";
 import toast from "react-hot-toast";
 import {
   IoAddOutline,
+  IoSettingsOutline,
   IoTrashOutline,
   IoEyeOutline,
   IoWalletOutline,
@@ -34,6 +36,8 @@ import { IoBusinessOutline, IoMedkitOutline } from "react-icons/io5";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
+import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
+import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 import { pathologyBillingService } from "@/services/pathologyBillingService";
 import { pathologyService } from "@/services/pathologyService";
 import { clinicService } from "@/services/clinicService";
@@ -73,14 +77,15 @@ function PatientSearchBox({
   const filtered = (
     q && Array.isArray(patients)
       ? patients.filter((p) => {
-        const name = p?.name || (p as any)?.patientName || "";
-        const phone = p?.phone || (p as any)?.patientPhone || "";
-        const query = q.toLowerCase();
-        return (
-          name.toLowerCase().includes(query) ||
-          phone.toLowerCase().includes(query)
-        );
-      })
+          const name = p?.name || (p as any)?.patientName || "";
+          const phone = p?.phone || (p as any)?.patientPhone || "";
+          const query = q.toLowerCase();
+
+          return (
+            name.toLowerCase().includes(query) ||
+            phone.toLowerCase().includes(query)
+          );
+        })
       : Array.isArray(patients)
         ? patients
         : []
@@ -95,7 +100,6 @@ function PatientSearchBox({
           placeholder="Search patient…"
           value={open ? q : value}
           onChange={(e) => {
-
             setQ(e.target.value);
             onChange(e.target.value);
             setOpen(true);
@@ -233,6 +237,9 @@ function ModalShell({
 interface PathologyBillingTabProps {
   clinicId: string;
   branchId: string;
+  /** Invoice id to auto-open in the Edit form on mount (e.g. deep-linked from the invoice detail page), and the callback to clear it once consumed. */
+  initialEditInvoiceId?: string;
+  onInitialEditInvoiceConsumed?: () => void;
   onRecordResults?: (billing: PathologyBilling) => void;
 }
 
@@ -256,25 +263,36 @@ interface InvoiceFormData {
   sampleCollectionDate: string;
   expectedReportDate: string;
   reportStatus:
-  | "pending_collection"
-  | "collected"
-  | "in_lab"
-  | "partially_ready"
-  | "ready"
-  | "delivered";
+    | "pending_collection"
+    | "collected"
+    | "in_lab"
+    | "partially_ready"
+    | "ready"
+    | "delivered";
+  /** Per-invoice VAT override — see appointments-billing.tsx for why this isn't a single clinic-wide toggle. */
+  applyTax: boolean;
 }
 
 export default function PathologyBillingTab({
   clinicId,
   branchId,
+  initialEditInvoiceId,
+  onInitialEditInvoiceConsumed,
   onRecordResults,
 }: PathologyBillingTabProps) {
   const { currentUser, userData } = useAuthContext();
+  const navigate = useNavigate();
   const invoiceModal = useModalState(false);
   const paymentModal = useModalState(false);
   const settingsModal = useModalState(false);
 
   const [activeTab, setActiveTab] = useState("create");
+  const [taxSettingsForm, setTaxSettingsForm] = useState({
+    enableTax: false,
+    defaultTaxPercentage: 0,
+    taxLabel: "VAT",
+  });
+  const [isSavingTaxSettings, setIsSavingTaxSettings] = useState(false);
 
   // Data states
   const [tests, setTests] = useState<PathologyTest[]>([]);
@@ -293,6 +311,11 @@ export default function PathologyBillingTab({
   // Form states
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [reasonModal, setReasonModal] = useState<
+    "cancel" | "creditNote" | null
+  >(null);
+  const [reasonModalBilling, setReasonModalBilling] =
+    useState<PathologyBilling | null>(null);
   const [selectedBilling, setSelectedBilling] =
     useState<PathologyBilling | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
@@ -308,41 +331,6 @@ export default function PathologyBillingTab({
     notes: "",
   });
 
-  const [paymentDiscountType, setPaymentDiscountType] = useState<
-    "none" | "flat" | "percent"
-  >("none");
-  const [paymentDiscountValue, setPaymentDiscountValue] = useState<string>("");
-
-  const calculatedDiscountAmount = useMemo(() => {
-    if (
-      paymentDiscountType === "none" ||
-      !paymentDiscountValue ||
-      !selectedBillingForPayment
-    )
-      return 0;
-    const val = parseFloat(paymentDiscountValue);
-
-    if (isNaN(val) || val < 0) return 0;
-    if (paymentDiscountType === "flat") return val;
-    if (paymentDiscountType === "percent") {
-      return (selectedBillingForPayment.balanceAmount * val) / 100;
-    }
-
-    return 0;
-  }, [paymentDiscountType, paymentDiscountValue, selectedBillingForPayment]);
-
-  useEffect(() => {
-    if (paymentModal.isOpen && selectedBillingForPayment) {
-      const originalDue = selectedBillingForPayment.balanceAmount;
-      const maxAllowed = Math.max(0, originalDue - calculatedDiscountAmount);
-
-      setPaymentForm((prev) => ({ ...prev, amount: maxAllowed.toString() }));
-    }
-  }, [
-    calculatedDiscountAmount,
-    paymentModal.isOpen,
-    selectedBillingForPayment,
-  ]);
 
   // Doctors & Partners list
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -372,6 +360,7 @@ export default function PathologyBillingTab({
       .toISOString()
       .split("T")[0], // Tomorrow
     reportStatus: "pending_collection",
+    applyTax: false,
   });
 
   const [selectedPrintFormat, setSelectedPrintFormat] =
@@ -437,6 +426,7 @@ export default function PathologyBillingTab({
     formData.items,
     formData.discountType,
     formData.discountValue,
+    formData.applyTax,
     billingSettings,
   ]);
 
@@ -477,6 +467,15 @@ export default function PathologyBillingTab({
       setParameters(parametersData);
       setBillings(billingsData);
       setBillingSettings(settingsData);
+      setFormData((prev) => ({
+        ...prev,
+        applyTax: Boolean(settingsData?.enableTax),
+      }));
+      setTaxSettingsForm({
+        enableTax: Boolean(settingsData?.enableTax),
+        defaultTaxPercentage: settingsData?.defaultTaxPercentage || 0,
+        taxLabel: settingsData?.taxLabel || "VAT",
+      });
       setClinic(clinicData);
       setLayoutConfig(layoutConfigData);
       if (layoutConfigData?.defaultPrintFormat) {
@@ -572,7 +571,7 @@ export default function PathologyBillingTab({
     const totalDiscount = itemDiscountAmount + mainDiscountAmount;
     const afterDiscount = subtotal - totalDiscount;
 
-    const taxPercentage = billingSettings.enableTax
+    const taxPercentage = formData.applyTax
       ? billingSettings.defaultTaxPercentage
       : 0;
     const taxAmount = (afterDiscount * taxPercentage) / 100;
@@ -852,7 +851,9 @@ export default function PathologyBillingTab({
             mobile: formData.patientPhone.trim() || null,
             address: formData.patientAddress.trim() || null,
             age: formData.patientAge ? parseInt(formData.patientAge) : null,
-            gender: (formData.patientGender.trim() as "male" | "female" | "other") || null,
+            gender:
+              (formData.patientGender.trim() as "male" | "female" | "other") ||
+              null,
             isActive: true,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -883,7 +884,7 @@ export default function PathologyBillingTab({
         discountAmount: calculations.totalDiscount,
         itemDiscountAmount: calculations.itemDiscountAmount,
         mainDiscountAmount: calculations.mainDiscountAmount,
-        taxPercentage: billingSettings.enableTax
+        taxPercentage: formData.applyTax
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
@@ -925,12 +926,9 @@ export default function PathologyBillingTab({
           color: "success",
         });
       } else {
-        const invoiceNumber =
-          await pathologyBillingService.generateInvoiceNumber(clinicId);
-
         billingData = {
           ...billingData,
-          invoiceNumber,
+          invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
           status: "draft",
           paymentStatus: "unpaid",
           paidAmount: 0,
@@ -966,6 +964,7 @@ export default function PathologyBillingTab({
           .toISOString()
           .split("T")[0],
         reportStatus: "pending_collection",
+        applyTax: Boolean(billingSettings?.enableTax),
       });
 
       // Reload billings
@@ -976,11 +975,12 @@ export default function PathologyBillingTab({
       // Switch to manage tab
       setActiveTab("manage");
       invoiceModal.forceClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating pathology invoice:", error);
       addToast({
         title: "Error",
-        description: "Failed to create invoice. Please try again.",
+        description:
+          error?.message || "Failed to create invoice. Please try again.",
         color: "danger",
       });
     } finally {
@@ -1022,74 +1022,87 @@ export default function PathologyBillingTab({
       sampleCollectionDate: formatDateForInput(billing.sampleCollectionDate),
       expectedReportDate: formatDateForInput(billing.expectedReportDate),
       reportStatus: billing.reportStatus || "pending_collection",
+      applyTax: (billing.taxPercentage || 0) > 0,
     });
 
     setActiveTab("create");
   };
 
-  const handleCancelInvoice = async (billing: PathologyBilling) => {
-    if (
-      confirm(
-        "Are you sure you want to cancel this invoice? This action cannot be undone.",
-      )
-    ) {
-      setSubmitting(true);
-      try {
-        await pathologyBillingService.updateBilling(billing.id!, {
-          status: "cancelled",
-          paymentStatus: "cancelled" as any,
-        });
-        setBillings((prev) =>
-          prev.map((b) =>
-            b.id === billing.id
-              ? { ...b, status: "cancelled", paymentStatus: "cancelled" as any }
-              : b,
-          ),
-        );
-        addToast({
-          title: "Success",
-          description: "Invoice cancelled successfully.",
-          color: "success",
-        });
-      } catch (err) {
-        addToast({
-          title: "Error",
-          description: "Failed to cancel invoice.",
-          color: "danger",
-        });
-      } finally {
-        setSubmitting(false);
-      }
+  // Deep-linked edit request (e.g. "Edit Invoice" from the invoice detail page) — open it once the list has loaded, then let the parent clear the query param.
+  useEffect(() => {
+    if (!initialEditInvoiceId || billings.length === 0) return;
+    const target = billings.find((b) => b.id === initialEditInvoiceId);
+
+    if (target) {
+      handleEditInvoice(target);
+    }
+    onInitialEditInvoiceConsumed?.();
+  }, [initialEditInvoiceId, billings]);
+
+  const handleCancelInvoice = async (reason: string) => {
+    if (!reasonModalBilling) return;
+
+    setSubmitting(true);
+    try {
+      await pathologyBillingService.cancelBilling(
+        reasonModalBilling.id!,
+        reason,
+      );
+
+      const updatedBillings = await pathologyBillingService.getBillingByClinic(
+        clinicId,
+        branchId,
+      );
+
+      setBillings(updatedBillings);
+      setReasonModal(null);
+      addToast({
+        title: "Success",
+        description: "Invoice cancelled successfully.",
+        color: "success",
+      });
+    } catch (err: any) {
+      addToast({
+        title: "Error",
+        description: err.message || "Failed to cancel invoice.",
+        color: "danger",
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleIssueCreditNote = async (billing: PathologyBilling) => {
-    const reason = prompt("Enter the reason for issuing this Credit Note:");
-    if (!reason) return;
+  const handleIssueCreditNote = async (reason: string) => {
+    if (!reasonModalBilling) return;
 
-    if (confirm("Are you sure you want to issue a Credit Note? This will reverse the invoice and create a new negative invoice.")) {
-      setSubmitting(true);
-      try {
-        await pathologyBillingService.issueCreditNote(billing.id, reason, currentUser?.uid || 'unknown');
+    setSubmitting(true);
+    try {
+      await pathologyBillingService.issueCreditNote(
+        reasonModalBilling.id,
+        reason,
+        currentUser?.uid || "unknown",
+      );
 
-        // Refresh billings
-        const updatedBillings = await pathologyBillingService.getBillingByClinic(clinicId, branchId);
-        setBillings(updatedBillings);
+      // Refresh billings
+      const updatedBillings =
+        await pathologyBillingService.getBillingByClinic(clinicId, branchId);
 
-        addToast({
-          title: "Success",
-          description: "Credit Note issued successfully",
-          color: "success",
-        });
-      } catch (err: any) {
-        addToast({
-          title: "Error",
-          description: err.message || "Failed to issue Credit Note",
-          color: "danger",
-        });
-      } finally {
-        setSubmitting(false);
-      }
+      setBillings(updatedBillings);
+      setReasonModal(null);
+
+      addToast({
+        title: "Success",
+        description: "Credit Note issued successfully",
+        color: "success",
+      });
+    } catch (err: any) {
+      addToast({
+        title: "Error",
+        description: err.message || "Failed to issue Credit Note",
+        color: "danger",
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1114,8 +1127,39 @@ export default function PathologyBillingTab({
         .toISOString()
         .split("T")[0],
       reportStatus: "pending_collection",
+      applyTax: Boolean(billingSettings?.enableTax),
     });
     setActiveTab("manage");
+  };
+
+  const handleSaveTaxSettings = async () => {
+    if (!clinicId || !currentUser) return;
+    setIsSavingTaxSettings(true);
+    try {
+      await pathologyBillingService.updateBillingSettings(
+        clinicId,
+        branchId,
+        taxSettingsForm,
+        currentUser.uid,
+      );
+      const updated =
+        await pathologyBillingService.getBillingSettings(clinicId);
+
+      if (updated) setBillingSettings(updated);
+      addToast({
+        title: "Success",
+        description: "Tax settings saved",
+        color: "success",
+      });
+    } catch (e: any) {
+      addToast({
+        title: "Error",
+        description: e.message || "Failed to save tax settings",
+        color: "danger",
+      });
+    } finally {
+      setIsSavingTaxSettings(false);
+    }
   };
 
   const handlePaymentOpen = (billing: PathologyBilling) => {
@@ -1126,8 +1170,6 @@ export default function PathologyBillingTab({
       reference: "",
       notes: "",
     });
-    setPaymentDiscountType("none");
-    setPaymentDiscountValue("");
     paymentModal.open();
   };
 
@@ -1146,15 +1188,10 @@ export default function PathologyBillingTab({
       return;
     }
 
-    const maxAllowed = Math.max(
-      0,
-      selectedBillingForPayment.balanceAmount - calculatedDiscountAmount,
-    );
-
-    if (amount > maxAllowed) {
+    if (amount > selectedBillingForPayment.balanceAmount) {
       addToast({
         title: "Validation Error",
-        description: `Payment amount cannot exceed effectively due amount (${Math.round(maxAllowed).toLocaleString()})`,
+        description: `Payment amount cannot exceed the balance amount (${Math.round(selectedBillingForPayment.balanceAmount).toLocaleString()})`,
         color: "warning",
       });
 
@@ -1171,7 +1208,6 @@ export default function PathologyBillingTab({
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
         currentUser.uid,
-        calculatedDiscountAmount,
       );
 
       addToast({
@@ -1192,13 +1228,11 @@ export default function PathologyBillingTab({
       paymentModal.forceClose();
       setSelectedBillingForPayment(null);
       setPaymentForm({ amount: "", method: "cash", reference: "", notes: "" });
-      setPaymentDiscountType("none");
-      setPaymentDiscountValue("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error recording payment:", error);
       addToast({
         title: "Error",
-        description: "Failed to record payment. Please try again.",
+        description: error?.message || "Failed to record payment. Please try again.",
         color: "danger",
       });
     } finally {
@@ -1288,12 +1322,15 @@ export default function PathologyBillingTab({
   const handlePrint = (billing: PathologyBilling) => {
     if (!billing) return;
 
-    const isCopy = (billing.printCount || 0) > 0;
+    // 0 = original, N = the Nth reprint (IRD requires reprints numbered "Copy of Original – N")
+    const copyNumber = billing.printCount || 0;
 
     // Update print count in background
-    pathologyBillingService.updateBilling(billing.id, {
-      printCount: (billing.printCount || 0) + 1
-    }).catch(console.error);
+    pathologyBillingService
+      .updateBilling(billing.id, {
+        printCount: (billing.printCount || 0) + 1,
+      })
+      .catch(console.error);
 
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
@@ -1308,15 +1345,17 @@ export default function PathologyBillingTab({
       return;
     }
 
-    const printedByText = userData ? `${userData.displayName} (${userData.role})` : "";
-    
+    const printedByText = userData
+      ? `${userData.displayName} (${userData.role})`
+      : "";
+
     const printContent = generateInvoiceHTML(
       billing,
       selectedPrintFormat,
       clinic,
       layoutConfig,
-      isCopy,
-      printedByText
+      copyNumber,
+      printedByText,
     );
 
     printWindow.document.write(printContent);
@@ -1347,6 +1386,11 @@ export default function PathologyBillingTab({
               label: "Manage Invoices",
               icon: <IoReceiptOutline className="w-4 h-4" />,
             },
+            {
+              id: "settings",
+              label: "Settings",
+              icon: <IoSettingsOutline className="w-4 h-4" />,
+            },
           ].map((t) => (
             <button
               key={t.id}
@@ -1363,6 +1407,27 @@ export default function PathologyBillingTab({
         {/* Create Invoice Tab */}
         {activeTab === "create" && (
           <div className="p-5 flex flex-col gap-6">
+            {editingInvoiceId &&
+              (() => {
+                const editingBilling = billings.find(
+                  (b) => b.id === editingInvoiceId,
+                );
+
+                return editingBilling &&
+                  (editingBilling.irdSynced ||
+                    editingBilling.status === "finalized") ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 text-[13px] text-amber-800">
+                    <strong>
+                      This invoice has already been finalized
+                      {editingBilling.irdSynced ? " and synced to IRD" : ""}.
+                    </strong>{" "}
+                    Financial fields (items, discounts, totals) cannot be
+                    changed here — the system will block the save. To correct
+                    a finalized invoice, issue a Credit Note instead.
+                    Non-financial fields can still be edited.
+                  </div>
+                ) : null;
+              })()}
             {/* Patient Information */}
             <div>
               <h3 className="text-[14px] font-semibold text-primary mb-3">
@@ -2093,14 +2158,26 @@ export default function PathologyBillingTab({
                       </span>
                     </div>
                   )}
-                  {billingSettings?.enableTax && calculations.taxAmount > 0 && (
-                    <div className="flex justify-between text-[13px] text-text-muted">
-                      <span>
-                        Tax ({billingSettings.defaultTaxPercentage}%):
-                      </span>
+                  <label className="flex items-center justify-between gap-2 text-[13px] text-text-muted cursor-pointer pt-0.5">
+                    <span className="flex items-center gap-1.5">
+                      <input
+                        checked={formData.applyTax}
+                        className="w-3.5 h-3.5 text-primary rounded border-border-base focus:ring-primary"
+                        type="checkbox"
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            applyTax: e.target.checked,
+                          }))
+                        }
+                      />
+                      Apply {billingSettings?.taxLabel || "VAT"} (
+                      {billingSettings?.defaultTaxPercentage || 0}%)
+                    </span>
+                    {formData.applyTax && (
                       <span>{formatCurrency(calculations.taxAmount)}</span>
-                    </div>
-                  )}
+                    )}
+                  </label>
                   <div className="flex justify-between text-[16px] font-black text-primary border-t border-primary/20 pt-1 mt-1">
                     <span>Total:</span>
                     <span>{formatCurrency(calculations.totalAmount)}</span>
@@ -2222,43 +2299,12 @@ export default function PathologyBillingTab({
                           </Chip>
                         </TableCell>
                         <TableCell>
-                          {billing.status === "finalized" ? (
-                            <div className="flex flex-col gap-1 items-start">
-                              {billing.irdSynced ? (
-                                <span className="text-[10px] bg-success-50 text-success-600 px-1.5 py-0.5 rounded font-medium border border-success-200">
-                                  ✅ Synced
-                                </span>
-                              ) : (
-                                <>
-                                  <span className="text-[10px] bg-danger-50 text-danger-600 px-1.5 py-0.5 rounded font-medium border border-danger-200">
-                                    ⚠️ Failed
-                                  </span>
-                                  <button
-                                    className="text-[10px] text-primary hover:underline"
-                                    onClick={async () => {
-                                      try {
-                                        const { retryIrdSync } = await import("@/services/irdCbmsService");
-                                        const res = await retryIrdSync(billing.id, "pathology");
-                                        if (res.success) {
-                                          toast.success("IRD Sync successful!");
-                                        } else {
-                                          toast.error("IRD Sync failed: " + res.message);
-                                        }
-                                      } catch (e) {
-                                        toast.error("Error during retry sync");
-                                      }
-                                    }}
-                                  >
-                                    Retry Sync
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-default-400">
-                              ➖ N/A
-                            </span>
-                          )}
+                          <IrdSyncBadge
+                            finalized={billing.status === "finalized"}
+                            invoiceType="pathology"
+                            recordId={billing.id}
+                            synced={Boolean(billing.irdSynced)}
+                          />
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 justify-center">
@@ -2304,22 +2350,25 @@ export default function PathologyBillingTab({
                                 <Button
                                   isIconOnly
                                   color="danger"
+                                  isDisabled={billing.irdSynced}
                                   isLoading={submitting}
                                   size="sm"
                                   title="Cancel Invoice"
                                   variant="light"
-                                  isDisabled={billing.irdSynced}
-                                  onPress={() => handleCancelInvoice(billing)}
+                                  onPress={() => {
+                                    setReasonModalBilling(billing);
+                                    setReasonModal("cancel");
+                                  }}
                                 >
                                   <IoCloseCircleOutline className="text-lg" />
                                 </Button>
                               )}
                             <Button
                               isIconOnly
+                              isDisabled={billing.irdSynced}
                               size="sm"
                               title="Edit"
                               variant="light"
-                              isDisabled={billing.irdSynced}
                               onPress={() => handleEditInvoice(billing)}
                             >
                               <IoPencilOutline className="text-lg text-default-500 hover:text-primary" />
@@ -2338,26 +2387,33 @@ export default function PathologyBillingTab({
                               size="sm"
                               title="View"
                               variant="light"
-                              onPress={() => {
-                                setSelectedBilling(billing);
-                                invoiceModal.open();
-                              }}
+                              onPress={() =>
+                                navigate(
+                                  `/dashboard/pathology-billing/${billing.id}`,
+                                )
+                              }
                             >
                               <IoEyeOutline className="text-lg text-default-500 hover:text-primary" />
                             </Button>
-                            {billing.status === "finalized" && billing.irdSynced && !billing.isCreditNote && (
-                              <Button
-                                isIconOnly
-                                color="danger"
-                                size="sm"
-                                title="Issue Credit Note (Sales Return)"
-                                variant="light"
-                                isLoading={submitting}
-                                onPress={() => handleIssueCreditNote(billing)}
-                              >
-                                <span className="font-bold text-sm">CN</span>
-                              </Button>
-                            )}
+                            {billing.status === "finalized" &&
+                              billing.irdSynced &&
+                              !billing.isCreditNote &&
+                              !billing.hasCreditNote && (
+                                <Button
+                                  isIconOnly
+                                  color="danger"
+                                  isLoading={submitting}
+                                  size="sm"
+                                  title="Issue Credit Note (Sales Return)"
+                                  variant="light"
+                                  onPress={() => {
+                                    setReasonModalBilling(billing);
+                                    setReasonModal("creditNote");
+                                  }}
+                                >
+                                  <span className="font-bold text-sm">CN</span>
+                                </Button>
+                              )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2372,6 +2428,72 @@ export default function PathologyBillingTab({
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === "settings" && (
+          <div className="p-5">
+            <div className="border border-border-base rounded overflow-hidden bg-surface max-w-xl">
+              <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
+                <h4 className="text-[13.5px] font-semibold text-primary">
+                  Tax Settings
+                </h4>
+              </div>
+              <div className="p-4 flex flex-col gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    checked={taxSettingsForm.enableTax}
+                    className="w-4 h-4 text-primary rounded border-border-base focus:ring-primary"
+                    type="checkbox"
+                    onChange={(e) =>
+                      setTaxSettingsForm((p) => ({
+                        ...p,
+                        enableTax: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span className="text-[13px] font-medium text-text-main">
+                    Enable tax by default on new invoices
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    description="e.g. 13 for standard Nepal VAT"
+                    label="Default Tax Percentage"
+                    type="number"
+                    value={taxSettingsForm.defaultTaxPercentage.toString()}
+                    onChange={(e) =>
+                      setTaxSettingsForm((p) => ({
+                        ...p,
+                        defaultTaxPercentage: parseFloat(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <Input
+                    description="Display label, e.g. VAT, GST, Tax"
+                    label="Tax Label"
+                    value={taxSettingsForm.taxLabel}
+                    onChange={(e) =>
+                      setTaxSettingsForm((p) => ({
+                        ...p,
+                        taxLabel: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="text-right">
+                  <Button
+                    color="primary"
+                    isLoading={isSavingTaxSettings}
+                    size="sm"
+                    onPress={handleSaveTaxSettings}
+                  >
+                    Save Tax Settings
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -2427,43 +2549,6 @@ export default function PathologyBillingTab({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border border-border-base rounded-md bg-surface-2/30">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[12px] font-medium text-text-muted">
-                      Discount Type
-                    </label>
-                    <select
-                      className="h-10 w-full px-2.5 text-[14px] border-2 border-border-base rounded-xl bg-surface focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 text-text-main"
-                      value={paymentDiscountType}
-                      onChange={(e) => {
-                        setPaymentDiscountType(
-                          e.target.value as "none" | "flat" | "percent",
-                        );
-                        if (e.target.value === "none") {
-                          setPaymentDiscountValue("");
-                        }
-                      }}
-                    >
-                      <option value="none">No Discount</option>
-                      <option value="flat">Flat Amount</option>
-                      <option value="percent">Percentage (%)</option>
-                    </select>
-                  </div>
-                  {paymentDiscountType !== "none" && (
-                    <Input
-                      label="Discount Value"
-                      placeholder="0"
-                      startContent={
-                        <span className="text-[12px] text-text-muted">
-                          {paymentDiscountType === "flat" ? "NPR" : "%"}
-                        </span>
-                      }
-                      type="number"
-                      value={paymentDiscountValue}
-                      onValueChange={(v) => setPaymentDiscountValue(v)}
-                    />
-                  )}
-                </div>
                 <Input
                   isRequired
                   label="Payment Amount *"
@@ -2580,7 +2665,9 @@ export default function PathologyBillingTab({
                   <p className="text-sm text-text-muted">Patient Name</p>
                   <p className="font-medium">{selectedBilling.patientName}</p>
                   {selectedBilling.patientPanVat && (
-                    <p className="text-xs text-text-muted mt-0.5">PAN/VAT: {selectedBilling.patientPanVat}</p>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      PAN/VAT: {selectedBilling.patientPanVat}
+                    </p>
                   )}
                 </div>
                 <div>
@@ -2747,6 +2834,30 @@ export default function PathologyBillingTab({
           )}
         </ModalShell>
       )}
+
+      <ReasonConfirmModal
+        confirmColor="danger"
+        confirmText={
+          reasonModal === "cancel" ? "Cancel Invoice" : "Issue Credit Note"
+        }
+        description={
+          reasonModal === "cancel"
+            ? "This action cannot be undone."
+            : "This will reverse the invoice and create a new negative invoice."
+        }
+        isOpen={reasonModal !== null}
+        isSubmitting={submitting}
+        title={reasonModal === "cancel" ? "Cancel Invoice" : "Issue Credit Note"}
+        onClose={() => {
+          setReasonModal(null);
+          setReasonModalBilling(null);
+        }}
+        onConfirm={(reason) =>
+          reasonModal === "cancel"
+            ? handleCancelInvoice(reason)
+            : handleIssueCreditNote(reason)
+        }
+      />
     </div>
   );
 }

@@ -46,6 +46,9 @@ import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
 import { expertService } from "@/services/expertService";
 import { IrdAnnexureReport } from "./IrdAnnexureReport";
+import { CorrectedRecordsReport } from "./CorrectedRecordsReport";
+import { Schedule5Report } from "./Schedule5Report";
+import { BillingAuditLogReport } from "./BillingAuditLogReport";
 
 // Types
 import {
@@ -132,8 +135,7 @@ export default function ReportsPage() {
   const { clinicId, userData } = useAuthContext();
   const branchId = userData?.branchId ?? null;
 
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" || userData?.role === "system-owner";
+  const isClinicAdmin = userData?.role === "clinic-admin";
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -3057,6 +3059,46 @@ export default function ReportsPage() {
             }
           >
             <IrdAnnexureReport
+              billings={filteredBillings}
+              pathologyBillings={filteredPathologyBillings}
+              medicinePurchases={reportData.medicinePurchases}
+            />
+          </Tab>
+
+          <Tab
+            key="schedule5"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Schedule 5 (Master Bill)
+              </span>
+            }
+          >
+            <Schedule5Report />
+          </Tab>
+
+          <Tab
+            key="billing-audit-log"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Billing Audit Log
+              </span>
+            }
+          >
+            <BillingAuditLogReport />
+          </Tab>
+
+          <Tab
+            key="corrected-records"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Corrected & Cancelled Records
+              </span>
+            }
+          >
+            <CorrectedRecordsReport
               billings={filteredBillings}
               pathologyBillings={filteredPathologyBillings}
               medicinePurchases={reportData.medicinePurchases}

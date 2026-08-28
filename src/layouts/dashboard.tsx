@@ -335,7 +335,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const formatRole = (role?: string): string => {
     if (!role) return "User";
     const map: Record<string, string> = {
-      "system-owner": "System Owner",
       "clinic-admin": "Clinic Admin",
       doctor: "Doctor",
       nurse: "Nurse",

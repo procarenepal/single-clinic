@@ -8,7 +8,7 @@ import {
 import { PathologyBilling, AppointmentBilling } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { numberToWords } from "./numberToWords";
-import { getNepaliFiscalYear } from "@/services/irdCbmsService";
+import { adToBS } from "./dateConverter";
 
 export type PrintFormat =
   | "A4"
@@ -44,11 +44,87 @@ export interface UnifiedInvoice {
   previousDuePaidAmount?: number;
   balanceAmount: number;
   irdSynced?: boolean;
+  // Required on the printed invoice by IRD's Electronic Billing Procedure, Schedule 6.
+  paymentMethod?: string;
   items: UnifiedInvoiceItem[];
   cliniciansHtml?: string;
+  // Credit Note (sales return) marking — must be visually distinct from a
+  // normal tax invoice, per IRD's cancellation/return provisions.
+  isCreditNote?: boolean;
+  creditNoteNote?: string;
 }
 
 const formatCurrency = (amount: number) => `NPR ${amount.toLocaleString()}`;
+
+/**
+ * IRD's Electronic Billing Procedure, Schedule 6, defines three invoice
+ * title variants: for VAT-registered clinics, the full "Tax Invoice" (has a
+ * VAT line) or "Abbreviated Tax Invoice" (no VAT line — this specific bill
+ * has no taxable amount); for a clinic that is NOT VAT-registered
+ * (income-tax-only), a plain "Invoice" with no Taxable Amount/VAT rows at
+ * all. Shared so both invoicePrinting.ts and pharmacy's print template stay
+ * in sync on which title a given bill should carry.
+ */
+export const getIrdInvoiceTitle = (
+  taxAmount?: number,
+  isVatRegistered: boolean = true,
+): string => {
+  if (!isVatRegistered) return "बिल (INVOICE)";
+  return (taxAmount || 0) > 0
+    ? "कर बिजक (TAX INVOICE)"
+    : "संक्षिप्त कर बिजक (ABBREVIATED TAX INVOICE)";
+};
+
+/**
+ * "Taxable Amount" is a required row on both Tax Invoice and Abbreviated Tax
+ * Invoice per Schedule 6 — it must show even when 0 for a fully exempt sale,
+ * never be omitted. Only the VAT % line disappears for non-taxable bills.
+ */
+export const getIrdTaxableAmount = (
+  taxAmount: number | undefined,
+  taxableAmount: number | undefined,
+  fallbackBase: number,
+): number => {
+  if (typeof taxableAmount === "number") return taxableAmount;
+  return (taxAmount || 0) > 0 ? fallbackBase : 0;
+};
+
+// Payment method values are stored as machine keys (e.g. "mobile_banking",
+// "bank_transfer") — humanize for the printed "Method of Payment" line.
+export const formatPaymentMethod = (method?: string): string => {
+  if (!method) return "Cash";
+  return method
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+/**
+ * IRD's Electronic Billing Procedure, Schedule 6, requires the printed
+ * "Method of Payment" line to be exactly one of Cash / Cheque / Creditor /
+ * Other — a narrower set than the clinic's actual configurable payment
+ * methods (card, mobile banking, bank transfer, etc). Maps into that
+ * required category for the legal document while keeping the clinic's own
+ * detail visible alongside it (e.g. "Other (Mobile Banking)").
+ */
+export const getIrdPaymentCategory = (
+  method: string | undefined,
+  balanceAmount: number | undefined,
+): "Cash" | "Cheque" | "Creditor" | "Other" => {
+  const m = (method || "").toLowerCase();
+
+  if (m.includes("cheque") || m.includes("check")) return "Cheque";
+  if (m.includes("cash")) return "Cash";
+  if (method) return "Other";
+  // No method was actually recorded — this is the only case "Creditor" is a
+  // reasonable inference (payment genuinely outstanding, nothing collected).
+  // A method being selected but payment not yet marked complete (this app
+  // records payment as a separate step after invoice creation) must NOT be
+  // read as a credit sale — that would mislabel almost every fresh invoice.
+  return (balanceAmount || 0) > 0 ? "Creditor" : "Cash";
+};
 
 const formatDate = (date: Date | string) => {
   const d = typeof date === "string" ? new Date(date) : date;
@@ -59,6 +135,16 @@ const formatDate = (date: Date | string) => {
   });
 };
 
+// IRD's invoice date fields are expected in both AD and BS (Nepali calendar).
+const formatDateWithBS = (date: Date | string) => {
+  const d = typeof date === "string" ? new Date(date) : date;
+  try {
+    return `${formatDate(d)} (BS ${adToBS(d).formatted})`;
+  } catch {
+    return formatDate(d);
+  }
+};
+
 /**
  * Core engine for generating unified HTML invoice layouts.
  */
@@ -67,7 +153,9 @@ export const generateUnifiedInvoiceHTML = (
   format: PrintFormat,
   clinic: any,
   layoutConfig: any,
-  isCopy: boolean = false,
+  // 0 = original; N = the Nth reprint — IRD requires reprints to be marked
+  // "Copy of Original – 1, 2, 3…", not just a generic "copy" label.
+  copyNumber: number = 0,
   printedBy: string = ""
 ): string => {
   const isThermal =
@@ -85,6 +173,9 @@ export const generateUnifiedInvoiceHTML = (
 
   const brandingCSS = layoutConfig ? getPrintBrandingCSS(layoutConfig, isThermal) : "";
   const headerHTML = layoutConfig ? getPrintHeaderHTML(layoutConfig, clinic, isThermal) : "";
+  // Defaults to VAT-registered (existing behavior) — CBMS is fundamentally
+  // a VAT-context system, so only an explicit `false` opts a clinic out.
+  const isVatRegistered = clinic?.isVatRegistered !== false;
 
   // Footer text depends on the invoice type
   let footerType: "pathology" | "appointment" | "pharmacy" = invoice.invoiceType;
@@ -97,7 +188,7 @@ export const generateUnifiedInvoiceHTML = (
           <td class="text-center" style="text-align: center;">${index + 1}</td>
           <td style="text-align: ${isThermal ? 'center' : 'left'};">
             <div style="font-weight: 500;">${item.name}</div>
-            ${item.subtext ? `<div style="font-size: 0.9em; color: #334155; font-weight: 600; margin-top: 2px;">${item.subtext}</div>` : ''}
+            ${item.subtext ? `<div style="font-size: ${isThermal ? '0.9em' : '10px'}; color: #000000; font-weight: 600; margin-top: 2px;">${item.subtext}</div>` : ''}
           </td>
           <td class="text-center" style="text-align: center; white-space: nowrap;">${item.quantity}</td>
           ${!isThermal ? `<td class="text-center" style="text-align: center; white-space: nowrap;">${item.price !== undefined ? formatCurrency(item.price) : '-'}</td>` : ""}
@@ -126,7 +217,7 @@ export const generateUnifiedInvoiceHTML = (
     body {
       font-family: ${layoutConfig?.fontFamily || "'Nunito', 'Plus Jakarta Sans', 'Inter', system-ui, Arial, sans-serif"};
       color: ${layoutConfig?.textColor || "#333"};
-      font-size: ${isThermal ? "9px" : layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "11px"};
+      font-size: ${isThermal ? "9px" : layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : "12px"};
       line-height: 1.3;
     }
     .print-container {
@@ -157,30 +248,7 @@ export const generateUnifiedInvoiceHTML = (
       margin: 0;
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      color: #1e293b;
-    }
-    .bill-to-section {
-      display: flex;
-      flex-direction: ${isThermal ? "column" : "row"};
-      justify-content: space-between;
-      margin-bottom: ${isThermal ? "8px" : "10px"};
-      padding: ${isThermal ? "8px" : "6px 12px"};
-      background-color: #f8fafc;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-    }
-    .bill-to-section h3 {
-      margin: 0 0 6px 0;
-      font-size: 0.85em;
-      font-weight: 800;
-      color: #334155;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .bill-to-section p {
-      margin: 1px 0;
-      font-size: 1em;
-      color: #334155;
+      color: #000000;
     }
     .items-table {
       width: 100%;
@@ -191,33 +259,35 @@ export const generateUnifiedInvoiceHTML = (
     .items-table td {
       border: 1px solid #e2e8f0;
       padding: ${isThermal ? "4px 4px" : "6px 8px"};
-      font-size: 1em;
-      color: #334155;
+      font-size: ${isThermal ? "1em" : "13px"};
+      color: #000000;
     }
     .items-table th {
       background-color: #f1f5f9;
       font-weight: 800;
       text-align: center;
       text-transform: uppercase;
-      font-size: 0.85em;
+      font-size: ${isThermal ? "0.85em" : "12px"};
       letter-spacing: 0.05em;
-      color: #1e293b;
+      color: #000000;
     }
     .summary-section {
       display: flex;
       justify-content: flex-end;
       margin-top: 6px;
     }
-    .summary-table { width: ${isThermal ? '100%' : '260px'}; min-width: ${isThermal ? '100%' : '260px'}; border-collapse: collapse; }
+    .summary-table { width: ${isThermal ? '100%' : '340px'}; min-width: ${isThermal ? '100%' : '340px'}; border-collapse: collapse; }
     .summary-table td {
       padding: ${isThermal ? "3px 4px" : "4px 8px"};
       border-bottom: 1px solid #f1f5f9;
-      font-size: 1em;
-      color: #334155;
+      font-size: ${isThermal ? "1em" : "13px"};
+      color: #000000;
+      white-space: nowrap;
     }
+    .summary-table td:first-child { padding-right: 20px; }
     .text-right { text-align: right !important; }
     .text-center { text-align: center !important; }
-    .font-bold { font-weight: 700; color: #1e293b; }
+    .font-bold { font-weight: 700; color: #000000; }
 
     @media screen {
       body {
@@ -263,35 +333,78 @@ export const generateUnifiedInvoiceHTML = (
 <body>
   <div class="print-container">
     ${headerHTML}
-    ${isCopy ? `<div style="text-align: center; font-weight: bold; font-size: 16px; margin-top: 4px; margin-bottom: 4px; text-transform: uppercase;">[ COPY OF ORIGINAL ]</div>` : ""}
+    ${copyNumber > 0 ? `<div style="text-align: center; font-weight: bold; font-size: 13px; margin-top: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">[ COPY OF ORIGINAL &ndash; ${copyNumber} ]</div>` : ""}
     
     <div class="content">
       <div class="document-title">
-        <h2>कर बिजक (TAX INVOICE)</h2>
-        <div class="document-info" style="display: flex; justify-content: space-between; margin-top: 10px;">
-          <span># ${invoice.invoiceNumber}</span>
-          <span>Date: ${formatDate(invoice.invoiceDate)}</span>
-        </div>
+        ${invoice.isCreditNote ? `<div style="text-align: center; font-weight: 800; font-size: 15px; color: #b91c1c; letter-spacing: 0.05em; border: 2px solid #b91c1c; padding: 4px 0; margin-bottom: 6px;">मूल्य फिर्ता बिजक (CREDIT NOTE / SALES RETURN)</div>` : ""}
+        <h2>${getIrdInvoiceTitle(invoice.taxAmount, isVatRegistered)}</h2>
+        ${invoice.isCreditNote && invoice.creditNoteNote ? `<div style="font-size: 11px; color: #b91c1c; font-weight: 600; margin-top: 6px; text-align: center;">${invoice.creditNoteNote}</div>` : ""}
       </div>
-      
-      <div class="bill-to-section">
-        <div style="flex: 1;">
-          <div style="display: grid; grid-template-columns: ${isThermal ? '1fr' : '1fr 1fr'}; gap: ${isThermal ? '2px' : '20px'};">
-            <div style="display: grid; grid-template-columns: max-content 1fr; column-gap: 8px; row-gap: 4px; align-items: baseline;">
-              <div style="font-weight: 700; font-size: 0.8em; color: #64748b; text-transform: uppercase;">BILL TO:</div>
-              <div style="font-weight: 700; font-size: 1.1em; color: #0f172a;">${invoice.patientName && invoice.patientName !== "Unknown Patient" ? invoice.patientName : "Unknown Patient"}</div>
-              
-              ${invoice.buyerPan || invoice.patientPanVat ? `<div style="font-size: 0.85em; color: #64748b;">Buyer PAN:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${invoice.buyerPan || invoice.patientPanVat}</div>` : ""}
-            </div>
-            <div style="display: grid; grid-template-columns: max-content 1fr; column-gap: 8px; row-gap: 4px; align-items: baseline;">
-              ${invoice.patientPhone ? `<div style="font-size: 0.85em; color: #64748b;">Phone:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${invoice.patientPhone}</div>` : ""}
-              ${invoice.patientAddress ? `<div style="font-size: 0.85em; color: #64748b;">Address:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${invoice.patientAddress}</div>` : ""}
-            </div>
-          </div>
+
+      <div style="border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: ${isThermal ? "6px 0" : "8px 0"}; margin: 10px 0;">
+        <div style="display: flex; flex-direction: ${isThermal ? "column" : "row"}; justify-content: space-between; align-items: baseline; width: 100%; gap: ${isThermal ? "1px" : "16px"}; font-size: 13px; color: #000000; margin-bottom: ${isThermal ? "6px" : "8px"};">
+          <span style="font-weight: 700; color: #000000; white-space: nowrap; flex-shrink: 0;"># ${invoice.invoiceNumber}</span>
+          <span style="text-align: ${isThermal ? "left" : "right"};">Transaction Date: ${formatDateWithBS(invoice.invoiceDate)}${isThermal ? "" : " &nbsp;|&nbsp; "}${isThermal ? "<br/>" : ""}Invoice Issue Date: ${formatDateWithBS(invoice.invoiceDate)}</span>
         </div>
-        ${!isThermal && invoice.cliniciansHtml ? invoice.cliniciansHtml : ""}
+        ${(() => {
+          const lbl = `padding: 1px 0; color: #000000; text-transform: uppercase; font-size: 12px; letter-spacing: 0.03em; vertical-align: top; white-space: nowrap;`;
+          const val = `padding: 1px 8px 1px 0; font-weight: 600; vertical-align: top;`;
+          const patientName =
+            invoice.patientName && invoice.patientName !== "Unknown Patient"
+              ? invoice.patientName
+              : "Unknown Patient";
+          const paymentCategory = getIrdPaymentCategory(invoice.paymentMethod, invoice.balanceAmount);
+          const paymentDetail = formatPaymentMethod(invoice.paymentMethod);
+          // Only show the parenthetical detail when it adds real information
+          // — a method was actually recorded, and it says something beyond
+          // what the category already states (e.g. skip "Cash (Cash)").
+          const paymentLine =
+            invoice.paymentMethod && paymentDetail !== paymentCategory
+              ? `${paymentCategory} (${paymentDetail})`
+              : paymentCategory;
+
+          // Left column is always present (required fields). On the right,
+          // Address is also a fixed Schedule 6 field slot — like Purchaser's
+          // PAN, it always renders (with a "-" fallback) rather than
+          // disappearing when blank; Phone is not schedule-required, so it's
+          // only shown when there's actually a value.
+          const leftRows = [
+            ["Bill To", patientName],
+            ["PAN", invoice.buyerPan || invoice.patientPanVat || "-"],
+            ["Payment", paymentLine],
+          ];
+          // Address first so it lands on a fixed row position regardless of
+          // whether the optional Phone row is present.
+          const rightRows = [
+            ["Address", invoice.patientAddress || "-"],
+            invoice.patientPhone ? ["Phone", invoice.patientPhone] : null,
+          ].filter(Boolean) as [string, string][];
+
+          if (isThermal) {
+            const allRows = [...leftRows, ...rightRows];
+            return `<table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #000000;">
+              ${allRows.map(([label, value]) => `<tr><td style="width: 70px; ${lbl}">${label}</td><td style="${val}">${value}</td></tr>`).join("")}
+            </table>`;
+          }
+
+          const rowCount = Math.max(leftRows.length, rightRows.length);
+          const bodyRows = Array.from({ length: rowCount }, (_, i) => {
+            const [ll, lv] = leftRows[i] || ["", ""];
+            const [rl, rv] = rightRows[i] || ["", ""];
+
+            return `<tr>
+              <td style="width: 78px; ${lbl}">${ll}</td>
+              <td style="width: 40%; ${val}">${lv}</td>
+              <td style="width: 65px; ${lbl}">${rl}</td>
+              <td style="${val}">${rv}</td>
+            </tr>`;
+          }).join("");
+
+          return `<table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #000000;">${bodyRows}</table>`;
+        })()}
       </div>
-      
+
       <table class="items-table">
         <thead>
           <tr>
@@ -313,59 +426,36 @@ export const generateUnifiedInvoiceHTML = (
             <td>Gross Amount</td>
             <td class="text-right">${formatCurrency(invoice.subtotal)}</td>
           </tr>
-          ${(invoice.discountAmount || 0) > 0 ? `<tr><td>Discount</td><td class="text-right">- ${formatCurrency(invoice.discountAmount || 0)}</td></tr>` : ""}
-          ${(invoice.taxPercentage || 0) > 0 ? `<tr><td>Taxable Amount</td><td class="text-right">${formatCurrency(invoice.taxableAmount || (invoice.subtotal - (invoice.discountAmount || 0)))}</td></tr>` : ""}
-          ${(invoice.taxPercentage || 0) > 0 ? `<tr><td>VAT (${invoice.taxPercentage}%)</td><td class="text-right">${formatCurrency(invoice.taxAmount || 0)}</td></tr>` : ""}
+          ${(invoice.discountAmount || 0) > 0 ? `<tr><td>Discount % (${invoice.subtotal > 0 ? (((invoice.discountAmount || 0) / invoice.subtotal) * 100).toFixed(1) : "0.0"}%)</td><td class="text-right">- ${formatCurrency(invoice.discountAmount || 0)}</td></tr>` : ""}
+          ${isVatRegistered ? `<tr><td>Taxable Amount</td><td class="text-right">${formatCurrency(getIrdTaxableAmount(invoice.taxAmount, invoice.taxableAmount, invoice.subtotal - (invoice.discountAmount || 0)))}</td></tr>` : ""}
+          ${isVatRegistered && (invoice.taxPercentage || 0) > 0 ? `<tr><td>VAT (${invoice.taxPercentage}%)</td><td class="text-right">${formatCurrency(invoice.taxAmount || 0)}</td></tr>` : ""}
           <tr class="font-bold">
             <td>Total Amount</td>
             <td class="text-right">${formatCurrency(invoice.totalAmount)}</td>
           </tr>
-          ${(invoice.previousDuePaidAmount || 0) > 0 ? `<tr><td>Previous Due Settled</td><td class="text-right">${formatCurrency(invoice.previousDuePaidAmount || 0)}</td></tr>` : ""}
-          <tr>
-            <td>Paid</td>
-            <td class="text-right">${formatCurrency(invoice.paidAmount + (invoice.previousDuePaidAmount || 0))}</td>
-          </tr>
-          <tr class="font-bold">
-            <td>Balance</td>
-            <td class="text-right">${formatCurrency(invoice.balanceAmount)}</td>
-          </tr>
         </table>
       </div>
       
-      <div style="margin-top: 4px; font-size: 1em; color: #1e293b;">
+      <div style="margin-top: 4px; font-size: 13px; color: #000000;">
         <strong>In words:</strong> Rupees ${numberToWords(invoice.totalAmount || 0)} Only
       </div>
 
-      <div style="margin-top: ${isThermal ? "10px" : "15px"}; display: flex; justify-content: space-between; align-items: flex-end; font-size: 1em; color: #334155;">
-        <div style="display: flex; gap: 40px;">
-          <div>
-            <p style="margin: 0;">Prepared By</p>
-            <p style="margin: 5px 0 0 0;">___________________</p>
-          </div>
-          <div>
-            <p style="margin: 0;">Printed By</p>
-            <p style="margin: 5px 0 0 0;">${printedBy ? printedBy : "___________________"}</p>
-          </div>
+      <div style="margin-top: ${isThermal ? "10px" : "15px"}; display: flex; gap: 60px; font-size: 13px; color: #000000;">
+        <div>
+          <p style="margin: 0;">Authorized Signature</p>
+          <p style="margin: 5px 0 0 0;">___________________</p>
         </div>
-        <div style="text-align: right; display: flex; align-items: center; gap: 8px;">
-          <div style="text-align: right;">
-            <div style="font-weight: 800; font-size: 0.85em; color: #166534; text-transform: uppercase;">
-              ${invoice.irdSynced ? "✓ IRD Verified E-Bill" : "E-Bill System"}
-            </div>
-            <div style="font-size: 0.75em; color: #64748b;">
-              PAN: ${clinic?.panNumber || layoutConfig?.panNumber || "-"} | FY: ${getNepaliFiscalYear(invoice.invoiceDate)}
-            </div>
-          </div>
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`PAN:${clinic?.panNumber || layoutConfig?.panNumber || ''}|INV:${invoice.invoiceNumber}|DATE:${new Date(invoice.invoiceDate).toISOString().split('T')[0]}|AMT:${invoice.totalAmount}`)}" style="width: 50px; height: 50px; border: 1px solid #e2e8f0; padding: 2px; border-radius: 4px;" alt="IRD QR" />
+        <div>
+          <p style="margin: 0;">Printed By</p>
+          <p style="margin: 5px 0 0 0;">${printedBy ? printedBy : "___________________"}</p>
         </div>
       </div>
-      ${isThermal && invoice.cliniciansHtml ? invoice.cliniciansHtml : ""}
     </div>
     
     ${!isThermal && footerHTML
       ? footerHTML
       : `
-    <div style="margin-top: 15px; text-align: center; font-size: 0.85em; color: #666; border-top: 1px solid #eee; padding-top: 5px;">
+    <div style="margin-top: 15px; text-align: center; font-size: 0.85em; color: #000000; border-top: 1px solid #eee; padding-top: 5px;">
       <p style="font-weight: bold; margin: 2px 0;">Computerized Billing System</p>
       <p>${layoutConfig?.showFooter ? (
         invoice.invoiceType === 'appointment' ? layoutConfig.appointmentFooterText :
@@ -397,7 +487,7 @@ export const generateInvoiceHTML = (
   format: PrintFormat,
   clinic: any,
   layoutConfig: any,
-  isCopy: boolean = false,
+  copyNumber: number = 0,
   printedBy: string = ""
 ): string => {
   const unifiedInvoice: UnifiedInvoice = {
@@ -410,10 +500,16 @@ export const generateInvoiceHTML = (
     patientAddress: billing.patientAddress,
     subtotal: billing.subtotal || 0,
     discountAmount: billing.discountAmount || 0,
+    taxableAmount: (billing.taxPercentage || 0) > 0 ? (billing.subtotal || 0) - (billing.discountAmount || 0) : undefined,
+    taxPercentage: billing.taxPercentage || 0,
+    taxAmount: billing.taxAmount || 0,
     totalAmount: billing.totalAmount || 0,
     paidAmount: billing.paidAmount || 0,
     balanceAmount: billing.balanceAmount || 0,
     irdSynced: billing.irdSynced,
+    paymentMethod: billing.paymentMethod,
+    isCreditNote: billing.isCreditNote,
+    creditNoteNote: billing.isCreditNote ? billing.notes : undefined,
     items: billing.items.map(i => ({
       name: i.testName,
       subtext: i.testType ? `(${i.testType})` : undefined,
@@ -423,7 +519,7 @@ export const generateInvoiceHTML = (
     }))
   };
 
-  return generateUnifiedInvoiceHTML(unifiedInvoice, format, clinic, layoutConfig, isCopy, printedBy);
+  return generateUnifiedInvoiceHTML(unifiedInvoice, format, clinic, layoutConfig, copyNumber, printedBy);
 };
 
 /**
@@ -436,7 +532,7 @@ export const generateAppointmentInvoiceHTML = (
   patient: any,
   format: PrintFormat = "A4",
   doctor?: any,
-  isCopy: boolean = false,
+  copyNumber: number = 0,
   printedBy: string = ""
 ): string => {
   // Get involved clinicians
@@ -463,8 +559,8 @@ export const generateAppointmentInvoiceHTML = (
   const cliniciansList = Array.from(cliniciansMap.values());
   const cliniciansHtml = cliniciansList.length > 0
     ? `<div>
-        <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #333;">${cliniciansList.length > 1 ? "Clinicians" : "Clinician"}:</h3>
-        ${cliniciansList.map((c) => `<p style="margin: 2px 0; font-size: 12px; font-weight: 500;">${c.name}${c.isPrimary && cliniciansList.length > 1 ? " (Primary)" : ""}</p>`).join("")}
+        <h3 style="margin: 0 0 6px 0; font-size: 10px; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 0.03em;">${cliniciansList.length > 1 ? "Clinicians" : "Clinician"}:</h3>
+        ${cliniciansList.map((c) => `<p style="margin: 2px 0; font-size: 11px; font-weight: 600; color: #000000;">${c.name}${c.isPrimary && cliniciansList.length > 1 ? " (Primary)" : ""}</p>`).join("")}
       </div>`
     : "";
 
@@ -486,6 +582,9 @@ export const generateAppointmentInvoiceHTML = (
     previousDuePaidAmount: (invoice as any).previousDuePaidAmount || 0,
     balanceAmount: invoice.balanceAmount || 0,
     irdSynced: invoice.irdSynced,
+    paymentMethod: invoice.paymentMethod,
+    isCreditNote: invoice.isCreditNote,
+    creditNoteNote: invoice.isCreditNote ? invoice.notes : undefined,
     cliniciansHtml,
     items: invoice.items.map(i => ({
       name: i.appointmentTypeName,
@@ -496,7 +595,7 @@ export const generateAppointmentInvoiceHTML = (
     }))
   };
 
-  return generateUnifiedInvoiceHTML(unifiedInvoice, format, clinic, layoutConfig, isCopy, printedBy);
+  return generateUnifiedInvoiceHTML(unifiedInvoice, format, clinic, layoutConfig, copyNumber, printedBy);
 };
 
 /**
@@ -507,7 +606,7 @@ export const generatePharmacyInvoiceHTML = (
   format: PrintFormat,
   clinic: any,
   layoutConfig: any,
-  isCopy: boolean = false,
+  copyNumber: number = 0,
   printedBy: string = ""
 ): string => {
   const unifiedInvoice: UnifiedInvoice = {
@@ -527,16 +626,19 @@ export const generatePharmacyInvoiceHTML = (
     paidAmount: saleData.paidAmount || 0,
     balanceAmount: saleData.balanceAmount || 0,
     irdSynced: saleData.irdSynced,
+    paymentMethod: saleData.paymentMethod || saleData.paymentType,
+    isCreditNote: saleData.isCreditNote,
+    creditNoteNote: saleData.creditNoteNote,
     items: (saleData.items || []).map((i: any) => ({
       name: i.name || i.medicineName || i.itemName,
-      subtext: i.batchNumber ? `Batch: ${i.batchNumber}` : undefined,
+      subtext: i.subtext || (i.batchNumber ? `Batch: ${i.batchNumber}` : undefined),
       quantity: i.quantity || 1,
       price: i.price || i.unitPrice || 0,
       amount: i.amount || i.totalPrice || (i.quantity * (i.price || i.unitPrice || 0))
     }))
   };
 
-  return generateUnifiedInvoiceHTML(unifiedInvoice, format, clinic, layoutConfig, isCopy, printedBy);
+  return generateUnifiedInvoiceHTML(unifiedInvoice, format, clinic, layoutConfig, copyNumber, printedBy);
 };
 
 
@@ -695,7 +797,7 @@ export const generatePatientSlipHTML = (
       margin-top: 15px;
       text-align: center;
       font-size: 10px;
-      color: #666;
+      color: #000000;
       border-top: 1px solid #eee;
       padding-top: 5px;
     }

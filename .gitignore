@@ -53,3 +53,13 @@ final_count.py
 tag_lines.txt
 tsc_output.txt
 vite.config.ts.timestamp-*.mjs
+
+# Firebase / IRD credentials — never commit these
+**/serviceAccountKey.json
+**/*serviceAccount*.json
+.env
+.env.*
+!.env.example
+
+# Claude Code local tool config — not part of the app
+.claude/

@@ -1297,15 +1297,12 @@ export const rbacService = {
     clinicId: string,
   ): Promise<Page[]> {
     try {
-      // Check if user has legacy clinic-admin or system-owner role
+      // Check if user has legacy clinic-admin role
       // These users should have access to all clinic type pages
       const { userService } = await import("./userService");
       const user = await userService.getUserById(userId);
 
-      if (
-        user &&
-        (user.role === "clinic-admin" || user.role === "system-owner")
-      ) {
+      if (user && user.role === "clinic-admin") {
         // Legacy admin users get all clinic type pages
         const allPages = await this.getAvailablePagesForClinic(clinicId);
 
@@ -1442,63 +1439,6 @@ export const rbacService = {
   },
 
   // =================== INITIALIZATION ===================
-
-  /**
-   * Initialize system-level permissions and roles
-   */
-  async initializeSystemPermissions(): Promise<void> {
-    try {
-      const rolesRef = collection(db, ROLES_COLLECTION);
-
-      const systemRoles = [
-        {
-          id: "system-owner",
-          name: "System Owner",
-          description: "Full access to all system features",
-          clinicId: null,
-          permissions: ["*"],
-          isDefault: true,
-          isBranchSpecific: false,
-          linkedToDoctor: false,
-        },
-        {
-          id: "clinic-admin",
-          name: "Clinic Administrator",
-          description: "Full administrative access to a clinic",
-          clinicId: null,
-          permissions: [
-            "dashboard:*",
-            "patients:*",
-            "appointments:*",
-            "doctors:*",
-            "settings:*",
-          ],
-          isDefault: true,
-          isBranchSpecific: false,
-          linkedToDoctor: false,
-        },
-      ];
-
-      const batch = writeBatch(db);
-
-      for (const roleData of systemRoles) {
-        // Use the ID as the document ID
-        const docRef = doc(rolesRef, roleData.id);
-
-        batch.set(docRef, {
-          ...roleData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      await batch.commit();
-      console.log("System permissions initialized successfully.");
-    } catch (error) {
-      console.error("Error initializing system permissions:", error);
-      throw error;
-    }
-  },
 
   /**
    * Create default clinic admin role when a new clinic is created

@@ -21,10 +21,10 @@ export const getPrintBrandingCSS = (
   const fontSize = config.fontSize || "medium";
   const headerHeight =
     config.headerHeight === "compact"
-      ? 140
+      ? 80
       : config.headerHeight === "expanded"
-        ? 220
-        : 180;
+        ? 140
+        : 100;
 
   const effectiveLogoPosition = isThermal
     ? "center"
@@ -58,7 +58,7 @@ export const getPrintBrandingCSS = (
       position: relative;
       width: 100%;
       min-height: ${headerHeight}px;
-      padding: 20px 0;
+      padding: 8px 0;
       background: #fff;
       display: flex;
       flex-direction: column;
@@ -74,7 +74,7 @@ export const getPrintBrandingCSS = (
       justify-content: center;
       padding: 0 80px;
       width: 100%;
-      gap: 6px;
+      gap: 2px;
       z-index: 50;
       box-sizing: border-box;
     }
@@ -83,7 +83,7 @@ export const getPrintBrandingCSS = (
       position: ${effectiveLogoPosition === "center" ? "relative" : "absolute"};
       z-index: 100;
       width: ${config.logoWidth || 80}px;
-      top: 20px;
+      top: 8px;
     }
 
     .logo {
@@ -93,7 +93,7 @@ export const getPrintBrandingCSS = (
     }
 
     .clinic-name {
-      font-size: ${config.fontSize === "small" ? "20px" : config.fontSize === "large" ? "28px" : "24px"};
+      font-size: ${config.fontSize === "small" ? "15px" : config.fontSize === "large" ? "20px" : "17px"};
       margin: 0;
       font-weight: 800;
       color: ${titleColor};
@@ -105,7 +105,7 @@ export const getPrintBrandingCSS = (
     }
 
     .tagline {
-      font-size: 14px;
+      font-size: 11px;
       font-weight: 600;
       color: ${titleColor};
       text-transform: uppercase;
@@ -115,12 +115,12 @@ export const getPrintBrandingCSS = (
     }
 
     .address-container {
-      margin-top: 10px;
+      margin-top: 2px;
       text-align: center;
     }
 
     .address {
-      font-size: ${contentFontSize}px;
+      font-size: ${Math.max(contentFontSize - 1, 9)}px;
       font-weight: 500;
       color: ${textColor};
       line-height: 1.4;
@@ -152,14 +152,14 @@ export const getPrintBrandingCSS = (
     }
 
     .contact-value {
-      font-size: ${contentFontSize}px;
+      font-size: ${Math.max(contentFontSize - 1, 9)}px;
       font-weight: 700;
       color: ${titleColor};
       font-family: ${fontFamily};
     }
 
     .website {
-      font-size: ${contentFontSize}px;
+      font-size: ${Math.max(contentFontSize - 1, 9)}px;
       font-weight: 700;
       color: ${primaryColor};
       margin-top: 2px;
@@ -193,7 +193,7 @@ export const getPrintBrandingCSS = (
     }
 
     .footer-text {
-      font-size: ${Math.max(contentFontSize - 2, 8)}px;
+      font-size: 10px;
       font-weight: 600;
       color: ${textColor};
       text-transform: uppercase;
@@ -216,8 +216,28 @@ export const getPrintHeaderHTML = (
   const rawClinicName = config.clinicName || clinic?.name || "Clinic Name";
   const formattedClinicName = rawClinicName.replace(/\s+(Pvt\.?\s*Ltd\.?)/i, "<br/>$1");
 
+  const panValue = String(config.panNumber || clinic?.panNumber || "");
+  const panBoxesHTML =
+    !isThermal && config.showPan !== false && panValue
+      ? `
+        <div style="position: absolute; top: 4px; right: 4px; text-align: right;">
+          <div style="font-size: 0.7em; color: #334155; font-weight: 600; margin-bottom: 2px; letter-spacing: 0.05em;">PAN / VAT No.</div>
+          <div style="display: flex; gap: 2px; justify-content: flex-end;">
+            ${panValue
+              .split("")
+              .map(
+                (ch) =>
+                  `<div style="border: 1px solid #1e293b; width: 18px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: 700; color: #1e293b;">${ch}</div>`,
+              )
+              .join("")}
+          </div>
+        </div>
+      `
+      : "";
+
   return `
-    <div class="header">
+    <div class="header" style="position: relative;">
+      ${panBoxesHTML}
       ${logoUrl
       ? `
         <div class="pos-logo logo-container">
@@ -248,10 +268,10 @@ export const getPrintHeaderHTML = (
       : ""
     }
 
-        ${config.showPan !== false && (config.panNumber || clinic?.panNumber)
+        ${config.showPan !== false && (config.panNumber || clinic?.panNumber) && isThermal
       ? `
           <div class="pos-pan" style="font-weight: 700; font-size: 1.1em; margin-top: 4px; color: #1e293b;">
-            <span style="font-size: 0.85em; color: #64748b; font-weight: 600;">PAN/VAT:</span> ${config.panNumber || clinic?.panNumber}
+            <span style="font-size: 0.85em; color: #334155; font-weight: 600;">PAN/VAT:</span> ${config.panNumber || clinic?.panNumber}
           </div>
         `
       : ""

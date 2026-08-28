@@ -10,9 +10,9 @@ import { initScrollbarThemeObserver } from "@/utils/scrollbarTheme";
 const DefaultLayout = reactLazy(() => import("@/layouts/default"));
 const AuthProviders = reactLazy(() => import("@/providers/auth-providers"));
 const DashboardLayout = reactLazy(() => import("@/layouts/dashboard"));
-const SystemOwnerRoute = reactLazy(() =>
-  import("@/components/rbac/SystemOwnerRoute").then((m) => ({
-    default: m.SystemOwnerRoute,
+const ClinicAdminRoute = reactLazy(() =>
+  import("@/components/clinic-admin-route").then((m) => ({
+    default: m.ClinicAdminRoute,
   })),
 );
 const RbacProtectedRoute = reactLazy(() =>
@@ -129,6 +129,9 @@ const PurchaseReturnPage = lazy(
   () => import("@/pages/dashboard/pharmacy/purchase-return"),
 );
 const PathologyPage = lazy(() => import("@/pages/dashboard/pathology"));
+const PathologyInvoiceDetailPage = lazy(
+  () => import("@/pages/dashboard/pathology-billing/[id]"),
+);
 const BedManagementPage = lazy(
   () => import("@/pages/dashboard/bed-management/index"),
 );
@@ -149,9 +152,6 @@ const BranchManagementPage = lazy(
   () => import("@/pages/dashboard/branches/index"),
 );
 const NewBranchPage = lazy(() => import("@/pages/dashboard/new-branch"));
-const SystemOwnerDashboard = lazy(
-  () => import("@/pages/dashboard/system-owner"),
-);
 
 // Lazy load reports page
 const ReportsPage = lazy(() => import("@/pages/dashboard/reports/index"));
@@ -170,9 +170,6 @@ const FrontOfficeDeskPage = lazy(
   () => import("@/pages/dashboard/front-office/front-office-desk"),
 );
 const FollowupsPage = lazy(() => import("@/pages/dashboard/follow-ups/index"));
-const TestCommissionPage = lazy(
-  () => import("@/pages/dashboard/test-commission"),
-);
 
 // Lazy load invitation handler
 const InvitationPage = lazy(() => import("@/pages/invitation/index"));
@@ -203,6 +200,7 @@ const EditPrescriptionPage = lazy(
 
 // Lazy load inventory page
 const AdminLogsPage = lazy(() => import("@/pages/admin/logs/index"));
+const BillingHelpPage = lazy(() => import("@/pages/dashboard/billing-help/index"));
 const InventoryPage = lazy(() => import("@/pages/dashboard/inventory"));
 const CommunicationPage = lazy(
   () => import("@/pages/dashboard/communication/index"),
@@ -644,6 +642,14 @@ export default function App() {
                           />
                           <Route
                             element={
+                              <RbacProtectedRoute pagePath="/dashboard/pathology">
+                                <PathologyInvoiceDetailPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="pathology-billing/:id"
+                          />
+                          <Route
+                            element={
                               <RbacProtectedRoute pagePath="/dashboard/bed-management">
                                 <BedManagementPage />
                               </RbacProtectedRoute>
@@ -738,16 +744,12 @@ export default function App() {
                             }
                             path="follow-ups"
                           />
-                          <Route
-                            element={
-                              <RbacProtectedRoute pagePath="/dashboard/billing">
-                                <TestCommissionPage />
-                              </RbacProtectedRoute>
-                            }
-                            path="test-commission"
-                          />
                           {/* Core Settings Routes - No RBAC needed for basic settings */}
                           <Route element={<SettingsPage />} path="settings" />
+                          <Route
+                            element={<BillingHelpPage />}
+                            path="billing-help"
+                          />
                           <Route element={<ProfilePage />} path="profile" />
                           <Route
                             element={<ActivityLogPage />}
@@ -858,28 +860,20 @@ export default function App() {
                             path="settings/referral-partners/:partnerId"
                           />
 
-                          {/* System Owner Branch Management Routes */}
+                          {/* Branch Management Routes */}
                           <Route
                             element={
-                              <SystemOwnerRoute>
-                                <SystemOwnerDashboard />
-                              </SystemOwnerRoute>
-                            }
-                            path="clinic-overview"
-                          />
-                          <Route
-                            element={
-                              <SystemOwnerRoute>
+                              <ClinicAdminRoute>
                                 <BranchManagementPage />
-                              </SystemOwnerRoute>
+                              </ClinicAdminRoute>
                             }
                             path="branches"
                           />
                           <Route
                             element={
-                              <SystemOwnerRoute>
+                              <ClinicAdminRoute>
                                 <NewBranchPage />
-                              </SystemOwnerRoute>
+                              </ClinicAdminRoute>
                             }
                             path="branches/new"
                           />
@@ -947,20 +941,6 @@ export default function App() {
                 </Suspense>
               }
               path="/dashboard/*"
-            />
-
-            {/* Top-Level Admin Logs Route */}
-            <Route
-              element={
-                <Suspense fallback={<LoadingSpinner />}>
-                  <BasicProtectedRoute>
-                    <DashboardLayout>
-                      <AdminLogsPage />
-                    </DashboardLayout>
-                  </BasicProtectedRoute>
-                </Suspense>
-              }
-              path="/admin/logs"
             />
 
             {/* Catch-all route for 404 Not Found */}

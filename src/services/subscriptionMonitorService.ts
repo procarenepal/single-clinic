@@ -17,13 +17,6 @@ class SubscriptionMonitorService {
    * @param userRole The user role
    */
   startMonitoring(clinicId: string, userRole: string) {
-    // Don't monitor super admins or during impersonation
-    const isImpersonating = localStorage.getItem("isImpersonating") === "true";
-
-    if (userRole === "system-owner" || isImpersonating) {
-      return;
-    }
-
     // Stop any existing monitoring
     this.stopMonitoring();
 
@@ -60,15 +53,7 @@ class SubscriptionMonitorService {
    * Perform the actual subscription check
    */
   private async performSubscriptionCheck() {
-    // Skip checks during impersonation
-    const isImpersonating = localStorage.getItem("isImpersonating") === "true";
-
-    if (
-      !this.isMonitoring ||
-      !this.clinicId ||
-      this.userRole === "system-owner" ||
-      isImpersonating
-    ) {
+    if (!this.isMonitoring || !this.clinicId) {
       return;
     }
 
@@ -149,7 +134,7 @@ class SubscriptionMonitorService {
    * Force an immediate subscription check
    */
   async forceCheck(): Promise<boolean> {
-    if (!this.clinicId || this.userRole === "system-owner") {
+    if (!this.clinicId) {
       return true;
     }
 

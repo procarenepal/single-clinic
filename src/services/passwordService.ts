@@ -9,14 +9,12 @@ import {
 
 import { auth, actionCodeSettings } from "../config/firebase";
 
-import { impersonationService } from "./impersonationService";
-
 /**
- * Service for managing password updates and impersonation record synchronization
+ * Service for managing password updates
  */
 export const passwordService = {
   /**
-   * Update user password with proper validation and impersonation record sync
+   * Update user password with proper validation
    * @param {string} currentPassword - Current password for re-authentication
    * @param {string} newPassword - New password to set
    * @returns {Promise<void>}
@@ -42,9 +40,6 @@ export const passwordService = {
 
       // Update password
       await updatePassword(user, newPassword);
-
-      // Update impersonation record if it exists
-      await this.updateImpersonationRecord(user.uid, user.email, newPassword);
     } catch (error) {
       console.error("Error updating password:", error);
       throw error;
@@ -70,100 +65,9 @@ export const passwordService = {
       // Confirm password reset
       await confirmPasswordReset(auth, oobCode, newPassword);
       console.log(`✅ Password reset completed for: ${email}`);
-
-      // After password reset, the user should be automatically signed in
-      // Wait a moment for the auth state to update
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Get the current user (should be signed in after password reset)
-      const user = auth.currentUser;
-
-      if (user && user.email === email) {
-        console.log(`🔍 Found authenticated user: ${user.uid}`);
-        await this.updateImpersonationRecord(user.uid, email, newPassword);
-      } else {
-        console.warn(
-          `⚠️ Could not find authenticated user after password reset`,
-        );
-        console.warn(
-          `⚠️ Impersonation record may not be updated automatically`,
-        );
-
-        // Try to find user by email in Firestore as fallback
-        try {
-          const { userService } = await import("./userService");
-          const userByEmail = await userService.getUserByEmail(email);
-
-          if (userByEmail) {
-            console.log(
-              `🔄 Found user data by email, updating impersonation record...`,
-            );
-            await this.updateImpersonationRecord(
-              userByEmail.id,
-              email,
-              newPassword,
-            );
-          } else {
-            console.warn(`⚠️ Could not find user data for email: ${email}`);
-          }
-        } catch (fallbackError) {
-          console.warn(
-            `⚠️ Fallback impersonation update failed:`,
-            fallbackError,
-          );
-        }
-      }
     } catch (error) {
       console.error("Error updating password with reset code:", error);
       throw error;
-    }
-  },
-
-  /**
-   * Update impersonation record with new password
-   * @param {string} userId - User ID
-   * @param {string} email - User email
-   * @param {string} newPassword - New password
-   * @returns {Promise<void>}
-   */
-  async updateImpersonationRecord(
-    userId: string,
-    email: string,
-    newPassword: string,
-  ): Promise<void> {
-    try {
-      console.log(`🔄 Checking impersonation record for user: ${userId}`);
-
-      // Check if impersonation record exists
-      const existingCredentials =
-        await impersonationService.getCredentials(userId);
-
-      if (existingCredentials) {
-        console.log(
-          `✅ Found existing impersonation record for ${email}, updating password...`,
-        );
-
-        // Update the stored credentials with new password
-        await impersonationService.storeCredentials(userId, email, newPassword);
-
-        console.log(
-          `✅ Impersonation record updated successfully for ${email}`,
-        );
-        console.log(
-          `🔐 Super admins can now impersonate this user with the new password`,
-        );
-      } else {
-        console.log(
-          `ℹ️ No impersonation record found for ${email} - no update needed`,
-        );
-      }
-    } catch (error) {
-      // Don't throw error for impersonation update failure
-      // This is not critical for password update functionality
-      console.warn("⚠️ Failed to update impersonation record:", error);
-      console.warn(
-        "⚠️ Super admins may need to re-store credentials for this user",
-      );
     }
   },
 

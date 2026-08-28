@@ -29,6 +29,9 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { addToast } from "@/components/ui/toast";
+import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
+import { StatusBadge } from "@/components/billing/StatusBadge";
+import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { appointmentService } from "@/services/appointmentService";
 import { clinicService } from "@/services/clinicService";
@@ -47,33 +50,6 @@ import {
 import { Select, SelectItem } from "@/components/ui/select";
 
 // ── UI Helpers (spec: flat, compact, border-based) ─────────────────────────
-function StatusBadge({
-  status,
-  type = "payment",
-}: {
-  status: string;
-  type?: "status" | "payment";
-}) {
-  const S_COLORS: Record<string, string> = {
-    paid: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    finalized: "bg-primary/10 text-primary border-primary/20",
-    partial: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    unpaid: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-    cancelled: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-    default:
-      "bg-[rgb(var(--color-surface-2))] text-[rgb(var(--color-text-muted))] border-[rgb(var(--color-border))]",
-  };
-  const color = S_COLORS[status] || S_COLORS.default;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border capitalize ${color}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 function FlatInput({
   label,
   value,
@@ -218,9 +194,13 @@ export default function InvoiceDetailPage() {
   } = useAuthContext();
   const paymentModal = useModalState(false);
   const branchId = userData?.branchId ?? null;
-  const isClinicAdmin = userData?.role === "system-owner";
+  const isClinicAdmin = userData?.role === "clinic-admin";
 
   const [invoice, setInvoice] = useState<AppointmentBilling | null>(null);
+  const [reasonModal, setReasonModal] = useState<
+    "cancel" | "creditNote" | null
+  >(null);
+  const [reasonModalSubmitting, setReasonModalSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(
@@ -240,37 +220,17 @@ export default function InvoiceDetailPage() {
   const [paymentSplits, setPaymentSplits] = useState([
     { id: "1", amount: "", method: "cash", reference: "", notes: "" },
   ]);
-  const [paymentDiscountType, setPaymentDiscountType] = useState<
-    "none" | "flat" | "percent"
-  >("none");
-  const [paymentDiscountValue, setPaymentDiscountValue] = useState("");
-
-  const calculatedDiscountAmount = useMemo(() => {
-    if (paymentDiscountType === "none" || !paymentDiscountValue || !invoice)
-      return 0;
-    const val = parseFloat(paymentDiscountValue);
-
-    if (isNaN(val) || val < 0) return 0;
-    if (paymentDiscountType === "flat") return val;
-    if (paymentDiscountType === "percent") {
-      return (invoice.balanceAmount * val) / 100;
-    }
-
-    return 0;
-  }, [paymentDiscountType, paymentDiscountValue, invoice]);
-
   useEffect(() => {
     if (paymentSplits.length === 1 && invoice) {
       const maxAllowed = includePreviousDue
-        ? Math.max(0, invoice.balanceAmount - calculatedDiscountAmount) +
-          previousDue
-        : Math.max(0, invoice.balanceAmount - calculatedDiscountAmount);
+        ? invoice.balanceAmount + previousDue
+        : invoice.balanceAmount;
 
       setPaymentSplits((prev) => [
         { ...prev[0], amount: maxAllowed > 0 ? maxAllowed.toString() : "" },
       ]);
     }
-  }, [calculatedDiscountAmount, includePreviousDue, invoice]);
+  }, [includePreviousDue, invoice]);
 
   // Available payment methods (would come from billing settings in real app)
   const availablePaymentMethods = [
@@ -457,7 +417,7 @@ export default function InvoiceDetailPage() {
         patient,
         printFormat,
         doctor,
-        false,
+        invoice.printCount || 0,
         printedByText
       );
 
@@ -575,13 +535,9 @@ export default function InvoiceDetailPage() {
     const totalPayment = Math.round(
       validSplits.reduce((sum, s) => sum + parseFloat(s.amount), 0),
     );
-    const effectiveBalance = Math.max(
-      0,
-      invoice.balanceAmount - calculatedDiscountAmount,
-    );
     const maxAllowed = includePreviousDue
-      ? effectiveBalance + previousDue
-      : effectiveBalance;
+      ? invoice.balanceAmount + previousDue
+      : invoice.balanceAmount;
 
     if (totalPayment > maxAllowed) {
       addToast({
@@ -609,22 +565,9 @@ export default function InvoiceDetailPage() {
 
         // 1. Pay current invoice first
         if (currentInvoiceRemaining > 0 && splitAmountRemaining > 0) {
-          // If this is the first payment applied to the current invoice, pass the discount.
-          // For subsequent splits on the same invoice, pass 0 discount so it's not double-counted.
-          const isFirstSplitForCurrentInvoice =
-            currentInvoiceRemaining === invoice.balanceAmount;
-          const discountToApply = isFirstSplitForCurrentInvoice
-            ? calculatedDiscountAmount
-            : 0;
-
-          // Max we can apply to this invoice is its remaining balance minus discount
-          const targetRemainingForCurrent = isFirstSplitForCurrentInvoice
-            ? Math.max(0, currentInvoiceRemaining - discountToApply)
-            : currentInvoiceRemaining;
-
           const applyAmount = Math.min(
             splitAmountRemaining,
-            targetRemainingForCurrent,
+            currentInvoiceRemaining,
           );
 
           await appointmentBillingService.recordPayment(
@@ -633,10 +576,9 @@ export default function InvoiceDetailPage() {
             split.method,
             split.reference || undefined,
             split.notes || undefined,
-            discountToApply,
           );
           splitAmountRemaining -= applyAmount;
-          currentInvoiceRemaining = targetRemainingForCurrent - applyAmount;
+          currentInvoiceRemaining -= applyAmount;
         }
 
         // 2. Apply rest to previous invoices
@@ -700,11 +642,11 @@ export default function InvoiceDetailPage() {
           notes: "",
         },
       ]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error recording payment:", error);
       addToast({
         title: "Payment Error",
-        description: "Failed to record payment. Please try again.",
+        description: error?.message || "Failed to record payment. Please try again.",
         color: "danger",
       });
     } finally {
@@ -730,8 +672,9 @@ export default function InvoiceDetailPage() {
   const handlePrint = () => {
     if (!invoice) return;
 
-    const isCopy = (invoice.printCount || 0) > 0;
-    
+    // 0 = original, N = the Nth reprint (IRD requires reprints numbered "Copy of Original – N")
+    const copyNumber = invoice.printCount || 0;
+
     // Update print count in background
     appointmentBillingService.updateBilling(invoice.id, {
       printCount: (invoice.printCount || 0) + 1
@@ -749,7 +692,7 @@ export default function InvoiceDetailPage() {
         patient,
         printFormat,
         undefined,
-        isCopy,
+        copyNumber,
         printedByText
       );
 
@@ -765,6 +708,66 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handleCancelInvoice = async (reason: string) => {
+    if (!invoice) return;
+
+    setReasonModalSubmitting(true);
+    try {
+      await appointmentBillingService.cancelBilling(invoice.id, reason);
+      const updatedInvoice = await appointmentBillingService.getBillingById(
+        invoice.id,
+      );
+
+      setInvoice(updatedInvoice);
+      setReasonModal(null);
+      addToast({
+        title: "Success",
+        description: "Invoice cancelled successfully.",
+        color: "success",
+      });
+    } catch (err: any) {
+      addToast({
+        title: "Error",
+        description: err.message || "Failed to cancel invoice.",
+        color: "danger",
+      });
+    } finally {
+      setReasonModalSubmitting(false);
+    }
+  };
+
+  const handleIssueCreditNote = async (reason: string) => {
+    if (!invoice) return;
+
+    setReasonModalSubmitting(true);
+    try {
+      await appointmentBillingService.issueCreditNote(
+        invoice.id,
+        reason,
+        currentUser?.uid || "unknown",
+      );
+      const updatedInvoice = await appointmentBillingService.getBillingById(
+        invoice.id,
+      );
+
+      setInvoice(updatedInvoice);
+      setReasonModal(null);
+      addToast({
+        title: "Success",
+        description: "Credit Note issued successfully.",
+        color: "success",
+      });
+    } catch (err: any) {
+      addToast({
+        title: "Error",
+        description: err.message || "Failed to issue credit note.",
+        color: "danger",
+      });
+    } finally {
+      setReasonModalSubmitting(false);
+    }
+  };
+
   if (loading || authLoading || !clinicId) {
     return (
       <div className="flex flex-col gap-4 px-4 pb-12">
@@ -777,10 +780,10 @@ export default function InvoiceDetailPage() {
             <IoArrowBackOutline className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
+            <h1 className="clarity-page-title">
               Invoice Details
             </h1>
-            <p className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5">
+            <p className="clarity-page-subtitle">
               {authLoading
                 ? "Authenticating..."
                 : !clinicId
@@ -814,10 +817,10 @@ export default function InvoiceDetailPage() {
             <IoArrowBackOutline className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
+            <h1 className="clarity-page-title">
               Invoice Not Found
             </h1>
-            <p className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5">
+            <p className="clarity-page-subtitle">
               The requested invoice could not be found
             </p>
           </div>
@@ -861,10 +864,10 @@ export default function InvoiceDetailPage() {
               <IoArrowBackOutline className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="clarity-page-title text-[15px] font-bold text-text-main tracking-tight">
+              <h1 className="clarity-page-title">
                 Invoice Details
               </h1>
-              <div className="clarity-page-subtitle text-[12.5px] text-text-muted mt-0.5 space-y-0.5">
+              <div className="clarity-page-subtitle space-y-0.5">
                 <p>
                   {invoice.invoiceNumber} •{" "}
                   {formatDateWithBS(invoice.invoiceDate).ad}
@@ -927,12 +930,41 @@ export default function InvoiceDetailPage() {
                 Record Payment
               </Button>
             )}
+            {invoice.status !== "cancelled" &&
+              invoice.status !== "finalized" &&
+              invoice.paymentStatus !== "paid" && (
+                <Button
+                  color="danger"
+                  size="sm"
+                  startContent={<IoCloseCircleOutline className="w-4 h-4" />}
+                  variant="light"
+                  onClick={() => setReasonModal("cancel")}
+                >
+                  Cancel Invoice
+                </Button>
+              )}
+            {invoice.status === "finalized" &&
+              invoice.irdSynced &&
+              !invoice.isCreditNote &&
+              !invoice.hasCreditNote && (
+                <Button
+                  color="danger"
+                  size="sm"
+                  startContent={
+                    <span className="font-bold text-[11px]">CN</span>
+                  }
+                  variant="light"
+                  onClick={() => setReasonModal("creditNote")}
+                >
+                  Issue Credit Note
+                </Button>
+              )}
           </div>
         </div>
 
         {/* Payment status bar — clarity-card, no shadow */}
         <div className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded p-4">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <div>
               <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-0.5">
                 Total Amount
@@ -966,6 +998,27 @@ export default function InvoiceDetailPage() {
               <div className="flex items-center gap-1.5 mt-0.5">
                 {getPaymentStatusIcon(invoice.paymentStatus)}
                 <StatusBadge status={invoice.paymentStatus} />
+              </div>
+            </div>
+            <div>
+              <p className="text-[12px] text-[rgb(var(--color-text-muted))] mb-0.5">
+                IRD Status
+              </p>
+              <div className="mt-0.5">
+                <IrdSyncBadge
+                  finalized={invoice.status === "finalized"}
+                  invoiceType="appointment"
+                  recordId={invoice.id}
+                  synced={Boolean(invoice.irdSynced)}
+                  onSynced={async () => {
+                    const updatedInvoice =
+                      await appointmentBillingService.getBillingById(
+                        invoice.id,
+                      );
+
+                    setInvoice(updatedInvoice);
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -1441,7 +1494,7 @@ export default function InvoiceDetailPage() {
                       required
                       hint={
                         index === 0
-                          ? `Maximum: ${formatCurrency(includePreviousDue ? Math.max(0, invoice.balanceAmount - calculatedDiscountAmount) + previousDue : Math.max(0, invoice.balanceAmount - calculatedDiscountAmount))}`
+                          ? `Maximum: ${formatCurrency(includePreviousDue ? invoice.balanceAmount + previousDue : invoice.balanceAmount)}`
                           : undefined
                       }
                       label="Payment Amount"
@@ -1535,40 +1588,6 @@ export default function InvoiceDetailPage() {
               >
                 Add Split Tender
               </Button>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border border-border-base rounded-md bg-surface-2/30">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[12px] font-medium text-mountain-700">
-                    Discount Type
-                  </label>
-                  <select
-                    className="h-8 w-full px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100 text-mountain-800"
-                    value={paymentDiscountType}
-                    onChange={(e) => {
-                      setPaymentDiscountType(
-                        e.target.value as "none" | "flat" | "percent",
-                      );
-                      if (e.target.value === "none") {
-                        setPaymentDiscountValue("");
-                      }
-                    }}
-                  >
-                    <option value="none">No Discount</option>
-                    <option value="flat">Flat Amount</option>
-                    <option value="percent">Percentage (%)</option>
-                  </select>
-                </div>
-                {paymentDiscountType !== "none" && (
-                  <FlatInput
-                    label="Discount Value"
-                    placeholder="0"
-                    prefixText={paymentDiscountType === "flat" ? "NPR" : "%"}
-                    type="number"
-                    value={paymentDiscountValue}
-                    onChange={(v) => setPaymentDiscountValue(v)}
-                  />
-                )}
-              </div>
             </div>
             <div className="lg:col-span-1">
               {(() => {
@@ -1580,13 +1599,9 @@ export default function InvoiceDetailPage() {
                 );
 
                 if (totalAmount > 0) {
-                  const totalTargetBalance = includePreviousDue
+                  const effectiveTargetBalance = includePreviousDue
                     ? invoice.balanceAmount + previousDue
                     : invoice.balanceAmount;
-                  const effectiveTargetBalance = Math.max(
-                    0,
-                    totalTargetBalance - calculatedDiscountAmount,
-                  );
                   const newBalance = effectiveTargetBalance - totalAmount;
 
                   return (
@@ -1614,16 +1629,6 @@ export default function InvoiceDetailPage() {
                           {formatCurrency(invoice.paidAmount)}
                         </span>
                       </div>
-                      {calculatedDiscountAmount > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-mountain-600">
-                            Payment Discount:
-                          </span>
-                          <span className="text-rose-500">
-                            - {formatCurrency(calculatedDiscountAmount)}
-                          </span>
-                        </div>
-                      )}
                       <div className="flex justify-between border-t border-mountain-200 mt-1 pt-1">
                         <span className="text-mountain-600 font-medium">
                           Total Payable:
@@ -1678,6 +1683,31 @@ export default function InvoiceDetailPage() {
           </div>
         </ModalShell>
       )}
+
+      <ReasonConfirmModal
+        confirmColor="danger"
+        confirmText={
+          reasonModal === "cancel" ? "Cancel Invoice" : "Issue Credit Note"
+        }
+        description={
+          reasonModal === "cancel"
+            ? "This action cannot be undone."
+            : "This will reverse the invoice and create a new negative invoice."
+        }
+        isOpen={reasonModal !== null}
+        isSubmitting={reasonModalSubmitting}
+        title={
+          reasonModal === "cancel"
+            ? "Cancel Invoice"
+            : "Issue Credit Note"
+        }
+        onClose={() => setReasonModal(null)}
+        onConfirm={(reason) =>
+          reasonModal === "cancel"
+            ? handleCancelInvoice(reason)
+            : handleIssueCreditNote(reason)
+        }
+      />
     </>
   );
 }

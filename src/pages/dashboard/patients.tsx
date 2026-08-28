@@ -474,8 +474,7 @@ export default function PatientsPage() {
     });
     if (!clinicId || !userData) return;
 
-    const isAdmin =
-      userData.role === "clinic-admin" || userData.role === "system-owner";
+    const isAdmin = userData.role === "clinic-admin";
 
     if (isAdmin || !userEmail) {
       console.log("isDoctorResolved: resolved instantly", {

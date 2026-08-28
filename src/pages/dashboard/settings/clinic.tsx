@@ -51,6 +51,7 @@ interface FormData {
   address: string;
   description: string;
   panNumber: string;
+  isVatRegistered: boolean;
   irdEnabled: boolean;
   irdEnvironment: "mock" | "sandbox" | "live";
   irdApiUrl: string;
@@ -144,6 +145,9 @@ const VALIDATION_RULES: Record<keyof FormData, ValidationRule> = {
     required: false,
     maxLength: 20,
   },
+  isVatRegistered: {
+    required: false,
+  },
   irdEnabled: {
     required: false,
   },
@@ -189,6 +193,7 @@ export default function ClinicSettingsPage() {
     address: "",
     description: "",
     panNumber: "",
+    isVatRegistered: true,
     irdEnabled: false,
     irdEnvironment: "mock",
     irdApiUrl: "",
@@ -212,6 +217,7 @@ export default function ClinicSettingsPage() {
     address: "",
     description: "",
     panNumber: "",
+    isVatRegistered: true,
     irdEnabled: false,
     irdEnvironment: "mock",
     irdApiUrl: "",
@@ -389,8 +395,11 @@ export default function ClinicSettingsPage() {
           address: clinicData.address || "",
           description: clinicData.description || "",
           panNumber: clinicData.panNumber || "",
+          isVatRegistered: clinicData.isVatRegistered !== false,
           irdEnabled: clinicData.irdEnabled || false,
-          irdEnvironment: (clinicData.irdEnvironment as "mock" | "sandbox" | "live") || "mock",
+          irdEnvironment:
+            (clinicData.irdEnvironment as "mock" | "sandbox" | "live") ||
+            "mock",
           irdApiUrl: clinicData.irdApiUrl || "",
           irdApiUsername: clinicData.irdApiUsername || "",
           irdApiPassword: clinicData.irdApiPassword || "",
@@ -555,6 +564,7 @@ export default function ClinicSettingsPage() {
         address: formData.address.trim(),
         description: formData.description.trim(),
         panNumber: formData.panNumber.trim(),
+        isVatRegistered: formData.isVatRegistered,
         irdEnabled: formData.irdEnabled,
         irdEnvironment: formData.irdEnvironment,
         irdApiUrl: formData.irdApiUrl.trim(),
@@ -565,6 +575,31 @@ export default function ClinicSettingsPage() {
       await retryOperation(() =>
         clinicService.updateClinic(clinicId, updateData),
       );
+
+      // Also push the same IRD config to the Java backend's encrypted store —
+      // that's the actual source IrdCbmsService reads from server-side now.
+      // Best-effort: the Firestore save above is the primary record for this
+      // form: don't block/fail the whole save if the Java backend is offline.
+      try {
+        const { billingApi } = await import("@/services/api/billingApi");
+
+        await billingApi.saveClinicIrdConfig({
+          sellerPan: formData.panNumber.trim(),
+          irdEnvironment: formData.irdEnvironment,
+          irdApiUrl: formData.irdApiUrl.trim(),
+          irdApiUsername: formData.irdApiUsername.trim(),
+          irdApiPassword: formData.irdApiPassword.trim() || undefined,
+          enabled: formData.irdEnabled,
+        });
+      } catch (syncErr) {
+        console.warn("Failed to sync IRD config to Java backend:", syncErr);
+        addToast({
+          title: "IRD config partially saved",
+          description:
+            "Saved locally, but couldn't reach the billing backend to sync IRD credentials. Real IRD sync won't work until this succeeds.",
+          color: "warning",
+        });
+      }
 
       // Update local state immediately so UI reflects changes
       setClinic(
@@ -630,10 +665,7 @@ export default function ClinicSettingsPage() {
     setIsUploadingLogo(true);
     try {
       // 1. Upload to Firebase
-      const result = await uploadFileToFirebase(
-        file,
-        "clinic-logos"
-      );
+      const result = await uploadFileToFirebase(file, "clinic-logos");
 
       // 2. Update Clinic Record in Firestore
       await clinicService.updateClinic(clinicId, { logo: result.url });
@@ -754,12 +786,7 @@ export default function ClinicSettingsPage() {
     }
 
     // Check if all required fields are filled
-    const requiredFields = [
-      "name",
-      "email",
-      "phone",
-      "city",
-    ] as const;
+    const requiredFields = ["name", "email", "phone", "city"] as const;
     const allRequiredFieldsFilled = requiredFields.every(
       (field) => formData[field] && formData[field].trim() !== "",
     );
@@ -1144,7 +1171,7 @@ export default function ClinicSettingsPage() {
                     >
                       {clinic.subscriptionStatus
                         ? clinic.subscriptionStatus.charAt(0).toUpperCase() +
-                        clinic.subscriptionStatus.slice(1)
+                          clinic.subscriptionStatus.slice(1)
                         : "Unknown"}
                     </Chip>
                   </div>
@@ -1465,26 +1492,69 @@ export default function ClinicSettingsPage() {
                     !!validationErrors.panNumber
                   }
                   name="panNumber"
-                  onChange={handleInputChange}
                   placeholder="Enter Clinic PAN Number"
                   value={formData.panNumber}
+                  onChange={handleInputChange}
                 />
               </div>
             </div>
 
             <Divider className="my-2" />
-            <h3 className="text-sm font-semibold text-[rgb(var(--color-text))] mb-2">IRD CBMS Configuration</h3>
+            <div className="md:col-span-2 mb-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  checked={formData.isVatRegistered}
+                  className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                  name="isVatRegistered"
+                  type="checkbox"
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      isVatRegistered: e.target.checked,
+                    }))
+                  }
+                />
+                <span className="text-sm font-medium text-[rgb(var(--color-text))]">
+                  Clinic is VAT-registered
+                </span>
+              </label>
+              <p className="text-xs text-[rgb(var(--color-text-muted))] mt-1 ml-6">
+                Uncheck only if this clinic is registered for income tax but
+                not VAT — invoices then print IRD's plain "Invoice" format
+                (no Taxable Amount/VAT rows) instead of Tax Invoice.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-[rgb(var(--color-text))]">
+                IRD CBMS Configuration
+              </h3>
+              <Link
+                className="text-xs"
+                href="/dashboard/billing-help"
+                target="_blank"
+              >
+                Billing &amp; IRD user manual
+              </Link>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
-                    type="checkbox"
-                    name="irdEnabled"
                     checked={formData.irdEnabled}
-                    onChange={(e) => setFormData(prev => ({ ...prev, irdEnabled: e.target.checked }))}
                     className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                    name="irdEnabled"
+                    type="checkbox"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        irdEnabled: e.target.checked,
+                      }))
+                    }
                   />
-                  <span className="text-sm font-medium text-[rgb(var(--color-text))]">Enable IRD CBMS Sync</span>
+                  <span className="text-sm font-medium text-[rgb(var(--color-text))]">
+                    Enable IRD CBMS Sync
+                  </span>
                 </label>
               </div>
 
@@ -1499,18 +1569,28 @@ export default function ClinicSettingsPage() {
                       {(["mock", "sandbox", "live"] as const).map((env) => (
                         <button
                           key={env}
-                          type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, irdEnvironment: env }))}
-                          className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium capitalize transition-all ${formData.irdEnvironment === env
+                          className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium capitalize transition-all ${
+                            formData.irdEnvironment === env
                               ? env === "live"
                                 ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
                                 : env === "sandbox"
                                   ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400"
                                   : "border-gray-500 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                               : "border-gray-200 text-gray-400 dark:border-gray-600 dark:text-gray-500 hover:border-gray-400"
-                            }`}
+                          }`}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              irdEnvironment: env,
+                            }))
+                          }
                         >
-                          {env === "mock" ? "🔵 Mock (Dev)" : env === "sandbox" ? "🟡 Sandbox (Test)" : "🟢 Live (Production)"}
+                          {env === "mock"
+                            ? "🔵 Mock (Dev)"
+                            : env === "sandbox"
+                              ? "🟡 Sandbox (Test)"
+                              : "🟢 Live (Production)"}
                         </button>
                       ))}
                     </div>
@@ -1525,13 +1605,16 @@ export default function ClinicSettingsPage() {
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-[rgb(var(--color-text))] mb-1.5">
-                      IRD API URL <span className="text-xs text-gray-400 font-normal">(auto-set by environment, or override manually)</span>
+                      IRD API URL{" "}
+                      <span className="text-xs text-gray-400 font-normal">
+                        (auto-set by environment, or override manually)
+                      </span>
                     </label>
                     <Input
                       name="irdApiUrl"
-                      onChange={handleInputChange}
                       placeholder="https://cbapi.ird.gov.np"
                       value={formData.irdApiUrl}
+                      onChange={handleInputChange}
                     />
                   </div>
                   <div>
@@ -1540,9 +1623,9 @@ export default function ClinicSettingsPage() {
                     </label>
                     <Input
                       name="irdApiUsername"
-                      onChange={handleInputChange}
                       placeholder="Taxpayer Portal Username"
                       value={formData.irdApiUsername}
+                      onChange={handleInputChange}
                     />
                   </div>
                   <div>
@@ -1551,10 +1634,10 @@ export default function ClinicSettingsPage() {
                     </label>
                     <Input
                       name="irdApiPassword"
-                      type="password"
-                      onChange={handleInputChange}
                       placeholder="Taxpayer Portal Password"
+                      type="password"
                       value={formData.irdApiPassword}
+                      onChange={handleInputChange}
                     />
                   </div>
                 </>

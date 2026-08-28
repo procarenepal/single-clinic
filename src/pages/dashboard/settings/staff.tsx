@@ -85,7 +85,7 @@ export default function StaffManagementPage() {
     newRole: "",
   });
 
-  // Available roles for staff creation (excluding system-owner)
+  // Available roles for staff creation
   const availableRoles = [
     { key: "clinic-admin", label: "Clinic Admin" },
     { key: "staff", label: "Staff Member" },

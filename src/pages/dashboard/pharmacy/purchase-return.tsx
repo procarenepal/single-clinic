@@ -288,6 +288,17 @@ export default function PurchaseReturnPage() {
       return false;
     }
 
+    if (!notes.trim()) {
+      addToast({
+        title: "Validation Error",
+        description:
+          "A reason for the return is required for IRD compliance.",
+        color: "warning",
+      });
+
+      return false;
+    }
+
     return true;
   };
 
@@ -357,8 +368,7 @@ export default function PurchaseReturnPage() {
         refundMethod,
         items,
         createdBy: currentUser.uid,
-        // Only include notes if it's not empty
-        ...(notes && notes.trim() && { notes: notes.trim() }),
+        notes: notes.trim(),
       };
 
       await pharmacyService.addMedicinePurchaseReturn(
@@ -650,8 +660,9 @@ export default function PurchaseReturnPage() {
               </div>
               <div className="md:col-span-2">
                 <Input
-                  label="Notes (optional)"
-                  placeholder="Add any notes about this return..."
+                  isRequired
+                  label="Reason for Return"
+                  placeholder="Why is this being returned?"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                 />

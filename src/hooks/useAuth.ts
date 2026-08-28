@@ -80,23 +80,18 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Check if the user has admin permissions for a clinic
   const isClinicAdmin = useCallback((): boolean => {
-    return (
-      userData?.role === "clinic-admin" || userData?.role === "system-owner"
-    );
+    return userData?.role === "clinic-admin";
   }, [userData?.role]);
 
-  // Check if the user is a system owner
+  // System-owner tier no longer exists (single-clinic mode); kept as a
+  // stable no-op for callers that still combine it with isClinicAdmin().
   const isSystemOwner = useCallback((): boolean => {
-    return userData?.role === "system-owner";
-  }, [userData?.role]);
+    return false;
+  }, []);
 
   // Check if the user has permission to access a specific page
   const hasPagePermission = useCallback(
     async (pageId: string): Promise<boolean> => {
-      if (userData?.role === "system-owner") {
-        return true; // Super admin has all permissions
-      }
-
       if (!currentUser || !clinicId) {
         return false;
       }
@@ -121,7 +116,6 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
   // Synchronous cache-only permission check (returns null if not cached yet)
   const hasPagePermissionSync = useCallback(
     (pageId: string): boolean | null => {
-      if (userData?.role === "system-owner") return true;
       if (!currentUser || !clinicId) return false;
       try {
         const { cacheService } = require("../services/cacheService");
@@ -143,10 +137,6 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
   // Check if the user has permission to access a specific page by path (faster cached version)
   const hasPagePermissionByPath = useCallback(
     async (pagePath: string): Promise<boolean> => {
-      if (userData?.role === "system-owner") {
-        return true; // Super admin has all permissions
-      }
-
       if (!currentUser || !clinicId) {
         return false;
       }
@@ -179,10 +169,10 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Preload user permissions for better performance
   const preloadPermissions = useCallback(async (): Promise<void> => {
-    if (userData?.role === "system-owner" || !currentUser || !clinicId) {
-      setPermissionsReady(true); // System owner treats as ready immediately
+    if (!currentUser || !clinicId) {
+      setPermissionsReady(true);
 
-      return; // System owner doesn't need RBAC, or no user/clinic
+      return; // No user/clinic yet
     }
 
     try {
@@ -198,11 +188,11 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Check clinic subscription status
   const checkClinicSubscription = useCallback(async (): Promise<boolean> => {
-    if (userData?.role === "system-owner" || !userData?.clinicId) {
+    if (!userData?.clinicId) {
       setSubscriptionValid(true);
       setSubscriptionLastChecked(Date.now());
 
-      return true; // System owner or no clinic - always allow
+      return true; // No clinic - always allow
     }
 
     try {
@@ -240,19 +230,6 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
 
   // Get accessible pages for the current user
   const getAccessiblePages = useCallback(async (): Promise<any[]> => {
-    if (userData?.role === "system-owner") {
-      // System owner can access all pages
-      try {
-        const { pageService } = await import("../services/pageService");
-
-        return await pageService.getAllPages();
-      } catch (error) {
-        console.error("Error getting all pages for system owner:", error);
-
-        return [];
-      }
-    }
-
     if (!currentUser || !clinicId) {
       return [];
     }
@@ -388,9 +365,6 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
     if (dataOnly) return;
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      const isImpersonating =
-        localStorage.getItem("isImpersonating") === "true";
-
       if (firebaseUser) {
         try {
           // Get the ID token result which contains custom claims
@@ -405,10 +379,9 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
           console.log("User data from Firestore:", userDataFromFirestore);
 
           if (userDataFromFirestore) {
-            // Check if user is active (but skip if in impersonation mode)
-            if (!userDataFromFirestore.isActive && !isImpersonating) {
+            // Check if user is active
+            if (!userDataFromFirestore.isActive) {
               console.warn("User is inactive! Logging them out instantly.");
-              // If user is inactive, sign them out (unless we're impersonating them)
               await signOut(auth);
               setCurrentUser(null);
               setUserData(null);
@@ -443,9 +416,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
             setClinicId(effectiveClinicId);
 
             // STANDALONE MODE: Simplified permission preloading
-            if (userDataFromFirestore.role === "system-owner") {
-              setPermissionsReady(true);
-            } else if (effectiveClinicId) {
+            if (effectiveClinicId) {
               setTimeout(async () => {
                 try {
                   const { rbacService } = await import(
@@ -468,18 +439,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
             }
           } else {
             // User exists in Firebase Auth but not in Firestore
-            if (isImpersonating) {
-              // Clear impersonation flags and sign out
-              localStorage.removeItem("isImpersonating");
-              localStorage.removeItem("impersonatingAdminId");
-              await signOut(auth);
-              setCurrentUser(null);
-              setUserData(null);
-              setClinicId(null);
-            } else {
-              // Normal case - user exists in Firebase Auth but not in Firestore
-              setCurrentUser(firebaseUser as ExtendedUser);
-            }
+            setCurrentUser(firebaseUser as ExtendedUser);
           }
         } catch (error) {
           console.error("Error getting user claims:", error);
@@ -506,7 +466,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
     const MIN_INTERVAL = 3 * 60 * 1000; // 3 minutes
 
     function maybeRevalidate() {
-      if (!currentUser || userData?.role === "system-owner") return;
+      if (!currentUser) return;
       const now = Date.now();
 
       if (

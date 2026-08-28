@@ -26,7 +26,6 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isClinicAdmin: () => boolean;
   isSystemOwner: () => boolean;
-  hasPermission: (permission: string) => boolean;
   hasPagePermission: (pageId: string) => Promise<boolean>;
   hasPagePermissionSync: (pageId: string) => boolean | null;
   hasPagePermissionByPath: (pagePath: string) => Promise<boolean>;
@@ -74,17 +73,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkClinicSubscription: auth.checkClinicSubscription,
     updateProfileInfo: auth.updateProfileInfo,
     updateEmailInfo: (auth as any).updateEmailInfo,
-    // Add a hasPermission method that uses hasPagePermission for backward compatibility
-    hasPermission: (permission: string) => {
-      // For now, treat permission as a pageId and use hasPagePermission
-      // This is a synchronous wrapper around the async hasPagePermission
-      // Note: This might not work perfectly for all cases since hasPagePermission is async
-      console.warn(
-        "hasPermission is deprecated, use hasPagePermission instead",
-      );
-
-      return auth.userData?.role === "system-owner" || false; // Return true for super admin, false otherwise
-    },
   };
 
   return (
@@ -112,7 +100,6 @@ export function useAuthContext() {
       logout: async () => {},
       isClinicAdmin: () => false,
       isSystemOwner: () => false,
-      hasPermission: () => false,
       hasPagePermission: async () => false,
       hasPagePermissionSync: () => null,
       hasPagePermissionByPath: async () => false,

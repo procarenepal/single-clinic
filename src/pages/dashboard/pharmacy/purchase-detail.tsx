@@ -16,13 +16,17 @@ import {
 import { pharmacyService } from "@/services/pharmacyService";
 import { clinicService } from "@/services/clinicService";
 import { medicineService } from "@/services/medicineService";
-import { MedicinePurchase } from "@/types/models";
+import { MedicinePurchase, MedicinePurchaseReturn } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import {
   getPrintBrandingCSS,
   getPrintHeaderHTML,
   getPrintFooterHTML,
 } from "@/utils/printBranding";
+import {
+  generatePharmacyInvoiceHTML,
+  PrintFormat,
+} from "@/utils/invoicePrinting";
 import { useAuthContext } from "@/context/AuthContext";
 
 // Custom Clinic Clarity UI
@@ -524,11 +528,6 @@ export default function PurchaseDetailPage() {
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  const [paymentDiscountType, setPaymentDiscountType] = useState<
-    "none" | "flat" | "percent"
-  >("none");
-  const [paymentDiscountValue, setPaymentDiscountValue] = useState<string>("");
-
   const handleOpenPaymentModal = () => {
     setPaymentForm((prev) => ({
       ...prev,
@@ -855,27 +854,25 @@ export default function PurchaseDetailPage() {
     return "partial";
   };
 
-  const calculatedDiscountAmount = useMemo(() => {
-    if (paymentDiscountType === "none" || !paymentDiscountValue || !purchase)
-      return 0;
-    const val = parseFloat(paymentDiscountValue);
-
-    if (isNaN(val) || val < 0) return 0;
-    if (paymentDiscountType === "flat") return val;
-    if (paymentDiscountType === "percent") {
-      return (dueAmount * val) / 100;
-    }
-
-    return 0;
-  }, [paymentDiscountType, paymentDiscountValue, purchase, dueAmount]);
-
   useEffect(() => {
     if (isPaymentModalOpen && purchase) {
-      const maxAllowed = Math.max(0, dueAmount - calculatedDiscountAmount);
-
-      setPaymentForm((prev) => ({ ...prev, amount: maxAllowed }));
+      setPaymentForm((prev) => ({ ...prev, amount: dueAmount }));
     }
-  }, [calculatedDiscountAmount, dueAmount, isPaymentModalOpen, purchase]);
+  }, [dueAmount, isPaymentModalOpen, purchase]);
+
+  // Auto-open Record Payment if deep-linked from the purchase list (?action=payment)
+  useEffect(() => {
+    if (
+      !loading &&
+      purchase &&
+      dueAmount > 0 &&
+      searchParams.get("action") === "payment" &&
+      !isPaymentModalOpen
+    ) {
+      handleOpenPaymentModal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, purchase, dueAmount, searchParams]);
 
   const handleAddPayment = async () => {
     if (!purchase || !currentUser) return;
@@ -903,12 +900,10 @@ export default function PurchaseDetailPage() {
       return;
     }
 
-    const maxAllowed = Math.max(0, dueAmount - calculatedDiscountAmount);
-
-    if (paymentForm.amount > maxAllowed) {
+    if (paymentForm.amount > dueAmount) {
       addToast({
         title: "Validation Error",
-        description: `Payment amount cannot exceed effectively due amount (NPR ${maxAllowed.toLocaleString()})`,
+        description: `Payment amount cannot exceed the due amount (NPR ${dueAmount.toLocaleString()})`,
         color: "warning",
       });
 
@@ -965,19 +960,8 @@ export default function PurchaseDetailPage() {
         updatedPayments.reduce((sum, p) => sum + p.amount, 0),
       );
 
-      const newNetAmount = Math.max(
-        0,
-        purchase.netAmount - calculatedDiscountAmount,
-      );
-      const newTotalAmount = Math.max(
-        0,
-        totalAmount - calculatedDiscountAmount,
-      );
-      const newDiscountTotal =
-        (purchase.discount || 0) + calculatedDiscountAmount;
-
       const newStatus =
-        newPaidAmount >= newTotalAmount
+        newPaidAmount >= totalAmount
           ? "paid"
           : newPaidAmount > 0
             ? "partial"
@@ -989,11 +973,6 @@ export default function PurchaseDetailPage() {
         paymentHistory: updatedHistory,
       };
 
-      if (calculatedDiscountAmount > 0) {
-        updatePayload.discount = newDiscountTotal;
-        updatePayload.netAmount = newNetAmount;
-      }
-
       await pharmacyService.updateMedicinePurchase(purchase.id, updatePayload);
 
       // Update local purchase state
@@ -1002,10 +981,6 @@ export default function PurchaseDetailPage() {
           ? {
             ...prev,
             paymentStatus: newStatus,
-            ...(calculatedDiscountAmount > 0 && {
-              discount: newDiscountTotal,
-              netAmount: newNetAmount,
-            }),
           }
           : null,
       );
@@ -1039,7 +1014,8 @@ export default function PurchaseDetailPage() {
   const handlePrint = async (format: string = "A4") => {
     if (!purchase) return;
 
-    const isCopy = (purchase.printCount || 0) > 0;
+    // 0 = original, N = the Nth reprint (IRD requires reprints numbered "Copy of Original – N")
+    const copyNumber = purchase.printCount || 0;
 
     try {
       await pharmacyService.updateMedicinePurchase(purchase.id, {
@@ -1050,309 +1026,52 @@ export default function PurchaseDetailPage() {
       console.error("Failed to update print count", err);
     }
 
-    const isThermal =
-      format.startsWith("THERMAL") ||
-      format === "Thermal" ||
-      format === "THERMAL_4INCH";
-
-    // Use config-defined width if available and format is thermal
-    let thermalWidth = "80mm";
-
-    if (format === "THERMAL_80MM" || format === "Thermal")
-      thermalWidth = "80mm";
-    else if (format === "THERMAL_58MM") thermalWidth = "58mm";
-    else if (format === "THERMAL_4INCH") thermalWidth = "104mm";
-    else if (isThermal && layoutConfig?.thermalPaperWidthMm) {
-      thermalWidth = `${layoutConfig.thermalPaperWidthMm}mm`;
-    }
-
     // Create a new window for printing
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     if (printWindow) {
-      // Build the table rows for Items
       const displayItems = getDisplayItems(purchase.items);
-      const itemsHtml = displayItems
-        .map((item, index) => {
-          const price = item.salePrice;
-          const formattedPrice = price.toLocaleString(undefined, {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          });
-
-          return `<tr>
-          <td style="text-align: center;">${index + 1}</td>
-          <td>
-            <div style="font-weight: bold;">${item.medicineName}</div>
-            ${item.batchNumber || item.expiryDate
-              ? `
-              <div style="font-size: 0.85em; color: #64748b; margin-top: 2px;">
-                ${item.expiryDate ? `<strong>Exp:</strong> ${item.expiryDate}` : ""}
-                ${item.batchNumber ? `${item.expiryDate ? " | " : ""}<strong>Batch:</strong> ${item.batchNumber}` : ""}
-              </div>`
-              : ""
-            }
-          </td>
-          <td style="text-align: center; white-space: nowrap;">${item.quantity}</td>
-          <td style="text-align: center; white-space: nowrap;">NPR ${formattedPrice}</td>
-          <td style="text-align: center; white-space: nowrap;">NPR ${item.amount.toLocaleString()}</td>
-        </tr>`;
-        })
-        .join("");
-
-      // Build the summary rows (right side)
-      const summaryRowsHtml = `
-        <tr>
-          <td style="text-align: left; padding: 2px 0;">Subtotal</td>
-          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(purchase.total).toLocaleString()}</td>
-        </tr>
-        ${purchase.discount > 0
-          ? `
-        <tr>
-          <td style="text-align: left; padding: 2px 0;">Discount</td>
-          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">- NPR ${Math.round(purchase.discount).toLocaleString()}</td>
-        </tr>`
-          : ""
-        }
-        ${purchase.taxAmount > 0
-          ? `
-        <tr>
-          <td style="text-align: left; padding: 2px 0;">Tax (${purchase.taxPercentage}%)</td>
-          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(purchase.taxAmount).toLocaleString()}</td>
-        </tr>`
-          : ""
-        }
-        <tr style="font-weight: bold; font-size: 1.1em;">
-          <td style="text-align: left; padding: 4px 0; border-top: 1px solid #e2e8f0;">Total</td>
-          <td style="text-align: right; padding: 4px 0; border-top: 1px solid #e2e8f0; white-space: nowrap;">NPR ${Math.round(purchase.netAmount).toLocaleString()}</td>
-        </tr>
-        <tr>
-          <td style="text-align: left; padding: 2px 0;">Paid (${purchase.paymentType.toUpperCase()})</td>
-          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(paidAmount).toLocaleString()}</td>
-        </tr>
-        <tr style="font-weight: bold; font-size: 1.1em;">
-          <td style="text-align: left; padding: 2px 0;">Balance</td>
-          <td style="text-align: right; padding: 2px 0; white-space: nowrap;">NPR ${Math.round(dueAmount).toLocaleString()}</td>
-        </tr>
-      `;
-
-      // Use Global Branding Utility
-      const brandingCSS = layoutConfig
-        ? getPrintBrandingCSS(layoutConfig, isThermal)
+      const printedByText = userData
+        ? `${userData.displayName} (${userData.role})`
         : "";
-      const headerHTML = layoutConfig
-        ? getPrintHeaderHTML(layoutConfig, clinic, isThermal)
-        : "";
-      const footerHTML = layoutConfig ? getPrintFooterHTML(layoutConfig, "pharmacy") : "";
 
-      // Generate the HTML content for printing with dynamic clinic data
-      const printContent = `<!DOCTYPE html>
-<html>
-<head>
-  <title>Purchase Receipt - ${purchase.purchaseNo}</title>
-  <style>
-    @page { 
-      margin: 0; 
-      size: ${isThermal ? `${thermalWidth} auto` : "A4"}; 
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: white;
-      -webkit-print-color-adjust: exact;
-      width: 100%;
-    }
-    body {
-      font-family: Arial, sans-serif;
-      color: #333;
-      font-size: ${layoutConfig?.contentFontSize ? `${layoutConfig.contentFontSize}px` : isThermal ? "11px" : "13px"};
-    }
-    .print-container {
-      width: ${isThermal ? thermalWidth : "100%"};
-      margin: 0 auto;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      padding: ${isThermal ? "5mm" : "15mm"};
-      box-sizing: border-box;
-    }
-    
-    ${brandingCSS}
-
-    .document-title {
-      text-align: center;
-      margin: 8px 0 2px 0;
-      border-bottom: 2px solid #7c3aed;
-      padding-bottom: 4px;
-      width: 100%;
-    }
-    .document-title h2 {
-      font-size: 16px;
-      font-weight: 800;
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: #7c3aed;
-    }
-    .document-info {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 8px;
-      margin-bottom: 12px;
-      font-size: 0.95em;
-      font-weight: 500;
-      color: #334155;
-    }
-
-    .bill-to-section {
-      background-color: ${isThermal ? "transparent" : "#f8fafc"};
-      border-radius: 6px;
-      padding: ${isThermal ? "2px 0" : "10px 12px"};
-      margin-bottom: 16px;
-      border: ${isThermal ? "none" : "1px dashed #cbd5e1"};
-    }
-      color: #64748b;
-      font-size: 0.85em;
-      font-weight: 600;
-    }
-    .detail-val {
-      font-weight: 700;
-      color: #1e293b;
-      font-size: 0.9em;
-    }
-
-    .items-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 6px;
-    }
-    .items-table th {
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
-      padding: 6px;
-      text-align: center;
-      font-size: 0.85em;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: #64748b;
-    }
-    .items-table td {
-      border: 1px solid #e2e8f0;
-      padding: 6px;
-      font-size: 0.9em;
-      color: #334155;
-    }
-
-    .summary-container {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 8px;
-    }
-    .summary-table {
-      min-width: 280px;
-      width: auto;
-      border-collapse: collapse;
-    }
-    .summary-table td {
-      font-size: 1em;
-      color: #334155;
-    }
-    
-    .footer-note {
-      text-align: center;
-      margin-top: 40px;
-      font-size: 0.85em;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #94a3b8;
-      font-weight: 600;
-    }
-    
-    ${brandingCSS}
-  </style>
-</head>
-<body>
-    <div class="print-container">
-      ${headerHTML}
-    
-    <div class="document-title">
-      <h2>TAX INVOICE</h2>
-      ${isCopy ? `<div style="text-align: center; font-weight: bold; font-size: 16px; margin-top: 10px; margin-bottom: 10px; text-transform: uppercase;">[ COPY OF ORIGINAL ]</div>` : ""}
-    </div>
-
-    <div class="document-info">
-      <span># ${purchase.purchaseNo}</span>
-      <span>Date: ${purchase.purchaseDate.toLocaleDateString()}</span>
-    </div>
-
-    <div class="bill-to-section">
-      <div style="display: grid; grid-template-columns: ${isThermal ? '1fr' : '1fr 1fr'}; gap: ${isThermal ? '2px' : '20px'};">
-        <div style="display: grid; grid-template-columns: max-content 1fr; column-gap: 8px; row-gap: 4px; align-items: baseline;">
-          <div style="font-weight: 700; font-size: 0.8em; color: #64748b; text-transform: uppercase;">BILL TO:</div>
-          <div style="font-weight: 700; font-size: 1.1em; color: #0f172a;">${purchase.patientName || "Cash Customer"}</div>
-          
-          ${purchase.patientPanVat ? `<div style="font-size: 0.85em; color: #64748b;">Buyer PAN:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${purchase.patientPanVat}</div>` : ""}
-        </div>
-        <div style="display: grid; grid-template-columns: max-content 1fr; column-gap: 8px; row-gap: 4px; align-items: baseline;">
-          ${purchase.patientPhone ? `<div style="font-size: 0.85em; color: #64748b;">Phone:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${purchase.patientPhone}</div>` : ""}
-          ${purchase.patientAddress ? `<div style="font-size: 0.85em; color: #64748b;">Address:</div><div style="font-size: 0.9em; font-weight: 600; color: #1e293b;">${purchase.patientAddress}</div>` : ""}
-        </div>
-      </div>
-    </div>
-
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th style="width: 50px;">S.N.</th>
-          <th style="text-align: left;">Medicine</th>
-          <th style="width: 60px; white-space: nowrap;">Qty</th>
-          <th style="width: 15%; text-align: center; white-space: nowrap;">Price</th>
-          <th style="width: 15%; text-align: center; white-space: nowrap;">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itemsHtml}
-      </tbody>
-    </table>
-
-    <div class="summary-container">
-      <table class="summary-table">
-        <tbody>
-          ${summaryRowsHtml}
-        </tbody>
-      </table>
-    </div>
-
-    <div style="margin-top: 15px; text-align: center;">
-      ${!layoutConfig?.showFooter ? '<div style="font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; font-weight: 600;">Thank you for choosing us.</div>' : ""}
-      <div style="font-size: 0.75em; margin-top: 10px; color: #64748b; text-align: right; font-weight: 500;">
-        Print Date: ${new Date().toLocaleString()}
-      </div>
-    </div>
-
-    ${footerHTML}
-  </div>
-  
-  <script>
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        window.print();
-      }, 500);
-    });
-    
-    window.addEventListener('afterprint', function() {
-      window.close();
-    });
-    
-    window.addEventListener('beforeunload', function() {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage('printComplete', '*');
-      }
-    });
-  </script>
-</body>
-</html>`;
+      const printContent = generatePharmacyInvoiceHTML(
+        {
+          invoiceNumber: purchase.purchaseNo,
+          invoiceDate: purchase.purchaseDate,
+          patientName: purchase.patientName || "Cash Customer",
+          patientPanVat: purchase.patientPanVat,
+          patientPhone: purchase.patientPhone,
+          patientAddress: purchase.patientAddress,
+          subtotal: purchase.total,
+          discountAmount: purchase.discount,
+          taxPercentage: purchase.taxPercentage,
+          taxAmount: purchase.taxAmount,
+          totalAmount: purchase.netAmount,
+          paidAmount,
+          balanceAmount: dueAmount,
+          irdSynced: purchase.irdSynced,
+          paymentMethod: purchase.paymentType,
+          items: displayItems.map((item) => ({
+            name: item.medicineName,
+            subtext:
+              [
+                item.expiryDate ? `Exp: ${item.expiryDate}` : null,
+                item.batchNumber ? `Batch: ${item.batchNumber}` : null,
+              ]
+                .filter(Boolean)
+                .join(" | ") || undefined,
+            quantity: item.quantity,
+            price: item.salePrice,
+            amount: item.amount,
+          })),
+        },
+        format as PrintFormat,
+        clinic,
+        layoutConfig,
+        copyNumber,
+        printedByText,
+      );
 
       printWindow.document.write(printContent);
       printWindow.document.close();
@@ -1364,6 +1083,63 @@ export default function PurchaseDetailPage() {
         color: "danger",
       });
     }
+  };
+
+  const handlePrintReturn = (ret: MedicinePurchaseReturn) => {
+    if (!purchase) return;
+
+    const printWindow = window.open("", "_blank", "width=800,height=600");
+
+    if (!printWindow) {
+      addToast({
+        title: "Error",
+        description:
+          "Unable to open print window. Please check your browser settings.",
+        color: "danger",
+      });
+
+      return;
+    }
+
+    const printedByText = userData
+      ? `${userData.displayName} (${userData.role})`
+      : "";
+
+    const printContent = generatePharmacyInvoiceHTML(
+      {
+        invoiceNumber: `RET-${purchase.purchaseNo}-${ret.id.slice(0, 6)}`,
+        invoiceDate: ret.createdAt,
+        patientName: purchase.patientName || "Cash Customer",
+        patientPanVat: purchase.patientPanVat,
+        patientPhone: purchase.patientPhone,
+        patientAddress: purchase.patientAddress,
+        subtotal: ret.totalAmount,
+        discountAmount: 0,
+        taxPercentage: 0,
+        taxAmount: 0,
+        totalAmount: ret.totalAmount,
+        paidAmount: ret.totalAmount,
+        balanceAmount: 0,
+        irdSynced: ret.irdSynced,
+        paymentMethod: ret.refundMethod,
+        isCreditNote: true,
+        creditNoteNote: `Return against purchase ${purchase.purchaseNo}. Reason: ${ret.notes}`,
+        items: ret.items.map((item) => ({
+          name: item.medicineName,
+          quantity: item.quantity,
+          price: item.amount / item.quantity,
+          amount: item.amount,
+        })),
+      },
+      "A4" as PrintFormat,
+      clinic,
+      layoutConfig,
+      0,
+      printedByText,
+    );
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
   };
 
   if (loading) {
@@ -1919,6 +1695,9 @@ export default function PurchaseDetailPage() {
                     <th className="px-3 py-2 text-[11px] font-semibold text-mountain-500 uppercase tracking-wider">
                       Notes
                     </th>
+                    <th className="px-3 py-2 text-[11px] font-semibold text-mountain-500 uppercase tracking-wider text-center">
+                      Print
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-mountain-100 bg-white">
@@ -1940,6 +1719,16 @@ export default function PurchaseDetailPage() {
                       </td>
                       <td className="px-3 py-2.5 text-[12.5px] text-mountain-800">
                         {ret.notes || "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <button
+                          className="p-1.5 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded"
+                          title="Print Return Receipt"
+                          type="button"
+                          onClick={() => handlePrintReturn(ret)}
+                        >
+                          <IoPrintOutline />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -2558,40 +2347,6 @@ export default function PurchaseDetailPage() {
                 administrator to set up payment methods in pharmacy settings.
               </div>
             )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 border border-border-base rounded-md bg-surface-2/30">
-              <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-medium text-mountain-700">
-                  Discount Type
-                </label>
-                <select
-                  className="h-8 w-full px-2.5 text-[12.5px] border border-mountain-200 rounded bg-white focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-100 text-mountain-800"
-                  value={paymentDiscountType}
-                  onChange={(e) => {
-                    setPaymentDiscountType(
-                      e.target.value as "none" | "flat" | "percent",
-                    );
-                    if (e.target.value === "none") {
-                      setPaymentDiscountValue("");
-                    }
-                  }}
-                >
-                  <option value="none">No Discount</option>
-                  <option value="flat">Flat Amount</option>
-                  <option value="percent">Percentage (%)</option>
-                </select>
-              </div>
-              {paymentDiscountType !== "none" && (
-                <FlatInput
-                  label="Discount Value"
-                  placeholder="0"
-                  prefixText={paymentDiscountType === "flat" ? "NPR" : "%"}
-                  type="number"
-                  value={paymentDiscountValue}
-                  onChange={(v) => setPaymentDiscountValue(v)}
-                />
-              )}
-            </div>
 
             <FlatInput
               hint={

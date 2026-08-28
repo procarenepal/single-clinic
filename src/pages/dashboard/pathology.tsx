@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -205,7 +206,20 @@ export default function PathologyPage() {
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
 
   // Active tab state
-  const [activeTab, setActiveTab] = useState("tests");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get("tab") === "billing" ? "billing" : "tests",
+  );
+  const editInvoiceId = searchParams.get("editInvoice") || undefined;
+
+  // Re-sync the tab if navigated here with ?tab=billing while already mounted
+  // (e.g. from the invoice detail page's Edit link) — the useState above only
+  // covers the initial mount.
+  useEffect(() => {
+    if (searchParams.get("tab") === "billing" && activeTab !== "billing") {
+      setActiveTab("billing");
+    }
+  }, [searchParams]);
 
   // Loading state
   const [loading, setLoading] = useState(true);
@@ -3473,6 +3487,13 @@ export default function PathologyPage() {
               <PathologyBillingTab
                 branchId={branchId!}
                 clinicId={clinicId!}
+                initialEditInvoiceId={editInvoiceId}
+                onInitialEditInvoiceConsumed={() => {
+                  const next = new URLSearchParams(searchParams);
+
+                  next.delete("editInvoice");
+                  setSearchParams(next, { replace: true });
+                }}
                 onRecordResults={handleRecordResultsFromBilling}
               />
             )}

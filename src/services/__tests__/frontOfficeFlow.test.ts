@@ -58,7 +58,11 @@ vi.mock("@/config/firebase", () => ({
 
 vi.mock("../api/billingApi", () => ({
   billingApi: {
-    createInvoice: vi.fn().mockResolvedValue({ id: "mocked_doc_id" }),
+    createInvoice: vi.fn().mockResolvedValue({
+      id: 1,
+      invoiceNumber: "INV-2080.081-0001",
+      irdSynced: false,
+    }),
   },
 }));
 
@@ -108,10 +112,11 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
       createdBy: "system",
     };
 
-    const billingId =
+    const { id: billingId, invoiceNumber } =
       await appointmentBillingService.createBilling(mockBillingData);
 
     expect(billingId).toBe("mocked_doc_id");
+    expect(invoiceNumber).toBe("INV-2080.081-0001");
 
     // 2. Settle the consultation bill
     // Using a spy to verify doctor commission is triggered
@@ -191,13 +196,14 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
       createdBy: "pharmacy_1",
     };
 
-    vi.spyOn(pharmacyService, "createMedicinePurchase").mockResolvedValue(
-      "mocked_doc_id",
-    );
+    vi.spyOn(pharmacyService, "createMedicinePurchase").mockResolvedValue({
+      id: "mocked_doc_id",
+      purchaseNo: "PUR-0001",
+      irdSynced: true,
+    });
 
-    const pharmacyInvoiceId = await pharmacyService.createMedicinePurchase(
-      mockPharmacyInvoice as any,
-    );
+    const { id: pharmacyInvoiceId } =
+      await pharmacyService.createMedicinePurchase(mockPharmacyInvoice as any);
 
     expect(pharmacyInvoiceId).toBe("mocked_doc_id");
   });
@@ -243,7 +249,7 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
       createdBy: "system",
     };
 
-    const billingId =
+    const { id: billingId } =
       await appointmentBillingService.createBilling(mockProcedureBill);
 
     expect(billingId).toBe("mocked_doc_id");
@@ -300,7 +306,7 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
       createdBy: "front_desk_1",
     };
 
-    const pathId = await pathologyBillingService.createBilling(
+    const { id: pathId } = await pathologyBillingService.createBilling(
       mockPathologyBill as any,
     );
 
@@ -338,9 +344,13 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
       updateData.assignedExpertId = selectedExpertId;
       updateData.status = "in-progress";
 
-      if (mockAppointment.doctorId && mockAppointment.doctorId !== "unassigned") {
+      if (
+        mockAppointment.doctorId &&
+        mockAppointment.doctorId !== "unassigned"
+      ) {
         updateData.doctorConsultationCompleted = true;
         let updatedNotes = mockAppointment.notes || "";
+
         updatedNotes = updatedNotes.replace("[Routed to: Doctor]", "").trim();
         if (!updatedNotes.includes("[Routed to: Expert]")) {
           updatedNotes = (updatedNotes + " [Routed to: Expert]").trim();
@@ -372,7 +382,7 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
           id: "laser-id",
           name: "CO2 Laser Resurfacing",
           fee: 4000,
-        }
+        },
       ],
     };
 
@@ -393,21 +403,27 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
     expect(clinicianId).toBe("expert_1"); // Clinician should be the Expert
 
     // Generate billing items
-    const billingItems = finalAppointment.recommendedProcedure.items.map((item) => ({
-      id: "item_laser_1",
-      appointmentTypeId: item.id,
-      appointmentTypeName: item.name,
-      price: item.fee,
-      quantity: 1,
-      commission: 30, // 30% Expert commission
-      doctorId: clinicianId,
-      doctorName: "Laser Expert",
-      amount: item.fee,
-    }));
+    const billingItems = finalAppointment.recommendedProcedure.items.map(
+      (item) => ({
+        id: "item_laser_1",
+        appointmentTypeId: item.id,
+        appointmentTypeName: item.name,
+        price: item.fee,
+        quantity: 1,
+        commission: 30, // 30% Expert commission
+        doctorId: clinicianId,
+        doctorName: "Laser Expert",
+        amount: item.fee,
+      }),
+    );
 
     // Recommending doctor referral
     const referrals: any[] = [];
-    if (finalAppointment.doctorId && finalAppointment.doctorId !== "unassigned") {
+
+    if (
+      finalAppointment.doctorId &&
+      finalAppointment.doctorId !== "unassigned"
+    ) {
       referrals.push({
         type: "doctor",
         id: finalAppointment.doctorId,
@@ -449,7 +465,7 @@ describe("Front Office Patient Journey (End-to-End Flow)", () => {
     await expertCommissionService.createCommissionsFromBilling(
       billingData as any,
       30,
-      "system"
+      "system",
     );
 
     expect(expertCommissionSpy).toHaveBeenCalled();

@@ -49,6 +49,8 @@ import {
 import { Pagination } from "@/components/ui/pagination";
 import { Chip } from "@/components/ui/chip";
 import { title } from "@/components/primitives";
+import { StatusBadge } from "@/components/billing/StatusBadge";
+import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 const Divider = () => <hr className="border-border-base my-2" />;
 
 function CustomSelect({
@@ -123,10 +125,11 @@ function CustomInput({
         </label>
       )}
       <div
-        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${isInvalid
-          ? "border-red-300 focus-within:ring-red-100"
-          : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
-          } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
+        className={`flex items-center border rounded min-h-[38px] bg-surface transition-colors ${
+          isInvalid
+            ? "border-red-300 focus-within:ring-red-100"
+            : "border-border-base focus-within:border-primary focus-within:ring-primary/20"
+        } focus-within:ring-1 ${disabled || readOnly ? "bg-surface-2" : ""} ${classNames?.inputWrapper || ""}`}
       >
         {startContent && (
           <div className="pl-3 pr-1 text-text-main flex items-center justify-center shrink-0">
@@ -182,7 +185,9 @@ function SearchSelect({
   const [open, setOpen] = useState(false);
   const filtered = (
     q
-      ? items.filter((i) => (i.primary || "").toLowerCase().includes(q.toLowerCase()))
+      ? items.filter((i) =>
+          (i.primary || "").toLowerCase().includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -433,10 +438,13 @@ interface MedicinePurchaseReturn {
   purchaseId: string;
   totalAmount: number;
   refundMethod?: string;
-  notes?: string;
+  notes: string;
   items: MedicinePurchaseReturnItem[];
   createdAt: Date;
   createdBy: string;
+  javaInvoiceId?: number;
+  irdSynced?: boolean;
+  cbmsResponseCode?: string;
 }
 
 interface MedicinePurchase {
@@ -470,7 +478,6 @@ interface MedicinePurchase {
   totalReturnedAmount?: number;
   printCount?: number;
 }
-
 
 interface MedicineUsage {
   id: string;
@@ -522,33 +529,6 @@ interface SupplierLedgerSummary {
   lastPurchaseDate?: Date;
 }
 
-function StatusBadge({
-  status,
-  type = "status",
-}: {
-  status: string;
-  type?: "status" | "payment";
-}) {
-  const S_COLORS: Record<string, string> = {
-    paid: "bg-green-500/10 text-green-600 border-green-500/20",
-    finalized: "bg-primary/10 text-primary border-primary/20",
-    partial: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
-    unpaid: "bg-red-500/10 text-red-600 border-red-500/20",
-    cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
-    pending: "bg-surface-2 text-text-muted border-border-base",
-    default: "bg-surface-2/50 text-text-muted/60 border-border-base",
-  };
-  const color = S_COLORS[status] || S_COLORS.default;
-
-  return (
-    <span
-      className={`text-[10.5px] font-semibold px-2 py-0.5 rounded border capitalize ${color}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 const toISODateString = (date: any): string => {
   if (!date) return "";
 
@@ -570,8 +550,7 @@ export default function PharmacyPage() {
   const [searchParams] = useSearchParams();
   const { clinicId, currentUser, userData } = useAuthContext();
   const branchId = userData?.branchId ?? null;
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" || userData?.role === "system-owner";
+  const isClinicAdmin = userData?.role === "clinic-admin";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
@@ -937,7 +916,7 @@ export default function PharmacyPage() {
         userData?.role === "clinic-admin"
           ? supplierPaymentForm.supplierId
             ? suppliers.find((s) => s.id === supplierPaymentForm.supplierId)
-              ?.branchId || ""
+                ?.branchId || ""
             : ""
           : userData?.branchId || "";
 
@@ -1146,7 +1125,7 @@ export default function PharmacyPage() {
         clinicId,
         medicines.map((m) => m.id),
         effectiveBranchId || undefined,
-        true // force refresh
+        true, // force refresh
       );
       const sMap: Record<string, number> = {};
 
@@ -1261,7 +1240,9 @@ export default function PharmacyPage() {
           setPurchaseForm((prev) => ({
             ...prev,
             paymentType: settingsData.defaultPaymentMethod || prev.paymentType,
-            taxPercentage: settingsData.enableTax ? settingsData.defaultTaxPercentage : 0,
+            taxPercentage: settingsData.enableTax
+              ? settingsData.defaultTaxPercentage
+              : 0,
           }));
         } else {
           const defaultSettings = pharmacyService.getDefaultPharmacySettings();
@@ -1275,7 +1256,9 @@ export default function PharmacyPage() {
             ...prev,
             paymentType:
               defaultSettings.defaultPaymentMethod || prev.paymentType,
-            taxPercentage: defaultSettings.enableTax ? defaultSettings.defaultTaxPercentage : 0,
+            taxPercentage: defaultSettings.enableTax
+              ? defaultSettings.defaultTaxPercentage
+              : 0,
           }));
         }
       } catch (error) {
@@ -1323,7 +1306,7 @@ export default function PharmacyPage() {
         if (prescriptionsData) {
           setPrescriptions(
             (prescriptionsData as any[])?.filter((rx) => rx.sendToPharmacy) ||
-            [],
+              [],
           );
         }
 
@@ -1417,12 +1400,16 @@ export default function PharmacyPage() {
       discountAmount = (total * purchaseForm.discountPercentage) / 100;
     }
 
-    const taxableAmount = Number(Math.max(0, total - discountAmount).toFixed(2));
+    const taxableAmount = Number(
+      Math.max(0, total - discountAmount).toFixed(2),
+    );
     const taxAmount = Number(
       ((taxableAmount * purchaseForm.taxPercentage) / 100).toFixed(2),
     );
     const netAmount = Number(
-      (taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0)).toFixed(2),
+      (taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0)).toFixed(
+        2,
+      ),
     );
 
     setPurchaseForm((prev) => ({
@@ -1764,25 +1751,31 @@ export default function PharmacyPage() {
   // Calculate daily report summary
   const getDailyReportSummary = () => {
     const dailyPurchases = getDailyReportPurchases();
-    const totalSales = dailyPurchases.reduce(
-      (sum, purchase) => {
-        const returnedAmount = purchase.totalReturnedAmount && purchase.totalReturnedAmount > 0
+    const totalSales = dailyPurchases.reduce((sum, purchase) => {
+      const returnedAmount =
+        purchase.totalReturnedAmount && purchase.totalReturnedAmount > 0
           ? purchase.totalReturnedAmount
-          : (purchase.returns ?? []).reduce((retSum, r) => retSum + Math.abs(r.totalAmount || 0), 0);
-        return sum + Math.max(0, (purchase.netAmount || 0) - returnedAmount);
-      },
-      0,
-    );
-    const totalItems = dailyPurchases.reduce(
-      (sum, purchase) => {
-        const returnedQty = (purchase.returns ?? []).reduce((retSum, r) => {
-          return retSum + (r.items ?? []).reduce((iSum, i) => iSum + (i.quantity || 0), 0);
-        }, 0);
-        const purchasedQty = purchase.items.reduce((itemSum, item) => itemSum + item.quantity, 0);
-        return sum + Math.max(0, purchasedQty - returnedQty);
-      },
-      0,
-    );
+          : (purchase.returns ?? []).reduce(
+              (retSum, r) => retSum + Math.abs(r.totalAmount || 0),
+              0,
+            );
+
+      return sum + Math.max(0, (purchase.netAmount || 0) - returnedAmount);
+    }, 0);
+    const totalItems = dailyPurchases.reduce((sum, purchase) => {
+      const returnedQty = (purchase.returns ?? []).reduce((retSum, r) => {
+        return (
+          retSum +
+          (r.items ?? []).reduce((iSum, i) => iSum + (i.quantity || 0), 0)
+        );
+      }, 0);
+      const purchasedQty = purchase.items.reduce(
+        (itemSum, item) => itemSum + item.quantity,
+        0,
+      );
+
+      return sum + Math.max(0, purchasedQty - returnedQty);
+    }, 0);
     const paidCount = dailyPurchases.filter(
       (p) => p.paymentStatus === "paid",
     ).length;
@@ -2570,8 +2563,18 @@ export default function PharmacyPage() {
       }
 
       // Save purchase record
-      const createdPurchaseId =
+      const purchaseResult =
         await pharmacyService.createMedicinePurchase(purchaseData);
+      const createdPurchaseId = purchaseResult.id;
+
+      if (purchaseResult.javaSyncError) {
+        addToast({
+          title: "Sale saved, but ledger/IRD sync failed",
+          description:
+            "The sale was recorded. It will be retried automatically — contact an admin if this persists.",
+          color: "warning",
+        });
+      }
 
       // If this was fulfilled from a prescription, mark it as completed
       if (purchaseForm.prescriptionId) {
@@ -2631,7 +2634,9 @@ export default function PharmacyPage() {
         discount: 0,
         discountType: "flat",
         discountPercentage: 0,
-        taxPercentage: pharmacySettings?.enableTax ? (pharmacySettings.defaultTaxPercentage || 0) : 0,
+        taxPercentage: pharmacySettings?.enableTax
+          ? pharmacySettings.defaultTaxPercentage || 0
+          : 0,
         taxAmount: 0,
         handlingAmount: 0,
         taxableAmount: 0,
@@ -3605,7 +3610,7 @@ export default function PharmacyPage() {
       (pm) =>
         pm.id !== editingPaymentMethod.id &&
         pm.name.trim().toLowerCase() ===
-        paymentMethodForm.name.trim().toLowerCase(),
+          paymentMethodForm.name.trim().toLowerCase(),
     );
 
     if (duplicateEdit) {
@@ -3799,10 +3804,11 @@ export default function PharmacyPage() {
         {/* Daily Sales Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "daily"
-              ? "border-primary shadow-sm ring-1 ring-primary/20"
-              : "border-border-base hover:border-border-strong hover:bg-surface-2"
-              }`}
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
+              activeFilter === "daily"
+                ? "border-primary shadow-sm ring-1 ring-primary/20"
+                : "border-border-base hover:border-border-strong hover:bg-surface-2"
+            }`}
             onClick={() => handleStatCardClick("daily")}
           >
             <IoStorefrontOutline className="text-primary w-6 h-6 mb-2" />
@@ -3813,10 +3819,11 @@ export default function PharmacyPage() {
           </div>
 
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "paid"
-              ? "border-primary shadow-sm ring-1 ring-primary/20"
-              : "border-border-base hover:border-border-strong hover:bg-surface-2"
-              }`}
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
+              activeFilter === "paid"
+                ? "border-primary shadow-sm ring-1 ring-primary/20"
+                : "border-border-base hover:border-border-strong hover:bg-surface-2"
+            }`}
             onClick={() => handleStatCardClick("paid")}
           >
             <IoCheckmarkCircleOutline className="text-primary w-6 h-6 mb-2" />
@@ -3829,10 +3836,11 @@ export default function PharmacyPage() {
           </div>
 
           <div
-            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${activeFilter === "unpaid"
-              ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
-              : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
-              }`}
+            className={`bg-surface border transition-all rounded p-4 cursor-pointer flex flex-col items-center ${
+              activeFilter === "unpaid"
+                ? "border-red-500 shadow-sm ring-1 ring-red-500/20"
+                : "border-border-base hover:border-red-500/40 hover:bg-surface-2"
+            }`}
             onClick={() => handleStatCardClick("unpaid")}
           >
             <IoCloseCircleOutline className="text-red-500 w-6 h-6 mb-2" />
@@ -4067,10 +4075,10 @@ export default function PharmacyPage() {
                                 "number" && purchase.totalReturnedAmount > 0
                                 ? purchase.totalReturnedAmount
                                 : (purchase.returns ?? []).reduce(
-                                  (sum, r) =>
-                                    sum + Math.abs(r.totalAmount || 0),
-                                  0,
-                                );
+                                    (sum, r) =>
+                                      sum + Math.abs(r.totalAmount || 0),
+                                    0,
+                                  );
                             const netAfterReturns = Math.max(
                               0,
                               (purchase.netAmount || 0) - totalReturnedAmount,
@@ -4141,43 +4149,12 @@ export default function PharmacyPage() {
                                   </div>
                                 </td>
                                 <td className="px-3 py-2.5">
-                                  {purchase.paymentStatus === "paid" ? (
-                                    <div className="flex flex-col gap-1 items-start">
-                                      {purchase.irdSynced ? (
-                                        <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded font-medium border border-green-500/20">
-                                          ✅ Synced
-                                        </span>
-                                      ) : (
-                                        <>
-                                          <span className="text-[10px] bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium border border-red-500/20">
-                                            ⚠️ Failed
-                                          </span>
-                                          <button
-                                            className="text-[10px] text-primary hover:underline"
-                                            onClick={async () => {
-                                              try {
-                                                const { retryIrdSync } = await import("@/services/irdCbmsService");
-                                                const res = await retryIrdSync(purchase.id, "pharmacy");
-                                                if (res.success) {
-                                                  toast.success("IRD Sync successful!");
-                                                } else {
-                                                  toast.error("IRD Sync failed: " + res.message);
-                                                }
-                                              } catch (e) {
-                                                toast.error("Error during retry sync");
-                                              }
-                                            }}
-                                          >
-                                            Retry Sync
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-text-muted/60">
-                                      ➖ N/A
-                                    </span>
-                                  )}
+                                  <IrdSyncBadge
+                                    finalized={purchase.paymentStatus === "paid"}
+                                    invoiceType="pharmacy"
+                                    recordId={purchase.id}
+                                    synced={Boolean(purchase.irdSynced)}
+                                  />
                                 </td>
                                 <td className="px-3 py-2.5">
                                   <div className="flex items-center gap-1.5">
@@ -4214,6 +4191,29 @@ export default function PharmacyPage() {
                                       }
                                     >
                                       <IoReloadOutline />
+                                    </button>
+                                    <button
+                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
+                                      title="Print"
+                                      onClick={() =>
+                                        navigate(
+                                          `/dashboard/pharmacy/purchase/${purchase.id}?print=true`,
+                                        )
+                                      }
+                                    >
+                                      <IoPrintOutline />
+                                    </button>
+                                    <button
+                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+                                      disabled={purchase.paymentStatus === "paid"}
+                                      title="Record Payment"
+                                      onClick={() =>
+                                        navigate(
+                                          `/dashboard/pharmacy/purchase/${purchase.id}?action=payment`,
+                                        )
+                                      }
+                                    >
+                                      <IoWalletOutline />
                                     </button>
                                   </div>
                                 </td>
@@ -4488,16 +4488,17 @@ export default function PharmacyPage() {
                               Current Balance
                             </p>
                             <p
-                              className={`text-stat-sm font-semibold mt-1 ${supplierLedgerEntries[
-                                supplierLedgerEntries.length - 1
-                              ].balanceAmount > 0
-                                ? "text-red-500"
-                                : supplierLedgerEntries[
+                              className={`text-stat-sm font-semibold mt-1 ${
+                                supplierLedgerEntries[
                                   supplierLedgerEntries.length - 1
-                                ].balanceAmount < 0
-                                  ? "text-primary"
-                                  : "text-text-main"
-                                }`}
+                                ].balanceAmount > 0
+                                  ? "text-red-500"
+                                  : supplierLedgerEntries[
+                                        supplierLedgerEntries.length - 1
+                                      ].balanceAmount < 0
+                                    ? "text-primary"
+                                    : "text-text-main"
+                              }`}
                             >
                               NPR{" "}
                               {Math.round(
@@ -4596,12 +4597,13 @@ export default function PharmacyPage() {
                                     </td>
                                     <td className="px-3 py-2.5 text-[12.5px]">
                                       <span
-                                        className={`font-semibold ${entry.balanceAmount > 0
-                                          ? "text-red-500"
-                                          : entry.balanceAmount < 0
-                                            ? "text-primary"
-                                            : "text-text-muted"
-                                          }`}
+                                        className={`font-semibold ${
+                                          entry.balanceAmount > 0
+                                            ? "text-red-500"
+                                            : entry.balanceAmount < 0
+                                              ? "text-primary"
+                                              : "text-text-muted"
+                                        }`}
                                       >
                                         NPR{" "}
                                         {Math.round(
@@ -4773,8 +4775,8 @@ export default function PharmacyPage() {
                                 {patients.find((p) => p.id === rx.patientId)
                                   ?.name ||
                                   "Patient " +
-                                  (rx.patientId?.substring(0, 5) ||
-                                    "Unknown")}
+                                    (rx.patientId?.substring(0, 5) ||
+                                      "Unknown")}
                               </div>
                             </td>
                             <td className="px-4 py-3.5">
@@ -4799,9 +4801,9 @@ export default function PharmacyPage() {
                             <td className="px-4 py-3.5 text-[12px] text-text-muted">
                               {rx.createdAt
                                 ? format(
-                                  new Date(rx.createdAt),
-                                  "MMM d, yyyy h:mm a",
-                                )
+                                    new Date(rx.createdAt),
+                                    "MMM d, yyyy h:mm a",
+                                  )
                                 : "N/A"}
                             </td>
                             <td className="px-4 py-3.5 text-right">
@@ -5316,36 +5318,39 @@ export default function PharmacyPage() {
                                   </td>
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
-                                      className={`${regular === 0
-                                        ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        : regular <= 10
-                                          ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                          : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        }`}
+                                      className={`${
+                                        regular === 0
+                                          ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          : regular <= 10
+                                            ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                            : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                      }`}
                                     >
                                       {regular}
                                     </span>
                                   </td>
                                   <td className="px-5 py-4 text-center font-semibold">
                                     <span
-                                      className={`${scheme === 0
-                                        ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        : scheme <= 10
-                                          ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                          : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
-                                        }`}
+                                      className={`${
+                                        scheme === 0
+                                          ? "text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                          : scheme <= 10
+                                            ? "text-amber-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                            : "text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-xl text-[10px]"
+                                      }`}
                                     >
                                       {scheme}
                                     </span>
                                   </td>
                                   <td className="px-5 py-4 text-center font-bold">
                                     <span
-                                      className={`${total === 0
-                                        ? "text-red-600 text-sm"
-                                        : total <= 10
-                                          ? "text-amber-600 text-sm"
-                                          : "text-default-800 text-sm"
-                                        }`}
+                                      className={`${
+                                        total === 0
+                                          ? "text-red-600 text-sm"
+                                          : total <= 10
+                                            ? "text-amber-600 text-sm"
+                                            : "text-default-800 text-sm"
+                                      }`}
                                     >
                                       {total}
                                     </span>
@@ -5674,47 +5679,47 @@ export default function PharmacyPage() {
 
                       {(!settingsForm.enabledPaymentMethods ||
                         settingsForm.enabledPaymentMethods.length === 0) && (
-                          <div className="text-center py-8">
-                            <div className="text-default-400 mb-4">
-                              <svg
-                                className="mx-auto opacity-50"
-                                fill="none"
-                                height="48"
-                                stroke="currentColor"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                viewBox="0 0 24 24"
-                                width="48"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <rect
-                                  height="16"
-                                  rx="2"
-                                  ry="2"
-                                  width="22"
-                                  x="1"
-                                  y="4"
-                                />
-                                <line x1="1" x2="23" y1="10" y2="10" />
-                              </svg>
-                            </div>
-                            <h3 className="text-stat-sm font-medium text-default-700 mb-2">
-                              No payment methods configured
-                            </h3>
-                            <p className="text-default-500 mb-4">
-                              Add payment methods to enable different payment
-                              options for purchases.
-                            </p>
-                            <Button
-                              color="primary"
-                              startContent={<IoAddOutline />}
-                              onPress={addPaymentMethodModalState.open}
+                        <div className="text-center py-8">
+                          <div className="text-default-400 mb-4">
+                            <svg
+                              className="mx-auto opacity-50"
+                              fill="none"
+                              height="48"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              viewBox="0 0 24 24"
+                              width="48"
+                              xmlns="http://www.w3.org/2000/svg"
                             >
-                              Add Your First Payment Method
-                            </Button>
+                              <rect
+                                height="16"
+                                rx="2"
+                                ry="2"
+                                width="22"
+                                x="1"
+                                y="4"
+                              />
+                              <line x1="1" x2="23" y1="10" y2="10" />
+                            </svg>
                           </div>
-                        )}
+                          <h3 className="text-stat-sm font-medium text-default-700 mb-2">
+                            No payment methods configured
+                          </h3>
+                          <p className="text-default-500 mb-4">
+                            Add payment methods to enable different payment
+                            options for purchases.
+                          </p>
+                          <Button
+                            color="primary"
+                            startContent={<IoAddOutline />}
+                            onPress={addPaymentMethodModalState.open}
+                          >
+                            Add Your First Payment Method
+                          </Button>
+                        </div>
+                      )}
                     </CardBody>
                   </Card>
 
@@ -6038,12 +6043,13 @@ export default function PharmacyPage() {
                                   Net Quantity
                                 </p>
                                 <p
-                                  className={`text-stat-sm font-semibold mt-1 ${netQuantity > 0
-                                    ? "text-success"
-                                    : netQuantity < 0
-                                      ? "text-danger"
-                                      : "text-default-600"
-                                    }`}
+                                  className={`text-stat-sm font-semibold mt-1 ${
+                                    netQuantity > 0
+                                      ? "text-success"
+                                      : netQuantity < 0
+                                        ? "text-danger"
+                                        : "text-default-600"
+                                  }`}
                                 >
                                   {netQuantity}
                                 </p>
@@ -6094,16 +6100,16 @@ export default function PharmacyPage() {
                                   <TableCell>
                                     <div className="text-sm">
                                       {transaction.date instanceof Date &&
-                                        !isNaN(transaction.date.getTime())
+                                      !isNaN(transaction.date.getTime())
                                         ? format(
-                                          transaction.date,
-                                          "MMM dd, yyyy",
-                                        )
+                                            transaction.date,
+                                            "MMM dd, yyyy",
+                                          )
                                         : "N/A"}
                                     </div>
                                     <div className="text-xs text-default-500">
                                       {transaction.date instanceof Date &&
-                                        !isNaN(transaction.date.getTime())
+                                      !isNaN(transaction.date.getTime())
                                         ? format(transaction.date, "hh:mm a")
                                         : "N/A"}
                                     </div>
@@ -6134,10 +6140,11 @@ export default function PharmacyPage() {
                                   <TableCell>{transaction.party}</TableCell>
                                   <TableCell>
                                     <span
-                                      className={`font-medium ${transaction.quantity < 0
-                                        ? "text-danger"
-                                        : "text-success"
-                                        }`}
+                                      className={`font-medium ${
+                                        transaction.quantity < 0
+                                          ? "text-danger"
+                                          : "text-success"
+                                      }`}
                                     >
                                       {transaction.quantity > 0 ? "+" : ""}
                                       {transaction.quantity}
@@ -6174,15 +6181,15 @@ export default function PharmacyPage() {
                                         )}
                                         {transaction.expiryDate <
                                           new Date() && (
-                                            <Chip
-                                              className="ml-1"
-                                              color="danger"
-                                              size="sm"
-                                              variant="flat"
-                                            >
-                                              Expired
-                                            </Chip>
-                                          )}
+                                          <Chip
+                                            className="ml-1"
+                                            color="danger"
+                                            size="sm"
+                                            variant="flat"
+                                          >
+                                            Expired
+                                          </Chip>
+                                        )}
                                       </div>
                                     ) : (
                                       <span className="text-default-400">
@@ -6558,12 +6565,12 @@ export default function PharmacyPage() {
                                             purchase.paymentStatus === "paid"
                                               ? "success"
                                               : purchase.paymentStatus ===
-                                                "unpaid" ||
-                                                purchase.paymentStatus ===
-                                                "pending"
+                                                    "unpaid" ||
+                                                  purchase.paymentStatus ===
+                                                    "pending"
                                                 ? "danger"
                                                 : purchase.paymentStatus ===
-                                                  "partial"
+                                                    "partial"
                                                   ? "warning"
                                                   : "default"
                                           }
@@ -6778,7 +6785,7 @@ export default function PharmacyPage() {
 
                       {/* Daily Purchases Report Table */}
                       {refillTransactions.length === 0 &&
-                        !isLoadingRefillTransactions ? (
+                      !isLoadingRefillTransactions ? (
                         <Card>
                           <CardBody>
                             <div className="text-center py-12">
@@ -6992,10 +6999,7 @@ export default function PharmacyPage() {
                     <div className="flex-1 h-px bg-[rgb(var(--color-border))]" />
                   </div>
                   <div
-                    className={clsx(
-                      "grid gap-3",
-                      "grid-cols-1 md:grid-cols-2",
-                    )}
+                    className={clsx("grid gap-3", "grid-cols-1 md:grid-cols-2")}
                   >
                     <CustomSelect
                       required
@@ -7213,13 +7217,13 @@ export default function PharmacyPage() {
                                 items={
                                   item.type === "medicine"
                                     ? medicines.map((m) => ({
-                                      id: m.id,
-                                      primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
-                                    }))
+                                        id: m.id,
+                                        primary: `${m.name} • NPR ${(m.price || 0).toLocaleString()}`,
+                                      }))
                                     : items.map((i) => ({
-                                      id: i.id,
-                                      primary: i.name,
-                                    }))
+                                        id: i.id,
+                                        primary: i.name,
+                                      }))
                                 }
                                 label={`${item.type === "medicine" ? "Medicine" : "Item"}`}
                                 placeholder={`Search ${item.type}…`}
@@ -8059,12 +8063,13 @@ export default function PharmacyPage() {
                             </TableCell>
                             <TableCell>
                               <span
-                                className={`font-semibold ${entry.balanceAmount > 0
-                                  ? "text-danger"
-                                  : entry.balanceAmount < 0
-                                    ? "text-success"
-                                    : "text-default-600"
-                                  }`}
+                                className={`font-semibold ${
+                                  entry.balanceAmount > 0
+                                    ? "text-danger"
+                                    : entry.balanceAmount < 0
+                                      ? "text-success"
+                                      : "text-default-600"
+                                }`}
                               >
                                 NPR{" "}
                                 {Math.round(

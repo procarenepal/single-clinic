@@ -102,8 +102,7 @@ export default function PatientDetailPage() {
       const patientData = await patientService.getPatientById(patientId);
 
       // Authorization Check: Doctors should only view patients assigned to them
-      const isAdmin =
-        userData?.role === "clinic-admin" || userData?.role === "system-owner";
+      const isAdmin = userData?.role === "clinic-admin";
 
       if (!isAdmin && userData?.email) {
         try {

@@ -46,7 +46,7 @@ import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
-import { sendCheckInSMS, sendConfirmedSMS } from "@/services/sendMessageService";
+import { sendConfirmedSMS } from "@/services/sendMessageService";
 import {
   Appointment,
   Patient,
@@ -271,8 +271,7 @@ export default function AppointmentsPage() {
       setError(null);
       try {
         const userRole = userData.role;
-        const isAdmin =
-          userRole === "clinic-admin" || userRole === "system-owner";
+        const isAdmin = userRole === "clinic-admin";
         let doctorId: string | null = null;
         let isLocalExpert = false;
 

@@ -7,6 +7,7 @@ import {
   IoCalendarOutline,
   IoTimeOutline,
 } from "react-icons/io5";
+import { IoAddOutline, IoTrashOutline } from "react-icons/io5";
 
 import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
@@ -32,8 +33,13 @@ import {
   validateADDate,
   debounce,
 } from "@/utils/dateConverterApi";
-import { Appointment, Patient, AppointmentType, Doctor, Expert } from "@/types/models";
-import { IoAddOutline, IoTrashOutline } from "react-icons/io5";
+import {
+  Appointment,
+  Patient,
+  AppointmentType,
+  Doctor,
+  Expert,
+} from "@/types/models";
 
 export type ClinicianType = "doctor" | "expert";
 
@@ -78,10 +84,10 @@ function CustomSearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-        (i.primary + (i.secondary || ""))
-          .toLowerCase()
-          .includes(q.toLowerCase()),
-      )
+          (i.primary + (i.secondary || ""))
+            .toLowerCase()
+            .includes(q.toLowerCase()),
+        )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -578,6 +584,7 @@ export default function NewAppointmentPage() {
           description: "Please select a patient.",
           color: "danger",
         });
+
         return;
       }
       if (!appointmentInfo.appointmentDate) {
@@ -586,6 +593,7 @@ export default function NewAppointmentPage() {
           description: "Please select a date.",
           color: "danger",
         });
+
         return;
       }
       if (appointmentRows.length === 0) {
@@ -594,6 +602,7 @@ export default function NewAppointmentPage() {
           description: "Please add at least one appointment.",
           color: "danger",
         });
+
         return;
       }
 
@@ -623,7 +632,6 @@ export default function NewAppointmentPage() {
       // Generate Invoice first if we have billable items
       const selPat = patients.find((p) => p.id === appointmentInfo.patientId);
 
-      let invoiceNo = "";
       let newBillingId = "";
       const billingItems: any[] = [];
       let totalAmount = 0;
@@ -659,8 +667,6 @@ export default function NewAppointmentPage() {
       }
 
       if (billingItems.length > 0) {
-        invoiceNo =
-          await appointmentBillingService.generateInvoiceNumber(clinicId);
         const processedReferrals: any[] = [];
 
         if (selPat?.referrals && Array.isArray(selPat.referrals)) {
@@ -683,7 +689,7 @@ export default function NewAppointmentPage() {
         const firstClinicianItem = billingItems[0];
 
         const billingData = {
-          invoiceNumber: invoiceNo,
+          invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
           clinicId: clinicId,
           branchId: defaultBranchId || userData?.branchId || clinicId,
           patientId: selPat?.id || appointmentInfo.patientId,
@@ -712,11 +718,11 @@ export default function NewAppointmentPage() {
           taxPercentage: 0, // Note: You can compute VAT here based on ClinicSettings
           taxAmount: 0,
           totalAmount: totalAmount,
-          
+
           buyerPan: appointmentInfo.buyerPan.trim(),
           cbmsSyncStatus: "pending",
           isPrinted: false,
-          
+
           status: "draft" as const,
           paymentStatus: "unpaid" as const,
           paidAmount: 0,
@@ -724,9 +730,11 @@ export default function NewAppointmentPage() {
           createdBy: currentUser?.uid || "system",
         };
 
-        newBillingId = await appointmentBillingService.createBilling(
+        const created = await appointmentBillingService.createBilling(
           billingData as any,
         );
+
+        newBillingId = created.id;
       }
 
       // Create appointments
@@ -906,7 +914,9 @@ export default function NewAppointmentPage() {
                 !appointmentInfo.patientId ||
                 !appointmentInfo.appointmentDate ||
                 appointmentRows.length === 0 ||
-                appointmentRows.some((row) => !row.clinicianId || !row.appointmentTypeId)
+                appointmentRows.some(
+                  (row) => !row.clinicianId || !row.appointmentTypeId,
+                )
               }
               type="submit"
             >
@@ -967,7 +977,7 @@ export default function NewAppointmentPage() {
                 }
                 endContent={
                   dateConversionState.isConverting &&
-                    dateConversionState.field === "appointmentBS" ? (
+                  dateConversionState.field === "appointmentBS" ? (
                     <Spinner size="sm" />
                   ) : appointmentInfo.appointmentBS &&
                     dateConversionState.lastConversion.timestamp > 0 ? (
@@ -1010,8 +1020,8 @@ export default function NewAppointmentPage() {
             </h4>
             <Button
               size="sm"
-              variant="bordered"
               type="button"
+              variant="bordered"
               onClick={() => {
                 setAppointmentRows((prev) => [
                   ...prev,
@@ -1039,8 +1049,8 @@ export default function NewAppointmentPage() {
                 {/* Remove button if more than 1 */}
                 {appointmentRows.length > 1 && (
                   <button
-                    type="button"
                     className="absolute -top-3 -right-3 w-7 h-7 bg-red-100 text-red-600 rounded-full flex items-center justify-center border border-red-200 hover:bg-red-200 transition-colors z-10"
+                    type="button"
                     onClick={() => {
                       setAppointmentRows((prev) =>
                         prev.filter((r) => r.id !== row.id),
@@ -1060,6 +1070,7 @@ export default function NewAppointmentPage() {
                     value={row.clinicianType}
                     onChange={(e) => {
                       const newType = e.target.value as "doctor" | "expert";
+
                       setAppointmentRows((prev) =>
                         prev.map((r) =>
                           r.id === row.id
@@ -1080,19 +1091,19 @@ export default function NewAppointmentPage() {
                     items={
                       row.clinicianType === "doctor"
                         ? doctors
-                          .filter((_d: any) => _d.isActive !== false)
-                          .map((d) => ({
-                            id: d.id,
-                            primary: d.name,
-                            secondary: d.speciality,
-                          }))
+                            .filter((_d: any) => _d.isActive !== false)
+                            .map((d) => ({
+                              id: d.id,
+                              primary: d.name,
+                              secondary: d.speciality,
+                            }))
                         : experts
-                          .filter((_e: any) => _e.isActive !== false)
-                          .map((e) => ({
-                            id: e.id,
-                            primary: e.name,
-                            secondary: e.speciality || "Expert",
-                          }))
+                            .filter((_e: any) => _e.isActive !== false)
+                            .map((e) => ({
+                              id: e.id,
+                              primary: e.name,
+                              secondary: e.speciality || "Expert",
+                            }))
                     }
                     label={`Select ${row.clinicianType === "doctor" ? "Doctor" : "Expert"} *`}
                     placeholder={`Search ${row.clinicianType}...`}
@@ -1136,7 +1147,9 @@ export default function NewAppointmentPage() {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     setAppointmentRows((prev) =>
                       prev.map((r) =>
-                        r.id === row.id ? { ...r, startTime: e.target.value } : r,
+                        r.id === row.id
+                          ? { ...r, startTime: e.target.value }
+                          : r,
                       ),
                     );
                   }}

@@ -117,7 +117,9 @@ function SearchSelect({
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const filtered = q
-    ? items.filter((i) => (i.primary || "").toLowerCase().includes(q.toLowerCase()))
+    ? items.filter((i) =>
+        (i.primary || "").toLowerCase().includes(q.toLowerCase()),
+      )
     : items;
   const selected = items.find((i) => i.id === value);
 
@@ -164,29 +166,29 @@ function SearchSelect({
           <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-surface border border-border-base rounded max-h-48 overflow-y-auto shadow-xl">
             {filtered.length === 0
               ? emptyContent || (
-                <p className="px-3 py-2 text-[12px] text-text-muted/60">
-                  No results
-                </p>
-              )
+                  <p className="px-3 py-2 text-[12px] text-text-muted/60">
+                    No results
+                  </p>
+                )
               : filtered.map((i) => (
-                <button
-                  key={i.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-primary/10 ${i.id === value ? "bg-primary/10" : ""}`}
-                  type="button"
-                  onClick={() => {
-                    onChange(i.id);
-                    setQ("");
-                    setOpen(false);
-                  }}
-                >
-                  <p className="text-[12.5px] text-text-main">{i.primary}</p>
-                  {i.secondary && (
-                    <p className="text-[11px] text-text-muted">
-                      {i.secondary}
-                    </p>
-                  )}
-                </button>
-              ))}
+                  <button
+                    key={i.id}
+                    className={`w-full text-left px-3 py-2 hover:bg-primary/10 ${i.id === value ? "bg-primary/10" : ""}`}
+                    type="button"
+                    onClick={() => {
+                      onChange(i.id);
+                      setQ("");
+                      setOpen(false);
+                    }}
+                  >
+                    <p className="text-[12.5px] text-text-main">{i.primary}</p>
+                    {i.secondary && (
+                      <p className="text-[11px] text-text-muted">
+                        {i.secondary}
+                      </p>
+                    )}
+                  </button>
+                ))}
           </div>
         </>
       )}
@@ -606,9 +608,6 @@ export default function PatientBillingTab({
     }
     setSubmitting(true);
     try {
-      const invoiceNumber =
-        await appointmentBillingService.generateInvoiceNumber(clinicId);
-
       // Derive root doctor fields from the first item
       const firstItem = formData.items[0];
       const rootDoctorId = firstItem.doctorId || "";
@@ -619,7 +618,7 @@ export default function PatientBillingTab({
       ) as "regular" | "visitor";
 
       const billingData = {
-        invoiceNumber,
+        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         clinicId,
         branchId: userData?.branchId || "",
         patientId: formData.patientId,
@@ -649,12 +648,12 @@ export default function PatientBillingTab({
         referralPartnerId: referralPartner?.id || "",
         referralCommissionAmount: referralPartner
           ? (calculations.totalAmount *
-            (referralPartner.defaultCommission || 0)) /
-          100
+              (referralPartner.defaultCommission || 0)) /
+            100
           : 0,
       };
-      const billingId =
-        await appointmentBillingService.createBilling(billingData);
+
+      await appointmentBillingService.createBilling(billingData);
 
       // Commissions are now correctly generated ONLY when the invoice is paid via appointmentBillingService.recordPayment.
 
@@ -1097,12 +1096,16 @@ export default function PatientBillingTab({
                             placeholder="Search or seed services..."
                             value={item.appointmentTypeId}
                             onChange={(id) => {
-                              const apptType = appointmentTypes.find((t) => t.id === id);
+                              const apptType = appointmentTypes.find(
+                                (t) => t.id === id,
+                              );
                               const updateObj: any = { appointmentTypeId: id };
+
                               if (apptType) {
                                 updateObj.appointmentTypeName = apptType.name;
                                 updateObj.price = apptType.price;
-                                updateObj.amount = apptType.price * item.quantity;
+                                updateObj.amount =
+                                  apptType.price * item.quantity;
                                 if (apptType.calculateCommission === false) {
                                   updateObj.commission = 0;
                                 }
@@ -1132,14 +1135,19 @@ export default function PatientBillingTab({
                             onChange={(id) => {
                               const d = doctors.find((doc) => doc.id === id);
 
-                              const apptType = appointmentTypes.find((t) => t.id === item.appointmentTypeId);
-                              
+                              const apptType = appointmentTypes.find(
+                                (t) => t.id === item.appointmentTypeId,
+                              );
+
                               updateItem(idx, {
                                 doctorId: id,
                                 doctorName: d?.name || "",
-                                commission: apptType?.calculateCommission === false 
-                                  ? 0 
-                                  : (d?.defaultCommission ?? billingSettings?.defaultCommission ?? 0),
+                                commission:
+                                  apptType?.calculateCommission === false
+                                    ? 0
+                                    : (d?.defaultCommission ??
+                                      billingSettings?.defaultCommission ??
+                                      0),
                               });
                             }}
                           />
@@ -1253,27 +1261,27 @@ export default function PatientBillingTab({
                         ["Subtotal", fmtCur(calculations.subtotal)],
                         ...(calculations.itemDiscountAmount > 0
                           ? [
-                            [
-                              "Service Discounts",
-                              `– ${fmtCur(calculations.itemDiscountAmount)}`,
-                            ],
-                          ]
+                              [
+                                "Service Discounts",
+                                `– ${fmtCur(calculations.itemDiscountAmount)}`,
+                              ],
+                            ]
                           : []),
                         ...(calculations.mainDiscountAmount > 0
                           ? [
-                            [
-                              "Main Discount",
-                              `– ${fmtCur(calculations.mainDiscountAmount)}`,
-                            ],
-                          ]
+                              [
+                                "Main Discount",
+                                `– ${fmtCur(calculations.mainDiscountAmount)}`,
+                              ],
+                            ]
                           : []),
                         ...(billingSettings?.enableTax
                           ? [
-                            [
-                              `${billingSettings.taxLabel} (${billingSettings.defaultTaxPercentage}%)`,
-                              fmtCur(calculations.taxAmount),
-                            ],
-                          ]
+                              [
+                                `${billingSettings.taxLabel} (${billingSettings.defaultTaxPercentage}%)`,
+                                fmtCur(calculations.taxAmount),
+                              ],
+                            ]
                           : []),
                       ].map(([l, v]) => (
                         <div
@@ -1382,16 +1390,16 @@ export default function PatientBillingTab({
             {/* Conditional reference */}
             {availableMethods.find((m) => m.key === paymentForm.method)
               ?.requiresReference && (
-                <FlatInput
-                  hint="Required for this payment method"
-                  label="Transaction Reference *"
-                  placeholder="Transaction ID / cheque number"
-                  value={paymentForm.reference}
-                  onChange={(v) =>
-                    setPaymentForm((p) => ({ ...p, reference: v }))
-                  }
-                />
-              )}
+              <FlatInput
+                hint="Required for this payment method"
+                label="Transaction Reference *"
+                placeholder="Transaction ID / cheque number"
+                value={paymentForm.reference}
+                onChange={(v) =>
+                  setPaymentForm((p) => ({ ...p, reference: v }))
+                }
+              />
+            )}
 
             <FlatInput
               label="Notes"

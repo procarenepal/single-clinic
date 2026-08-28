@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { isToday, isTomorrow, isYesterday, addDays, subDays } from "date-fns";
 
 describe("Patient Follow-ups Logic", () => {

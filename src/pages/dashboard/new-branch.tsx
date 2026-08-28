@@ -31,7 +31,6 @@ import { title } from "@/components/primitives";
 import { useAuthContext } from "@/context/AuthContext";
 import { branchService } from "@/services/branchService";
 import { userService } from "@/services/userService";
-import { impersonationService } from "@/services/impersonationService";
 
 export default function NewBranchPage() {
   const navigate = useNavigate();
@@ -63,8 +62,7 @@ export default function NewBranchPage() {
     },
   });
 
-  const isSystemOwner =
-    userData?.role === "system-owner" || userData?.role === "clinic-admin";
+  const isSystemOwner = userData?.role === "clinic-admin";
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({
@@ -237,13 +235,6 @@ export default function NewBranchPage() {
           branchId: pendingBranchData.branchId, // Assign to specific branch
         },
         adminPassword, // Pass clinic super admin password for re-authentication
-      );
-
-      // Store admin credentials for impersonation purposes
-      await impersonationService.storeCredentials(
-        adminId,
-        pendingBranchData.adminEmail,
-        pendingBranchData.adminPassword,
       );
 
       // Assign full clinic admin role to branch admin (same as individual clinic admins)
@@ -578,8 +569,8 @@ export default function NewBranchPage() {
                   <p className="text-xs text-text-muted">
                     Each branch requires a dedicated administrator who will
                     manage day-to-day operations, staff, and branch-specific
-                    settings. The admin will receive login credentials and can
-                    be impersonated by you if needed.
+                    settings. The admin will receive login credentials for
+                    this branch.
                   </p>
                 </div>
               </div>
@@ -639,10 +630,6 @@ export default function NewBranchPage() {
                     <li>
                       • Admin will be automatically assigned to this specific
                       branch
-                    </li>
-                    <li>
-                      • Credentials will be stored securely for impersonation
-                      support
                     </li>
                     <li>
                       • Admin will have full control over this branch's

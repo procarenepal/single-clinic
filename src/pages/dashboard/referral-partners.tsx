@@ -39,8 +39,7 @@ export default function ReferralPartnersPage() {
   const itemsPerPage = 8;
 
   const branchId = userData?.branchId ?? null;
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" || userData?.role === "system-owner";
+  const isClinicAdmin = userData?.role === "clinic-admin";
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
   const effectiveBranchId =
     branchId ??

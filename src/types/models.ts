@@ -21,6 +21,14 @@ export interface Clinic {
   irdApiUrl?: string; // Live or Test URL
   irdApiUsername?: string; // Taxpayer Portal Username
   irdApiPassword?: string; // Taxpayer Portal Password
+  /**
+   * Whether this clinic is VAT-registered. Defaults to true (existing
+   * behavior) since CBMS is fundamentally a VAT-context system. When
+   * explicitly set false, invoices print IRD Schedule 6's plain "Invoice"
+   * format (income-tax-only businesses) instead of Tax/Abbreviated Tax
+   * Invoice — no Taxable Amount or VAT rows at all.
+   */
+  isVatRegistered?: boolean;
 
   description?: string;
   subscriptionStatus: "active" | "suspended" | "cancelled";
@@ -71,8 +79,8 @@ export interface User {
   displayName: string;
   photoURL?: string;
   phone?: string;
-  clinicId?: string; // null for system-owner
-  branchId?: string; // null for system-owner and system-owner
+  clinicId?: string;
+  branchId?: string;
   role: UserRole;
   isActive: boolean;
   createdAt: Date;
@@ -81,13 +89,7 @@ export interface User {
 }
 
 // Possible user roles in the system
-export type UserRole =
-  | "system-owner"
-  | "clinic-admin"
-  | "staff"
-  | "doctor"
-  | "expert"
-  | "hr";
+export type UserRole = "clinic-admin" | "staff" | "doctor" | "expert" | "hr";
 
 // Clinic Type model for categorizing clinics
 export interface ClinicType {
@@ -97,7 +99,7 @@ export interface ClinicType {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  createdBy: string; // User ID of the creator (system-owner)
+  createdBy: string; // User ID of the creator
 }
 
 // Subscription Plan model for different subscription tiers
@@ -862,10 +864,16 @@ export interface MedicinePurchaseReturn {
   totalAmount: number;
   /** How the refund/credit was given (cash, card, adjustment, etc.) */
   refundMethod?: string;
-  notes?: string;
+  /** Mandatory documented reason for the return — required per IRD's reversal provisions. */
+  notes: string;
   items: MedicinePurchaseReturnItem[];
   createdAt: Date;
   createdBy: string;
+  // IRD CBMS Tracking — mirrors Invoice/AppointmentBilling/PathologyBilling
+  // so a return's actual sync outcome can be audited later, not just logged.
+  javaInvoiceId?: number;
+  irdSynced?: boolean;
+  cbmsResponseCode?: string;
 }
 
 // Purchase Item model for unified purchase handling
@@ -1721,6 +1729,7 @@ export interface AppointmentBilling {
   isCreditNote?: boolean;
   linkedInvoiceId?: string; // ID of the original invoice this credit note reverses
   creditNoteReason?: string;
+  hasCreditNote?: boolean; // set on the ORIGINAL invoice once it has been reversed — prevents issuing a second Credit Note against it
 
   createdAt: Date;
   updatedAt: Date;
@@ -2125,6 +2134,7 @@ export interface PathologyBilling {
   isCreditNote?: boolean;
   linkedInvoiceId?: string; // ID of the original invoice this credit note reverses
   creditNoteReason?: string;
+  hasCreditNote?: boolean; // set on the ORIGINAL invoice once it has been reversed — prevents issuing a second Credit Note against it
 
   // Robust Pathology Workflow Fields
   labReferenceNo?: string; // Internal Lab tracking ID

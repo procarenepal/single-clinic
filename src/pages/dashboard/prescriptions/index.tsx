@@ -166,8 +166,7 @@ export default function PrescriptionsPage() {
   const { clinicId, userData, currentUser, branchId: contextBranchId } = useAuthContext();
 
   const branchId = userData?.branchId ?? contextBranchId ?? null;
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" || userData?.role === "system-owner";
+  const isClinicAdmin = userData?.role === "clinic-admin";
 
   const [prescriptions, setPrescriptions] = useState<ExtendedPrescription[]>(
     [],

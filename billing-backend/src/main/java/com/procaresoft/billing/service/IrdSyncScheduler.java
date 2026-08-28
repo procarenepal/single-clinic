@@ -2,87 +2,91 @@ package com.procaresoft.billing.service;
 
 import com.procaresoft.billing.model.Invoice;
 import com.procaresoft.billing.repository.InvoiceRepository;
-import com.procaresoft.billing.dto.IrdSyncRequestDto;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
+
 import java.util.List;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
+/**
+ * Automated retry for invoices that failed to sync to IRD on creation.
+ *
+ * Backoff: 1min, 5min, 30min, 2h, 12h (attempt index -> delay). After
+ * MAX_ATTEMPTS failures, the invoice is flagged irdNeedsManualReview and no
+ * longer auto-retried — it needs a human to look at it (bad credentials,
+ * IRD outage, permanently malformed data, etc.) rather than retrying forever
+ * silently, which would hide a real compliance gap.
+ */
 @Service
 @RequiredArgsConstructor
 public class IrdSyncScheduler {
 
+    private static final Logger log = LoggerFactory.getLogger(IrdSyncScheduler.class);
+    private static final int MAX_ATTEMPTS = 5;
+    private static final long[] BACKOFF_MINUTES = { 1, 5, 30, 120, 720 };
+
     private final InvoiceRepository invoiceRepository;
     private final IrdCbmsService irdCbmsService;
 
-    @Value("${ird.api.enabled:false}")
-    private boolean irdEnabled;
-
-    @Value("${ird.api.url:}")
-    private String irdApiUrl;
-
-    @Value("${ird.api.username:}")
-    private String irdApiUsername;
-
-    @Value("${ird.api.password:}")
-    private String irdApiPassword;
-    
-    @Value("${ird.api.seller-pan:}")
-    private String sellerPan;
-    
-    @Value("${ird.api.fiscal-year:80/81}")
-    private String fiscalYear;
-
-    // Run every 60 seconds (60000 ms)
     @Scheduled(fixedDelayString = "60000")
     public void retryFailedIrdSyncs() {
-        // Firebase handles offline syncs via Firestore caching and retry buttons (Option A).
-        // Disable Java offline syncing completely.
-        if (true) return;
-        
-        if (!irdEnabled) {
+        List<Invoice> failedInvoices = invoiceRepository.findByIrdSyncedFalse();
+        if (failedInvoices.isEmpty()) {
             return;
         }
 
-        List<Invoice> failedInvoices = invoiceRepository.findByIrdSyncedFalse();
-        if (failedInvoices.isEmpty()) {
-            return; // Nothing to sync
-        }
-
-        System.out.println("[IRD Scheduler] Found " + failedInvoices.size() + " failed invoices. Attempting sync...");
-
         for (Invoice invoice : failedInvoices) {
-            try {
-                IrdSyncRequestDto requestDto = new IrdSyncRequestDto();
-                requestDto.setIrdEnabled(true);
-                requestDto.setIrdApiUrl(irdApiUrl);
-                requestDto.setIrdApiUsername(irdApiUsername);
-                requestDto.setIrdApiPassword(irdApiPassword);
-                requestDto.setSellerPan(sellerPan);
-                requestDto.setFiscalYear(fiscalYear);
-                
-                // Assuming negative total amount means it's a return
-                boolean isReturn = invoice.getTotalAmount() != null && invoice.getTotalAmount().signum() < 0;
-                requestDto.setReturn(isReturn);
+            if (invoice.isIrdNeedsManualReview()) {
+                continue;
+            }
+            if (invoice.getFiscalYear() == null) {
+                // Legacy rows created before fiscalYear was tracked on Invoice — can't
+                // safely resolve which IRD fiscal-year bucket to submit under.
+                continue;
+            }
+            if (!isDueForRetry(invoice)) {
+                continue;
+            }
 
-                IrdCbmsService.SyncResult syncResult = irdCbmsService.syncInvoice(invoice, requestDto);
-                
+            try {
+                boolean isReturn = invoice.getTotalAmount() != null && invoice.getTotalAmount().signum() < 0;
+                IrdCbmsService.SyncResult syncResult = irdCbmsService.syncInvoice(invoice, invoice.getFiscalYear(), isReturn);
+
+                invoice.setIrdSyncAttempts(invoice.getIrdSyncAttempts() + 1);
+                invoice.setIrdLastAttemptAt(LocalDateTime.now());
+                invoice.setCbmsResponseCode(syncResult.getResponseCode());
+
                 if (syncResult.isSuccess()) {
                     invoice.setIrdSynced(true);
                     invoice.setIrdSyncDate(LocalDateTime.now());
-                    invoice.setCbmsResponseCode(syncResult.getResponseCode());
-                    invoiceRepository.save(invoice);
-                    System.out.println("[IRD Scheduler] Successfully synced invoice: " + invoice.getInvoiceNumber());
+                    log.info("Successfully synced invoice: {}", invoice.getInvoiceNumber());
                 } else {
-                    invoice.setCbmsResponseCode(syncResult.getResponseCode());
-                    invoiceRepository.save(invoice);
-                    System.err.println("[IRD Scheduler] Failed to sync invoice: " + invoice.getInvoiceNumber() + ". Reason: " + syncResult.getMessage());
+                    log.warn("Failed to sync invoice {} (attempt {}/{}): {}", invoice.getInvoiceNumber(),
+                            invoice.getIrdSyncAttempts(), MAX_ATTEMPTS, syncResult.getMessage());
+                    if (invoice.getIrdSyncAttempts() >= MAX_ATTEMPTS) {
+                        invoice.setIrdNeedsManualReview(true);
+                        log.error("Invoice {} exceeded {} IRD sync attempts — flagged for manual review",
+                                invoice.getInvoiceNumber(), MAX_ATTEMPTS);
+                    }
                 }
+                invoiceRepository.save(invoice);
             } catch (Exception e) {
-                System.err.println("[IRD Scheduler] Error processing invoice " + invoice.getInvoiceNumber() + ": " + e.getMessage());
+                log.error("Error processing invoice {}", invoice.getInvoiceNumber(), e);
             }
         }
+    }
+
+    private boolean isDueForRetry(Invoice invoice) {
+        if (invoice.getIrdLastAttemptAt() == null) {
+            return true;
+        }
+        int attemptIndex = Math.min(invoice.getIrdSyncAttempts(), BACKOFF_MINUTES.length - 1);
+        long dueInMinutes = BACKOFF_MINUTES[attemptIndex];
+        long minutesSinceLastAttempt = ChronoUnit.MINUTES.between(invoice.getIrdLastAttemptAt(), LocalDateTime.now());
+        return minutesSinceLastAttempt >= dueInMinutes;
     }
 }

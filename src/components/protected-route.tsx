@@ -49,14 +49,6 @@ export function ProtectedRoute({
     }
 
     const runId = ++runningCheckRef.current;
-    const isSystemOwner = userData?.role === "system-owner";
-
-    // Fast path: system owner always allowed
-    if (isSystemOwner) {
-      setPermissionAllowed(true);
-
-      return;
-    }
 
     // Try synchronous cache first
     if (requiredPageId) {

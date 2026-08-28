@@ -33,8 +33,7 @@ import SettingsTab from "@/pages/dashboard/medicine-management/tabs/SettingsTab"
 
 export default function MedicineManagementPage() {
   const { userData, clinicId, branchId } = useAuthContext();
-  const isClinicAdmin =
-    userData?.role === "system-owner" || userData?.role === "clinic-admin";
+  const isClinicAdmin = userData?.role === "clinic-admin";
   const [selectedTab, setSelectedTab] = useState("medicines");
   const [isLoading, setIsLoading] = useState(true);
   const [clinicSettings, setClinicSettings] = useState<ClinicSettings | null>(

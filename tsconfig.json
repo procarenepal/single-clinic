@@ -9,11 +9,9 @@
     ],
     "module": "ESNext",
     "skipLibCheck": true,
-    "ignoreDeprecations": "5.0",
-    "baseUrl": "./src",
     "paths": {
       "@/*": [
-        "./*"
+        "./src/*"
       ]
     },
     /* Bundler mode */

@@ -25,6 +25,12 @@ export interface CombinedIrdRecord {
   taxableAmount: number;
   taxAmount: number;
   taxExemptAmount: number;
+  /**
+   * Zero-rated export sales — required as its own column by IRD's Schedule 6
+   * Sales Book format. Always 0 today: nothing in the app currently marks a
+   * sale as an export, so there's no data source to populate this from yet.
+   */
+  exportSales: number;
   isCreditNote: boolean;
   irdSynced: boolean;
   irdSyncDate?: string;
@@ -93,12 +99,13 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
         bsDate: formatNepaliDate(b.invoiceDate),
         invoiceNumber: b.invoiceNumber || "N/A",
         buyerName: b.patientName || "Cash Sales",
-        buyerPan: "",
+        buyerPan: b.buyerPan || b.patientPanVat || "",
         totalAmount: total,
         discount,
         taxableAmount: taxable,
         taxAmount: tax,
         taxExemptAmount: exempt,
+        exportSales: 0,
         isCreditNote: b.isCreditNote || false,
         irdSynced: !!b.irdSynced,
         irdSyncDate: b.irdSyncDate ? new Date(b.irdSyncDate).toLocaleString() : undefined,
@@ -122,12 +129,13 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
         bsDate: formatNepaliDate(b.invoiceDate),
         invoiceNumber: b.invoiceNumber || "N/A",
         buyerName: b.patientName || "Cash Sales",
-        buyerPan: "",
+        buyerPan: b.patientPanVat || "",
         totalAmount: total,
         discount,
         taxableAmount: taxable,
         taxAmount: tax,
         taxExemptAmount: exempt,
+        exportSales: 0,
         isCreditNote: b.isCreditNote || false,
         irdSynced: !!b.irdSynced,
         irdSyncDate: b.irdSyncDate ? new Date(b.irdSyncDate).toLocaleString() : undefined,
@@ -154,12 +162,13 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
         bsDate: formatNepaliDate(dateVal),
         invoiceNumber: p.purchaseNo || "N/A",
         buyerName: p.patientName || "Cash Sales",
-        buyerPan: "",
+        buyerPan: p.patientPanVat || "",
         totalAmount: total,
         discount,
         taxableAmount: taxable,
         taxAmount: tax,
         taxExemptAmount: exempt,
+        exportSales: 0,
         isCreditNote: false, // Original purchase is never a credit note
         irdSynced: !!p.irdSynced,
         irdSyncDate: p.irdSyncDate ? new Date(p.irdSyncDate).toLocaleString() : undefined,
@@ -185,12 +194,13 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
             bsDate: formatNepaliDate(retDateVal),
             invoiceNumber: p.purchaseNo || "N/A",
             buyerName: p.patientName || "Cash Sales",
-            buyerPan: "",
+            buyerPan: p.patientPanVat || "",
             totalAmount: retTotal,
             discount: 0,
             taxableAmount: retTaxable,
             taxAmount: retTax,
             taxExemptAmount: retExempt,
+            exportSales: 0,
             isCreditNote: true, // This is a return/credit note
             irdSynced: true, // Note: Individual return sync status is not tracked in model
             irdSyncDate: p.irdSyncDate ? new Date(p.irdSyncDate).toLocaleString() : undefined,
@@ -236,8 +246,9 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
         taxable: acc.taxable + r.taxableAmount,
         vat: acc.vat + r.taxAmount,
         exempt: acc.exempt + r.taxExemptAmount,
+        exportSales: acc.exportSales + r.exportSales,
       }),
-      { totalSales: 0, discount: 0, taxable: 0, vat: 0, exempt: 0 }
+      { totalSales: 0, discount: 0, taxable: 0, vat: 0, exempt: 0, exportSales: 0 }
     );
   }, [filteredRecords]);
 
@@ -256,9 +267,10 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
       "Buyer PAN": row.buyerPan || "-",
       "Total Amount (NPR)": row.totalAmount.toFixed(2),
       "Discount (NPR)": row.discount.toFixed(2),
+      "Non Taxable Sales (NPR)": row.taxExemptAmount.toFixed(2),
+      "Export Sales (NPR)": row.exportSales.toFixed(2),
       "Taxable Amount (NPR)": row.taxableAmount.toFixed(2),
       "13% VAT (NPR)": row.taxAmount.toFixed(2),
-      "Tax Exempt Sales (NPR)": row.taxExemptAmount.toFixed(2),
       "IRD Synced": row.irdSynced ? "Yes" : "Pending",
       "CBMS Response Code": row.cbmsResponseCode || "-",
     }));
@@ -270,7 +282,8 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
     const colWidths = [
       { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 14 },
       { wch: 25 }, { wch: 15 }, { wch: 18 }, { wch: 15 },
-      { wch: 18 }, { wch: 14 }, { wch: 20 }, { wch: 12 }, { wch: 18 }
+      { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 14 },
+      { wch: 12 }, { wch: 18 }
     ];
     worksheet["!cols"] = colWidths;
 
@@ -361,7 +374,7 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="p-3 bg-mountain-50 border border-mountain-200 rounded-lg">
           <p className="text-[11px] font-medium text-mountain-500 uppercase">Total Sales</p>
           <p className="text-sm font-bold text-mountain-900">NPR {totals.totalSales.toLocaleString()}</p>
@@ -378,9 +391,13 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
           <p className="text-[11px] font-medium text-mountain-500 uppercase">13% VAT Collected</p>
           <p className="text-sm font-bold text-success-700">NPR {totals.vat.toLocaleString()}</p>
         </div>
-        <div className="p-3 bg-mountain-50 border border-mountain-200 rounded-lg col-span-2 sm:col-span-1">
-          <p className="text-[11px] font-medium text-mountain-500 uppercase">Tax Exempt Sales</p>
+        <div className="p-3 bg-mountain-50 border border-mountain-200 rounded-lg">
+          <p className="text-[11px] font-medium text-mountain-500 uppercase">Non Taxable Sales</p>
           <p className="text-sm font-bold text-mountain-700">NPR {totals.exempt.toLocaleString()}</p>
+        </div>
+        <div className="p-3 bg-mountain-50 border border-mountain-200 rounded-lg">
+          <p className="text-[11px] font-medium text-mountain-500 uppercase">Export Sales</p>
+          <p className="text-sm font-bold text-mountain-700">NPR {totals.exportSales.toLocaleString()}</p>
         </div>
       </div>
 
@@ -406,6 +423,8 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
                 <th>Buyer PAN</th>
                 <th className="text-right">Total (NPR)</th>
                 <th className="text-right">Discount</th>
+                <th className="text-right">Non-Taxable</th>
+                <th className="text-right">Export</th>
                 <th className="text-right">Taxable</th>
                 <th className="text-right">13% VAT</th>
                 <th className="text-center">IRD Status</th>
@@ -414,7 +433,7 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
             <tbody>
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-6 text-mountain-400 font-medium">
+                  <td colSpan={12} className="text-center py-6 text-mountain-400 font-medium">
                     No records found matching the current filters.
                   </td>
                 </tr>
@@ -442,6 +461,8 @@ export const IrdAnnexureReport: React.FC<IrdAnnexureReportProps> = ({
                     <td>{row.buyerPan || "-"}</td>
                     <td className="text-right font-semibold">{row.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     <td className="text-right text-warning-700">{row.discount > 0 ? row.discount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "-"}</td>
+                    <td className="text-right">{row.taxExemptAmount > 0 ? row.taxExemptAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "-"}</td>
+                    <td className="text-right">{row.exportSales > 0 ? row.exportSales.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "-"}</td>
                     <td className="text-right">{row.taxableAmount > 0 ? row.taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "-"}</td>
                     <td className="text-right text-success-700">{row.taxAmount > 0 ? row.taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "-"}</td>
                     <td className="text-center whitespace-nowrap">

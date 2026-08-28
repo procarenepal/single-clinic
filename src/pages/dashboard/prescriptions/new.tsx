@@ -313,8 +313,7 @@ export default function NewPrescriptionPage() {
 
   // Resolve logged-in doctor's own ID by matching email (null = admin/non-doctor sees all)
   const loggedInDoctorId = React.useMemo(() => {
-    const isAdmin =
-      userData?.role === "clinic-admin" || userData?.role === "system-owner";
+    const isAdmin = userData?.role === "clinic-admin";
 
     if (isAdmin) return null;
     const matched = doctors.find(
@@ -1095,9 +1094,6 @@ export default function NewPrescriptionPage() {
             ? primaryPartner.commissionAmount
             : undefined;
 
-          const invoiceNo =
-            await appointmentBillingService.generateInvoiceNumber(clinicId!);
-
           const billingItem = {
             id: crypto.randomUUID(),
             appointmentTypeId: apt.appointmentTypeId || "manual-gp-fee",
@@ -1111,7 +1107,7 @@ export default function NewPrescriptionPage() {
           };
 
           const billingData = {
-            invoiceNumber: invoiceNo,
+            invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
             clinicId: clinicId!,
             branchId: effectiveBranchId ?? clinicId!,
             patientId: patientId,
@@ -1145,8 +1141,8 @@ export default function NewPrescriptionPage() {
             createdBy: currentUser,
           };
 
-          billingId =
-            await appointmentBillingService.createBilling(billingData);
+          ({ id: billingId } =
+            await appointmentBillingService.createBilling(billingData));
 
           // Commission generation is now handled safely by appointmentBillingService.recordPayment when the invoice is actually paid.
         }
@@ -1262,16 +1258,13 @@ export default function NewPrescriptionPage() {
           const pat = patients.find((p) => p.id === patientId);
           const docInfo = doctors.find((d) => d.id === doctorId);
 
-          const pathologyInvoiceNo =
-            await pathologyBillingService.generateInvoiceNumber(clinicId!);
-
           const subtotal = selectedPathologyTests.reduce(
             (sum, t) => sum + t.price,
             0,
           );
 
           const draftPathologyBilling = {
-            invoiceNumber: pathologyInvoiceNo,
+            invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
             clinicId: clinicId!,
             branchId: effectiveBranchId ?? clinicId!,
             patientId,
@@ -1435,9 +1428,6 @@ export default function NewPrescriptionPage() {
               ? primaryPartner.commissionAmount
               : undefined;
 
-            const invoiceNo =
-              await appointmentBillingService.generateInvoiceNumber(clinicId!);
-
             const billingItem = {
               id: crypto.randomUUID(),
               appointmentTypeId: apt.appointmentTypeId || "manual-gp-fee",
@@ -1451,7 +1441,7 @@ export default function NewPrescriptionPage() {
             };
 
             const billingData = {
-              invoiceNumber: invoiceNo,
+              invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
               clinicId: clinicId!,
               branchId: effectiveBranchId ?? clinicId!,
               patientId: patientId,
@@ -1485,7 +1475,7 @@ export default function NewPrescriptionPage() {
               createdBy: currentUser,
             };
 
-            const billingId =
+            const { id: billingId } =
               await appointmentBillingService.createBilling(billingData);
 
             // Commission generation is now handled safely by appointmentBillingService.recordPayment when the invoice is actually paid.

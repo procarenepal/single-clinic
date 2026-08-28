@@ -24,7 +24,6 @@ import { useAuthContext } from "@/context/AuthContext";
 import { branchService } from "@/services/branchService";
 import { clinicService } from "@/services/clinicService";
 import { userService } from "@/services/userService";
-import { impersonationService } from "@/services/impersonationService";
 import { Branch, Clinic, User } from "@/types/models";
 
 type BranchWithAdmin = Branch & { admin?: User | null };
@@ -51,8 +50,7 @@ export default function BranchManagementPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
 
-  const isSystemOwner =
-    userData?.role === "system-owner" || userData?.role === "clinic-admin";
+  const isSystemOwner = userData?.role === "clinic-admin";
 
   useEffect(() => {
     loadData();
@@ -149,11 +147,6 @@ export default function BranchManagementPage() {
         adminPassword,
       );
 
-      await impersonationService.storeCredentials(
-        adminId,
-        adminFormData.email,
-        adminFormData.password,
-      );
       addToast({
         title: "Success",
         description: "Branch admin created successfully",
@@ -747,8 +740,7 @@ export default function BranchManagementPage() {
                     </p>
                     <p className="text-xs text-teal-700 mt-1">
                       The new admin will have full access to manage this
-                      branch's operations, staff, and data. Admin credentials
-                      will be stored for impersonation purposes.
+                      branch's operations, staff, and data.
                     </p>
                   </div>
                 </div>

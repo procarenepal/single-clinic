@@ -1,5 +1,6 @@
 import axios from "axios";
 import NepaliDate from "nepali-datetime";
+
 import { ClinicSettings, Clinic } from "../types/models";
 
 export interface IrdBillPayload {
@@ -38,9 +39,11 @@ export const getNepaliFiscalYear = (date: Date | string): string => {
   // Fiscal year in Nepal starts from Shrawan (4th month)
   if (bsMonth >= 4) {
     const nextYear = bsYear + 1;
+
     return `${bsYear}.${nextYear.toString().substring(2)}`;
   } else {
     const prevYear = bsYear - 1;
+
     return `${prevYear}.${bsYear.toString().substring(2)}`;
   }
 };
@@ -53,6 +56,7 @@ const formatIrdDate = (date: Date | string): string => {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
+
   return `${year}.${month}.${day}`;
 };
 
@@ -82,19 +86,38 @@ export const syncInvoiceToIRD = async ({
   invoiceData,
   isReturn = false,
   panNumberOverride,
-}: SyncInvoiceParams): Promise<{ success: boolean; responseCode?: string; message?: string }> => {
+}: SyncInvoiceParams): Promise<{
+  success: boolean;
+  responseCode?: string;
+  message?: string;
+}> => {
   try {
-    if (!clinicSettings.irdEnabled) {
+    // irdEnabled/credentials live on the Clinic document — that's what
+    // Clinic Settings > IRD CBMS Configuration actually writes to, not
+    // ClinicSettings (which has its own same-named but always-unset field).
+    if (!clinic.irdEnabled) {
       return { success: false, message: "IRD Sync is disabled in settings." };
     }
 
-    if (!clinicSettings.irdApiUrl || !clinicSettings.irdApiUsername || !clinicSettings.irdApiPassword) {
-      return { success: false, message: "IRD API credentials are not fully configured." };
+    if (
+      !clinic.irdApiUrl ||
+      !clinic.irdApiUsername ||
+      !clinic.irdApiPassword
+    ) {
+      return {
+        success: false,
+        message: "IRD API credentials are not fully configured.",
+      };
     }
 
     const effectivePan = clinic.panNumber || panNumberOverride;
+
     if (!effectivePan) {
-      return { success: false, message: "Clinic PAN is required for IRD sync. Please set PAN in Clinic Settings or Print Layout." };
+      return {
+        success: false,
+        message:
+          "Clinic PAN is required for IRD sync. Please set PAN in Clinic Settings or Print Layout.",
+      };
     }
 
     const vat = invoiceData.taxAmount || 0;
@@ -110,8 +133,8 @@ export const syncInvoiceToIRD = async ({
     }
 
     const payload: IrdBillPayload = {
-      username: clinicSettings.irdApiUsername,
-      password: clinicSettings.irdApiPassword,
+      username: clinic.irdApiUsername,
+      password: clinic.irdApiPassword,
       seller_pan: effectivePan,
       buyer_pan: invoiceData.buyerPan || "",
       buyer_name: invoiceData.buyerName || "Cash Sales",
@@ -133,6 +156,17 @@ export const syncInvoiceToIRD = async ({
       datetimeClient: new Date().toISOString(),
     };
 
+    // An unconfigured environment must fail loudly rather than silently
+    // succeed via mock — a clinic admin who never chose an environment
+    // should not mistake a fake "success" for a real IRD sync.
+    if (!clinic.irdEnvironment && !clinic.irdApiUrl) {
+      return {
+        success: false,
+        message:
+          "IRD environment is not configured. Set Live/Sandbox/Mock in Clinic Settings before syncing.",
+      };
+    }
+
     // Choose endpoint based on if it's a regular bill or a sales return
     // Auto-resolve base URL from irdEnvironment if no manual URL is set
     const IRD_ENDPOINTS: Record<string, string> = {
@@ -140,18 +174,30 @@ export const syncInvoiceToIRD = async ({
       sandbox: "https://cbapi.ird.gov.np/sandbox", // IRD sandbox (same host, sandbox path)
       mock: "mock",
     };
-    const resolvedEnv = clinicSettings.irdEnvironment || "mock";
-    const manualUrl = clinicSettings.irdApiUrl?.trim();
-    const baseUrl = (manualUrl || IRD_ENDPOINTS[resolvedEnv] || IRD_ENDPOINTS.mock).replace(/\/$/, "");
-    const endpoint = isReturn ? `${baseUrl}/api/billreturn` : `${baseUrl}/api/bill`;
+    const resolvedEnv = clinic.irdEnvironment || "mock";
+    const manualUrl = clinic.irdApiUrl?.trim();
+    const baseUrl = (
+      manualUrl ||
+      IRD_ENDPOINTS[resolvedEnv] ||
+      IRD_ENDPOINTS.mock
+    ).replace(/\/$/, "");
+    const endpoint = isReturn
+      ? `${baseUrl}/api/billreturn`
+      : `${baseUrl}/api/bill`;
 
     // --- MOCK TESTING CHECK ---
-    const isMock = resolvedEnv === "mock" || baseUrl === "mock" || baseUrl.includes("localhost") || !baseUrl;
+    const isMock =
+      resolvedEnv === "mock" ||
+      baseUrl === "mock" ||
+      baseUrl.includes("localhost") ||
+      !baseUrl;
+
     if (isMock) {
       console.log("==== MOCK IRD SYNC ====");
       console.log("Endpoint:", endpoint);
       console.log("Payload:", JSON.stringify(payload, null, 2));
       console.log("=======================");
+
       return {
         success: true,
         responseCode: "200",
@@ -161,16 +207,41 @@ export const syncInvoiceToIRD = async ({
     // --------------------------
 
     // --- PROXY VIA FIREBASE FUNCTIONS ---
-    const functionsUrl = import.meta.env.VITE_FIREBASE_FUNCTIONS_URL || `https://us-central1-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
+    // irdProxy requires an authenticated caller (it forwards to a real IRD
+    // host, allowlisted server-side) — attach the current user's ID token.
+    const { auth } = await import("../config/firebase");
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      return {
+        success: false,
+        message: "Not authenticated — cannot sync to IRD.",
+      };
+    }
+    const idToken = await currentUser.getIdToken();
+
+    const functionsUrl =
+      import.meta.env.VITE_FIREBASE_FUNCTIONS_URL ||
+      `https://us-central1-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
     const proxyPayload = {
       endpoint,
-      payload
+      payload,
     };
 
-    const execution = await axios.post(`${functionsUrl}/irdProxy`, proxyPayload);
+    const execution = await axios.post(
+      `${functionsUrl}/irdProxy`,
+      proxyPayload,
+      {
+        headers: { Authorization: `Bearer ${idToken}` },
+      },
+    );
 
     if (execution.status !== 200 || !execution.data.success) {
-      throw new Error(execution.data?.message || execution.data?.error || "Proxy failed to connect to IRD");
+      throw new Error(
+        execution.data?.message ||
+          execution.data?.error ||
+          "Proxy failed to connect to IRD",
+      );
     }
 
     const response = execution.data;
@@ -185,9 +256,12 @@ export const syncInvoiceToIRD = async ({
     };
   } catch (error: any) {
     console.error("Error syncing to IRD:", error);
+
     return {
       success: false,
-      responseCode: error.response?.status ? String(error.response.status) : "500",
+      responseCode: error.response?.status
+        ? String(error.response.status)
+        : "500",
       message: error.message || "Unknown network error",
     };
   }
@@ -199,7 +273,7 @@ export const syncInvoiceToIRD = async ({
 export const retryIrdSync = async (
   invoiceId: string,
   invoiceType: "appointment" | "pathology" | "pharmacy",
-  isReturn: boolean = false
+  isReturn: boolean = false,
 ): Promise<{ success: boolean; message: string }> => {
   try {
     const { clinicSettingsService } = await import("./clinicSettingsService");
@@ -210,15 +284,22 @@ export const retryIrdSync = async (
 
     // Fetch the invoice based on type
     if (invoiceType === "appointment") {
-      const { appointmentBillingService } = await import("./appointmentBillingService");
+      const { appointmentBillingService } = await import(
+        "./appointmentBillingService"
+      );
+
       invoiceData = await appointmentBillingService.getBillingById(invoiceId);
       if (invoiceData) clinicId = invoiceData.clinicId;
     } else if (invoiceType === "pathology") {
-      const { pathologyBillingService } = await import("./pathologyBillingService");
+      const { pathologyBillingService } = await import(
+        "./pathologyBillingService"
+      );
+
       invoiceData = await pathologyBillingService.getBillingById(invoiceId);
       if (invoiceData) clinicId = invoiceData.clinicId;
     } else if (invoiceType === "pharmacy") {
       const { pharmacyService } = await import("./pharmacyService");
+
       invoiceData = await pharmacyService.getMedicinePurchaseById(invoiceId);
       if (invoiceData) clinicId = invoiceData.clinicId;
     }
@@ -229,76 +310,115 @@ export const retryIrdSync = async (
 
     // Ensure it's finalized (or paid for pharmacy)
     if (invoiceType === "pharmacy" && invoiceData.paymentStatus !== "paid") {
-       return { success: false, message: "Pharmacy invoice is not fully paid." };
-    } else if (invoiceType !== "pharmacy" && invoiceData.status !== "finalized" && invoiceData.status !== "paid") {
-       return { success: false, message: "Invoice is not finalized." };
+      return { success: false, message: "Pharmacy invoice is not fully paid." };
+    } else if (
+      invoiceType !== "pharmacy" &&
+      invoiceData.status !== "finalized" &&
+      invoiceData.status !== "paid"
+    ) {
+      return { success: false, message: "Invoice is not finalized." };
     }
 
-    const clinicSettings = await clinicSettingsService.getClinicSettings(clinicId);
+    const clinicSettings =
+      await clinicSettingsService.getClinicSettings(clinicId);
     const clinic = await clinicService.getClinicById(clinicId);
 
-    if (!clinicSettings || !clinic || !clinicSettings.irdEnabled) {
-      return { success: false, message: "IRD Sync is not enabled for this clinic." };
+    if (!clinicSettings || !clinic || !clinic.irdEnabled) {
+      return {
+        success: false,
+        message: "IRD Sync is not enabled for this clinic.",
+      };
     }
 
     // Try to get PAN from print layout if clinic.panNumber is not set
     let panNumberOverride: string | undefined;
+
     if (!clinic.panNumber) {
       try {
         const printLayout = await clinicService.getPrintLayoutConfig(clinicId);
+
         panNumberOverride = printLayout?.panNumber || undefined;
       } catch {
         // Print layout lookup failure is non-fatal
       }
     }
 
-    const effectivePan = clinic.panNumber || panNumberOverride || "";
-
     // Map the fields properly depending on the model
     const irdInvoiceData = {
       buyerName: invoiceData.patientName || "Cash Sales",
-      buyerPan: "", 
-      invoiceNumber: invoiceType === "pharmacy" ? invoiceData.purchaseNo : invoiceData.invoiceNumber,
-      invoiceDate: invoiceType === "pharmacy" ? (invoiceData.purchaseDate || new Date()) : invoiceData.invoiceDate,
-      totalAmount: invoiceType === "pharmacy" ? invoiceData.netAmount : invoiceData.totalAmount,
+      buyerPan: "",
+      invoiceNumber:
+        invoiceType === "pharmacy"
+          ? invoiceData.purchaseNo
+          : invoiceData.invoiceNumber,
+      invoiceDate:
+        invoiceType === "pharmacy"
+          ? invoiceData.purchaseDate || new Date()
+          : invoiceData.invoiceDate,
+      totalAmount:
+        invoiceType === "pharmacy"
+          ? invoiceData.netAmount
+          : invoiceData.totalAmount,
       taxAmount: invoiceData.taxAmount || 0,
-      isTaxEnabled: invoiceType === "pharmacy" ? (invoiceData.taxPercentage || 0) > 0 : invoiceData.taxPercentage > 0,
+      isTaxEnabled:
+        invoiceType === "pharmacy"
+          ? (invoiceData.taxPercentage || 0) > 0
+          : invoiceData.taxPercentage > 0,
     };
 
-    let result: { success: boolean, responseCode?: string, message?: string };
+    let result: { success: boolean; responseCode?: string; message?: string };
 
     if (invoiceData.javaInvoiceId) {
-      // Route the retry through the Java backend
-      const baseUrl = clinicSettings.irdApiUrl ? clinicSettings.irdApiUrl.replace(/\/$/, "") : "https://cbapi.ird.gov.np";
-      const endpoint = isReturn ? `${baseUrl}/api/billreturn` : `${baseUrl}/api/bill`;
-
-      const irdConfig = {
-        irdEnabled: clinicSettings.irdEnabled,
-        irdApiUrl: endpoint,
-        irdApiUsername: clinicSettings.irdApiUsername,
-        irdApiPassword: clinicSettings.irdApiPassword,
-        sellerPan: effectivePan,
-        fiscalYear: getNepaliFiscalYear(irdInvoiceData.invoiceDate),
-        isReturn: isReturn,
-      };
-      
+      // Route the retry through the Java backend. Credentials are resolved
+      // server-side per clinic — only fiscalYear/isReturn travel here.
       try {
         const { billingApi } = await import("./api/billingApi");
-        const javaResult = await billingApi.retryIrdSync(invoiceData.javaInvoiceId, irdConfig);
-        
+        const javaResult = await billingApi.retryIrdSync(
+          invoiceData.javaInvoiceId,
+          {
+            fiscalYear: getNepaliFiscalYear(irdInvoiceData.invoiceDate),
+            isReturn,
+          },
+        );
+
         // Update local Firebase record with new Java state
         if (invoiceType === "appointment") {
-          const { appointmentBillingService } = await import("./appointmentBillingService");
-          await appointmentBillingService.updateBilling(invoiceId, { irdSynced: javaResult.irdSynced, irdSyncDate: new Date(), cbmsResponseCode: javaResult.cbmsResponseCode });
+          const { appointmentBillingService } = await import(
+            "./appointmentBillingService"
+          );
+
+          await appointmentBillingService.updateBilling(invoiceId, {
+            irdSynced: javaResult.irdSynced,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: javaResult.cbmsResponseCode,
+          });
         } else if (invoiceType === "pathology") {
-          const { pathologyBillingService } = await import("./pathologyBillingService");
-          await pathologyBillingService.updateBilling(invoiceId, { irdSynced: javaResult.irdSynced, irdSyncDate: new Date(), cbmsResponseCode: javaResult.cbmsResponseCode });
+          const { pathologyBillingService } = await import(
+            "./pathologyBillingService"
+          );
+
+          await pathologyBillingService.updateBilling(invoiceId, {
+            irdSynced: javaResult.irdSynced,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: javaResult.cbmsResponseCode,
+          });
         } else if (invoiceType === "pharmacy") {
           const { pharmacyService } = await import("./pharmacyService");
-          await pharmacyService.updateMedicinePurchase(invoiceId, { irdSynced: javaResult.irdSynced, irdSyncDate: new Date(), cbmsResponseCode: javaResult.cbmsResponseCode });
+
+          await pharmacyService.updateMedicinePurchase(invoiceId, {
+            irdSynced: javaResult.irdSynced,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: javaResult.cbmsResponseCode,
+          });
         }
-        
-        result = { success: javaResult.irdSynced, responseCode: javaResult.cbmsResponseCode, message: javaResult.irdSynced ? "Java Backend Sync Success" : "Java Backend Sync Failed" };
+
+        result = {
+          success: javaResult.irdSynced,
+          responseCode: javaResult.cbmsResponseCode,
+          message: javaResult.irdSynced
+            ? "Java Backend Sync Success"
+            : "Java Backend Sync Failed",
+        };
       } catch (err: any) {
         result = { success: false, responseCode: "500", message: err.message };
       }
@@ -313,38 +433,65 @@ export const retryIrdSync = async (
       });
 
       if (result.success) {
-         // Update the record
-         if (invoiceType === "appointment") {
-            const { appointmentBillingService } = await import("./appointmentBillingService");
-            await appointmentBillingService.updateBilling(invoiceId, { irdSynced: true, irdSyncDate: new Date(), cbmsResponseCode: result.responseCode });
-         } else if (invoiceType === "pathology") {
-            const { pathologyBillingService } = await import("./pathologyBillingService");
-            await pathologyBillingService.updateBilling(invoiceId, { irdSynced: true, irdSyncDate: new Date(), cbmsResponseCode: result.responseCode });
-         } else if (invoiceType === "pharmacy") {
-            const { pharmacyService } = await import("./pharmacyService");
-            await pharmacyService.updateMedicinePurchase(invoiceId, { irdSynced: true, irdSyncDate: new Date(), cbmsResponseCode: result.responseCode });
-         }
+        // Update the record
+        if (invoiceType === "appointment") {
+          const { appointmentBillingService } = await import(
+            "./appointmentBillingService"
+          );
+
+          await appointmentBillingService.updateBilling(invoiceId, {
+            irdSynced: true,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: result.responseCode,
+          });
+        } else if (invoiceType === "pathology") {
+          const { pathologyBillingService } = await import(
+            "./pathologyBillingService"
+          );
+
+          await pathologyBillingService.updateBilling(invoiceId, {
+            irdSynced: true,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: result.responseCode,
+          });
+        } else if (invoiceType === "pharmacy") {
+          const { pharmacyService } = await import("./pharmacyService");
+
+          await pharmacyService.updateMedicinePurchase(invoiceId, {
+            irdSynced: true,
+            irdSyncDate: new Date(),
+            cbmsResponseCode: result.responseCode,
+          });
+        }
       }
     }
-    
+
     // Log the sync attempt (success or failure)
     try {
       const { auditLogService } = await import("./auditLogService");
+
       await auditLogService.logIrdSync({
         performedBy: "system", // Retries are often automated or via admin action
         clinicId: clinicId,
         invoiceNumber: irdInvoiceData.invoiceNumber,
         status: result.success ? "success" : "failure",
         responseCode: result.responseCode,
-        errorMessage: result.message
+        errorMessage: result.message,
       });
     } catch (auditErr) {
       console.warn("Failed to record audit log for IRD sync retry:", auditErr);
     }
 
-    return { success: result.success, message: result.message || "Sync attempt finished." };
+    return {
+      success: result.success,
+      message: result.message || "Sync attempt finished.",
+    };
   } catch (error: any) {
     console.error("Retry sync error:", error);
-    return { success: false, message: error.message || "Error during retry sync." };
+
+    return {
+      success: false,
+      message: error.message || "Error during retry sync.",
+    };
   }
 };

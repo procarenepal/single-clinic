@@ -100,7 +100,7 @@ export default function AppointmentSettingsPage() {
           where("branchId", "==", branchId),
         );
       } else {
-        // Individual clinic or system-owner - show all for clinic
+        // Individual clinic - show all for clinic
         q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
       }
 

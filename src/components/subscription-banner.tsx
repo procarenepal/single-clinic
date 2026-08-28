@@ -143,11 +143,7 @@ export function SubscriptionBanner() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const isImpersonating =
-      localStorage.getItem("isImpersonating") === "true" ||
-      !!localStorage.getItem("impersonationMeta");
-
-    if (isSystemOwner() || !userData?.clinicId || isImpersonating) {
+    if (isSystemOwner() || !userData?.clinicId) {
       setLoading(false);
 
       return;

@@ -145,10 +145,6 @@ export default function SellPackageModal({
         finalPatientName = pat.name;
       }
 
-      // 1. Generate Invoice Number
-      const invoiceNo =
-        await appointmentBillingService.generateInvoiceNumber(clinicId);
-
       // 2. Create the Billing record
       const billingItem = {
         id: crypto.randomUUID(),
@@ -163,7 +159,7 @@ export default function SellPackageModal({
       };
 
       const billingData = {
-        invoiceNumber: invoiceNo,
+        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         clinicId: clinicId,
         branchId: branchId || clinicId,
         patientId: finalPatientId,
@@ -189,7 +185,7 @@ export default function SellPackageModal({
         createdBy: currentUser.uid,
       };
 
-      const billingId =
+      const { id: billingId } =
         await appointmentBillingService.createBilling(billingData);
 
       // 3. Record Payment (if price > 0)

@@ -5,7 +5,6 @@ import * as Icons from "react-icons/io5";
 import React from "react";
 
 import { cacheService } from "./cacheService";
-import { pageService } from "./pageService";
 import { rbacService } from "./rbacService";
 import { clinicService } from "./clinicService";
 import { appointmentBillingService } from "./appointmentBillingService";
@@ -145,11 +144,7 @@ class NavigationService {
     // Get pages assigned to the system
     let availablePages = [];
 
-    if (role === "system-owner") {
-      availablePages = await pageService.getAllPages();
-    } else {
-      availablePages = await rbacService.getAvailablePagesForClinic(clinicId);
-    }
+    availablePages = await rbacService.getAvailablePagesForClinic(clinicId);
 
     // Populate children for hardcoded items
     items.forEach((item) => {
@@ -544,7 +539,6 @@ class NavigationService {
       }
 
       switch (role) {
-        case "system-owner":
         case "clinic-admin":
           navItems = await this.buildAdminNavigation(clinicId, role);
           break;

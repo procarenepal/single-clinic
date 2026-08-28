@@ -9,24 +9,21 @@ RUN apk add --no-cache python3 make g++
 
 # Copy package files
 COPY package*.json ./
-COPY sms-backend/package*.json ./sms-backend/
 
 # Install all dependencies (including devDependencies for build)
 RUN npm install
-RUN cd sms-backend && npm install
 
 # Copy source code
 COPY . .
 
-# Build the frontend
+# Build the frontend (static output in dist/)
 RUN npm run build
 
 # Remove devDependencies to reduce image size
 RUN npm prune --production
-RUN cd sms-backend && npm prune --production
 
-# Create logs directory
-RUN mkdir -p logs
+# Serve the built static site
+RUN npm install -g serve
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
@@ -42,7 +39,7 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://127.0.0.1:3000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://127.0.0.1:3000', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-# Start application
-CMD ["npm", "start"]
+# Serve the static build
+CMD ["serve", "-s", "dist", "-l", "3000"]

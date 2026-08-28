@@ -22,6 +22,7 @@ import {
   IoPrintOutline,
   IoCloseOutline,
   IoChevronDown,
+  IoCheckmarkCircleOutline,
 } from "react-icons/io5";
 
 import {
@@ -34,6 +35,8 @@ import { useAuthContext } from "@/context/AuthContext";
 import { title } from "@/components/primitives";
 import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/billing/StatusBadge";
+import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 
 // Services
 import { appointmentBillingService } from "@/services/appointmentBillingService";
@@ -66,37 +69,17 @@ interface InvoiceFormData {
   discountType: "flat" | "percent";
   discountValue: number;
   notes: string;
+  /**
+   * Per-invoice VAT override — whether tax applies is a clinic-wide default
+   * (billingSettings.enableTax) but IRD's rules only require VAT on sales
+   * that are actually taxable, and a single global on/off doesn't fit
+   * clinics whose sales are a mix. Defaults to the clinic setting but staff
+   * can flip it per invoice at creation time.
+   */
+  applyTax: boolean;
 }
 
 // ── UI Helpers ─────────────────────────────────────────────────────────────
-function StatusBadge({
-  status,
-  type = "status",
-}: {
-  status: string;
-  type?: "status" | "payment";
-}) {
-  const S_COLORS: Record<string, string> = {
-    paid: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-    finalized:
-      "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
-    partial:
-      "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    unpaid: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-    cancelled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-    default: "bg-surface-2 text-text-muted border-border-base",
-  };
-  const color = S_COLORS[status] || S_COLORS.default;
-
-  return (
-    <span
-      className={`text-[10.5px] font-semibold px-2 py-0.5 rounded border capitalize ${color}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 function SearchSelect({
   label,
   items,
@@ -144,7 +127,7 @@ function SearchSelect({
           className="flex-1 text-[12.5px] px-2 bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 w-full"
           disabled={disabled}
           placeholder={placeholder || `Search…`}
-          value={selected && !open ? (selected.primary || "") : q}
+          value={selected && !open ? selected.primary || "" : q}
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -276,15 +259,17 @@ function Toggle({
   return (
     <label className="flex items-center gap-2 cursor-pointer select-none">
       <div
-        className={`relative inline-flex items-center w-10 h-[22px] rounded-full transition-colors duration-200 ease-in-out ${checked
+        className={`relative inline-flex items-center w-10 h-[22px] rounded-full transition-colors duration-200 ease-in-out ${
+          checked
             ? "bg-primary border border-primary"
             : "bg-gray-200 border border-gray-300 dark:bg-gray-600 dark:border-gray-500"
-          }`}
+        }`}
         onClick={() => onChange(!checked)}
       >
         <div
-          className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${checked ? "translate-x-[18px]" : "translate-x-0"
-            }`}
+          className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${
+            checked ? "translate-x-[18px]" : "translate-x-0"
+          }`}
         />
       </div>
       <span className="text-[12.5px] text-text-main">{label}</span>
@@ -380,8 +365,7 @@ export default function AppointmentBillingPage() {
   const filterDate = searchParams.get("date");
 
   const branchId = userData?.branchId ?? null;
-  const isClinicAdmin =
-    userData?.role === "clinic-admin" || userData?.role === "system-owner";
+  const isClinicAdmin = userData?.role === "clinic-admin";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
@@ -431,10 +415,6 @@ export default function AppointmentBillingPage() {
     notes: "",
   });
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deletingBilling, setDeletingBilling] =
-    useState<AppointmentBilling | null>(null);
 
   // Form Data (Create)
   const emptyForm: InvoiceFormData = {
@@ -449,6 +429,7 @@ export default function AppointmentBillingPage() {
     discountType: "percent",
     discountValue: 0,
     notes: "",
+    applyTax: false,
   };
   const [formData, setFormData] = useState<InvoiceFormData>(emptyForm);
   const [calculations, setCalculations] = useState({
@@ -470,6 +451,42 @@ export default function AppointmentBillingPage() {
     icon: "💳",
   });
   const [isAddingPaymentMethod, setIsAddingPaymentMethod] = useState(false);
+  const [taxSettingsForm, setTaxSettingsForm] = useState({
+    enableTax: false,
+    defaultTaxPercentage: 0,
+    taxLabel: "VAT",
+  });
+  const [isSavingTaxSettings, setIsSavingTaxSettings] = useState(false);
+
+  useEffect(() => {
+    if (!billingSettings) return;
+    setTaxSettingsForm({
+      enableTax: Boolean(billingSettings.enableTax),
+      defaultTaxPercentage: billingSettings.defaultTaxPercentage || 0,
+      taxLabel: billingSettings.taxLabel || "VAT",
+    });
+  }, [billingSettings]);
+
+  const handleSaveTaxSettings = async () => {
+    if (!clinicId || !currentUser) return;
+    setIsSavingTaxSettings(true);
+    try {
+      await appointmentBillingService.updateBillingSettings(
+        clinicId,
+        taxSettingsForm,
+        currentUser.uid,
+      );
+      const updated =
+        await appointmentBillingService.getBillingSettings(clinicId);
+
+      if (updated) setBillingSettings(updated);
+      addToast({ title: "Tax settings saved", color: "success" });
+    } catch (e) {
+      addToast({ title: "Failed to save tax settings", color: "danger" });
+    } finally {
+      setIsSavingTaxSettings(false);
+    }
+  };
 
   // Load branches for clinic-wide admins (no fixed branchId)
   useEffect(() => {
@@ -519,6 +536,7 @@ export default function AppointmentBillingPage() {
     formData.items,
     formData.discountType,
     formData.discountValue,
+    formData.applyTax,
     billingSettings,
   ]);
 
@@ -531,6 +549,7 @@ export default function AppointmentBillingPage() {
 
       if (!settings?.enabledByAdmin || !settings?.isActive) return;
       setBillingSettings(settings);
+      setFormData((prev) => ({ ...prev, applyTax: Boolean(settings.enableTax) }));
 
       const [pData, dData, expData, aData, bData, tcData] = await Promise.all([
         patientService.getPatientsByClinic(clinicId, effectiveBranchId),
@@ -596,7 +615,7 @@ export default function AppointmentBillingPage() {
         formData.items,
         formData.discountType,
         formData.discountValue,
-        billingSettings.enableTax ? billingSettings.defaultTaxPercentage : 0,
+        formData.applyTax ? billingSettings.defaultTaxPercentage : 0,
       ),
     );
   };
@@ -849,8 +868,6 @@ export default function AppointmentBillingPage() {
 
     try {
       setSubmitting(true);
-      const invoiceNumber =
-        await appointmentBillingService.generateInvoiceNumber(clinicId);
 
       // Derive root doctor fields from the first item
       const firstItem = formData.items[0];
@@ -875,11 +892,19 @@ export default function AppointmentBillingPage() {
         return cleaned;
       });
 
+      // applyTax is a per-invoice UI control, not a field on AppointmentBilling.
+      const { applyTax: _applyTax, ...formDataForSave } = formData;
+
       const data: Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt"> = {
-        invoiceNumber,
+        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         clinicId,
         branchId: effectiveBranchId || userData?.branchId || "",
-        ...formData,
+        ...formDataForSave,
+        // buyerPan is what print/Java-invoice logic actually reads;
+        // patientPanVat (also set via ...formData above) is used elsewhere
+        // for display — keep both populated from the same input so neither
+        // silently stays blank.
+        buyerPan: formData.patientPanVat || "",
         doctorId: rootDoctorId,
         doctorName: rootDoctorName,
         doctorType: rootDoctorType,
@@ -889,7 +914,7 @@ export default function AppointmentBillingPage() {
         discountAmount: calculations.totalDiscount,
         itemDiscountAmount: calculations.itemDiscountAmount,
         mainDiscountAmount: calculations.mainDiscountAmount,
-        taxPercentage: billingSettings.enableTax
+        taxPercentage: formData.applyTax
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
@@ -901,7 +926,7 @@ export default function AppointmentBillingPage() {
         createdBy: currentUser.uid,
       };
 
-      const id = await appointmentBillingService.createBilling(data);
+      const { id } = await appointmentBillingService.createBilling(data);
 
       // Update patient's assigned clinician to ensure they appear in Expert/Doctor profiles
       if (formData.patientId && formData.patientId !== "walk-in") {
@@ -974,18 +999,18 @@ export default function AppointmentBillingPage() {
 
   const filteredBillings = searchQuery.trim()
     ? billings.filter((b) => {
-      const patientName =
-        b.patientName === "Unknown Patient" || !b.patientName
-          ? patients.find((p) => p.id === b.patientId)?.name ||
-          b.patientName ||
-          "Unknown Patient"
-          : b.patientName;
+        const patientName =
+          b.patientName === "Unknown Patient" || !b.patientName
+            ? patients.find((p) => p.id === b.patientId)?.name ||
+              b.patientName ||
+              "Unknown Patient"
+            : b.patientName;
 
-      return (
-        patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    })
+        return (
+          patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      })
     : billings;
 
   const totalPages = Math.ceil(filteredBillings.length / itemsPerPage) || 1;
@@ -994,21 +1019,29 @@ export default function AppointmentBillingPage() {
     currentPage * itemsPerPage,
   );
 
-  const handleDelete = async () => {
-    if (!deletingBilling || !clinicId) return;
+  const [finalizingId, setFinalizingId] = useState<string | null>(null);
+
+  const handleFinalize = async (billing: AppointmentBilling) => {
+    if (!currentUser) return;
     try {
-      setIsDeleting(true);
-      await appointmentBillingService.deleteBilling(deletingBilling.id);
-      addToast({ title: "Invoice deleted", color: "success" });
-      setBillings((b) => b.filter((x) => x.id !== deletingBilling.id));
-      setShowDeleteModal(false);
-      setDeletingBilling(null);
+      setFinalizingId(billing.id);
+      await appointmentBillingService.finalizeInvoice(
+        billing.id,
+        currentUser.uid,
+      );
+      addToast({ title: "Invoice finalized", color: "success" });
+      setBillings((prev) =>
+        prev.map((b) =>
+          b.id === billing.id ? { ...b, status: "finalized" } : b,
+        ),
+      );
     } catch (e) {
-      addToast({ title: "Delete failed", color: "danger" });
+      addToast({ title: "Failed to finalize invoice", color: "danger" });
     } finally {
-      setIsDeleting(false);
+      setFinalizingId(null);
     }
   };
+
 
   const handlePaymentSubmit = async () => {
     if (!selectedBillingForPayment || !clinicId) return;
@@ -1058,8 +1091,12 @@ export default function AppointmentBillingPage() {
       setSelectedBillingForPayment(null);
       setPaymentForm({ amount: "", method: "cash", reference: "", notes: "" });
       if (showInvoiceModal) setShowInvoiceModal(false); // Close view modal if open
-    } catch (e) {
-      addToast({ title: "Payment failed", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Payment failed",
+        description: e?.message,
+        color: "danger",
+      });
     } finally {
       setPaymentProcessing(false);
     }
@@ -1282,6 +1319,15 @@ export default function AppointmentBillingPage() {
                 type="date"
                 value={formData.invoiceDate}
                 onChange={(v) => setFormData((p) => ({ ...p, invoiceDate: v }))}
+              />
+
+              <FlatInput
+                label="Customer PAN (optional)"
+                placeholder="e.g. 601234567"
+                value={formData.patientPanVat || ""}
+                onChange={(v) =>
+                  setFormData((p) => ({ ...p, patientPanVat: v }))
+                }
               />
             </div>
             <div className="border-t border-border-base" />
@@ -1546,15 +1592,26 @@ export default function AppointmentBillingPage() {
                         - {fmtCur(calculations.totalDiscount)}
                       </span>
                     </div>
-                    {billingSettings.enableTax && (
-                      <div className="flex justify-between">
-                        <span>
-                          {billingSettings.taxLabel} (
-                          {billingSettings.defaultTaxPercentage}%):
-                        </span>
+                    <label className="flex items-center justify-between gap-2 cursor-pointer pt-1">
+                      <span className="flex items-center gap-1.5">
+                        <input
+                          checked={formData.applyTax}
+                          className="w-3.5 h-3.5 text-primary rounded border-border-base focus:ring-primary"
+                          type="checkbox"
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              applyTax: e.target.checked,
+                            }))
+                          }
+                        />
+                        Apply {billingSettings.taxLabel || "VAT"} (
+                        {billingSettings.defaultTaxPercentage}%)
+                      </span>
+                      {formData.applyTax && (
                         <span>{fmtCur(calculations.taxAmount)}</span>
-                      </div>
-                    )}
+                      )}
+                    </label>
                     <div className="border-t border-border-base pt-2 flex justify-between font-bold text-text-main text-[14px]">
                       <span>Total:</span>
                       <span>{fmtCur(calculations.totalAmount)}</span>
@@ -1667,11 +1724,11 @@ export default function AppointmentBillingPage() {
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px] text-text-main">
                             {b.patientName === "Unknown Patient" ||
-                              !b.patientName
+                            !b.patientName
                               ? patients.find((p) => p.id === b.patientId)
-                                ?.name ||
-                              b.patientName ||
-                              "Unknown Patient"
+                                  ?.name ||
+                                b.patientName ||
+                                "Unknown Patient"
                               : b.patientName}
                           </td>
                           <td className="px-3 py-2.5 text-[12.5px]">
@@ -1682,10 +1739,10 @@ export default function AppointmentBillingPage() {
                                   b.doctorId && b.doctorId !== "unassigned"
                                     ? b.doctorId
                                     : b.items?.find(
-                                      (i) =>
-                                        i.doctorId &&
-                                        i.doctorId !== "unassigned",
-                                    )?.doctorId;
+                                        (i) =>
+                                          i.doctorId &&
+                                          i.doctorId !== "unassigned",
+                                      )?.doctorId;
 
                                 if (docId) {
                                   const foundDoc = doctors.find(
@@ -1741,12 +1798,12 @@ export default function AppointmentBillingPage() {
                                 new Set(
                                   b.items
                                     ? b.items
-                                      .filter(
-                                        (i) =>
-                                          i.doctorId &&
-                                          i.doctorId !== b.doctorId,
-                                      )
-                                      .map((i) => i.doctorName)
+                                        .filter(
+                                          (i) =>
+                                            i.doctorId &&
+                                            i.doctorId !== b.doctorId,
+                                        )
+                                        .map((i) => i.doctorName)
                                     : [],
                                 ),
                               );
@@ -1790,43 +1847,12 @@ export default function AppointmentBillingPage() {
                             </div>
                           </td>
                           <td className="px-3 py-2.5">
-                            {b.status === "finalized" ? (
-                              <div className="flex flex-col gap-1 items-start">
-                                {b.irdSynced ? (
-                                  <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded font-medium border border-green-500/20">
-                                    ✅ Synced
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="text-[10px] bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium border border-red-500/20">
-                                      ⚠️ Failed
-                                    </span>
-                                    <button
-                                      className="text-[10px] text-primary hover:underline"
-                                      onClick={async () => {
-                                        try {
-                                          const { retryIrdSync } = await import("@/services/irdCbmsService");
-                                          const res = await retryIrdSync(b.id, "appointment");
-                                          if (res.success) {
-                                            toast.success("IRD Sync successful!");
-                                          } else {
-                                            toast.error("IRD Sync failed: " + res.message);
-                                          }
-                                        } catch (e) {
-                                          toast.error("Error during retry sync");
-                                        }
-                                      }}
-                                    >
-                                      Retry Sync
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-text-muted/60">
-                                ➖ N/A
-                              </span>
-                            )}
+                            <IrdSyncBadge
+                              finalized={b.status === "finalized"}
+                              invoiceType="appointment"
+                              recordId={b.id}
+                              synced={Boolean(b.irdSynced)}
+                            />
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1.5">
@@ -1916,18 +1942,33 @@ export default function AppointmentBillingPage() {
                                   </DropdownItem>
                                 </DropdownMenu>
                               </Dropdown>
-                              <button
-                                className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
-                                title="Edit"
-                                type="button"
-                                onClick={() =>
-                                  navigate(
-                                    `/dashboard/appointments-billing/${b.id}/edit`,
-                                  )
-                                }
-                              >
-                                <IoPencilOutline />
-                              </button>
+                              {b.status === "draft" && (
+                                <button
+                                  className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded disabled:opacity-50"
+                                  disabled={finalizingId === b.id}
+                                  title="Finalize (required for IRD sync status to show)"
+                                  type="button"
+                                  onClick={() => handleFinalize(b)}
+                                >
+                                  <IoCheckmarkCircleOutline />
+                                </button>
+                              )}
+                              {!b.irdSynced &&
+                                b.status !== "finalized" &&
+                                !b.isCreditNote && (
+                                  <button
+                                    className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
+                                    title="Edit"
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/dashboard/appointments-billing/${b.id}/edit`,
+                                      )
+                                    }
+                                  >
+                                    <IoPencilOutline />
+                                  </button>
+                                )}
                               {b.paymentStatus !== "paid" && (
                                 <button
                                   className="p-1.5 text-text-muted hover:text-green-600 hover:bg-green-500/10 rounded"
@@ -1945,17 +1986,6 @@ export default function AppointmentBillingPage() {
                                   <IoCash />
                                 </button>
                               )}
-                              <button
-                                className="p-1.5 text-text-muted hover:text-red-600 hover:bg-red-500/10 rounded"
-                                title="Delete"
-                                type="button"
-                                onClick={() => {
-                                  setDeletingBilling(b);
-                                  setShowDeleteModal(true);
-                                }}
-                              >
-                                <IoTrashOutline />
-                              </button>
                             </div>
                           </td>
                         </tr>
@@ -2019,6 +2049,56 @@ export default function AppointmentBillingPage() {
         {/* Settings Tab */}
         {activeTab === "settings" && (
           <div className="p-5 space-y-8">
+            {/* Tax Settings */}
+            <div className="border border-border-base rounded overflow-hidden bg-surface">
+              <div className="px-4 py-3 bg-surface-2 border-b border-border-base">
+                <h4 className={title({ size: "sm", color: "primary" })}>
+                  Tax Settings
+                </h4>
+              </div>
+              <div className="p-4 flex flex-col gap-4">
+                <Toggle
+                  checked={taxSettingsForm.enableTax}
+                  label="Enable tax by default on new invoices"
+                  onChange={(c) =>
+                    setTaxSettingsForm((p) => ({ ...p, enableTax: c }))
+                  }
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <FlatInput
+                    hint="e.g. 13 for standard Nepal VAT"
+                    label="Default Tax Percentage"
+                    type="number"
+                    value={taxSettingsForm.defaultTaxPercentage.toString()}
+                    onChange={(v) =>
+                      setTaxSettingsForm((p) => ({
+                        ...p,
+                        defaultTaxPercentage: parseFloat(v) || 0,
+                      }))
+                    }
+                  />
+                  <FlatInput
+                    hint="Display label, e.g. VAT, GST, Tax"
+                    label="Tax Label"
+                    value={taxSettingsForm.taxLabel}
+                    onChange={(v) =>
+                      setTaxSettingsForm((p) => ({ ...p, taxLabel: v }))
+                    }
+                  />
+                </div>
+                <div className="text-right">
+                  <Button
+                    color="primary"
+                    isLoading={isSavingTaxSettings}
+                    size="sm"
+                    onClick={handleSaveTaxSettings}
+                  >
+                    Save Tax Settings
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-col lg:flex-row gap-6 items-start">
               {/* Add form */}
               <div className="flex-1 w-full border border-border-base rounded overflow-hidden bg-surface">
@@ -2403,7 +2483,9 @@ export default function AppointmentBillingPage() {
                 <p className="text-[11px] text-text-muted">Patient</p>
                 <p className="font-semibold">{selectedBilling.patientName}</p>
                 {selectedBilling.patientPanVat && (
-                  <p className="text-[11px] text-text-muted mt-0.5">PAN/VAT: {selectedBilling.patientPanVat}</p>
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    PAN/VAT: {selectedBilling.patientPanVat}
+                  </p>
                 )}
               </div>
               <div>
@@ -2608,15 +2690,15 @@ export default function AppointmentBillingPage() {
             </div>
             {availableMethods.find((m) => m.key === paymentForm.method)
               ?.requiresReference && (
-                <FlatInput
-                  required
-                  label="Reference ID"
-                  value={paymentForm.reference}
-                  onChange={(v) =>
-                    setPaymentForm((p) => ({ ...p, reference: v }))
-                  }
-                />
-              )}
+              <FlatInput
+                required
+                label="Reference ID"
+                value={paymentForm.reference}
+                onChange={(v) =>
+                  setPaymentForm((p) => ({ ...p, reference: v }))
+                }
+              />
+            )}
             <FlatInput
               label="Notes"
               value={paymentForm.notes}
@@ -2626,55 +2708,6 @@ export default function AppointmentBillingPage() {
         </ModalShell>
       )}
 
-      {/* Delete Modal */}
-      {showDeleteModal && deletingBilling && (
-        <ModalShell
-          disabled={isDeleting}
-          footer={
-            <>
-              <Button
-                color="default"
-                disabled={isDeleting}
-                size="sm"
-                variant="bordered"
-                onClick={() => setShowDeleteModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                color="danger"
-                isLoading={isDeleting}
-                size="sm"
-                onClick={handleDelete}
-              >
-                Delete Invoice
-              </Button>
-            </>
-          }
-          size="md"
-          title="Delete Invoice"
-          onClose={() => setShowDeleteModal(false)}
-        >
-          <div className="text-[13px] text-text-muted">
-            <p>
-              Are you sure you want to delete invoice{" "}
-              <strong className="font-mono text-text-main">
-                {deletingBilling.invoiceNumber}
-              </strong>
-              ?
-            </p>
-            <div className="mt-3 p-3 bg-red-500/5 border border-red-500/10 rounded text-red-500">
-              <p className="font-semibold flex items-center gap-1">
-                <IoTrashOutline /> This action cannot be undone.
-              </p>
-              <p className="text-[12px] mt-1">
-                This will permanently remove the invoice and any associated
-                ledger records.
-              </p>
-            </div>
-          </div>
-        </ModalShell>
-      )}
     </div>
   );
 }

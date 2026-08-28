@@ -112,7 +112,6 @@ export default function StaffManagementPage() {
       if (isBranchAdmin && userData?.branchId) {
         // Branch clinic admin - filter on server side
         userFilterOptions.branchId = userData.branchId;
-        userFilterOptions.excludeRoles = ["system-owner"];
 
         roleFilterOptions.branchId = userData.branchId;
         roleFilterOptions.isBranchSpecific = true;

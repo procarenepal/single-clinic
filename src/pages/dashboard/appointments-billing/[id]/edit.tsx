@@ -672,11 +672,12 @@ export default function EditInvoicePage() {
         color: "success",
       });
       navigate(`/dashboard/appointments-billing/${invoice.id}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating invoice:", error);
       addToast({
         title: "Error",
-        description: "Failed to update invoice. Please try again.",
+        description:
+          error?.message || "Failed to update invoice. Please try again.",
         color: "danger",
       });
     } finally {
@@ -760,6 +761,16 @@ export default function EditInvoicePage() {
           Back
         </Button>
       </div>
+
+      {(invoice.irdSynced || invoice.status === "finalized") && (
+        <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 text-[13px] text-amber-800">
+          <strong>This invoice has already been finalized{invoice.irdSynced ? " and synced to IRD" : ""}.</strong>{" "}
+          Financial fields (items, prices, discounts, totals) cannot be
+          changed here — the system will block the save. To correct a
+          finalized invoice, issue a Credit Note from the invoice detail page
+          instead. Non-financial fields like notes can still be edited.
+        </div>
+      )}
 
       <div className="bg-white border border-mountain-200 rounded shadow-sm">
         {/* Basic Information */}

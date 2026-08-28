@@ -93,8 +93,7 @@ export default function DailyReportPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isMultiBranch, setIsMultiBranch] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const isClinicAdmin =
-    userData?.role === "system-owner" || userData?.role === "clinic-admin";
+  const isClinicAdmin = userData?.role === "clinic-admin";
   const effectiveBranchId = userBranchId ?? selectedBranchId ?? undefined;
   const currentBranchName = effectiveBranchId
     ? branches.find((b) => b.id === effectiveBranchId)?.name

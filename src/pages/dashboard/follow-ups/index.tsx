@@ -23,7 +23,6 @@ import {
   IoAddOutline,
   IoTrashOutline,
   IoChevronDownOutline,
-  IoChevronUpOutline,
 } from "react-icons/io5";
 import { format, isToday, isTomorrow, isYesterday } from "date-fns";
 import toast from "react-hot-toast";
@@ -103,10 +102,7 @@ export default function FollowupsPage() {
   useEffect(() => {
     if (clinicId && currentUser?.uid) {
       const fetchRoles = async () => {
-        if (
-          currentUser.role === "system-owner" ||
-          currentUser.role === "clinic-admin"
-        ) {
+        if (currentUser.role === "clinic-admin") {
           setAllowedCategories([
             "all",
             "appointment",

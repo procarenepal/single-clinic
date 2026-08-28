@@ -47,6 +47,11 @@ class ExpertCommissionService {
           // Calculate total commission amount for this expert's items
           let groupSubtotal = 0;
           const groupCommissionAmount = group.items.reduce((total, item) => {
+            // Explicitly skip items where calculateCommission is false from the business total entirely
+            if (item.calculateCommission === false) {
+              return total;
+            }
+
             const percentage =
               typeof item.commission === "number"
                 ? item.commission
