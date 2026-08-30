@@ -679,11 +679,15 @@ export const rbacService = {
    */
   async getAvailablePagesForClinic(clinicId: string): Promise<Page[]> {
     try {
-      // Check cache first
+      // Check cache first. An empty array is deliberately NOT treated as a
+      // cache hit — otherwise a transient empty result (e.g. pages briefly
+      // missing) gets "locked in" for the full TTL even after the
+      // underlying data is fixed, since a stale empty array is still
+      // truthy and would short-circuit every refetch attempt.
       const { cacheService } = await import("./cacheService");
       const cachedPages = cacheService.getClinicPages(clinicId);
 
-      if (cachedPages) {
+      if (cachedPages && cachedPages.length > 0) {
         return cachedPages;
       }
 
@@ -1189,10 +1193,14 @@ export const rbacService = {
     try {
       const { cacheService } = await import("./cacheService");
 
-      // Return early if cached
+      // Return early if cached. A cached entry with an empty accessiblePages
+      // array is deliberately NOT treated as a hit — the wrapping object is
+      // always truthy regardless of contents, so a transient empty result
+      // (e.g. pages briefly missing) would otherwise get "locked in" for the
+      // full TTL even after the underlying data is fixed.
       const existing = cacheService.getUserPermissions(userId, clinicId);
 
-      if (existing) return;
+      if (existing && existing.accessiblePages.length > 0) return;
 
       // Deduplicate concurrent preloads
       const inflightKey = `${userId}:${clinicId}`;
@@ -1208,7 +1216,7 @@ export const rbacService = {
         // Double-check cache inside the in-flight closure
         const cached = cacheService.getUserPermissions(userId, clinicId);
 
-        if (cached) return;
+        if (cached && cached.accessiblePages.length > 0) return;
 
         // Fetch concurrently
         const [accessiblePages, allClinicPages] = await Promise.all([
@@ -1257,13 +1265,13 @@ export const rbacService = {
     try {
       const { cacheService } = await import("./cacheService");
 
-      // Check cache first
+      // Check cache first (same empty-result guard as preloadUserPermissions)
       const cachedPermissions = cacheService.getUserPermissions(
         userId,
         clinicId,
       );
 
-      if (cachedPermissions) {
+      if (cachedPermissions && cachedPermissions.accessiblePages.length > 0) {
         return cachedPermissions.accessiblePages;
       }
 

@@ -130,7 +130,11 @@ export const doctorService = {
       const cacheKey = clinicId || "standalone";
       const cached = cacheService.getClinicDoctors(cacheKey);
 
-      if (cached) return cached as Doctor[];
+      // An empty array is deliberately NOT treated as a cache hit — it's
+      // still truthy, so a transient empty result would otherwise get
+      // "locked in" for the full TTL even after the underlying data is
+      // fixed (same bug class already fixed in rbacService.ts this session).
+      if (cached && (cached as Doctor[]).length > 0) return cached as Doctor[];
 
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
       const constraints: any[] = [];

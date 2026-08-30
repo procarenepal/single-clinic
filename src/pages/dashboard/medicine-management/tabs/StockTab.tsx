@@ -310,30 +310,16 @@ export default function StockTab({
 
     setIsLoading(true);
     try {
-      // Get current stock to calculate new stock
       const stockItem = stockItems.find(
         (item) => item.medicineId === transactionFormData.medicineId,
       );
-      const currentStock = stockItem?.currentStock || 0;
       const quantity = parseInt(transactionFormData.quantity);
-
-      let newStock = currentStock;
-
-      if (transactionFormData.type === "purchase") {
-        newStock = currentStock + quantity;
-      } else if (transactionFormData.type === "sale") {
-        newStock = currentStock - quantity;
-      } else if (transactionFormData.type === "adjustment") {
-        newStock = quantity; // For adjustments, the quantity is the new stock level
-      }
 
       const transactionData = {
         medicineId: transactionFormData.medicineId,
         branchId: branchScopeId || "",
         type: transactionFormData.type,
         quantity: quantity,
-        previousStock: currentStock,
-        newStock: newStock,
         unitPrice: transactionFormData.unitPrice
           ? parseFloat(transactionFormData.unitPrice)
           : undefined,
@@ -350,18 +336,13 @@ export default function StockTab({
         createdBy: userData.id,
       };
 
-      await medicineService.createStockTransaction(transactionData);
-
-      // Update stock if it exists
-      if (stockItem) {
-        await medicineService.updateMedicineStock(stockItem.id, {
-          currentStock: newStock,
-          lastRestocked:
-            transactionFormData.type === "purchase"
-              ? new Date()
-              : stockItem.lastRestocked,
-        });
-      }
+      // Atomic: re-reads the stock doc inside a transaction instead of
+      // computing newStock from already-loaded, potentially stale state.
+      await medicineService.recordStockTransaction(
+        stockItem?.id || null,
+        transactionData,
+        true,
+      );
 
       addToast({
         title: "Success",

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   IoPeopleOutline,
@@ -12,6 +12,10 @@ import {
   IoHeartOutline,
   IoCreateOutline,
   IoReceiptOutline,
+  IoSearchOutline,
+  IoCloseOutline,
+  IoKeypadOutline,
+  IoPulseOutline,
 } from "react-icons/io5";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 
@@ -25,6 +29,7 @@ import { title } from "@/components/primitives";
 import { useAuthContext } from "@/context/AuthContext";
 import { addToast } from "@/components/ui/toast";
 import { appointmentService } from "@/services/appointmentService";
+import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
@@ -32,7 +37,10 @@ import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService"
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { expertService } from "@/services/expertService";
 import { hrService } from "@/services/hrService";
-import { appointmentBillingService } from "@/services/appointmentBillingService";
+import {
+  appointmentBillingService,
+  isBillingLocked,
+} from "@/services/appointmentBillingService";
 import { packageService } from "@/services/packageService";
 import { walletService } from "@/services/walletService";
 import { patientPackageService } from "@/services/patientPackageService";
@@ -46,6 +54,7 @@ import {
   StaffMember,
   TreatmentPackage,
   PatientPackage,
+  AppointmentBillingSettings,
 } from "@/types/models";
 import { Spinner, Checkbox } from "@/components/ui";
 import { db } from "@/config/firebase";
@@ -53,8 +62,134 @@ import { NotificationService } from "@/services/notificationService";
 import { sendCheckInSMS } from "@/services/sendMessageService";
 import SellPackageModal from "@/components/packages/SellPackageModal";
 
+// Last-resort billing fallbacks used only when a doctor has no
+// consultationCharge set on their profile, or an appointment type has no
+// price configured — real data-entry gaps, not intended defaults. Kept as
+// named constants (rather than bare numbers) so they're easy to find, and
+// every use logs a warning so the gap doesn't go unnoticed indefinitely.
+const FALLBACK_CONSULTATION_FEE = 700;
+const FALLBACK_GENERAL_FEE = 500;
+
+// Exclusive (single-patient-at-a-time) cabin/room names — must match the
+// "OPD Rooms" and "Cabins & Laser" optgroup values in RoutingModal.tsx
+// exactly. "Other Areas" (Lobby, Triage Area, Billing Counter, Pharmacy)
+// are deliberately excluded — those are shared spaces by design, not
+// exclusive rooms, so multiple patients being "in" one isn't a conflict.
+const EXCLUSIVE_CABIN_NAMES = new Set([
+  "OPD Room 1",
+  "OPD Room 2",
+  "OPD Room 3",
+  "Laser Room 1",
+  "Laser Room 2",
+  "PRP Cabin A",
+  "PRP Cabin B",
+  "Facial Therapy Room",
+]);
+
+interface ProcessedReferral {
+  type: "referral-partner" | "doctor" | "expert" | "staff";
+  id: string;
+  name: string;
+  commissionPercentage: number;
+  commissionAmount: number;
+}
+
+/**
+ * Resolves a patient's referral/commission ledger against a given invoice
+ * base amount — polymorphic multi-referral list first (current schema),
+ * falling back to the legacy single `referralPartnerId` field. Shared by
+ * every place that auto-generates an invoice for a patient
+ * (createConsultationBill, handleSettleBilling's fallback) — was previously
+ * duplicated near-verbatim in both, which is exactly how the SellPackageModal
+ * tax/PAN gap slipped through undetected earlier this session.
+ */
+async function resolvePatientReferrals(
+  pat: Patient | undefined,
+  baseAmount: number,
+): Promise<{
+  processedReferrals: ProcessedReferral[];
+  refPartnerId: string | undefined;
+  refCommissionAmt: number | undefined;
+}> {
+  const processedReferrals: ProcessedReferral[] = [];
+
+  if (pat?.referrals && Array.isArray(pat.referrals) && pat.referrals.length > 0) {
+    for (const ref of pat.referrals) {
+      const pct = ref.commissionPercentage || 0;
+      const amt = (baseAmount * pct) / 100;
+
+      processedReferrals.push({
+        type: ref.type,
+        id: ref.id,
+        name: ref.name,
+        commissionPercentage: pct,
+        commissionAmount: amt,
+      });
+    }
+  } else if (pat?.referralPartnerId) {
+    // Backward compatibility fallback: single referral partner ID
+    try {
+      const partner = await referralPartnerService.getReferralPartnerById(
+        pat.referralPartnerId,
+      );
+
+      if (partner) {
+        const pct = partner.defaultCommission || 0;
+        const amt = (baseAmount * pct) / 100;
+
+        processedReferrals.push({
+          type: "referral-partner",
+          id: partner.id,
+          name: partner.name,
+          commissionPercentage: pct,
+          commissionAmount: amt,
+        });
+      }
+    } catch (err) {
+      console.error(
+        "Error fetching fallback referral partner for automated billing:",
+        err,
+      );
+    }
+  }
+
+  // Keep primary partner values for legacy schema columns
+  const primaryPartner = processedReferrals.find(
+    (r) => r.type === "referral-partner",
+  );
+  const refPartnerId = primaryPartner
+    ? primaryPartner.id
+    : pat?.referralPartnerId || undefined;
+  const refCommissionAmt = primaryPartner
+    ? primaryPartner.commissionAmount
+    : undefined;
+
+  return { processedReferrals, refPartnerId, refCommissionAmt };
+}
+
 export default function FrontOfficeDesk() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Guards rapid double-clicks on queue action buttons (none of which have
+  // per-row disabled/loading state today) from firing a handler twice
+  // concurrently — a real risk for handlers that write invoices or change
+  // appointment status. Keyed by an action-specific string, not just the
+  // appointment id, so unrelated actions on the same appointment can't
+  // block each other.
+  const inFlightActionsRef = useRef<Set<string>>(new Set());
+  // Find a patient by name/reg-number regardless of which tab/stage they're
+  // currently in — the tab pills alone can't answer "where is this patient
+  // right now" on a busy day with people spread across every stage.
+  const [boardSearchQuery, setBoardSearchQuery] = useState("");
+  const runGuarded = async (key: string, action: () => Promise<void>) => {
+    if (inFlightActionsRef.current.has(key)) return;
+    inFlightActionsRef.current.add(key);
+    try {
+      await action();
+    } finally {
+      inFlightActionsRef.current.delete(key);
+    }
+  };
   const { clinicId, currentUser, branchId, userData, hasPagePermissionByPath } =
     useAuthContext();
   const isAdmin = userData?.role === "clinic-admin";
@@ -86,10 +221,12 @@ export default function FrontOfficeDesk() {
   const [experts, setExperts] = useState<Expert[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [billingSettings, setBillingSettings] =
+    useState<AppointmentBillingSettings | null>(null);
 
   // App states
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<
+  type FrontOfficeTab =
     | "urgent"
     | "lobby"
     | "triage"
@@ -97,12 +234,201 @@ export default function FrontOfficeDesk() {
     | "expert"
     | "billing"
     | "pharmacy"
-    | "all"
-  >("lobby");
+    | "all";
+  const validTabs: FrontOfficeTab[] = [
+    "urgent",
+    "lobby",
+    "triage",
+    "doctor",
+    "expert",
+    "billing",
+    "pharmacy",
+    "all",
+  ];
+  const [activeTab, setActiveTab] = useState<FrontOfficeTab>(() => {
+    const requestedTab = searchParams.get("tab");
+
+    return requestedTab && validTabs.includes(requestedTab as FrontOfficeTab)
+      ? (requestedTab as FrontOfficeTab)
+      : "lobby";
+  });
 
   // Resolved IDs for the currently logged-in doctor or expert
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
   const [currentExpertId, setCurrentExpertId] = useState<string | null>(null);
+
+  // "Send Back to Lobby" — undo mis-routing/premature triage. Only ever
+  // offered for pre-billing stages (triage-done/doctor/expert); reversing
+  // anything past billing would mean touching an already-created (possibly
+  // IRD-synced) invoice, a different problem solved via Credit Note.
+  const [sendBackAppt, setSendBackAppt] = useState<Appointment | null>(null);
+  const [isSendingBack, setIsSendingBack] = useState(false);
+
+  const handleSendBackToLobby = async (appt: Appointment, reason: string) => {
+    setIsSendingBack(true);
+    try {
+      // At the lobby stage itself, "sending back" means fully undoing
+      // check-in (back to Scheduled) — everywhere later in the flow it
+      // means clearing routing/triage state back to Lobby, as before.
+      const isUndoingCheckIn = getPatientStage(appt) === "lobby";
+      const targetStatus = isUndoingCheckIn ? "scheduled" : "confirmed";
+
+      await appointmentService.updateAppointment(appt.id, {
+        status: targetStatus,
+        doctorId: "unassigned",
+        assignedExpertId: "unassigned",
+        doctorConsultationCompleted: false,
+        cabinName: "",
+        notes: isUndoingCheckIn
+          ? `[Check-In Undone] ${reason}`
+          : `[Sent Back to Lobby] ${reason}`,
+        updatedAt: new Date(),
+      });
+      addToast({
+        title: isUndoingCheckIn ? "Check-In Undone" : "Patient Sent Back to Lobby",
+        description: isUndoingCheckIn
+          ? "Patient returned to Scheduled."
+          : "Routing and triage state have been cleared.",
+        color: "success",
+      });
+      setSendBackAppt(null);
+    } catch (err) {
+      console.error("Error sending patient back to lobby:", err);
+      addToast({
+        title: "Failed to Send Back",
+        description: "Could not update the patient's status. Please try again.",
+        color: "danger",
+      });
+    } finally {
+      setIsSendingBack(false);
+    }
+  };
+
+  // "On Hold" — patient temporarily stepped out mid-visit. Purely a
+  // flow-tracking flag; doesn't touch status/routing/billing at all, so
+  // toggling it can never interfere with any of the write paths above.
+  const [holdAppt, setHoldAppt] = useState<Appointment | null>(null);
+  const [isTogglingHold, setIsTogglingHold] = useState(false);
+
+  const handleToggleHold = (appt: Appointment, reason: string) =>
+    runGuarded(`toggle-hold-${appt.id}`, async () => {
+      setIsTogglingHold(true);
+      try {
+        const turningOn = !appt.onHold;
+
+        await appointmentService.updateAppointment(appt.id, {
+          onHold: turningOn,
+          onHoldReason: turningOn ? reason : "",
+          updatedAt: new Date(),
+        } as any);
+        addToast({
+          title: turningOn ? "Patient On Hold" : "Hold Resumed",
+          description: turningOn
+            ? "Wait time is paused and this patient won't trigger the 30-minute alert."
+            : "Wait time is counting normally again.",
+          color: "success",
+        });
+        setHoldAppt(null);
+      } catch (err) {
+        console.error("Error toggling patient hold state:", err);
+        addToast({
+          title: "Failed to Update Hold Status",
+          description: "Could not update the patient's status. Please try again.",
+          color: "danger",
+        });
+      } finally {
+        setIsTogglingHold(false);
+      }
+    });
+
+  // Starting a hold needs a documented reason (ReasonConfirmModal, opened
+  // via setHoldAppt below); resuming doesn't — it's a plain immediate
+  // toggle, matching how "undo"-style actions elsewhere only require a
+  // reason for the state-changing direction, not for reverting it.
+  const handleHoldButtonClick = (appt: Appointment) => {
+    if (appt.onHold) {
+      handleToggleHold(appt, "");
+    } else {
+      setHoldAppt(appt);
+    }
+  };
+
+  // Mark a scheduled patient who never showed up — a routine, frequent,
+  // low-stakes action, so deliberately single-click (no mandatory-reason
+  // modal, unlike Send Back/Hold) rather than adding friction to something
+  // staff may do many times a day. Doesn't touch billing/routing; nothing
+  // was created yet at the "scheduled" stage for this to conflict with.
+  const handleMarkNoShow = (appt: Appointment) =>
+    runGuarded(`mark-no-show-${appt.id}`, async () => {
+      try {
+        await appointmentService.updateAppointmentStatus(appt.id, "no-show");
+        addToast({
+          title: "Marked No-Show",
+          description: `${getPatientName(appt.patientId)} did not check in for their appointment.`,
+          color: "warning",
+        });
+      } catch (err) {
+        console.error("Error marking appointment as no-show:", err);
+        addToast({
+          title: "Failed to Mark No-Show",
+          description: "Could not update the appointment. Please try again.",
+          color: "danger",
+        });
+      }
+    });
+
+  // Doctor/Expert duty status — who's actually at the clinic right now vs.
+  // off-duty. `doctors`/`experts` are loaded once (not a live subscription
+  // like appointments/billings), so a toggle updates local state directly
+  // rather than waiting on a re-fetch.
+  const [isDutyPanelOpen, setIsDutyPanelOpen] = useState(false);
+  const [togglingDutyId, setTogglingDutyId] = useState<string | null>(null);
+
+  const handleToggleDoctorDuty = async (doctor: Doctor) => {
+    const nextIsOnDuty = !(doctor.isOnDuty ?? true);
+
+    setTogglingDutyId(doctor.id);
+    try {
+      await doctorService.updateDoctor(doctor.id, { isOnDuty: nextIsOnDuty });
+      setDoctors((prev) =>
+        prev.map((d) =>
+          d.id === doctor.id ? { ...d, isOnDuty: nextIsOnDuty } : d,
+        ),
+      );
+    } catch (err) {
+      console.error("Error toggling doctor duty status:", err);
+      addToast({
+        title: "Failed to Update Status",
+        description: "Could not update this doctor's duty status.",
+        color: "danger",
+      });
+    } finally {
+      setTogglingDutyId(null);
+    }
+  };
+
+  const handleToggleExpertDuty = async (expert: Expert) => {
+    const nextIsOnDuty = !(expert.isOnDuty ?? true);
+
+    setTogglingDutyId(expert.id);
+    try {
+      await expertService.updateExpert(expert.id, { isOnDuty: nextIsOnDuty });
+      setExperts((prev) =>
+        prev.map((e) =>
+          e.id === expert.id ? { ...e, isOnDuty: nextIsOnDuty } : e,
+        ),
+      );
+    } catch (err) {
+      console.error("Error toggling expert duty status:", err);
+      addToast({
+        title: "Failed to Update Status",
+        description: "Could not update this expert's duty status.",
+        color: "danger",
+      });
+    } finally {
+      setTogglingDutyId(null);
+    }
+  };
 
   // Auto-switch active tab based on resolved doctor/expert role, and resolve their IDs
   useEffect(() => {
@@ -125,6 +451,11 @@ export default function FrontOfficeDesk() {
       setCurrentExpertId(null);
     }
 
+    // An explicit `?tab=` (e.g. returning from settling a billing invoice)
+    // takes priority over the role-based default — don't clobber a
+    // deliberate return navigation.
+    if (searchParams.get("tab")) return;
+
     if (matchedDoc && matchedExp) {
       setActiveTab("all"); // If both, maybe show all workflow
     } else if (matchedDoc) {
@@ -132,80 +463,7 @@ export default function FrontOfficeDesk() {
     } else if (matchedExp) {
       setActiveTab("expert");
     }
-  }, [doctors, experts, currentUser?.email]);
-
-  // Seed demo doctor and expert
-  const seedDemoDoctorAndExpert = async () => {
-    if (!clinicId) {
-      addToast({
-        title: "Seed Error",
-        description: "Clinic ID not found. Please log in.",
-        color: "danger",
-      });
-
-      return;
-    }
-
-    try {
-      const { doc, setDoc } = await import("firebase/firestore");
-
-      // 1. Seed Doctor
-      const demoDoctorId = "doctor_karan";
-      const doctorRef = doc(db, "doctors", demoDoctorId);
-
-      await setDoc(doctorRef, {
-        id: demoDoctorId,
-        name: "Dr. Karan Bohara",
-        doctorType: "regular",
-        defaultCommission: 10,
-        speciality: "Dermatology & Aesthetics",
-        phone: "9876543210",
-        email: "doctor@procaresoft.com",
-        nmcNumber: "NMC-12345",
-        clinicId: clinicId,
-        branchId: branchId || clinicId,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy: currentUser?.uid || "system",
-      });
-
-      // 2. Seed Expert
-      const demoExpertId = "expert_deepak";
-      const expertRef = doc(db, "experts", demoExpertId);
-
-      await setDoc(expertRef, {
-        id: demoExpertId,
-        name: "Deepak Sharma",
-        expertType: "regular",
-        defaultCommission: 15,
-        speciality: "Skin & Laser Therapy Specialist",
-        phone: "9876543211",
-        email: "expert@procaresoft.com",
-        licenseNumber: "LIC-98765",
-        clinicId: clinicId,
-        branchId: branchId || clinicId,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy: currentUser?.uid || "system",
-      });
-
-      addToast({
-        title: "Seed Successful",
-        description:
-          "Doctor (doctor@procaresoft.com) and Expert (expert@procaresoft.com) seeded successfully.",
-        color: "success",
-      });
-    } catch (err: any) {
-      console.error("Error seeding demo clinicians:", err);
-      addToast({
-        title: "Seed Failed",
-        description: err.message || "Failed to write seed data.",
-        color: "danger",
-      });
-    }
-  };
+  }, [doctors, experts, currentUser?.email, searchParams]);
 
   // Triage modal state
   const [isTriageModalOpen, setIsTriageModalOpen] = useState(false);
@@ -377,6 +635,7 @@ export default function FrontOfficeDesk() {
   const [quickIntakeForm, setQuickIntakeForm] = useState({
     name: "",
     mobile: "",
+    patientPanVat: "",
     age: "",
     gender: "male",
     appointmentDate: new Date().toISOString().split("T")[0],
@@ -425,6 +684,7 @@ export default function FrontOfficeDesk() {
     setQuickIntakeForm({
       name: "",
       mobile: "",
+      patientPanVat: "",
       age: "",
       gender: "male",
       appointmentDate: new Date().toISOString().split("T")[0],
@@ -506,6 +766,7 @@ export default function FrontOfficeDesk() {
           referralPartnersData,
           expertsData,
           staffData,
+          billingSettingsData,
         ] = await Promise.all([
           patientService.getPatients(clinicId),
           doctorService.getDoctors(clinicId),
@@ -523,6 +784,9 @@ export default function FrontOfficeDesk() {
             branchId || undefined,
           ),
           hrService.getStaffByClinic(clinicId!, branchId || undefined),
+          appointmentBillingService
+            .getBillingSettings(clinicId)
+            .catch(() => null),
         ]);
 
         if (isActive) {
@@ -533,6 +797,7 @@ export default function FrontOfficeDesk() {
           setReferralPartners(referralPartnersData);
           setExperts(expertsData || []);
           setStaff(staffData || []);
+          setBillingSettings(billingSettingsData);
 
           // Pre-select first doctor and first appointment type for quick walk-in intake
           if (doctorsData.length > 0) {
@@ -559,6 +824,14 @@ export default function FrontOfficeDesk() {
         }
       } catch (err) {
         console.error("Error loading supporting front-office data:", err);
+        if (isActive) {
+          addToast({
+            title: "Failed to Load Front Office Data",
+            description:
+              "Could not load patients, doctors, or clinic settings. Please refresh the page.",
+            color: "danger",
+          });
+        }
       }
     };
 
@@ -768,7 +1041,29 @@ export default function FrontOfficeDesk() {
       const appt = appointments.find((a) => a.id === appointmentId);
 
       if (appt && appt.consultationBillingId) {
-        return appt.consultationBillingId;
+        // A cancelled invoice must not block re-billing — without this
+        // check, a cancelled consultation invoice permanently "occupies"
+        // consultationBillingId and every future routing attempt with
+        // "Charge Consultation Fee" checked would silently reopen the
+        // dead cancelled invoice instead of ever creating a fresh charge.
+        try {
+          const existingBilling = await appointmentBillingService.getBillingById(
+            appt.consultationBillingId,
+          );
+
+          if (existingBilling && existingBilling.status !== "cancelled") {
+            return appt.consultationBillingId;
+          }
+        } catch (err) {
+          console.error(
+            "Error checking existing consultation billing status:",
+            err,
+          );
+
+          // Can't confirm the existing invoice is safe to replace — fail
+          // safe and reuse it rather than risk creating a duplicate.
+          return appt.consultationBillingId;
+        }
       }
       let pat = patients.find((p) => p.id === patientId);
 
@@ -782,18 +1077,36 @@ export default function FrontOfficeDesk() {
 
       let totalInvoiceAmount = 0;
       const items: any[] = [];
+      // Tracks whether any item this loop builds is a package-session
+      // commission-only item (price 0 — patient already paid for the
+      // package — but still commission-bearing for the performing
+      // clinician). When true, the invoice is deliberately NOT
+      // auto-marked "paid" at creation (even though its total is 0) so
+      // that the explicit recordPayment(..., 0, "package") call below
+      // triggers the normal "commission generated when the invoice is
+      // paid" pipeline, instead of silently earning no commission.
+      let hasPackageSessionCommissionItem = false;
 
-      const cliniciansToProcess =
-        cliniciansList && cliniciansList.length > 0
-          ? cliniciansList
-          : [
-              {
-                clinicianId: doctorId,
-                appointmentTypeId: appointmentTypeId,
-                addCommission: addClinicianCommission,
-                chargeConsultation: generateConsultationFee,
-              },
-            ];
+      // Only the Quick Intake modal's real "Charge Fee" checkboxes (one per
+      // clinician row) reach here as a genuine multi-item cliniciansList —
+      // every other call site (check-in, routing) builds the single-item
+      // fallback below with chargeConsultation hardcoded from its own
+      // caller, not a real per-row toggle. The checkbox is only made
+      // authoritative for the real list, so single-item call sites keep
+      // their exact existing behavior (see the "Charge Fee" bug note below).
+      const isMultiClinicianList = Boolean(
+        cliniciansList && cliniciansList.length > 0,
+      );
+      const cliniciansToProcess = isMultiClinicianList
+        ? cliniciansList!
+        : [
+            {
+              clinicianId: doctorId,
+              appointmentTypeId: appointmentTypeId,
+              addCommission: addClinicianCommission,
+              chargeConsultation: generateConsultationFee,
+            },
+          ];
 
       for (const cl of cliniciansToProcess) {
         if (!cl.clinicianId || cl.clinicianId === "unassigned") continue;
@@ -821,17 +1134,75 @@ export default function FrontOfficeDesk() {
 
         if (cl.chargeConsultation) {
           if (docInfo) {
-            clConsultationPrice =
-              docInfo.consultationCharge !== undefined
-                ? Number(docInfo.consultationCharge)
-                : 700;
+            if (docInfo.consultationCharge !== undefined) {
+              clConsultationPrice = Number(docInfo.consultationCharge);
+            } else {
+              console.warn(
+                `Doctor "${docInfo.name}" (${docInfo.id}) has no consultationCharge set — falling back to NPR ${FALLBACK_CONSULTATION_FEE}. Set a real fee on their profile.`,
+              );
+              clConsultationPrice = FALLBACK_CONSULTATION_FEE;
+            }
           }
         }
 
         let clApptTypeItem: any = null;
         let isApptTypeConsultation = false;
 
+        // Consuming a session from a previously-sold package: the patient
+        // already paid at time of sale, so this never adds to what they
+        // owe (price stays 0) — but the assigned doctor/expert performing
+        // the session still earns commission, computed on the package's
+        // per-session value (price ÷ totalSessions), same as any other
+        // commission-bearing item.
         if (
+          cl.appointmentTypeId &&
+          cl.appointmentTypeId.startsWith("consume_pkg_") &&
+          (docInfo || expInfo)
+        ) {
+          const patientPkgId = cl.appointmentTypeId.replace(
+            "consume_pkg_",
+            "",
+          );
+          const patientPkg =
+            activePatientPackages.find((p) => p.id === patientPkgId) ||
+            (await patientPackageService.getPatientPackageById(patientPkgId));
+          const pkg = patientPkg
+            ? packages.find((p) => p.id === patientPkg.packageId)
+            : undefined;
+
+          if (pkg) {
+            const sessionCount =
+              patientPkg?.totalSessions || pkg.totalSessions || 1;
+            const perSessionValue = pkg.price > 0 ? pkg.price / sessionCount : 0;
+            const commissionPct =
+              cl.addCommission
+                ? (isExpert
+                    ? expInfo?.defaultCommission
+                    : docInfo?.defaultCommission) || 0
+                : 0;
+
+            if (commissionPct > 0 && perSessionValue > 0) {
+              clApptTypeItem = {
+                id: crypto.randomUUID(),
+                appointmentTypeId: cl.appointmentTypeId,
+                appointmentTypeName: `Package Session — ${pkg.name}`,
+                price: 0,
+                quantity: 1,
+                commission: commissionPct,
+                doctorId: cl.clinicianId,
+                doctorName: isExpert
+                  ? expInfo?.name || "Expert"
+                  : docInfo?.name || "GP",
+                amount: perSessionValue,
+              };
+              hasPackageSessionCommissionItem = true;
+            }
+          } else {
+            console.warn(
+              `Could not resolve package for session consumption (patientPackageId=${patientPkgId}) — no commission item created.`,
+            );
+          }
+        } else if (
           cl.appointmentTypeId &&
           cl.appointmentTypeId !== "default" &&
           cl.appointmentTypeId !== "consultation-fee" &&
@@ -846,13 +1217,27 @@ export default function FrontOfficeDesk() {
             const nameLower = apptType.name.toLowerCase();
 
             isApptTypeConsultation = nameLower.includes("consult");
-            let shouldCharge =
-              apptType.billAtFrontDesk ||
-              nameLower.includes("hair analy") ||
-              nameLower.includes("skin analy") ||
-              isApptTypeConsultation;
 
-            if (isApptTypeConsultation && !cl.chargeConsultation) {
+            // Bug fix: previously the "Charge Fee" checkbox only had any
+            // effect when the category name literally contained "consult"
+            // — for every other category (e.g. a procedure), whether it
+            // billed was decided solely by the appointment type's own
+            // billAtFrontDesk flag, completely ignoring what staff checked
+            // or unchecked in the Quick Intake modal. For the real
+            // multi-clinician list, the checkbox is now the sole, honest
+            // answer to "does this row get billed" — no silent fallback.
+            let shouldCharge = isMultiClinicianList
+              ? Boolean(cl.chargeConsultation)
+              : apptType.billAtFrontDesk ||
+                nameLower.includes("hair analy") ||
+                nameLower.includes("skin analy") ||
+                isApptTypeConsultation;
+
+            if (
+              !isMultiClinicianList &&
+              isApptTypeConsultation &&
+              !cl.chargeConsultation
+            ) {
               shouldCharge = false;
             }
 
@@ -895,7 +1280,13 @@ export default function FrontOfficeDesk() {
           items.push({
             id: crypto.randomUUID(),
             appointmentTypeId: "consultation-fee",
-            appointmentTypeName: `Doctor Consultation Fee - Dr. ${docInfo?.name || "GP"}`,
+            appointmentTypeName: `Doctor Consultation Fee - ${
+              docInfo?.name
+                ? docInfo.name.startsWith("Dr.")
+                  ? docInfo.name
+                  : `Dr. ${docInfo.name}`
+                : "Dr. GP"
+            }`,
             price: clConsultationPrice,
             quantity: 1,
             commission: cl.addCommission ? docInfo?.defaultCommission || 0 : 0,
@@ -915,70 +1306,24 @@ export default function FrontOfficeDesk() {
       }
 
       // 2. Resolve all referrers (polymorphic and multiple)
-      const processedReferrals: Array<{
-        type: "referral-partner" | "doctor" | "expert" | "staff";
-        id: string;
-        name: string;
-        commissionPercentage: number;
-        commissionAmount: number;
-      }> = [];
-
-      if (
-        pat?.referrals &&
-        Array.isArray(pat.referrals) &&
-        pat.referrals.length > 0
-      ) {
-        for (const ref of pat.referrals) {
-          const pct = ref.commissionPercentage || 0;
-          const amt = (totalInvoiceAmount * pct) / 100;
-
-          processedReferrals.push({
-            type: ref.type,
-            id: ref.id,
-            name: ref.name,
-            commissionPercentage: pct,
-            commissionAmount: amt,
-          });
-        }
-      } else if (pat?.referralPartnerId) {
-        // Backward compatibility fallback: single referral partner ID
-        try {
-          const partner = await referralPartnerService.getReferralPartnerById(
-            pat.referralPartnerId,
-          );
-
-          if (partner) {
-            const pct = partner.defaultCommission || 0;
-            const amt = (totalInvoiceAmount * pct) / 100;
-
-            processedReferrals.push({
-              type: "referral-partner",
-              id: partner.id,
-              name: partner.name,
-              commissionPercentage: pct,
-              commissionAmount: amt,
-            });
-          }
-        } catch (err) {
-          console.error(
-            "Error fetching fallback referral partner for automated billing:",
-            err,
-          );
-        }
-      }
-
-      // Keep primary partner values for legacy schema columns
-      const primaryPartner = processedReferrals.find(
-        (r) => r.type === "referral-partner",
-      );
-      const refPartnerId = primaryPartner
-        ? primaryPartner.id
-        : pat?.referralPartnerId || undefined;
-      const refCommissionAmt = primaryPartner
-        ? primaryPartner.commissionAmount
-        : undefined;
+      const { processedReferrals, refPartnerId, refCommissionAmt } =
+        await resolvePatientReferrals(pat, totalInvoiceAmount);
 
       // Items are already built above in the array loop
+
+      // Apply the clinic's real tax settings instead of always billing
+      // untaxed — this invoice is created and IRD-synced immediately
+      // (see appointmentBillingService.createBilling), so it must be
+      // correct from the start, not "fixed later".
+      const taxPercentage = billingSettings?.enableTax
+        ? billingSettings.defaultTaxPercentage || 0
+        : 0;
+      const totals = appointmentBillingService.calculateInvoiceTotals(
+        items,
+        "percent",
+        0,
+        taxPercentage,
+      );
 
       const billingData = {
         invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
@@ -986,6 +1331,7 @@ export default function FrontOfficeDesk() {
         branchId: branchId || clinicId!,
         patientId: patientId,
         patientName: pat?.name || "Unknown Patient",
+        patientPanVat: pat?.patientPanVat || undefined,
         doctorId: doctorId || "unassigned",
         doctorName: "Multiple/System",
         doctorType: "regular" as const,
@@ -998,34 +1344,60 @@ export default function FrontOfficeDesk() {
         referrals: processedReferrals, // Save complete polymorph referral ledger on invoice
         invoiceDate: new Date(),
         items: items,
-        subtotal: totalInvoiceAmount,
+        subtotal: totals.subtotal,
         itemDiscountAmount: 0,
         mainDiscountAmount: 0,
         discountType: "percent" as const,
         discountValue: 0,
-        discountAmount: 0,
-        taxPercentage: 0,
-        taxAmount: 0,
-        totalAmount: totalInvoiceAmount,
+        discountAmount: totals.totalDiscount,
+        taxPercentage,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
+        // A zero-total package-session-commission item is deliberately
+        // NOT auto-marked "paid" here — commission is only ever generated
+        // by recordPayment() on a genuine unpaid→paid transition (see the
+        // explicit recordPayment call below), so auto-paid-at-creation
+        // would silently skip commission for the performing clinician.
         status:
-          totalInvoiceAmount === 0 ? ("paid" as const) : ("draft" as const),
+          totals.totalAmount === 0 && !hasPackageSessionCommissionItem
+            ? ("paid" as const)
+            : ("draft" as const),
         paymentStatus:
-          totalInvoiceAmount === 0 ? ("paid" as const) : ("unpaid" as const),
+          totals.totalAmount === 0 && !hasPackageSessionCommissionItem
+            ? ("paid" as const)
+            : ("unpaid" as const),
         paidAmount: 0,
-        balanceAmount: totalInvoiceAmount,
+        balanceAmount: totals.totalAmount,
         createdBy: currentUser?.uid || "system",
       };
 
       const { id: billingId } =
         await appointmentBillingService.createBilling(billingData);
 
+      if (hasPackageSessionCommissionItem) {
+        try {
+          await appointmentBillingService.recordPayment(
+            billingId,
+            0,
+            "package",
+            undefined,
+            "Package session — covered by pre-paid package, no additional charge.",
+          );
+        } catch (payErr) {
+          console.error(
+            "Error recording zero-amount payment for package session commission:",
+            payErr,
+          );
+        }
+      }
+
       // Link billing record to the appointment in Firestore
       await appointmentService.updateAppointment(appointmentId, {
         consultationBillingId: billingId,
-        consultationBillingStatus: totalInvoiceAmount === 0 ? "paid" : "unpaid",
+        consultationBillingStatus: totals.totalAmount === 0 ? "paid" : "unpaid",
         billingId: null,
         billingStatus: "unpaid",
-        paymentStatus: totalInvoiceAmount === 0 ? "paid" : "unpaid",
+        paymentStatus: totals.totalAmount === 0 ? "paid" : "unpaid",
         updatedAt: new Date(),
       } as any);
 
@@ -1127,7 +1499,23 @@ export default function FrontOfficeDesk() {
 
   const handleConfirmRoute = async () => {
     if (!routingAppointment) return;
+
+    return runGuarded(`confirm-route-${routingAppointment.id}`, async () => {
     try {
+      // Defense in depth — the cabin <select>'s disabled options already
+      // prevent picking an occupied room, but re-check here in case of a
+      // stale render (another patient routed there between opening this
+      // modal and confirming).
+      if (routingCabin && occupiedCabins[routingCabin]) {
+        addToast({
+          title: "Cabin Already Occupied",
+          description: `${routingCabin} is currently occupied by ${occupiedCabins[routingCabin]}. Please choose a different room.`,
+          color: "danger",
+        });
+
+        return;
+      }
+
       const updateData: any = {
         status: "in-progress",
         cabinName: routingCabin,
@@ -1147,9 +1535,11 @@ export default function FrontOfficeDesk() {
         updateData.doctorId = routingDoctorId;
         updateData.doctorConsultationCompleted = false;
 
+        // Append-only: a prior "[Routed to: Expert]" marker (if any) is left
+        // in place so notes keep the full routing history instead of only
+        // ever reflecting the most recent route.
         let updatedNotes = routingAppointment.notes || "";
 
-        updatedNotes = updatedNotes.replace("[Routed to: Expert]", "").trim();
         if (!updatedNotes.includes("[Routed to: Doctor]")) {
           updatedNotes = (updatedNotes + " [Routed to: Doctor]").trim();
         }
@@ -1175,9 +1565,9 @@ export default function FrontOfficeDesk() {
         ) {
           updateData.doctorConsultationCompleted = true;
 
+          // Append-only — see the "routed to: Doctor" branch above for why.
           let updatedNotes = routingAppointment.notes || "";
 
-          updatedNotes = updatedNotes.replace("[Routed to: Doctor]", "").trim();
           if (!updatedNotes.includes("[Routed to: Expert]")) {
             updatedNotes = (updatedNotes + " [Routed to: Expert]").trim();
           }
@@ -1224,7 +1614,9 @@ export default function FrontOfficeDesk() {
         routingChargeConsultation &&
         createdBillingId
       ) {
-        navigate(`/dashboard/appointments-billing/${createdBillingId}`);
+        navigate(
+          `/dashboard/appointments-billing/${createdBillingId}?from=front-office&tab=${activeTab}`,
+        );
       }
     } catch (err) {
       console.error("Error routing patient:", err);
@@ -1234,6 +1626,7 @@ export default function FrontOfficeDesk() {
         color: "danger",
       });
     }
+    });
   };
 
   const handleAssignCabin = async (
@@ -1292,6 +1685,20 @@ export default function FrontOfficeDesk() {
       );
 
       if (hasBookedItem) {
+        return billing.paymentStatus || "unpaid";
+      }
+
+      // This invoice may already be IRD-synced (sync happens at creation,
+      // not at a later "Finalize") — updateBilling would throw rather than
+      // silently patch a locked invoice's items. Check up front so the
+      // front-desk user gets a clear reason instead of nothing happening.
+      if (isBillingLocked(billing)) {
+        addToast({
+          title: "Invoice Already Locked",
+          description: `${apptType.name} could not be added — this invoice is already IRD-synced. Create a separate invoice for this charge from Appointment Billing.`,
+          color: "warning",
+        });
+
         return billing.paymentStatus || "unpaid";
       }
 
@@ -1359,7 +1766,8 @@ export default function FrontOfficeDesk() {
   const handleCompleteConsultation = async (
     appointmentId: string,
     forceComplete: boolean = false,
-  ) => {
+  ) =>
+    runGuarded(`complete-consultation-${appointmentId}`, async () => {
     try {
       const appt = appointments.find((a) => a.id === appointmentId);
 
@@ -1438,6 +1846,14 @@ export default function FrontOfficeDesk() {
             });
           } catch (err) {
             console.error("Error consuming session", err);
+            addToast({
+              title: "Package Session Not Deducted",
+              description:
+                err instanceof Error
+                  ? err.message
+                  : "The consultation was completed, but the package session could not be deducted. Check the patient's package manually.",
+              color: "warning",
+            });
           }
         }
 
@@ -1467,9 +1883,10 @@ export default function FrontOfficeDesk() {
         color: "danger",
       });
     }
-  };
+    });
 
-  const handleCompleteCheckout = async (appointmentId: string) => {
+  const handleCompleteCheckout = async (appointmentId: string) =>
+    runGuarded(`complete-checkout-${appointmentId}`, async () => {
     try {
       const appt = appointments.find((a) => a.id === appointmentId);
 
@@ -1558,6 +1975,14 @@ export default function FrontOfficeDesk() {
           });
         } catch (err) {
           console.error("Error consuming session during checkout:", err);
+          addToast({
+            title: "Package Session Not Deducted",
+            description:
+              err instanceof Error
+                ? err.message
+                : "Checkout completed, but the package session could not be deducted. Check the patient's package manually.",
+            color: "warning",
+          });
         }
       }
       addToast({
@@ -1573,7 +1998,7 @@ export default function FrontOfficeDesk() {
         color: "danger",
       });
     }
-  };
+    });
 
   const handleOpenTriage = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
@@ -1987,6 +2412,14 @@ export default function FrontOfficeDesk() {
             });
           } catch (err) {
             console.error("Error consuming session", err);
+            addToast({
+              title: "Package Session Not Deducted",
+              description:
+                err instanceof Error
+                  ? err.message
+                  : "The procedure was logged, but the package session could not be deducted. Check the patient's package manually.",
+              color: "warning",
+            });
           }
         }
 
@@ -2036,7 +2469,8 @@ export default function FrontOfficeDesk() {
           : selectedAppointment.doctorConsultationCompleted;
 
       if (target === "expert") {
-        updatedNotes = updatedNotes.replace("[Routed to: Doctor]", "").trim();
+        // Append-only, not destructive — see handleConfirmRoute for the
+        // same reasoning: notes should keep the full routing history.
         if (!updatedNotes.includes("[Routed to: Expert]")) {
           updatedNotes = (updatedNotes + " [Routed to: Expert]").trim();
         }
@@ -2071,6 +2505,14 @@ export default function FrontOfficeDesk() {
           });
         } catch (err) {
           console.error("Error consuming session", err);
+          addToast({
+            title: "Package Session Not Deducted",
+            description:
+              err instanceof Error
+                ? err.message
+                : "Routing completed, but the package session could not be deducted. Check the patient's package manually.",
+            color: "warning",
+          });
         }
       }
 
@@ -2201,10 +2643,31 @@ export default function FrontOfficeDesk() {
     return "completed";
   };
 
-  // Filter list by selected active tab
+  // Which exclusive cabins are currently occupied, and by whom — used to
+  // warn/block routing a second patient into the same physical room while
+  // someone else is already there. Excludes the patient currently being
+  // routed (re-confirming their own current cabin isn't a conflict).
+  const occupiedCabins: Record<string, string> = {};
+
+  for (const a of appointments) {
+    if (
+      a.status === "in-progress" &&
+      a.cabinName &&
+      EXCLUSIVE_CABIN_NAMES.has(a.cabinName) &&
+      a.id !== routingAppointment?.id
+    ) {
+      occupiedCabins[a.cabinName] = getPatientName(a.patientId);
+    }
+  }
+
+  // Filter list by selected active tab (or, when a search query is typed,
+  // find the patient across ALL stages — the whole point of searching is
+  // to find someone regardless of which tab they happen to be in right
+  // now, not to further narrow an already-selected tab).
   const filteredAppointments = appointments.filter((appt) => {
     const stage = getPatientStage(appt);
     const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
+
 
     // If logged-in user has clinician profiles, only show their own patients
     if (currentDoctorId || currentExpertId) {
@@ -2236,6 +2699,7 @@ export default function FrontOfficeDesk() {
         if (consBill && !isConsBillPaid) return true;
       }
       if (
+        !appt.onHold &&
         appt.createdAt &&
         (stage === "lobby" ||
           stage === "triage-done" ||
@@ -2255,6 +2719,19 @@ export default function FrontOfficeDesk() {
       }
 
       return false;
+    }
+
+    if (boardSearchQuery.trim()) {
+      const q = boardSearchQuery.trim().toLowerCase();
+      const name = getPatientName(appt.patientId).toLowerCase();
+      const reg = getPatientReg(appt.patientId).toLowerCase();
+
+      // Also exclude fully completed/checked-out visits from search — a
+      // finished visit isn't something staff are trying to "find" on a
+      // live board the same way an active one is.
+      return (
+        stage !== "completed" && (name.includes(q) || reg.includes(q))
+      );
     }
 
     if (activeTab === "lobby")
@@ -2322,6 +2799,7 @@ export default function FrontOfficeDesk() {
         doctors={doctors}
         experts={experts}
         isOpen={isRoutingModalOpen}
+        occupiedCabins={occupiedCabins}
         patientName={
           routingAppointment ? getPatientName(routingAppointment.patientId) : ""
         }
@@ -2577,6 +3055,28 @@ export default function FrontOfficeDesk() {
 
         return;
       }
+
+      if (mobileStatus === "checking") {
+        addToast({
+          title: "Please Wait",
+          description:
+            "Still checking whether this mobile number is already registered.",
+          color: "warning",
+        });
+
+        return;
+      }
+
+      if (mobileStatus === "duplicate") {
+        addToast({
+          title: "Duplicate Patient",
+          description:
+            "A patient with this mobile number already exists. Search for them instead of creating a new profile.",
+          color: "danger",
+        });
+
+        return;
+      }
     } else {
       if (!selectedExistingPatient) {
         addToast({
@@ -2617,11 +3117,27 @@ export default function FrontOfficeDesk() {
       return;
     }
 
+    const totalReferralSplit = quickIntakeForm.referrals.reduce(
+      (sum: number, ref: any) => sum + (Number(ref.commissionPercentage) || 0),
+      0,
+    );
+
+    if (totalReferralSplit > 100) {
+      addToast({
+        title: "Invalid Commission Split",
+        description: `Referral Split % totals ${totalReferralSplit}%, which exceeds 100%. Adjust the values before continuing.`,
+        color: "danger",
+      });
+
+      return;
+    }
+
     setQuickIntakeSaving(true);
     try {
       let patientIdToUse = "";
       let regNumberToUse = "";
       let patientNameToUse = "";
+      let patientPanVatToUse: string | undefined;
 
       if (intakeMode === "new") {
         // Check uniqueness of mobile first
@@ -2661,6 +3177,7 @@ export default function FrontOfficeDesk() {
         const newPatientId = await patientService.createPatient({
           name: quickIntakeForm.name.trim(),
           mobile: quickIntakeForm.mobile.trim(),
+          patientPanVat: quickIntakeForm.patientPanVat.trim() || undefined,
           age: quickIntakeForm.age.trim(),
           gender: quickIntakeForm.gender as "male" | "female" | "other",
           regNumber: nextReg,
@@ -2675,10 +3192,12 @@ export default function FrontOfficeDesk() {
 
         patientIdToUse = newPatientId;
         patientNameToUse = quickIntakeForm.name.trim();
+        patientPanVatToUse = quickIntakeForm.patientPanVat.trim() || undefined;
         const newPatient = {
           id: newPatientId,
           name: quickIntakeForm.name.trim(),
           mobile: quickIntakeForm.mobile.trim(),
+          patientPanVat: quickIntakeForm.patientPanVat.trim() || undefined,
           age: quickIntakeForm.age.trim(),
           gender: quickIntakeForm.gender as "male" | "female" | "other",
           regNumber: nextReg,
@@ -2699,6 +3218,7 @@ export default function FrontOfficeDesk() {
         patientIdToUse = selectedExistingPatient.id;
         regNumberToUse = selectedExistingPatient.regNumber || "N/A";
         patientNameToUse = selectedExistingPatient.name;
+        patientPanVatToUse = selectedExistingPatient.patientPanVat;
 
         // Optionally update existing patient's doctor, referrals or expert in background if changed
         const updateData: any = {};
@@ -2738,30 +3258,41 @@ export default function FrontOfficeDesk() {
           amount: pkg.price,
         };
 
+        const pkgTaxPercentage = billingSettings?.enableTax
+          ? billingSettings.defaultTaxPercentage || 0
+          : 0;
+        const pkgTotals = appointmentBillingService.calculateInvoiceTotals(
+          [billingItem],
+          "percent",
+          0,
+          pkgTaxPercentage,
+        );
+
         const billingData = {
           invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
           clinicId: clinicId!,
           branchId: branchId || clinicId!,
           patientId: patientIdToUse,
           patientName: patientNameToUse,
+          patientPanVat: patientPanVatToUse,
           doctorId: "unassigned",
           doctorName: "Clinic",
           doctorType: "regular" as const,
           invoiceDate: new Date(),
           items: [billingItem],
-          subtotal: pkg.price,
+          subtotal: pkgTotals.subtotal,
           itemDiscountAmount: 0,
           mainDiscountAmount: 0,
           discountType: "percent" as const,
           discountValue: 0,
-          discountAmount: 0,
-          taxPercentage: 0,
-          taxAmount: 0,
-          totalAmount: pkg.price,
+          discountAmount: pkgTotals.totalDiscount,
+          taxPercentage: pkgTaxPercentage,
+          taxAmount: pkgTotals.taxAmount,
+          totalAmount: pkgTotals.totalAmount,
           status: "draft" as const,
           paymentStatus: "unpaid" as const,
           paidAmount: 0,
-          balanceAmount: pkg.price,
+          balanceAmount: pkgTotals.totalAmount,
           createdBy: currentUser?.uid || "system",
         };
 
@@ -3128,6 +3659,7 @@ export default function FrontOfficeDesk() {
       setQuickIntakeForm({
         name: "",
         mobile: "",
+        patientPanVat: "",
         age: "",
         gender: "male",
         appointmentDate: new Date().toISOString().split("T")[0],
@@ -3219,6 +3751,12 @@ export default function FrontOfficeDesk() {
       const clinician = docInfo || expInfo;
       const clinicianName = clinician?.name || "Clinician";
       const defaultComm = clinician?.defaultCommission || 0;
+      // Set when the invoice we'd normally patch turns out to be IRD-locked
+      // — instead of a dead-end toast, we fall through to the same "create
+      // a fresh draft invoice" logic used when there's no invoice at all,
+      // so staff get a working invoice for this procedure in one step
+      // instead of having to build one manually elsewhere.
+      let followUpAfterLock = false;
 
       if (accept && rec && rec.fee > 0) {
         let procedureItemsToAdd: any[] = [];
@@ -3324,7 +3862,13 @@ export default function FrontOfficeDesk() {
           const billing =
             await appointmentBillingService.getBillingById(billingId);
 
-          if (billing) {
+          if (billing && isBillingLocked(billing)) {
+            // This invoice may already be IRD-synced (sync happens at
+            // creation, not at a later "Finalize") — updateBilling would
+            // throw rather than silently patch a locked invoice's items.
+            followUpAfterLock = true;
+            billingId = null;
+          } else if (billing) {
             const updatedItems = [
               ...(billing.items || []),
               ...procedureItemsToAdd,
@@ -3413,8 +3957,11 @@ export default function FrontOfficeDesk() {
               updatedAt: new Date(),
             } as any);
           }
-        } else {
-          // No invoice exists. Create a draft invoice for this procedure from scratch.
+        }
+
+        if (!billingId) {
+          // No invoice exists (or the existing one was locked, see above) —
+          // create a draft invoice for this procedure from scratch.
           let pat = patients.find((p) => p.id === apptToFinalise.patientId);
 
           if (!pat && apptToFinalise.patientId) {
@@ -3461,12 +4008,23 @@ export default function FrontOfficeDesk() {
             }
           }
 
+          const procTaxPercentage = billingSettings?.enableTax
+            ? billingSettings.defaultTaxPercentage || 0
+            : 0;
+          const procTotals = appointmentBillingService.calculateInvoiceTotals(
+            draftBillingItems,
+            "percent",
+            0,
+            procTaxPercentage,
+          );
+
           const billingData = {
             invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
             clinicId: clinicId,
             branchId: branchId || clinicId,
             patientId: apptToFinalise.patientId,
             patientName: pat?.name || "Unknown Patient",
+            patientPanVat: pat?.patientPanVat || undefined,
             doctorId: clinicianId,
             doctorName: docInfo?.name || "Clinician",
             doctorType: ((docInfo as any)?.doctorType || "regular") as
@@ -3475,19 +4033,19 @@ export default function FrontOfficeDesk() {
             invoiceDate: new Date(),
             items: draftBillingItems,
             referrals: referrals,
-            subtotal: totalFee,
+            subtotal: procTotals.subtotal,
             itemDiscountAmount: 0,
             mainDiscountAmount: 0,
             discountType: "percent" as const,
             discountValue: 0,
-            discountAmount: 0,
-            taxPercentage: 0,
-            taxAmount: 0,
-            totalAmount: totalFee,
+            discountAmount: procTotals.totalDiscount,
+            taxPercentage: procTaxPercentage,
+            taxAmount: procTotals.taxAmount,
+            totalAmount: procTotals.totalAmount,
             status: "draft" as const,
             paymentStatus: "unpaid" as const,
             paidAmount: 0,
-            balanceAmount: totalFee,
+            balanceAmount: procTotals.totalAmount,
             createdBy: currentUser?.uid || "system",
           };
 
@@ -3525,9 +4083,15 @@ export default function FrontOfficeDesk() {
       await appointmentService.updateAppointment(apptToFinalise.id, updates);
 
       addToast({
-        title: accept ? "Procedure Billed" : "Procedure Declined",
+        title: accept
+          ? followUpAfterLock
+            ? "Follow-up Invoice Created"
+            : "Procedure Billed"
+          : "Procedure Declined",
         description: accept
-          ? "The procedure has been added to the invoice."
+          ? followUpAfterLock
+            ? "The original invoice was already IRD-synced, so a separate invoice was created for this procedure instead."
+            : "The procedure has been added to the invoice."
           : "The recommended procedure was discarded.",
         color: accept ? "success" : "warning",
       });
@@ -3544,7 +4108,8 @@ export default function FrontOfficeDesk() {
     }
   };
 
-  const handleSettleBilling = async (appt: Appointment) => {
+  const handleSettleBilling = async (appt: Appointment) =>
+    runGuarded(`settle-billing-${appt.id}`, async () => {
     // 1. If the appointment already has a cached billingId, let's inspect it.
     let targetBillingId = appt.billingId;
 
@@ -3572,7 +4137,9 @@ export default function FrontOfficeDesk() {
 
           if (!hasPendingProc) {
             // No procedure pending — consultation is fully settled. Navigate to it.
-            navigate(`/dashboard/appointments-billing/${targetBillingId}`);
+            navigate(
+              `/dashboard/appointments-billing/${targetBillingId}?from=front-office&tab=${activeTab}`,
+            );
 
             return;
           }
@@ -3584,7 +4151,9 @@ export default function FrontOfficeDesk() {
     }
 
     if (targetBillingId) {
-      navigate(`/dashboard/appointments-billing/${targetBillingId}`);
+      navigate(
+              `/dashboard/appointments-billing/${targetBillingId}?from=front-office&tab=${activeTab}`,
+            );
 
       return;
     }
@@ -3610,7 +4179,9 @@ export default function FrontOfficeDesk() {
       );
 
       if (draftBilling) {
-        navigate(`/dashboard/appointments-billing/${draftBilling.id}`);
+        navigate(
+          `/dashboard/appointments-billing/${draftBilling.id}?from=front-office&tab=${activeTab}`,
+        );
       } else {
         const consultationBillingId = (appt as any).consultationBillingId;
         const hasPendingProcedure =
@@ -3646,7 +4217,9 @@ export default function FrontOfficeDesk() {
           );
 
           if (paidBilling) {
-            navigate(`/dashboard/appointments-billing/${paidBilling.id}`);
+            navigate(
+              `/dashboard/appointments-billing/${paidBilling.id}?from=front-office&tab=${activeTab}`,
+            );
 
             return;
           }
@@ -3701,12 +4274,22 @@ export default function FrontOfficeDesk() {
             }
           }
 
-          let price = 500;
+          let price = FALLBACK_GENERAL_FEE;
           let appointmentTypeName = "General Consultation";
 
           if (apptType) {
-            price = Number(apptType.price) || 500;
+            if (Number(apptType.price)) {
+              price = Number(apptType.price);
+            } else {
+              console.warn(
+                `Appointment type "${apptType.name}" (${apptType.id}) has no price set — falling back to NPR ${FALLBACK_GENERAL_FEE}. Set a real price on it.`,
+              );
+            }
             appointmentTypeName = apptType.name || "General Consultation";
+          } else {
+            console.warn(
+              `Settling billing for an appointment with no resolvable appointment type — falling back to NPR ${FALLBACK_GENERAL_FEE} "General Consultation".`,
+            );
           }
 
           if (
@@ -3717,67 +4300,8 @@ export default function FrontOfficeDesk() {
           }
 
           // Resolve referrals
-          const processedReferrals: Array<{
-            type: "referral-partner" | "doctor" | "expert" | "staff";
-            id: string;
-            name: string;
-            commissionPercentage: number;
-            commissionAmount: number;
-          }> = [];
-
-          if (
-            pat?.referrals &&
-            Array.isArray(pat.referrals) &&
-            pat.referrals.length > 0
-          ) {
-            for (const ref of pat.referrals) {
-              const pct = ref.commissionPercentage || 0;
-              const amt = (price * pct) / 100;
-
-              processedReferrals.push({
-                type: ref.type,
-                id: ref.id,
-                name: ref.name,
-                commissionPercentage: pct,
-                commissionAmount: amt,
-              });
-            }
-          } else if (pat?.referralPartnerId) {
-            try {
-              const partner =
-                await referralPartnerService.getReferralPartnerById(
-                  pat.referralPartnerId,
-                );
-
-              if (partner) {
-                const pct = partner.defaultCommission || 0;
-                const amt = (price * pct) / 100;
-
-                processedReferrals.push({
-                  type: "referral-partner",
-                  id: partner.id,
-                  name: partner.name,
-                  commissionPercentage: pct,
-                  commissionAmount: amt,
-                });
-              }
-            } catch (err) {
-              console.error(
-                "Error fetching fallback referral partner for automatic procedure billing:",
-                err,
-              );
-            }
-          }
-
-          const primaryPartner = processedReferrals.find(
-            (r) => r.type === "referral-partner",
-          );
-          const refPartnerId = primaryPartner
-            ? primaryPartner.id
-            : pat?.referralPartnerId || undefined;
-          const refCommissionAmt = primaryPartner
-            ? primaryPartner.commissionAmount
-            : undefined;
+          const { processedReferrals, refPartnerId, refCommissionAmt } =
+            await resolvePatientReferrals(pat, price);
 
           const billingItem = {
             id: crypto.randomUUID(),
@@ -3797,12 +4321,23 @@ export default function FrontOfficeDesk() {
             amount: price,
           };
 
+          const settleTaxPercentage = billingSettings?.enableTax
+            ? billingSettings.defaultTaxPercentage || 0
+            : 0;
+          const settleTotals = appointmentBillingService.calculateInvoiceTotals(
+            [billingItem],
+            "percent",
+            0,
+            settleTaxPercentage,
+          );
+
           const billingData = {
             invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
             clinicId: clinicId,
             branchId: branchId ?? clinicId,
             patientId: appt.patientId,
             patientName: pat?.name || "Unknown Patient",
+            patientPanVat: pat?.patientPanVat || undefined,
             appointmentId: appt.id,
             doctorId: clinicianId,
             doctorName: docInfo
@@ -3823,19 +4358,19 @@ export default function FrontOfficeDesk() {
             referrals: processedReferrals,
             invoiceDate: new Date(),
             items: [billingItem],
-            subtotal: price,
+            subtotal: settleTotals.subtotal,
             itemDiscountAmount: 0,
             mainDiscountAmount: 0,
             discountType: "percent" as const,
             discountValue: 0,
-            discountAmount: 0,
-            taxPercentage: 0,
-            taxAmount: 0,
-            totalAmount: price,
+            discountAmount: settleTotals.totalDiscount,
+            taxPercentage: settleTaxPercentage,
+            taxAmount: settleTotals.taxAmount,
+            totalAmount: settleTotals.totalAmount,
             status: "draft" as const,
             paymentStatus: "unpaid" as const,
             paidAmount: 0,
-            balanceAmount: price,
+            balanceAmount: settleTotals.totalAmount,
             createdBy: currentUser?.uid || "system",
           };
 
@@ -3859,7 +4394,9 @@ export default function FrontOfficeDesk() {
             color: "success",
           });
 
-          navigate(`/dashboard/appointments-billing/${newBillingId}`);
+          navigate(
+            `/dashboard/appointments-billing/${newBillingId}?from=front-office&tab=${activeTab}`,
+          );
         } catch (genErr) {
           console.error(
             "Failed to generate procedure billing on fallback:",
@@ -3872,7 +4409,7 @@ export default function FrontOfficeDesk() {
       console.error("Error settling billing:", err);
       navigate("/dashboard/appointments-billing");
     }
-  };
+    });
 
   const getGuidedAction = (appt: Appointment) => {
     const stage = getPatientStage(appt);
@@ -3915,7 +4452,9 @@ export default function FrontOfficeDesk() {
         icon: <IoCardOutline className="w-4 h-4" />,
         colorClass: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
         onClick: () =>
-          navigate(`/dashboard/appointments-billing/${consBill.id}`),
+          navigate(
+            `/dashboard/appointments-billing/${consBill.id}?from=front-office&tab=${activeTab}`,
+          ),
       };
     }
 
@@ -4186,15 +4725,30 @@ export default function FrontOfficeDesk() {
                 Visitors Log
               </button>
               <button
-                className="clarity-btn bg-emerald-500 hover:bg-emerald-600 text-white border-transparent flex items-center gap-1.5"
+                className="clarity-btn clarity-btn-ghost flex items-center gap-1.5"
+                title="See and toggle which doctors/experts are on duty today"
                 type="button"
-                onClick={seedDemoDoctorAndExpert}
+                onClick={() => setIsDutyPanelOpen(true)}
               >
-                <IoAddOutline className="w-4 h-4" />
-                Seed Doctor & Expert
+                <IoPulseOutline className="w-4 h-4" />
+                Clinician Status
               </button>
             </>
           )}
+          <button
+            className="clarity-btn clarity-btn-ghost flex items-center gap-1.5"
+            title={
+              "Keyboard shortcuts:\n" +
+              "1 – Lobby   2 – Triage   3 – Doctor   4 – Expert\n" +
+              "5 – Billing   6 – Pharmacy   ` – All Workflow\n" +
+              "Alt+N – New Intake Check-In\n" +
+              "(disabled while typing in a text field)"
+            }
+            type="button"
+          >
+            <IoKeypadOutline className="w-4 h-4" />
+            Shortcuts
+          </button>
         </div>
       </div>
 
@@ -4488,6 +5042,7 @@ export default function FrontOfficeDesk() {
                     return true;
 
                   if (
+                    !a.onHold &&
                     a.createdAt &&
                     (s === "lobby" ||
                       s === "triage-done" ||
@@ -4643,6 +5198,32 @@ export default function FrontOfficeDesk() {
           })()}
         </div>
 
+        {/* Find a patient regardless of which stage/tab they're currently
+            in — while active, this bypasses the tab filter entirely rather
+            than further narrowing whichever tab happens to be selected. */}
+        <div className="px-4 pt-3">
+          <div className="relative max-w-sm">
+            <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/50 w-4 h-4" />
+            <input
+              className="w-full h-9 pl-9 pr-8 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary placeholder:text-text-muted/40 text-text-main"
+              placeholder="Find a patient by name or reg. number…"
+              type="text"
+              value={boardSearchQuery}
+              onChange={(e) => setBoardSearchQuery(e.target.value)}
+            />
+            {boardSearchQuery && (
+              <button
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main"
+                type="button"
+                onClick={() => setBoardSearchQuery("")}
+              >
+                <IoCloseOutline className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Live List rendering */}
         <div className="p-4">
           {loading ? (
@@ -4686,6 +5267,9 @@ export default function FrontOfficeDesk() {
               handleSendToDoctor={handleSendToDoctor}
               handleSendToExpert={handleSendToExpert}
               loading={loading}
+              onMarkNoShow={handleMarkNoShow}
+              onSendBack={setSendBackAppt}
+              onToggleHold={handleHoldButtonClick}
             />
           )}
         </div>
@@ -4699,6 +5283,168 @@ export default function FrontOfficeDesk() {
 
       {/* Render the procedure log popup modal */}
       {renderProcedureModal()}
+
+      {/* Send Back to Lobby / Undo Check-In — undo mis-routing, premature
+          triage, or check-in itself, depending on the patient's stage */}
+      <ReasonConfirmModal
+        confirmColor="danger"
+        confirmText={
+          sendBackAppt && getPatientStage(sendBackAppt) === "lobby"
+            ? "Undo Check-In"
+            : "Send Back to Lobby"
+        }
+        description={
+          sendBackAppt && getPatientStage(sendBackAppt) === "lobby"
+            ? "This returns the patient to Scheduled, undoing check-in. It does not affect any invoice already created for this visit, and cannot un-send any check-in SMS that was already sent."
+            : "This clears the patient's cabin assignment and triage status, moving them back to the Lobby queue. It does not affect any invoice already created for this visit."
+        }
+        isOpen={Boolean(sendBackAppt)}
+        isSubmitting={isSendingBack}
+        reasonLabel="Reason for sending back"
+        title={
+          sendBackAppt && getPatientStage(sendBackAppt) === "lobby"
+            ? "Undo Check-In"
+            : "Send Patient Back to Lobby"
+        }
+        onClose={() => setSendBackAppt(null)}
+        onConfirm={(reason) => {
+          if (sendBackAppt) handleSendBackToLobby(sendBackAppt, reason);
+        }}
+      />
+
+      {/* Put On Hold — patient temporarily stepped out mid-visit. Resuming
+          doesn't use this modal (see handleHoldButtonClick) — only
+          starting a hold needs a documented reason. */}
+      <ReasonConfirmModal
+        confirmColor="primary"
+        confirmText="Put On Hold"
+        description="This pauses the wait-time indicator and excludes this patient from the 30-minute auto-urgent alert. It doesn't change their stage or routing."
+        isOpen={Boolean(holdAppt)}
+        isSubmitting={isTogglingHold}
+        reasonLabel="Reason patient is on hold"
+        title="Put Patient On Hold"
+        onClose={() => setHoldAppt(null)}
+        onConfirm={(reason) => {
+          if (holdAppt) handleToggleHold(holdAppt, reason);
+        }}
+      />
+
+      {/* Clinician Duty Status — who's actually at the clinic right now */}
+      {isDutyPanelOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setIsDutyPanelOpen(false)}
+            />
+            <div className="bg-surface rounded border border-border-base shadow-xl max-w-sm w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200 max-h-[80vh] flex flex-col">
+              <div className="px-5 py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
+                <h3 className="font-bold text-[14.5px] text-text-main">
+                  Clinician Duty Status
+                </h3>
+                <button
+                  className="text-text-muted hover:text-text-main p-1"
+                  type="button"
+                  onClick={() => setIsDutyPanelOpen(false)}
+                >
+                  <IoCloseOutline className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4 overflow-y-auto">
+                <div>
+                  <p className="text-[11.5px] font-semibold text-text-muted mb-2 uppercase tracking-wide">
+                    Doctors
+                  </p>
+                  <div className="space-y-1.5">
+                    {doctors
+                      .filter((d) => d.isActive)
+                      .map((d) => {
+                        const onDuty = d.isOnDuty ?? true;
+
+                        return (
+                          <div
+                            key={d.id}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-surface-2"
+                          >
+                            <span className="text-[13px] text-text-main">
+                              {d.name}
+                            </span>
+                            <button
+                              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors disabled:opacity-50 ${
+                                onDuty
+                                  ? "bg-success/15 text-success"
+                                  : "bg-surface-3 text-text-muted"
+                              }`}
+                              disabled={togglingDutyId === d.id}
+                              type="button"
+                              onClick={() => handleToggleDoctorDuty(d)}
+                            >
+                              {togglingDutyId === d.id
+                                ? "..."
+                                : onDuty
+                                  ? "On Duty"
+                                  : "Off Duty"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    {doctors.filter((d) => d.isActive).length === 0 && (
+                      <p className="text-xs text-text-muted px-2.5">
+                        No active doctors.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11.5px] font-semibold text-text-muted mb-2 uppercase tracking-wide">
+                    Experts
+                  </p>
+                  <div className="space-y-1.5">
+                    {experts
+                      .filter((e) => e.isActive)
+                      .map((e) => {
+                        const onDuty = e.isOnDuty ?? true;
+
+                        return (
+                          <div
+                            key={e.id}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-surface-2"
+                          >
+                            <span className="text-[13px] text-text-main">
+                              {e.name}
+                            </span>
+                            <button
+                              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors disabled:opacity-50 ${
+                                onDuty
+                                  ? "bg-success/15 text-success"
+                                  : "bg-surface-3 text-text-muted"
+                              }`}
+                              disabled={togglingDutyId === e.id}
+                              type="button"
+                              onClick={() => handleToggleExpertDuty(e)}
+                            >
+                              {togglingDutyId === e.id
+                                ? "..."
+                                : onDuty
+                                  ? "On Duty"
+                                  : "Off Duty"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    {experts.filter((e) => e.isActive).length === 0 && (
+                      <p className="text-xs text-text-muted px-2.5">
+                        No active experts.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* Render the quick intake walk-in modal */}
       {isQuickIntakeOpen && renderQuickIntakeModal()}

@@ -49,7 +49,10 @@ export const hrService = {
     clinicId: string,
     branchId?: string,
   ): Promise<StaffMember[]> {
-    let q = query(collection(db, STAFF_COLLECTION));
+    let q = query(
+      collection(db, STAFF_COLLECTION),
+      where("clinicId", "==", clinicId),
+    );
 
     if (branchId) {
       q = query(q, where("branchId", "==", branchId));
@@ -161,14 +164,21 @@ export const hrService = {
     endDate: Date,
     branchId?: string,
   ): Promise<StaffAttendance[]> {
-    let q = query(collection(db, ATTENDANCE_COLLECTION));
+    // StaffAttendance records store no clinicId/branchId of their own, so
+    // the previous `where("branchId", ...)` filter here silently matched
+    // nothing (the field doesn't exist on these docs) while the missing
+    // clinicId filter meant every clinic's attendance was returned when
+    // branchId was omitted. Scope correctly by cross-referencing against
+    // this clinic's actual staff IDs instead.
+    const clinicStaff = await this.getStaffByClinic(clinicId, branchId);
+    const clinicStaffIds = new Set(clinicStaff.map((s) => s.id));
 
-    if (branchId) {
-      q = query(q, where("branchId", "==", branchId));
-    }
+    const q = query(collection(db, ATTENDANCE_COLLECTION));
 
     const querySnapshot = await getDocs(q);
-    const attendance = querySnapshot.docs.map((doc) => {
+    const attendance = querySnapshot.docs
+      .filter((doc) => clinicStaffIds.has(doc.data().staffId))
+      .map((doc) => {
       const data = doc.data();
 
       return {
@@ -257,7 +267,10 @@ export const hrService = {
   // --- Holiday Operations ---
 
   async getHolidays(clinicId: string): Promise<ClinicHoliday[]> {
-    const q = query(collection(db, HOLIDAY_COLLECTION));
+    const q = query(
+      collection(db, HOLIDAY_COLLECTION),
+      where("clinicId", "==", clinicId),
+    );
     const querySnapshot = await getDocs(q);
 
     return querySnapshot.docs.map((doc) => {

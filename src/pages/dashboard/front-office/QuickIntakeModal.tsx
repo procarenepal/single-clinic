@@ -263,6 +263,34 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                           />
                         </div>
                       </div>
+
+                      {/* PAN/VAT — optional, but needed for the printed
+                          invoice's Purchaser's PAN field (Schedule 6) */}
+                      <div>
+                        <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
+                          PAN/VAT Number (Optional)
+                        </label>
+                        <input
+                          className="w-full h-9 px-3 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
+                          inputMode="numeric"
+                          maxLength={9}
+                          placeholder="9-digit PAN/VAT, e.g. 123456789"
+                          type="text"
+                          value={quickIntakeForm.patientPanVat}
+                          onChange={(e) =>
+                            setQuickIntakeForm((prev) => ({
+                              ...prev,
+                              // Nepal PAN/VAT numbers are digits only, 9
+                              // digits — this prints on the invoice's
+                              // Purchaser's PAN field, so filter garbage
+                              // input rather than letting it through.
+                              patientPanVat: e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 9),
+                            }))
+                          }
+                        />
+                      </div>
                     </>
                   ) : (
                     <>
@@ -843,7 +871,32 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                           Walk-in).
                         </div>
                       ) : (
-                        <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                        <>
+                          {(() => {
+                            const totalSplit = quickIntakeForm.referrals.reduce(
+                              (sum: number, ref: any) =>
+                                sum + (Number(ref.commissionPercentage) || 0),
+                              0,
+                            );
+                            const overCommitted = totalSplit > 100;
+
+                            return (
+                              <div
+                                className={`flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-semibold ${
+                                  overCommitted
+                                    ? "bg-red-500/10 text-red-600 border border-red-500/20"
+                                    : "bg-surface text-text-muted border border-border-base"
+                                }`}
+                              >
+                                <span>Total Split</span>
+                                <span>
+                                  {totalSplit}% of 100%
+                                  {overCommitted && " — exceeds 100%"}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                          <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                           {quickIntakeForm.referrals.map((ref, idx) => (
                             <div
                               key={idx}
@@ -1047,7 +1100,8 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                               )}
                             </div>
                           ))}
-                        </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>

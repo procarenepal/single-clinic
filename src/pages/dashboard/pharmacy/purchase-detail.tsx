@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { addDays, differenceInCalendarDays } from "date-fns";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   IoArrowBackOutline,
@@ -34,6 +34,10 @@ import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui";
 import { title } from "@/components/primitives";
+import {
+  getLastPaymentMethod,
+  setLastPaymentMethod,
+} from "@/utils/lastUsedPreferences";
 
 interface DisplayItem {
   id: string;
@@ -182,6 +186,8 @@ function ModalShell({
     "5xl": "max-w-5xl",
   };
 
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const el =
       document.getElementById("dashboard-scroll-container") || document.body;
@@ -194,6 +200,20 @@ function ModalShell({
     };
   }, []);
 
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !disabled) onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, disabled]);
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden"
@@ -202,7 +222,9 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        ref={panelRef}
+        className={`bg-white border border-mountain-200 rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] outline-none`}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between px-4 py-3 border-b border-mountain-100 shrink-0">
@@ -214,6 +236,7 @@ function ModalShell({
           </div>
           {!disabled && (
             <button
+              aria-label="Close"
               className="text-mountain-400 hover:text-mountain-700 mt-0.5"
               type="button"
               onClick={onClose}
@@ -521,7 +544,7 @@ export default function PurchaseDetailPage() {
   // Payment form state
   const [paymentForm, setPaymentForm] = useState({
     amount: 0,
-    paymentMethod: "cash" as string,
+    paymentMethod: getLastPaymentMethod("cash") as string,
     reference: "",
     notes: "",
   });
@@ -724,10 +747,17 @@ export default function PurchaseDetailPage() {
       lifoPricesReady &&
       searchParams.get("print") === "true"
     ) {
-      const timer = setTimeout(() => window.print(), 400);
+      // Route through handlePrint (same path the in-page Print button uses)
+      // instead of a bare window.print() — that bypassed the printCount
+      // increment entirely, so reprints triggered from the purchase list's
+      // deep link never advanced the IRD-required "COPY OF ORIGINAL – N"
+      // numbering, unlike appointment billing and pathology's identical
+      // deep links, which both already call their own handlePrint().
+      const timer = setTimeout(() => handlePrint(receiptFormat), 400);
 
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, purchase, lifoPricesReady, searchParams]);
 
   // Compute LIFO price per medicine line from stock transactions (latest purchase at or before purchase date)
@@ -985,6 +1015,7 @@ export default function PurchaseDetailPage() {
           : null,
       );
 
+      setLastPaymentMethod(paymentForm.paymentMethod);
       addToast({
         title: "Success",
         description: "Payment recorded successfully",
@@ -994,16 +1025,16 @@ export default function PurchaseDetailPage() {
       // Reset form and close modal
       setPaymentForm({
         amount: 0,
-        paymentMethod: "cash",
+        paymentMethod: getLastPaymentMethod("cash"),
         reference: "",
         notes: "",
       });
       setIsPaymentModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error recording payment:", error);
       addToast({
         title: "Error",
-        description: "Failed to record payment",
+        description: error?.message || "Failed to record payment",
         color: "danger",
       });
     } finally {
@@ -1331,6 +1362,11 @@ export default function PurchaseDetailPage() {
             <Button
               color="default"
               startContent={<IoPrintOutline />}
+              title={
+                purchase.printCount
+                  ? `Will print as "Copy of Original – ${purchase.printCount}"`
+                  : "Will print as the original"
+              }
               variant="bordered"
               onClick={() => handlePrint(receiptFormat)}
             >

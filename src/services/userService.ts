@@ -285,7 +285,10 @@ export const userService = {
   async getClinicUsers(clinicId?: string): Promise<User[]> {
     try {
       const usersRef = collection(db, USERS_COLLECTION);
-      const querySnapshot = await getDocs(usersRef);
+      const q = clinicId
+        ? query(usersRef, where("clinicId", "==", clinicId))
+        : usersRef;
+      const querySnapshot = await getDocs(q);
 
       return querySnapshot.docs.map(
         (doc) =>
@@ -437,7 +440,10 @@ export const userService = {
   async getUsersByClinic(clinicId?: string): Promise<User[]> {
     try {
       const usersRef = collection(db, USERS_COLLECTION);
-      const querySnapshot = await getDocs(usersRef);
+      const q = clinicId
+        ? query(usersRef, where("clinicId", "==", clinicId))
+        : usersRef;
+      const querySnapshot = await getDocs(q);
 
       return querySnapshot.docs.map(
         (doc) =>

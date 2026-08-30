@@ -26,6 +26,34 @@ const PATHOLOGY_BILLING_COLLECTION = "pathologyBilling";
 const PATHOLOGY_BILLING_SETTINGS_COLLECTION = "pathologyBillingSettings";
 
 /**
+ * Reverse every doctor/referral-partner commission tied to a pathology
+ * billing (mirrors appointmentBillingService's equivalent) — used when an
+ * invoice is cancelled or credit-noted so commission earned on a reversed
+ * sale doesn't stay permanently on the books. Failures here are logged, not
+ * thrown — the invoice-side cancellation/credit-note must not be blocked by
+ * a commission-bookkeeping error.
+ */
+async function reverseCommissionsForBilling(billingId: string): Promise<void> {
+  try {
+    const [docComms, refComms] = await Promise.all([
+      doctorCommissionService.getCommissionsByBillingId(billingId),
+      referralCommissionService.getCommissionsByBillingId(billingId),
+    ]);
+
+    await Promise.all([
+      ...docComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => doctorCommissionService.updateCommissionStatus(c.id, "cancelled")),
+      ...refComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
+    ]);
+  } catch (error) {
+    console.error("Error reversing commissions for pathology billing:", billingId, error);
+  }
+}
+
+/**
  * Service for managing pathology billing operations including invoices and settings
  */
 export const pathologyBillingService = {
@@ -506,6 +534,65 @@ export const pathologyBillingService = {
             "IRD Tax Compliance Error: Financial fields of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
           );
         }
+
+        // Clause ट covers "any data" (कुनैपनि तथ्याङ्क), not just financial
+        // fields — patient identity, doctor, dates etc. must also be frozen
+        // once finalized/synced. Only system-driven bookkeeping fields
+        // (payment recording, IRD sync retries, cancellation/credit-note
+        // linkage) may still change post-finalization.
+        if (isFinalized) {
+          const allowedPostFinalizeFields = new Set([
+            "paidAmount",
+            "balanceAmount",
+            "paymentStatus",
+            "paymentMethod",
+            "paymentDate",
+            "paymentReference",
+            "paymentNotes",
+            "paymentHistory",
+            "printCount",
+            "irdSynced",
+            "irdSyncDate",
+            "cbmsResponseCode",
+            "status",
+            "hasCreditNote",
+          ]);
+          const financialKeys = [
+            "totalAmount",
+            "subtotal",
+            "taxAmount",
+            "discountAmount",
+          ];
+
+          for (const key of Object.keys(billingData)) {
+            if (financialKeys.includes(key) || key === "items") continue;
+            if (allowedPostFinalizeFields.has(key)) continue;
+
+            if (key === "notes") {
+              const oldNotes = existingData.notes || "";
+              const newNotes = (billingData as any).notes || "";
+
+              if (newNotes === oldNotes || newNotes.startsWith(oldNotes)) continue;
+
+              throw new Error(
+                "IRD Tax Compliance Error: Notes on a finalized or IRD-synced pathology invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
+              );
+            }
+
+            const oldVal = (existingData as any)[key];
+            const newVal = (billingData as any)[key];
+            const changed =
+              typeof newVal === "object" && newVal !== null
+                ? JSON.stringify(newVal) !== JSON.stringify(oldVal)
+                : newVal !== oldVal;
+
+            if (changed) {
+              throw new Error(
+                "IRD Tax Compliance Error: Data of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
+              );
+            }
+          }
+        }
       }
 
       // Recursive function to remove undefined values from objects and arrays
@@ -649,6 +736,56 @@ export const pathologyBillingService = {
   },
 
   /**
+   * Get all pathology billing records for a specific patient within a clinic.
+   * Note: `patientId` is optional on `PathologyBilling` (walk-in/outsider
+   * patients have no linked record) — records without it simply won't match.
+   */
+  async getBillingByPatient(
+    patientId: string,
+    clinicId: string,
+  ): Promise<PathologyBilling[]> {
+    try {
+      if (!clinicId || !patientId) {
+        throw new Error("Clinic ID and Patient ID are required");
+      }
+
+      const billingRef = collection(db, PATHOLOGY_BILLING_COLLECTION);
+      const q = query(
+        billingRef,
+        where("clinicId", "==", clinicId),
+        where("patientId", "==", patientId),
+      );
+
+      const querySnapshot = await getDocs(q);
+      const billings: PathologyBilling[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        billings.push({
+          ...data,
+          id: doc.id,
+          invoiceDate: data.invoiceDate?.toDate() || new Date(),
+          paymentDate: data.paymentDate?.toDate() || null,
+          finalizedAt: data.finalizedAt?.toDate() || null,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+        } as PathologyBilling);
+      });
+
+      return billings.sort((a, b) => {
+        const dateA = a.createdAt?.getTime() || 0;
+        const dateB = b.createdAt?.getTime() || 0;
+
+        return dateB - dateA;
+      });
+    } catch (error) {
+      console.error("Error getting pathology billing by patient:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Finalize an invoice (change status from draft to finalized)
    */
   async finalizeInvoice(id: string, finalizedBy: string): Promise<void> {
@@ -734,6 +871,8 @@ export const pathologyBillingService = {
       paymentStatus: "cancelled" as any,
       notes,
     });
+
+    await reverseCommissionsForBilling(id);
   },
 
   /**
@@ -831,6 +970,11 @@ export const pathologyBillingService = {
           (original.notes ? original.notes + "\n" : "") +
           `Reversed by Credit Note ${creditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
       });
+
+      // The credit note fully offsets the original sale — reverse whatever
+      // commission was earned on it (the credit note document itself never
+      // earns commission, since finalizeInvoice is never called on it).
+      await reverseCommissionsForBilling(original.id);
 
       return newCreditNoteId;
     } catch (error) {

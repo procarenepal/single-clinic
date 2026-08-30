@@ -9,7 +9,7 @@ import {
   ModalBody,
   ModalFooter,
 } from "@/components/ui";
-import { Patient, TreatmentPackage } from "@/types/models";
+import { AppointmentBillingSettings, Patient, TreatmentPackage } from "@/types/models";
 import { packageService } from "@/services/packageService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { walletService } from "@/services/walletService";
@@ -33,6 +33,8 @@ export default function SellPackageModal({
   const { clinicId, branchId, currentUser } = useAuthContext();
   const [packages, setPackages] = useState<TreatmentPackage[]>([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
+  const [billingSettings, setBillingSettings] =
+    useState<AppointmentBillingSettings | null>(null);
 
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [selectedPackageId, setSelectedPackageId] = useState("");
@@ -47,6 +49,7 @@ export default function SellPackageModal({
   const [newPatientForm, setNewPatientForm] = useState({
     name: "",
     mobile: "",
+    patientPanVat: "",
     age: "",
     gender: "male",
   });
@@ -60,12 +63,13 @@ export default function SellPackageModal({
   const loadPackages = async () => {
     try {
       setLoadingPackages(true);
-      const data = await packageService.getPackagesByClinic(
-        clinicId!,
-        branchId || undefined,
-      );
+      const [data, settings] = await Promise.all([
+        packageService.getPackagesByClinic(clinicId!, branchId || undefined),
+        appointmentBillingService.getBillingSettings(clinicId!).catch(() => null),
+      ]);
 
       setPackages(data);
+      setBillingSettings(settings);
     } catch (error) {
       console.error("Error loading packages:", error);
     } finally {
@@ -121,6 +125,7 @@ export default function SellPackageModal({
 
       let finalPatientId = selectedPatientId;
       let finalPatientName = "";
+      let finalPatientPanVat: string | undefined;
 
       if (saleMode === "new") {
         // Create patient first
@@ -130,6 +135,7 @@ export default function SellPackageModal({
         finalPatientId = await patientService.createPatient({
           name: newPatientForm.name.trim(),
           mobile: newPatientForm.mobile.trim(),
+          patientPanVat: newPatientForm.patientPanVat.trim() || undefined,
           age: newPatientForm.age.trim(),
           gender: newPatientForm.gender as "male" | "female" | "other",
           regNumber: nextReg,
@@ -138,11 +144,13 @@ export default function SellPackageModal({
           branchId: branchId || clinicId,
         });
         finalPatientName = newPatientForm.name.trim();
+        finalPatientPanVat = newPatientForm.patientPanVat.trim() || undefined;
       } else {
         const pat = patients.find((p) => p.id === selectedPatientId);
 
         if (!pat) throw new Error("Patient not found");
         finalPatientName = pat.name;
+        finalPatientPanVat = pat.patientPanVat;
       }
 
       // 2. Create the Billing record
@@ -158,30 +166,41 @@ export default function SellPackageModal({
         amount: pkg.price,
       };
 
+      const taxPercentage = billingSettings?.enableTax
+        ? billingSettings.defaultTaxPercentage || 0
+        : 0;
+      const totals = appointmentBillingService.calculateInvoiceTotals(
+        [billingItem],
+        "percent",
+        0,
+        taxPercentage,
+      );
+
       const billingData = {
         invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         clinicId: clinicId,
         branchId: branchId || clinicId,
         patientId: finalPatientId,
         patientName: finalPatientName,
+        patientPanVat: finalPatientPanVat,
         doctorId: "unassigned",
         doctorName: "Clinic",
         doctorType: "regular" as const,
         invoiceDate: new Date(),
         items: [billingItem],
-        subtotal: pkg.price,
+        subtotal: totals.subtotal,
         itemDiscountAmount: 0,
         mainDiscountAmount: 0,
         discountType: "percent" as const,
         discountValue: 0,
-        discountAmount: 0,
-        taxPercentage: 0,
-        taxAmount: 0,
-        totalAmount: pkg.price,
+        discountAmount: totals.totalDiscount,
+        taxPercentage,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
         status: "draft" as const,
         paymentStatus: "unpaid" as const,
         paidAmount: 0,
-        balanceAmount: pkg.price,
+        balanceAmount: totals.totalAmount,
         createdBy: currentUser.uid,
       };
 
@@ -412,6 +431,31 @@ export default function SellPackageModal({
                     <option value="female">Female</option>
                     <option value="other">Other</option>
                   </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-text-muted mb-1 block">
+                    PAN/VAT Number (Optional)
+                  </label>
+                  <input
+                    className="w-full text-sm p-1.5 border border-border-base rounded outline-none focus:border-primary"
+                    inputMode="numeric"
+                    maxLength={9}
+                    placeholder="9-digit PAN/VAT, e.g. 123456789"
+                    type="text"
+                    value={newPatientForm.patientPanVat}
+                    onChange={(e) =>
+                      setNewPatientForm((prev) => ({
+                        ...prev,
+                        // Nepal PAN/VAT numbers are digits only, 9 digits —
+                        // this prints on the invoice's Purchaser's PAN
+                        // field, so filter garbage input rather than
+                        // letting it through.
+                        patientPanVat: e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 9),
+                      }))
+                    }
+                  />
                 </div>
               </div>
             )}

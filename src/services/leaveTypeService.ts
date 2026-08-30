@@ -5,6 +5,7 @@ import {
   deleteDoc,
   doc,
   query,
+  where,
   getDocs,
   serverTimestamp,
 } from "firebase/firestore";
@@ -25,10 +26,18 @@ function mapLeaveType(docId: string, data: any): LeaveType {
 
 export const leaveTypeService = {
   async getLeaveTypes(clinicId: string): Promise<LeaveType[]> {
-    const q = query(collection(db, LEAVE_TYPES_COL));
+    // Bug fix: this previously queried the collection with no clinicId
+    // filter at all, so any clinic saw every clinic's leave types (and the
+    // "seed defaults if empty" check only ever fired for the very first
+    // clinic ever created — after that, the global collection was never
+    // empty, so no other clinic got its own defaults).
+    const q = query(
+      collection(db, LEAVE_TYPES_COL),
+      where("clinicId", "==", clinicId),
+    );
     const snap = await getDocs(q);
 
-    // Default leaves if none exist
+    // Default leaves if none exist for this clinic specifically
     if (snap.empty) {
       return this.seedDefaultLeaveTypes(clinicId);
     }

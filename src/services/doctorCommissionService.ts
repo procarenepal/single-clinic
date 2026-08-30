@@ -221,6 +221,24 @@ class DoctorCommissionService {
       for (const refDoc of billing.referringDoctors) {
         if (refDoc.calculatedAmount <= 0) continue;
 
+        // Prevent duplicate commissions if finalizeInvoice is ever called
+        // twice for the same invoice (retry after a partial failure, a
+        // double click before the button disables, etc.) — mirrors the
+        // existing guard in referralCommissionService.createReferralCommission.
+        const existingQuery = query(
+          collection(db, this.collectionName),
+          where("billingId", "==", billing.id),
+          where("doctorId", "==", refDoc.doctorId),
+        );
+        const existingDocs = await getDocs(existingQuery);
+
+        if (!existingDocs.empty) {
+          console.warn(
+            `Pathology commission already exists for doctor ${refDoc.doctorId} on billing ID ${billing.id}. Skipping.`,
+          );
+          continue;
+        }
+
         const commissionData: Omit<DoctorCommission, "id"> = {
           doctorId: refDoc.doctorId,
           doctorName: refDoc.doctorName,
@@ -502,6 +520,38 @@ class DoctorCommissionService {
     } catch (error) {
       console.error("Error updating commission status:", error);
       throw error;
+    }
+  }
+
+  // Get all commissions for a billing (a billing can produce multiple
+  // commission docs — one per clinician group)
+  async getCommissionsByBillingId(
+    billingId: string,
+  ): Promise<DoctorCommission[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where("billingId", "==", billingId),
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          appointmentDate: data.appointmentDate?.toDate() || new Date(),
+          paidDate: data.paidDate?.toDate(),
+        };
+      }) as DoctorCommission[];
+    } catch (error) {
+      console.error("Error getting commissions by billing ID:", error);
+
+      return [];
     }
   }
 

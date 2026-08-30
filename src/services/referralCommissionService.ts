@@ -447,6 +447,40 @@ class ReferralCommissionService {
   }
 
   /**
+   * Get all commissions for a billing (a billing can have multiple
+   * referrers, each producing their own commission doc)
+   */
+  async getCommissionsByBillingId(
+    billingId: string,
+  ): Promise<ReferralCommission[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where("billingId", "==", billingId),
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          invoiceDate: data.invoiceDate?.toDate() || new Date(),
+          paidDate: data.paidDate?.toDate(),
+        };
+      }) as ReferralCommission[];
+    } catch (error) {
+      console.error("Error getting referral commissions by billing ID:", error);
+
+      return [];
+    }
+  }
+
+  /**
    * Get commission by billing ID
    */
   async getCommissionByBillingId(

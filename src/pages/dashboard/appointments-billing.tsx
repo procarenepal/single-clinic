@@ -5,10 +5,9 @@
  */
 import type { Branch } from "@/types/models";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import toast from "react-hot-toast";
 import {
   IoReceiptOutline,
   IoAddOutline,
@@ -23,6 +22,7 @@ import {
   IoCloseOutline,
   IoChevronDown,
   IoCheckmarkCircleOutline,
+  IoEllipsisVerticalOutline,
 } from "react-icons/io5";
 
 import {
@@ -30,6 +30,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
+  DropdownSection,
 } from "@/components/ui/dropdown";
 import { useAuthContext } from "@/context/AuthContext";
 import { title } from "@/components/primitives";
@@ -37,15 +38,27 @@ import { addToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/billing/StatusBadge";
 import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
+import { AgingTag } from "@/components/billing/AgingTag";
 
 // Services
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { getPatientOutstandingSummary } from "@/utils/patientOutstanding";
+import {
+  DateRangeFilter,
+  DATE_RANGE_OPTIONS,
+  isWithinDateRange,
+  SortDirection,
+} from "@/utils/billingListControls";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
 import { treatmentCategoryService } from "@/services/treatmentCategoryService";
+import {
+  getLastPaymentMethod,
+  setLastPaymentMethod,
+} from "@/utils/lastUsedPreferences";
 import {
   AppointmentBilling,
   AppointmentBillingItem,
@@ -264,7 +277,6 @@ function Toggle({
             ? "bg-primary border border-primary"
             : "bg-gray-200 border border-gray-300 dark:bg-gray-600 dark:border-gray-500"
         }`}
-        onClick={() => onChange(!checked)}
       >
         <div
           className={`absolute top-[3px] left-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${
@@ -306,6 +318,7 @@ function ModalShell({
     xl: "max-w-3xl",
     "5xl": "max-w-5xl",
   };
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el =
@@ -319,6 +332,20 @@ function ModalShell({
     };
   }, []);
 
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !disabled) onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, disabled]);
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden"
@@ -327,7 +354,9 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-surface border border-border-base rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] shadow-xl`}
+        ref={panelRef}
+        className={`bg-surface border border-border-base rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] shadow-xl outline-none`}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between px-4 py-3 border-b border-border-base shrink-0">
@@ -339,6 +368,7 @@ function ModalShell({
           </div>
           {!disabled && (
             <button
+              aria-label="Close"
               className="text-text-muted hover:text-text-main mt-0.5"
               type="button"
               onClick={onClose}
@@ -397,6 +427,9 @@ export default function AppointmentBillingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>("all");
+  const [sortField, setSortField] = useState<"date" | "amount" | null>(null);
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const itemsPerPage = 10;
 
   // Modals
@@ -410,7 +443,7 @@ export default function AppointmentBillingPage() {
     useState<AppointmentBilling | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
-    method: "cash",
+    method: getLastPaymentMethod("cash"),
     reference: "",
     notes: "",
   });
@@ -441,6 +474,7 @@ export default function AppointmentBillingPage() {
     totalAmount: 0,
   });
   const [patientDue, setPatientDue] = useState(0);
+  const [otherModulesDue, setOtherModulesDue] = useState(0);
 
   // Settings tab form
   const [paymentMethodForm, setPaymentMethodForm] = useState({
@@ -625,7 +659,12 @@ export default function AppointmentBillingPage() {
     const p = patients.find((x) => x.id === id);
 
     if (p) {
-      setFormData((prev) => ({ ...prev, patientId: id, patientName: p.name }));
+      setFormData((prev) => ({
+        ...prev,
+        patientId: id,
+        patientName: p.name,
+        patientPanVat: p.patientPanVat || prev.patientPanVat,
+      }));
       // Fetch patient's previous due amount
       try {
         const patientInvoices =
@@ -636,6 +675,16 @@ export default function AppointmentBillingPage() {
         );
 
         setPatientDue(totalDue);
+
+        // Also surface dues sitting in pathology/pharmacy — a patient can
+        // owe money there without it showing anywhere on this form
+        // otherwise, so staff would only find out after already creating
+        // the invoice.
+        getPatientOutstandingSummary(id, clinicId!)
+          .then((summary) =>
+            setOtherModulesDue(summary.pathologyDue + summary.pharmacyDue),
+          )
+          .catch(() => setOtherModulesDue(0));
 
         // Auto-populate unbilled appointments
         try {
@@ -700,6 +749,7 @@ export default function AppointmentBillingPage() {
       } catch (e) {
         console.error("Error fetching patient due balance:", e);
         setPatientDue(0);
+        setOtherModulesDue(0);
       }
     } else {
       setFormData((prev) => ({
@@ -709,6 +759,7 @@ export default function AppointmentBillingPage() {
         items: [],
       }));
       setPatientDue(0);
+      setOtherModulesDue(0);
     }
   };
 
@@ -946,6 +997,27 @@ export default function AppointmentBillingPage() {
         } catch (err) {
           console.error("Failed to update patient clinician assignment:", err);
         }
+
+        // Backfill PAN onto the patient record if they typed one in here and
+        // the patient record itself is still missing it — never overwrites
+        // an existing value, so future invoices don't need it retyped.
+        const existingPatient = patients.find(
+          (pt) => pt.id === formData.patientId,
+        );
+
+        if (
+          existingPatient &&
+          !existingPatient.patientPanVat &&
+          formData.patientPanVat?.trim()
+        ) {
+          try {
+            await patientService.updatePatient(formData.patientId, {
+              patientPanVat: formData.patientPanVat.trim(),
+            });
+          } catch (err) {
+            console.error("Failed to backfill patient PAN:", err);
+          }
+        }
       }
 
       // Link the invoice to the appointments
@@ -974,6 +1046,7 @@ export default function AppointmentBillingPage() {
         discountValue: billingSettings.defaultDiscountValue,
       });
       setPatientDue(0);
+      setOtherModulesDue(0);
       const up = await appointmentBillingService.getBillingByClinic(
         clinicId,
         effectiveBranchId,
@@ -981,8 +1054,12 @@ export default function AppointmentBillingPage() {
 
       if (up) setBillings(up);
       setActiveTab("manage");
-    } catch (e) {
-      addToast({ title: "Failed to create invoice", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Failed to create invoice",
+        description: e?.message,
+        color: "danger",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -997,7 +1074,7 @@ export default function AppointmentBillingPage() {
       day: "numeric",
     });
 
-  const filteredBillings = searchQuery.trim()
+  const searchedBillings = searchQuery.trim()
     ? billings.filter((b) => {
         const patientName =
           b.patientName === "Unknown Patient" || !b.patientName
@@ -1012,6 +1089,31 @@ export default function AppointmentBillingPage() {
         );
       })
     : billings;
+
+  const dateFilteredBillings = searchedBillings.filter((b) =>
+    isWithinDateRange(b.invoiceDate, dateRangeFilter),
+  );
+
+  const filteredBillings = sortField
+    ? [...dateFilteredBillings].sort((a, b) => {
+        const diff =
+          sortField === "date"
+            ? new Date(a.invoiceDate).getTime() -
+              new Date(b.invoiceDate).getTime()
+            : a.totalAmount - b.totalAmount;
+
+        return sortDir === "asc" ? diff : -diff;
+      })
+    : dateFilteredBillings;
+
+  const toggleSort = (field: "date" | "amount") => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
 
   const totalPages = Math.ceil(filteredBillings.length / itemsPerPage) || 1;
   const currentBillings = filteredBillings.slice(
@@ -1035,8 +1137,12 @@ export default function AppointmentBillingPage() {
           b.id === billing.id ? { ...b, status: "finalized" } : b,
         ),
       );
-    } catch (e) {
-      addToast({ title: "Failed to finalize invoice", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Failed to finalize invoice",
+        description: e?.message,
+        color: "danger",
+      });
     } finally {
       setFinalizingId(null);
     }
@@ -1080,6 +1186,7 @@ export default function AppointmentBillingPage() {
 
       // Commission generation has been safely migrated to the `recordPayment` flow in appointmentBillingService.ts
 
+      setLastPaymentMethod(paymentForm.method);
       addToast({ title: "Payment recorded", color: "success" });
       const up = await appointmentBillingService.getBillingByClinic(
         clinicId,
@@ -1089,7 +1196,12 @@ export default function AppointmentBillingPage() {
       if (up) setBillings(up);
       setShowPaymentModal(false);
       setSelectedBillingForPayment(null);
-      setPaymentForm({ amount: "", method: "cash", reference: "", notes: "" });
+      setPaymentForm({
+        amount: "",
+        method: getLastPaymentMethod("cash"),
+        reference: "",
+        notes: "",
+      });
       if (showInvoiceModal) setShowInvoiceModal(false); // Close view modal if open
     } catch (e: any) {
       addToast({
@@ -1141,8 +1253,12 @@ export default function AppointmentBillingPage() {
       const s = await appointmentBillingService.getBillingSettings(clinicId);
 
       if (s) setBillingSettings(s);
-    } catch (e) {
-      addToast({ title: "Failed to add method", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Failed to add method",
+        description: e?.message,
+        color: "danger",
+      });
     } finally {
       setIsAddingPaymentMethod(false);
     }
@@ -1160,8 +1276,12 @@ export default function AppointmentBillingPage() {
       const s = await appointmentBillingService.getBillingSettings(clinicId);
 
       if (s) setBillingSettings(s);
-    } catch (e) {
-      addToast({ title: "Delete failed", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Update failed",
+        description: e?.message,
+        color: "danger",
+      });
     }
   };
 
@@ -1191,8 +1311,12 @@ export default function AppointmentBillingPage() {
       );
 
       setTreatmentCategories(cats);
-    } catch (e) {
-      addToast({ title: "Failed to add category", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Failed to add category",
+        description: e?.message,
+        color: "danger",
+      });
     } finally {
       setIsAddingCategory(false);
     }
@@ -1204,8 +1328,12 @@ export default function AppointmentBillingPage() {
       await treatmentCategoryService.deleteCategory(id);
       addToast({ title: "Category deleted", color: "success" });
       setTreatmentCategories((prev) => prev.filter((c) => c.id !== id));
-    } catch (e) {
-      addToast({ title: "Delete failed", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Delete failed",
+        description: e?.message,
+        color: "danger",
+      });
     }
   };
 
@@ -1220,8 +1348,12 @@ export default function AppointmentBillingPage() {
       const s = await appointmentBillingService.getBillingSettings(clinicId);
 
       if (s) setBillingSettings(s);
-    } catch (e) {
-      addToast({ title: "Delete failed", color: "danger" });
+    } catch (e: any) {
+      addToast({
+        title: "Delete failed",
+        description: e?.message,
+        color: "danger",
+      });
     }
   };
 
@@ -1570,6 +1702,12 @@ export default function AppointmentBillingPage() {
                         <span>{fmtCur(patientDue)}</span>
                       </div>
                     )}
+                    {otherModulesDue > 0 && (
+                      <div className="flex justify-between text-[11.5px] text-saffron-600/80 italic">
+                        <span>+ Due in Pathology/Pharmacy:</span>
+                        <span>{fmtCur(otherModulesDue)}</span>
+                      </div>
+                    )}
                     {calculations.itemDiscountAmount > 0 && (
                       <div className="flex justify-between text-xs">
                         <span className="text-text-muted/60 italic ml-2">
@@ -1625,6 +1763,7 @@ export default function AppointmentBillingPage() {
                     onClick={() => {
                       setFormData({ ...emptyForm });
                       setPatientDue(0);
+                      setOtherModulesDue(0);
                     }}
                   >
                     Reset
@@ -1646,15 +1785,36 @@ export default function AppointmentBillingPage() {
         {activeTab === "manage" && (
           <div className="p-5 flex flex-col gap-4">
             {billings.length > 0 && (
-              <div className="w-64">
-                <div className="flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary">
-                  <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-muted/50" />
-                  <input
-                    className="flex-1 px-2 text-[12.5px] bg-transparent focus:outline-none placeholder:text-text-muted/40 text-text-main"
-                    placeholder="Search invoices…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="w-64">
+                  <div className="flex items-center h-9 border border-border-base rounded bg-surface focus-within:border-primary">
+                    <IoSearchOutline className="ml-2.5 w-4 h-4 text-text-muted/50" />
+                    <input
+                      className="flex-1 px-2 text-[12.5px] bg-transparent focus:outline-none placeholder:text-text-muted/40 text-text-main"
+                      placeholder="Search invoices…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 border border-border-base rounded p-0.5 bg-surface">
+                  {DATE_RANGE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.key}
+                      className={`px-2.5 py-1 text-[11.5px] rounded transition-colors ${
+                        dateRangeFilter === opt.key
+                          ? "bg-primary text-white font-medium"
+                          : "text-text-muted hover:bg-surface-2"
+                      }`}
+                      type="button"
+                      onClick={() => {
+                        setDateRangeFilter(opt.key);
+                        setCurrentPage(1);
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -1703,14 +1863,35 @@ export default function AppointmentBillingPage() {
                           "PAYMENT",
                           "IRD STATUS",
                           "ACTIONS",
-                        ].map((h) => (
-                          <th
-                            key={h}
-                            className="px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider"
-                          >
-                            {h}
-                          </th>
-                        ))}
+                        ].map((h) => {
+                          const sortKey =
+                            h === "DATE"
+                              ? ("date" as const)
+                              : h === "AMOUNT"
+                                ? ("amount" as const)
+                                : null;
+
+                          return (
+                            <th
+                              key={h}
+                              className={`px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider ${
+                                sortKey ? "cursor-pointer select-none" : ""
+                              }`}
+                              onClick={
+                                sortKey ? () => toggleSort(sortKey) : undefined
+                              }
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                {h}
+                                {sortKey && sortField === sortKey && (
+                                  <span className="text-[9px]">
+                                    {sortDir === "asc" ? "▲" : "▼"}
+                                  </span>
+                                )}
+                              </span>
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-base bg-transparent">
@@ -1810,10 +1991,20 @@ export default function AppointmentBillingPage() {
 
                               if (otherDoctors.length > 0) {
                                 return (
-                                  <span className="text-[10px] text-teal-600 font-medium bg-teal-50 px-1 rounded">
+                                  <button
+                                    className="text-[10px] text-teal-600 font-medium bg-teal-50 px-1 rounded hover:bg-teal-100 hover:underline transition-colors cursor-pointer"
+                                    title={`Also on this invoice: ${otherDoctors.join(", ")}`}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(
+                                        `/dashboard/appointments-billing/${b.id}`,
+                                      );
+                                    }}
+                                  >
                                     + {otherDoctors.length} more clinician
                                     {otherDoctors.length > 1 ? "s" : ""}
-                                  </span>
+                                  </button>
                                 );
                               }
 
@@ -1844,20 +2035,26 @@ export default function AppointmentBillingPage() {
                                   Bal: {fmtCur(b.balanceAmount)}
                                 </span>
                               )}
+                              {b.paymentStatus !== "paid" &&
+                                b.status !== "cancelled" && (
+                                  <AgingTag date={b.invoiceDate} />
+                                )}
                             </div>
                           </td>
                           <td className="px-3 py-2.5">
                             <IrdSyncBadge
-                              finalized={b.status === "finalized"}
+                              attempted={Boolean(
+                                b.irdSynced || b.cbmsResponseCode,
+                              )}
                               invoiceType="appointment"
                               recordId={b.id}
                               synced={Boolean(b.irdSynced)}
                             />
                           </td>
                           <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1">
                               <button
-                                className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
+                                className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                 title="View"
                                 type="button"
                                 onClick={() =>
@@ -1871,121 +2068,121 @@ export default function AppointmentBillingPage() {
                               <Dropdown>
                                 <DropdownTrigger>
                                   <button
-                                    className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded flex items-center gap-0.5"
-                                    title="Print"
+                                    className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
+                                    title="More actions"
                                     type="button"
                                   >
-                                    <IoPrintOutline />
-                                    <IoChevronDown className="w-2.5 h-2.5 opacity-50" />
+                                    <IoEllipsisVerticalOutline />
                                   </button>
                                 </DropdownTrigger>
-                                <DropdownMenu aria-label="Print Formats">
-                                  <DropdownItem
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      window.open(
-                                        `/dashboard/appointments-billing/${b.id}?print=true&format=A4`,
-                                        "_blank",
-                                      );
-                                    }}
-                                  >
-                                    A4 Full Page
-                                  </DropdownItem>
-                                  <DropdownItem
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      window.open(
-                                        `/dashboard/appointments-billing/${b.id}?print=true&format=A4_HALF`,
-                                        "_blank",
-                                      );
-                                    }}
-                                  >
-                                    A4 Half Page
-                                  </DropdownItem>
-                                  <DropdownItem
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      window.open(
-                                        `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_80MM`,
-                                        "_blank",
-                                      );
-                                    }}
-                                  >
-                                    Thermal (80mm)
-                                  </DropdownItem>
-                                  <DropdownItem
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      window.open(
-                                        `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_58MM`,
-                                        "_blank",
-                                      );
-                                    }}
-                                  >
-                                    Thermal (58mm)
-                                  </DropdownItem>
-                                  <DropdownItem
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      window.open(
-                                        `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_4INCH`,
-                                        "_blank",
-                                      );
-                                    }}
-                                  >
-                                    Label (4-inch)
-                                  </DropdownItem>
+                                <DropdownMenu aria-label="Invoice actions">
+                                  <DropdownSection showDivider title="Print">
+                                    <DropdownItem
+                                      startContent={<IoPrintOutline />}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        window.open(
+                                          `/dashboard/appointments-billing/${b.id}?print=true&format=A4`,
+                                          "_blank",
+                                        );
+                                      }}
+                                    >
+                                      A4 Full Page
+                                    </DropdownItem>
+                                    <DropdownItem
+                                      startContent={<IoPrintOutline />}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        window.open(
+                                          `/dashboard/appointments-billing/${b.id}?print=true&format=A4_HALF`,
+                                          "_blank",
+                                        );
+                                      }}
+                                    >
+                                      A4 Half Page
+                                    </DropdownItem>
+                                    <DropdownItem
+                                      startContent={<IoPrintOutline />}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        window.open(
+                                          `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_80MM`,
+                                          "_blank",
+                                        );
+                                      }}
+                                    >
+                                      Thermal (80mm)
+                                    </DropdownItem>
+                                    <DropdownItem
+                                      startContent={<IoPrintOutline />}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        window.open(
+                                          `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_58MM`,
+                                          "_blank",
+                                        );
+                                      }}
+                                    >
+                                      Thermal (58mm)
+                                    </DropdownItem>
+                                    <DropdownItem
+                                      startContent={<IoPrintOutline />}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        window.open(
+                                          `/dashboard/appointments-billing/${b.id}?print=true&format=THERMAL_4INCH`,
+                                          "_blank",
+                                        );
+                                      }}
+                                    >
+                                      Label (4-inch)
+                                    </DropdownItem>
+                                  </DropdownSection>
+                                  {b.status === "draft" ? (
+                                    <DropdownItem
+                                      isDisabled={finalizingId === b.id}
+                                      startContent={<IoCheckmarkCircleOutline />}
+                                      onPress={() => handleFinalize(b)}
+                                    >
+                                      Finalize
+                                    </DropdownItem>
+                                  ) : null}
+                                  {!b.irdSynced &&
+                                  b.status !== "finalized" &&
+                                  !b.isCreditNote ? (
+                                    <DropdownItem
+                                      startContent={<IoPencilOutline />}
+                                      onPress={() =>
+                                        navigate(
+                                          `/dashboard/appointments-billing/${b.id}/edit`,
+                                        )
+                                      }
+                                    >
+                                      Edit
+                                    </DropdownItem>
+                                  ) : null}
+                                  {b.paymentStatus !== "paid" ? (
+                                    <DropdownItem
+                                      startContent={<IoCash />}
+                                      onPress={() => {
+                                        setSelectedBillingForPayment(b);
+                                        setPaymentForm((p) => ({
+                                          ...p,
+                                          amount: b.balanceAmount.toString(),
+                                        }));
+                                        setShowPaymentModal(true);
+                                      }}
+                                    >
+                                      Record Payment
+                                    </DropdownItem>
+                                  ) : null}
                                 </DropdownMenu>
                               </Dropdown>
-                              {b.status === "draft" && (
-                                <button
-                                  className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded disabled:opacity-50"
-                                  disabled={finalizingId === b.id}
-                                  title="Finalize (required for IRD sync status to show)"
-                                  type="button"
-                                  onClick={() => handleFinalize(b)}
-                                >
-                                  <IoCheckmarkCircleOutline />
-                                </button>
-                              )}
-                              {!b.irdSynced &&
-                                b.status !== "finalized" &&
-                                !b.isCreditNote && (
-                                  <button
-                                    className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
-                                    title="Edit"
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/dashboard/appointments-billing/${b.id}/edit`,
-                                      )
-                                    }
-                                  >
-                                    <IoPencilOutline />
-                                  </button>
-                                )}
-                              {b.paymentStatus !== "paid" && (
-                                <button
-                                  className="p-1.5 text-text-muted hover:text-green-600 hover:bg-green-500/10 rounded"
-                                  title="Pay"
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedBillingForPayment(b);
-                                    setPaymentForm((p) => ({
-                                      ...p,
-                                      amount: b.balanceAmount.toString(),
-                                    }));
-                                    setShowPaymentModal(true);
-                                  }}
-                                >
-                                  <IoCash />
-                                </button>
-                              )}
                             </div>
                           </td>
                         </tr>

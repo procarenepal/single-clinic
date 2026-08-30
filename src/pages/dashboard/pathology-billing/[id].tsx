@@ -5,7 +5,7 @@
  */
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   IoArrowBackOutline,
   IoPrintOutline,
@@ -30,6 +30,10 @@ import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { adToBS } from "@/utils/dateConverter";
 import { generateInvoiceHTML, PrintFormat } from "@/utils/invoicePrinting";
+import {
+  getLastPaymentMethod,
+  setLastPaymentMethod,
+} from "@/utils/lastUsedPreferences";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import { PathologyBilling } from "@/types/models";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -97,6 +101,8 @@ function ModalShell({
   footer: React.ReactNode;
   disabled?: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const el =
       document.getElementById("dashboard-scroll-container") || document.body;
@@ -109,6 +115,20 @@ function ModalShell({
     };
   }, []);
 
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !disabled) onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, disabled]);
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden"
@@ -117,7 +137,9 @@ function ModalShell({
       }}
     >
       <div
-        className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full max-w-lg flex flex-col max-h-[90vh]"
+        ref={panelRef}
+        className="bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full max-w-lg flex flex-col max-h-[90vh] outline-none"
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
@@ -133,6 +155,7 @@ function ModalShell({
           </div>
           {!disabled && (
             <button
+              aria-label="Close"
               className="text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] mt-0.5 transition-colors"
               type="button"
               onClick={onClose}
@@ -174,7 +197,7 @@ export default function PathologyInvoiceDetailPage() {
 
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
-    method: "cash",
+    method: getLastPaymentMethod("cash"),
     reference: "",
     notes: "",
   });
@@ -252,6 +275,16 @@ export default function PathologyInvoiceDetailPage() {
 
     load();
   }, [invoiceId, clinicId, branchId, navigate, authLoading]);
+
+  // Trigger automatic print if the URL contains `?print=true` once data is loaded
+  useEffect(() => {
+    if (!loading && invoice && searchParams.get("print") === "true") {
+      const timer = setTimeout(() => handlePrint(), 400);
+
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, invoice, searchParams]);
 
   const formatCurrency = (amount: number) => `NPR ${Math.round(amount).toLocaleString()}`;
 
@@ -332,7 +365,7 @@ export default function PathologyInvoiceDetailPage() {
     if (!invoice) return;
     setPaymentForm({
       amount: Math.round(invoice.balanceAmount).toString(),
-      method: "cash",
+      method: getLastPaymentMethod("cash"),
       reference: "",
       notes: "",
     });
@@ -354,7 +387,11 @@ export default function PathologyInvoiceDetailPage() {
       return;
     }
 
-    if (amount > invoice.balanceAmount) {
+    // Rounded to match what's actually shown/pre-filled in this form (the
+    // input defaults to Math.round(balanceAmount)) — comparing against the
+    // raw, unrounded balance (e.g. 813.6 from tax math) would reject the
+    // form's own default amount (814) as "excessive".
+    if (amount > Math.round(invoice.balanceAmount)) {
       addToast({
         title: "Excessive Amount",
         description: "Payment amount cannot exceed the balance amount.",
@@ -375,6 +412,7 @@ export default function PathologyInvoiceDetailPage() {
         currentUser.uid,
       );
 
+      setLastPaymentMethod(paymentForm.method);
       addToast({
         title: "Payment Recorded",
         description: `Payment of ${formatCurrency(amount)} has been recorded successfully.`,
@@ -458,6 +496,7 @@ export default function PathologyInvoiceDetailPage() {
       <div className="flex flex-col gap-4 px-4 pb-12">
         <div className="clarity-page-header flex flex-wrap items-center gap-3">
           <button
+            aria-label="Back"
             className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded border border-transparent hover:border-border-base transition-all"
             type="button"
             onClick={() => navigate("/dashboard/pathology?tab=billing")}
@@ -483,6 +522,7 @@ export default function PathologyInvoiceDetailPage() {
       <div className="flex flex-col gap-4 px-4 pb-12">
         <div className="clarity-page-header flex flex-wrap items-center gap-3">
           <button
+            aria-label="Back"
             className="p-2 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded border border-transparent hover:border-mountain-200"
             type="button"
             onClick={() => navigate("/dashboard/pathology?tab=billing")}
@@ -513,6 +553,7 @@ export default function PathologyInvoiceDetailPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
             <button
+              aria-label="Back"
               className="p-2 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded border border-transparent hover:border-mountain-200"
               type="button"
               onClick={() => navigate("/dashboard/pathology?tab=billing")}
@@ -556,6 +597,11 @@ export default function PathologyInvoiceDetailPage() {
               color="default"
               size="sm"
               startContent={<IoPrintOutline className="w-4 h-4" />}
+              title={
+                invoice.printCount
+                  ? `Will print as "Copy of Original – ${invoice.printCount}"`
+                  : "Will print as the original"
+              }
               variant="bordered"
               onClick={handlePrint}
             >
@@ -570,9 +616,7 @@ export default function PathologyInvoiceDetailPage() {
                   startContent={<IoCreateOutline className="w-4 h-4" />}
                   variant="flat"
                   onClick={() =>
-                    navigate(
-                      `/dashboard/pathology?tab=billing&editInvoice=${invoice.id}`,
-                    )
+                    navigate(`/dashboard/pathology-billing/${invoice.id}/edit`)
                   }
                 >
                   Edit Invoice
@@ -662,7 +706,9 @@ export default function PathologyInvoiceDetailPage() {
               </p>
               <div className="mt-0.5">
                 <IrdSyncBadge
-                  finalized={invoice.status === "finalized"}
+                  attempted={Boolean(
+                    invoice.irdSynced || invoice.cbmsResponseCode,
+                  )}
                   invoiceType="pathology"
                   recordId={invoice.id}
                   synced={Boolean(invoice.irdSynced)}

@@ -116,6 +116,74 @@ class StaffCommissionService {
     }
   }
 
+  // Get all commissions for a billing
+  async getCommissionsByBillingId(
+    billingId: string,
+  ): Promise<StaffCommission[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where("billingId", "==", billingId),
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          appointmentDate: data.appointmentDate?.toDate() || new Date(),
+          paidDate: data.paidDate?.toDate(),
+        };
+      }) as StaffCommission[];
+    } catch (error) {
+      console.error("Error getting staff commissions by billing ID:", error);
+
+      return [];
+    }
+  }
+
+  // Update commission status (for cancelling commissions)
+  async updateCommissionStatus(
+    commissionId: string,
+    status: "pending" | "paid" | "cancelled",
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+
+      const commissionData = commissionDoc.data() as StaffCommission;
+
+      if (status === "cancelled" && commissionData.status !== "cancelled") {
+        const staffRef = doc(db, "staff", commissionData.staffId);
+
+        await updateDoc(staffRef, {
+          totalCommissionEarned: increment(-commissionData.commissionAmount),
+          totalCommissionBalance: increment(
+            -(commissionData.commissionAmount - (commissionData.paidAmount || 0)),
+          ),
+          updatedAt: Timestamp.now(),
+        });
+      }
+
+      await updateDoc(docRef, {
+        status,
+        updatedAt: Timestamp.fromDate(new Date()),
+      });
+    } catch (error) {
+      console.error("Error updating staff commission status:", error);
+      throw error;
+    }
+  }
+
   // Get all commissions for a clinic
   async getCommissionsByClinic(clinicId: string): Promise<StaffCommission[]> {
     try {

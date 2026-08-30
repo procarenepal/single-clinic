@@ -10,6 +10,7 @@ import {
   where,
   addDoc,
   serverTimestamp,
+  runTransaction,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
 
@@ -517,6 +518,7 @@ export const medicineService = {
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
+          where("clinicId", "==", clinicId),
         );
       } else {
         q = query(
@@ -600,6 +602,7 @@ export const medicineService = {
         q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
           where("medicineId", "==", medicineId),
+          where("clinicId", "==", clinicId),
         );
       } else {
         q = query(
@@ -658,6 +661,7 @@ export const medicineService = {
         collection(db, MEDICINE_STOCK_COLLECTION),
         where("medicineId", "==", medicineId),
         where("batchNumber", "==", batchNumber),
+        where("clinicId", "==", clinicId),
       );
       const querySnapshot = await getDocs(q);
 
@@ -846,6 +850,245 @@ export const medicineService = {
       console.error("Error updating medicine stock:", error);
       throw error;
     }
+  },
+
+  /**
+   * Atomically adjust a medicine's stock across its branch stock docs.
+   * Previously (pharmacy.tsx handleSaveStockAdjustment) this same logic ran
+   * client-side against stock docs read before the modal was even opened:
+   * two concurrent adjustments (or an adjustment racing a real sale) could
+   * both read the same stale currentStock and one write would silently
+   * clobber the other's change (lost update). Re-reading every involved
+   * stock doc inside a transaction and computing the diff from that fresh
+   * data closes the gap, matching the pattern already used for bed
+   * allotments and package sessions.
+   */
+  async adjustStock(params: {
+    medicineId: string;
+    clinicId: string;
+    branchId: string;
+    stockDocIds: string[];
+    type: "add" | "deduct" | "set";
+    regularInput: number;
+    schemeInput: number;
+    reason: string;
+    unitPrice: number;
+    createdBy: string;
+  }): Promise<{ oldTotal: number; newTotal: number; totalDiff: number }> {
+    const {
+      medicineId,
+      clinicId,
+      branchId,
+      stockDocIds,
+      type,
+      regularInput,
+      schemeInput,
+      reason,
+      unitPrice,
+      createdBy,
+    } = params;
+
+    return runTransaction(db, async (transaction) => {
+      const stockRefs = stockDocIds.map((id) =>
+        doc(db, MEDICINE_STOCK_COLLECTION, id),
+      );
+      const stockSnaps = await Promise.all(
+        stockRefs.map((ref) => transaction.get(ref)),
+      );
+      const docs = stockSnaps
+        .map((snap, i) => ({ id: stockRefs[i].id, ref: stockRefs[i], data: snap.data() }))
+        .filter((d) => d.data !== undefined) as {
+        id: string;
+        ref: ReturnType<typeof doc>;
+        data: any;
+      }[];
+
+      const totalCurrentRegular = docs.reduce(
+        (sum, d) => sum + (d.data.currentStock || 0),
+        0,
+      );
+      const totalCurrentScheme = docs.reduce(
+        (sum, d) => sum + (d.data.schemeStock || 0),
+        0,
+      );
+
+      const inputReg = Math.abs(regularInput || 0);
+      const inputSch = Math.abs(schemeInput || 0);
+
+      let diffReg = 0;
+      let diffSch = 0;
+
+      if (type === "add") {
+        diffReg = inputReg;
+        diffSch = inputSch;
+      } else if (type === "deduct") {
+        diffReg = -Math.min(inputReg, totalCurrentRegular);
+        diffSch = -Math.min(inputSch, totalCurrentScheme);
+      } else if (type === "set") {
+        diffReg = Math.max(0, regularInput) - totalCurrentRegular;
+        diffSch = Math.max(0, schemeInput) - totalCurrentScheme;
+      }
+
+      const totalDiff = diffReg + diffSch;
+
+      if (totalDiff !== 0) {
+        if (diffReg > 0 || diffSch > 0) {
+          const firstDoc = docs[0];
+
+          if (firstDoc) {
+            transaction.update(firstDoc.ref, {
+              currentStock:
+                (firstDoc.data.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
+              schemeStock:
+                (firstDoc.data.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            const newStockRef = doc(collection(db, MEDICINE_STOCK_COLLECTION));
+
+            transaction.set(newStockRef, {
+              medicineId,
+              currentStock: diffReg > 0 ? diffReg : 0,
+              schemeStock: diffSch > 0 ? diffSch : 0,
+              minimumStock: 10,
+              reorderLevel: 20,
+              clinicId,
+              branchId: branchId || "",
+              updatedBy: createdBy,
+              updatedAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+            });
+          }
+        }
+
+        if (diffReg < 0 || diffSch < 0) {
+          let remainingRegToDeduct = Math.abs(diffReg < 0 ? diffReg : 0);
+          let remainingSchToDeduct = Math.abs(diffSch < 0 ? diffSch : 0);
+
+          const sortedDocs = [...docs].sort((a, b) => {
+            const timeA = a.data.createdAt?.toMillis
+              ? a.data.createdAt.toMillis()
+              : 0;
+            const timeB = b.data.createdAt?.toMillis
+              ? b.data.createdAt.toMillis()
+              : 0;
+
+            return timeA - timeB;
+          });
+
+          for (const d of sortedDocs) {
+            if (remainingRegToDeduct === 0 && remainingSchToDeduct === 0) break;
+
+            const deductReg = Math.min(
+              d.data.currentStock || 0,
+              remainingRegToDeduct,
+            );
+            const deductSch = Math.min(
+              d.data.schemeStock || 0,
+              remainingSchToDeduct,
+            );
+
+            if (deductReg > 0 || deductSch > 0) {
+              transaction.update(d.ref, {
+                currentStock: (d.data.currentStock || 0) - deductReg,
+                schemeStock: (d.data.schemeStock || 0) - deductSch,
+                updatedAt: serverTimestamp(),
+              });
+              remainingRegToDeduct -= deductReg;
+              remainingSchToDeduct -= deductSch;
+            }
+          }
+        }
+
+        const oldTotal = totalCurrentRegular + totalCurrentScheme;
+        const newTotal = oldTotal + totalDiff;
+
+        const txRef = doc(collection(db, STOCK_TRANSACTIONS_COLLECTION));
+
+        transaction.set(txRef, {
+          medicineId,
+          type: totalDiff > 0 ? "adjustment" : "deduction",
+          quantity: totalDiff,
+          previousStock: oldTotal,
+          newStock: newTotal,
+          unitPrice,
+          totalAmount: Math.abs(totalDiff) * unitPrice,
+          referenceId: "MANUAL-ADJUST",
+          reason: reason || "Manual Inventory Reconciliation",
+          clinicId,
+          branchId: branchId || "",
+          createdBy,
+          createdAt: serverTimestamp(),
+        });
+
+        return { oldTotal, newTotal, totalDiff };
+      }
+
+      const oldTotal = totalCurrentRegular + totalCurrentScheme;
+
+      return { oldTotal, newTotal: oldTotal, totalDiff: 0 };
+    });
+  },
+
+  /**
+   * Atomically record a stock transaction (purchase/sale/adjustment) and
+   * apply it to the linked stock doc. Previously (StockTab.tsx
+   * handleSaveTransaction) currentStock was read from already-loaded
+   * component state, then a separate updateMedicineStock call applied
+   * newStock computed from that stale value — a concurrent transaction on
+   * the same medicine could be lost. Re-reading the stock doc inside a
+   * transaction closes that gap.
+   */
+  async recordStockTransaction(
+    stockDocId: string | null,
+    transactionData: Omit<
+      StockTransaction,
+      "id" | "createdAt" | "previousStock" | "newStock"
+    > & { quantity: number },
+    lastRestockedOnPurchase: boolean,
+  ): Promise<void> {
+    await runTransaction(db, async (transaction) => {
+      let currentStock = 0;
+      let stockRef: ReturnType<typeof doc> | null = null;
+
+      if (stockDocId) {
+        stockRef = doc(db, MEDICINE_STOCK_COLLECTION, stockDocId);
+        const stockSnap = await transaction.get(stockRef);
+
+        currentStock = stockSnap.exists()
+          ? stockSnap.data().currentStock || 0
+          : 0;
+      }
+
+      let newStock = currentStock;
+
+      if (transactionData.type === "purchase") {
+        newStock = currentStock + transactionData.quantity;
+      } else if (transactionData.type === "sale") {
+        newStock = currentStock - transactionData.quantity;
+      } else if (transactionData.type === "adjustment") {
+        newStock = transactionData.quantity;
+      }
+
+      const txRef = doc(collection(db, STOCK_TRANSACTIONS_COLLECTION));
+
+      transaction.set(txRef, {
+        ...this.stripUndefined(transactionData),
+        previousStock: currentStock,
+        newStock,
+        createdAt: serverTimestamp(),
+      });
+
+      if (stockRef) {
+        transaction.update(stockRef, {
+          currentStock: newStock,
+          ...(lastRestockedOnPurchase && transactionData.type === "purchase"
+            ? { lastRestocked: serverTimestamp() }
+            : {}),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
   },
 
   // ============= STOCK TRANSACTIONS =============

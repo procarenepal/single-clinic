@@ -251,6 +251,35 @@ export default function NewPrescriptionPage() {
     ? (userData?.branchId ?? defaultBranchId ?? undefined)
     : undefined;
 
+  // Real clinic tax settings — these invoices are created and IRD-synced
+  // immediately, so tax/PAN must be correct from the start (see the
+  // hardcoded-zero-tax bug fixed this session in this same file's three
+  // auto-billing call sites).
+  const [appointmentBillingSettings, setAppointmentBillingSettings] =
+    useState<{ enableTax?: boolean; defaultTaxPercentage?: number } | null>(
+      null,
+    );
+  const [pathologyBillingSettingsForTax, setPathologyBillingSettingsForTax] =
+    useState<{ enableTax?: boolean; defaultTaxPercentage?: number } | null>(
+      null,
+    );
+
+  useEffect(() => {
+    if (!clinicId) return;
+    appointmentBillingService
+      .getBillingSettings(clinicId)
+      .then(setAppointmentBillingSettings)
+      .catch((err) =>
+        console.error("Error loading appointment billing settings:", err),
+      );
+    pathologyBillingService
+      .getBillingSettings(clinicId)
+      .then(setPathologyBillingSettingsForTax)
+      .catch((err) =>
+        console.error("Error loading pathology billing settings:", err),
+      );
+  }, [clinicId, effectiveBranchId]);
+
   const [patients, setPatients] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
@@ -1106,12 +1135,23 @@ export default function NewPrescriptionPage() {
             amount: price,
           };
 
+          const taxPercentage1 = appointmentBillingSettings?.enableTax
+            ? appointmentBillingSettings.defaultTaxPercentage || 0
+            : 0;
+          const totals1 = appointmentBillingService.calculateInvoiceTotals(
+            [billingItem] as any,
+            "percent",
+            0,
+            taxPercentage1,
+          );
+
           const billingData = {
             invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
             clinicId: clinicId!,
             branchId: effectiveBranchId ?? clinicId!,
             patientId: patientId,
             patientName: pat?.name || "Unknown Patient",
+            patientPanVat: pat?.patientPanVat || undefined,
             doctorId: doctorId,
             doctorName: docInfo?.name || "Unknown Doctor",
             doctorType: (docInfo?.doctorType || "regular") as
@@ -1125,19 +1165,19 @@ export default function NewPrescriptionPage() {
             referrals: processedReferrals,
             invoiceDate: new Date(),
             items: [billingItem],
-            subtotal: price,
+            subtotal: totals1.subtotal,
             itemDiscountAmount: 0,
             mainDiscountAmount: 0,
             discountType: "percent" as const,
             discountValue: 0,
-            discountAmount: 0,
-            taxPercentage: 0,
-            taxAmount: 0,
-            totalAmount: price,
+            discountAmount: totals1.totalDiscount,
+            taxPercentage: taxPercentage1,
+            taxAmount: totals1.taxAmount,
+            totalAmount: totals1.totalAmount,
             status: "draft" as const,
             paymentStatus: "unpaid" as const,
             paidAmount: 0,
-            balanceAmount: price,
+            balanceAmount: totals1.totalAmount,
             createdBy: currentUser,
           };
 
@@ -1258,9 +1298,22 @@ export default function NewPrescriptionPage() {
           const pat = patients.find((p) => p.id === patientId);
           const docInfo = doctors.find((d) => d.id === doctorId);
 
-          const subtotal = selectedPathologyTests.reduce(
-            (sum, t) => sum + t.price,
+          const pathItems = selectedPathologyTests.map((t) => ({
+            id: crypto.randomUUID(),
+            testId: t.testId,
+            testName: t.testName,
+            price: t.price,
+            quantity: 1,
+            amount: t.price,
+          }));
+          const pathTaxPercentage = pathologyBillingSettingsForTax?.enableTax
+            ? pathologyBillingSettingsForTax.defaultTaxPercentage || 0
+            : 0;
+          const pathTotals = pathologyBillingService.calculateInvoiceTotals(
+            pathItems as any,
+            "percent",
             0,
+            pathTaxPercentage,
           );
 
           const draftPathologyBilling = {
@@ -1271,33 +1324,27 @@ export default function NewPrescriptionPage() {
             patientName: pat?.name || "Unknown Patient",
             patientPhone: pat?.mobile || "",
             patientGender: pat?.gender || "",
+            patientPanVat: pat?.patientPanVat || undefined,
             doctorId,
             doctorName: docInfo?.name || "Unknown Doctor",
             doctorType: (docInfo?.doctorType || "regular") as
               | "regular"
               | "visitor",
             invoiceDate: new Date(),
-            items: selectedPathologyTests.map((t) => ({
-              id: crypto.randomUUID(),
-              testId: t.testId,
-              testName: t.testName,
-              price: t.price,
-              quantity: 1,
-              amount: t.price,
-            })),
-            subtotal,
+            items: pathItems,
+            subtotal: pathTotals.subtotal,
             itemDiscountAmount: 0,
             mainDiscountAmount: 0,
             discountType: "percent" as const,
             discountValue: 0,
-            discountAmount: 0,
-            taxPercentage: 0,
-            taxAmount: 0,
-            totalAmount: subtotal,
+            discountAmount: pathTotals.discountAmount,
+            taxPercentage: pathTaxPercentage,
+            taxAmount: pathTotals.taxAmount,
+            totalAmount: pathTotals.totalAmount,
             status: "draft" as const,
             paymentStatus: "unpaid" as const,
             paidAmount: 0,
-            balanceAmount: subtotal,
+            balanceAmount: pathTotals.totalAmount,
             createdBy: currentUser,
             notes: "Prescribed via Clinical Consultation",
           };
@@ -1440,12 +1487,23 @@ export default function NewPrescriptionPage() {
               amount: price,
             };
 
+            const taxPercentage3 = appointmentBillingSettings?.enableTax
+              ? appointmentBillingSettings.defaultTaxPercentage || 0
+              : 0;
+            const totals3 = appointmentBillingService.calculateInvoiceTotals(
+              [billingItem] as any,
+              "percent",
+              0,
+              taxPercentage3,
+            );
+
             const billingData = {
               invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
               clinicId: clinicId!,
               branchId: effectiveBranchId ?? clinicId!,
               patientId: patientId,
               patientName: pat?.name || "Unknown Patient",
+              patientPanVat: pat?.patientPanVat || undefined,
               doctorId: doctorId,
               doctorName: docInfo?.name || "Unknown Doctor",
               doctorType: (docInfo?.doctorType || "regular") as
@@ -1459,19 +1517,19 @@ export default function NewPrescriptionPage() {
               referrals: processedReferrals, // Save complete polymorph referral ledger on invoice
               invoiceDate: new Date(),
               items: [billingItem],
-              subtotal: price,
+              subtotal: totals3.subtotal,
               itemDiscountAmount: 0,
               mainDiscountAmount: 0,
               discountType: "percent" as const,
               discountValue: 0,
-              discountAmount: 0,
-              taxPercentage: 0,
-              taxAmount: 0,
-              totalAmount: price,
+              discountAmount: totals3.totalDiscount,
+              taxPercentage: taxPercentage3,
+              taxAmount: totals3.taxAmount,
+              totalAmount: totals3.totalAmount,
               status: "draft" as const,
               paymentStatus: "unpaid" as const,
               paidAmount: 0,
-              balanceAmount: price,
+              balanceAmount: totals3.totalAmount,
               createdBy: currentUser,
             };
 
@@ -1638,6 +1696,17 @@ export default function NewPrescriptionPage() {
                               {formattedTime}
                             </strong>
                           </span>
+                          <span className="text-[11px] text-text-muted block mt-0.5">
+                            Dr.{" "}
+                            <strong className="text-text-main">
+                              {doc?.name || "Unassigned"}
+                            </strong>
+                          </span>
+                          {appt.reason && (
+                            <span className="text-[11px] text-text-muted block mt-0.5 truncate max-w-[180px]">
+                              {appt.reason}
+                            </span>
+                          )}
                         </div>
                         {appt.status === "in-progress" ? (
                           <span className="text-[9.5px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded border border-rose-500/20 flex items-center gap-1 animate-pulse">

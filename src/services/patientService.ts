@@ -233,7 +233,9 @@ export const patientService = {
       const cacheKey = clinicId || "standalone";
       const cached = cacheService.getClinicPatients(cacheKey);
 
-      if (cached) return cached as Patient[];
+      // An empty array is deliberately NOT treated as a cache hit — see
+      // doctorService.getDoctors for the same fix and rationale.
+      if (cached && (cached as Patient[]).length > 0) return cached as Patient[];
 
       const patientsRef = collection(db, PATIENTS_COLLECTION);
       const constraints: any[] = [];
@@ -384,11 +386,17 @@ export const patientService = {
    * @returns {Promise<Patient[]>} - Array of matching patients
    */
   async searchPatients(
-    _clinicId: string,
+    clinicId: string,
     searchTerm: string,
   ): Promise<Patient[]> {
     try {
-      const allPatients = await this.getPatients();
+      // Bug fix: this used to call getPatients() with no argument at all,
+      // so its internal clinicId scoping never applied and every search
+      // leaked every clinic's patients (name/email/phone/reg number) into
+      // results whenever a search term happened to match. Threading
+      // clinicId through respects getPatients' own existing convention
+      // (including its deliberate "default" = standalone/no-filter mode).
+      const allPatients = await this.getPatients(clinicId);
       const lowerSearchTerm = searchTerm.toLowerCase();
 
       return allPatients.filter(

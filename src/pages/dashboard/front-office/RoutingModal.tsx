@@ -22,6 +22,10 @@ interface RoutingModalProps {
   experts?: any[];
   routingExpertId?: string;
   setRoutingExpertId?: React.Dispatch<React.SetStateAction<string>>;
+  /** Cabin name → occupying patient's name, for the exclusive (non-shared)
+   * rooms only — computed by front-office-desk.tsx from live appointment
+   * state, excluding the patient currently being routed. */
+  occupiedCabins?: Record<string, string>;
 }
 
 export const RoutingModal: React.FC<RoutingModalProps> = ({
@@ -44,11 +48,19 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
   experts = [],
   routingExpertId = "",
   setRoutingExpertId,
+  occupiedCabins = {},
 }) => {
   if (!isOpen || !appointment) return null;
 
   const modalRoot = document.body;
   const hasDoc = appointment.doctorId && appointment.doctorId !== "unassigned";
+  const cabinLabel = (value: string, label: string) =>
+    occupiedCabins[value] ? `${label} — Occupied (${occupiedCabins[value]})` : label;
+  const clinicianLabel = (clinician: any) =>
+    clinician.isOnDuty === false ? `${clinician.name} (Off Duty)` : clinician.name;
+  const selectedCabinConflict = routingCabin
+    ? occupiedCabins[routingCabin]
+    : undefined;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
@@ -90,7 +102,7 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
                   <option value="">-- Select Doctor --</option>
                   {doctors.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.name}
+                      {clinicianLabel(d)}
                     </option>
                   ))}
                 </select>
@@ -122,7 +134,7 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
                   <option value="">-- Select Expert --</option>
                   {experts.map((e) => (
                     <option key={e.id} value={e.id}>
-                      {e.name}
+                      {clinicianLabel(e)}
                     </option>
                   ))}
                 </select>
@@ -141,16 +153,35 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
             >
               <option value="">-- Select Room/Cabin (Optional) --</option>
               <optgroup label="OPD Rooms">
-                <option value="OPD Room 1">OPD Room 1</option>
-                <option value="OPD Room 2">OPD Room 2</option>
-                <option value="OPD Room 3">OPD Room 3</option>
+                <option disabled={Boolean(occupiedCabins["OPD Room 1"])} value="OPD Room 1">
+                  {cabinLabel("OPD Room 1", "OPD Room 1")}
+                </option>
+                <option disabled={Boolean(occupiedCabins["OPD Room 2"])} value="OPD Room 2">
+                  {cabinLabel("OPD Room 2", "OPD Room 2")}
+                </option>
+                <option disabled={Boolean(occupiedCabins["OPD Room 3"])} value="OPD Room 3">
+                  {cabinLabel("OPD Room 3", "OPD Room 3")}
+                </option>
               </optgroup>
               <optgroup label="Cabins & Laser">
-                <option value="Laser Room 1">Laser Room 1</option>
-                <option value="Laser Room 2">Laser Room 2</option>
-                <option value="PRP Cabin A">PRP Cabin A</option>
-                <option value="PRP Cabin B">PRP Cabin B</option>
-                <option value="Facial Therapy Room">Facial Room</option>
+                <option disabled={Boolean(occupiedCabins["Laser Room 1"])} value="Laser Room 1">
+                  {cabinLabel("Laser Room 1", "Laser Room 1")}
+                </option>
+                <option disabled={Boolean(occupiedCabins["Laser Room 2"])} value="Laser Room 2">
+                  {cabinLabel("Laser Room 2", "Laser Room 2")}
+                </option>
+                <option disabled={Boolean(occupiedCabins["PRP Cabin A"])} value="PRP Cabin A">
+                  {cabinLabel("PRP Cabin A", "PRP Cabin A")}
+                </option>
+                <option disabled={Boolean(occupiedCabins["PRP Cabin B"])} value="PRP Cabin B">
+                  {cabinLabel("PRP Cabin B", "PRP Cabin B")}
+                </option>
+                <option
+                  disabled={Boolean(occupiedCabins["Facial Therapy Room"])}
+                  value="Facial Therapy Room"
+                >
+                  {cabinLabel("Facial Therapy Room", "Facial Room")}
+                </option>
               </optgroup>
               <optgroup label="Other Areas">
                 <option value="Lobby">Lobby</option>
@@ -159,6 +190,12 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
                 <option value="Pharmacy">Pharmacy</option>
               </optgroup>
             </select>
+            {selectedCabinConflict && (
+              <p className="text-[11px] text-danger mt-1">
+                ⚠️ {routingCabin} is currently occupied by {selectedCabinConflict}
+                . Please choose a different room.
+              </p>
+            )}
           </div>
           <p className="text-xs text-text-muted">
             Routing this patient will mark their status as{" "}

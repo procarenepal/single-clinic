@@ -9,6 +9,7 @@ import {
   query,
   where,
   Timestamp,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -46,7 +47,10 @@ export const bedService = {
   ): Promise<BedCategory[]> {
     try {
       const categoriesRef = collection(db, BED_CATEGORIES_COLLECTION);
-      const constraints: any[] = [where("isActive", "==", true)];
+      const constraints: any[] = [
+        where("isActive", "==", true),
+        where("clinicId", "==", clinicId),
+      ];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
@@ -179,7 +183,10 @@ export const bedService = {
   async getBedsByClinic(clinicId: string, branchId?: string): Promise<Bed[]> {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
-      const constraints: any[] = [where("isActive", "==", true)];
+      const constraints: any[] = [
+        where("isActive", "==", true),
+        where("clinicId", "==", clinicId),
+      ];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
@@ -220,6 +227,7 @@ export const bedService = {
       const constraints: any[] = [
         where("status", "==", "available"),
         where("isActive", "==", true),
+        where("clinicId", "==", clinicId),
       ];
 
       if (branchId) {
@@ -428,7 +436,10 @@ export const bedService = {
   ): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      const constraints: any[] = [where("status", "==", "active")];
+      const constraints: any[] = [
+        where("status", "==", "active"),
+        where("clinicId", "==", clinicId),
+      ];
 
       if (branchId) {
         constraints.push(where("branchId", "==", branchId));
@@ -591,7 +602,8 @@ export const bedService = {
     allotmentData: Omit<BedAllotment, "id" | "createdAt" | "updatedAt">,
   ): Promise<string> {
     try {
-      const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
+      const bedRef = doc(db, BEDS_COLLECTION, allotmentData.bedId);
+      const allotmentRef = doc(collection(db, BED_ALLOTMENTS_COLLECTION));
       const now = Timestamp.now();
 
       const data = removeUndefinedFields({
@@ -605,14 +617,34 @@ export const bedService = {
           : undefined,
       });
 
-      const docRef = await addDoc(allotmentsRef, data);
+      // Transaction closes the double-booking gap: previously the
+      // allotment doc was written and the bed status updated as two
+      // separate, non-atomic calls with no check the bed wasn't already
+      // occupied — two concurrent allotment attempts for the same bed
+      // could both succeed. Reading + checking + writing both docs inside
+      // one transaction makes this atomic and rejects the second attempt.
+      await runTransaction(db, async (transaction) => {
+        const bedSnap = await transaction.get(bedRef);
 
-      // Update bed status to 'occupied'
-      await this.updateBedStatus(allotmentData.bedId, "occupied");
+        if (!bedSnap.exists()) {
+          throw new Error("Bed not found");
+        }
+        if (bedSnap.data().status === "occupied") {
+          throw new Error(
+            "This bed is already occupied. Please choose a different bed.",
+          );
+        }
 
-      console.log("Bed allotment created with ID:", docRef.id);
+        transaction.set(allotmentRef, data);
+        transaction.update(bedRef, {
+          status: "occupied",
+          updatedAt: now,
+        });
+      });
 
-      return docRef.id;
+      console.log("Bed allotment created with ID:", allotmentRef.id);
+
+      return allotmentRef.id;
     } catch (error) {
       console.error("Error creating bed allotment:", error);
       throw error;
@@ -663,23 +695,40 @@ export const bedService = {
   async dischargeAllotment(id: string, dischargeDate: Date): Promise<void> {
     try {
       const allotmentRef = doc(db, BED_ALLOTMENTS_COLLECTION, id);
-      const allotmentSnap = await getDoc(allotmentRef);
+      const now = Timestamp.now();
 
-      if (!allotmentSnap.exists()) {
-        throw new Error("Bed allotment not found");
-      }
+      // Transaction (mirroring the createAllotment fix): reads + guards +
+      // writes both the allotment and its bed atomically, so a double
+      // discharge (double-click, two tabs) can't decrement/free a bed twice
+      // or re-fire discharge side effects, and a concurrent discharge can't
+      // race with this one.
+      await runTransaction(db, async (transaction) => {
+        const allotmentSnap = await transaction.get(allotmentRef);
 
-      const allotment = allotmentSnap.data() as BedAllotment;
+        if (!allotmentSnap.exists()) {
+          throw new Error("Bed allotment not found");
+        }
 
-      // Update allotment status and discharge date
-      await updateDoc(allotmentRef, {
-        status: "discharged",
-        dischargeDate: Timestamp.fromDate(dischargeDate),
-        updatedAt: Timestamp.now(),
+        const allotment = allotmentSnap.data() as BedAllotment;
+
+        if (allotment.status !== "active") {
+          throw new Error(
+            `This allotment is already "${allotment.status}" — it cannot be discharged again.`,
+          );
+        }
+
+        const bedRef = doc(db, BEDS_COLLECTION, allotment.bedId);
+
+        transaction.update(allotmentRef, {
+          status: "discharged",
+          dischargeDate: Timestamp.fromDate(dischargeDate),
+          updatedAt: now,
+        });
+        transaction.update(bedRef, {
+          status: "available",
+          updatedAt: now,
+        });
       });
-
-      // Update bed status to 'available'
-      await this.updateBedStatus(allotment.bedId, "available");
 
       console.log("Bed allotment discharged successfully");
     } catch (error) {

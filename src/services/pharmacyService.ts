@@ -698,6 +698,57 @@ export const pharmacyService = {
   },
 
   /**
+   * Get all medicine purchases for a specific patient within a clinic.
+   * Note: `patientId` isn't a typed field on `MedicinePurchase` — walk-in
+   * sales are stored with `patientId: "walk-in-pharmacy"` and never match
+   * a real patient here.
+   */
+  async getMedicinePurchasesByPatient(
+    patientId: string,
+    clinicId: string,
+  ): Promise<MedicinePurchase[]> {
+    try {
+      const purchasesRef = collection(db, MEDICINE_PURCHASES_COLLECTION);
+      const q = query(
+        purchasesRef,
+        where("clinicId", "==", clinicId),
+        where("patientId", "==", patientId),
+      );
+      const querySnapshot = await getDocs(q);
+
+      const purchases = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          ...data,
+          purchaseDate: data.purchaseDate?.toDate(),
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate(),
+        } as MedicinePurchase;
+      });
+
+      return purchases.sort((a, b) => {
+        const dateA = a.purchaseDate
+          ? a.purchaseDate instanceof Date
+            ? a.purchaseDate.getTime()
+            : new Date(a.purchaseDate).getTime()
+          : 0;
+        const dateB = b.purchaseDate
+          ? b.purchaseDate instanceof Date
+            ? b.purchaseDate.getTime()
+            : new Date(b.purchaseDate).getTime()
+          : 0;
+
+        return dateB - dateA;
+      });
+    } catch (error) {
+      console.error("Error getting medicine purchases by patient:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Update a medicine purchase
    */
   async updateMedicinePurchase(
@@ -710,6 +761,55 @@ export const pharmacyService = {
       const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, id);
       const prevDoc = await getDoc(docRef);
       const prevData = prevDoc.exists() ? prevDoc.data() : null;
+
+      // IRD COMPLIANCE (Clause 6(ख)/(ट)): once a purchase is synced to IRD,
+      // neither its financial fields nor any other business/identity data
+      // may be silently modified — this function previously had no guard at
+      // all, unlike its appointment/pathology billing counterparts. Only
+      // system-driven bookkeeping fields (payment recording, sync retries)
+      // may still change post-sync.
+      if (prevData && (prevData as any).irdSynced) {
+        const financialKeys = [
+          "total",
+          "discount",
+          "taxPercentage",
+          "taxAmount",
+          "netAmount",
+        ];
+        const allowedPostSyncFields = new Set([
+          "paymentStatus",
+          "paymentHistory",
+          "printCount",
+          "irdSynced",
+          "irdSyncDate",
+          "cbmsResponseCode",
+          "updatedAt",
+          "updatedBy",
+        ]);
+
+        for (const key of Object.keys(updateData)) {
+          if (allowedPostSyncFields.has(key)) continue;
+
+          const oldVal = (prevData as any)[key];
+          const newVal = (updateData as any)[key];
+          const changed =
+            typeof newVal === "object" && newVal !== null
+              ? JSON.stringify(newVal) !== JSON.stringify(oldVal)
+              : (newVal || 0) !== (oldVal || 0);
+
+          if (!changed) continue;
+
+          if (financialKeys.includes(key) || key === "items") {
+            throw new Error(
+              "IRD Tax Compliance Error: Financial fields of an IRD-synced purchase cannot be modified. Issue a Return instead.",
+            );
+          }
+
+          throw new Error(
+            "IRD Tax Compliance Error: Data of an IRD-synced purchase cannot be modified. Issue a Return instead.",
+          );
+        }
+      }
 
       await updateDoc(docRef, {
         ...updateData,
@@ -772,6 +872,15 @@ export const pharmacyService = {
     returnData: Omit<MedicinePurchaseReturn, "id" | "createdAt">,
   ): Promise<string> {
     try {
+      // Enforced here too, not just in purchase-return.tsx's form
+      // validation — `notes` is the mandatory documented reason required
+      // per IRD's reversal provisions (see the model comment), and this is
+      // currently the only guard against a future/alternate call site
+      // bypassing that UI-level check.
+      if (!returnData.notes?.trim()) {
+        throw new Error("A reason is required to record a return.");
+      }
+
       const purchaseRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseId);
 
       const medicineItems = returnData.items;
@@ -962,21 +1071,42 @@ export const pharmacyService = {
           const javaClinic = await clinicService.getClinicById(
             returnData.clinicId,
           );
+          // Mirror the original sale's taxable/exempt split instead of
+          // hardcoding the return as fully exempt — a return of items from
+          // a taxed sale must reverse the same proportion of tax, or IRD's
+          // reported taxable revenue never actually decreases while the
+          // exempt total gets incorrectly inflated.
+          const originalTaxRatio =
+            (purchase.netAmount || 0) > 0 && (purchase.taxAmount || 0) > 0
+              ? (purchase.taxAmount || 0) / (purchase.netAmount || 0)
+              : 0;
+          const isOriginalTaxable = originalTaxRatio > 0;
+          const returnGrossAmount = Math.abs(returnData.totalAmount || 0);
+          const returnTaxAmount = isOriginalTaxable
+            ? Math.round(returnGrossAmount * originalTaxRatio)
+            : 0;
+          const returnTaxableAmount = isOriginalTaxable
+            ? returnGrossAmount - returnTaxAmount
+            : 0;
+          const returnExemptAmount = isOriginalTaxable
+            ? 0
+            : returnGrossAmount;
+
           const returnItems = returnData.items.map((item) => ({
             itemName: "Return Item",
             quantity: -Math.abs(item.quantity || 1),
             rate: item.amount / item.quantity || 0,
             totalAmount: -Math.abs(item.amount || 0),
-            isTaxable: false,
+            isTaxable: isOriginalTaxable,
           }));
           const payload = {
             firebasePatientId: (purchase as any).patientId || "",
             buyerName: purchase.patientName || "Cash Sales",
             buyerPan: (purchase as any).patientPanVat || "",
             totalAmount: -Math.abs(returnData.totalAmount),
-            taxableAmount: 0,
-            taxAmount: 0,
-            exemptAmount: -Math.abs(returnData.totalAmount),
+            taxableAmount: -returnTaxableAmount,
+            taxAmount: -returnTaxAmount,
+            exemptAmount: -returnExemptAmount,
             irdEnabled: Boolean(javaClinic?.irdEnabled),
             fiscalYear: getNepaliFiscalYear(
               purchase.purchaseDate || new Date(),
@@ -1148,11 +1278,15 @@ export const pharmacyService = {
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
-      let q = query(usageRef);
+      let q = query(usageRef, where("clinicId", "==", clinicId));
 
       // Filter by branch if specified
       if (branchId) {
-        q = query(usageRef, where("branchId", "==", branchId));
+        q = query(
+          usageRef,
+          where("clinicId", "==", clinicId),
+          where("branchId", "==", branchId),
+        );
       }
 
       const querySnapshot = await getDocs(q);
@@ -1184,11 +1318,16 @@ export const pharmacyService = {
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
-      let q = query(usageRef, where("medicineId", "==", medicineId));
+      let q = query(
+        usageRef,
+        where("clinicId", "==", clinicId),
+        where("medicineId", "==", medicineId),
+      );
 
       if (branchId) {
         q = query(
           usageRef,
+          where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("medicineId", "==", medicineId),
         );
@@ -1223,11 +1362,16 @@ export const pharmacyService = {
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
-      let q = query(usageRef, where("patientId", "==", patientId));
+      let q = query(
+        usageRef,
+        where("clinicId", "==", clinicId),
+        where("patientId", "==", patientId),
+      );
 
       if (branchId) {
         q = query(
           usageRef,
+          where("clinicId", "==", clinicId),
           where("branchId", "==", branchId),
           where("patientId", "==", patientId),
         );

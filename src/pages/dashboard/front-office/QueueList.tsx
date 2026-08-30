@@ -5,6 +5,9 @@ import {
   IoDocumentTextOutline,
   IoTimeOutline,
   IoCreateOutline,
+  IoArrowUndoOutline,
+  IoPauseOutline,
+  IoPlayOutline,
 } from "react-icons/io5";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -20,7 +23,13 @@ function formatTimeTo12Hour(timeStr: string) {
   return `${hour}:${m} ${ampm}`;
 }
 
-const WaitTimeIndicator = ({ startTime }: { startTime: any }) => {
+const WaitTimeIndicator = ({
+  startTime,
+  onHold,
+}: {
+  startTime: any;
+  onHold?: boolean;
+}) => {
   const [mins, setMins] = useState(0);
 
   useEffect(() => {
@@ -47,6 +56,18 @@ const WaitTimeIndicator = ({ startTime }: { startTime: any }) => {
 
     return () => clearInterval(interval);
   }, [startTime]);
+
+  // While on hold, show a static pill instead of the ticking count — the
+  // clock keeps running underneath (elapsed time isn't tracked/subtracted
+  // on resume, matching how everyone else's counter works), but the
+  // display shouldn't make a legitimately-paused patient look neglected.
+  if (onHold) {
+    return (
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 whitespace-nowrap shrink-0 bg-default-100 text-default-500 border-default-200">
+        ⏸ On Hold
+      </span>
+    );
+  }
 
   if (mins === 0) return null;
 
@@ -92,6 +113,9 @@ export interface QueueListProps {
   handleCompleteConsultation: (id: string, toBilling?: boolean) => void;
   handleCompleteCheckout: (id: string) => void;
   handleOpenProcedure: (appt: any) => void;
+  onSendBack?: (appt: any) => void;
+  onToggleHold?: (appt: any) => void;
+  onMarkNoShow?: (appt: any) => void;
 }
 
 export const QueueList: React.FC<QueueListProps> = ({
@@ -113,6 +137,9 @@ export const QueueList: React.FC<QueueListProps> = ({
   handleCompleteConsultation,
   handleCompleteCheckout,
   handleOpenProcedure,
+  onSendBack,
+  onToggleHold,
+  onMarkNoShow,
 }) => {
   const navigate = useNavigate();
 
@@ -188,7 +215,10 @@ export const QueueList: React.FC<QueueListProps> = ({
                           getPatientStage(appts[0]) === "triage" ||
                           getPatientStage(appts[0]) === "doctor" ||
                           getPatientStage(appts[0]) === "expert") && (
-                            <WaitTimeIndicator startTime={appts[0].createdAt} />
+                            <WaitTimeIndicator
+                              onHold={appts[0].onHold}
+                              startTime={appts[0].createdAt}
+                            />
                           )}
                       </div>
                       <p className="text-[11.5px] text-text-muted leading-none mt-1">
@@ -239,6 +269,33 @@ export const QueueList: React.FC<QueueListProps> = ({
 
                       return visitActionNode;
                     })()}
+
+                    {/* No-Show — only for a patient who hasn't checked in
+                        yet; single-click, no reason required, see
+                        front-office-desk.tsx's handleMarkNoShow */}
+                    {onMarkNoShow &&
+                      (() => {
+                        const scheduledAppts = appts.filter(
+                          (a) => getPatientStage(a) === "scheduled",
+                        );
+                        const firstScheduledAppt =
+                          scheduledAppts.find(
+                            (a) => a.doctorId && a.doctorId !== "unassigned",
+                          ) || scheduledAppts[0];
+
+                        if (!firstScheduledAppt) return null;
+
+                        return (
+                          <button
+                            className="h-8 px-2.5 whitespace-nowrap rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-danger hover:border-danger/30 hover:bg-danger/5 transition-colors outline-none"
+                            title="Mark as no-show — patient did not check in"
+                            type="button"
+                            onClick={() => onMarkNoShow(firstScheduledAppt)}
+                          >
+                            No-Show
+                          </button>
+                        );
+                      })()}
 
                     <div className="flex items-center gap-1 md:gap-1.5 bg-surface px-3 py-1.5 rounded border border-border-base/40">
                     {(() => {
@@ -517,6 +574,60 @@ export const QueueList: React.FC<QueueListProps> = ({
                             }
                             return null;
                           })()}
+
+                          {/* Undo check-in/mis-routing/premature triage —
+                              pre-billing stages only, see front-office-desk.tsx */}
+                          {onSendBack &&
+                            (stage === "lobby" ||
+                              stage === "triage-done" ||
+                              stage === "doctor" ||
+                              stage === "expert") && (
+                              <button
+                                className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-danger hover:border-danger/30 hover:bg-danger/5 transition-colors outline-none flex items-center gap-1"
+                                title={
+                                  stage === "lobby"
+                                    ? "Undo check-in — return patient to Scheduled"
+                                    : "Send patient back to Lobby"
+                                }
+                                type="button"
+                                onClick={() => onSendBack(appt)}
+                              >
+                                <IoArrowUndoOutline className="w-3.5 h-3.5" />
+                                {stage === "lobby" ? "Undo Check-In" : "Send Back"}
+                              </button>
+                            )}
+
+                          {/* Patient temporarily stepped out mid-visit —
+                              same active stages as Send Back; pauses the
+                              wait-time indicator and the 30-min urgent
+                              alert without changing stage/routing. */}
+                          {onToggleHold &&
+                            (stage === "lobby" ||
+                              stage === "triage-done" ||
+                              stage === "doctor" ||
+                              stage === "expert") && (
+                              <button
+                                className={`h-8 px-2.5 rounded text-[11.5px] font-medium border transition-colors outline-none flex items-center gap-1 ${
+                                  appt.onHold
+                                    ? "border-warning/50 text-warning-700 bg-warning/10 hover:bg-warning/20"
+                                    : "border-border-base text-text-muted hover:text-text-main hover:bg-surface-2"
+                                }`}
+                                title={
+                                  appt.onHold
+                                    ? "Resume — patient is back"
+                                    : "Put patient on hold (stepped out)"
+                                }
+                                type="button"
+                                onClick={() => onToggleHold(appt)}
+                              >
+                                {appt.onHold ? (
+                                  <IoPlayOutline className="w-3.5 h-3.5" />
+                                ) : (
+                                  <IoPauseOutline className="w-3.5 h-3.5" />
+                                )}
+                                {appt.onHold ? "Resume" : "Hold"}
+                              </button>
+                            )}
                         </div>
                       </div>
                     );

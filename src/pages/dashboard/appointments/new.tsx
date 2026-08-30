@@ -245,6 +245,10 @@ export default function NewAppointmentPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
   const [isMultiBranch, setIsMultiBranch] = useState(false);
+  const [billingSettings, setBillingSettings] = useState<{
+    enableTax?: boolean;
+    defaultTaxPercentage?: number;
+  } | null>(null);
 
   // Date conversion state
   const [dateConversionState, setDateConversionState] = useState({
@@ -484,6 +488,15 @@ export default function NewAppointmentPage() {
           );
 
         setAppointmentTypes(appointmentTypesData);
+
+        try {
+          const settings =
+            await appointmentBillingService.getBillingSettings(clinicId);
+
+          setBillingSettings(settings);
+        } catch (settingsError) {
+          console.error("Error loading billing settings:", settingsError);
+        }
       } catch (error) {
         addToast({
           title: "Error",
@@ -688,6 +701,21 @@ export default function NewAppointmentPage() {
 
         const firstClinicianItem = billingItems[0];
 
+        // Apply the clinic's real tax settings instead of always billing
+        // untaxed — this invoice is created and IRD-synced immediately, so
+        // it must be correct from the start, not "fixed later" (mirrors
+        // the same fix already applied to front-office's own auto-created
+        // consultation invoices).
+        const taxPercentage = billingSettings?.enableTax
+          ? billingSettings.defaultTaxPercentage || 0
+          : 0;
+        const totals = appointmentBillingService.calculateInvoiceTotals(
+          billingItems as any,
+          "percent",
+          0,
+          taxPercentage,
+        );
+
         const billingData = {
           invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
           clinicId: clinicId,
@@ -709,15 +737,15 @@ export default function NewAppointmentPage() {
           referrals: processedReferrals,
           invoiceDate: new Date(),
           items: billingItems,
-          subtotal: totalAmount,
+          subtotal: totals.subtotal,
           itemDiscountAmount: 0,
           mainDiscountAmount: 0,
           discountType: "percent" as const,
           discountValue: 0,
-          discountAmount: 0,
-          taxPercentage: 0, // Note: You can compute VAT here based on ClinicSettings
-          taxAmount: 0,
-          totalAmount: totalAmount,
+          discountAmount: totals.totalDiscount,
+          taxPercentage,
+          taxAmount: totals.taxAmount,
+          totalAmount: totals.totalAmount,
 
           buyerPan: appointmentInfo.buyerPan.trim(),
           cbmsSyncStatus: "pending",
@@ -726,7 +754,7 @@ export default function NewAppointmentPage() {
           status: "draft" as const,
           paymentStatus: "unpaid" as const,
           paidAmount: 0,
-          balanceAmount: totalAmount,
+          balanceAmount: totals.totalAmount,
           createdBy: currentUser?.uid || "system",
         };
 

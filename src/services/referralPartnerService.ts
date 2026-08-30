@@ -123,7 +123,9 @@ export const referralPartnerService = {
     try {
       const cached = cacheService.getClinicReferralPartners("standalone");
 
-      if (cached)
+      // An empty array is deliberately NOT treated as a cache hit — see
+      // doctorService.getDoctors for the same fix and rationale.
+      if (cached && (cached as ReferralPartner[]).length > 0)
         return (cached as ReferralPartner[]).filter((p) => !p.isDeleted);
 
       const partnersRef = collection(db, PARTNERS_COLLECTION);

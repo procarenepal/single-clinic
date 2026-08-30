@@ -275,20 +275,27 @@ export class MedicalRecordsService {
     clinicId: string,
   ): Promise<MedicalDocument[]> {
     try {
+      // clinicId filter is required — this endpoint previously fetched
+      // every clinic's uploaded patient documents with no scoping at all.
+      // orderBy dropped in favor of client-side sort to avoid requiring a
+      // new composite index for (clinicId, createdAt).
       const q = query(
         collection(db, DOCUMENTS_COLLECTION),
-
-        orderBy("createdAt", "desc"),
+        where("clinicId", "==", clinicId),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-      })) as MedicalDocument[];
+      return querySnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        }))
+        .sort(
+          (a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime(),
+        ) as MedicalDocument[];
     } catch (error) {
       console.error("Error getting documents by clinic:", error);
       throw new Error("Failed to get clinic documents");
@@ -544,20 +551,27 @@ export class MedicalRecordsService {
    */
   static async getXraysByClinic(clinicId: string): Promise<XrayRecord[]> {
     try {
+      // clinicId filter is required — this endpoint previously fetched
+      // every clinic's X-ray records with no scoping at all. orderBy
+      // dropped in favor of client-side sort to avoid requiring a new
+      // composite index for (clinicId, createdAt).
       const q = query(
         collection(db, XRAYS_COLLECTION),
-
-        orderBy("createdAt", "desc"),
+        where("clinicId", "==", clinicId),
       );
 
       const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-      })) as XrayRecord[];
+      return querySnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        }))
+        .sort(
+          (a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime(),
+        ) as XrayRecord[];
     } catch (error) {
       console.error("Error getting X-rays by clinic:", error);
       throw new Error("Failed to get clinic X-rays");

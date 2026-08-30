@@ -240,10 +240,10 @@ export interface WalletTransaction {
   patientId: string;
   clinicId: string;
   branchId: string;
-  type: "deposit" | "deduction";
+  type: "deposit" | "deduction" | "refund";
   amount: number;
   paymentMethod?: string; // e.g. "cash", "card" for deposits
-  referenceId?: string; // invoiceId if deduction, or external reference for deposit
+  referenceId?: string; // invoiceId if deduction, patientPackageId if refund, or external reference for deposit
   notes?: string;
   createdAt: Date;
   createdBy: string;
@@ -305,8 +305,13 @@ export interface PatientPackage {
     clinicianId?: string;
     clinicianName?: string;
   }[];
-  status: "active" | "completed" | "expired";
+  status: "active" | "completed" | "expired" | "refunded";
   expiresAt?: Date;
+  // Set when unused sessions are refunded (see patientPackageService.refundUnusedSessions)
+  refundedAt?: Date;
+  refundedAmount?: number;
+  refundReason?: string;
+  refundedSessions?: number; // How many unused sessions were refunded
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -372,6 +377,12 @@ export interface Appointment {
   doctorConsultationCompleted?: boolean;
   cabinName?: string;
   patientPackageId?: string; // Links this appointment to a specific active package session
+  /** Patient temporarily stepped out / paused mid-visit — surfaced on the
+   * front-office board as a static "On Hold" indicator instead of a
+   * ticking wait-time counter, and excluded from the >30min auto-urgent
+   * escalation, so a legitimate pause doesn't look like neglect. */
+  onHold?: boolean;
+  onHoldReason?: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -391,6 +402,12 @@ export interface Doctor {
   branchId: string; // Associated branch
   isActive: boolean;
   isDeleted?: boolean; // Soft delete flag - deleted doctors won't show in list
+  /** Live day-to-day presence at the clinic (checked in today, on break,
+   * etc.) — distinct from `isActive`, which is an account-enabled flag set
+   * in settings, not a daily status. `undefined` is treated as on-duty so
+   * existing records aren't silently hidden from routing the day this
+   * field is introduced. */
+  isOnDuty?: boolean;
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
   consultationCharge?: number; // Custom charge per doctor consultation
@@ -414,6 +431,9 @@ export interface Expert {
   branchId: string; // Associated branch
   isActive: boolean;
   isDeleted?: boolean; // Soft delete flag
+  /** See `Doctor.isOnDuty` — same meaning, same "undefined = on-duty"
+   * default. */
+  isOnDuty?: boolean;
   totalCommissionBalance?: number; // Current pending balance to be paid
   totalCommissionEarned?: number; // Lifetime total commission earned
   monthlyTarget?: number; // Monthly business target

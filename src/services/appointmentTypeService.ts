@@ -90,7 +90,10 @@ export const appointmentTypeService = {
       const cacheKey = clinicId || "standalone";
       const cached = cacheService.getClinicAppointmentTypes(cacheKey);
 
-      if (cached) return cached as AppointmentType[];
+      // An empty array is deliberately NOT treated as a cache hit — see
+      // doctorService.getDoctors for the same fix and rationale.
+      if (cached && (cached as AppointmentType[]).length > 0)
+        return cached as AppointmentType[];
 
       const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
       // For single clinic, we fetch all if clinicId is not provided or if we want to be inclusive

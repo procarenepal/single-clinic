@@ -16,6 +16,8 @@ import {
   IoTrashOutline,
   IoSearchOutline,
   IoCloseOutline,
+  IoFlaskOutline,
+  IoMedkitOutline,
 } from "react-icons/io5";
 import { createPortal } from "react-dom";
 
@@ -25,10 +27,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { pathologyBillingService } from "@/services/pathologyBillingService";
+import { pharmacyService } from "@/services/pharmacyService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { patientService } from "@/services/patientService";
 import { referralPartnerService } from "@/services/referralPartnerService";
+import {
+  getLastPaymentMethod,
+  setLastPaymentMethod,
+} from "@/utils/lastUsedPreferences";
 import {
   AppointmentBilling,
   AppointmentBillingSettings,
@@ -37,6 +45,8 @@ import {
   AppointmentType,
   Patient,
   ReferralPartner,
+  PathologyBilling,
+  MedicinePurchase,
 } from "@/types/models";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -273,6 +283,7 @@ function ModalShell({
     xl: "max-w-3xl",
     "5xl": "max-w-5xl",
   };
+  const panelRef = React.useRef<HTMLDivElement>(null);
 
   // Lock the real scroll container while modal is open
   React.useEffect(() => {
@@ -288,6 +299,20 @@ function ModalShell({
     };
   }, []);
 
+  React.useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !disabled) onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, disabled]);
+
   return createPortal(
     /* Overlay rendered at document.body via portal — always full-viewport */
     <div
@@ -298,7 +323,9 @@ function ModalShell({
     >
       {/* Modal panel */}
       <div
-        className={`bg-surface border border-border-base rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] shadow-2xl`}
+        ref={panelRef}
+        className={`bg-surface border border-border-base rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] shadow-2xl outline-none`}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header — pinned */}
@@ -311,6 +338,7 @@ function ModalShell({
           </div>
           {!disabled && (
             <button
+              aria-label="Close"
               className="text-text-muted/60 hover:text-text-main mt-0.5"
               type="button"
               onClick={onClose}
@@ -347,6 +375,12 @@ export default function PatientBillingTab({
 
   // Data
   const [billings, setBillings] = useState<AppointmentBilling[]>([]);
+  const [pathologyBillings, setPathologyBillings] = useState<
+    PathologyBilling[]
+  >([]);
+  const [pharmacyPurchases, setPharmacyPurchases] = useState<
+    MedicinePurchase[]
+  >([]);
   const [billingSettings, setBillingSettings] =
     useState<AppointmentBillingSettings | null>(null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -370,7 +404,7 @@ export default function PatientBillingTab({
   // Payment form
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
-    method: "cash",
+    method: getLastPaymentMethod("cash"),
     reference: "",
     notes: "",
   });
@@ -430,8 +464,23 @@ export default function PatientBillingTab({
     if (!clinicId || !patientId) return;
     setLoading(true);
     try {
-      const settings =
-        await appointmentBillingService.getBillingSettings(clinicId);
+      // Pathology/Pharmacy dues are independent of whether Appointment
+      // Billing itself is enabled for this clinic — fetch them regardless,
+      // and don't let either failing block the rest of the tab from loading.
+      const [settings, pathologyRecords, pharmacyRecords] = await Promise.all(
+        [
+          appointmentBillingService.getBillingSettings(clinicId),
+          pathologyBillingService
+            .getBillingByPatient(patientId, clinicId)
+            .catch(() => []),
+          pharmacyService
+            .getMedicinePurchasesByPatient(patientId, clinicId)
+            .catch(() => []),
+        ],
+      );
+
+      setPathologyBillings(pathologyRecords);
+      setPharmacyPurchases(pharmacyRecords);
 
       if (!settings?.enabledByAdmin || !settings?.isActive) {
         setBillings([]);
@@ -667,8 +716,12 @@ export default function PatientBillingTab({
       });
       setShowInvoiceModal(false);
       loadBillingData();
-    } catch {
-      addToast({ title: "Failed to create invoice", color: "danger" });
+    } catch (error: any) {
+      addToast({
+        title: "Failed to create invoice",
+        description: error?.message,
+        color: "danger",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -708,6 +761,7 @@ export default function PatientBillingTab({
         paymentForm.reference || undefined,
         paymentForm.notes || undefined,
       );
+      setLastPaymentMethod(paymentForm.method);
       addToast({
         title: `Payment of ${fmtCur(amount)} recorded`,
         color: "success",
@@ -720,9 +774,18 @@ export default function PatientBillingTab({
       setBillings(updated || []);
       setShowPaymentModal(false);
       setSelectedBilling(null);
-      setPaymentForm({ amount: "", method: "cash", reference: "", notes: "" });
-    } catch {
-      addToast({ title: "Payment failed", color: "danger" });
+      setPaymentForm({
+        amount: "",
+        method: getLastPaymentMethod("cash"),
+        reference: "",
+        notes: "",
+      });
+    } catch (error: any) {
+      addToast({
+        title: "Payment failed",
+        description: error?.message,
+        color: "danger",
+      });
     } finally {
       setPaymentProcessing(false);
     }
@@ -732,10 +795,11 @@ export default function PatientBillingTab({
     setSelectedBilling(b);
     setPaymentForm({
       amount: b.balanceAmount.toString(),
-      method:
+      method: getLastPaymentMethod(
         billingSettings?.defaultPaymentMethod ||
-        availableMethods[0]?.key ||
-        "cash",
+          availableMethods[0]?.key ||
+          "cash",
+      ),
       reference: "",
       notes: "",
     });
@@ -765,6 +829,44 @@ export default function PatientBillingTab({
     pending: billings.reduce((s, b) => s + b.balanceAmount, 0),
     unpaid: billings.filter((b) => b.paymentStatus === "unpaid").length,
   };
+
+  // ── Cross-module outstanding balance ────────────────────────────────────────
+  // Pharmacy stores no balanceAmount field — derive it the same way
+  // purchase-detail.tsx does (return-adjusted net minus payments made).
+  const getPharmacyDue = (purchase: MedicinePurchase) => {
+    const totalReturnedAmount =
+      typeof purchase.totalReturnedAmount === "number" &&
+      purchase.totalReturnedAmount > 0
+        ? purchase.totalReturnedAmount
+        : (purchase.returns ?? []).reduce(
+            (sum, r) => sum + Math.abs(r.totalAmount || 0),
+            0,
+          );
+    const netAfterReturns = Math.max(
+      0,
+      (purchase.netAmount || 0) - totalReturnedAmount,
+    );
+    const paidAmount = Math.round(
+      (purchase.paymentHistory || []).reduce((s, p) => s + p.amount, 0),
+    );
+
+    return Math.max(0, netAfterReturns - paidAmount);
+  };
+
+  const outstandingPathology = pathologyBillings.filter(
+    (b) => b.balanceAmount > 0 && b.status !== "cancelled",
+  );
+  const pharmacyDuesByPurchase = pharmacyPurchases
+    .map((p) => ({ purchase: p, due: getPharmacyDue(p) }))
+    .filter((x) => x.due > 0);
+
+  const pathologyDue = outstandingPathology.reduce(
+    (s, b) => s + b.balanceAmount,
+    0,
+  );
+  const pharmacyDue = pharmacyDuesByPurchase.reduce((s, x) => s + x.due, 0);
+  const combinedDue = stats.pending + pathologyDue + pharmacyDue;
+  const hasCrossModuleDue = pathologyDue > 0 || pharmacyDue > 0;
 
   const newBalance = selectedBilling
     ? selectedBilling.balanceAmount - (parseFloat(paymentForm.amount) || 0)
@@ -818,6 +920,104 @@ export default function PatientBillingTab({
           Create Invoice
         </Button>
       </div>
+
+      {/* Cross-module outstanding balance — only shown when this patient owes
+          money in Pathology or Pharmacy too, so the common single-module
+          patient sees no extra clutter. */}
+      {hasCrossModuleDue && (
+        <div className="bg-red-500/5 border border-red-500/20 rounded overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-red-500/10 bg-red-500/5">
+            <IoWalletOutline className="w-4 h-4 text-red-500" />
+            <h4 className="text-[13px] font-semibold text-red-500">
+              Outstanding Across All Modules
+            </h4>
+          </div>
+          <div className="p-3 space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard label="Appointment Due" value={fmtCur(stats.pending)} />
+              <StatCard label="Pathology Due" value={fmtCur(pathologyDue)} />
+              <StatCard label="Pharmacy Due" value={fmtCur(pharmacyDue)} />
+              <StatCard label="Total Due" value={fmtCur(combinedDue)} />
+            </div>
+            <div className="space-y-1.5">
+              {outstandingPathology.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between bg-surface-2/50 border border-border-base/50 rounded px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <IoFlaskOutline className="w-4 h-4 text-primary shrink-0" />
+                    <div>
+                      <p className="text-[12.5px] font-medium text-text-main">
+                        {b.invoiceNumber}{" "}
+                        <span className="text-[10.5px] text-text-muted/60">
+                          (Pathology)
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-text-muted/60">
+                        Date: {fmtDate(b.invoiceDate)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-bold text-red-500">
+                      {fmtCur(b.balanceAmount)}
+                    </p>
+                    <Button
+                      color="primary"
+                      size="sm"
+                      variant="bordered"
+                      onClick={() =>
+                        navigate(`/dashboard/pathology-billing/${b.id}`)
+                      }
+                    >
+                      View & Pay
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {pharmacyDuesByPurchase.map(({ purchase, due }) => (
+                <div
+                  key={purchase.id}
+                  className="flex items-center justify-between bg-surface-2/50 border border-border-base/50 rounded px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <IoMedkitOutline className="w-4 h-4 text-primary shrink-0" />
+                    <div>
+                      <p className="text-[12.5px] font-medium text-text-main">
+                        {purchase.purchaseNo}{" "}
+                        <span className="text-[10.5px] text-text-muted/60">
+                          (Pharmacy)
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-text-muted/60">
+                        Date: {fmtDate(purchase.purchaseDate)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-bold text-red-500">
+                      {fmtCur(due)}
+                    </p>
+                    <Button
+                      color="primary"
+                      size="sm"
+                      variant="bordered"
+                      onClick={() =>
+                        navigate(
+                          `/dashboard/pharmacy/purchase/${purchase.id}?action=payment`,
+                        )
+                      }
+                    >
+                      View & Pay
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

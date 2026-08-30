@@ -29,6 +29,64 @@ const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
 
 /**
+ * Whether an appointment billing record is IRD-locked — financial and other
+ * data may no longer be edited (see `updateBilling`'s compliance guard).
+ * Exported so callers that patch an existing invoice (e.g. front-office-desk.tsx)
+ * can check this BEFORE attempting an update, instead of relying on a thrown
+ * error as control flow.
+ */
+export function isBillingLocked(
+  billing: Pick<AppointmentBilling, "irdSynced" | "status">,
+): boolean {
+  return Boolean(billing.irdSynced || billing.status === "finalized");
+}
+
+/**
+ * Reverse every doctor/expert/referral-partner commission tied to a billing
+ * (cancelling a commission record and rolling back the clinician/partner's
+ * totalCommissionEarned/totalCommissionBalance). Used when an invoice is
+ * cancelled or credit-noted so commission earned on a reversed sale doesn't
+ * stay permanently on the books. A billing can have multiple commission
+ * docs (one per clinician group / one per referrer), so every match is
+ * reversed, not just the first. Failures here are logged, not thrown — the
+ * invoice-side cancellation/credit-note is the primary, legally-required
+ * action and must not be blocked by a commission-bookkeeping error.
+ */
+async function reverseCommissionsForBilling(billingId: string): Promise<void> {
+  try {
+    const { doctorCommissionService } = await import(
+      "./doctorCommissionService"
+    );
+    const { expertCommissionService } = await import(
+      "./expertCommissionService"
+    );
+    const { referralCommissionService } = await import(
+      "./referralCommissionService"
+    );
+
+    const [docComms, expComms, refComms] = await Promise.all([
+      doctorCommissionService.getCommissionsByBillingId(billingId),
+      expertCommissionService.getCommissionsByBillingId(billingId),
+      referralCommissionService.getCommissionsByBillingId(billingId),
+    ]);
+
+    await Promise.all([
+      ...docComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => doctorCommissionService.updateCommissionStatus(c.id, "cancelled")),
+      ...expComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => expertCommissionService.updateCommissionStatus(c.id, "cancelled")),
+      ...refComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
+    ]);
+  } catch (error) {
+    console.error("Error reversing commissions for billing:", billingId, error);
+  }
+}
+
+/**
  * Service for managing appointment billing operations including invoices and settings
  */
 export const appointmentBillingService = {
@@ -585,6 +643,7 @@ export const appointmentBillingService = {
           "subtotal",
           "taxAmount",
           "discountAmount",
+          "mainDiscountAmount",
         ];
         // undefined/null normalized to 0 — otherwise re-sending an
         // unchanged-but-previously-unset field (e.g. discountAmount: 0 when
@@ -605,13 +664,66 @@ export const appointmentBillingService = {
 
         isAlteringFinancials = simpleValuesChanged || itemsChanged;
 
-        if (
-          isAlteringFinancials &&
-          (existing.irdSynced || existing.status === "finalized")
-        ) {
+        const isFinalized = isBillingLocked(existing);
+
+        if (isAlteringFinancials && isFinalized) {
           throw new Error(
             "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead.",
           );
+        }
+
+        // Clause ट covers "any data" (कुनैपनि तथ्याङ्क), not just financial
+        // fields — patient identity, doctor, dates etc. must also be frozen
+        // once finalized/synced. Only system-driven bookkeeping fields
+        // (payment recording, IRD sync retries, cancellation/credit-note
+        // linkage) may still change post-finalization.
+        if (isFinalized) {
+          const allowedPostFinalizeFields = new Set([
+            "paidAmount",
+            "balanceAmount",
+            "paymentStatus",
+            "paymentMethod",
+            "paymentDate",
+            "paymentReference",
+            "paymentNotes",
+            "paymentHistory",
+            "previousDuePaidAmount",
+            "printCount",
+            "irdSynced",
+            "irdSyncDate",
+            "cbmsResponseCode",
+            "status",
+            "hasCreditNote",
+          ]);
+
+          for (const key of Object.keys(billingData)) {
+            if (financialKeys.includes(key) || key === "items") continue;
+            if (allowedPostFinalizeFields.has(key)) continue;
+
+            if (key === "notes") {
+              const oldNotes = existing.notes || "";
+              const newNotes = (billingData as any).notes || "";
+
+              if (newNotes === oldNotes || newNotes.startsWith(oldNotes)) continue;
+
+              throw new Error(
+                "IRD Tax Compliance Error: Notes on a finalized or IRD-synced invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
+              );
+            }
+
+            const oldVal = (existing as any)[key];
+            const newVal = (billingData as any)[key];
+            const changed =
+              typeof newVal === "object" && newVal !== null
+                ? JSON.stringify(newVal) !== JSON.stringify(oldVal)
+                : newVal !== oldVal;
+
+            if (changed) {
+              throw new Error(
+                "IRD Tax Compliance Error: Data of a finalized or IRD-synced invoice cannot be modified. Issue a Credit Note instead.",
+              );
+            }
+          }
         }
       }
 
@@ -1530,6 +1642,8 @@ export const appointmentBillingService = {
       paymentStatus: "cancelled" as any,
       notes,
     });
+
+    await reverseCommissionsForBilling(id);
   },
 
   /**
@@ -1627,6 +1741,12 @@ export const appointmentBillingService = {
           (original.notes ? original.notes + "\n" : "") +
           `Reversed by Credit Note ${creditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
       });
+
+      // The credit note fully offsets the original sale — reverse whatever
+      // commission was earned on it (the credit note document itself never
+      // earns commission, since it's created via createBilling, not
+      // recordPayment).
+      await reverseCommissionsForBilling(original.id);
 
       return newCreditNoteId;
     } catch (error) {

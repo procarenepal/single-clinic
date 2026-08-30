@@ -146,6 +146,19 @@ class ExpertCommissionService {
     try {
 
 
+      // Use the same discount-adjusted, pre-tax base every other commission
+      // path uses (doctorCommissionService.createCommission,
+      // expertCommissionService.createCommissionsFromBilling) — this
+      // function previously used billing.totalAmount (tax-inclusive),
+      // systematically overpaying relative to the equivalent doctor/partner
+      // referral-bonus path on the same invoice.
+      const effectiveBase =
+        (billing.subtotal || 0) -
+        (billing.itemDiscountAmount || 0) -
+        (billing.mainDiscountAmount || 0);
+      const commissionAmount =
+        (Math.max(effectiveBase, 0) * expertCommissionPercent) / 100;
+
       const commissionData: Omit<ExpertCommission, "id"> = {
         expertId,
         expertName,
@@ -160,7 +173,7 @@ class ExpertCommissionService {
         serviceNames: billing.items.map((item) => item.appointmentTypeName),
         totalInvoiceAmount: billing.totalAmount,
         commissionPercentage: expertCommissionPercent,
-        commissionAmount: (billing.totalAmount * expertCommissionPercent) / 100,
+        commissionAmount,
         status: "pending",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -291,6 +304,74 @@ class ExpertCommissionService {
       });
     } catch (error) {
       console.error("Error paying expert commission:", error);
+      throw error;
+    }
+  }
+
+  // Get all commissions for a billing
+  async getCommissionsByBillingId(
+    billingId: string,
+  ): Promise<ExpertCommission[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where("billingId", "==", billingId),
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      return querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          date: data.date?.toDate() || new Date(),
+          paidDate: data.paidDate?.toDate(),
+        };
+      }) as ExpertCommission[];
+    } catch (error) {
+      console.error("Error getting expert commissions by billing ID:", error);
+
+      return [];
+    }
+  }
+
+  // Update commission status (for cancelling commissions)
+  async updateCommissionStatus(
+    commissionId: string,
+    status: "pending" | "paid" | "cancelled",
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+
+      const commissionData = commissionDoc.data() as ExpertCommission;
+
+      if (status === "cancelled" && commissionData.status !== "cancelled") {
+        const expertRef = doc(db, "experts", commissionData.expertId);
+
+        await updateDoc(expertRef, {
+          totalCommissionEarned: increment(-commissionData.commissionAmount),
+          totalCommissionBalance: increment(
+            -(commissionData.commissionAmount - (commissionData.paidAmount || 0)),
+          ),
+          updatedAt: Timestamp.now(),
+        });
+      }
+
+      await updateDoc(docRef, {
+        status,
+        updatedAt: Timestamp.fromDate(new Date()),
+      });
+    } catch (error) {
+      console.error("Error updating expert commission status:", error);
       throw error;
     }
   }

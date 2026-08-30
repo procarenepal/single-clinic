@@ -77,6 +77,52 @@ export const appointmentService = {
     try {
       const appointmentsCollection = collection(db, "appointments");
 
+      // Conflict check: block booking the same clinician into the exact
+      // same date+time slot twice. Previously createAppointment was a pure
+      // additive write with no check at all — this is a conservative,
+      // exact-slot-collision guard (not full time-range overlap math), but
+      // closes the most obvious double-booking case with low risk of
+      // false positives on legitimate flows.
+      const clinicianId =
+        appointmentData.doctorId && appointmentData.doctorId !== "unassigned"
+          ? appointmentData.doctorId
+          : appointmentData.assignedExpertId;
+
+      if (clinicianId && appointmentData.appointmentDate && appointmentData.startTime) {
+        const dayStart = new Date(appointmentData.appointmentDate);
+
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart);
+
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        const conflictQuery = query(
+          appointmentsCollection,
+          where(
+            appointmentData.doctorId && appointmentData.doctorId !== "unassigned"
+              ? "doctorId"
+              : "assignedExpertId",
+            "==",
+            clinicianId,
+          ),
+          where("startTime", "==", appointmentData.startTime),
+          where("appointmentDate", ">=", Timestamp.fromDate(dayStart)),
+          where("appointmentDate", "<", Timestamp.fromDate(dayEnd)),
+        );
+        const conflictSnap = await getDocs(conflictQuery);
+        const activeConflict = conflictSnap.docs.find((d) => {
+          const status = d.data().status;
+
+          return status !== "cancelled" && status !== "no-show";
+        });
+
+        if (activeConflict) {
+          throw new Error(
+            "This clinician already has an appointment booked at this exact date and time. Please choose a different slot.",
+          );
+        }
+      }
+
       // Prepare data for Firestore and filter out undefined values
       const firestoreData: any = {
         patientId: appointmentData.patientId,
@@ -165,6 +211,11 @@ export const appointmentService = {
       return docRef.id;
     } catch (error) {
       console.error("Error creating appointment:", error);
+      // Preserve the specific conflict message (thrown above) instead of
+      // masking it with a generic one — callers/UI need to know why.
+      if (error instanceof Error && error.message.includes("already has an appointment")) {
+        throw error;
+      }
       throw new Error("Failed to create appointment");
     }
   },
@@ -194,21 +245,47 @@ export const appointmentService = {
   },
 
   /**
-   * Alias for backward compatibility
+   * Alias for backward compatibility.
+   *
+   * Bug fix: this used to call getAppointments() (no clinicId filter at
+   * all) and just used clinicId as a cache key — every clinic's
+   * appointments were returned to every caller. Now genuinely scoped.
    */
   async getAppointmentsByClinic(
     clinicId?: string,
-    _branchId?: string,
+    branchId?: string,
   ): Promise<Appointment[]> {
-    const appointments = await this.getAppointments();
+    try {
+      const appointmentsCollection = collection(db, "appointments");
+      const constraints = clinicId ? [where("clinicId", "==", clinicId)] : [];
 
-    if (clinicId) {
-      cacheService.setClinicAppointments(clinicId, appointments);
-    } else {
-      cacheService.setClinicAppointments("standalone", appointments);
+      if (branchId) {
+        constraints.push(where("branchId", "==", branchId));
+      }
+
+      const q = query(appointmentsCollection, ...constraints);
+      const querySnapshot = await getDocs(q);
+      const appointments: Appointment[] = [];
+
+      querySnapshot.forEach((docSnap) => {
+        appointments.push(mapAppointmentDoc(docSnap));
+      });
+
+      appointments.sort(
+        (a, b) => b.appointmentDate.getTime() - a.appointmentDate.getTime(),
+      );
+
+      if (clinicId) {
+        cacheService.setClinicAppointments(clinicId, appointments);
+      } else {
+        cacheService.setClinicAppointments("standalone", appointments);
+      }
+
+      return appointments;
+    } catch (error) {
+      console.error("Error fetching appointments by clinic:", error);
+      throw new Error("Failed to fetch appointments by clinic");
     }
-
-    return appointments;
   },
 
   /**

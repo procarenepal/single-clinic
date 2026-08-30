@@ -5,21 +5,31 @@ import { addToast } from "@/components/ui/toast";
  * every billing list/detail view (appointment, pathology, pharmacy) so the
  * same state always renders with the same colors and copy, instead of four
  * independently hand-styled copies.
+ *
+ * `attempted` must reflect whether a real IRD sync call was ever made for
+ * this record — NOT the record's own draft/finalized/paid workflow status.
+ * The Java backend syncs synchronously at invoice CREATION time, entirely
+ * independent of any later local status change, so gating this on
+ * "finalized" or "paid" hides real Synced/Failed results behind an
+ * unrelated step (and for a while, pharmacy's caller literally passed
+ * `paymentStatus === "paid"` here, making the badge look payment-gated).
+ * Pass `Boolean(record.cbmsResponseCode)` — set only when IRD sync was
+ * actually attempted (irrespective of success) — never a workflow status.
  */
 export function IrdSyncBadge({
-  finalized,
+  attempted,
   synced,
   recordId,
   invoiceType,
   onSynced,
 }: {
-  finalized: boolean;
+  attempted: boolean;
   synced: boolean;
   recordId: string;
   invoiceType: "appointment" | "pathology" | "pharmacy";
   onSynced?: () => void;
 }) {
-  if (!finalized) {
+  if (!attempted) {
     return (
       <span className="text-[10px] text-text-muted/60">➖ N/A</span>
     );

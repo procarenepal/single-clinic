@@ -738,6 +738,8 @@ export default function EditInvoicePage() {
     );
   }
 
+  const isLocked = invoice.irdSynced || invoice.status === "finalized";
+
   return (
     <div className="flex flex-col gap-6 pb-12">
       {/* Header */}
@@ -762,13 +764,13 @@ export default function EditInvoicePage() {
         </Button>
       </div>
 
-      {(invoice.irdSynced || invoice.status === "finalized") && (
+      {isLocked && (
         <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 text-[13px] text-amber-800">
           <strong>This invoice has already been finalized{invoice.irdSynced ? " and synced to IRD" : ""}.</strong>{" "}
-          Financial fields (items, prices, discounts, totals) cannot be
-          changed here — the system will block the save. To correct a
-          finalized invoice, issue a Credit Note from the invoice detail page
-          instead. Non-financial fields like notes can still be edited.
+          Per IRD compliance rules, nothing on this invoice can be changed
+          here anymore — not the amounts, and not patient/doctor/date details
+          either. Editing has been disabled below. To correct a finalized
+          invoice, issue a Credit Note from the invoice detail page instead.
         </div>
       )}
 
@@ -1175,7 +1177,13 @@ export default function EditInvoicePage() {
                   </Button>
                   <Button
                     color="primary"
+                    disabled={isLocked}
                     isLoading={saving}
+                    title={
+                      isLocked
+                        ? "Locked — finalized/IRD-synced invoices cannot be edited. Issue a Credit Note instead."
+                        : undefined
+                    }
                     onClick={handleSubmit}
                   >
                     Update Invoice

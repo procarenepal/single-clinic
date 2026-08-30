@@ -17,6 +17,17 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Print-layout logos (settings/print-layout.tsx uploads here — a
+    // separate path from clinic-logos/, no rule for it existed before,
+    // so uploads silently had nothing to match and were denied by the
+    // default-deny fallback). Images only, max 2MB. Auth required.
+    match /logos/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // Clinic cover photos: banner images, max 5MB. Auth required for read/write.
     match /clinic-covers/{allPaths=**} {
       allow read: if request.auth != null;

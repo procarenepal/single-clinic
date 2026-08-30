@@ -18,6 +18,7 @@ import {
   IoCloseOutline,
   IoChatbubbleEllipsesOutline,
   IoNotificationsOutline,
+  IoReceiptOutline,
 } from "react-icons/io5";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 
@@ -30,6 +31,9 @@ import { doctorService } from "@/services/doctorService";
 import { enquiryService } from "@/services/enquiryService";
 import { clinicService } from "@/services/clinicService";
 import { expertService } from "@/services/expertService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { pathologyBillingService } from "@/services/pathologyBillingService";
+import { pharmacyService } from "@/services/pharmacyService";
 import { Clinic } from "@/types/models";
 // Custom UI — zero HeroUI
 import { Button } from "@/components/ui/button";
@@ -48,7 +52,7 @@ import { addToast } from "@/components/ui/toast";
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SearchResult = {
   id: string;
-  type: "patient" | "doctor";
+  type: "patient" | "doctor" | "enquiry" | "invoice";
   title: string;
   subtitle: string;
   extraInfo?: string;
@@ -295,12 +299,22 @@ export const DashboardHeader = ({
 
       setIsSearching(true);
       try {
-        const [patients, doctors, enquiries] = await Promise.all([
+        const [
+          patients,
+          doctors,
+          enquiries,
+          appointmentInvoices,
+          pathologyInvoices,
+          pharmacyPurchases,
+        ] = await Promise.all([
           patientService.getPatientsByClinic(clinicId),
           doctorService.getDoctorsByClinic(clinicId),
           enquiryService.getEnquiries(clinicId, undefined, {
             dateField: "createdAt",
           }),
+          appointmentBillingService.getBillingByClinic(clinicId).catch(() => []),
+          pathologyBillingService.getBillingByClinic(clinicId).catch(() => []),
+          pharmacyService.getMedicinePurchasesByClinic(clinicId).catch(() => []),
         ]);
 
         const ql = query.toLowerCase();
@@ -349,7 +363,7 @@ export const DashboardHeader = ({
           ) {
             results.push({
               id: e.id,
-              type: "enquiry" as any,
+              type: "enquiry",
               title: e.fullName,
               subtitle: `Enquiry: ${e.reasonForVisit || "General"}`,
               extraInfo: e.phone,
@@ -358,14 +372,69 @@ export const DashboardHeader = ({
           }
         });
 
+        // Invoice search — matched on invoice/purchase number primarily
+        // (the case a patient-name search can't cover: staff who only have
+        // the number, not the name, and don't know which of the 3 billing
+        // modules it's from).
+        appointmentInvoices.forEach((b) => {
+          if (
+            b.invoiceNumber?.toLowerCase().includes(ql) ||
+            b.patientName?.toLowerCase().includes(ql)
+          ) {
+            results.push({
+              id: b.id,
+              type: "invoice",
+              title: b.invoiceNumber,
+              subtitle: `Appointment • ${b.patientName || "Cash Sales"}`,
+              extraInfo: `NPR ${Math.round(b.totalAmount).toLocaleString()}`,
+              href: `/dashboard/appointments-billing/${b.id}`,
+            });
+          }
+        });
+
+        pathologyInvoices.forEach((b) => {
+          if (
+            b.invoiceNumber?.toLowerCase().includes(ql) ||
+            b.patientName?.toLowerCase().includes(ql)
+          ) {
+            results.push({
+              id: b.id,
+              type: "invoice",
+              title: b.invoiceNumber,
+              subtitle: `Pathology • ${b.patientName || "Cash Sales"}`,
+              extraInfo: `NPR ${Math.round(b.totalAmount).toLocaleString()}`,
+              href: `/dashboard/pathology-billing/${b.id}`,
+            });
+          }
+        });
+
+        pharmacyPurchases.forEach((p) => {
+          if (
+            p.purchaseNo?.toLowerCase().includes(ql) ||
+            p.patientName?.toLowerCase().includes(ql)
+          ) {
+            results.push({
+              id: p.id,
+              type: "invoice",
+              title: p.purchaseNo,
+              subtitle: `Pharmacy • ${p.patientName || "Walk-in Customer"}`,
+              extraInfo: `NPR ${Math.round(p.netAmount).toLocaleString()}`,
+              href: `/dashboard/pharmacy/purchase/${p.id}`,
+            });
+          }
+        });
+
         // Sort by match position and type
         results.sort((a, b) => {
-          const aIndex = a.title.toLowerCase().indexOf(ql);
-          const bIndex = b.title.toLowerCase().indexOf(ql);
+          // Some records (draft invoices awaiting a Java-assigned number,
+          // older data missing a field) can have an undefined title —
+          // guard rather than let one bad record crash the whole search.
+          const aIndex = (a.title || "").toLowerCase().indexOf(ql);
+          const bIndex = (b.title || "").toLowerCase().indexOf(ql);
 
           if (aIndex !== bIndex) return aIndex - bIndex;
 
-          const typeOrder = { patient: 0, doctor: 1, enquiry: 2 };
+          const typeOrder = { patient: 0, doctor: 1, invoice: 2, enquiry: 3 };
 
           return (
             (typeOrder[a.type as keyof typeof typeOrder] ?? 99) -
@@ -561,13 +630,17 @@ export const DashboardHeader = ({
                               ? "bg-primary/10 text-primary"
                               : result.type === "doctor"
                                 ? "bg-success/10 text-success"
-                                : "bg-amber-500/10 text-amber-600"
+                                : result.type === "invoice"
+                                  ? "bg-teal-500/10 text-teal-600"
+                                  : "bg-amber-500/10 text-amber-600"
                           }`}
                         >
                           {result.type === "patient" ? (
                             <IoPersonOutline className="w-3.5 h-3.5" />
                           ) : result.type === "doctor" ? (
                             <IoMedicalOutline className="w-3.5 h-3.5" />
+                          ) : result.type === "invoice" ? (
+                            <IoReceiptOutline className="w-3.5 h-3.5" />
                           ) : (
                             <IoChatbubbleEllipsesOutline className="w-3.5 h-3.5" />
                           )}

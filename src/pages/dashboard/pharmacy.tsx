@@ -33,6 +33,7 @@ import {
   IoDocumentTextOutline,
   IoCloseOutline,
   IoWarningOutline,
+  IoEllipsisVerticalOutline,
 } from "react-icons/io5";
 
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -46,11 +47,25 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
+import {
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@/components/ui/dropdown";
 import { Pagination } from "@/components/ui/pagination";
 import { Chip } from "@/components/ui/chip";
 import { title } from "@/components/primitives";
 import { StatusBadge } from "@/components/billing/StatusBadge";
 import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
+import { AgingTag } from "@/components/billing/AgingTag";
+import { getPatientOutstandingSummary } from "@/utils/patientOutstanding";
+import {
+  DateRangeFilter,
+  DATE_RANGE_OPTIONS,
+  isWithinDateRange,
+  SortDirection,
+} from "@/utils/billingListControls";
 const Divider = () => <hr className="border-border-base my-2" />;
 
 function CustomSelect({
@@ -609,6 +624,14 @@ export default function PharmacyPage() {
   // Search state
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  const [purchasesDateRangeFilter, setPurchasesDateRangeFilter] =
+    useState<DateRangeFilter>("all");
+  const [purchasesSortField, setPurchasesSortField] = useState<
+    "date" | "amount" | null
+  >(null);
+  const [purchasesSortDir, setPurchasesSortDir] =
+    useState<SortDirection>("desc");
+
   // Pagination state for Sold Items/Med tab
   const [purchasesPage, setPurchasesPage] = useState(1);
   const [purchasesRowsPerPage] = useState(10);
@@ -731,6 +754,11 @@ export default function PharmacyPage() {
     patientId: "",
     prescriptionId: "",
   });
+
+  // Cross-module outstanding due for the currently-selected patient — shown
+  // so staff see existing dues (appointment/pathology) before creating a
+  // NEW pharmacy purchase, not just after.
+  const [selectedPatientOtherDue, setSelectedPatientOtherDue] = useState(0);
 
   const [rawStocks, setRawStocks] = useState<any[]>([]);
   const [inventorySearch, setInventorySearch] = useState("");
@@ -1006,113 +1034,23 @@ export default function PharmacyPage() {
         (s) => !effectiveBranchId || s.branchId === effectiveBranchId,
       );
 
-      const totalCurrentRegular = branchStockDocs.reduce(
-        (sum, d) => sum + (d.currentStock || 0),
-        0,
-      );
-      const totalCurrentScheme = branchStockDocs.reduce(
-        (sum, d) => sum + (d.schemeStock || 0),
-        0,
-      );
-
-      const inputReg = Math.abs(adjustForm.regularStock || 0);
-      const inputSch = Math.abs(adjustForm.schemeStock || 0);
-
-      let diffReg = 0;
-      let diffSch = 0;
-
-      if (adjustForm.type === "add") {
-        diffReg = inputReg;
-        diffSch = inputSch;
-      } else if (adjustForm.type === "deduct") {
-        diffReg = -Math.min(inputReg, totalCurrentRegular);
-        diffSch = -Math.min(inputSch, totalCurrentScheme);
-      } else if (adjustForm.type === "set") {
-        diffReg = Math.max(0, adjustForm.regularStock) - totalCurrentRegular;
-        diffSch = Math.max(0, adjustForm.schemeStock) - totalCurrentScheme;
-      }
-
-      const totalDiff = diffReg + diffSch;
-
-      if (totalDiff !== 0) {
-        if (diffReg > 0 || diffSch > 0) {
-          const firstDoc = branchStockDocs[0];
-
-          if (firstDoc && firstDoc.id) {
-            await medicineService.updateMedicineStock(firstDoc.id, {
-              currentStock:
-                (firstDoc.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
-              schemeStock:
-                (firstDoc.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
-            });
-          } else {
-            await medicineService.createMedicineStock({
-              medicineId: selectedMedicineForAdjust.id,
-              currentStock: diffReg > 0 ? diffReg : 0,
-              schemeStock: diffSch > 0 ? diffSch : 0,
-              minimumStock: 10,
-              reorderLevel: 20,
-              clinicId,
-              branchId: effectiveBranchId || "",
-              updatedBy: currentUser?.uid || "",
-            });
-          }
-        }
-
-        if (diffReg < 0 || diffSch < 0) {
-          let remainingRegToDeduct = Math.abs(diffReg < 0 ? diffReg : 0);
-          let remainingSchToDeduct = Math.abs(diffSch < 0 ? diffSch : 0);
-
-          const sortedDocs = [...branchStockDocs].sort((a, b) => {
-            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-
-            return timeA - timeB;
-          });
-
-          for (const doc of sortedDocs) {
-            if (remainingRegToDeduct === 0 && remainingSchToDeduct === 0) break;
-            if (!doc.id) continue;
-
-            const deductReg = Math.min(
-              doc.currentStock || 0,
-              remainingRegToDeduct,
-            );
-            const deductSch = Math.min(
-              doc.schemeStock || 0,
-              remainingSchToDeduct,
-            );
-
-            if (deductReg > 0 || deductSch > 0) {
-              await medicineService.updateMedicineStock(doc.id, {
-                currentStock: (doc.currentStock || 0) - deductReg,
-                schemeStock: (doc.schemeStock || 0) - deductSch,
-              });
-              remainingRegToDeduct -= deductReg;
-              remainingSchToDeduct -= deductSch;
-            }
-          }
-        }
-
-        const oldTotal = totalCurrentRegular + totalCurrentScheme;
-        const newTotal = oldTotal + totalDiff;
-
-        await medicineService.createStockTransaction({
-          medicineId: selectedMedicineForAdjust.id,
-          type: totalDiff > 0 ? "adjustment" : "deduction",
-          quantity: totalDiff,
-          previousStock: oldTotal,
-          newStock: newTotal,
-          unitPrice: selectedMedicineForAdjust.price || 0,
-          totalAmount:
-            Math.abs(totalDiff) * (selectedMedicineForAdjust.price || 0),
-          referenceId: "MANUAL-ADJUST",
-          reason: adjustForm.reason || "Manual Inventory Reconciliation",
-          clinicId,
-          branchId: effectiveBranchId || "",
-          createdBy: currentUser?.uid || "",
-        });
-      }
+      // Atomic: re-reads every stock doc inside a transaction and computes
+      // the diff from fresh data, closing the lost-update race that existed
+      // when this was computed from the stale branchStockDocs read above.
+      await medicineService.adjustStock({
+        medicineId: selectedMedicineForAdjust.id,
+        clinicId,
+        branchId: effectiveBranchId || "",
+        stockDocIds: branchStockDocs
+          .map((d) => d.id)
+          .filter((id): id is string => !!id),
+        type: adjustForm.type,
+        regularInput: adjustForm.regularStock || 0,
+        schemeInput: adjustForm.schemeStock || 0,
+        reason: adjustForm.reason,
+        unitPrice: selectedMedicineForAdjust.price || 0,
+        createdBy: currentUser?.uid || "",
+      });
 
       addToast({
         title: "Stock Adjusted",
@@ -1134,11 +1072,12 @@ export default function PharmacyPage() {
       });
       setMedicineStocks(sMap);
       setRawStocks(sData);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       addToast({
         title: "Adjustment Failed",
-        description: "Failed to record manual stock adjustment.",
+        description:
+          err?.message || "Failed to record manual stock adjustment.",
         color: "danger",
       });
     } finally {
@@ -1507,7 +1446,34 @@ export default function PharmacyPage() {
       });
     }
 
+    filtered = filtered.filter(
+      (purchase) =>
+        !purchase.purchaseDate ||
+        isWithinDateRange(purchase.purchaseDate, purchasesDateRangeFilter),
+    );
+
+    if (purchasesSortField) {
+      filtered = [...filtered].sort((a, b) => {
+        const diff =
+          purchasesSortField === "date"
+            ? new Date(a.purchaseDate || 0).getTime() -
+              new Date(b.purchaseDate || 0).getTime()
+            : (a.netAmount || 0) - (b.netAmount || 0);
+
+        return purchasesSortDir === "asc" ? diff : -diff;
+      });
+    }
+
     return filtered;
+  };
+
+  const togglePurchasesSort = (field: "date" | "amount") => {
+    if (purchasesSortField === field) {
+      setPurchasesSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setPurchasesSortField(field);
+      setPurchasesSortDir("desc");
+    }
   };
 
   const filteredPurchases = getFilteredPurchases();
@@ -2576,6 +2542,55 @@ export default function PharmacyPage() {
         });
       }
 
+      // Backfill PAN/phone/address onto the linked patient's record if this
+      // sale typed in details the patient record itself is still missing —
+      // never overwrites an existing value, so future sales don't need it
+      // retyped.
+      if (
+        purchaseForm.customerType === "patient" &&
+        purchaseForm.patientId
+      ) {
+        const existingPatient = patients.find(
+          (p) => p.id === purchaseForm.patientId,
+        );
+
+        if (existingPatient) {
+          const backfill: Record<string, any> = {};
+
+          if (
+            !existingPatient.patientPanVat &&
+            purchaseForm.patientPanVat?.trim()
+          ) {
+            backfill.patientPanVat = purchaseForm.patientPanVat.trim();
+          }
+          if (
+            !existingPatient.mobile &&
+            !existingPatient.phone &&
+            purchaseForm.patientPhone?.trim()
+          ) {
+            backfill.mobile = purchaseForm.patientPhone.trim();
+            backfill.phone = purchaseForm.patientPhone.trim();
+          }
+          if (
+            !existingPatient.address &&
+            purchaseForm.patientAddress?.trim()
+          ) {
+            backfill.address = purchaseForm.patientAddress.trim();
+          }
+
+          if (Object.keys(backfill).length > 0) {
+            try {
+              await patientService.updatePatient(
+                purchaseForm.patientId,
+                backfill,
+              );
+            } catch (err) {
+              console.error("Failed to backfill patient details:", err);
+            }
+          }
+        }
+      }
+
       // If this was fulfilled from a prescription, mark it as completed
       if (purchaseForm.prescriptionId) {
         try {
@@ -2652,6 +2667,7 @@ export default function PharmacyPage() {
         patientId: "",
         prescriptionId: "",
       });
+      setSelectedPatientOtherDue(0);
 
       // Add small delay to ensure any dropdown interactions are complete before closing
       setTimeout(() => {
@@ -3937,6 +3953,22 @@ export default function PharmacyPage() {
                       )}
                     </div>
                   </div>
+                  <div className="flex items-center gap-1 border border-border-base rounded p-0.5 bg-surface">
+                    {DATE_RANGE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.key}
+                        className={`px-2.5 py-1 text-[11.5px] rounded transition-colors ${
+                          purchasesDateRangeFilter === opt.key
+                            ? "bg-primary text-white font-medium"
+                            : "text-text-muted hover:bg-surface-2"
+                        }`}
+                        type="button"
+                        onClick={() => setPurchasesDateRangeFilter(opt.key)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                   {activeFilter && (
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[12px] font-medium">
@@ -4043,14 +4075,40 @@ export default function PharmacyPage() {
                               "NET AMOUNT",
                               "IRD STATUS",
                               "ACTION",
-                            ].map((h) => (
-                              <th
-                                key={h}
-                                className="px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider"
-                              >
-                                {h}
-                              </th>
-                            ))}
+                            ].map((h) => {
+                              const sortKey =
+                                h === "DATE"
+                                  ? ("date" as const)
+                                  : h === "NET AMOUNT"
+                                    ? ("amount" as const)
+                                    : null;
+
+                              return (
+                                <th
+                                  key={h}
+                                  className={`px-3 py-2 text-[10.5px] font-semibold text-primary uppercase tracking-wider ${
+                                    sortKey ? "cursor-pointer select-none" : ""
+                                  }`}
+                                  onClick={
+                                    sortKey
+                                      ? () => togglePurchasesSort(sortKey)
+                                      : undefined
+                                  }
+                                >
+                                  <span className="inline-flex items-center gap-1">
+                                    {h}
+                                    {sortKey &&
+                                      purchasesSortField === sortKey && (
+                                        <span className="text-[9px]">
+                                          {purchasesSortDir === "asc"
+                                            ? "▲"
+                                            : "▼"}
+                                        </span>
+                                      )}
+                                  </span>
+                                </th>
+                              );
+                            })}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-base bg-surface">
@@ -4146,20 +4204,29 @@ export default function PharmacyPage() {
                                         {netAfterReturns.toLocaleString()}
                                       </span>
                                     )}
+                                    {purchase.paymentStatus !== "paid" &&
+                                      purchase.purchaseDate && (
+                                        <div className="mt-1">
+                                          <AgingTag date={purchase.purchaseDate} />
+                                        </div>
+                                      )}
                                   </div>
                                 </td>
                                 <td className="px-3 py-2.5">
                                   <IrdSyncBadge
-                                    finalized={purchase.paymentStatus === "paid"}
+                                    attempted={Boolean(
+                                      purchase.irdSynced ||
+                                        purchase.cbmsResponseCode,
+                                    )}
                                     invoiceType="pharmacy"
                                     recordId={purchase.id}
                                     synced={Boolean(purchase.irdSynced)}
                                   />
                                 </td>
                                 <td className="px-3 py-2.5">
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1">
                                     <button
-                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
+                                      className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                       title="View"
                                       onClick={() =>
                                         navigate(
@@ -4169,52 +4236,62 @@ export default function PharmacyPage() {
                                     >
                                       <IoEyeOutline />
                                     </button>
-                                    <button
-                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
-                                      title="Edit"
-                                      onClick={() =>
-                                        navigate(
-                                          `/dashboard/pharmacy/purchase-edit/${purchase.id}`,
-                                        )
-                                      }
-                                    >
-                                      <IoCreateOutline />
-                                    </button>
-                                    <button
-                                      className="p-1.5 text-text-muted hover:text-yellow-600 hover:bg-yellow-500/10 rounded disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text-muted"
-                                      disabled={netAfterReturns <= 0}
-                                      title="Record Return"
-                                      onClick={() =>
-                                        navigate(
-                                          `/dashboard/pharmacy/purchase/${purchase.id}/return`,
-                                        )
-                                      }
-                                    >
-                                      <IoReloadOutline />
-                                    </button>
-                                    <button
-                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
-                                      title="Print"
-                                      onClick={() =>
-                                        navigate(
-                                          `/dashboard/pharmacy/purchase/${purchase.id}?print=true`,
-                                        )
-                                      }
-                                    >
-                                      <IoPrintOutline />
-                                    </button>
-                                    <button
-                                      className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text-muted"
-                                      disabled={purchase.paymentStatus === "paid"}
-                                      title="Record Payment"
-                                      onClick={() =>
-                                        navigate(
-                                          `/dashboard/pharmacy/purchase/${purchase.id}?action=payment`,
-                                        )
-                                      }
-                                    >
-                                      <IoWalletOutline />
-                                    </button>
+                                    <Dropdown>
+                                      <DropdownTrigger>
+                                        <button
+                                          className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
+                                          title="More actions"
+                                          type="button"
+                                        >
+                                          <IoEllipsisVerticalOutline />
+                                        </button>
+                                      </DropdownTrigger>
+                                      <DropdownMenu aria-label="Purchase actions">
+                                        <DropdownItem
+                                          startContent={<IoCreateOutline />}
+                                          onPress={() =>
+                                            navigate(
+                                              `/dashboard/pharmacy/purchase-edit/${purchase.id}`,
+                                            )
+                                          }
+                                        >
+                                          Edit
+                                        </DropdownItem>
+                                        <DropdownItem
+                                          startContent={<IoPrintOutline />}
+                                          onPress={() =>
+                                            navigate(
+                                              `/dashboard/pharmacy/purchase/${purchase.id}?print=true`,
+                                            )
+                                          }
+                                        >
+                                          Print
+                                        </DropdownItem>
+                                        <DropdownItem
+                                          isDisabled={purchase.paymentStatus === "paid"}
+                                          startContent={<IoWalletOutline />}
+                                          onPress={() =>
+                                            navigate(
+                                              `/dashboard/pharmacy/purchase/${purchase.id}?action=payment`,
+                                            )
+                                          }
+                                        >
+                                          Record Payment
+                                        </DropdownItem>
+                                        <DropdownItem
+                                          color="warning"
+                                          isDisabled={netAfterReturns <= 0}
+                                          startContent={<IoReloadOutline />}
+                                          onPress={() =>
+                                            navigate(
+                                              `/dashboard/pharmacy/purchase/${purchase.id}/return`,
+                                            )
+                                          }
+                                        >
+                                          Record Return
+                                        </DropdownItem>
+                                      </DropdownMenu>
+                                    </Dropdown>
                                   </div>
                                 </td>
                               </tr>
@@ -4417,7 +4494,7 @@ export default function PharmacyPage() {
                     <div className="flex items-center justify-between border-b border-border-base pb-4">
                       <div className="flex items-center gap-4">
                         <button
-                          className="p-1.5 text-text-muted hover:text-text-main hover:bg-surface-2 rounded transition-colors"
+                          className="p-2 text-text-muted hover:text-text-main hover:bg-surface-2 rounded transition-colors"
                           type="button"
                           onClick={() => {
                             setSelectedSupplierForTransactions(null);
@@ -4615,7 +4692,7 @@ export default function PharmacyPage() {
                                       {entry.balanceAmount > 0 &&
                                         entry.type === "purchase" && (
                                           <button
-                                            className="p-1.5 text-text-muted hover:text-success hover:bg-success/10 rounded"
+                                            className="p-2 text-text-muted hover:text-success hover:bg-success/10 rounded"
                                             title="Pay Bill"
                                             type="button"
                                             onClick={() => {
@@ -4639,7 +4716,7 @@ export default function PharmacyPage() {
                                           </button>
                                         )}
                                       <button
-                                        className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
+                                        className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded"
                                         title="Edit Entry"
                                         type="button"
                                         onClick={() => {
@@ -7022,6 +7099,9 @@ export default function PharmacyPage() {
                           patientName:
                             selectedType === "walk-in" ? "" : prev.patientName,
                         }));
+                        if (selectedType === "walk-in") {
+                          setSelectedPatientOtherDue(0);
+                        }
                       }}
                     />
 
@@ -7060,9 +7140,34 @@ export default function PharmacyPage() {
                                 selectedPatient?.phone ||
                                 "",
                               patientAddress: selectedPatient?.address || "",
+                              patientPanVat:
+                                selectedPatient?.patientPanVat ||
+                                prev.patientPanVat,
                             }));
+
+                            if (key && clinicId) {
+                              getPatientOutstandingSummary(key, clinicId)
+                                .then((summary) =>
+                                  setSelectedPatientOtherDue(
+                                    summary.appointmentDue +
+                                      summary.pathologyDue,
+                                  ),
+                                )
+                                .catch(() => setSelectedPatientOtherDue(0));
+                            } else {
+                              setSelectedPatientOtherDue(0);
+                            }
                           }}
                         />
+                        {selectedPatientOtherDue > 0 && (
+                          <p className="text-[11px] text-amber-600 italic mt-1">
+                            This patient has NPR{" "}
+                            {Math.round(
+                              selectedPatientOtherDue,
+                            ).toLocaleString()}{" "}
+                            due in Appointment Billing/Pathology.
+                          </p>
+                        )}
                       </div>
                     )}
 

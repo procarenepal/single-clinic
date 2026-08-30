@@ -132,6 +132,9 @@ const PathologyPage = lazy(() => import("@/pages/dashboard/pathology"));
 const PathologyInvoiceDetailPage = lazy(
   () => import("@/pages/dashboard/pathology-billing/[id]"),
 );
+const PathologyEditInvoicePage = lazy(
+  () => import("@/pages/dashboard/pathology-billing/[id]/edit"),
+);
 const BedManagementPage = lazy(
   () => import("@/pages/dashboard/bed-management/index"),
 );
@@ -647,6 +650,14 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="pathology-billing/:id"
+                          />
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/pathology">
+                                <PathologyEditInvoicePage />
+                              </RbacProtectedRoute>
+                            }
+                            path="pathology-billing/:id/edit"
                           />
                           <Route
                             element={

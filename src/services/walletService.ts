@@ -134,6 +134,58 @@ export const walletService = {
   },
 
   /**
+   * Refund value back to a patient's wallet (e.g., unused package sessions).
+   * Same shape as addFunds, but recorded as its own transaction type so
+   * refunds are visually distinguishable from ordinary deposits in the
+   * patient's wallet history.
+   */
+  async refundFunds(
+    patientId: string,
+    clinicId: string,
+    branchId: string,
+    amount: number,
+    referenceId: string,
+    notes: string,
+    createdBy: string,
+  ): Promise<string> {
+    try {
+      const now = new Date();
+
+      const transaction: Omit<WalletTransaction, "id"> = {
+        patientId,
+        clinicId,
+        branchId,
+        type: "refund",
+        amount,
+        referenceId,
+        notes,
+        createdAt: now,
+        createdBy,
+      };
+
+      const docRef = await addDoc(
+        collection(db, WALLET_TRANSACTIONS_COLLECTION),
+        {
+          ...transaction,
+          createdAt: Timestamp.fromDate(now),
+        },
+      );
+
+      const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
+
+      await updateDoc(patientRef, {
+        walletBalance: increment(amount),
+        updatedAt: Timestamp.now(),
+      });
+
+      return docRef.id;
+    } catch (error) {
+      console.error("Error refunding funds to wallet:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Get wallet transaction history for a specific patient
    */
   async getPatientTransactions(

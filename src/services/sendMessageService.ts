@@ -1475,10 +1475,20 @@ export const smsService = {
         return false;
       }
 
-      // SMS scheduling via backend is no longer available
-      console.warn("SMS scheduling is disabled: sms-backend has been removed");
+      // Queue into sms_test_logs, which the deployed smsScheduler Cloud
+      // Function (firebase-functions/src/index.ts, runs every minute)
+      // already polls for due status:"scheduled" entries and sends via the
+      // SMS provider. This previously called a since-removed Appwrite
+      // backend and always returned false, so appointment reminders never
+      // actually sent — reusing the still-live scheduler closes that gap.
+      await addDoc(collection(db, "sms_test_logs"), {
+        phone_number: phoneNumber,
+        message,
+        scheduled_time: scheduledTime,
+        status: "scheduled",
+      });
 
-      return false;
+      return true;
     } catch (error) {
       console.error("Error scheduling SMS via Firebase:", error);
 
@@ -1580,10 +1590,16 @@ export const smsService = {
         return false;
       }
 
-      // SMS scheduling via backend is no longer available
-      console.warn("SMS scheduling is disabled: sms-backend has been removed");
+      // See scheduleAppointmentSMS above for why this queues into
+      // sms_test_logs instead of calling the removed Appwrite backend.
+      await addDoc(collection(db, "sms_test_logs"), {
+        phone_number: phoneNumber,
+        message,
+        scheduled_time: scheduledTime,
+        status: "scheduled",
+      });
 
-      return false;
+      return true;
     } catch (error) {
       console.error("Error scheduling doctor SMS via Firebase:", error);
 

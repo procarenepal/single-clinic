@@ -129,19 +129,29 @@ export const expertService = {
   },
 
   /**
-   * Alias for backward compatibility
+   * Alias for backward compatibility.
+   *
+   * `clinicId` was previously accepted but silently ignored (named
+   * `_clinicId`) — `getExperts()` has no server-side clinic filter at all,
+   * so this returned every clinic's experts sharing the same branch name,
+   * a real cross-tenant data leak. Now AND'd with clinicId, matching the
+   * same fix already applied to several other services' equivalent
+   * clinicId-dropped-when-branchId-given bugs earlier this session.
    */
   async getExpertsByClinic(
-    _clinicId?: string,
+    clinicId?: string,
     branchId?: string,
   ): Promise<Expert[]> {
     const experts = await this.getExperts();
+    const filtered = clinicId
+      ? experts.filter((e) => e.clinicId === clinicId)
+      : experts;
 
     if (branchId) {
-      return experts.filter((e) => e.branchId === branchId);
+      return filtered.filter((e) => e.branchId === branchId);
     }
 
-    return experts;
+    return filtered;
   },
 
   /**

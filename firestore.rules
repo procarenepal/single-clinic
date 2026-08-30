@@ -2218,6 +2218,23 @@ match /smsSettings {
   allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
 }
 
+// SMS Test Logs collection rules (queue for the smsScheduler Cloud
+// Function, which polls for status:"scheduled" entries and sends them via
+// the SMS provider — used by scheduleAppointmentSMS/scheduleDoctorAppointmentSMS)
+match /sms_test_logs/{logId} {
+  // Only authenticated clinic staff can queue a scheduled SMS; the
+  // scheduler function itself runs with admin credentials and bypasses
+  // these rules for its status-update writes.
+  allow create: if isAuthenticated() &&
+                request.resource.data.keys().hasAll(['phone_number', 'message', 'scheduled_time', 'status']) &&
+                request.resource.data.status == 'scheduled' &&
+                request.resource.data.phone_number is string &&
+                request.resource.data.message is string &&
+                request.resource.data.scheduled_time is string;
+
+  allow read: if isAuthenticated();
+}
+
 // SMS Provider Configurations collection rules
 match /smsProviders/{providerId} {
   // Helper function to check if user belongs to the clinic

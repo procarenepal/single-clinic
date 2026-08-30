@@ -1253,6 +1253,21 @@ export default function HRPage() {
 
   const handleDisburseSalary = async () => {
     if (!selectedStaff) return;
+
+    if (
+      payrollForm.paymentType === "regular" &&
+      Number(payrollForm.amount) === 0
+    ) {
+      addToast({
+        title: "Salary Amount Required",
+        description:
+          "Salary amount cannot be zero for a regular payroll payment.",
+        color: "warning",
+      });
+
+      return;
+    }
+
     try {
       const baseExpected =
         (selectedStaff.salary || 0) * (payrollForm.selectedMonths.length || 1);

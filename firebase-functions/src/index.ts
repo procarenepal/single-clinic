@@ -317,3 +317,41 @@ export const smsScheduler = onSchedule("every 1 minutes", async (event) => {
     logger.error("SMS Scheduler error:", err);
   }
 });
+
+// ==========================================
+// 4. Daily SMS Quota Reset
+//
+// sendMessageService.resetDailySMSCount existed client-side but was never
+// called anywhere — once a clinic hit smsSettings.maxDailySMS it stayed
+// locked out forever, since nothing ever reset currentDailySMS back to 0.
+// Runs once daily and resets every clinic's counter.
+// ==========================================
+export const smsQuotaReset = onSchedule(
+  { schedule: "0 0 * * *", timeZone: "Asia/Kathmandu" },
+  async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const snapshot = await db.collection("smsSettings").get();
+
+      if (snapshot.empty) return;
+
+      const batchSize = 400;
+
+      for (let i = 0; i < snapshot.docs.length; i += batchSize) {
+        const chunk = snapshot.docs.slice(i, i + batchSize);
+        const batch = db.batch();
+
+        for (const doc of chunk) {
+          batch.update(doc.ref, {
+            currentDailySMS: 0,
+            lastResetDate: today,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        await batch.commit();
+      }
+    } catch (err) {
+      logger.error("SMS Quota Reset error:", err);
+    }
+  },
+);

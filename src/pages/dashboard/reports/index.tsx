@@ -45,10 +45,14 @@ import { referralPartnerService } from "@/services/referralPartnerService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { branchService } from "@/services/branchService";
 import { expertService } from "@/services/expertService";
+import { patientPackageService } from "@/services/patientPackageService";
 import { IrdAnnexureReport } from "./IrdAnnexureReport";
 import { CorrectedRecordsReport } from "./CorrectedRecordsReport";
+import { OutstandingBalancesReport } from "./OutstandingBalancesReport";
+import { IrdSyncFailuresReport } from "./IrdSyncFailuresReport";
 import { Schedule5Report } from "./Schedule5Report";
 import { BillingAuditLogReport } from "./BillingAuditLogReport";
+import { PackageExpiryReport } from "./PackageExpiryReport";
 
 // Types
 import {
@@ -71,6 +75,7 @@ import {
   AppointmentType,
   Branch,
   Expert,
+  PatientPackage,
 } from "@/types/models";
 
 interface ReportData {
@@ -92,6 +97,7 @@ interface ReportData {
   pathologyBillings: PathologyBilling[];
   pathologyBillingSettings: PathologyBillingSettings | null;
   referralPartners: ReferralPartner[];
+  patientPackages: PatientPackage[];
 }
 
 // Helper function to format date in yyyy/mm/dd format
@@ -166,6 +172,7 @@ export default function ReportsPage() {
     pathologyBillings: [],
     pathologyBillingSettings: null,
     referralPartners: [],
+    patientPackages: [],
   });
   const [selectedTab, setSelectedTab] = useState("overview");
   const [dateRange, setDateRange] = useState({
@@ -344,6 +351,21 @@ export default function ReportsPage() {
         // TODO: Implement stockTransactions service method
         const stockTransactions: StockTransaction[] = [];
 
+        // Load patient packages (for the Package Expiry report) — a
+        // point-in-time snapshot like referralPartners above, not scoped
+        // to the date-range filter (an expiring package matters regardless
+        // of when it was purchased).
+        let patientPackages: PatientPackage[] = [];
+
+        try {
+          patientPackages = await patientPackageService.getPatientPackagesByClinic(
+            clinicId,
+            reportBranchId,
+          );
+        } catch (ppError) {
+          console.warn("Patient packages data not available:", ppError);
+        }
+
         // Only update state if component is still mounted
         if (isMounted) {
           setReportData({
@@ -365,6 +387,7 @@ export default function ReportsPage() {
             pathologyBillings,
             pathologyBillingSettings,
             referralPartners,
+            patientPackages,
           });
         }
       } catch (error) {
@@ -3102,6 +3125,57 @@ export default function ReportsPage() {
               billings={filteredBillings}
               pathologyBillings={filteredPathologyBillings}
               medicinePurchases={reportData.medicinePurchases}
+            />
+          </Tab>
+
+          <Tab
+            key="outstanding-balances"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Outstanding Balances
+              </span>
+            }
+          >
+            <OutstandingBalancesReport
+              billings={reportData.billings}
+              medicinePurchases={reportData.medicinePurchases}
+              patients={reportData.patients}
+              pathologyBillings={reportData.pathologyBillings}
+            />
+          </Tab>
+
+          <Tab
+            key="package-expiry"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Package Expiry
+              </span>
+            }
+          >
+            <PackageExpiryReport
+              branchId={branchId || undefined}
+              clinicId={clinicId || ""}
+              createdBy={userData?.id || "system"}
+              patientPackages={reportData.patientPackages}
+              patients={reportData.patients}
+            />
+          </Tab>
+
+          <Tab
+            key="ird-sync-failures"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                IRD Sync Failures
+              </span>
+            }
+          >
+            <IrdSyncFailuresReport
+              billings={reportData.billings}
+              medicinePurchases={reportData.medicinePurchases}
+              pathologyBillings={reportData.pathologyBillings}
             />
           </Tab>
         </Tabs>

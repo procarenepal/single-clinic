@@ -9,7 +9,7 @@ import {
   Link,
 } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   IoArrowBackOutline,
   IoPrintOutline,
@@ -43,6 +43,10 @@ import { PrintLayoutConfig } from "@/types/printLayout";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { adToBS } from "@/utils/dateConverter";
+import {
+  getLastPaymentMethod,
+  setLastPaymentMethod,
+} from "@/utils/lastUsedPreferences";
 import {
   generateAppointmentInvoiceHTML,
   PrintFormat,
@@ -127,6 +131,7 @@ function ModalShell({
   disabled?: boolean;
 }) {
   const widthMap = { md: "max-w-md", lg: "max-w-2xl", xl: "max-w-3xl" };
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el =
@@ -140,6 +145,20 @@ function ModalShell({
     };
   }, []);
 
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !disabled) onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, disabled]);
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 overflow-hidden"
@@ -148,7 +167,9 @@ function ModalShell({
       }}
     >
       <div
-        className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh]`}
+        ref={panelRef}
+        className={`bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded w-full ${widthMap[size]} flex flex-col max-h-[90vh] outline-none`}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between px-4 py-3 border-b border-[rgb(var(--color-border))] shrink-0">
@@ -164,6 +185,7 @@ function ModalShell({
           </div>
           {!disabled && (
             <button
+              aria-label="Close"
               className="text-[rgb(var(--color-text-muted))] hover:text-[rgb(var(--color-text))] mt-0.5 transition-colors"
               type="button"
               onClick={onClose}
@@ -186,6 +208,14 @@ export default function InvoiceDetailPage() {
   const { id: invoiceId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  // If we arrived via a front-office guided action (e.g. "Settle Billing"),
+  // the back button should return there — with the tab the staff member was
+  // on — instead of the generic invoice list.
+  const cameFromFrontOffice = searchParams.get("from") === "front-office";
+  const returnTab = searchParams.get("tab");
+  const backDestination = cameFromFrontOffice
+    ? `/dashboard/front-office?tab=${returnTab || "billing"}`
+    : "/dashboard/appointments-billing";
   const {
     currentUser,
     clinicId,
@@ -218,7 +248,13 @@ export default function InvoiceDetailPage() {
 
   // Payment form state
   const [paymentSplits, setPaymentSplits] = useState([
-    { id: "1", amount: "", method: "cash", reference: "", notes: "" },
+    {
+      id: "1",
+      amount: "",
+      method: getLastPaymentMethod("cash"),
+      reference: "",
+      notes: "",
+    },
   ]);
   useEffect(() => {
     if (paymentSplits.length === 1 && invoice) {
@@ -269,7 +305,7 @@ export default function InvoiceDetailPage() {
             description: "The requested invoice could not be found.",
             color: "danger",
           });
-          navigate("/dashboard/appointments-billing");
+          navigate(backDestination);
 
           return;
         }
@@ -280,7 +316,7 @@ export default function InvoiceDetailPage() {
             description: "This invoice does not belong to your clinic.",
             color: "danger",
           });
-          navigate("/dashboard/appointments-billing");
+          navigate(backDestination);
 
           return;
         }
@@ -291,7 +327,7 @@ export default function InvoiceDetailPage() {
             description: "You can only view invoices for your branch.",
             color: "danger",
           });
-          navigate("/dashboard/appointments-billing");
+          navigate(backDestination);
 
           return;
         }
@@ -405,27 +441,20 @@ export default function InvoiceDetailPage() {
     loadInvoiceDetails();
   }, [invoiceId, clinicId, branchId, navigate, authLoading]);
 
-  // Trigger automatic print if the URL contains `?print=true` once data is loaded
+  // Trigger automatic print if the URL contains `?print=true` once data is
+  // loaded — routed through the same handlePrint() the in-page Print button
+  // uses (matching pathology/pharmacy's deep links) instead of separately
+  // overwriting the current window in place, which skipped the popup
+  // window entirely and never incremented printCount, breaking the
+  // IRD-required "COPY OF ORIGINAL – N" numbering on this specific path.
   useEffect(() => {
     if (!loading && invoice && searchParams.get("print") === "true") {
-      // Overwrite current window with the generated invoice HTML
-      const printedByText = userData ? `${userData.displayName} (${userData.role})` : "";
-      const html = generateAppointmentInvoiceHTML(
-        invoice,
-        clinic,
-        layoutConfig,
-        patient,
-        printFormat,
-        doctor,
-        invoice.printCount || 0,
-        printedByText
-      );
+      const timer = setTimeout(() => handlePrint(), 400);
 
-      document.open();
-      document.write(html);
-      document.close();
+      return () => clearTimeout(timer);
     }
-  }, [loading, invoice, searchParams, clinic, layoutConfig, patient, doctor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, invoice, searchParams]);
 
   const formatCurrency = (amount: number) => {
     return `NPR ${amount.toLocaleString()}`;
@@ -535,9 +564,15 @@ export default function InvoiceDetailPage() {
     const totalPayment = Math.round(
       validSplits.reduce((sum, s) => sum + parseFloat(s.amount), 0),
     );
-    const maxAllowed = includePreviousDue
-      ? invoice.balanceAmount + previousDue
-      : invoice.balanceAmount;
+    // Rounded to match totalPayment (already Math.round'd above) and what's
+    // pre-filled in the form (Math.round(balanceAmount)) — comparing a
+    // rounded payment against a raw, unrounded balance (e.g. 813.6 from tax
+    // math) would reject the form's own default amount as "excessive".
+    const maxAllowed = Math.round(
+      includePreviousDue
+        ? invoice.balanceAmount + previousDue
+        : invoice.balanceAmount,
+    );
 
     if (totalPayment > maxAllowed) {
       addToast({
@@ -631,13 +666,15 @@ export default function InvoiceDetailPage() {
         setInvoice(updatedInvoice);
       }
 
+      setLastPaymentMethod(validSplits[0].method);
+
       // Close payment modal
       paymentModal.forceClose();
       setPaymentSplits([
         {
           id: Date.now().toString(),
           amount: "",
-          method: "cash",
+          method: getLastPaymentMethod("cash"),
           reference: "",
           notes: "",
         },
@@ -661,7 +698,7 @@ export default function InvoiceDetailPage() {
       {
         id: Date.now().toString(),
         amount: invoice.balanceAmount.toString(),
-        method: "cash",
+        method: getLastPaymentMethod("cash"),
         reference: "",
         notes: "",
       },
@@ -774,8 +811,9 @@ export default function InvoiceDetailPage() {
         <div className="clarity-page-header flex flex-wrap items-center gap-3">
           <button
             className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded border border-transparent hover:border-border-base transition-all"
+            title={cameFromFrontOffice ? "Back to Front Office" : undefined}
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(backDestination)}
           >
             <IoArrowBackOutline className="w-5 h-5" />
           </button>
@@ -811,8 +849,9 @@ export default function InvoiceDetailPage() {
         <div className="clarity-page-header flex flex-wrap items-center gap-3">
           <button
             className="p-2 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded border border-transparent hover:border-mountain-200"
+            title={cameFromFrontOffice ? "Back to Front Office" : undefined}
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(backDestination)}
           >
             <IoArrowBackOutline className="w-5 h-5" />
           </button>
@@ -858,8 +897,9 @@ export default function InvoiceDetailPage() {
           <div className="flex items-center gap-3">
             <button
               className="p-2 text-mountain-500 hover:text-teal-600 hover:bg-teal-50 rounded border border-transparent hover:border-mountain-200"
+              title={cameFromFrontOffice ? "Back to Front Office" : undefined}
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate(backDestination)}
             >
               <IoArrowBackOutline className="w-5 h-5" />
             </button>
@@ -902,6 +942,11 @@ export default function InvoiceDetailPage() {
               color="default"
               size="sm"
               startContent={<IoPrintOutline className="w-4 h-4" />}
+              title={
+                invoice.printCount
+                  ? `Will print as "Copy of Original – ${invoice.printCount}"`
+                  : "Will print as the original"
+              }
               variant="bordered"
               onClick={handlePrint}
             >
@@ -1006,7 +1051,9 @@ export default function InvoiceDetailPage() {
               </p>
               <div className="mt-0.5">
                 <IrdSyncBadge
-                  finalized={invoice.status === "finalized"}
+                  attempted={Boolean(
+                    invoice.irdSynced || invoice.cbmsResponseCode,
+                  )}
                   invoiceType="appointment"
                   recordId={invoice.id}
                   synced={Boolean(invoice.irdSynced)}
@@ -1193,6 +1240,17 @@ export default function InvoiceDetailPage() {
                       {patient.address}
                     </p>
                   )}
+                  <p
+                    className={
+                      invoice.patientPanVat
+                        ? undefined
+                        : "text-[rgb(var(--color-text-muted))]"
+                    }
+                    title="This is what prints on the invoice's Purchaser's PAN field — shown here so a missing PAN is caught before printing, not after."
+                  >
+                    <span className="font-medium">PAN:</span>{" "}
+                    {invoice.patientPanVat || patient?.patientPanVat || "—"}
+                  </p>
                   {previousDue > 0 && (
                     <div className="mt-3 p-2 bg-rose-50 border border-rose-200 rounded text-rose-700 text-[12px] font-medium flex items-center gap-1.5 no-print">
                       <IoWarningOutline className="w-4 h-4 shrink-0" />
@@ -1295,11 +1353,16 @@ export default function InvoiceDetailPage() {
                           <p className="flex items-center gap-2">
                             <span className="font-medium">Name:</span>{" "}
                             {resolvedName}
-                            {doc.isPrimary && docs.length > 1 && (
-                              <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 border border-primary/20 rounded">
-                                Primary
-                              </span>
-                            )}
+                            {docs.length > 1 &&
+                              (doc.isPrimary ? (
+                                <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 border border-primary/20 rounded">
+                                  Primary
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold text-mountain-500 bg-mountain-500/10 px-1 border border-mountain-500/20 rounded">
+                                  Secondary
+                                </span>
+                              ))}
                           </p>
                           {doc.isPrimary && (
                             <p>
@@ -1335,9 +1398,15 @@ export default function InvoiceDetailPage() {
                       </p>
                     )}
                   </div>
-                  <p>
-                    <span className="font-medium">Status:</span>{" "}
-                    {invoice.status}
+                  <p title="Invoice lifecycle stage — separate from Payment Status above. A 'draft' invoice can still be fully paid; it just means the invoice record hasn't been explicitly finalized.">
+                    <span className="font-medium">Invoice Stage:</span>{" "}
+                    {invoice.status === "draft"
+                      ? "Draft"
+                      : invoice.status === "finalized"
+                        ? "Finalized"
+                        : invoice.status === "cancelled"
+                          ? "Cancelled"
+                          : invoice.status}
                   </p>
                   {invoice.paymentMethod && (
                     <p>
@@ -1579,7 +1648,7 @@ export default function InvoiceDetailPage() {
                     {
                       id: Date.now().toString(),
                       amount: "",
-                      method: "cash",
+                      method: getLastPaymentMethod("cash"),
                       reference: "",
                       notes: "",
                     },

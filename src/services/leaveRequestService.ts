@@ -70,7 +70,10 @@ export const leaveRequestService = {
     clinicId: string,
     branchId?: string,
   ): Promise<LeaveRequest[]> {
-    let q = query(collection(db, LEAVES_COLLECTION));
+    let q = query(
+      collection(db, LEAVES_COLLECTION),
+      where("clinicId", "==", clinicId),
+    );
 
     if (branchId) {
       q = query(q, where("branchId", "==", branchId));
@@ -88,6 +91,7 @@ export const leaveRequestService = {
     const q = query(
       collection(db, LEAVES_COLLECTION),
       where("staffId", "==", staffId),
+      where("clinicId", "==", clinicId),
     );
     const snap = await getDocs(q);
     const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
@@ -101,7 +105,7 @@ export const leaveRequestService = {
   ): Promise<LeaveRequest[]> {
     let q = query(
       collection(db, LEAVES_COLLECTION),
-
+      where("clinicId", "==", clinicId),
       where("status", "==", "pending"),
     );
 
@@ -130,6 +134,17 @@ export const leaveRequestService = {
     if (!leaveSnap.exists()) throw new Error("Leave request not found");
 
     const leave = mapLeaveRequest(leaveId, leaveSnap.data());
+
+    // Idempotency guard: without this, calling approveLeave twice on the
+    // same request (double-click, two admin tabs, stale UI state) silently
+    // decrements the balance a second time for one leave — same bug class
+    // as the already-fixed double-consumption bug in patientPackageService.
+    if (leave.status !== "pending") {
+      throw new Error(
+        `This leave request is already "${leave.status}" — it cannot be approved again.`,
+      );
+    }
+
     const batch = writeBatch(db);
 
     // 1. Update the leave request
@@ -235,7 +250,7 @@ export const leaveRequestService = {
     const q = query(
       collection(db, BALANCES_COLLECTION),
       where("staffId", "==", staffId),
-
+      where("clinicId", "==", clinicId),
       where("year", "==", year),
     );
     const snap = await getDocs(q);
@@ -273,7 +288,7 @@ export const leaveRequestService = {
   ): Promise<LeaveBalance[]> {
     const q = query(
       collection(db, BALANCES_COLLECTION),
-
+      where("clinicId", "==", clinicId),
       where("year", "==", year),
     );
     const snap = await getDocs(q);

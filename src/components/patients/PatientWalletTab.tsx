@@ -4,8 +4,10 @@ import {
   IoAddOutline,
   IoTimeOutline,
   IoArrowForwardOutline,
+  IoCashOutline,
 } from "react-icons/io5";
 import { Link } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
 
 import { Patient, WalletTransaction, PatientPackage } from "@/types/models";
 import { walletService } from "@/services/walletService";
@@ -13,6 +15,7 @@ import { patientPackageService } from "@/services/patientPackageService";
 import { useAuthContext } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { addToast } from "@/components/ui/toast";
+import { db } from "@/config/firebase";
 
 export default function PatientWalletTab({ patient }: { patient: Patient }) {
   const { clinicId, branchId, currentUser } = useAuthContext();
@@ -29,6 +32,12 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
 
   const [activePackages, setActivePackages] = useState<PatientPackage[]>([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
+
+  const [refundPkg, setRefundPkg] = useState<PatientPackage | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [loadingSuggestedAmount, setLoadingSuggestedAmount] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -49,6 +58,88 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
       console.error("Error loading patient packages:", error);
     } finally {
       setLoadingPackages(false);
+    }
+  };
+
+  const openRefundModal = async (pkg: PatientPackage) => {
+    setRefundPkg(pkg);
+    setRefundReason("");
+    setRefundAmount("");
+    setLoadingSuggestedAmount(true);
+    try {
+      const pkgSnap = await getDoc(doc(db, "treatmentPackages", pkg.packageId));
+      const walletCreditAmount = pkgSnap.exists()
+        ? pkgSnap.data().walletCreditAmount || 0
+        : 0;
+      const unusedSessions = Math.max(
+        pkg.totalSessions - pkg.usedSessions,
+        0,
+      );
+      const suggested =
+        pkg.totalSessions > 0
+          ? Math.round((unusedSessions * walletCreditAmount) / pkg.totalSessions)
+          : 0;
+
+      setRefundAmount(String(suggested));
+    } catch (error) {
+      console.error("Error computing suggested refund amount:", error);
+    } finally {
+      setLoadingSuggestedAmount(false);
+    }
+  };
+
+  const handleRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refundPkg || !currentUser) return;
+
+    const amountNum = parseFloat(refundAmount);
+
+    if (isNaN(amountNum) || amountNum <= 0) {
+      addToast({
+        title: "Invalid amount",
+        description: "Please enter a valid refund amount",
+        color: "warning",
+      });
+
+      return;
+    }
+    if (!refundReason.trim()) {
+      addToast({
+        title: "Reason required",
+        description: "Please enter a reason for this refund",
+        color: "warning",
+      });
+
+      return;
+    }
+
+    try {
+      setRefundSubmitting(true);
+      await patientPackageService.refundUnusedSessions(
+        refundPkg.id,
+        amountNum,
+        refundReason.trim(),
+        currentUser.uid,
+      );
+
+      addToast({
+        title: "Refund Processed",
+        description: `NPR ${amountNum.toLocaleString()} refunded to wallet.`,
+        color: "success",
+      });
+      setCurrentBalance((prev) => prev + amountNum);
+      setRefundPkg(null);
+      loadTransactions();
+      loadPackages();
+    } catch (error) {
+      addToast({
+        title: "Refund Failed",
+        description:
+          error instanceof Error ? error.message : "Failed to process refund.",
+        color: "danger",
+      });
+    } finally {
+      setRefundSubmitting(false);
     }
   };
 
@@ -190,12 +281,34 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                         ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                         : pkg.status === "expired"
                           ? "bg-red-50 text-red-600 border-red-200"
-                          : "bg-primary/10 text-primary border-primary/20"
+                          : pkg.status === "refunded"
+                            ? "bg-surface-3 text-text-muted border-border-base"
+                            : "bg-primary/10 text-primary border-primary/20"
                     }`}
                   >
                     {pkg.status}
                   </span>
                 </div>
+
+                {pkg.status === "refunded" ? (
+                  <p className="text-[11px] text-text-muted italic">
+                    Refunded NPR {(pkg.refundedAmount || 0).toLocaleString()}{" "}
+                    for {pkg.refundedSessions} unused session(s)
+                    {pkg.refundReason ? ` — "${pkg.refundReason}"` : ""}
+                  </p>
+                ) : (
+                  pkg.totalSessions - pkg.usedSessions > 0 && (
+                    <Button
+                      className="self-start"
+                      size="sm"
+                      startContent={<IoCashOutline className="w-3.5 h-3.5" />}
+                      variant="bordered"
+                      onClick={() => openRefundModal(pkg)}
+                    >
+                      Refund Unused Sessions
+                    </Button>
+                  )
+                )}
 
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
@@ -370,7 +483,7 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                       <td className="px-5 py-3">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
-                            t.type === "deposit"
+                            t.type === "deposit" || t.type === "refund"
                               ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                               : "bg-rose-50 text-rose-600 border border-rose-200"
                           }`}
@@ -379,10 +492,12 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                         </span>
                       </td>
                       <td
-                        className={`px-5 py-3 text-[13.5px] font-semibold ${t.type === "deposit" ? "text-emerald-600" : "text-rose-600"}`}
+                        className={`px-5 py-3 text-[13.5px] font-semibold ${t.type === "deposit" || t.type === "refund" ? "text-emerald-600" : "text-rose-600"}`}
                       >
-                        {t.type === "deposit" ? "+" : "-"} NPR{" "}
-                        {t.amount.toLocaleString()}
+                        {t.type === "deposit" || t.type === "refund"
+                          ? "+"
+                          : "-"}{" "}
+                        NPR {t.amount.toLocaleString()}
                       </td>
                       <td className="px-5 py-3 text-[12px] text-text-muted">
                         {t.type === "deposit" ? (
@@ -392,6 +507,8 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                               {t.paymentMethod}
                             </span>
                           </>
+                        ) : t.type === "refund" ? (
+                          "Package refund"
                         ) : (
                           <div className="flex items-center gap-1 flex-wrap">
                             Used on Invoice
@@ -493,6 +610,79 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                 </Button>
                 <Button color="primary" isLoading={submitting} type="submit">
                   Add Funds
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Unused Sessions Modal */}
+      {refundPkg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onClick={() => setRefundPkg(null)}
+        >
+          <div
+            className="bg-surface border border-border-base rounded shadow-2xl max-w-sm w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-border-base bg-surface-2 flex justify-between items-center">
+              <h3 className="text-[14px] font-semibold text-text-main">
+                Refund Unused Sessions
+              </h3>
+            </div>
+            <form className="p-4 space-y-4" onSubmit={handleRefund}>
+              <p className="text-[12.5px] text-text-muted">
+                {refundPkg.packageName} —{" "}
+                <span className="font-semibold text-text-main">
+                  {refundPkg.totalSessions - refundPkg.usedSessions}
+                </span>{" "}
+                unused session(s) of {refundPkg.totalSessions}.
+              </p>
+              <div>
+                <label className="text-[12px] font-medium text-text-muted mb-1 block">
+                  Refund Amount (NPR)
+                </label>
+                <input
+                  required
+                  className="w-full px-3 py-2 text-[13px] border border-border-base rounded focus:outline-none focus:border-primary"
+                  disabled={loadingSuggestedAmount}
+                  min="1"
+                  placeholder={loadingSuggestedAmount ? "Calculating..." : ""}
+                  type="number"
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                />
+                <p className="text-[11px] text-text-muted mt-1">
+                  Suggested amount based on unused sessions — editable for a
+                  partial/negotiated refund.
+                </p>
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-text-muted mb-1 block">
+                  Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  className="w-full px-3 py-2 text-[13px] border border-border-base rounded focus:outline-none focus:border-primary resize-none"
+                  placeholder="e.g. Patient relocating, unable to complete sessions"
+                  rows={2}
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  color="default"
+                  disabled={refundSubmitting}
+                  variant="bordered"
+                  onClick={() => setRefundPkg(null)}
+                >
+                  Cancel
+                </Button>
+                <Button color="danger" isLoading={refundSubmitting} type="submit">
+                  Confirm Refund
                 </Button>
               </div>
             </form>

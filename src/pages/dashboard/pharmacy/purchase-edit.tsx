@@ -418,6 +418,8 @@ export default function PurchaseEditPage() {
     );
   }
 
+  const isLocked = Boolean(purchase.irdSynced);
+
   return (
     <>
       <div className="flex flex-col gap-6">
@@ -455,15 +457,30 @@ export default function PurchaseEditPage() {
             </Button>
             <Button
               color="primary"
-              isDisabled={saving}
+              isDisabled={saving || isLocked}
               isLoading={saving}
               startContent={<IoSaveOutline size={18} />}
+              title={
+                isLocked
+                  ? "Locked — this purchase is IRD-synced and cannot be edited. Use Record Return instead."
+                  : undefined
+              }
               onPress={handleSave}
             >
               {saving ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>
+
+        {isLocked && (
+          <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 text-[13px] text-amber-800">
+            <strong>This purchase has already been synced to IRD.</strong>{" "}
+            Per IRD compliance rules, nothing on it can be changed anymore —
+            not the amounts, and not patient or item details either. Saving
+            has been disabled below. To reverse or adjust a synced purchase,
+            use Record Return from the purchase detail page instead.
+          </div>
+        )}
 
         {/* Edit Form */}
         <Card>
