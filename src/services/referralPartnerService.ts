@@ -119,9 +119,12 @@ export const referralPartnerService = {
   /**
    * Get all referral partners (excluding deleted)
    */
-  async getAllReferralPartners(): Promise<ReferralPartner[]> {
+  async getAllReferralPartners(
+    clinicId?: string,
+  ): Promise<ReferralPartner[]> {
     try {
-      const cached = cacheService.getClinicReferralPartners("standalone");
+      const cacheKey = clinicId || "standalone";
+      const cached = cacheService.getClinicReferralPartners(cacheKey);
 
       // An empty array is deliberately NOT treated as a cache hit — see
       // doctorService.getDoctors for the same fix and rationale.
@@ -129,7 +132,10 @@ export const referralPartnerService = {
         return (cached as ReferralPartner[]).filter((p) => !p.isDeleted);
 
       const partnersRef = collection(db, PARTNERS_COLLECTION);
-      const querySnapshot = await getDocs(partnersRef);
+      const q = clinicId
+        ? query(partnersRef, where("clinicId", "==", clinicId))
+        : partnersRef;
+      const querySnapshot = await getDocs(q);
 
       const partners = querySnapshot.docs.map((doc) => {
         const data = doc.data();
@@ -150,7 +156,7 @@ export const referralPartnerService = {
 
       const activePartners = partners.filter((p) => !p.isDeleted);
 
-      cacheService.setClinicReferralPartners("standalone", activePartners);
+      cacheService.setClinicReferralPartners(cacheKey, activePartners);
 
       return activePartners;
     } catch (error) {
@@ -163,14 +169,10 @@ export const referralPartnerService = {
    * Alias for backward compatibility
    */
   async getReferralPartnersByClinic(
-    _clinicId?: string,
-    branchId?: string,
+    clinicId?: string,
   ): Promise<ReferralPartner[]> {
-    const partners = await this.getAllReferralPartners();
+    const partners = await this.getAllReferralPartners(clinicId);
 
-    if (branchId) {
-      return partners.filter((p) => p.branchId === branchId);
-    }
 
     return partners;
   },
@@ -180,10 +182,10 @@ export const referralPartnerService = {
    */
   async searchReferralPartners(
     searchTerm: string,
-    _clinicId?: string,
+    clinicId?: string,
   ): Promise<ReferralPartner[]> {
     try {
-      const partners = await this.getAllReferralPartners();
+      const partners = await this.getAllReferralPartners(clinicId);
 
       if (!searchTerm) return partners;
       const term = searchTerm.toLowerCase();

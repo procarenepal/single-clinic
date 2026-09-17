@@ -139,17 +139,8 @@ export const followupService = {
    */
   async getFollowups(
     clinicId: string,
-    branchId?: string,
   ): Promise<PatientFollowup[]> {
-    let q = query(collection(db, COLLECTION));
-
-    if (branchId) {
-      q = query(
-        collection(db, COLLECTION),
-
-        where("branchId", "==", branchId),
-      );
-    }
+    const q = query(collection(db, COLLECTION));
 
     const snap = await getDocs(q);
     const results = snap.docs.map((d) => mapDoc(d.id, d.data()));

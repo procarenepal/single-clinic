@@ -139,7 +139,14 @@ export const doctorService = {
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
       const constraints: any[] = [];
 
-      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+      // "default" was previously treated as a sentinel meaning "don't
+      // filter" — but it's this deployment's actual clinicId (a real
+      // clinic, not a placeholder), so that exclusion was a live
+      // cross-tenant leak: any clinic whose id happens to be "default"
+      // silently saw every clinic's doctors. Only "standalone" (the
+      // synthetic cache key used when no clinicId is passed at all) means
+      // "don't filter."
+      if (clinicId && clinicId !== "standalone") {
         constraints.push(where("clinicId", "==", clinicId));
       }
       const q = query(doctorsRef, ...constraints);
@@ -179,7 +186,6 @@ export const doctorService = {
    */
   async getDoctorsByClinic(
     clinicId?: string,
-    _branchId?: string,
   ): Promise<Doctor[]> {
     return this.getDoctors(clinicId);
   },
@@ -189,11 +195,16 @@ export const doctorService = {
    */
   async getDoctorByEmail(
     email: string,
-    _clinicId?: string,
+    clinicId?: string,
   ): Promise<Doctor | null> {
     try {
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
-      const qy = query(doctorsRef, where("email", "==", email.toLowerCase()));
+      const constraints: any[] = [where("email", "==", email.toLowerCase())];
+
+      if (clinicId) {
+        constraints.push(where("clinicId", "==", clinicId));
+      }
+      const qy = query(doctorsRef, ...constraints);
       const snap = await getDocs(qy);
 
       if (snap.empty) return null;
@@ -225,7 +236,7 @@ export const doctorService = {
     clinicId?: string,
   ): Promise<Doctor[]> {
     try {
-      const doctors = await this.getDoctors();
+      const doctors = await this.getDoctors(clinicId);
 
       if (!searchTerm) {
         return doctors;

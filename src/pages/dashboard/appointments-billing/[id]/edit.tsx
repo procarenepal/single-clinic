@@ -46,6 +46,7 @@ interface InvoiceFormData {
   discountType: "flat" | "percent";
   discountValue: number;
   notes: string;
+  applyTax: boolean;
 }
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
@@ -310,7 +311,7 @@ function CustomSelect({
 export default function EditInvoicePage() {
   const { id: invoiceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, branchId } = useAuthContext();
+  const { clinicId, currentUser, userData } = useAuthContext();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -339,6 +340,7 @@ export default function EditInvoicePage() {
     discountType: "percent",
     discountValue: 0,
     notes: "",
+    applyTax: false,
   });
 
   // Calculations
@@ -361,6 +363,7 @@ export default function EditInvoicePage() {
     formData.items,
     formData.discountType,
     formData.discountValue,
+    formData.applyTax,
     billingSettings,
   ]);
 
@@ -390,27 +393,13 @@ export default function EditInvoicePage() {
         return;
       }
 
-      if (branchId && invoiceData.branchId !== branchId) {
-        setError("You can only edit invoices for your branch.");
-        addToast({
-          title: "Access denied",
-          description: "You can only edit invoices for your branch.",
-          color: "danger",
-        });
-        navigate("/dashboard/appointments-billing");
-
-        return;
-      }
-
-      const invoiceBranchId = invoiceData.branchId || undefined;
       const [patientsData, doctorsData, expertsData, appointmentTypesData] =
         await Promise.all([
-          patientService.getPatientsByClinic(clinicId, invoiceBranchId),
-          doctorService.getDoctorsByClinic(clinicId, invoiceBranchId),
-          expertService.getExpertsByClinic(clinicId, invoiceBranchId),
+          patientService.getPatientsByClinic(clinicId),
+          doctorService.getDoctorsByClinic(clinicId),
+          expertService.getExpertsByClinic(clinicId),
           appointmentTypeService.getAppointmentTypesByClinic(
             clinicId,
-            invoiceBranchId,
           ),
         ]);
 
@@ -448,6 +437,10 @@ export default function EditInvoicePage() {
         discountType: invoiceData.discountType,
         discountValue: invoiceData.discountValue,
         notes: invoiceData.notes || "",
+        // Reflect this invoice's actual current tax state, not the clinic
+        // default — it may have been created with tax on/off independent
+        // of whatever the clinic setting currently is.
+        applyTax: Boolean((invoiceData as any).taxPercentage > 0),
       });
     } catch (error) {
       console.error("Error loading invoice data:", error);
@@ -469,7 +462,7 @@ export default function EditInvoicePage() {
       formData.items,
       formData.discountType,
       formData.discountValue,
-      billingSettings.enableTax ? billingSettings.defaultTaxPercentage : 0,
+      formData.applyTax ? billingSettings.defaultTaxPercentage : 0,
     );
 
     setCalculations(totals);
@@ -624,8 +617,18 @@ export default function EditInvoicePage() {
         rootDoctor?.doctorType === "visiting" ? "visitor" : "regular"
       ) as "regular" | "visitor";
 
+      // Fetch fresh rather than trusting the page-load-time `invoice` state
+      // (no realtime listener here) — a payment could have been recorded on
+      // this invoice elsewhere while this edit page was open, and reading a
+      // stale paidAmount here would silently revert paymentStatus/
+      // balanceAmount when submitting an unrelated field change.
+      const freshInvoice =
+        (await appointmentBillingService
+          .getBillingById(invoice.id)
+          .catch(() => null)) || invoice;
+
       const newTotalAmount = calculations.totalAmount;
-      const existingPaidAmount = invoice.paidAmount;
+      const existingPaidAmount = freshInvoice.paidAmount;
       const newBalanceAmount = Math.max(0, newTotalAmount - existingPaidAmount);
 
       let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
@@ -633,9 +636,9 @@ export default function EditInvoicePage() {
       if (existingPaidAmount >= newTotalAmount) paymentStatus = "paid";
       else if (existingPaidAmount > 0) paymentStatus = "partial";
 
-      let invoiceStatus = invoice.status;
+      let invoiceStatus = freshInvoice.status;
 
-      if (paymentStatus === "paid" && invoice.status !== "cancelled") {
+      if (paymentStatus === "paid" && freshInvoice.status !== "cancelled") {
         invoiceStatus = "paid";
       }
 
@@ -654,7 +657,7 @@ export default function EditInvoicePage() {
         discountAmount: calculations.totalDiscount,
         itemDiscountAmount: calculations.itemDiscountAmount,
         mainDiscountAmount: calculations.mainDiscountAmount,
-        taxPercentage: billingSettings.enableTax
+        taxPercentage: formData.applyTax
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
@@ -1105,6 +1108,22 @@ export default function EditInvoicePage() {
                     }
                   />
                 </div>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    checked={formData.applyTax}
+                    className="w-3.5 h-3.5 rounded border-mountain-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                    type="checkbox"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        applyTax: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span className="text-[13px] font-medium text-mountain-700 select-none">
+                    Apply Tax to Invoice
+                  </span>
+                </label>
                 <div className="flex flex-col gap-1.5 w-full">
                   <label className="text-[13px] font-medium text-mountain-700">
                     Notes (Optional)
@@ -1150,7 +1169,7 @@ export default function EditInvoicePage() {
                       </span>
                     </div>
                   )}
-                  {billingSettings.enableTax && (
+                  {formData.applyTax && (
                     <div className="flex justify-between text-[13.5px] text-mountain-700">
                       <span>
                         {billingSettings.taxLabel || "Tax"} (

@@ -107,7 +107,8 @@ import { leaveRequestService } from "@/services/leaveRequestService";
 import { leaveTypeService } from "@/services/leaveTypeService";
 
 export default function HRPage() {
-  const { clinicId, userData, branchId } = useAuthContext();
+  const { clinicId, userData } = useAuthContext();
+  const branchId = clinicId ?? null;
   const [activeTab, setActiveTab] = useState("directory");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [attendance, setAttendance] = useState<StaffAttendance[]>([]);
@@ -681,14 +682,13 @@ export default function HRPage() {
 
       const [staffData, attendanceData, billsData, typesData] =
         await Promise.all([
-          hrService.getStaffByClinic(clinicId!, branchId || undefined),
+          hrService.getStaffByClinic(clinicId!),
           hrService.getAttendanceByRange(
             clinicId!,
             startOfDay(fiveYearsAgo),
             new Date(),
-            branchId || undefined,
           ),
-          accountService.getBillsByClinic(clinicId!, branchId || undefined),
+          accountService.getBillsByClinic(clinicId!),
           leaveTypeService.getLeaveTypes(clinicId!),
         ]);
 
@@ -713,7 +713,7 @@ export default function HRPage() {
     setLeavesLoading(true);
     try {
       const [requests, balances] = await Promise.all([
-        leaveRequestService.getLeavesByClinic(clinicId!, branchId || undefined),
+        leaveRequestService.getLeavesByClinic(clinicId!),
         leaveRequestService.getAllBalancesForClinic(
           clinicId!,
           new Date().getFullYear(),

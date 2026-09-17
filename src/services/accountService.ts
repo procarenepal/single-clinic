@@ -45,13 +45,11 @@ export const accountService = {
 
   async getBillsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<AccountBill[]> {
-    let q = query(collection(db, BILLS_COLLECTION));
-
-    if (branchId) {
-      q = query(q, where("branchId", "==", branchId));
-    }
+    const q = query(
+      collection(db, BILLS_COLLECTION),
+      where("clinicId", "==", clinicId),
+    );
 
     const querySnapshot = await getDocs(q);
     const bills = querySnapshot.docs.map((doc) => {
@@ -92,13 +90,11 @@ export const accountService = {
 
   async getVendorsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<Vendor[]> {
-    let q = query(collection(db, VENDORS_COLLECTION));
-
-    if (branchId) {
-      q = query(q, where("branchId", "==", branchId));
-    }
+    const q = query(
+      collection(db, VENDORS_COLLECTION),
+      where("clinicId", "==", clinicId),
+    );
 
     const querySnapshot = await getDocs(q);
     const vendors = querySnapshot.docs.map((doc) => {

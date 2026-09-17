@@ -14,9 +14,7 @@ import { addToast } from "@/components/ui/toast";
 import { TextEditorComponent } from "@/components/text-editor/TextEditorComponent";
 import { TextDocument } from "@/types/textEditor";
 import { textEditorService } from "@/services/textEditorService";
-import { branchService } from "@/services/branchService";
 import { useAuthContext } from "@/context/AuthContext";
-import { Branch } from "@/types/models";
 
 export default function TextEditorPage() {
   const navigate = useNavigate();
@@ -31,10 +29,6 @@ export default function TextEditorPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
-  const [isMultiBranch, setIsMultiBranch] = useState(false);
 
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<TextDocument | null>(
@@ -58,7 +52,7 @@ export default function TextEditorPage() {
     if (!clinicId) return;
     if (isEditMode) return;
     loadDocuments();
-  }, [clinicId, selectedBranchId, currentPage]);
+  }, [clinicId, currentPage]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -77,24 +71,6 @@ export default function TextEditorPage() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const isMultiBranchEnabled =
-        await branchService.isMultiBranchEnabled(clinicId);
-
-      setIsMultiBranch(isMultiBranchEnabled);
-
-      if (isMultiBranchEnabled) {
-        const branchList = await branchService.getClinicBranches(clinicId);
-
-        setBranches(branchList);
-        if (userData?.branchId) {
-          setSelectedBranchId(userData.branchId);
-        } else if (branchList.length > 0) {
-          const mainBranch =
-            branchList.find((b) => b.isMainBranch) || branchList[0];
-
-          setSelectedBranchId(mainBranch.id);
-        }
-      }
 
       if (documentId) {
         await handleEditDocument(documentId);
@@ -117,10 +93,8 @@ export default function TextEditorPage() {
   const loadDocuments = async () => {
     try {
       setLoading(true);
-      const branchId = isMultiBranch ? selectedBranchId : undefined;
       const result = await textEditorService.getDocuments(
         clinicId,
-        branchId,
         10,
         currentPage > 1 ? (documents[documents.length - 1] as any) : undefined,
       );
@@ -147,11 +121,9 @@ export default function TextEditorPage() {
     }
     try {
       setSearching(true);
-      const branchId = isMultiBranch ? selectedBranchId : undefined;
       const results = await textEditorService.searchDocuments(
         clinicId,
         searchQuery.trim(),
-        branchId,
       );
 
       setDocuments(results);
@@ -265,7 +237,6 @@ export default function TextEditorPage() {
   if (isEditorOpen) {
     return (
       <TextEditorComponent
-        branchId={isMultiBranch ? selectedBranchId : undefined}
         clinicId={clinicId}
         document={editingDocument || undefined}
         onCancel={handleCancelEdit}
@@ -314,25 +285,6 @@ export default function TextEditorPage() {
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             />
           </div>
-          {isMultiBranch && branches.length > 0 && (
-            <div className="md:col-span-4">
-              <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1">
-                Branch
-              </label>
-              <select
-                aria-label="Branch"
-                className="clarity-input w-full"
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-              >
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name} {branch.isMainBranch ? "(Main)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <div className="md:col-span-2">
             <button
               className="clarity-btn clarity-btn-primary w-full md:w-auto"

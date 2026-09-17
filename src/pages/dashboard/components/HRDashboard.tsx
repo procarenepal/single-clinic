@@ -84,7 +84,7 @@ function StatMini({
 
 export default function HRDashboard() {
   const navigate = useNavigate();
-  const { clinicId, branchId, currentUser, userData } = useAuthContext();
+  const { clinicId, currentUser, userData } = useAuthContext();
 
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<any[]>([]);
@@ -107,12 +107,11 @@ export default function HRDashboard() {
       try {
         setLoading(true);
         const [staffData, leavesData, billsData] = await Promise.all([
-          hrService.getStaffByClinic(clinicId, branchId || undefined),
+          hrService.getStaffByClinic(clinicId),
           leaveRequestService.getLeavesByClinic(
             clinicId,
-            branchId || undefined,
           ),
-          accountService.getBillsByClinic(clinicId, branchId || undefined),
+          accountService.getBillsByClinic(clinicId),
         ]);
 
         setStaff(staffData);
@@ -124,7 +123,7 @@ export default function HRDashboard() {
         setLoading(false);
       }
     })();
-  }, [clinicId, branchId]);
+  }, [clinicId]);
 
   if (loading)
     return (

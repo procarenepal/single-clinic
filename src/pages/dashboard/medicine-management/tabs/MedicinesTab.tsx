@@ -307,7 +307,6 @@ export default function MedicinesTab({
           const count = await medicineService.getMedicinesCountByClinic(
             clinicId,
             prefix,
-            branchScopeId || undefined,
           );
 
           setTotalCount(count);
@@ -320,7 +319,6 @@ export default function MedicinesTab({
         const stockList = await medicineService.getStockByMedicineIds(
           clinicId,
           ids,
-          branchScopeId || undefined,
         );
         const stockMap: Record<string, number> = {};
         const schemeStockMap: Record<string, number> = {};
@@ -380,7 +378,6 @@ export default function MedicinesTab({
       const data = await medicineService.getMedicinesByClinic(
         clinicId,
         undefined,
-        branchScopeId || undefined,
       );
 
       setMasterMedicines(data);
@@ -437,7 +434,6 @@ export default function MedicinesTab({
     try {
       const data = await medicineService.getSuppliersByClinic(
         clinicId,
-        branchScopeId || undefined,
       );
 
       setSuppliers(data);
@@ -454,7 +450,6 @@ export default function MedicinesTab({
       const data = await medicineService.getMedicinesByClinic(
         clinicId,
         undefined,
-        branchScopeId || undefined,
       );
 
       setMedicines(data);
@@ -468,7 +463,6 @@ export default function MedicinesTab({
         // Use the existing getStockByClinic method which handles permissions properly
         const stockData = await medicineService.getStockByClinic(
           clinicId,
-          branchScopeId || undefined,
         );
 
         // Map medicine IDs to stock quantities (both regular and scheme)
@@ -492,7 +486,6 @@ export default function MedicinesTab({
               const transactions = await medicineService.getStockTransactions(
                 medicine.id,
                 50,
-                branchScopeId || undefined,
               );
               // Find the most recent transaction with an expiry date
               const transactionWithExpiry = transactions
@@ -812,7 +805,6 @@ export default function MedicinesTab({
         const txs = await medicineService.getStockTransactions(
           medicine.id,
           5,
-          branchScopeId || undefined,
         );
         // Find the most recent transaction that has the missing data
         const txWithBatch = txs.find((t) => t.batchNumber);
@@ -2219,7 +2211,6 @@ export default function MedicinesTab({
                                   await medicineService.getStockTransactions(
                                     medicine.id,
                                     10,
-                                    branchScopeId || undefined,
                                   );
 
                                 // Find most recent regular stock transaction for prices

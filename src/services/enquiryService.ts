@@ -89,11 +89,14 @@ export const enquiryService = {
 
   async getEnquiries(
     _clinicId?: string,
-    _branchId?: string,
     filters?: EnquiryFilters,
   ): Promise<Enquiry[]> {
     try {
       const constraints: QueryConstraint[] = [];
+
+      if (_clinicId) {
+        constraints.push(where("clinicId", "==", _clinicId));
+      }
 
       // Branch filter removed for standalone mode
 

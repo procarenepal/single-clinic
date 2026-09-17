@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { specialityService } from "@/services/specialityService";
-import { branchService } from "@/services/branchService";
 import { addToast } from "@/components/ui/toast";
 import { db } from "@/config/firebase";
 
@@ -131,7 +130,7 @@ export default function NewDoctorPage() {
   >([]);
   const [adminEmails, setAdminEmails] = useState<string[]>([]);
   const [emailError, setEmailError] = useState<string>("");
-  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
+  const defaultBranchId = clinicId ?? null;
 
   const [isAddingNewSpeciality, setIsAddingNewSpeciality] = useState(false);
   const [doctorProfile, setDoctorProfile] = useState({
@@ -154,7 +153,7 @@ export default function NewDoctorPage() {
   const loadSpecialities = async () => {
     try {
       const specialitiesData =
-        await specialityService.getActiveSpecialitiesForDropdown();
+        await specialityService.getActiveSpecialitiesForDropdown(clinicId);
 
       setSpecialities(
         specialitiesData.map((s: { key: string; label: string }) => ({
@@ -171,26 +170,6 @@ export default function NewDoctorPage() {
       });
     }
   };
-
-  // Determine default branch for the new doctor (user branch, main branch, or clinic fallback)
-  useEffect(() => {
-    if (!clinicId || authLoading) return;
-    if (userData?.branchId) {
-      setDefaultBranchId(userData.branchId);
-
-      return;
-    }
-    branchService
-      .isMultiBranchEnabled(clinicId)
-      .then((multi) =>
-        multi
-          ? branchService
-              .getMainBranch(clinicId)
-              .then((b) => b && setDefaultBranchId(b.id))
-          : setDefaultBranchId(clinicId),
-      )
-      .catch(() => setDefaultBranchId(clinicId));
-  }, [clinicId, authLoading, userData?.branchId]);
 
   const loadAdminEmails = async () => {
     if (!clinicId) return;

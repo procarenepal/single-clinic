@@ -20,8 +20,7 @@ import { Skeleton } from "@/components/ui";
 import { useAuthContext } from "@/context/AuthContext";
 import { medicineService } from "@/services/medicineService";
 import { clinicSettingsService } from "@/services/clinicSettingsService";
-import { ClinicSettings, Branch } from "@/types/models";
-import { branchService } from "@/services/branchService";
+import { ClinicSettings } from "@/types/models";
 
 // Import sub-components
 import BrandsTab from "@/pages/dashboard/medicine-management/tabs/BrandsTab";
@@ -32,7 +31,7 @@ import PurchaseRecordsTab from "@/pages/dashboard/medicine-management/tabs/Purch
 import SettingsTab from "@/pages/dashboard/medicine-management/tabs/SettingsTab";
 
 export default function MedicineManagementPage() {
-  const { userData, clinicId, branchId } = useAuthContext();
+  const { userData, clinicId } = useAuthContext();
   const isClinicAdmin = userData?.role === "clinic-admin";
   const [selectedTab, setSelectedTab] = useState("medicines");
   const [isLoading, setIsLoading] = useState(true);
@@ -50,76 +49,9 @@ export default function MedicineManagementPage() {
     totalBrands: 0,
     totalCategories: 0,
   });
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const [isMultiBranch, setIsMultiBranch] = useState(false);
-
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    !isMultiBranch ||
-    (isClinicAdmin &&
-      (selectedBranchId === null ||
-        (mainBranchId && selectedBranchId === mainBranchId)))
-      ? undefined
-      : (userData?.branchId ?? (selectedBranchId || undefined));
-
-  // Only require branch selector for multi-branch clinics; individual clinics use clinic-wide scope
-  const requiresBranchSelection = !branchId && isClinicAdmin && isMultiBranch;
-  const hasBranchScope =
-    !!branchId || selectedBranchId !== null || !isMultiBranch;
-
-  // Load branches for clinic-wide admins (no fixed branchId); detect multi-branch for individual clinics
-  useEffect(() => {
-    if (!clinicId) return;
-    if (branchId) {
-      setIsMultiBranch(true);
-
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const multi = await branchService.isMultiBranchEnabled(clinicId);
-
-        if (cancelled) return;
-        setIsMultiBranch(multi);
-
-        if (!isClinicAdmin || branchId) return;
-
-        const data = await branchService.getClinicBranches(clinicId, true);
-
-        if (cancelled) return;
-        setBranches(data);
-        if (data.length > 0) {
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (error) {
-        console.error("Medicine management branches fetch error:", error);
-        if (!cancelled) {
-          setIsMultiBranch(false);
-          setBranches([]);
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
-
   const loadDashboardStats = useCallback(
     async (settingsOverride?: ClinicSettings | null) => {
       if (!clinicId) return;
-
-      // For clinic admins without a fixed branch, require an explicit branch selection (including "Main branch" for collective data)
-      if (!branchId && isClinicAdmin && selectedBranchId === null) {
-        return;
-      }
 
       try {
         setIsLoadingStats(true);
@@ -127,21 +59,17 @@ export default function MedicineManagementPage() {
           medicineService.getMedicinesByClinic(
             clinicId,
             undefined,
-            effectiveBranchId || undefined,
           ),
           medicineService.getMedicineBrandsByClinic(
             clinicId,
-            effectiveBranchId || undefined,
           ),
           medicineService.getMedicineCategoriesByClinic(
             clinicId,
-            effectiveBranchId || undefined,
           ),
         ]);
 
         const stockData = await medicineService.getStockByClinic(
           clinicId,
-          effectiveBranchId || undefined,
         );
         const medicineStocks: Record<string, number> = {};
         const aggregatedStocks: Record<
@@ -198,15 +126,7 @@ export default function MedicineManagementPage() {
         setIsLoadingStats(false);
       }
     },
-    [
-      clinicId,
-      branchId,
-      isClinicAdmin,
-      selectedBranchId,
-      effectiveBranchId,
-      clinicSettings,
-      isMultiBranch,
-    ],
+    [clinicId, isClinicAdmin, clinicSettings],
   );
 
   // Check permissions and load clinic settings (do not depend on loadDashboardStats to avoid re-run when clinicSettings updates)
@@ -234,21 +154,17 @@ export default function MedicineManagementPage() {
           medicineService.getMedicinesByClinic(
             clinicId,
             undefined,
-            effectiveBranchId || undefined,
           ),
           medicineService.getMedicineBrandsByClinic(
             clinicId,
-            effectiveBranchId || undefined,
           ),
           medicineService.getMedicineCategoriesByClinic(
             clinicId,
-            effectiveBranchId || undefined,
           ),
         ]);
 
         const stockData = await medicineService.getStockByClinic(
           clinicId,
-          effectiveBranchId || undefined,
         );
 
         const medicineStocks: Record<string, number> = {};
@@ -312,15 +228,7 @@ export default function MedicineManagementPage() {
     return () => {
       cancelled = true;
     };
-  }, [
-    clinicId,
-    userData,
-    effectiveBranchId,
-    selectedBranchId,
-    isMultiBranch,
-    mainBranchId,
-    branches.length,
-  ]);
+  }, [clinicId, userData]);
 
   const refreshStats = useCallback(() => {
     loadDashboardStats();
@@ -428,27 +336,6 @@ export default function MedicineManagementPage() {
               </p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-              {!branchId && isClinicAdmin && branches.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[rgb(var(--color-text-muted))]">
-                    Branch
-                  </span>
-                  <select
-                    className="h-8 px-2.5 py-0 text-[12px] border border-[rgb(var(--color-border))] rounded bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text))] focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary)/0.2)]"
-                    value={selectedBranchId ?? ""}
-                    onChange={(e) =>
-                      setSelectedBranchId(e.target.value || null)
-                    }
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                        {b.isMainBranch ? " (all branches)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <span
                 className={`text-xs font-semibold px-2.5 py-1 rounded-sm border ${
                   clinicSettings?.sellsMedicines
@@ -488,27 +375,8 @@ export default function MedicineManagementPage() {
         )}
 
         {/* Require branch selection for clinic admins without fixed branch */}
-        {requiresBranchSelection && !hasBranchScope && (
-          <div className="mb-6">
-            <div className="clarity-card bg-mountain-50 border-mountain-200 p-4">
-              <div className="flex items-start gap-3">
-                <IoWarningOutline className="text-mountain-600 text-stat-sm mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 className="font-medium text-mountain-800 mb-1">
-                    Select a branch to manage medicines
-                  </h3>
-                  <p className="text-sm text-mountain-600">
-                    Choose a branch from the selector above to view and manage
-                    medicines, stock, brands, and suppliers for that branch.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Dashboard Stats Cards */}
-        {(!requiresBranchSelection || hasBranchScope) && (
+        {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8 relative">
             {isLoadingStats && (
               <div className="absolute inset-0 bg-surface/40 backdrop-blur-[2px] flex items-center justify-center z-10 rounded-lg">
@@ -647,10 +515,10 @@ export default function MedicineManagementPage() {
               </div>
             </div>
           </div>
-        )}
+        }
 
         {/* Medicine Management Tabs */}
-        {(!requiresBranchSelection || hasBranchScope) && (
+        {
           <div className="clarity-card pb-0 rounded-b-none">
             <div className="bg-[rgb(var(--color-surface-2))] border-b border-[rgb(var(--color-border))] px-4 py-3 rounded-t-lg">
               <div className="flex items-center gap-2">
@@ -736,7 +604,6 @@ export default function MedicineManagementPage() {
                   <div className="p-4">
                     <MedicinesTab
                       clinicSettings={clinicSettings}
-                      effectiveBranchId={effectiveBranchId}
                       filterType={filterType}
                       onStatsChange={refreshStats}
                     />
@@ -747,7 +614,6 @@ export default function MedicineManagementPage() {
                   <div className="p-4">
                     <StockTab
                       clinicSettings={clinicSettings}
-                      effectiveBranchId={effectiveBranchId}
                       onStatsChange={refreshStats}
                     />
                   </div>
@@ -756,7 +622,6 @@ export default function MedicineManagementPage() {
                 {selectedTab === "brands" && (
                   <div className="p-4">
                     <BrandsTab
-                      effectiveBranchId={effectiveBranchId}
                       onStatsChange={refreshStats}
                     />
                   </div>
@@ -765,7 +630,6 @@ export default function MedicineManagementPage() {
                 {selectedTab === "categories" && (
                   <div className="p-4">
                     <CategoriesTab
-                      effectiveBranchId={effectiveBranchId}
                       onStatsChange={refreshStats}
                     />
                   </div>
@@ -773,14 +637,13 @@ export default function MedicineManagementPage() {
 
                 {selectedTab === "suppliers" && (
                   <div className="p-4">
-                    <SuppliersTab effectiveBranchId={effectiveBranchId} />
+                    <SuppliersTab />
                   </div>
                 )}
 
                 {selectedTab === "purchase-records" && (
                   <div className="p-4">
                     <PurchaseRecordsTab
-                      effectiveBranchId={effectiveBranchId}
                       onStatsChange={refreshStats}
                     />
                   </div>
@@ -797,7 +660,7 @@ export default function MedicineManagementPage() {
               </div>
             </div>
           </div>
-        )}
+        }
       </div>
     </>
   );

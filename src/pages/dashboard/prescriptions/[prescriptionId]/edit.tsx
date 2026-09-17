@@ -29,7 +29,6 @@ import { medicineService } from "@/services/medicineService";
 import { appointmentService } from "@/services/appointmentService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { prescriptionService } from "@/services/prescriptionService";
-import { branchService } from "@/services/branchService";
 import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -233,7 +232,6 @@ export default function EditPrescriptionPage() {
   const navigate = useNavigate();
   const { prescriptionId } = useParams<{ prescriptionId: string }>();
   const { clinicId, userData, currentUser } = useAuthContext();
-  const effectiveBranchId = userData?.branchId ?? undefined;
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -244,10 +242,6 @@ export default function EditPrescriptionPage() {
   const [saving, setSaving] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [accessError, setAccessError] = useState<string | null>(null);
-  const [prescriptionBranchId, setPrescriptionBranchId] = useState<
-    string | null
-  >(null);
-  const [isMultiBranch, setIsMultiBranch] = useState(false);
 
   // Form Fields
   const [patientId, setPatientId] = useState("");
@@ -502,28 +496,12 @@ export default function EditPrescriptionPage() {
     }
   };
 
-  // Detect multi-branch for this clinic
-  useEffect(() => {
-    if (!clinicId) return;
-    // If user is scoped to a branch, we know multi-branch is enabled
-    if (userData?.branchId) {
-      setIsMultiBranch(true);
-
-      return;
-    }
-    branchService
-      .isMultiBranchEnabled(clinicId)
-      .then((multi) => setIsMultiBranch(multi))
-      .catch(() => setIsMultiBranch(false));
-  }, [clinicId, userData?.branchId]);
-
   useEffect(() => {
     const loadPrescriptionData = async () => {
       if (!prescriptionId || !clinicId) return;
       try {
         setInitialLoading(true);
         setAccessError(null);
-        setPrescriptionBranchId(null);
         const prescriptionData =
           await prescriptionService.getPrescriptionById(prescriptionId);
 
@@ -537,16 +515,6 @@ export default function EditPrescriptionPage() {
 
           return;
         }
-        if (
-          effectiveBranchId != null &&
-          prescriptionData.branchId !== effectiveBranchId
-        ) {
-          setAccessError("You don't have access to this prescription.");
-          setInitialLoading(false);
-
-          return;
-        }
-        setPrescriptionBranchId(prescriptionData.branchId);
 
         const prescriptionItems =
           await prescriptionService.getPrescriptionItems(prescriptionId);
@@ -586,19 +554,13 @@ export default function EditPrescriptionPage() {
     };
 
     loadPrescriptionData();
-  }, [prescriptionId, clinicId, navigate, effectiveBranchId]);
+  }, [prescriptionId, clinicId, navigate]);
 
   useEffect(() => {
     const loadData = async () => {
       if (!clinicId) return;
-      // For multi-branch clinics we need the prescription's branch to scope data;
-      // for individual clinics we always load clinic-wide data (no branch filter).
-      if (isMultiBranch && prescriptionBranchId == null) return;
       try {
         setLoading(true);
-        const branchIdArg = isMultiBranch
-          ? (prescriptionBranchId ?? undefined)
-          : undefined;
         const [
           patientsData,
           doctorsDataRaw,
@@ -607,14 +569,13 @@ export default function EditPrescriptionPage() {
           appointmentsData,
           appointmentTypesData,
         ] = await Promise.all([
-          patientService.getPatientsByClinic(clinicId, branchIdArg),
-          doctorService.getDoctorsByClinic(clinicId, branchIdArg),
-          expertService.getExpertsByClinic(clinicId, branchIdArg),
+          patientService.getPatientsByClinic(clinicId),
+          doctorService.getDoctorsByClinic(clinicId),
+          expertService.getExpertsByClinic(clinicId),
           medicineService.getMedicinesByClinic(clinicId),
-          appointmentService.getAppointmentsByClinic(clinicId, branchIdArg),
+          appointmentService.getAppointmentsByClinic(clinicId),
           appointmentTypeService.getAppointmentTypesByClinic(
             clinicId,
-            branchIdArg,
           ),
         ]);
 
@@ -671,7 +632,7 @@ export default function EditPrescriptionPage() {
     };
 
     loadData();
-  }, [clinicId, prescriptionBranchId, isMultiBranch]);
+  }, [clinicId]);
 
   const handleAppointmentChange = (selectedId: string) => {
     setAppointmentId(selectedId);

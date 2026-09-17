@@ -47,7 +47,7 @@ export default function ActivityLogPage() {
       const [appts, pts, enqs, doctorsList] = await Promise.all([
         appointmentService.getAppointmentsByClinic(clinicId),
         patientService.getPatientsByClinic(clinicId),
-        enquiryService.getEnquiries(clinicId, undefined, {
+        enquiryService.getEnquiries(clinicId, {
           dateField: "createdAt",
         }),
         doctorService.getDoctorsByClinic(clinicId),

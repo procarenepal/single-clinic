@@ -367,4 +367,45 @@ export const auditLogService = {
       },
     });
   },
+
+  /**
+   * Helper to log discount/tax changes on a billing document (creation or edit)
+   */
+  async logDiscountTaxChange(data: {
+    performedBy: string;
+    performedByName?: string;
+    performedByEmail?: string;
+    clinicId: string;
+    branchId?: string;
+    billingId: string;
+    invoiceNumber?: string;
+    before?: {
+      discountType?: string;
+      discountValue?: number;
+      applyTax?: boolean;
+      taxPercentage?: number;
+    };
+    after: {
+      discountType?: string;
+      discountValue?: number;
+      applyTax?: boolean;
+      taxPercentage?: number;
+    };
+  }): Promise<string> {
+    return this.createLog({
+      eventType: "billing_discount_tax_changed",
+      performedBy: data.performedBy,
+      performedByName: data.performedByName,
+      performedByEmail: data.performedByEmail,
+      clinicId: data.clinicId,
+      branchId: data.branchId,
+      status: "success",
+      details: {
+        billingId: data.billingId,
+        invoiceNumber: data.invoiceNumber,
+        before: data.before,
+        after: data.after,
+      },
+    });
+  },
 };

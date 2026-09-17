@@ -3,6 +3,7 @@ package com.procaresoft.billing.dto;
 import com.procaresoft.billing.model.Invoice;
 import lombok.Data;
 import java.math.BigDecimal;
+import java.time.format.DateTimeFormatter;
 
 /**
  * One row of the master invoice/sales table IRD's Electronic Billing
@@ -10,10 +11,12 @@ import java.math.BigDecimal;
  * exactly these attributes, viewable and printable from the front end
  * (clause 6(ङ)). Field names below match the schedule's own field list.
  *
- * Two fields are always null for now, not faked: Printed_by/Is_Bill_Printed
- * (invoice reprints are tracked in Firestore, not yet synced back to this
- * database) and Transaction_Id/VAT_Refund_Amount (Schedule 8's digital-payment
- * VAT rebate flow is not yet implemented — see docs/IRD_CBMS_INTEGRATION.md).
+ * Printed_by/Is_Bill_Printed/Printed_Time are sourced from Invoice's own
+ * print_count/last_printed_at/last_printed_by columns (see /record-print),
+ * kept in sync with the Firestore-side printCount the frontend also tracks.
+ * Transaction_Id/VAT_Refund_Amount are still always null — Schedule 8's
+ * digital-payment VAT rebate flow is not yet implemented (see
+ * docs/IRD_CBMS_INTEGRATION.md).
  */
 @Data
 public class Schedule5RecordDto {
@@ -66,11 +69,13 @@ public class Schedule5RecordDto {
                 invoice.getTaxAmount(),
                 invoice.getTotalAmount(),
                 invoice.isIrdSynced(),
-                null,
+                invoice.getPrintCount() > 0,
                 invoice.isActive(),
-                null,
+                invoice.getLastPrintedAt() != null
+                        ? invoice.getLastPrintedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                        : null,
                 invoice.getCreatedByUid(),
-                null,
+                invoice.getLastPrintedBy(),
                 isRealtime,
                 invoice.getPaymentMethod(),
                 null,

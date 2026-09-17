@@ -44,6 +44,19 @@ export interface Prescription {
   updatedAt: Date;
   createdBy: string;
   sendToPharmacy?: boolean;
+  sendToPathology?: boolean;
+  pathologyTests?: Array<{
+    id?: string;
+    testId: string;
+    testName: string;
+    price?: number;
+  }>;
+  /** Set once a pathologyBilling invoice has been created from this
+   * prescription's tests (from the Pathology Billing tab's Pending Orders
+   * queue) — the marker that removes it from that queue. Kept separate from
+   * `status` since a prescription can independently carry pending medicines
+   * and already-billed tests. */
+  pathologyBillingId?: string;
 }
 
 export interface PrescriptionItem {

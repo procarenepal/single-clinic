@@ -16,7 +16,6 @@ interface AuthContextType {
   currentUser: ExtendedUser | null;
   userData: User | null;
   clinicId: string | null;
-  branchId: string | null;
   isLoading: boolean;
   subscriptionValid: boolean | null;
   subscriptionLastChecked: number | null;
@@ -55,7 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     currentUser: auth.currentUser,
     userData: auth.userData,
     clinicId: auth.clinicId,
-    branchId: auth.userData?.branchId || null,
     isLoading: auth.isLoading,
     subscriptionValid: (auth as any).subscriptionValid ?? null,
     subscriptionLastChecked: (auth as any).subscriptionLastChecked ?? null,
@@ -90,7 +88,6 @@ export function useAuthContext() {
       currentUser: null,
       userData: null,
       clinicId: null,
-      branchId: null,
       isLoading: true,
       subscriptionValid: null,
       subscriptionLastChecked: null,

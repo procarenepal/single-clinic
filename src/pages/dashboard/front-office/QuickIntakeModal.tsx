@@ -6,6 +6,32 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui";
 import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
 
+/**
+ * Sensible per-clinician-type defaults for a newly-added (or retyped) row:
+ * a doctor's own consultation is typically charged directly with no
+ * commission split, while an assigned expert typically earns a commission
+ * on the procedure rather than a separate upfront fee. Matched by NAME
+ * against the clinic's actual appointment types (not a hardcoded doc id)
+ * since this project's data has been fully wiped/reseeded more than once —
+ * a hardcoded id would silently stop matching after any future reseed.
+ */
+export const getClinicianTypeDefaults = (
+  type: "doctor" | "expert",
+  appointmentTypes: any[],
+) => {
+  const wantedName =
+    type === "doctor" ? "doctor consultation" : "skin test";
+  const match = appointmentTypes.find(
+    (t: any) => t.name?.toLowerCase() === wantedName,
+  );
+
+  return {
+    chargeConsultation: type === "doctor",
+    addCommission: type === "expert",
+    appointmentTypeId: match?.id || "",
+  };
+};
+
 export interface QuickIntakeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -511,8 +537,10 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 id: crypto.randomUUID(),
                                 clinicianType: "doctor",
                                 clinicianId: "",
-                                chargeConsultation: true,
-                                addCommission: true,
+                                ...getClinicianTypeDefaults(
+                                  "doctor",
+                                  appointmentTypes,
+                                ),
                               },
                             ],
                           }));
@@ -553,14 +581,22 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 className="w-full h-9 pl-3 pr-8 text-[13px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors truncate"
                                 value={row.clinicianType}
                                 onChange={(e) => {
+                                  const newType = e.target.value as
+                                    | "doctor"
+                                    | "expert";
+
                                   setQuickIntakeForm((prev: any) => ({
                                     ...prev,
                                     clinicians: prev.clinicians.map((c: any) =>
                                       c.id === row.id
                                         ? {
                                             ...c,
-                                            clinicianType: e.target.value,
+                                            clinicianType: newType,
                                             clinicianId: "",
+                                            ...getClinicianTypeDefaults(
+                                              newType,
+                                              appointmentTypes,
+                                            ),
                                           }
                                         : c,
                                     ),
@@ -723,6 +759,25 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       ),
                     )}
                   </div>
+
+                  {/* Invoice-level, not per-clinician — applies to whichever
+                      consultation bill this check-in creates. */}
+                  <label className="flex items-center gap-1.5 cursor-pointer mt-1">
+                    <input
+                      checked={quickIntakeForm.applyTax}
+                      className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                      type="checkbox"
+                      onChange={(e) =>
+                        setQuickIntakeForm((prev: any) => ({
+                          ...prev,
+                          applyTax: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="text-[11px] text-text-muted font-medium select-none">
+                      Apply Tax to Invoice
+                    </span>
+                  </label>
 
                   {/* Payment details for Package Sales */}
                   {quickIntakeForm.appointmentTypeId.startsWith("pkg_") && (
@@ -1116,6 +1171,24 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       className="text-[11px] font-semibold text-primary hover:underline mt-1"
                       type="button"
                       onClick={() => {
+                        // Typed-in-progress demographics for a new walk-in
+                        // would otherwise be silently discarded — confirm
+                        // first rather than surprising whoever already
+                        // filled in a name/mobile before realizing they
+                        // need the full registration page.
+                        const hasUnsavedInput =
+                          intakeMode === "new" &&
+                          (quickIntakeForm?.name?.trim() ||
+                            quickIntakeForm?.mobile?.trim());
+
+                        if (
+                          hasUnsavedInput &&
+                          !window.confirm(
+                            "You've already entered patient details here. Leaving now will discard them. Continue to the full registration page?",
+                          )
+                        ) {
+                          return;
+                        }
                         setIsQuickIntakeOpen(false);
                         navigate("/dashboard/patients/new");
                       }}

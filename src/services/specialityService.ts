@@ -118,10 +118,14 @@ export const specialityService = {
    */
   async getSpecialities(
     activeOnly: boolean = false,
+    clinicId?: string,
   ): Promise<DoctorSpeciality[]> {
     try {
       const specialitiesCollection = collection(db, "doctor_specialities");
-      const querySnapshot = await getDocs(specialitiesCollection);
+      const q = clinicId
+        ? query(specialitiesCollection, where("clinicId", "==", clinicId))
+        : specialitiesCollection;
+      const querySnapshot = await getDocs(q);
 
       let specialities: DoctorSpeciality[] = [];
 
@@ -155,11 +159,10 @@ export const specialityService = {
    * Alias for backward compatibility during migration
    */
   async getSpecialitiesByClinic(
-    _clinicId?: string,
+    clinicId?: string,
     activeOnly: boolean = false,
-    _branchId?: string,
   ): Promise<DoctorSpeciality[]> {
-    return this.getSpecialities(activeOnly);
+    return this.getSpecialities(activeOnly, clinicId);
   },
 
   /**
@@ -167,11 +170,10 @@ export const specialityService = {
    * @returns {Promise<Array<{key: string, label: string}>>} - Array of key-label pairs
    */
   async getActiveSpecialitiesForDropdown(
-    _clinicId?: string,
-    _branchId?: string,
+    clinicId?: string,
   ): Promise<Array<{ key: string; label: string }>> {
     try {
-      const specialities = await this.getSpecialities(true);
+      const specialities = await this.getSpecialities(true, clinicId);
 
       return specialities.map((speciality) => ({
         key: speciality.key || speciality.id,

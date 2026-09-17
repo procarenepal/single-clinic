@@ -53,7 +53,6 @@ import {
   AppointmentType,
   Enquiry,
   EnquiryStatus,
-  Branch,
 } from "@/types/models";
 
 // Custom UI — zero HeroUI
@@ -467,7 +466,7 @@ function SectionHeader({ title, href }: { title: string; href: string }) {
 export default function DashboardIndexPage() {
   const { isDark } = useTheme();
   const navigate = useNavigate();
-  const { clinicId, userData, branchId, currentUser } = useAuthContext();
+  const { clinicId, userData, currentUser } = useAuthContext();
   const isClinicAdmin = userData?.role === "clinic-admin";
 
   const isDoctor = userData?.role === "doctor";
@@ -495,9 +494,6 @@ export default function DashboardIndexPage() {
   const [recentPrescriptions, setRecentPrescriptions] = useState<any[]>([]);
   const [dailyReport, setDailyReport] = useState<DailyReportData | null>(null);
 
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-
   const [apptTab, setApptTab] = useState("today");
   const [enquiryTab, setEnquiryTab] = useState<EnquiryStatus | "all">("new");
   const [dailyTab, setDailyTab] = useState<
@@ -512,13 +508,6 @@ export default function DashboardIndexPage() {
       setShowAnnouncement(true);
     }
   }, []);
-
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
 
   const closeAnnouncement = () => {
     localStorage.setItem("uiAnnouncementSeen", "true");
@@ -593,21 +582,19 @@ export default function DashboardIndexPage() {
           allPrescriptions,
           dailyData,
         ] = await Promise.all([
-          patientService.getPatientsByClinic(clinicId, branchScopedId),
-          doctorService.getDoctorsByClinic(clinicId, branchScopedId),
+          patientService.getPatientsByClinic(clinicId),
+          doctorService.getDoctorsByClinic(clinicId),
           appointmentTypeService.getAppointmentTypesByClinic(
             clinicId,
-            branchScopedId,
           ),
-          appointmentService.getAppointmentsByClinic(clinicId, branchScopedId),
-          enquiryService.getEnquiries(clinicId, branchScopedId, {
+          appointmentService.getAppointmentsByClinic(clinicId),
+          enquiryService.getEnquiries(clinicId, {
             dateField: "createdAt",
           }),
           prescriptionService.getPrescriptionsByClinic(clinicId),
           dailyReportService.getDailyReportData(
             clinicId,
             new Date(),
-            effectiveBranchId,
           ),
         ]);
 
@@ -670,7 +657,7 @@ export default function DashboardIndexPage() {
         setIsLoading(false);
       }
     })();
-  }, [clinicId, effectiveBranchId]);
+  }, [clinicId]);
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const getChartData = (): ChartDataType => {
@@ -895,15 +882,11 @@ export default function DashboardIndexPage() {
   const handleExportExcel = () => {
     if (!dailyReport) return;
     try {
-      const branchName = userData?.branchId
-        ? branches.find((b) => b.id === userData.branchId)?.name
-        : undefined;
-
       exportDailyReportToExcel(
         dailyReport,
         new Date(),
         undefined,
-        branchName,
+        undefined,
         patients,
         doctors,
         appointmentTypes,
@@ -916,15 +899,11 @@ export default function DashboardIndexPage() {
   const handleExportPDF = () => {
     if (!dailyReport) return;
     try {
-      const branchName = userData?.branchId
-        ? branches.find((b) => b.id === userData.branchId)?.name
-        : undefined;
-
       exportDailyReportToPDF(
         dailyReport,
         new Date(),
         undefined,
-        branchName,
+        undefined,
         patients,
         doctors,
         appointmentTypes,

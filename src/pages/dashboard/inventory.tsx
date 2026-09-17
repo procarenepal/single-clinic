@@ -206,12 +206,12 @@ export default function InventoryPage() {
         staffData,
         purchasesData,
       ] = await Promise.all([
-        itemService.getItemsByClinic(clinicId, branchId),
-        itemCategoryService.getCategoriesByClinic(clinicId, branchId),
-        issuedItemService.getIssuedItemsByClinic(clinicId, branchId),
-        accountService.getVendorsByClinic(clinicId, branchId),
+        itemService.getItemsByClinic(clinicId),
+        itemCategoryService.getCategoriesByClinic(clinicId),
+        issuedItemService.getIssuedItemsByClinic(clinicId),
+        accountService.getVendorsByClinic(clinicId),
         hrService.getStaffByClinic(clinicId), // Fetch all clinic staff
-        itemService.getItemPurchasesByClinic(clinicId, branchId),
+        itemService.getItemPurchasesByClinic(clinicId),
       ]);
 
       setItems(itemsData.filter((i) => !i.isDisposed));
@@ -528,7 +528,6 @@ export default function InventoryPage() {
       // Check for duplicate name
       const exists = await itemCategoryService.checkCategoryNameExists(
         clinicId!,
-        branchId!,
         categoryForm.name,
         isEditing ? categoryForm.id : undefined,
       );

@@ -37,24 +37,15 @@ export const labTechnicianService = {
    */
   async getTechniciansByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<LabTechnician[]> {
     try {
       const techniciansRef = collection(db, LAB_TECHNICIANS_COLLECTION);
-      let q = query(
-        techniciansRef,
-
+      const constraints: any[] = [
         where("isActive", "==", true),
-      );
+        where("clinicId", "==", clinicId),
+      ];
 
-      if (branchId) {
-        q = query(
-          techniciansRef,
-
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        );
-      }
+      const q = query(techniciansRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const technicians: LabTechnician[] = [];

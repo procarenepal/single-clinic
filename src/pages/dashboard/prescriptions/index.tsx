@@ -42,9 +42,8 @@ import { prescriptionService } from "@/services/prescriptionService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
-import { branchService } from "@/services/branchService";
 import { Prescription } from "@/types/medical-records";
-import { Branch, Doctor } from "@/types/models";
+import { Doctor } from "@/types/models";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface ExtendedPrescription extends Prescription {
@@ -163,9 +162,8 @@ function ModalShell({ isOpen, onClose, title, children, size = "md" }: any) {
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function PrescriptionsPage() {
   const navigate = useNavigate();
-  const { clinicId, userData, currentUser, branchId: contextBranchId } = useAuthContext();
+  const { clinicId, userData, currentUser } = useAuthContext();
 
-  const branchId = userData?.branchId ?? contextBranchId ?? null;
   const isClinicAdmin = userData?.role === "clinic-admin";
 
   const [prescriptions, setPrescriptions] = useState<ExtendedPrescription[]>(
@@ -173,16 +171,11 @@ export default function PrescriptionsPage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [branches, setBranches] = useState<Branch[]>([]);
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
-  const [branchMap, setBranchMap] = useState<Record<string, string>>({});
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [layoutConfig, setLayoutConfig] = useState<PrintLayoutConfig | null>(
     null,
   );
   const [clinic, setClinic] = useState<any>(null);
-
-  const effectiveBranchId = branchId ?? selectedBranchId ?? undefined;
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState("");
@@ -195,56 +188,9 @@ export default function PrescriptionsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Load branches for clinic admins (no fixed branchId)
+  // Load clinic + print layout config
   useEffect(() => {
-    if (!clinicId || !isClinicAdmin || branchId) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const [branchesData, clinicData, layoutData] = await Promise.all([
-          branchService.getClinicBranches(clinicId, true),
-          clinicService.getClinicById(clinicId),
-          clinicService.getPrintLayoutConfig(clinicId),
-        ]);
-
-        if (cancelled) return;
-        setBranches(branchesData);
-        if (clinicData) setClinic(clinicData);
-        if (layoutData) setLayoutConfig(layoutData);
-
-        const map: Record<string, string> = {};
-
-        branchesData.forEach((b) => {
-          map[b.id] = b.name;
-        });
-        setBranchMap(map);
-        if (branchesData.length > 0) {
-          const mainOrFirst =
-            branchesData.find((b) => b.isMainBranch)?.id ?? branchesData[0].id;
-
-          setSelectedBranchId((prev) => prev ?? mainOrFirst);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (err) {
-        console.error("Prescriptions branches fetch error:", err);
-        if (!cancelled) {
-          setBranches([]);
-          setBranchMap({});
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
-
-  // Load layout for non-admin or if admin but skipped above
-  useEffect(() => {
-    if (!clinicId || (isClinicAdmin && !branchId)) return;
+    if (!clinicId) return;
     (async () => {
       try {
         const [clinicData, layoutData] = await Promise.all([
@@ -258,11 +204,7 @@ export default function PrescriptionsPage() {
         console.error("Error loading print layout:", err);
       }
     })();
-  }, [clinicId, isClinicAdmin, branchId]);
-
-  useEffect(() => {
-    if (branchId) setSelectedBranchId(null);
-  }, [branchId]);
+  }, [clinicId]);
 
   // Load all doctors for the filter and determine current doctor if any
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
@@ -293,8 +235,8 @@ export default function PrescriptionsPage() {
         if (!isClinicAdmin && userEmail) {
           try {
             const [matchingDoctor, matchingExpert] = await Promise.all([
-              doctorService.getDoctorByEmail(userEmail),
-              expertService.getExpertByEmail(userEmail),
+              doctorService.getDoctorByEmail(userEmail, clinicId),
+              expertService.getExpertByEmail(userEmail, clinicId),
             ]);
             const matchingProvider = matchingDoctor || matchingExpert;
 
@@ -324,7 +266,6 @@ export default function PrescriptionsPage() {
         const prescriptionsData =
           await prescriptionService.getPrescriptionsByClinic(
             clinicId,
-            effectiveBranchId,
           );
 
         let extendedPrescriptions = await Promise.all(
@@ -391,7 +332,7 @@ export default function PrescriptionsPage() {
     };
 
     fetchPrescriptions();
-  }, [clinicId, effectiveBranchId, currentDoctorId, isClinicAdmin, isDoctorResolved]);
+  }, [clinicId, currentDoctorId, isClinicAdmin, isDoctorResolved]);
 
   const formatDate = (date: Date | string): string => {
     if (!date) return "N/A";
@@ -605,39 +546,6 @@ export default function PrescriptionsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {!branchId && isClinicAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-surface-2 border border-border-base px-2.5 py-1 rounded-[10px]">
-              <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                Branch
-              </span>
-              <Dropdown placement="bottom-end">
-                <DropdownTrigger>
-                  <div className="h-6 flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity">
-                    <span className="text-[12px] font-bold text-text-main">
-                      {branches.find((b) => b.id === (selectedBranchId ?? ""))
-                        ?.name || "All Branches"}
-                    </span>
-                    <IoChevronDown className="w-3 h-3 text-text-muted" />
-                  </div>
-                </DropdownTrigger>
-                <DropdownMenu className="min-w-[150px]">
-                  {branches.map((b) => (
-                    <DropdownItem
-                      key={b.id}
-                      className={
-                        selectedBranchId === b.id
-                          ? "bg-primary/10 text-primary font-bold"
-                          : ""
-                      }
-                      onClick={() => setSelectedBranchId(b.id)}
-                    >
-                      {b.name}
-                    </DropdownItem>
-                  ))}
-                </DropdownMenu>
-              </Dropdown>
-            </div>
-          )}
           <Dropdown placement="bottom-end">
             <DropdownTrigger>
               <Button startContent={<IoDownloadOutline />} variant="bordered">

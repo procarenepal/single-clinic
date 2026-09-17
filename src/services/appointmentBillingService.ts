@@ -63,11 +63,15 @@ async function reverseCommissionsForBilling(billingId: string): Promise<void> {
     const { referralCommissionService } = await import(
       "./referralCommissionService"
     );
+    const { staffCommissionService } = await import(
+      "./staffCommissionService"
+    );
 
-    const [docComms, expComms, refComms] = await Promise.all([
+    const [docComms, expComms, refComms, staffComms] = await Promise.all([
       doctorCommissionService.getCommissionsByBillingId(billingId),
       expertCommissionService.getCommissionsByBillingId(billingId),
       referralCommissionService.getCommissionsByBillingId(billingId),
+      staffCommissionService.getCommissionsByBillingId(billingId),
     ]);
 
     await Promise.all([
@@ -80,9 +84,43 @@ async function reverseCommissionsForBilling(billingId: string): Promise<void> {
       ...refComms
         .filter((c) => c.status !== "cancelled")
         .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
+      ...staffComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => staffCommissionService.updateCommissionStatus(c.id, "cancelled")),
     ]);
   } catch (error) {
     console.error("Error reversing commissions for billing:", billingId, error);
+  }
+}
+
+/**
+ * Refund a wallet-paid invoice's collected amount back to the patient's
+ * wallet on cancel/credit-note. Only applies when the invoice was actually
+ * paid via wallet (`paymentMethod === "wallet"`) and money was collected.
+ * Failures are logged, not thrown — mirrors reverseCommissionsForBilling's
+ * tolerance so a wallet-bookkeeping error never blocks the invoice-side
+ * cancellation/credit-note itself.
+ */
+async function refundWalletIfApplicable(
+  billing: AppointmentBilling,
+  reason: string,
+  createdBy: string,
+): Promise<void> {
+  if (billing.paymentMethod !== "wallet" || !(billing.paidAmount > 0)) {
+    return;
+  }
+
+  try {
+    await walletService.refundFunds(
+      billing.patientId,
+      billing.clinicId,
+      billing.paidAmount,
+      billing.id,
+      reason,
+      createdBy,
+    );
+  } catch (error) {
+    console.error("Error refunding wallet payment for billing:", billing.id, error);
   }
 }
 
@@ -219,7 +257,6 @@ export const appointmentBillingService = {
    */
   async enableBillingForClinic(
     clinicId: string,
-    branchId: string,
     enabledBy: string,
   ): Promise<void> {
     try {
@@ -228,7 +265,6 @@ export const appointmentBillingService = {
         enabledBy,
       );
 
-      defaultSettings.branchId = branchId;
       defaultSettings.enabledByAdmin = true;
       defaultSettings.isActive = true;
 
@@ -517,21 +553,40 @@ export const appointmentBillingService = {
     );
 
     const taxPercentage = billingData.taxPercentage || 0;
-    const calc = calculateTaxBreakdown({
-      items: (billingData.items || []).map((i) => ({
-        itemName: i.appointmentTypeName || "Service",
-        quantity: i.quantity,
-        price: i.price,
-        discountType: i.discountType,
-        discountValue: i.discountValue,
-        isTaxable: i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
-        taxRate: taxPercentage,
-      })),
-      discountType: billingData.discountType || "flat",
-      discountValue: billingData.discountValue || 0,
-      defaultTaxPercentage: taxPercentage,
-      isTaxEnabled: taxPercentage > 0,
-    });
+    const isCreditNote = Boolean((billingData as any).isCreditNote);
+
+    // calculateTaxBreakdown() is the shared engine for a normal sale — it
+    // clamps unit prices to >= 0 (Math.max(0, item.price)), which is correct
+    // for a regular invoice but silently zeroes out an entire Credit Note's
+    // totals, since a credit note's items carry negative prices by design.
+    // issueCreditNote() already computed the correct negative
+    // subtotal/tax/total on billingData itself — trust those directly for a
+    // credit note instead of recomputing (and zeroing) them here.
+    const calc = isCreditNote
+      ? {
+          totalAmount: billingData.totalAmount || 0,
+          taxableAmount:
+            (billingData.subtotal || 0) - (billingData.discountAmount || 0),
+          taxAmount: billingData.taxAmount || 0,
+          exemptAmount: 0,
+          totalDiscountAmount: billingData.discountAmount || 0,
+        }
+      : calculateTaxBreakdown({
+          items: (billingData.items || []).map((i) => ({
+            itemName: i.appointmentTypeName || "Service",
+            quantity: i.quantity,
+            price: i.price,
+            discountType: i.discountType,
+            discountValue: i.discountValue,
+            isTaxable:
+              i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
+            taxRate: taxPercentage,
+          })),
+          discountType: billingData.discountType || "flat",
+          discountValue: billingData.discountValue || 0,
+          defaultTaxPercentage: taxPercentage,
+          isTaxEnabled: taxPercentage > 0,
+        });
 
     // IRD's irdEnabled/credentials live on the Clinic document (that's what
     // Clinic Settings > IRD CBMS Configuration actually writes to) — never
@@ -558,6 +613,7 @@ export const appointmentBillingService = {
       taxAmount: calc.taxAmount,
       exemptAmount: calc.exemptAmount,
       discountAmount: calc.totalDiscountAmount,
+      paymentMethod: billingData.paymentMethod,
       irdEnabled: Boolean(clinic?.irdEnabled),
       fiscalYear: getNepaliFiscalYear(new Date()),
       // Credit notes/sales returns must route to IRD's /api/billreturn, not /api/bill.
@@ -612,6 +668,30 @@ export const appointmentBillingService = {
         "invoiceNumber:",
         javaResult.invoiceNumber,
       );
+
+      if (!isCreditNote) {
+        // Best-effort audit log — logging failures must never mask a
+        // successful invoice creation as a save failure.
+        try {
+          const { auditLogService } = await import("./auditLogService");
+
+          await auditLogService.logDiscountTaxChange({
+            performedBy: auth.currentUser?.uid || "system",
+            clinicId: billingData.clinicId,
+            branchId: billingData.branchId,
+            billingId: docRef.id,
+            invoiceNumber: javaResult.invoiceNumber,
+            after: {
+              discountType: billingData.discountType,
+              discountValue: billingData.discountValue,
+              applyTax: taxPercentage > 0,
+              taxPercentage,
+            },
+          });
+        } catch (auditError) {
+          console.error("Error logging discount/tax audit event:", auditError);
+        }
+      }
 
       return { id: docRef.id, invoiceNumber: javaResult.invoiceNumber };
     } catch (error) {
@@ -694,6 +774,8 @@ export const appointmentBillingService = {
             "cbmsResponseCode",
             "status",
             "hasCreditNote",
+            "finalizedBy",
+            "finalizedAt",
           ]);
 
           for (const key of Object.keys(billingData)) {
@@ -750,6 +832,57 @@ export const appointmentBillingService = {
 
       await updateDoc(billingRef, data);
       console.log("Appointment billing updated:", id);
+
+      if (existing) {
+        const discountTaxKeys = ["discountType", "discountValue", "taxPercentage"];
+        const discountTaxChanged = discountTaxKeys.some(
+          (k) =>
+            k in billingData &&
+            ((billingData as any)[k] || 0) !== ((existing as any)[k] || 0),
+        );
+
+        if (discountTaxChanged) {
+          // Best-effort audit log — logging failures must never mask a
+          // successful billing update as a failure.
+          try {
+            const { auditLogService } = await import("./auditLogService");
+
+            await auditLogService.logDiscountTaxChange({
+              performedBy: auth.currentUser?.uid || "system",
+              clinicId: existing.clinicId,
+              branchId: existing.branchId,
+              billingId: id,
+              invoiceNumber: existing.invoiceNumber,
+              before: {
+                discountType: existing.discountType,
+                discountValue: existing.discountValue,
+                applyTax: (existing.taxPercentage || 0) > 0,
+                taxPercentage: existing.taxPercentage,
+              },
+              after: {
+                discountType:
+                  "discountType" in billingData
+                    ? billingData.discountType
+                    : existing.discountType,
+                discountValue:
+                  "discountValue" in billingData
+                    ? billingData.discountValue
+                    : existing.discountValue,
+                applyTax:
+                  (("taxPercentage" in billingData
+                    ? billingData.taxPercentage
+                    : existing.taxPercentage) || 0) > 0,
+                taxPercentage:
+                  "taxPercentage" in billingData
+                    ? billingData.taxPercentage
+                    : existing.taxPercentage,
+              },
+            });
+          } catch (auditError) {
+            console.error("Error logging discount/tax audit event:", auditError);
+          }
+        }
+      }
     } catch (error) {
       console.error("Error updating appointment billing:", error);
       throw error;
@@ -790,11 +923,10 @@ export const appointmentBillingService = {
   },
 
   /**
-   * Get all appointment billing records for a clinic, optionally scoped by branch.
+   * Get all appointment billing records for a clinic.
    */
   async getBillingByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<AppointmentBilling[]> {
     try {
       if (!clinicId) {
@@ -808,7 +940,6 @@ export const appointmentBillingService = {
       console.log(
         "Fetching billing records for clinic:",
         clinicId,
-        branchId ? `branch: ${branchId}` : "all branches",
         "User:",
         currentUser?.uid,
       );
@@ -816,10 +947,6 @@ export const appointmentBillingService = {
       const billingRef = collection(db, APPOINTMENT_BILLING_COLLECTION);
 
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(billingRef, ...constraints);
 
@@ -987,7 +1114,6 @@ export const appointmentBillingService = {
         await walletService.deductFunds(
           billing.patientId,
           billing.clinicId,
-          billing.branchId || "",
           paymentAmount,
           id,
           paymentNotes || `Paid Invoice ${billing.invoiceNumber || "Draft"}`,
@@ -1075,10 +1201,6 @@ export const appointmentBillingService = {
               consultationBillingStatus: paymentStatus,
               updatedAt: Timestamp.now(),
             };
-
-            if (!isConsultationOnly && apptData.status === "billing") {
-              apptUpdates.status = "completed";
-            }
 
             return updateDoc(apptDocRef, apptUpdates);
           });
@@ -1279,7 +1401,6 @@ export const appointmentBillingService = {
                 r.id,
                 r.name,
                 billing.clinicId,
-                billing.branchId || "",
                 billing.patientId || "",
                 billing.patientName,
                 "Invoice Payment - Staff Referral",
@@ -1644,6 +1765,7 @@ export const appointmentBillingService = {
     });
 
     await reverseCommissionsForBilling(id);
+    await refundWalletIfApplicable(billing, cancellationNote, "system");
   },
 
   /**
@@ -1747,6 +1869,7 @@ export const appointmentBillingService = {
       // earns commission, since it's created via createBilling, not
       // recordPayment).
       await reverseCommissionsForBilling(original.id);
+      await refundWalletIfApplicable(original, reason, createdBy);
 
       return newCreditNoteId;
     } catch (error) {

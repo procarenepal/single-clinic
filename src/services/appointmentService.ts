@@ -253,15 +253,10 @@ export const appointmentService = {
    */
   async getAppointmentsByClinic(
     clinicId?: string,
-    branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const appointmentsCollection = collection(db, "appointments");
       const constraints = clinicId ? [where("clinicId", "==", clinicId)] : [];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(appointmentsCollection, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -541,29 +536,23 @@ export const appointmentService = {
    * @param {string} clinicId - ID of the clinic
    * @param {Date} startDate - Start date
    * @param {Date} endDate - End date
-   * @param {string} [branchId] - Optional branch ID to filter appointments by
    * @returns {Promise<Appointment[]>} - Array of appointments in the date range
    */
   async getAppointmentsByDateRange(
     _clinicId: string | undefined,
     startDate: Date,
     endDate: Date,
-    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const appointmentsCollection = collection(db, "appointments");
 
       // OPTION 2: Client-side filtering to avoid composite index requirements
-      // We only query by clinicId (and branchId) which are equality filters
+      // We only query by clinicId which is an equality filter
       const constraints: any[] = [];
 
-      if (_clinicId && _clinicId !== "standalone" && _clinicId !== "default") {
+      if (_clinicId && _clinicId !== "standalone") {
         constraints.push(where("clinicId", "==", _clinicId));
       }
-      if (_branchId) {
-        constraints.push(where("branchId", "==", _branchId));
-      }
-
       // We remove the date range where() and orderBy() from the Firestore query
       // and handle them in memory to solve the index error immediately.
       const q = query(appointmentsCollection, ...constraints);
@@ -595,12 +584,10 @@ export const appointmentService = {
   /**
    * Get upcoming appointments for a clinic (next 7 days)
    * @param {string} clinicId - ID of the clinic
-   * @param {string} [branchId] - Optional branch ID to filter appointments by
    * @returns {Promise<Appointment[]>} - Array of upcoming appointments
    */
   async getUpcomingAppointments(
     _clinicId?: string,
-    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const today = new Date();
@@ -612,7 +599,6 @@ export const appointmentService = {
         _clinicId,
         today,
         nextWeek,
-        _branchId,
       );
     } catch (error) {
       console.error("Error fetching upcoming appointments:", error);
@@ -623,12 +609,10 @@ export const appointmentService = {
   /**
    * Get today's appointments for a clinic
    * @param {string} clinicId - ID of the clinic
-   * @param {string} [branchId] - Optional branch ID to filter appointments by
    * @returns {Promise<Appointment[]>} - Array of today's appointments
    */
   async getTodaysAppointments(
     _clinicId?: string,
-    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const today = new Date();
@@ -650,7 +634,6 @@ export const appointmentService = {
         _clinicId,
         startOfDay,
         endOfDay,
-        _branchId,
       );
     } catch (error) {
       console.error("Error fetching today's appointments:", error);
@@ -662,13 +645,11 @@ export const appointmentService = {
    * Get appointments for a specific date for a clinic
    * @param {string} clinicId - ID of the clinic
    * @param {Date} date - Date to get appointments for
-   * @param {string} [branchId] - Optional branch ID to filter appointments by
    * @returns {Promise<Appointment[]>} - Array of appointments for the date
    */
   async getAppointmentsByDate(
     date: Date,
     _clinicId?: string,
-    _branchId?: string,
   ): Promise<Appointment[]> {
     try {
       const startOfDay = new Date(
@@ -689,7 +670,6 @@ export const appointmentService = {
         _clinicId,
         startOfDay,
         endOfDay,
-        _branchId,
       );
     } catch (error) {
       console.error("Error fetching appointments by date:", error);
@@ -702,18 +682,28 @@ export const appointmentService = {
    */
   subscribeToClinicAppointments(
     _clinicId: string | undefined,
-    _branchId: string | undefined,
     onData: AppointmentSnapshotHandler,
     onError?: AppointmentErrorHandler,
   ) {
+    // "standalone" is a deliberate sentinel for an intentionally unfiltered
+    // subscription. Any other falsy value (undefined/"") is not — building an
+    // unfiltered query in that case would silently leak cross-clinic
+    // appointment data, so refuse instead of defaulting to unfiltered.
+    if (!_clinicId) {
+      console.error(
+        "subscribeToClinicAppointments called without a clinicId — refusing to subscribe unfiltered.",
+      );
+      onError?.(new Error("clinicId is required to subscribe to appointments"));
+      onData([]);
+
+      return () => {};
+    }
+
     const appointmentsCollection = collection(db, "appointments");
     const constraints: any[] = [];
 
-    if (_clinicId && _clinicId !== "standalone" && _clinicId !== "default") {
+    if (_clinicId !== "standalone") {
       constraints.push(where("clinicId", "==", _clinicId));
-    }
-    if (_branchId) {
-      constraints.push(where("branchId", "==", _branchId));
     }
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
@@ -745,16 +735,12 @@ export const appointmentService = {
    */
   subscribeToDoctorAppointments(
     doctorId: string,
-    branchId: string | undefined,
     onData: AppointmentSnapshotHandler,
     onError?: AppointmentErrorHandler,
   ) {
     const appointmentsCollection = collection(db, "appointments");
     const constraints: any[] = [where("doctorId", "==", doctorId)];
 
-    if (branchId) {
-      constraints.push(where("branchId", "==", branchId));
-    }
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
 
@@ -785,16 +771,12 @@ export const appointmentService = {
    */
   subscribeToExpertAppointments(
     expertId: string,
-    branchId: string | undefined,
     onData: AppointmentSnapshotHandler,
     onError?: AppointmentErrorHandler,
   ) {
     const appointmentsCollection = collection(db, "appointments");
     const constraints: any[] = [where("assignedExpertId", "==", expertId)];
 
-    if (branchId) {
-      constraints.push(where("branchId", "==", branchId));
-    }
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
 

@@ -744,7 +744,6 @@ export const userService = {
     password: string,
     displayName: string,
     clinicId: string,
-    branchId: string,
     adminPassword?: string,
   ): Promise<string> {
     return this.createUser(
@@ -755,7 +754,7 @@ export const userService = {
         email,
         role: "clinic-admin",
         clinicId,
-        branchId,
+        branchId: clinicId,
         isActive: true,
       },
       adminPassword,

@@ -303,7 +303,6 @@ import {
   getPrintFooterHTML,
 } from "@/utils/printBranding";
 import { PrintLayoutConfig } from "@/types/printLayout";
-import { branchService } from "@/services/branchService";
 import { clinicService } from "@/services/clinicService";
 import { addToast } from "@/components/ui/toast";
 import {
@@ -319,7 +318,6 @@ import {
   MedicineStock,
 } from "@/types/models";
 
-import type { Branch } from "@/types/models";
 
 const calculateFEFOAmount = (item: any, batches: MedicineStock[]): number => {
   const stockType = item.stockType || "regular";
@@ -434,6 +432,8 @@ interface PurchaseItem {
   amount: number;
   stockType?: "regular" | "scheme"; // Stock type preference for medicine items
   isPriceOverridden?: boolean;
+  discountType?: "flat" | "percentage";
+  discountValue?: number;
 }
 
 interface MedicinePurchaseReturnItem {
@@ -564,16 +564,7 @@ export default function PharmacyPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { clinicId, currentUser, userData } = useAuthContext();
-  const branchId = userData?.branchId ?? null;
-  const isClinicAdmin = userData?.role === "clinic-admin";
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
+  const effectiveBranchId: string | undefined = undefined;
 
   const [activeTab, setActiveTab] = useState(
     () => searchParams.get("tab") || "purchased",
@@ -1062,7 +1053,6 @@ export default function PharmacyPage() {
       const sData = await medicineService.getStockByMedicineIds(
         clinicId,
         medicines.map((m) => m.id),
-        effectiveBranchId || undefined,
         true, // force refresh
       );
       const sMap: Record<string, number> = {};
@@ -1085,39 +1075,6 @@ export default function PharmacyPage() {
     }
   };
 
-  // Load branches for clinic-wide admins (no fixed branchId)
-  useEffect(() => {
-    if (!clinicId || !isClinicAdmin || branchId) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches(clinicId, true);
-
-        if (cancelled) return;
-        setBranches(data);
-        if (data.length > 0) {
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setBranches([]);
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
-
-  useEffect(() => {
-    if (branchId) setSelectedBranchId(null);
-  }, [branchId]);
-
   // Load medicines, items and pharmacy settings on component mount
   useEffect(() => {
     const loadData = async () => {
@@ -1137,15 +1094,13 @@ export default function PharmacyPage() {
           medicineService.getMedicinesByClinic(
             clinicId,
             undefined,
-            effectiveBranchId,
           ),
-          itemService.getItemsByClinic(clinicId, effectiveBranchId),
+          itemService.getItemsByClinic(clinicId),
           pharmacyService.getMedicinePurchasesByClinic(
             clinicId,
-            effectiveBranchId,
           ),
-          pharmacyService.getPharmacySettings(clinicId, effectiveBranchId),
-          medicineService.getSuppliersByClinic(clinicId, effectiveBranchId),
+          pharmacyService.getPharmacySettings(clinicId),
+          medicineService.getSuppliersByClinic(clinicId),
           clinicService.getClinicById(clinicId),
           clinicService.getPrintLayoutConfig(clinicId),
         ]);
@@ -1157,7 +1112,6 @@ export default function PharmacyPage() {
         const sData = await medicineService.getStockByMedicineIds(
           clinicId,
           mIds,
-          effectiveBranchId,
         );
         const sMap: Record<string, number> = {};
 
@@ -1227,12 +1181,11 @@ export default function PharmacyPage() {
           supplierPaymentsData,
           prescriptionsData,
         ] = await Promise.all([
-          pharmacyService.getMedicineUsageByClinic(clinicId, effectiveBranchId),
+          pharmacyService.getMedicineUsageByClinic(clinicId),
           medicineService.getSupplierPurchaseRecords(
             clinicId,
-            effectiveBranchId,
           ),
-          medicineService.getSupplierPayments(clinicId, effectiveBranchId),
+          medicineService.getSupplierPayments(clinicId),
           prescriptionService.getPrescriptionsByClinic(clinicId),
         ]);
 
@@ -1277,7 +1230,6 @@ export default function PharmacyPage() {
         try {
           const patientsData = await patientService.getPatientsByClinic(
             clinicId,
-            effectiveBranchId,
           );
 
           setPatients(patientsData);
@@ -1632,7 +1584,6 @@ export default function PharmacyPage() {
       const refillTransactions =
         await medicineService.getStockTransactionsByClinic(
           clinicId,
-          effectiveBranchId,
           "purchase",
           startOfDay,
           endOfDay,
@@ -1692,7 +1643,6 @@ export default function PharmacyPage() {
 
         const transactions = await medicineService.getStockTransactionsByClinic(
           clinicId,
-          effectiveBranchId,
           "purchase",
           startOfDay,
           endOfDay,
@@ -2314,7 +2264,6 @@ export default function PharmacyPage() {
       // Reload items
       const updatedItems = await itemService.getItemsByClinic(
         clinicId,
-        effectiveBranchId,
       );
 
       setItems(updatedItems);
@@ -2420,6 +2369,10 @@ export default function PharmacyPage() {
 
   // Handle purchase form submission
   const handlePurchaseSubmit = async () => {
+    // Re-entrancy guard: setIsSubmitting(true) below doesn't disable the
+    // submit button until React's next render, so a fast double-click can
+    // otherwise slip a second call through and create a duplicate purchase.
+    if (isSubmitting) return;
     if (!clinicId || !currentUser) return;
 
     // Validate customer type and patient selection
@@ -2473,6 +2426,8 @@ export default function PharmacyPage() {
           amount: item.amount,
           type: item.type, // Add type info for future use
           stockType: item.stockType || "regular", // Stock type preference
+          discountType: item.discountType || "flat",
+          discountValue: item.discountValue || 0,
         }));
 
       // Calculate discount amount based on type
@@ -2550,9 +2505,11 @@ export default function PharmacyPage() {
         purchaseForm.customerType === "patient" &&
         purchaseForm.patientId
       ) {
-        const existingPatient = patients.find(
-          (p) => p.id === purchaseForm.patientId,
-        );
+        const existingPatient =
+          (await patientService
+            .getPatientById(purchaseForm.patientId)
+            .catch(() => null)) ||
+          patients.find((p) => p.id === purchaseForm.patientId);
 
         if (existingPatient) {
           const backfill: Record<string, any> = {};
@@ -2806,7 +2763,6 @@ export default function PharmacyPage() {
       // Reload settings
       const updatedSettings = await pharmacyService.getPharmacySettings(
         clinicId,
-        effectiveBranchId,
       );
 
       if (updatedSettings) {
@@ -2880,7 +2836,6 @@ export default function PharmacyPage() {
     try {
       const payments = await medicineService.getSupplierPayments(
         clinicId,
-        effectiveBranchId,
       );
 
       setSupplierPayments(payments);
@@ -2899,7 +2854,6 @@ export default function PharmacyPage() {
     try {
       const balances = await medicineService.getSupplierLedgerBalances(
         clinicId,
-        branchIdParam,
       );
 
       setSupplierLedgerBalances(balances);
@@ -2919,7 +2873,6 @@ export default function PharmacyPage() {
       const entries = await medicineService.getSupplierLedgerEntries(
         supplierId,
         clinicId,
-        effectiveBranchId,
       );
 
       setSupplierLedgerEntries(entries);
@@ -3566,13 +3519,11 @@ export default function PharmacyPage() {
           requiresReference: paymentMethodForm.requiresReference,
           isEnabled: true,
         },
-        effectiveBranchId,
       );
 
       // Reload settings to get updated payment methods
       const updatedSettings = await pharmacyService.getPharmacySettings(
         clinicId,
-        effectiveBranchId,
       );
 
       if (updatedSettings) {
@@ -3651,13 +3602,11 @@ export default function PharmacyPage() {
           icon: paymentMethodForm.icon.trim() || editingPaymentMethod.icon,
           requiresReference: paymentMethodForm.requiresReference,
         },
-        effectiveBranchId,
       );
 
       // Reload settings to get updated payment methods
       const updatedSettings = await pharmacyService.getPharmacySettings(
         clinicId,
-        effectiveBranchId,
       );
 
       if (updatedSettings) {
@@ -3716,13 +3665,11 @@ export default function PharmacyPage() {
       await pharmacyService.deletePaymentMethod(
         clinicId,
         paymentMethodId,
-        effectiveBranchId,
       );
 
       // Reload settings to get updated payment methods
       const updatedSettings = await pharmacyService.getPharmacySettings(
         clinicId,
-        effectiveBranchId,
       );
 
       if (updatedSettings) {
@@ -3791,23 +3738,6 @@ export default function PharmacyPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {!branchId && isClinicAdmin && branches.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-text-muted">Branch</span>
-                <select
-                  className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                  value={selectedBranchId ?? ""}
-                  onChange={(e) => setSelectedBranchId(e.target.value || null)}
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                      {b.isMainBranch ? " (all branches)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
             {activeTab === "purchased" && (
               <Button color="primary" onClick={purchaseModalState.open}>
                 <IoAddOutline className="w-4 h-4 mr-1" />
@@ -4221,6 +4151,27 @@ export default function PharmacyPage() {
                                     invoiceType="pharmacy"
                                     recordId={purchase.id}
                                     synced={Boolean(purchase.irdSynced)}
+                                    onSynced={async () => {
+                                      const updated =
+                                        await pharmacyService.getMedicinePurchaseById(
+                                          purchase.id,
+                                        );
+
+                                      if (updated) {
+                                        setPurchases((prev) =>
+                                          prev.map((p) =>
+                                            p.id === purchase.id
+                                              ? {
+                                                  ...p,
+                                                  irdSynced: updated.irdSynced,
+                                                  cbmsResponseCode:
+                                                    updated.cbmsResponseCode,
+                                                }
+                                              : p,
+                                          ),
+                                        );
+                                      }
+                                    }}
                                   />
                                 </td>
                                 <td className="px-3 py-2.5">
@@ -7533,6 +7484,48 @@ export default function PharmacyPage() {
                                 }
                                 type="number"
                                 value={(item.amount || 0).toString()}
+                              />
+                            </div>
+
+                            {/* Row 3: Per-item discount */}
+                            <div className="col-span-12 sm:col-span-4">
+                              <CustomSelect
+                                label="Item Discount Type"
+                                options={[
+                                  { value: "flat", label: "Flat (NPR)" },
+                                  { value: "percentage", label: "Percentage (%)" },
+                                ]}
+                                value={item.discountType || "flat"}
+                                onChange={(e: any) =>
+                                  updatePurchaseItem(
+                                    item.id,
+                                    "discountType",
+                                    (e.target.value as "flat" | "percentage") ||
+                                      "flat",
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="col-span-12 sm:col-span-4">
+                              <CustomInput
+                                label="Item Discount"
+                                startContent={
+                                  <span className="text-[11px] text-text-muted/40">
+                                    {(item.discountType || "flat") === "flat"
+                                      ? "NPR"
+                                      : "%"}
+                                  </span>
+                                }
+                                step="any"
+                                type="number"
+                                value={(item.discountValue || 0).toString()}
+                                onChange={(e: any) =>
+                                  updatePurchaseItem(
+                                    item.id,
+                                    "discountValue",
+                                    parseFloat(e.target.value) || 0,
+                                  )
+                                }
                               />
                             </div>
 

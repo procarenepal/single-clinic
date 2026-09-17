@@ -23,8 +23,7 @@ import {
 import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
-import { branchService } from "@/services/branchService";
-import { Branch, Expert } from "@/types/models";
+import { Expert } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { Chip } from "@/components/ui/chip";
 
@@ -86,7 +85,7 @@ function CustomSelect({
 
 export default function ExpertsPage() {
   const navigate = useNavigate();
-  const { clinicId, userData, isClinicAdmin, isSystemOwner } = useAuthContext();
+  const { clinicId } = useAuthContext();
   const [experts, setExperts] = useState<Expert[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,24 +96,12 @@ export default function ExpertsPage() {
   const [specialities, setSpecialities] = useState<
     Array<{ key: string; label: string }>
   >([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchMap, setBranchMap] = useState<Record<string, string>>({});
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const itemsPerPage = 8;
-
-  const branchId = userData?.branchId ?? null;
-  const isClinicWideAdmin = isClinicAdmin() || isSystemOwner();
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
 
   useEffect(() => {
     loadExperts();
     loadSpecialities();
-  }, [clinicId, effectiveBranchId]);
+  }, [clinicId]);
 
   const loadSpecialities = async () => {
     if (!clinicId) return;
@@ -138,7 +125,6 @@ export default function ExpertsPage() {
       setLoading(true);
       const expertsData = await expertService.getExpertsByClinic(
         clinicId,
-        effectiveBranchId,
       );
 
       setExperts(expertsData);
@@ -152,44 +138,6 @@ export default function ExpertsPage() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (!clinicId) return;
-    if (!isClinicWideAdmin || branchId) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches(clinicId, true);
-
-        if (cancelled) return;
-        setBranches(data);
-        const map: Record<string, string> = {};
-
-        data.forEach((b) => {
-          map[b.id] = b.name;
-        });
-        setBranchMap(map);
-        if (data.length > 0) {
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (err) {
-        console.error("Experts branches fetch error:", err);
-        if (!cancelled) {
-          setBranches([]);
-          setBranchMap({});
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
 
   const handleToggleStatus = async (
     expertId: string,
@@ -296,23 +244,6 @@ export default function ExpertsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          {!branchId && isClinicWideAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-text-muted">Branch</span>
-              <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                value={selectedBranchId ?? ""}
-                onChange={(e) => setSelectedBranchId(e.target.value || null)}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.isMainBranch ? " (all branches)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <Button
             color="primary"
             startContent={<IoAddOutline className="w-4 h-4" />}

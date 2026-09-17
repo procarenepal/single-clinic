@@ -66,6 +66,9 @@ export interface CreatePrescriptionData {
 
 export interface UpdatePrescriptionData {
   status?: "active" | "completed" | "cancelled";
+  /** Set once a pathologyBilling invoice has been created from this
+   * prescription's tests — see Prescription.pathologyBillingId. */
+  pathologyBillingId?: string;
   diagnosis?: string;
   notes?: string;
   history?: string;
@@ -242,12 +245,14 @@ export const prescriptionService = {
    */
   async getPrescriptionsByClinic(
     clinicId?: string,
-    branchId?: string,
   ): Promise<Prescription[]> {
     try {
       if (!clinicId) return [];
       const prescriptionsCollection = collection(db, "prescriptions");
-      const q = query(prescriptionsCollection);
+      const q = query(
+        prescriptionsCollection,
+        where("clinicId", "==", clinicId),
+      );
       const querySnapshot = await getDocs(q);
 
       const list = querySnapshot.docs.map((docSnap) => {
@@ -271,9 +276,6 @@ export const prescriptionService = {
         return timeB - timeA;
       });
 
-      if (branchId) {
-        return list.filter((p) => p.branchId === branchId);
-      }
 
       return list;
     } catch (error) {
@@ -444,6 +446,9 @@ export const prescriptionService = {
       if (data.treatmentPlan !== undefined) {
         updateData.treatmentPlan = data.treatmentPlan;
       }
+      if (data.pathologyBillingId !== undefined) {
+        updateData.pathologyBillingId = data.pathologyBillingId;
+      }
 
       await updateDoc(prescriptionRef, updateData);
     } catch (error) {
@@ -606,8 +611,8 @@ export const prescriptionService = {
       const templatesCollection = collection(db, "prescription_templates");
       const q = query(
         templatesCollection,
-
         where("doctorId", "==", doctorId),
+        where("clinicId", "==", clinicId),
       );
       const snapshot = await getDocs(q);
 

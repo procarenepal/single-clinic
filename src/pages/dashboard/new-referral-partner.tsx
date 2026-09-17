@@ -6,7 +6,6 @@ import { title } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/context/AuthContext";
 import { referralPartnerService } from "@/services/referralPartnerService";
-import { branchService } from "@/services/branchService";
 import { addToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
@@ -73,22 +72,8 @@ export default function NewReferralPartnerPage() {
 
   useEffect(() => {
     if (!clinicId || authLoading || isEdit) return;
-    if (userData?.branchId) {
-      setDefaultBranchId(userData.branchId);
-
-      return;
-    }
-    branchService
-      .isMultiBranchEnabled(clinicId)
-      .then((multi) =>
-        multi
-          ? branchService
-              .getMainBranch(clinicId)
-              .then((b) => b && setDefaultBranchId(b.id))
-          : setDefaultBranchId(clinicId),
-      )
-      .catch(() => setDefaultBranchId(clinicId));
-  }, [clinicId, authLoading, userData?.branchId, isEdit]);
+    setDefaultBranchId(clinicId);
+  }, [clinicId, authLoading, isEdit]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,

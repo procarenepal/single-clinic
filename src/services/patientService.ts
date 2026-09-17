@@ -54,7 +54,7 @@ export const patientService = {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
       const constraints: any[] = [];
 
-      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+      if (clinicId && clinicId !== "standalone") {
         constraints.push(where("clinicId", "==", clinicId));
       }
 
@@ -240,7 +240,7 @@ export const patientService = {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
       const constraints: any[] = [];
 
-      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+      if (clinicId && clinicId !== "standalone") {
         constraints.push(where("clinicId", "==", clinicId));
       }
       const baseQ = query(patientsRef, ...constraints);
@@ -297,7 +297,6 @@ export const patientService = {
    */
   async getPatientsByClinic(
     clinicId?: string,
-    _branchId?: string,
   ): Promise<Patient[]> {
     return this.getPatients(clinicId);
   },
@@ -423,11 +422,16 @@ export const patientService = {
    */
   async getPatientsByDoctor(
     doctorId: string,
-    _clinicId?: string,
+    clinicId?: string,
   ): Promise<Patient[]> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
-      const q = query(patientsRef, where("doctorId", "==", doctorId));
+      const constraints: any[] = [where("doctorId", "==", doctorId)];
+
+      if (clinicId) {
+        constraints.push(where("clinicId", "==", clinicId));
+      }
+      const q = query(patientsRef, ...constraints);
       const querySnapshot = await getDocs(q);
 
       const patients: Patient[] = [];
@@ -470,12 +474,21 @@ export const patientService = {
    */
   async getPatientsByExpert(
     expertId: string,
-    _clinicId?: string,
+    clinicId?: string,
   ): Promise<Patient[]> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
-      const q1 = query(patientsRef, where("assignedExpertId", "==", expertId));
-      const q2 = query(patientsRef, where("doctorId", "==", expertId));
+      const expertConstraints: any[] = [
+        where("assignedExpertId", "==", expertId),
+      ];
+      const doctorConstraints: any[] = [where("doctorId", "==", expertId)];
+
+      if (clinicId) {
+        expertConstraints.push(where("clinicId", "==", clinicId));
+        doctorConstraints.push(where("clinicId", "==", clinicId));
+      }
+      const q1 = query(patientsRef, ...expertConstraints);
+      const q2 = query(patientsRef, ...doctorConstraints);
 
       const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
 

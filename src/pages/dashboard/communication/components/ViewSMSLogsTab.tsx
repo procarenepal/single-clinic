@@ -58,7 +58,7 @@ const ViewSMSLogsTab: React.FC = () => {
         setRefreshing(true);
       }
       try {
-        const logsData = await smsService.getSMSLogs(clinicId, undefined, 200);
+        const logsData = await smsService.getSMSLogs(clinicId, 200);
         const validLogs = logsData.filter(validateSMSLog);
 
         setLogs(validLogs);

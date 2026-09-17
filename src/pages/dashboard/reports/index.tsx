@@ -43,7 +43,6 @@ import { appointmentBillingService } from "@/services/appointmentBillingService"
 import { pathologyBillingService } from "@/services/pathologyBillingService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { branchService } from "@/services/branchService";
 import { expertService } from "@/services/expertService";
 import { patientPackageService } from "@/services/patientPackageService";
 import { IrdAnnexureReport } from "./IrdAnnexureReport";
@@ -73,7 +72,6 @@ import {
   PathologyBillingSettings,
   ReferralPartner,
   AppointmentType,
-  Branch,
   Expert,
   PatientPackage,
 } from "@/types/models";
@@ -139,18 +137,9 @@ interface OverviewStats {
 export default function ReportsPage() {
   const navigate = useNavigate();
   const { clinicId, userData } = useAuthContext();
-  const branchId = userData?.branchId ?? null;
 
   const isClinicAdmin = userData?.role === "clinic-admin";
 
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const reportBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
 
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<ReportData>({
@@ -214,41 +203,6 @@ export default function ReportsPage() {
     })),
   ];
 
-  // Load branches for clinic-wide admins (no fixed branchId)
-  useEffect(() => {
-    if (!clinicId || !isClinicAdmin || branchId) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches(clinicId, true);
-
-        if (cancelled) return;
-        setBranches(data);
-        if (data.length > 0) {
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (err) {
-        console.error("Reports branches fetch error:", err);
-        if (!cancelled) {
-          setBranches([]);
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
-
-  // When user has fixed branch, clear admin branch filter
-  useEffect(() => {
-    if (branchId) setSelectedBranchId(null);
-  }, [branchId]);
-
   // Load data on component mount
   useEffect(() => {
     let isMounted = true; // Flag to track if component is still mounted
@@ -273,28 +227,25 @@ export default function ReportsPage() {
           itemCategories,
           issuedItems,
         ] = await Promise.all([
-          appointmentService.getAppointmentsByClinic(clinicId, reportBranchId),
-          patientService.getPatientsByClinic(clinicId, reportBranchId),
-          doctorService.getDoctorsByClinic(clinicId, reportBranchId),
-          expertService.getExpertsByClinic(clinicId, reportBranchId),
+          appointmentService.getAppointmentsByClinic(clinicId),
+          patientService.getPatientsByClinic(clinicId),
+          doctorService.getDoctorsByClinic(clinicId),
+          expertService.getExpertsByClinic(clinicId),
           appointmentTypeService.getAppointmentTypesByClinic(
             clinicId,
-            reportBranchId,
           ),
           medicineService.getMedicinesByClinic(
             clinicId,
             undefined,
-            reportBranchId,
           ),
-          medicineService.getStockByClinic(clinicId, reportBranchId),
+          medicineService.getStockByClinic(clinicId),
           pharmacyService.getMedicinePurchasesByClinic(
             clinicId,
-            reportBranchId,
           ),
-          pharmacyService.getMedicineUsageByClinic(clinicId, reportBranchId),
-          itemService.getItemsByClinic(clinicId, reportBranchId),
-          itemCategoryService.getCategoriesByClinic(clinicId, reportBranchId),
-          issuedItemService.getIssuedItemsByClinic(clinicId, reportBranchId),
+          pharmacyService.getMedicineUsageByClinic(clinicId),
+          itemService.getItemsByClinic(clinicId),
+          itemCategoryService.getCategoriesByClinic(clinicId),
+          issuedItemService.getIssuedItemsByClinic(clinicId),
         ]);
 
         // Check if component is still mounted before proceeding
@@ -309,7 +260,6 @@ export default function ReportsPage() {
             appointmentBillingService.getBillingSettings(clinicId),
             appointmentBillingService.getBillingByClinic(
               clinicId,
-              reportBranchId,
             ),
           ]);
 
@@ -328,7 +278,6 @@ export default function ReportsPage() {
             pathologyBillingService.getBillingSettings(clinicId),
             pathologyBillingService.getBillingByClinic(
               clinicId,
-              reportBranchId,
             ),
           ]);
 
@@ -360,7 +309,6 @@ export default function ReportsPage() {
         try {
           patientPackages = await patientPackageService.getPatientPackagesByClinic(
             clinicId,
-            reportBranchId,
           );
         } catch (ppError) {
           console.warn("Patient packages data not available:", ppError);
@@ -415,7 +363,7 @@ export default function ReportsPage() {
       isMounted = false;
       abortController.abort(); // Cancel any ongoing requests if services support AbortController
     };
-  }, [clinicId, reportBranchId]);
+  }, [clinicId]);
 
   // Filter appointments by date range, doctor, and appointment type
   const getFilteredAppointments = () => {
@@ -1195,23 +1143,6 @@ export default function ReportsPage() {
             Generate comprehensive reports and analyze clinic performance
           </p>
         </div>
-        {!branchId && isClinicAdmin && branches.length > 0 && (
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] text-mountain-500">Branch</span>
-            <select
-              className="h-8 px-2.5 py-0 text-[12px] border border-mountain-200 rounded bg-white text-mountain-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-200"
-              value={selectedBranchId ?? ""}
-              onChange={(e) => setSelectedBranchId(e.target.value || null)}
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                  {b.isMainBranch ? " (all branches)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       {/* Report Filters — clarity-card, clarity-input, custom Select/Checkbox */}
@@ -2015,6 +1946,7 @@ export default function ReportsPage() {
                     <p className="clarity-stat-value text-health-600">
                       NPR{" "}
                       {filteredPathologyBillings
+                        .filter((b) => b.status !== "cancelled")
                         .reduce((sum, b) => sum + (b.totalAmount || 0), 0)
                         .toLocaleString()}
                     </p>
@@ -2024,6 +1956,7 @@ export default function ReportsPage() {
                     <p className="clarity-stat-value text-saffron-600">
                       NPR{" "}
                       {filteredPathologyBillings
+                        .filter((b) => b.status !== "cancelled")
                         .reduce((sum, b) => sum + (b.paidAmount || 0), 0)
                         .toLocaleString()}
                     </p>
@@ -2451,8 +2384,21 @@ export default function ReportsPage() {
                       let totalRevenue = 0;
                       let totalPaid = 0;
 
+                      // Cancelled invoices are excluded from revenue/
+                      // collection totals — they're status-flagged, not
+                      // deleted, so paidAmount/totalAmount stay on the
+                      // record for audit purposes but must not inflate
+                      // reported revenue.
+                      const activeBillings = filteredBillings.filter(
+                        (b) => b.status !== "cancelled",
+                      );
+                      const activePathologyBillings =
+                        filteredPathologyBillings.filter(
+                          (b) => b.status !== "cancelled",
+                        );
+
                       // Appointment Billing Revenue & Collection
-                      filteredBillings.forEach((b) => {
+                      activeBillings.forEach((b) => {
                         if (
                           selectedDoctor === "all" &&
                           selectedAppointmentType === "all"
@@ -2487,16 +2433,16 @@ export default function ReportsPage() {
                       // Pathology Billing Revenue & Collection (only applies if selectedAppointmentType is "all")
                       if (selectedAppointmentType === "all") {
                         if (selectedDoctor === "all") {
-                          totalRevenue += filteredPathologyBillings.reduce(
+                          totalRevenue += activePathologyBillings.reduce(
                             (sum, b) => sum + (b.totalAmount || 0),
                             0,
                           );
-                          totalPaid += filteredPathologyBillings.reduce(
+                          totalPaid += activePathologyBillings.reduce(
                             (sum, b) => sum + (b.paidAmount || 0),
                             0,
                           );
                         } else {
-                          filteredPathologyBillings.forEach((b) => {
+                          activePathologyBillings.forEach((b) => {
                             const referral = b.referringDoctors?.find(
                               (rd) => rd.doctorId === selectedDoctor,
                             );
@@ -2783,12 +2729,18 @@ export default function ReportsPage() {
                       <div className="text-center">
                         <p className="clarity-stat-value text-teal-700">
                           NPR{" "}
-                          {(
-                            filteredBillings.reduce(
-                              (sum, b) => sum + b.totalAmount,
-                              0,
-                            ) / Math.max(filteredBillings.length, 1)
-                          ).toLocaleString()}
+                          {(() => {
+                            const activeForAverage = filteredBillings.filter(
+                              (b) => b.status !== "cancelled",
+                            );
+
+                            return (
+                              activeForAverage.reduce(
+                                (sum, b) => sum + b.totalAmount,
+                                0,
+                              ) / Math.max(activeForAverage.length, 1)
+                            ).toLocaleString();
+                          })()}
                         </p>
                         <p className="clarity-stat-label">
                           Average Invoice Value
@@ -3155,7 +3107,6 @@ export default function ReportsPage() {
             }
           >
             <PackageExpiryReport
-              branchId={branchId || undefined}
               clinicId={clinicId || ""}
               createdBy={userData?.id || "system"}
               patientPackages={reportData.patientPackages}

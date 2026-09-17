@@ -50,24 +50,15 @@ export const pathologyService = {
    */
   async getTestsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<PathologyTest[]> {
     try {
       const testsRef = collection(db, PATHOLOGY_TESTS_COLLECTION);
-      let q = query(
-        testsRef,
-
+      const constraints: any[] = [
         where("isActive", "==", true),
-      );
+        where("clinicId", "==", clinicId),
+      ];
 
-      if (branchId) {
-        q = query(
-          testsRef,
-
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        );
-      }
+      const q = query(testsRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const tests: PathologyTest[] = [];
@@ -206,24 +197,15 @@ export const pathologyService = {
    */
   async getCategoriesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<PathologyCategory[]> {
     try {
       const categoriesRef = collection(db, PATHOLOGY_CATEGORIES_COLLECTION);
-      let q = query(
-        categoriesRef,
-
+      const constraints: any[] = [
         where("isActive", "==", true),
-      );
+        where("clinicId", "==", clinicId),
+      ];
 
-      if (branchId) {
-        q = query(
-          categoriesRef,
-
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        );
-      }
+      const q = query(categoriesRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const categories: PathologyCategory[] = [];
@@ -353,24 +335,15 @@ export const pathologyService = {
    */
   async getUnitsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<PathologyUnit[]> {
     try {
       const unitsRef = collection(db, PATHOLOGY_UNITS_COLLECTION);
-      let q = query(
-        unitsRef,
-
+      const constraints: any[] = [
         where("isActive", "==", true),
-      );
+        where("clinicId", "==", clinicId),
+      ];
 
-      if (branchId) {
-        q = query(
-          unitsRef,
-
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        );
-      }
+      const q = query(unitsRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const units: PathologyUnit[] = [];
@@ -500,24 +473,15 @@ export const pathologyService = {
    */
   async getParametersByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<PathologyParameter[]> {
     try {
       const parametersRef = collection(db, PATHOLOGY_PARAMETERS_COLLECTION);
-      let q = query(
-        parametersRef,
-
+      const constraints: any[] = [
         where("isActive", "==", true),
-      );
+        where("clinicId", "==", clinicId),
+      ];
 
-      if (branchId) {
-        q = query(
-          parametersRef,
-
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        );
-      }
+      const q = query(parametersRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const parameters: PathologyParameter[] = [];
@@ -649,24 +613,15 @@ export const pathologyService = {
    */
   async getTestTypesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<PathologyTestType[]> {
     try {
       const testTypesRef = collection(db, PATHOLOGY_TEST_TYPES_COLLECTION);
-      let q = query(
-        testTypesRef,
-
+      const constraints: any[] = [
         where("isActive", "==", true),
-      );
+        where("clinicId", "==", clinicId),
+      ];
 
-      if (branchId) {
-        q = query(
-          testTypesRef,
-
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-        );
-      }
+      const q = query(testTypesRef, ...constraints);
 
       const querySnapshot = await getDocs(q);
       const testTypes: PathologyTestType[] = [];

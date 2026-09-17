@@ -46,6 +46,9 @@ import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
 import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 import { AgingTag } from "@/components/billing/AgingTag";
 import { pathologyBillingService } from "@/services/pathologyBillingService";
+import { prescriptionService } from "@/services/prescriptionService";
+import { Prescription } from "@/types/medical-records";
+import { billingApi } from "@/services/api/billingApi";
 import { pathologyService } from "@/services/pathologyService";
 import { clinicService } from "@/services/clinicService";
 import { getPatientOutstandingSummary } from "@/utils/patientOutstanding";
@@ -77,6 +80,7 @@ import { doctorService } from "@/services/doctorService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { patientService } from "@/services/patientService";
 import { Patient } from "@/types/models";
+import { calculateTaxBreakdown } from "@/utils/taxEngine";
 
 // ── Flat inline patient search (mirrors SearchSelect in appointments-billing) ─
 function PatientSearchBox({
@@ -369,6 +373,16 @@ export default function PathologyBillingTab({
     useState<PathologyBilling | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
 
+  // Prescriptions with doctor-recommended pathology tests that haven't been
+  // converted into an invoice yet — the "Pending Orders" queue. Mirrors
+  // pharmacy's sendToPharmacy pending-prescriptions pattern.
+  const [pendingPathologyOrders, setPendingPathologyOrders] = useState<
+    Prescription[]
+  >([]);
+  const [sourcePrescriptionId, setSourcePrescriptionId] = useState<
+    string | null
+  >(null);
+
   // Payment states
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [selectedBillingForPayment, setSelectedBillingForPayment] =
@@ -501,19 +515,30 @@ export default function PathologyBillingTab({
         doctorsList,
         partnersList,
         patientsList,
+        prescriptionsData,
       ] = await Promise.all([
-        pathologyService.getTestsByClinic(clinicId, branchId),
-        pathologyService.getTestTypesByClinic(clinicId, branchId),
-        pathologyService.getCategoriesByClinic(clinicId, branchId),
-        pathologyService.getParametersByClinic(clinicId, branchId),
-        pathologyBillingService.getBillingByClinic(clinicId, branchId),
+        pathologyService.getTestsByClinic(clinicId),
+        pathologyService.getTestTypesByClinic(clinicId),
+        pathologyService.getCategoriesByClinic(clinicId),
+        pathologyService.getParametersByClinic(clinicId),
+        pathologyBillingService.getBillingByClinic(clinicId),
         pathologyBillingService.getBillingSettings(clinicId),
         clinicService.getClinicById(clinicId),
         clinicService.getPrintLayoutConfig(clinicId),
         doctorService.getDoctorsByClinic(clinicId),
         referralPartnerService.getReferralPartnersByClinic(clinicId),
-        patientService.getPatientsByClinic(clinicId, branchId),
+        patientService.getPatientsByClinic(clinicId),
+        prescriptionService.getPrescriptionsByClinic(clinicId),
       ]);
+
+      setPendingPathologyOrders(
+        (prescriptionsData || []).filter(
+          (rx) =>
+            rx.sendToPathology &&
+            (rx.pathologyTests?.length || 0) > 0 &&
+            !rx.pathologyBillingId,
+        ),
+      );
 
       setTests(testsData);
       setTestTypes(testTypesData);
@@ -521,10 +546,6 @@ export default function PathologyBillingTab({
       setParameters(parametersData);
       setBillings(billingsData);
       setBillingSettings(settingsData);
-      setFormData((prev) => ({
-        ...prev,
-        applyTax: Boolean(settingsData?.enableTax),
-      }));
       setTaxSettingsForm({
         enableTax: Boolean(settingsData?.enableTax),
         defaultTaxPercentage: settingsData?.defaultTaxPercentage || 0,
@@ -551,7 +572,6 @@ export default function PathologyBillingTab({
 
         await pathologyBillingService.updateBillingSettings(
           clinicId,
-          branchId,
           defaultSettings,
           currentUser.uid,
         );
@@ -596,40 +616,40 @@ export default function PathologyBillingTab({
       return;
     }
 
-    // Subtotal = sum of (price * quantity) BEFORE any discounts
-    const subtotal = formData.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0,
-    );
-
-    // Item-level discounts
-    const itemDiscountAmount = formData.items.reduce(
-      (sum, item) => sum + (item.discountAmount || 0),
-      0,
-    );
-
-    // Invoice-level discount applied on amount after item discounts
-    const afterItemDiscount = subtotal - itemDiscountAmount;
-    let mainDiscountAmount = 0;
-
-    if (formData.discountType === "percent") {
-      mainDiscountAmount =
-        (afterItemDiscount * (formData.discountValue || 0)) / 100;
-    } else {
-      mainDiscountAmount = Math.min(
-        formData.discountValue || 0,
-        afterItemDiscount,
-      );
-    }
-
-    const totalDiscount = itemDiscountAmount + mainDiscountAmount;
-    const afterDiscount = subtotal - totalDiscount;
-
+    // Delegates to the same taxEngine.ts used everywhere else in the app
+    // (appointments, procedures, prescriptions) instead of a bespoke local
+    // calculation — the old inline math here taxed the entire post-discount
+    // amount unconditionally with no taxable/exempt concept, and didn't
+    // clamp discount against negative/over-discount the way taxEngine does.
+    // Every pathology test is marked isTaxable: true to exactly preserve
+    // today's "100% of the post-discount amount is taxed" behavior — this
+    // is a pure engine swap, not a behavior change, for the common case.
     const taxPercentage = formData.applyTax
       ? billingSettings.defaultTaxPercentage
       : 0;
-    const taxAmount = (afterDiscount * taxPercentage) / 100;
-    const totalAmount = afterDiscount + taxAmount;
+    const breakdown = calculateTaxBreakdown({
+      items: formData.items.map((item) => ({
+        id: item.id,
+        itemName: item.testName,
+        quantity: item.quantity,
+        price: item.price,
+        discountType: item.discountType,
+        discountValue: item.discountValue,
+        isTaxable: true,
+      })),
+      discountType: formData.discountType,
+      discountValue: formData.discountValue,
+      defaultTaxPercentage: taxPercentage,
+      isTaxEnabled: taxPercentage > 0,
+    });
+
+    const subtotal = breakdown.subtotal;
+    const itemDiscountAmount = breakdown.itemDiscountAmount;
+    const mainDiscountAmount = breakdown.mainDiscountAmount;
+    const totalDiscount = breakdown.totalDiscountAmount;
+    const afterDiscount = breakdown.taxableAmount + breakdown.exemptAmount;
+    const taxAmount = breakdown.taxAmount;
+    const totalAmount = breakdown.totalAmount;
 
     // Recalculate doctor commissions based on after-discount subtotal
     const updatedReferringDoctors = formData.referringDoctors.map((doc) => {
@@ -693,6 +713,23 @@ export default function PathologyBillingTab({
       const matchingType = testTypes.find(
         (tt) => tt.name.toLowerCase() === value.toLowerCase(),
       );
+
+      const isDuplicate =
+        matchingType &&
+        updatedItems.some(
+          (it, i) =>
+            i !== index && it.testName.toLowerCase() === value.toLowerCase(),
+        );
+
+      if (isDuplicate) {
+        addToast({
+          title: "Test already added",
+          description: `"${value}" is already in this invoice.`,
+          color: "warning",
+        });
+
+        return;
+      }
 
       updatedItems[index] = {
         ...updatedItems[index],
@@ -863,6 +900,10 @@ export default function PathologyBillingTab({
   };
 
   const handleSubmit = async () => {
+    // Re-entrancy guard: setSubmitting(true) below doesn't disable the
+    // submit button until React's next render, so a fast double-click can
+    // otherwise slip a second call through and create a duplicate invoice.
+    if (submitting) return;
     if (!clinicId || !currentUser || !billingSettings) return;
 
     // Validation
@@ -930,7 +971,9 @@ export default function PathologyBillingTab({
         // age, gender never captured before), so they don't have to be
         // re-entered next time. Never overwrites a value the patient record
         // already has — only fills genuinely empty fields.
-        const existingPatient = patients.find((p) => p.id === patientIdToUse);
+        const existingPatient =
+          (await patientService.getPatientById(patientIdToUse).catch(() => null)) ||
+          patients.find((p) => p.id === patientIdToUse);
 
         if (existingPatient) {
           const backfill: Record<string, any> = {};
@@ -1003,8 +1046,14 @@ export default function PathologyBillingTab({
       };
 
       if (editingInvoiceId) {
-        // Find existing to get paid amount
-        const existing = billings.find((b) => b.id === editingInvoiceId);
+        // Fetch fresh rather than trusting the once-loaded `billings` array
+        // — a payment could have been recorded on this invoice elsewhere
+        // while this edit form was open, and reading a stale paidAmount
+        // here would silently revert paymentStatus/balanceAmount on submit.
+        const existing =
+          (await pathologyBillingService
+            .getBillingById(editingInvoiceId)
+            .catch(() => null)) || billings.find((b) => b.id === editingInvoiceId);
         const paidAmount = existing ? existing.paidAmount : 0;
         const balanceAmount = calculations.totalAmount - paidAmount;
         let paymentStatus = "unpaid";
@@ -1031,6 +1080,29 @@ export default function PathologyBillingTab({
           color: "success",
         });
       } else {
+        // Don't create a second invoice for the same pending order — a
+        // fresh read (not the possibly-stale loaded `pendingPathologyOrders`
+        // list) in case this order was already converted by another tab/
+        // click since this form was opened.
+        if (sourcePrescriptionId) {
+          const sourceRx = await prescriptionService
+            .getPrescriptionById(sourcePrescriptionId)
+            .catch(() => null);
+
+          if ((sourceRx as any)?.pathologyBillingId) {
+            addToast({
+              title: "Already converted",
+              description:
+                "This prescription's tests were already billed by another action. Refreshing the list.",
+              color: "warning",
+            });
+            setSubmitting(false);
+            await loadData();
+
+            return;
+          }
+        }
+
         billingData = {
           ...billingData,
           invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
@@ -1041,7 +1113,24 @@ export default function PathologyBillingTab({
           createdBy: currentUser.uid,
         };
 
-        await pathologyBillingService.createBilling(billingData);
+        const created = await pathologyBillingService.createBilling(
+          billingData,
+        );
+
+        if (sourcePrescriptionId) {
+          try {
+            await prescriptionService.updatePrescription(
+              sourcePrescriptionId,
+              { pathologyBillingId: created.id },
+            );
+          } catch (linkErr) {
+            console.error(
+              "Error linking invoice back to source prescription:",
+              linkErr,
+            );
+          }
+        }
+
         addToast({
           title: "Success",
           description: "Pathology invoice created successfully",
@@ -1069,13 +1158,14 @@ export default function PathologyBillingTab({
           .toISOString()
           .split("T")[0],
         reportStatus: "pending_collection",
-        applyTax: Boolean(billingSettings?.enableTax),
+        applyTax: false,
       });
 
       // Reload billings
       await loadData();
 
       setEditingInvoiceId(null);
+      setSourcePrescriptionId(null);
 
       // Switch to manage tab (or hand off to the wrapping route in
       // standalone edit mode, which doesn't render a manage tab at all)
@@ -1100,6 +1190,7 @@ export default function PathologyBillingTab({
 
   const handleEditInvoice = (billing: PathologyBilling) => {
     setEditingInvoiceId(billing.id);
+    setSourcePrescriptionId(null);
 
     // Format dates to YYYY-MM-DD for inputs
     const formatDateForInput = (dateValue: any) => {
@@ -1161,7 +1252,6 @@ export default function PathologyBillingTab({
 
       const updatedBillings = await pathologyBillingService.getBillingByClinic(
         clinicId,
-        branchId,
       );
 
       setBillings(updatedBillings);
@@ -1195,7 +1285,7 @@ export default function PathologyBillingTab({
 
       // Refresh billings
       const updatedBillings =
-        await pathologyBillingService.getBillingByClinic(clinicId, branchId);
+        await pathologyBillingService.getBillingByClinic(clinicId);
 
       setBillings(updatedBillings);
       setReasonModal(null);
@@ -1218,6 +1308,7 @@ export default function PathologyBillingTab({
 
   const cancelEdit = () => {
     setEditingInvoiceId(null);
+    setSourcePrescriptionId(null);
     setFormData({
       patientName: "",
       patientEmail: "",
@@ -1237,7 +1328,7 @@ export default function PathologyBillingTab({
         .toISOString()
         .split("T")[0],
       reportStatus: "pending_collection",
-      applyTax: Boolean(billingSettings?.enableTax),
+      applyTax: false,
     });
     if (onEditComplete) {
       onEditComplete();
@@ -1246,13 +1337,57 @@ export default function PathologyBillingTab({
     }
   };
 
+  // Pre-fill the (already fully editable) Create Invoice form from a
+  // pending prescription's recommended tests — staff can remove tests and
+  // set a discount/tax right here before anything is created, which is the
+  // only safe point to do so since createBilling syncs to IRD immediately.
+  const handleCreateInvoiceFromOrder = (rx: Prescription) => {
+    const pat = patients.find((p) => p.id === rx.patientId);
+    const items: PathologyBillingItem[] = (rx.pathologyTests || []).map(
+      (t) => ({
+        id: crypto.randomUUID(),
+        testId: t.testId,
+        testName: t.testName,
+        price: t.price || 0,
+        quantity: 1,
+        amount: t.price || 0,
+      }),
+    );
+
+    setEditingInvoiceId(null);
+    setSourcePrescriptionId(rx.id);
+    setFormData({
+      patientId: pat?.id,
+      patientName: pat?.name || "",
+      patientPanVat: pat?.patientPanVat || "",
+      patientEmail: pat?.email || "",
+      patientPhone: pat?.mobile || pat?.phone || "",
+      patientAddress: pat?.address || "",
+      patientAge: pat?.age?.toString() || "",
+      patientGender: pat?.gender || "",
+      invoiceDate: new Date().toISOString().split("T")[0],
+      items,
+      discountType: billingSettings?.defaultDiscountType || "percent",
+      discountValue: billingSettings?.defaultDiscountValue || 0,
+      referringDoctors: [],
+      notes: "Prescribed via Clinical Consultation",
+      labReferenceNo: "",
+      sampleCollectionDate: new Date().toISOString().split("T")[0],
+      expectedReportDate: new Date(Date.now() + 86400000)
+        .toISOString()
+        .split("T")[0],
+      reportStatus: "pending_collection",
+      applyTax: false,
+    });
+    setActiveTab("create");
+  };
+
   const handleSaveTaxSettings = async () => {
     if (!clinicId || !currentUser) return;
     setIsSavingTaxSettings(true);
     try {
       await pathologyBillingService.updateBillingSettings(
         clinicId,
-        branchId,
         taxSettingsForm,
         currentUser.uid,
       );
@@ -1342,7 +1477,6 @@ export default function PathologyBillingTab({
       // Reload billings
       const updatedBillings = await pathologyBillingService.getBillingByClinic(
         clinicId,
-        branchId,
       );
 
       setBillings(updatedBillings);
@@ -1398,6 +1532,7 @@ export default function PathologyBillingTab({
       setSubmitting(false);
     }
   };
+
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
       case "paid":
@@ -1496,6 +1631,12 @@ export default function PathologyBillingTab({
       })
       .catch(console.error);
 
+    // Mirror into the MySQL Schedule 5 ledger too — best-effort, never
+    // blocks the print itself.
+    if ((billing as any).javaInvoiceId) {
+      billingApi.recordPrint((billing as any).javaInvoiceId).catch(console.error);
+    }
+
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     if (!printWindow) {
@@ -1546,6 +1687,11 @@ export default function PathologyBillingTab({
                 id: "create",
                 label: editingInvoiceId ? "Edit Invoice" : "Create Invoice",
                 icon: <IoAddOutline className="w-4 h-4" />,
+              },
+              {
+                id: "orders",
+                label: `Pending Orders${pendingPathologyOrders.length ? ` (${pendingPathologyOrders.length})` : ""}`,
+                icon: <IoTime className="w-4 h-4" />,
               },
               {
                 id: "manage",
@@ -2397,6 +2543,64 @@ export default function PathologyBillingTab({
           </div>
         )}
 
+        {/* Pending Orders Tab — doctor-recommended pathology tests awaiting
+            an invoice. No invoice/IRD sync happens until staff act here. */}
+        {!hideTabBar && activeTab === "orders" && (
+          <div className="p-5 space-y-4">
+            {pendingPathologyOrders.length === 0 ? (
+              <div className="text-center py-10 text-[13px] text-text-muted">
+                No pathology tests are waiting to be invoiced.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table aria-label="Pending pathology orders" removeWrapper>
+                  <TableHeader>
+                    <TableColumn>PATIENT</TableColumn>
+                    <TableColumn>DOCTOR</TableColumn>
+                    <TableColumn>DATE</TableColumn>
+                    <TableColumn>TESTS</TableColumn>
+                    <TableColumn> </TableColumn>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingPathologyOrders.map((rx) => {
+                      const pat = patients.find((p) => p.id === rx.patientId);
+                      const doc = doctors.find((d) => d.id === rx.doctorId);
+
+                      return (
+                        <TableRow key={rx.id}>
+                          <TableCell>{pat?.name || "Unknown Patient"}</TableCell>
+                          <TableCell>{doc?.name || "Unknown Doctor"}</TableCell>
+                          <TableCell>
+                            {rx.prescriptionDate
+                              ? new Date(
+                                  rx.prescriptionDate,
+                                ).toLocaleDateString()
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {(rx.pathologyTests || [])
+                              .map((t) => t.testName)
+                              .join(", ")}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              color="primary"
+                              size="sm"
+                              onPress={() => handleCreateInvoiceFromOrder(rx)}
+                            >
+                              Create Invoice
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Manage Invoices Tab */}
         {!hideTabBar && activeTab === "manage" && (
           <div className="p-5 space-y-4">
@@ -2536,6 +2740,20 @@ export default function PathologyBillingTab({
                             invoiceType="pathology"
                             recordId={billing.id}
                             synced={Boolean(billing.irdSynced)}
+                            onSynced={async () => {
+                              const updated =
+                                await pathologyBillingService.getBillingById(
+                                  billing.id,
+                                );
+
+                              if (updated) {
+                                setBillings((prev) =>
+                                  prev.map((b) =>
+                                    b.id === updated.id ? updated : b,
+                                  ),
+                                );
+                              }
+                            }}
                           />
                         </TableCell>
                         <TableCell>
@@ -2636,8 +2854,7 @@ export default function PathologyBillingTab({
                                   Print
                                 </DropdownItem>
                                 {billing.status !== "cancelled" &&
-                                billing.status !== "finalized" &&
-                                billing.paymentStatus !== "paid" ? (
+                                billing.status !== "finalized" ? (
                                   <DropdownItem
                                     key="cancel"
                                     className="text-danger"
@@ -3114,6 +3331,7 @@ export default function PathologyBillingTab({
             : handleIssueCreditNote(reason)
         }
       />
+
     </div>
   );
 }

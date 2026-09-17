@@ -78,7 +78,6 @@ export default function LabTechnicianManagement({
       setLoading(true);
       const data = await labTechnicianService.getTechniciansByClinic(
         clinicId,
-        branchId,
       );
 
       setTechnicians(data);

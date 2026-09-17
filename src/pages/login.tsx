@@ -118,12 +118,12 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
-  const { login, currentUser, isLoading } = useAuthContext();
+  const { login, currentUser, isLoading, clinicId } = useAuthContext();
   const navigate = useNavigate();
 
   useEffect(() => {
     const handleRedirect = async () => {
-      if (!isLoading && currentUser) {
+      if (!isLoading && currentUser && clinicId) {
         try {
           const { collection, query, where, getDocs, doc, setDoc } =
             await import("firebase/firestore");
@@ -134,7 +134,11 @@ export default function LoginPage() {
           if (email) {
             // 1. Check if email matches any doctor
             const docSnap = await getDocs(
-              query(collection(db, "doctors"), where("email", "==", email)),
+              query(
+                collection(db, "doctors"),
+                where("email", "==", email),
+                where("clinicId", "==", clinicId),
+              ),
             );
 
             if (!docSnap.empty) {
@@ -144,7 +148,11 @@ export default function LoginPage() {
             }
             // 2. Check if email matches any expert
             const expSnap = await getDocs(
-              query(collection(db, "experts"), where("email", "==", email)),
+              query(
+                collection(db, "experts"),
+                where("email", "==", email),
+                where("clinicId", "==", clinicId),
+              ),
             );
 
             if (!expSnap.empty) {
@@ -155,7 +163,11 @@ export default function LoginPage() {
 
             // 3. Self-healing fallback: If they are registered in the staff collection as Doctor/Expert, sync them
             const staffSnap = await getDocs(
-              query(collection(db, "staff"), where("email", "==", email)),
+              query(
+                collection(db, "staff"),
+                where("email", "==", email),
+                where("clinicId", "==", clinicId),
+              ),
             );
 
             if (!staffSnap.empty) {
@@ -209,7 +221,7 @@ export default function LoginPage() {
     };
 
     handleRedirect();
-  }, [currentUser, isLoading, navigate]);
+  }, [currentUser, isLoading, navigate, clinicId]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

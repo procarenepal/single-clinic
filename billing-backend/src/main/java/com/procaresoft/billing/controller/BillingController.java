@@ -206,6 +206,41 @@ public class BillingController {
     }
 
     /**
+     * Records a print/reprint event for the Schedule 5 report's
+     * Is_Bill_Printed/Printed_Time/Printed_By fields (clause 6(ङ)). The
+     * frontend's own reprint-count-and-"Copy of Original"-numbering logic
+     * (clause 6(च)) lives in Firestore and is unaffected by this — this call
+     * just mirrors that same event into the authoritative MySQL ledger so
+     * the Java-side Schedule 5 report isn't permanently blank for these
+     * fields. Never blocks/fails the print itself: callers should fire this
+     * after printing succeeds and not treat a failure here as fatal.
+     */
+    @PostMapping("/{id}/record-print")
+    @Transactional
+    public ResponseEntity<Invoice> recordPrint(
+            @PathVariable Long id,
+            HttpServletRequest httpRequest) {
+        String clinicId = requireClinicId(httpRequest);
+        String userUid = requireUserUid(httpRequest);
+
+        return invoiceRepository.findById(id).map(invoice -> {
+            if (!clinicId.equals(invoice.getClinicId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invoice belongs to a different clinic");
+            }
+
+            invoice.setPrintCount(invoice.getPrintCount() + 1);
+            invoice.setLastPrintedAt(java.time.LocalDateTime.now());
+            invoice.setLastPrintedBy(userUid);
+            Invoice saved = invoiceRepository.save(invoice);
+
+            auditLogService.record("Invoice", saved.getId(), "PRINT", userUid, clinicId,
+                    "Invoice " + saved.getInvoiceNumber() + " printed (copy #" + saved.getPrintCount() + ")");
+
+            return ResponseEntity.ok(saved);
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
      * The Schedule 5 (अनुसूची ५) master invoice table — required to be
      * viewable and printable from the front end, per clause 6(ङ). Optionally
      * scoped to one fiscal year, matching how the schedule describes the

@@ -47,16 +47,11 @@ export const hrService = {
 
   async getStaffByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<StaffMember[]> {
-    let q = query(
+    const q = query(
       collection(db, STAFF_COLLECTION),
       where("clinicId", "==", clinicId),
     );
-
-    if (branchId) {
-      q = query(q, where("branchId", "==", branchId));
-    }
 
     const querySnapshot = await getDocs(q);
     const staff = querySnapshot.docs.map((doc) => {
@@ -146,7 +141,6 @@ export const hrService = {
   async getAttendanceByDate(
     clinicId: string,
     date: Date,
-    branchId?: string,
   ): Promise<StaffAttendance[]> {
     const startOfDay = new Date(date);
 
@@ -155,29 +149,21 @@ export const hrService = {
 
     endOfDay.setHours(23, 59, 59, 999);
 
-    return this.getAttendanceByRange(clinicId, startOfDay, endOfDay, branchId);
+    return this.getAttendanceByRange(clinicId, startOfDay, endOfDay);
   },
 
   async getAttendanceByRange(
     clinicId: string,
     startDate: Date,
     endDate: Date,
-    branchId?: string,
   ): Promise<StaffAttendance[]> {
-    // StaffAttendance records store no clinicId/branchId of their own, so
-    // the previous `where("branchId", ...)` filter here silently matched
-    // nothing (the field doesn't exist on these docs) while the missing
-    // clinicId filter meant every clinic's attendance was returned when
-    // branchId was omitted. Scope correctly by cross-referencing against
-    // this clinic's actual staff IDs instead.
-    const clinicStaff = await this.getStaffByClinic(clinicId, branchId);
-    const clinicStaffIds = new Set(clinicStaff.map((s) => s.id));
-
-    const q = query(collection(db, ATTENDANCE_COLLECTION));
+    const q = query(
+      collection(db, ATTENDANCE_COLLECTION),
+      where("clinicId", "==", clinicId),
+    );
 
     const querySnapshot = await getDocs(q);
     const attendance = querySnapshot.docs
-      .filter((doc) => clinicStaffIds.has(doc.data().staffId))
       .map((doc) => {
       const data = doc.data();
 

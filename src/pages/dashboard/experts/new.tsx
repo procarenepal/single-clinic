@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/context/AuthContext";
 import { expertService } from "@/services/expertService";
 import { specialityService } from "@/services/specialityService";
-import { branchService } from "@/services/branchService";
 import { addToast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -34,7 +33,7 @@ export default function NewExpertPage() {
   const [specialities, setSpecialities] = useState<
     Array<{ value: string; label: string }>
   >([]);
-  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
+  const defaultBranchId = clinicId ?? null;
   const [isAddingNewSpeciality, setIsAddingNewSpeciality] = useState(false);
 
   const [expertProfile, setExpertProfile] = useState({
@@ -55,11 +54,9 @@ export default function NewExpertPage() {
   const loadSpecialities = async () => {
     if (!clinicId) return;
     try {
-      const branchId = defaultBranchId ?? undefined;
       const specialitiesData =
         await specialityService.getActiveSpecialitiesForDropdown(
           clinicId,
-          branchId,
         );
 
       setSpecialities(
@@ -76,25 +73,6 @@ export default function NewExpertPage() {
       });
     }
   };
-
-  useEffect(() => {
-    if (!clinicId || authLoading) return;
-    if (userData?.branchId) {
-      setDefaultBranchId(userData.branchId);
-
-      return;
-    }
-    branchService
-      .isMultiBranchEnabled(clinicId)
-      .then((multi) =>
-        multi
-          ? branchService
-              .getMainBranch(clinicId)
-              .then((b) => b && setDefaultBranchId(b.id))
-          : setDefaultBranchId(clinicId),
-      )
-      .catch(() => setDefaultBranchId(clinicId));
-  }, [clinicId, authLoading, userData?.branchId]);
 
   const handleExpertProfileChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,

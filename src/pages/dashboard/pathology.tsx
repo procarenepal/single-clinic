@@ -370,8 +370,8 @@ export default function PathologyPage() {
         if (!isAdmin && userData.email) {
           try {
             const [matchingDoctor, matchingExpert] = await Promise.all([
-              doctorService.getDoctorByEmail(userData.email),
-              expertService.getExpertByEmail(userData.email),
+              doctorService.getDoctorByEmail(userData.email, clinicId),
+              expertService.getExpertByEmail(userData.email, clinicId),
             ]);
             const matchingProvider = matchingDoctor || matchingExpert;
 
@@ -403,18 +403,18 @@ export default function PathologyPage() {
           layoutConfigData,
           patientsData,
         ] = await Promise.all([
-          pathologyService.getTestsByClinic(clinicId, branchId),
-          pathologyService.getCategoriesByClinic(clinicId, branchId),
-          pathologyService.getUnitsByClinic(clinicId, branchId),
-          pathologyService.getParametersByClinic(clinicId, branchId),
-          pathologyService.getTestTypesByClinic(clinicId, branchId),
-          labTechnicianService.getTechniciansByClinic(clinicId, branchId),
-          pathologyBillingService.getBillingByClinic(clinicId, branchId),
+          pathologyService.getTestsByClinic(clinicId),
+          pathologyService.getCategoriesByClinic(clinicId),
+          pathologyService.getUnitsByClinic(clinicId),
+          pathologyService.getParametersByClinic(clinicId),
+          pathologyService.getTestTypesByClinic(clinicId),
+          labTechnicianService.getTechniciansByClinic(clinicId),
+          pathologyBillingService.getBillingByClinic(clinicId),
           clinicService.getClinicById(clinicId),
           clinicService.getPrintLayoutConfig(clinicId),
           doctorId && allowedPatientIds
             ? patientService.getPatientsByDoctor(doctorId, clinicId)
-            : patientService.getPatientsByClinic(clinicId, branchId),
+            : patientService.getPatientsByClinic(clinicId),
         ]);
 
         let filteredTests = testsData;
@@ -458,8 +458,8 @@ export default function PathologyPage() {
   useEffect(() => {
     if (activeTab === "dailyReport" && clinicId) {
       Promise.all([
-        pathologyBillingService.getBillingByClinic(clinicId, branchId),
-        pathologyService.getTestsByClinic(clinicId, branchId),
+        pathologyBillingService.getBillingByClinic(clinicId),
+        pathologyService.getTestsByClinic(clinicId),
       ]).then(([newBillings, newTests]) => {
         if (currentDoctorId) {
           // If we are filtering by doctor, we need their patient IDs to filter these fresh fetches
@@ -918,7 +918,6 @@ export default function PathologyPage() {
       // Update local patients list
       const updatedPatients = await patientService.getPatientsByClinic(
         clinicId!,
-        branchId!,
       );
 
       setPatients(updatedPatients);
@@ -993,8 +992,8 @@ export default function PathologyPage() {
           gender:
             (testForm.patientGender as "male" | "female" | "other") || "other",
           clinicId: clinicId!,
-          branchId: branchId!,
-        };
+          branchId: clinicId!,
+          };
         const newPatientId = await patientService.createPatient(patientData);
 
         finalPatientId = newPatientId;
@@ -1002,7 +1001,6 @@ export default function PathologyPage() {
         // Optionally update local patients list
         const updatedPatients = await patientService.getPatientsByClinic(
           clinicId!,
-          branchId!,
         );
 
         setPatients(updatedPatients);
@@ -1077,7 +1075,7 @@ export default function PathologyPage() {
             unit: p.unit,
           })),
         clinicId: clinicId!,
-        branchId: branchId!,
+        branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
       };
@@ -1100,8 +1098,8 @@ export default function PathologyPage() {
 
       // Reload data
       const [testsData, techniciansData] = await Promise.all([
-        pathologyService.getTestsByClinic(clinicId!, branchId!),
-        labTechnicianService.getTechniciansByClinic(clinicId!, branchId!),
+        pathologyService.getTestsByClinic(clinicId!),
+        labTechnicianService.getTechniciansByClinic(clinicId!),
       ]);
 
       setTests(testsData);
@@ -1356,7 +1354,7 @@ export default function PathologyPage() {
       > = {
         name: categoryForm.name.trim(),
         clinicId: clinicId!,
-        branchId: branchId!,
+        branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
       };
@@ -1401,7 +1399,7 @@ export default function PathologyPage() {
                   : undefined,
                 defaultValue: param.defaultValue || undefined,
                 clinicId: clinicId!,
-                branchId: branchId!,
+                branchId: clinicId!,
                 isActive: true,
                 createdBy: currentUser?.uid || "",
               };
@@ -1420,8 +1418,8 @@ export default function PathologyPage() {
 
       // Refresh both
       const [categoriesData, parametersData] = await Promise.all([
-        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
-        pathologyService.getParametersByClinic(clinicId!, branchId!),
+        pathologyService.getCategoriesByClinic(clinicId!),
+        pathologyService.getParametersByClinic(clinicId!),
       ]);
 
       setCategories(categoriesData);
@@ -1466,7 +1464,7 @@ export default function PathologyPage() {
       const unitData: Omit<PathologyUnit, "id" | "createdAt" | "updatedAt"> = {
         name: unitForm.name.trim(),
         clinicId: clinicId!,
-        branchId: branchId!,
+        branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
       };
@@ -1489,7 +1487,6 @@ export default function PathologyPage() {
 
       const unitsData = await pathologyService.getUnitsByClinic(
         clinicId!,
-        branchId!,
       );
 
       setUnits(unitsData);
@@ -1541,7 +1538,7 @@ export default function PathologyPage() {
       const unitData: Omit<PathologyUnit, "id" | "createdAt" | "updatedAt"> = {
         name: quickUnitName.trim(),
         clinicId: clinicId!,
-        branchId: branchId!,
+        branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
       };
@@ -1550,7 +1547,6 @@ export default function PathologyPage() {
 
       const unitsData = await pathologyService.getUnitsByClinic(
         clinicId!,
-        branchId!,
       );
 
       setUnits(unitsData);
@@ -1661,7 +1657,7 @@ export default function PathologyPage() {
           : undefined,
         defaultValue: parameterForm.defaultValue || undefined,
         clinicId: clinicId!,
-        branchId: branchId!,
+        branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
       };
@@ -1684,7 +1680,6 @@ export default function PathologyPage() {
 
       const parametersData = await pathologyService.getParametersByClinic(
         clinicId!,
-        branchId!,
       );
 
       setParameters(parametersData);
@@ -1806,7 +1801,7 @@ export default function PathologyPage() {
         targetType: testTypeForm.targetType,
         price: priceValue,
         clinicId: clinicId!,
-        branchId: branchId!,
+        branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
       };
@@ -1829,7 +1824,6 @@ export default function PathologyPage() {
 
       const testTypesData = await pathologyService.getTestTypesByClinic(
         clinicId!,
-        branchId!,
       );
 
       setTestTypes(testTypesData);
@@ -1871,7 +1865,6 @@ export default function PathologyPage() {
           await pathologyService.deleteTest(itemToDelete.id);
           const testsData = await pathologyService.getTestsByClinic(
             clinicId!,
-            branchId!,
           );
 
           setTests(testsData);
@@ -1880,7 +1873,6 @@ export default function PathologyPage() {
           await pathologyService.deleteCategory(itemToDelete.id);
           const categoriesData = await pathologyService.getCategoriesByClinic(
             clinicId!,
-            branchId!,
           );
 
           setCategories(categoriesData);
@@ -1889,7 +1881,6 @@ export default function PathologyPage() {
           await pathologyService.deleteUnit(itemToDelete.id);
           const unitsData = await pathologyService.getUnitsByClinic(
             clinicId!,
-            branchId!,
           );
 
           setUnits(unitsData);
@@ -1898,7 +1889,6 @@ export default function PathologyPage() {
           await pathologyService.deleteParameter(itemToDelete.id);
           const parametersData = await pathologyService.getParametersByClinic(
             clinicId!,
-            branchId!,
           );
 
           setParameters(parametersData);
@@ -1907,7 +1897,6 @@ export default function PathologyPage() {
           await pathologyService.deleteTestType(itemToDelete.id);
           const testTypesData = await pathologyService.getTestTypesByClinic(
             clinicId!,
-            branchId!,
           );
 
           setTestTypes(testTypesData);
@@ -2581,7 +2570,7 @@ export default function PathologyPage() {
         categoryId = await pathologyService.createCategory({
           name: "HIV Screening",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -2659,7 +2648,7 @@ export default function PathologyPage() {
         cellUnitId = await pathologyService.createUnit({
           name: "cells/μL",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -2672,7 +2661,7 @@ export default function PathologyPage() {
         copiesUnitId = await pathologyService.createUnit({
           name: "copies/mL",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -2707,7 +2696,7 @@ export default function PathologyPage() {
             criticalLow: p.criticalLow,
             criticalHigh: p.criticalHigh,
             clinicId: clinicId!,
-            branchId: branchId!,
+            branchId: clinicId!,
             isActive: true,
             createdBy: currentUser?.uid || "",
           });
@@ -2716,9 +2705,9 @@ export default function PathologyPage() {
 
       // Refresh
       const [cats, params2, units2] = await Promise.all([
-        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
-        pathologyService.getParametersByClinic(clinicId!, branchId!),
-        pathologyService.getUnitsByClinic(clinicId!, branchId!),
+        pathologyService.getCategoriesByClinic(clinicId!),
+        pathologyService.getParametersByClinic(clinicId!),
+        pathologyService.getUnitsByClinic(clinicId!),
       ]);
 
       setCategories(cats);
@@ -2755,7 +2744,7 @@ export default function PathologyPage() {
         categoryId = await pathologyService.createCategory({
           name: "Sugar & Diabetes",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -2812,7 +2801,7 @@ export default function PathologyPage() {
         mgDlUnitId = await pathologyService.createUnit({
           name: "mg/dL",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -2825,7 +2814,7 @@ export default function PathologyPage() {
         percentUnitId = await pathologyService.createUnit({
           name: "%",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -2854,7 +2843,7 @@ export default function PathologyPage() {
             criticalLow: p.criticalLow,
             criticalHigh: p.criticalHigh,
             clinicId: clinicId!,
-            branchId: branchId!,
+            branchId: clinicId!,
             isActive: true,
             createdBy: currentUser?.uid || "",
           });
@@ -2862,9 +2851,9 @@ export default function PathologyPage() {
       );
 
       const [cats, params2, units2] = await Promise.all([
-        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
-        pathologyService.getParametersByClinic(clinicId!, branchId!),
-        pathologyService.getUnitsByClinic(clinicId!, branchId!),
+        pathologyService.getCategoriesByClinic(clinicId!),
+        pathologyService.getParametersByClinic(clinicId!),
+        pathologyService.getUnitsByClinic(clinicId!),
       ]);
 
       setCategories(cats);
@@ -2902,7 +2891,7 @@ export default function PathologyPage() {
         categoryId = await pathologyService.createCategory({
           name: "Complete Blood Count (CBC)",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -2921,7 +2910,7 @@ export default function PathologyPage() {
           const id = await pathologyService.createUnit({
             name: uName,
             clinicId: clinicId!,
-            branchId: branchId!,
+            branchId: clinicId!,
             isActive: true,
             createdBy: currentUser?.uid || "",
           });
@@ -3077,7 +3066,7 @@ export default function PathologyPage() {
             ...p,
             categoryId: categoryId!,
             clinicId: clinicId!,
-            branchId: branchId!,
+            branchId: clinicId!,
             isActive: true,
             createdBy: currentUser?.uid || "",
           });
@@ -3087,7 +3076,6 @@ export default function PathologyPage() {
       // Create Test Price configuration for CBC
       const existingTestTypes = await pathologyService.getTestTypesByClinic(
         clinicId!,
-        branchId!,
       );
       const testTypeExists = existingTestTypes.some(
         (tt) =>
@@ -3102,17 +3090,17 @@ export default function PathologyPage() {
           targetType: "category",
           targetId: categoryId!,
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
       }
 
       const [cats, params2, units2, tt2] = await Promise.all([
-        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
-        pathologyService.getParametersByClinic(clinicId!, branchId!),
-        pathologyService.getUnitsByClinic(clinicId!, branchId!),
-        pathologyService.getTestTypesByClinic(clinicId!, branchId!),
+        pathologyService.getCategoriesByClinic(clinicId!),
+        pathologyService.getParametersByClinic(clinicId!),
+        pathologyService.getUnitsByClinic(clinicId!),
+        pathologyService.getTestTypesByClinic(clinicId!),
       ]);
 
       setCategories(cats);
@@ -3150,7 +3138,7 @@ export default function PathologyPage() {
         categoryId = await pathologyService.createCategory({
           name: "Lipid Profile",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -3210,7 +3198,7 @@ export default function PathologyPage() {
         mgDlUnitId = await pathologyService.createUnit({
           name: "mg/dl",
           clinicId: clinicId!,
-          branchId: branchId!,
+          branchId: clinicId!,
           isActive: true,
           createdBy: currentUser?.uid || "",
         });
@@ -3239,7 +3227,7 @@ export default function PathologyPage() {
             criticalLow: p.criticalLow,
             criticalHigh: p.criticalHigh,
             clinicId: clinicId!,
-            branchId: branchId!,
+            branchId: clinicId!,
             isActive: true,
             createdBy: currentUser?.uid || "",
           });
@@ -3247,9 +3235,9 @@ export default function PathologyPage() {
       );
 
       const [cats, params2, units2] = await Promise.all([
-        pathologyService.getCategoriesByClinic(clinicId!, branchId!),
-        pathologyService.getParametersByClinic(clinicId!, branchId!),
-        pathologyService.getUnitsByClinic(clinicId!, branchId!),
+        pathologyService.getCategoriesByClinic(clinicId!),
+        pathologyService.getParametersByClinic(clinicId!),
+        pathologyService.getUnitsByClinic(clinicId!),
       ]);
 
       setCategories(cats);

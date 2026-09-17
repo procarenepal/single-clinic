@@ -130,7 +130,6 @@ class TextEditorService {
    */
   async getDocuments(
     clinicId: string,
-    branchId?: string,
     pageSize = 20,
     lastDoc?: DocumentSnapshot,
   ): Promise<{
@@ -146,14 +145,6 @@ class TextEditorService {
       );
 
       // Add branch filtering for multi-branch clinics
-      if (branchId) {
-        q = query(
-          collection(db, TEXT_DOCUMENTS_COLLECTION),
-
-          where("branchId", "==", branchId),
-          limit(pageSize + 1),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
       const allDocs = querySnapshot.docs;
@@ -191,16 +182,12 @@ class TextEditorService {
   async searchDocuments(
     clinicId: string,
     searchTerm: string,
-    branchId?: string,
   ): Promise<TextDocument[]> {
     try {
       // Note: This is a basic implementation. For better search functionality,
       // consider using Algolia or implementing full-text search with Firestore
       let q = query(collection(db, TEXT_DOCUMENTS_COLLECTION));
 
-      if (branchId) {
-        q = query(q, where("branchId", "==", branchId));
-      }
 
       // Sort client-side by updatedAt descending (avoids composite index requirement)
       const querySnapshot = await getDocs(q);

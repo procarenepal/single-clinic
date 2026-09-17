@@ -123,9 +123,9 @@ export default function BedManagementPage() {
           patientsData,
           doctorsData,
         ] = await Promise.all([
-          bedService.getBedsByClinic(clinicId, branchId),
-          bedService.getCategoriesByClinic(clinicId, branchId),
-          bedService.getAllotmentsByClinic(clinicId, branchId),
+          bedService.getBedsByClinic(clinicId),
+          bedService.getCategoriesByClinic(clinicId),
+          bedService.getAllotmentsByClinic(clinicId),
           patientService.getPatientsByClinic(clinicId),
           doctorService.getDoctorsByClinic(clinicId),
         ]);
@@ -250,7 +250,7 @@ export default function BedManagementPage() {
         });
       }
 
-      const bedsData = await bedService.getBedsByClinic(clinicId!, branchId!);
+      const bedsData = await bedService.getBedsByClinic(clinicId!);
 
       setBeds(bedsData);
 
@@ -324,7 +324,6 @@ export default function BedManagementPage() {
 
       const categoriesData = await bedService.getCategoriesByClinic(
         clinicId!,
-        branchId!,
       );
 
       setCategories(categoriesData);
@@ -465,8 +464,8 @@ export default function BedManagementPage() {
 
       // Reload data
       const [bedsData, allotmentsData] = await Promise.all([
-        bedService.getBedsByClinic(clinicId!, branchId!),
-        bedService.getAllotmentsByClinic(clinicId!, branchId!),
+        bedService.getBedsByClinic(clinicId!),
+        bedService.getAllotmentsByClinic(clinicId!),
       ]);
 
       setBeds(bedsData);
@@ -524,8 +523,8 @@ export default function BedManagementPage() {
 
       // Reload data
       const [bedsData, allotmentsData] = await Promise.all([
-        bedService.getBedsByClinic(clinicId!, branchId!),
-        bedService.getAllotmentsByClinic(clinicId!, branchId!),
+        bedService.getBedsByClinic(clinicId!),
+        bedService.getAllotmentsByClinic(clinicId!),
       ]);
 
       setBeds(bedsData);
@@ -557,7 +556,7 @@ export default function BedManagementPage() {
           description: "Bed deleted successfully",
           color: "success",
         });
-        const bedsData = await bedService.getBedsByClinic(clinicId!, branchId!);
+        const bedsData = await bedService.getBedsByClinic(clinicId!);
 
         setBeds(bedsData);
       } else if (itemToDelete.type === "category") {
@@ -569,7 +568,6 @@ export default function BedManagementPage() {
         });
         const categoriesData = await bedService.getCategoriesByClinic(
           clinicId!,
-          branchId!,
         );
 
         setCategories(categoriesData);
@@ -581,8 +579,8 @@ export default function BedManagementPage() {
           color: "success",
         });
         const [bedsData, allotmentsData] = await Promise.all([
-          bedService.getBedsByClinic(clinicId!, branchId!),
-          bedService.getAllotmentsByClinic(clinicId!, branchId!),
+          bedService.getBedsByClinic(clinicId!),
+          bedService.getAllotmentsByClinic(clinicId!),
         ]);
 
         setBeds(bedsData);

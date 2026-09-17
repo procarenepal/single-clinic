@@ -29,8 +29,7 @@ import {
 import { useAuthContext } from "@/context/AuthContext";
 import { doctorService } from "@/services/doctorService";
 import { specialityService } from "@/services/specialityService";
-import { branchService } from "@/services/branchService";
-import { Branch, Doctor } from "@/types/models";
+import { Doctor } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 
 // ── Custom UI Helpers ────────────────────────────────────────────────────────
@@ -102,29 +101,19 @@ export default function DoctorsPage() {
   const [specialities, setSpecialities] = useState<
     Array<{ key: string; label: string }>
   >([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchMap, setBranchMap] = useState<Record<string, string>>({});
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const itemsPerPage = 8; // Adjust to preferred page size
 
-  const branchId = userData?.branchId ?? null;
   const isClinicWideAdmin = isClinicAdmin() || isSystemOwner();
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
 
   useEffect(() => {
     loadDoctors();
     loadSpecialities();
-  }, [clinicId, effectiveBranchId]);
+  }, [clinicId]);
 
   const loadSpecialities = async () => {
     try {
       const specialitiesData =
-        await specialityService.getActiveSpecialitiesForDropdown();
+        await specialityService.getActiveSpecialitiesForDropdown(clinicId);
 
       setSpecialities([
         { key: "all", label: "All Specialities" },
@@ -153,53 +142,6 @@ export default function DoctorsPage() {
       setLoading(false);
     }
   };
-
-  // Load branches for clinic-wide admins (no fixed branchId)
-  useEffect(() => {
-    if (!clinicId) return;
-    if (!isClinicWideAdmin || branchId) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches();
-
-        if (cancelled) return;
-        setBranches(data);
-        const map: Record<string, string> = {};
-
-        data.forEach((b) => {
-          map[b.id] = b.name;
-        });
-        setBranchMap(map);
-        if (data.length > 0) {
-          // Ordered by isMainBranch desc in service; first entry is main branch
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (err) {
-        console.error("Doctors branches fetch error:", err);
-        if (!cancelled) {
-          setBranches([]);
-          setBranchMap({});
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
-
-  // When branchId is hard-locked for staff, clear any admin filter state
-  useEffect(() => {
-    if (branchId) {
-      setSelectedBranchId(null);
-    }
-  }, [branchId]);
 
   const handleToggleStatus = async (
     doctorId: string,
@@ -308,23 +250,6 @@ export default function DoctorsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          {!branchId && isClinicWideAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-text-muted">Branch</span>
-              <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                value={selectedBranchId ?? ""}
-                onChange={(e) => setSelectedBranchId(e.target.value || null)}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.isMainBranch ? " (all branches)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <Button
             startContent={
               <div className="p-0.5 rounded-full bg-primary/10 text-primary">
@@ -504,13 +429,6 @@ export default function DoctorsPage() {
                           <div className="text-[11.5px] text-text-muted font-mono mt-0.5">
                             NMC: {doctor.nmcNumber}
                           </div>
-                          {isClinicWideAdmin && doctor.branchId && (
-                            <div className="mt-0.5">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface-2 text-text-muted border border-border-base">
-                                {branchMap[doctor.branchId]}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </td>

@@ -1,6 +1,7 @@
 import axios from "axios";
 import NepaliDate from "nepali-datetime";
 
+import { auth } from "../config/firebase";
 import { ClinicSettings, Clinic } from "../types/models";
 
 export interface IrdBillPayload {
@@ -36,15 +37,20 @@ export const getNepaliFiscalYear = (date: Date | string): string => {
   const bsYear = nepaliDate.getYear();
   const bsMonth = nepaliDate.getMonth() + 1; // 0-indexed
 
-  // Fiscal year in Nepal starts from Shrawan (4th month)
+  // Fiscal year in Nepal starts from Shrawan (4th month). The second
+  // component is the last 3 digits of the ending year (e.g. 2080.081, not
+  // 2080.81) — matches IRD's own documented sample ("2073.074") and this
+  // function's own doc comment above; substring(2) previously produced only
+  // 2 digits, which IRD's real CBMS API rejects as "104: model invalid"
+  // (confirmed live against cbapi.ird.gov.np).
   if (bsMonth >= 4) {
     const nextYear = bsYear + 1;
 
-    return `${bsYear}.${nextYear.toString().substring(2)}`;
+    return `${bsYear}.${nextYear.toString().substring(1)}`;
   } else {
     const prevYear = bsYear - 1;
 
-    return `${prevYear}.${bsYear.toString().substring(2)}`;
+    return `${prevYear}.${bsYear.toString().substring(1)}`;
   }
 };
 
@@ -471,7 +477,10 @@ export const retryIrdSync = async (
       const { auditLogService } = await import("./auditLogService");
 
       await auditLogService.logIrdSync({
-        performedBy: "system", // Retries are often automated or via admin action
+        // The Firestore rule for audit_logs requires performedBy to match
+        // the authenticated caller's uid — "system" as a literal always
+        // fails that check, so fall back to it only when truly unauthenticated.
+        performedBy: auth.currentUser?.uid || "system",
         clinicId: clinicId,
         invoiceNumber: irdInvoiceData.invoiceNumber,
         status: result.success ? "success" : "failure",

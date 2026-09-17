@@ -8,6 +8,7 @@ import {
   IoArrowUndoOutline,
   IoPauseOutline,
   IoPlayOutline,
+  IoAlertOutline,
 } from "react-icons/io5";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -116,7 +117,35 @@ export interface QueueListProps {
   onSendBack?: (appt: any) => void;
   onToggleHold?: (appt: any) => void;
   onMarkNoShow?: (appt: any) => void;
+  onToggleUrgent?: (appt: any) => void;
+  /** Reports whether a keyed action (e.g. `complete-consultation-<id>`) is
+   * currently mid-flight, so buttons that fire a write directly (not via a
+   * modal, which already has its own saving state) can disable + spin
+   * instead of looking unresponsive during the Firestore round-trip. */
+  isActionPending?: (key: string) => boolean;
 }
+
+const ButtonSpinner = () => (
+  <svg
+    className="w-3.5 h-3.5 animate-spin"
+    fill="none"
+    viewBox="0 0 24 24"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      fill="currentColor"
+    />
+  </svg>
+);
 
 export const QueueList: React.FC<QueueListProps> = ({
   loading,
@@ -140,6 +169,8 @@ export const QueueList: React.FC<QueueListProps> = ({
   onSendBack,
   onToggleHold,
   onMarkNoShow,
+  onToggleUrgent,
+  isActionPending,
 }) => {
   const navigate = useNavigate();
 
@@ -220,6 +251,14 @@ export const QueueList: React.FC<QueueListProps> = ({
                               startTime={appts[0].createdAt}
                             />
                           )}
+                        {appts.some((a) => a.isUrgent) && (
+                          <span
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 whitespace-nowrap shrink-0 bg-danger/10 text-danger border-danger/30 animate-pulse"
+                            title="Manually flagged urgent by front office"
+                          >
+                            <IoAlertOutline className="w-3 h-3" /> URGENT
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11.5px] text-text-muted leading-none mt-1">
                         Reg #{regNo}
@@ -254,13 +293,18 @@ export const QueueList: React.FC<QueueListProps> = ({
                       } else if (firstScheduledAppt) {
                         const visitAction = getGuidedAction(firstScheduledAppt);
                         if (visitAction.label === "Check-In Patient" || visitAction.label === "Settle Consultation Bill") {
+                          const pending =
+                            visitAction.label === "Check-In Patient" &&
+                            isActionPending?.(`check-in-${firstScheduledAppt.id}`);
+
                           visitActionNode = (
                             <button
-                              className={`h-8 px-3 whitespace-nowrap rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors outline-none shadow-sm ${visitAction.colorClass}`}
+                              className={`h-8 px-3 whitespace-nowrap rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors outline-none shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${visitAction.colorClass}`}
+                              disabled={pending}
                               type="button"
                               onClick={visitAction.onClick}
                             >
-                              {visitAction.icon}
+                              {pending ? <ButtonSpinner /> : visitAction.icon}
                               {visitAction.label}
                             </button>
                           );
@@ -293,6 +337,41 @@ export const QueueList: React.FC<QueueListProps> = ({
                             onClick={() => onMarkNoShow(firstScheduledAppt)}
                           >
                             No-Show
+                          </button>
+                        );
+                      })()}
+
+                    {/* Manual urgent flag — independent of the automatic
+                        >30min urgent escalation, for a clinically-urgent
+                        walk-in that just arrived. Available at any active
+                        pre-billing/pharmacy stage; single click both ways. */}
+                    {onToggleUrgent &&
+                      ["scheduled", "lobby", "triage-done", "doctor", "expert"].includes(
+                        getPatientStage(appts[0]),
+                      ) && (() => {
+                        // Match the header badge's basis (appts.some) so the
+                        // button's on/off state — and what clicking it does
+                        // to sibling appointments — stays consistent with
+                        // what's actually displayed.
+                        const anyUrgent = appts.some((a) => a.isUrgent);
+
+                        return (
+                          <button
+                            className={`h-8 px-2.5 whitespace-nowrap rounded text-[11.5px] font-medium border transition-colors outline-none flex items-center gap-1 ${
+                              anyUrgent
+                                ? "border-danger/50 text-danger bg-danger/10 hover:bg-danger/20"
+                                : "border-border-base text-text-muted hover:text-danger hover:border-danger/30 hover:bg-danger/5"
+                            }`}
+                            title={
+                              anyUrgent
+                                ? "Clear urgent flag"
+                                : "Flag as clinically urgent"
+                            }
+                            type="button"
+                            onClick={() => onToggleUrgent(appts[0])}
+                          >
+                            <IoAlertOutline className="w-3.5 h-3.5" />
+                            {anyUrgent ? "Urgent" : "Mark Urgent"}
                           </button>
                         );
                       })()}
@@ -455,26 +534,16 @@ export const QueueList: React.FC<QueueListProps> = ({
                         <div className="flex flex-wrap items-center gap-2 mt-2 md:mt-0 w-full md:w-auto justify-end shrink-0">
                           {stage === "lobby" && !isConsBillPending && (
                             <>
-                              {(!appt.doctorId || appt.doctorId === "unassigned") &&
-                                (!appt.assignedExpertId ||
-                                  appt.assignedExpertId === "unassigned") && (
+                              {(!appt.assignedExpertId ||
+                                appt.assignedExpertId === "unassigned") && (
                                   <button
                                     className="h-8 px-2.5 whitespace-nowrap rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
                                     type="button"
                                     onClick={() => handleSendToDoctor(appt.id)}
                                   >
-                                    Send to Cabin
+                                    Send to Doctor
                                   </button>
                                 )}
-                              {appt.doctorId && appt.doctorId !== "unassigned" && (
-                                <button
-                                  className="h-8 px-2.5 whitespace-nowrap rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
-                                  type="button"
-                                  onClick={() => handleSendToDoctor(appt.id)}
-                                >
-                                  Send to Doctor Cabin
-                                </button>
-                              )}
                               {appt.assignedExpertId &&
                                 appt.assignedExpertId !== "unassigned" && (
                                   <button
@@ -525,10 +594,16 @@ export const QueueList: React.FC<QueueListProps> = ({
                                   </>
                                 ) : (
                                   <button
-                                    className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                                    className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                    disabled={isActionPending?.(
+                                      `complete-consultation-${appt.id}`,
+                                    )}
                                     type="button"
                                     onClick={() => handleCompleteConsultation(appt.id)}
                                   >
+                                    {isActionPending?.(
+                                      `complete-consultation-${appt.id}`,
+                                    ) && <ButtonSpinner />}
                                     Complete (No Log)
                                   </button>
                                 )}
@@ -536,12 +611,18 @@ export const QueueList: React.FC<QueueListProps> = ({
                                   appt.assignedExpertId &&
                                   appt.assignedExpertId !== "unassigned" && (
                                     <button
-                                      className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                                      className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                      disabled={isActionPending?.(
+                                        `complete-consultation-${appt.id}`,
+                                      )}
                                       type="button"
                                       onClick={() =>
                                         handleCompleteConsultation(appt.id, true)
                                       }
                                     >
+                                      {isActionPending?.(
+                                        `complete-consultation-${appt.id}`,
+                                      ) && <ButtonSpinner />}
                                       Send to Billing
                                     </button>
                                   )}
@@ -549,10 +630,16 @@ export const QueueList: React.FC<QueueListProps> = ({
                             )}
                           {stage === "billing" && (
                             <button
-                              className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none"
+                              className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                              disabled={isActionPending?.(
+                                `complete-checkout-${appt.id}`,
+                              )}
                               type="button"
                               onClick={() => handleCompleteCheckout(appt.id)}
                             >
+                              {isActionPending?.(
+                                `complete-checkout-${appt.id}`,
+                              ) && <ButtonSpinner />}
                               Complete Checkout
                             </button>
                           )}

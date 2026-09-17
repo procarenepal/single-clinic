@@ -23,10 +23,9 @@ import { useAuthContext } from "@/context/AuthContext";
 // Services
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
-import { branchService } from "@/services/branchService";
 import { clinicService } from "@/services/clinicService";
 // Types
-import { Patient, Branch } from "@/types/models";
+import { Patient } from "@/types/models";
 import { PrintLayoutConfig } from "@/types/printLayout";
 import {
   getPrintBrandingCSS,
@@ -266,8 +265,6 @@ export default function PatientsPage() {
   } = useAuthContext();
 
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchMap, setBranchMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   // ── Filters
@@ -308,16 +305,7 @@ export default function PatientsPage() {
   const [currentExpertId, setCurrentExpertId] = useState<string | null>(null);
   const [isDoctorResolved, setIsDoctorResolved] = useState(false);
 
-  // Branch context
-  const branchId = userData?.branchId ?? null;
   const isSystemOwner = checkOwner() || checkAdmin();
-  const [branchFilter, setBranchFilter] = useState<string | null>(null);
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && branchFilter === mainBranchId
-      ? undefined
-      : (branchFilter ?? undefined));
 
   // Bypass server-side pagination only for complex filters not supported by Firestore natively
   // Also bypass for search to use client-side comprehensive filtering (mobile, email, etc.)
@@ -369,7 +357,6 @@ export default function PatientsPage() {
             searchPrefix,
             gender: genderFilter === "all" ? undefined : genderFilter,
             isCritical: isCriticalOpt,
-            branchId: effectiveBranchId,
           });
         let totalCount: number | undefined;
 
@@ -383,7 +370,6 @@ export default function PatientsPage() {
                 searchPrefix,
                 gender: genderFilter === "all" ? undefined : genderFilter,
                 isCritical: isCriticalOpt,
-                branchId: effectiveBranchId,
               },
             );
           } catch (countErr) {
@@ -420,7 +406,6 @@ export default function PatientsPage() {
       genderFilter,
       criticalFilter,
       PER_PAGE,
-      effectiveBranchId,
     ],
   );
 
@@ -442,26 +427,6 @@ export default function PatientsPage() {
       })
       .catch(console.error);
   }, [clinicId]);
-
-  useEffect(() => {
-    if (!clinicId || !isSystemOwner) return;
-    branchService
-      .getClinicBranches(undefined, false)
-      .then((data) => {
-        setBranches(data);
-        const map: Record<string, string> = {};
-
-        data.forEach((b) => {
-          map[b.id] = b.name;
-        });
-        setBranchMap(map);
-        if (!branchId && data.length > 0) {
-          // Default admin view to main branch (isMainBranch comes first from service)
-          setBranchFilter((prev) => prev ?? data[0].id);
-        }
-      })
-      .catch(console.error);
-  }, [clinicId, isSystemOwner, branchId]);
 
   // Resolve the logged-in user's doctorId once
   useEffect(() => {
@@ -490,8 +455,8 @@ export default function PatientsPage() {
       try {
         const { expertService } = await import("@/services/expertService");
         const [matchingDoctor, matchingExpert] = await Promise.all([
-          doctorService.getDoctorByEmail(userEmail),
-          expertService.getExpertByEmail(userEmail),
+          doctorService.getDoctorByEmail(userEmail, clinicId),
+          expertService.getExpertByEmail(userEmail, clinicId),
         ]);
 
         if (matchingExpert) {
@@ -529,11 +494,17 @@ export default function PatientsPage() {
         let data;
 
         if (currentExpertId) {
-          data = await patientService.getPatientsByExpert(currentExpertId);
+          data = await patientService.getPatientsByExpert(
+            currentExpertId,
+            clinicId,
+          );
         } else if (currentDoctorId) {
-          data = await patientService.getPatientsByDoctor(currentDoctorId);
+          data = await patientService.getPatientsByDoctor(
+            currentDoctorId,
+            clinicId,
+          );
         } else {
-          data = await patientService.getPatients();
+          data = await patientService.getPatients(clinicId);
         }
 
         if (!cancelled) {
@@ -560,7 +531,6 @@ export default function PatientsPage() {
     useServerPagination,
     currentDoctorId,
     currentExpertId,
-    effectiveBranchId,
     isDoctorResolved,
   ]);
 
@@ -1005,11 +975,7 @@ export default function PatientsPage() {
             <p className="text-[13.5px] text-text-muted mt-1">
               {currentDoctorId
                 ? "Your assigned patient records"
-                : branchId
-                  ? "Patients for your branch"
-                  : isSystemOwner && branchFilter
-                    ? "Clinic patients for selected branch"
-                    : "All registered clinic patients"}
+                : "All registered clinic patients"}
             </p>
           </div>
 
@@ -1073,23 +1039,6 @@ export default function PatientsPage() {
               <option value="non-critical">Non-Critical</option>
             </NativeSelect>
 
-            {/* Branch filter for clinic-wide admins (branch staff are locked to their own branch) */}
-            {isSystemOwner && !branchId && branches.length > 0 && (
-              <NativeSelect
-                value={branchFilter ?? ""}
-                onChange={(v) => {
-                  setBranchFilter(v || null);
-                  setPage(1);
-                }}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.isMainBranch ? " (all branches)" : ""}
-                  </option>
-                ))}
-              </NativeSelect>
-            )}
 
             {/* Advanced filters */}
             <Button
@@ -1256,11 +1205,6 @@ export default function PatientsPage() {
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                {isSystemOwner && patient.branchId && (
-                                  <Badge variant="primary">
-                                    {branchMap[patient.branchId] || "Branch"}
-                                  </Badge>
-                                )}
                                 <Link
                                   className="text-[12.5px] font-medium text-text-main hover:text-primary no-underline"
                                   to={`/dashboard/patients/${patient.id}`}

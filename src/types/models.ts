@@ -298,6 +298,7 @@ export interface PatientPackage {
   branchId: string;
   totalSessions: number;
   usedSessions: number;
+  billingId?: string; // Links to the AppointmentBilling invoice this package was sold on
   sessions?: PackageSessionTicket[]; // Explicit ticket tracking
   sessionHistory?: {
     consumedAt: Date;
@@ -383,6 +384,11 @@ export interface Appointment {
    * escalation, so a legitimate pause doesn't look like neglect. */
   onHold?: boolean;
   onHoldReason?: string;
+  /** Manually flagged by front-office staff for a clinically-urgent walk-in
+   * (e.g. visibly distressed patient) — independent of the >30min
+   * auto-urgent wait-time escalation, since that only fires after a long
+   * wait and this needs to surface immediately regardless of wait time. */
+  isUrgent?: boolean;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -858,6 +864,8 @@ export interface MedicinePurchaseItem {
   amount: number;
   batchNumber?: string; // Batch sold from
   type?: "medicine" | "item"; // Support both medicines and items
+  discountType?: "flat" | "percentage";
+  discountValue?: number;
 }
 
 // Line item inside a medicine purchase return
@@ -1880,7 +1888,8 @@ export interface AuditLog {
   | "payment_recorded"
   | "ird_synced"
   | "ird_sync_failed"
-  | "refund_issued";
+  | "refund_issued"
+  | "billing_discount_tax_changed";
   performedBy: string; // User ID who performed the action
   performedByEmail?: string; // User email for display
   performedByName?: string; // User name for display

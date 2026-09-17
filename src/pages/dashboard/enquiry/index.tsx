@@ -173,16 +173,12 @@ export default function EnquiriesPage() {
     setIsLoading(true);
     try {
       const dateRange = computeDateRange();
-      const data = await enquiryService.getEnquiries(
-        clinicId,
-        userData?.branchId,
-        {
-          status: statusFilter,
-          dateField,
-          startDate: dateRange.startDate,
-          endDate: dateRange.endDate,
-        },
-      );
+      const data = await enquiryService.getEnquiries(clinicId, {
+        status: statusFilter,
+        dateField,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      });
 
       setEnquiries(data);
     } catch (error) {

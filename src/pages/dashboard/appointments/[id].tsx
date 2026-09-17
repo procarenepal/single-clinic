@@ -20,7 +20,7 @@ import { Appointment, Patient, Doctor, AppointmentType } from "@/types/models";
 export default function AppointmentDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clinicId, userData, branchId, isSystemOwner } = useAuthContext();
+  const { clinicId, isSystemOwner } = useAuthContext();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,19 +50,6 @@ export default function AppointmentDetailsPage() {
 
         // Check if appointment belongs to this clinic (system owners can bypass)
         if (appointmentData.clinicId !== clinicId && !isSystemOwner()) {
-          setError("Appointment not found");
-
-          return;
-        }
-
-        // Enforce branch-level access for branch staff
-        const userBranchId = branchId || userData?.branchId;
-
-        if (
-          userBranchId &&
-          appointmentData.branchId &&
-          appointmentData.branchId !== userBranchId
-        ) {
           setError("Appointment not found");
 
           return;

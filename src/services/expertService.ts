@@ -3,9 +3,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   updateDoc,
   addDoc,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -97,12 +99,20 @@ export const expertService = {
   },
 
   /**
-   * Get all experts (excluding deleted)
+   * Get all experts (excluding deleted). Was previously an always-unfiltered
+   * `getDocs(expertsRef)` with clinic scoping applied only client-side after
+   * the fact — every clinic's expert records were sent over the wire to
+   * every caller regardless of clinicId. Now filters server-side via a real
+   * `where` clause, matching the fix already applied to every other
+   * service's equivalent leak this session.
    */
-  async getExperts(): Promise<Expert[]> {
+  async getExperts(clinicId?: string): Promise<Expert[]> {
     try {
       const expertsRef = collection(db, EXPERTS_COLLECTION);
-      const snap = await getDocs(expertsRef);
+      const q = clinicId
+        ? query(expertsRef, where("clinicId", "==", clinicId))
+        : expertsRef;
+      const snap = await getDocs(q);
 
       return snap.docs
         .map((doc) => {
@@ -129,29 +139,13 @@ export const expertService = {
   },
 
   /**
-   * Alias for backward compatibility.
-   *
-   * `clinicId` was previously accepted but silently ignored (named
-   * `_clinicId`) — `getExperts()` has no server-side clinic filter at all,
-   * so this returned every clinic's experts sharing the same branch name,
-   * a real cross-tenant data leak. Now AND'd with clinicId, matching the
-   * same fix already applied to several other services' equivalent
-   * clinicId-dropped-when-branchId-given bugs earlier this session.
+   * Alias for backward compatibility. clinicId goes all the way down to
+   * a server-side `where` clause in getExperts (see above).
    */
   async getExpertsByClinic(
     clinicId?: string,
-    branchId?: string,
   ): Promise<Expert[]> {
-    const experts = await this.getExperts();
-    const filtered = clinicId
-      ? experts.filter((e) => e.clinicId === clinicId)
-      : experts;
-
-    if (branchId) {
-      return filtered.filter((e) => e.branchId === branchId);
-    }
-
-    return filtered;
+    return await this.getExperts(clinicId);
   },
 
   /**
@@ -159,9 +153,12 @@ export const expertService = {
    * @param {string} email - Expert email
    * @returns {Promise<Expert | null>} - Matching expert or null
    */
-  async getExpertByEmail(email: string): Promise<Expert | null> {
+  async getExpertByEmail(
+    email: string,
+    clinicId?: string,
+  ): Promise<Expert | null> {
     try {
-      const experts = await this.getExperts();
+      const experts = await this.getExperts(clinicId);
       const term = email.toLowerCase();
       const match = experts.find(
         (expert) => expert.email && expert.email.toLowerCase() === term,
@@ -182,10 +179,10 @@ export const expertService = {
    */
   async searchExperts(
     searchTerm: string,
-    _clinicId?: string,
+    clinicId?: string,
   ): Promise<Expert[]> {
     try {
-      const experts = await this.getExperts();
+      const experts = await this.getExperts(clinicId);
 
       if (!searchTerm) {
         return experts;

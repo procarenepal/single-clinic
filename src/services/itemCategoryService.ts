@@ -24,15 +24,10 @@ export const itemCategoryService = {
    */
   async getCategoriesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<ItemCategory[]> {
     try {
       const categoriesRef = collection(db, ITEM_CATEGORIES_COLLECTION);
       const constraints: any[] = [where("isActive", "==", true)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(categoriesRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -181,7 +176,6 @@ export const itemCategoryService = {
    */
   async checkCategoryNameExists(
     clinicId: string,
-    branchId: string,
     categoryName: string,
     excludeId?: string,
   ): Promise<boolean> {
@@ -190,7 +184,7 @@ export const itemCategoryService = {
       const q = query(
         categoriesRef,
 
-        where("branchId", "==", branchId),
+        where("clinicId", "==", clinicId),
         where("name", "==", categoryName),
         where("isActive", "==", true),
       );

@@ -70,8 +70,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (!clinicId && !userData?.role?.includes("owner")) return;
 
     const unsubscribe = appointmentService.subscribeToClinicAppointments(
-      undefined,
-      undefined,
+      clinicId,
       (appointments) => {
         let count = 0;
         appointments.forEach((data) => {

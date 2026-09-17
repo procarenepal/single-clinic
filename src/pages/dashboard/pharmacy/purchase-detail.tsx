@@ -14,6 +14,7 @@ import {
 } from "react-icons/io5";
 
 import { pharmacyService } from "@/services/pharmacyService";
+import { billingApi } from "@/services/api/billingApi";
 import { clinicService } from "@/services/clinicService";
 import { medicineService } from "@/services/medicineService";
 import { MedicinePurchase, MedicinePurchaseReturn } from "@/types/models";
@@ -636,10 +637,8 @@ export default function PurchaseDetailPage() {
         }
 
         if (clinicId) {
-          const settingsData = await pharmacyService.getPharmacySettings(
-            clinicId,
-            purchaseData.branchId,
-          );
+          const settingsData =
+            await pharmacyService.getPharmacySettings(clinicId);
 
           let finalSettings = settingsData;
 
@@ -1055,6 +1054,12 @@ export default function PurchaseDetailPage() {
       setPurchase((prev) => prev ? { ...prev, printCount: (prev.printCount || 0) + 1 } : prev);
     } catch (err) {
       console.error("Failed to update print count", err);
+    }
+
+    // Mirror into the MySQL Schedule 5 ledger too — best-effort, never
+    // blocks the print itself.
+    if ((purchase as any).javaInvoiceId) {
+      billingApi.recordPrint((purchase as any).javaInvoiceId).catch(console.error);
     }
 
     // Create a new window for printing

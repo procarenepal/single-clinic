@@ -20,7 +20,6 @@ import { doctorService } from "@/services/doctorService";
 import { appointmentService } from "@/services/appointmentService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { expertService } from "@/services/expertService";
-import { branchService } from "@/services/branchService";
 import {
   scheduleAppointmentReminder,
   scheduleDoctorAppointmentReminder,
@@ -243,12 +242,12 @@ export default function NewAppointmentPage() {
     [],
   );
   const [loadingData, setLoadingData] = useState(true);
-  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
-  const [isMultiBranch, setIsMultiBranch] = useState(false);
+  const defaultBranchId = clinicId ?? null;
   const [billingSettings, setBillingSettings] = useState<{
     enableTax?: boolean;
     defaultTaxPercentage?: number;
   } | null>(null);
+  const [applyTax, setApplyTax] = useState(false);
 
   // Date conversion state
   const [dateConversionState, setDateConversionState] = useState({
@@ -425,58 +424,25 @@ export default function NewAppointmentPage() {
 
   const [patientSearchInput, setPatientSearchInput] = useState("");
 
-  // Resolve default branch for this appointment (branch users, then main branch, then clinic fallback)
-  useEffect(() => {
-    if (!clinicId) return;
-    if (userData?.branchId) {
-      setIsMultiBranch(true);
-      setDefaultBranchId(userData.branchId);
-
-      return;
-    }
-    branchService
-      .isMultiBranchEnabled(clinicId)
-      .then((multi) => {
-        setIsMultiBranch(multi);
-        if (multi) {
-          return branchService
-            .getMainBranch(clinicId)
-            .then((b) => b && setDefaultBranchId(b.id));
-        }
-        setDefaultBranchId(clinicId);
-      })
-      .catch(() => setDefaultBranchId(clinicId));
-  }, [clinicId, userData?.branchId]);
-
-  // Only pass branchId for multi-branch clinics; individual clinics use clinic-wide queries (no branchId filter)
-  const branchIdForData = isMultiBranch
-    ? (defaultBranchId ?? undefined)
-    : undefined;
-
   useEffect(() => {
     const loadData = async () => {
       if (!clinicId) return;
-      // For multi-branch we need defaultBranchId before loading; for individual clinic we can load with just clinicId
-      if (isMultiBranch && !defaultBranchId) return;
       try {
         setLoadingData(true);
         const patientsData = await patientService.getPatientsByClinic(
           clinicId,
-          branchIdForData,
         );
 
         setPatients(patientsData);
 
         const doctorsData = await doctorService.getDoctorsByClinic(
           clinicId,
-          branchIdForData,
         );
 
         setDoctors(doctorsData.filter((doctor) => doctor.isActive));
 
         const expertsData = await expertService.getExpertsByClinic(
           clinicId,
-          branchIdForData,
         );
 
         setExperts(expertsData.filter((expert) => expert.isActive));
@@ -484,7 +450,6 @@ export default function NewAppointmentPage() {
         const appointmentTypesData =
           await appointmentTypeService.getActiveAppointmentTypesByClinic(
             clinicId,
-            branchIdForData,
           );
 
         setAppointmentTypes(appointmentTypesData);
@@ -509,7 +474,7 @@ export default function NewAppointmentPage() {
     };
 
     loadData();
-  }, [clinicId, defaultBranchId, isMultiBranch, branchIdForData]);
+  }, [clinicId]);
 
   useEffect(() => {
     if (appointmentInfo.patientId && patients.length > 0) {
@@ -540,7 +505,6 @@ export default function NewAppointmentPage() {
         const appointments = await appointmentService.getAppointmentsByDate(
           selectedDate,
           clinicId,
-          defaultBranchId || userData?.branchId,
         );
 
         setExistingAppointments(appointments);
@@ -556,12 +520,7 @@ export default function NewAppointmentPage() {
     };
 
     loadAppointmentsForDate();
-  }, [
-    appointmentInfo.appointmentDate,
-    clinicId,
-    defaultBranchId,
-    userData?.branchId,
-  ]);
+  }, [appointmentInfo.appointmentDate, clinicId]);
 
   const handleAppointmentInfoChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -706,8 +665,8 @@ export default function NewAppointmentPage() {
         // it must be correct from the start, not "fixed later" (mirrors
         // the same fix already applied to front-office's own auto-created
         // consultation invoices).
-        const taxPercentage = billingSettings?.enableTax
-          ? billingSettings.defaultTaxPercentage || 0
+        const taxPercentage = applyTax
+          ? billingSettings?.defaultTaxPercentage || 0
           : 0;
         const totals = appointmentBillingService.calculateInvoiceTotals(
           billingItems as any,
@@ -719,7 +678,7 @@ export default function NewAppointmentPage() {
         const billingData = {
           invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
           clinicId: clinicId,
-          branchId: defaultBranchId || userData?.branchId || clinicId,
+          branchId: defaultBranchId || clinicId,
           patientId: selPat?.id || appointmentInfo.patientId,
           patientName: selPat?.name || "Unknown Patient",
           doctorId: firstClinicianItem.doctorId,
@@ -770,7 +729,7 @@ export default function NewAppointmentPage() {
         const appointmentData: Partial<Appointment> = {
           patientId: appointmentInfo.patientId,
           clinicId: clinicId,
-          branchId: defaultBranchId || userData?.branchId || clinicId,
+          branchId: defaultBranchId || clinicId,
           doctorId:
             row.clinicianType === "doctor" ? row.clinicianId : "unassigned",
           assignedExpertId:
@@ -1198,6 +1157,22 @@ export default function NewAppointmentPage() {
                 />
               </div>
             ))}
+
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                checked={applyTax}
+                className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                id="applyTaxNewAppt"
+                type="checkbox"
+                onChange={(e) => setApplyTax(e.target.checked)}
+              />
+              <label
+                className="text-[12px] text-text-muted font-medium cursor-pointer select-none"
+                htmlFor="applyTaxNewAppt"
+              >
+                Apply Tax to Invoice (if a fee applies)
+              </label>
+            </div>
 
             <div className="mt-2 flex flex-col gap-1.5 w-full">
               <label className="text-[13px] font-medium text-text-main">

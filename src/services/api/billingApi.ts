@@ -256,6 +256,17 @@ export const billingApi = {
   },
 
   /**
+   * Mirror a print/reprint event into the MySQL ledger's Schedule 5 fields
+   * (Is_Bill_Printed/Printed_Time/Printed_By), alongside the caller's own
+   * Firestore printCount write. Best-effort: a failure here must never
+   * block the actual print, so callers should fire-and-forget this (or
+   * catch and log, never surface to the user).
+   */
+  async recordPrint(javaId: number | string): Promise<void> {
+    await billingApiClient.post(`/${javaId}/record-print`, {});
+  },
+
+  /**
    * Fetch the Schedule 5 master invoice table (IRD Electronic Billing
    * Procedure clause 6(ङ)), optionally scoped to one fiscal year.
    */

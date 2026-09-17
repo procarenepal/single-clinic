@@ -263,7 +263,10 @@ export default function ExpertProfilePage() {
     try {
       setPatientsLoading(true);
       let patientsData: Patient[] = [];
-      const directPatients = await patientService.getPatientsByExpert(expertId);
+      const directPatients = await patientService.getPatientsByExpert(
+        expertId,
+        clinicId,
+      );
 
       if (directPatients) patientsData.push(...directPatients);
 

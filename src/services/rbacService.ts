@@ -101,7 +101,6 @@ export const rbacService = {
   async validateRoleNameUnique(
     clinicId: string,
     name: string,
-    branchId?: string,
     excludeId?: string,
   ): Promise<{ valid: boolean; error?: string }> {
     try {

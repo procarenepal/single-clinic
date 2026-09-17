@@ -68,16 +68,12 @@ export const leaveRequestService = {
 
   async getLeavesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<LeaveRequest[]> {
-    let q = query(
+    const q = query(
       collection(db, LEAVES_COLLECTION),
       where("clinicId", "==", clinicId),
     );
 
-    if (branchId) {
-      q = query(q, where("branchId", "==", branchId));
-    }
     const snap = await getDocs(q);
     const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
 
@@ -101,17 +97,13 @@ export const leaveRequestService = {
 
   async getPendingLeaves(
     clinicId: string,
-    branchId?: string,
   ): Promise<LeaveRequest[]> {
-    let q = query(
+    const q = query(
       collection(db, LEAVES_COLLECTION),
       where("clinicId", "==", clinicId),
       where("status", "==", "pending"),
     );
 
-    if (branchId) {
-      q = query(q, where("branchId", "==", branchId));
-    }
     const snap = await getDocs(q);
     const leaves = snap.docs.map((d) => mapLeaveRequest(d.id, d.data()));
 

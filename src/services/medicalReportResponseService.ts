@@ -21,7 +21,6 @@ export class MedicalReportResponseService {
    */
   static async savePatientResponses(
     clinicId: string,
-    branchId: string,
     patientId: string,
     fieldValues: Record<string, any>,
     submittedBy: string,
@@ -32,7 +31,7 @@ export class MedicalReportResponseService {
 
       const responseData: Omit<MedicalReportResponse, "id"> = {
         clinicId,
-        branchId,
+        branchId: clinicId,
         patientId,
         fieldValues,
         submittedBy,

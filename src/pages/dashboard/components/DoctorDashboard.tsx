@@ -43,6 +43,7 @@ const STATUS_COLORS: Record<string, string> = {
   "in-progress": "bg-amber-500/10 text-amber-600 border-amber-500/20",
   completed: "bg-green-500/10 text-green-600 border-green-500/20",
   cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
+  "no-show": "bg-red-500/10 text-red-600 border-red-500/20",
 };
 
 function StatMini({

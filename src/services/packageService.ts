@@ -20,14 +20,12 @@ export const packageService = {
    */
   async getPackagesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<TreatmentPackage[]> {
     try {
-      const constraints = [where("isActive", "==", true)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
+      const constraints = [
+        where("isActive", "==", true),
+        where("clinicId", "==", clinicId),
+      ];
 
       const q = query(collection(db, PACKAGES_COLLECTION), ...constraints);
       const snapshot = await getDocs(q);

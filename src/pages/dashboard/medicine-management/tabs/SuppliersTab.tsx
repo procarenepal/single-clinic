@@ -103,17 +103,10 @@ function ModalShell({
   );
 }
 
-interface SuppliersTabProps {
-  /**
-   * Effective branch scope for this view.
-   * For branch users this matches their fixed branchId.
-   * For clinic admins this is the branch selected on the parent page.
-   */
-  effectiveBranchId?: string | null;
-}
+interface SuppliersTabProps {}
 
-export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
-  const { userData, clinicId, branchId } = useAuthContext();
+export default function SuppliersTab(_props: SuppliersTabProps) {
+  const { clinicId, userData } = useAuthContext();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -133,8 +126,7 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
     licenseNumber: "",
   });
 
-  const branchScopeId =
-    effectiveBranchId ?? userData?.branchId ?? branchId ?? null;
+  const branchScopeId = clinicId ?? null;
 
   useEffect(() => {
     if (clinicId) {
@@ -149,7 +141,6 @@ export default function SuppliersTab({ effectiveBranchId }: SuppliersTabProps) {
     try {
       const suppliersData = await medicineService.getSuppliersByClinic(
         clinicId,
-        branchScopeId || undefined,
       );
 
       setSuppliers(suppliersData);

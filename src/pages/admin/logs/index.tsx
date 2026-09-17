@@ -12,6 +12,7 @@ import {
   IoInformationCircleOutline,
   IoChevronDownOutline,
   IoChevronUpOutline,
+  IoPrintOutline,
 } from "react-icons/io5";
 import { format } from "date-fns";
 
@@ -231,6 +232,92 @@ export default function AdminLogsPage() {
       .join(" ");
   };
 
+  const escapeHtml = (v: string) =>
+    v.replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c] as string,
+    );
+
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) return;
+
+    const rows = logs
+      .map((log) => {
+        const clinic = clinics.find((c) => c.id === log.clinicId);
+
+        return `
+          <tr>
+            <td>${format(log.timestamp, "MMM dd, yyyy HH:mm:ss")}</td>
+            <td>${escapeHtml(formatEventType(log.eventType))}</td>
+            <td class="status-${log.status}">${escapeHtml(log.status)}</td>
+            <td>${escapeHtml(log.performedByName || log.performedByEmail || log.performedBy)}</td>
+            <td>${escapeHtml(clinic?.name || log.clinicId)}</td>
+            <td>${escapeHtml(log.errorMessage || "")}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Audit Logs</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #1a1a1a; }
+            h1 { font-size: 18px; margin-bottom: 2px; }
+            p.subtitle { font-size: 12px; color: #666; margin-top: 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 11px; text-align: left; }
+            th { background: #f5f5f5; }
+            .status-success { color: #0a7a3d; font-weight: 600; }
+            .status-failure { color: #b91c1c; font-weight: 600; }
+            .status-partial { color: #b45309; font-weight: 600; }
+            @media print {
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Audit Logs</h1>
+          <p class="subtitle">Printed ${format(new Date(), "MMM dd, yyyy HH:mm:ss")} — ${logs.length} record(s)</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Event</th>
+                <th>Status</th>
+                <th>Performed By</th>
+                <th>Clinic</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   if (loading && logs.length === 0) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
@@ -248,15 +335,25 @@ export default function AdminLogsPage() {
             Track all role and user creation events and state changes
           </p>
         </div>
-        <Button
-          color="primary"
-          isLoading={loading}
-          startContent={<IoRefreshOutline />}
-          variant="flat"
-          onClick={() => loadLogs(true)}
-        >
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            isDisabled={logs.length === 0}
+            startContent={<IoPrintOutline />}
+            variant="flat"
+            onClick={handlePrint}
+          >
+            Print
+          </Button>
+          <Button
+            color="primary"
+            isLoading={loading}
+            startContent={<IoRefreshOutline />}
+            variant="flat"
+            onClick={() => loadLogs(true)}
+          >
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

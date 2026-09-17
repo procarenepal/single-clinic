@@ -32,19 +32,14 @@ export const dailyReportService = {
    * Get patients registered on a specific date
    * @param {string} clinicId - ID of the clinic
    * @param {Date} date - Date to get patients for
-   * @param {string} [branchId] - Optional branch ID to filter patients by
    * @returns {Promise<Patient[]>} - Array of patients registered on the date
    */
   async getDailyPatients(
     clinicId: string,
     date: Date,
-    branchId?: string,
   ): Promise<Patient[]> {
     try {
-      const allPatients = await patientService.getPatientsByClinic(
-        clinicId,
-        branchId,
-      );
+      const allPatients = await patientService.getPatientsByClinic(clinicId);
 
       // Filter patients by registration date (createdAt)
       const startOfDay = new Date(
@@ -80,20 +75,14 @@ export const dailyReportService = {
    * Get appointments for a specific date
    * @param {string} clinicId - ID of the clinic
    * @param {Date} date - Date to get appointments for
-   * @param {string} [branchId] - Optional branch ID to filter appointments by
    * @returns {Promise<Appointment[]>} - Array of appointments for the date
    */
   async getDailyAppointments(
     clinicId: string,
     date: Date,
-    branchId?: string,
   ): Promise<Appointment[]> {
     try {
-      return await appointmentService.getAppointmentsByDate(
-        date,
-        clinicId,
-        branchId,
-      );
+      return await appointmentService.getAppointmentsByDate(date, clinicId);
     } catch (error) {
       console.error("Error fetching daily appointments:", error);
       throw error;
@@ -104,13 +93,11 @@ export const dailyReportService = {
    * Get unified appointment and pharmacy billing/invoices for a specific date
    * @param {string} clinicId - ID of the clinic
    * @param {Date} date - Date to get billing for
-   * @param {string} [branchId] - Optional branch ID to filter billing by
    * @returns {Promise<DailyBillingSummary[]>} - Array of billing records for the date
    */
   async getDailyBilling(
     clinicId: string,
     date: Date,
-    branchId?: string,
   ): Promise<DailyBillingSummary[]> {
     try {
       const startOfDay = new Date(
@@ -134,9 +121,9 @@ export const dailyReportService = {
 
       const [allAppointmentBilling, allPurchases, allPathologyBilling] =
         await Promise.all([
-          appointmentBillingService.getBillingByClinic(clinicId, branchId),
-          pharmacyService.getMedicinePurchasesByClinic(clinicId, branchId),
-          pathologyBillingService.getBillingByClinic(clinicId, branchId),
+          appointmentBillingService.getBillingByClinic(clinicId),
+          pharmacyService.getMedicinePurchasesByClinic(clinicId),
+          pathologyBillingService.getBillingByClinic(clinicId),
         ]);
 
       const summaries: DailyBillingSummary[] = [];
@@ -272,19 +259,17 @@ export const dailyReportService = {
    * Get all daily report data for a specific date
    * @param {string} clinicId - ID of the clinic
    * @param {Date} date - Date to get report for
-   * @param {string} [branchId] - Optional branch ID to scope report to a single branch
    * @returns {Promise<DailyReportData>} - Complete daily report data
    */
   async getDailyReportData(
     clinicId: string,
     date: Date,
-    branchId?: string,
   ): Promise<DailyReportData> {
     try {
       const [patients, appointments, billing] = await Promise.all([
-        this.getDailyPatients(clinicId, date, branchId),
-        this.getDailyAppointments(clinicId, date, branchId),
-        this.getDailyBilling(clinicId, date, branchId),
+        this.getDailyPatients(clinicId, date),
+        this.getDailyAppointments(clinicId, date),
+        this.getDailyBilling(clinicId, date),
       ]);
 
       return {

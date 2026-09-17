@@ -364,7 +364,6 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
             const nameValidation = await rbacService.validateRoleNameUnique(
               clinicId,
               formData.name,
-              selectedRole!.branchId,
               selectedRole!.id, // Exclude current role
             );
 

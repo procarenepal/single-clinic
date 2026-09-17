@@ -100,7 +100,6 @@ export const PackageExpiryReport: React.FC<PackageExpiryReportProps> = ({
         row.patient.name,
         createdBy,
         undefined,
-        branchId,
       );
       addToast({
         title: "Reminder Sent",

@@ -33,22 +33,21 @@ export default function DefaultLayout({
     }
   };
 
-  // Fetch clinic branding — works with or without auth
+  // Fetch clinic branding — only possible once authenticated (clinicId
+  // known). clinicService.getAllClinics() is deliberately restricted to
+  // super admins (it's a full cross-clinic list), so there's no way to
+  // fetch "the" clinic for an unauthenticated visitor without either
+  // loosening that rule or hardcoding a clinic id — neither is worth it
+  // just for footer branding, which already has sensible siteConfig
+  // defaults for exactly this case.
   useEffect(() => {
+    if (!clinicId) return;
+
     let cancelled = false;
 
     const fetchClinic = async () => {
       try {
-        let clinic = null;
-
-        if (clinicId) {
-          clinic = await clinicService.getClinicById(clinicId);
-        } else {
-          // Public page: fetch the first clinic from the database
-          const all = await clinicService.getAllClinics();
-
-          if (all.length > 0) clinic = all[0];
-        }
+        const clinic = await clinicService.getClinicById(clinicId);
 
         if (cancelled || !clinic) return;
         setClinicName(clinic.name);

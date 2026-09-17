@@ -30,7 +30,7 @@ export default function SellPackageModal({
   onClose,
   patients,
 }: SellPackageModalProps) {
-  const { clinicId, branchId, currentUser } = useAuthContext();
+  const { clinicId, currentUser } = useAuthContext();
   const [packages, setPackages] = useState<TreatmentPackage[]>([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
   const [billingSettings, setBillingSettings] =
@@ -43,6 +43,7 @@ export default function SellPackageModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [startSessionInstantly, setStartSessionInstantly] = useState(false);
+  const [applyTax, setApplyTax] = useState(false);
 
   // New vs Existing mode
   const [saleMode, setSaleMode] = useState<"existing" | "new">("existing");
@@ -60,11 +61,34 @@ export default function SellPackageModal({
     }
   }, [isOpen, clinicId]);
 
+  // The modal stays mounted between opens (the parent never unmounts it),
+  // so without this its form silently carries over whatever was left from
+  // the previous sale — including "Apply Tax" — into the next one.
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedPatientId("");
+      setSelectedPackageId("");
+      setPaymentMethod("cash");
+      setReference("");
+      setNotes("");
+      setStartSessionInstantly(false);
+      setApplyTax(false);
+      setSaleMode("existing");
+      setNewPatientForm({
+        name: "",
+        mobile: "",
+        patientPanVat: "",
+        age: "",
+        gender: "male",
+      });
+    }
+  }, [isOpen]);
+
   const loadPackages = async () => {
     try {
       setLoadingPackages(true);
       const [data, settings] = await Promise.all([
-        packageService.getPackagesByClinic(clinicId!, branchId || undefined),
+        packageService.getPackagesByClinic(clinicId!),
         appointmentBillingService.getBillingSettings(clinicId!).catch(() => null),
       ]);
 
@@ -141,7 +165,7 @@ export default function SellPackageModal({
           regNumber: nextReg,
           address: "Clinic Walk-in",
           clinicId: clinicId,
-          branchId: branchId || clinicId,
+          branchId: clinicId,
         });
         finalPatientName = newPatientForm.name.trim();
         finalPatientPanVat = newPatientForm.patientPanVat.trim() || undefined;
@@ -166,8 +190,8 @@ export default function SellPackageModal({
         amount: pkg.price,
       };
 
-      const taxPercentage = billingSettings?.enableTax
-        ? billingSettings.defaultTaxPercentage || 0
+      const taxPercentage = applyTax
+        ? billingSettings?.defaultTaxPercentage || 0
         : 0;
       const totals = appointmentBillingService.calculateInvoiceTotals(
         [billingItem],
@@ -179,7 +203,7 @@ export default function SellPackageModal({
       const billingData = {
         invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         clinicId: clinicId,
-        branchId: branchId || clinicId,
+        branchId: clinicId,
         patientId: finalPatientId,
         patientName: finalPatientName,
         patientPanVat: finalPatientPanVat,
@@ -223,7 +247,6 @@ export default function SellPackageModal({
         await walletService.addFunds(
           finalPatientId,
           clinicId,
-          branchId || "",
           pkg.walletCreditAmount,
           paymentMethod,
           `Package Credit: ${pkg.name}`,
@@ -249,12 +272,13 @@ export default function SellPackageModal({
           packageId: pkg.id,
           packageName: pkg.name,
           clinicId: clinicId,
-          branchId: branchId || clinicId,
+          branchId: clinicId,
           totalSessions: pkg.totalSessions,
           usedSessions: 0,
           status: "active",
           expiresAt: expiresAt,
           createdBy: currentUser.uid,
+          billingId,
         });
       }
 
@@ -273,7 +297,7 @@ export default function SellPackageModal({
           status: "confirmed", // Puts patient directly in the Lobby Queue
           reason: `Session 1 of ${pkg.name}`,
           clinicId: clinicId,
-          branchId: branchId || clinicId,
+          branchId: clinicId,
           createdBy: currentUser.uid,
           billingId: billingId,
           billingStatus: "paid",
@@ -510,6 +534,22 @@ export default function SellPackageModal({
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
               />
+            </div>
+
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                checked={applyTax}
+                className="w-4 h-4 text-primary rounded border-border-base focus:ring-primary"
+                id="applyTax"
+                type="checkbox"
+                onChange={(e) => setApplyTax(e.target.checked)}
+              />
+              <label
+                className="text-[12px] font-medium text-text-main cursor-pointer select-none"
+                htmlFor="applyTax"
+              >
+                Apply Tax to Invoice
+              </label>
             </div>
 
             {selectedPkg && (selectedPkg.totalSessions || 0) > 0 && (

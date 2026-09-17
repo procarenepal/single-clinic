@@ -25,15 +25,10 @@ export const issuedItemService = {
    */
   async getIssuedItemsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<IssuedItem[]> {
     try {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(issuedItemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -70,15 +65,10 @@ export const issuedItemService = {
   async getIssuedItemsByStatus(
     clinicId: string,
     status: "issued" | "returned" | "overdue",
-    branchId?: string,
   ): Promise<IssuedItem[]> {
     try {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
       const constraints: any[] = [where("status", "==", status)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(issuedItemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -328,23 +318,14 @@ export const issuedItemService = {
   /**
    * Update overdue items status
    */
-  async updateOverdueItems(clinicId: string, branchId?: string): Promise<void> {
+  async updateOverdueItems(clinicId: string): Promise<void> {
     try {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
-      let q = query(
+      const q = query(
         issuedItemsRef,
 
         where("status", "==", "issued"),
       );
-
-      if (branchId) {
-        q = query(
-          issuedItemsRef,
-
-          where("branchId", "==", branchId),
-          where("status", "==", "issued"),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
       const now = new Date();

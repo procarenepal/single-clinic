@@ -33,7 +33,6 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { appointmentService } from "@/services/appointmentService";
-import { branchService } from "@/services/branchService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import {
   scheduleAppointmentReminder,
@@ -45,6 +44,7 @@ import { expertCommissionService } from "@/services/expertCommissionService";
 import { doctorCommissionService } from "@/services/doctorCommissionService";
 import { hrService } from "@/services/hrService";
 import { staffCommissionService } from "@/services/staffCommissionService";
+import { sendWelcomeSMS } from "@/services/sendMessageService";
 
 // Types
 import {
@@ -734,7 +734,7 @@ const NewPatientPage: React.FC = () => {
     userData,
     isLoading: authLoading,
   } = useAuthContext();
-  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
+  const defaultBranchId = clinicId ?? null;
 
   // ── Loading states
   const [loading, setLoading] = useState(false);
@@ -1016,7 +1016,7 @@ const NewPatientPage: React.FC = () => {
 
     // Load doctors
     doctorService
-      .getDoctors()
+      .getDoctors(clinicId)
       .then((data) => {
         const active = data.filter((d) => d.isActive);
 
@@ -1038,7 +1038,7 @@ const NewPatientPage: React.FC = () => {
 
     // Load experts
     expertService
-      .getExperts()
+      .getExperts(clinicId)
       .then((data) => {
         const active = data.filter((e) => e.isActive);
 
@@ -1048,11 +1048,14 @@ const NewPatientPage: React.FC = () => {
       .finally(() => setExpertsLoading(false));
 
     // Load patients for existing appointment lookup
-    patientService.getPatients().then(setPatients).catch(console.error);
+    patientService
+      .getPatients(clinicId)
+      .then(setPatients)
+      .catch(console.error);
 
     // Load appointment types
     appointmentTypeService
-      .getActiveAppointmentTypes()
+      .getActiveAppointmentTypes(clinicId)
       .then(setAppointmentTypes)
       .catch(console.error);
 
@@ -1067,36 +1070,17 @@ const NewPatientPage: React.FC = () => {
 
     // Load referral partners
     referralPartnerService
-      .getAllReferralPartners()
+      .getAllReferralPartners(clinicId)
       .then(setReferralPartners)
       .catch(console.error);
   }, [clinicId, authLoading, userData]);
-
-  useEffect(() => {
-    if (!clinicId || authLoading) return;
-    if (userData?.branchId) {
-      setDefaultBranchId(userData.branchId);
-
-      return;
-    }
-    branchService
-      .isMultiBranchEnabled()
-      .then((multi) =>
-        multi
-          ? branchService
-              .getMainBranch()
-              .then((b) => b && setDefaultBranchId(b.id))
-          : setDefaultBranchId(clinicId),
-      )
-      .catch(() => setDefaultBranchId(clinicId));
-  }, [clinicId, authLoading, userData?.branchId]);
 
   // Auto-generate reg number
   useEffect(() => {
     if (!clinicId) return;
     setGeneratingReg(true);
     patientService
-      .getNextRegistrationNumber()
+      .getNextRegistrationNumber(clinicId)
       .then((n) => setProfile((p) => ({ ...p, regNumber: n })))
       .catch(console.error)
       .finally(() => setGeneratingReg(false));
@@ -1111,11 +1095,7 @@ const NewPatientPage: React.FC = () => {
     }
     setLoadingAppointments(true);
     appointmentService
-      .getAppointmentsByDate(
-        new Date(appt.appointmentDate),
-        undefined, // clinicId
-        defaultBranchId || userData?.branchId,
-      )
+      .getAppointmentsByDate(new Date(appt.appointmentDate), undefined)
       .then(setExistingAppointments)
       .catch(console.error)
       .finally(() => setLoadingAppointments(false));
@@ -1486,6 +1466,15 @@ const NewPatientPage: React.FC = () => {
 
       const patientId = await patientService.createPatient(buildPatientData());
 
+      sendWelcomeSMS({
+        id: patientId,
+        name: profile.name,
+        mobile: profile.mobile,
+        phone: profile.phone,
+        clinicId,
+        branchId: defaultBranchId || clinicId,
+      }).catch((err) => console.error("Welcome SMS failed:", err));
+
       const doctorName =
         doctors.find((d) => d.id === profile.doctor)?.name || "";
 
@@ -1557,6 +1546,15 @@ const NewPatientPage: React.FC = () => {
 
       const patientId = await patientService.createPatient(buildPatientData());
 
+      sendWelcomeSMS({
+        id: patientId,
+        name: profile.name,
+        mobile: profile.mobile,
+        phone: profile.phone,
+        clinicId,
+        branchId: defaultBranchId || clinicId,
+      }).catch((err) => console.error("Welcome SMS failed:", err));
+
       // Handle Referral Commissions (Polymorphic Multiple Referrals)
       if (appt.appointmentType) {
         try {
@@ -1598,7 +1596,6 @@ const NewPatientPage: React.FC = () => {
                     await referralCommissionService.createRegistrationCommission(
                       { ...partner, defaultCommission: finalPercentage },
                       clinicId,
-                      defaultBranchId || clinicId,
                       patientId,
                       profile.name,
                       selectedType.name,
@@ -1622,7 +1619,6 @@ const NewPatientPage: React.FC = () => {
                       doctor.id,
                       doctor.name,
                       clinicId,
-                      defaultBranchId || clinicId,
                       patientId,
                       profile.name,
                       selectedType.name,
@@ -1647,7 +1643,6 @@ const NewPatientPage: React.FC = () => {
                       expert.id,
                       expert.name,
                       clinicId,
-                      defaultBranchId || clinicId,
                       patientId,
                       profile.name,
                       selectedType.name,
@@ -1672,7 +1667,6 @@ const NewPatientPage: React.FC = () => {
                       staffMember.id,
                       staffMember.name,
                       clinicId,
-                      defaultBranchId || clinicId,
                       patientId,
                       profile.name,
                       selectedType.name,

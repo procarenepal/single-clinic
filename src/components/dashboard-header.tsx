@@ -309,7 +309,7 @@ export const DashboardHeader = ({
         ] = await Promise.all([
           patientService.getPatientsByClinic(clinicId),
           doctorService.getDoctorsByClinic(clinicId),
-          enquiryService.getEnquiries(clinicId, undefined, {
+          enquiryService.getEnquiries(clinicId, {
             dateField: "createdAt",
           }),
           appointmentBillingService.getBillingByClinic(clinicId).catch(() => []),

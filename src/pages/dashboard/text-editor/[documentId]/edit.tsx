@@ -6,24 +6,21 @@ import { addToast } from "@/components/ui/toast";
 import { TextEditorComponent } from "@/components/text-editor/TextEditorComponent";
 import { TextDocument } from "@/types/textEditor";
 import { textEditorService } from "@/services/textEditorService";
-import { branchService } from "@/services/branchService";
 import { useAuthContext } from "@/context/AuthContext";
 
 export default function EditTextDocumentPage() {
   const { documentId } = useParams<{ documentId: string }>();
   const navigate = useNavigate();
-  const { clinicId, userData } = useAuthContext();
+  const { clinicId } = useAuthContext();
 
   const [document, setDocument] = useState<TextDocument | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isMultiBranch, setIsMultiBranch] = useState(false);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
 
   useEffect(() => {
     if (documentId && clinicId) {
       loadDocument();
     } else {
-      loadBranchData();
+      setLoading(false);
     }
   }, [documentId, clinicId]);
 
@@ -53,25 +50,7 @@ export default function EditTextDocumentPage() {
 
         return;
       }
-      if (
-        doc.branchId &&
-        userData?.branchId &&
-        doc.branchId !== userData.branchId
-      ) {
-        if (userData.role !== "clinic-admin") {
-          addToast({
-            title: "Access Denied",
-            description:
-              "You don't have permission to access this branch-specific document",
-            color: "danger",
-          });
-          navigate("/dashboard/text-editor");
-
-          return;
-        }
-      }
       setDocument(doc);
-      await loadBranchData();
     } catch (error) {
       console.error("Error loading document:", error);
       addToast({
@@ -82,38 +61,6 @@ export default function EditTextDocumentPage() {
       navigate("/dashboard/text-editor");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadBranchData = async () => {
-    if (!clinicId) return;
-    try {
-      const isMultiBranchEnabled =
-        await branchService.isMultiBranchEnabled(clinicId);
-
-      setIsMultiBranch(isMultiBranchEnabled);
-      if (isMultiBranchEnabled) {
-        if (userData?.branchId) {
-          setSelectedBranchId(userData.branchId);
-        } else if (document?.branchId) {
-          setSelectedBranchId(document.branchId);
-        } else {
-          const branches = await branchService.getClinicBranches(clinicId);
-
-          if (branches.length > 0) {
-            const mainBranch =
-              branches.find((b) => b.isMainBranch) || branches[0];
-
-            setSelectedBranchId(mainBranch.id);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error loading branch data:", error);
-    } finally {
-      if (!documentId) {
-        setLoading(false);
-      }
     }
   };
 
@@ -162,7 +109,6 @@ export default function EditTextDocumentPage() {
       </div>
 
       <TextEditorComponent
-        branchId={isMultiBranch ? selectedBranchId : undefined}
         clinicId={clinicId}
         document={document || undefined}
         onCancel={handleCancel}

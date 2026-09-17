@@ -32,7 +32,6 @@ import { doctorService } from "@/services/doctorService";
 import { medicineService } from "@/services/medicineService";
 import { appointmentService } from "@/services/appointmentService";
 import { prescriptionService } from "@/services/prescriptionService";
-import { branchService } from "@/services/branchService";
 import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
@@ -140,10 +139,10 @@ function SearchSelect({
   const filtered = (
     q
       ? items.filter((i) =>
-          (i.primary + " " + (i.secondary || ""))
-            .toLowerCase()
-            .includes(q.toLowerCase()),
-        )
+        (i.primary + " " + (i.secondary || ""))
+          .toLowerCase()
+          .includes(q.toLowerCase()),
+      )
       : items
   ).slice(0, 100);
   const selected = items.find((i) => i.id === value);
@@ -242,14 +241,8 @@ export default function NewPrescriptionPage() {
   const [searchParams] = useSearchParams();
   const { clinicId, userData } = useAuthContext();
 
-  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
-  const [isMultiBranch, setIsMultiBranch] = useState(false);
-  const effectiveBranchId =
-    userData?.branchId ?? defaultBranchId ?? clinicId ?? null;
-  // Only pass branchId for multi-branch clinics; individual clinics use clinic-wide queries
-  const branchIdForData = isMultiBranch
-    ? (userData?.branchId ?? defaultBranchId ?? undefined)
-    : undefined;
+  const defaultBranchId = clinicId ?? null;
+  const effectiveBranchId = clinicId ?? null;
 
   // Real clinic tax settings — these invoices are created and IRD-synced
   // immediately, so tax/PAN must be correct from the start (see the
@@ -268,7 +261,9 @@ export default function NewPrescriptionPage() {
     if (!clinicId) return;
     appointmentBillingService
       .getBillingSettings(clinicId)
-      .then(setAppointmentBillingSettings)
+      .then((settings) => {
+        setAppointmentBillingSettings(settings);
+      })
       .catch((err) =>
         console.error("Error loading appointment billing settings:", err),
       );
@@ -321,6 +316,10 @@ export default function NewPrescriptionPage() {
   const [sendToPathology, setSendToPathology] = useState(true);
   const [sendToExpert, setSendToExpert] = useState(false);
   const [selectedExpertId, setSelectedExpertId] = useState("");
+  // Single per-invoice tax override shared by all 3 auto-bill paths this
+  // page can trigger (complete-no-prescription, pathology referral, and
+  // save-with-consultation-billing) — one checkbox, not three.
+  const [applyTax, setApplyTax] = useState(false);
 
   // Live Consultation Queue & Triage Auto-Import
   const todayStr = new Date().toDateString();
@@ -767,40 +766,17 @@ export default function NewPrescriptionPage() {
     }
   };
 
-  // Resolve default branch (branch user, then main branch when multi-branch, else clinicId)
-  useEffect(() => {
-    if (!clinicId) return;
-    if (userData?.branchId) {
-      setIsMultiBranch(true);
-      setDefaultBranchId(userData.branchId);
-
-      return;
-    }
-    branchService
-      .isMultiBranchEnabled(clinicId)
-      .then((multi) => {
-        setIsMultiBranch(multi);
-        if (multi) {
-          return branchService
-            .getMainBranch(clinicId)
-            .then((b) => setDefaultBranchId(b?.id ?? clinicId));
-        }
-        setDefaultBranchId(clinicId);
-      })
-      .catch(() => setDefaultBranchId(clinicId));
-  }, [clinicId, userData?.branchId]);
-
   useEffect(() => {
     if (!clinicId) return;
     setLoading(true);
     Promise.all([
-      patientService.getPatientsByClinic(clinicId, branchIdForData),
-      doctorService.getDoctorsByClinic(clinicId, branchIdForData),
-      expertService.getExpertsByClinic(clinicId, branchIdForData),
+      patientService.getPatientsByClinic(clinicId),
+      doctorService.getDoctorsByClinic(clinicId),
+      expertService.getExpertsByClinic(clinicId),
       medicineService.getMedicinesByClinic(clinicId),
-      pathologyService.getCategoriesByClinic(clinicId, branchIdForData),
-      pathologyService.getTestTypesByClinic(clinicId, branchIdForData),
-      appointmentService.getAppointmentsByClinic(clinicId, branchIdForData),
+      pathologyService.getCategoriesByClinic(clinicId),
+      pathologyService.getTestTypesByClinic(clinicId),
+      appointmentService.getAppointmentsByClinic(clinicId),
     ])
       .then(
         ([
@@ -875,7 +851,7 @@ export default function NewPrescriptionPage() {
         });
       })
       .finally(() => setLoading(false));
-  }, [clinicId, branchIdForData, searchParams]);
+  }, [clinicId, searchParams]);
 
   useEffect(() => {
     if (appointmentId) {
@@ -920,7 +896,7 @@ export default function NewPrescriptionPage() {
       if (dObj && !isNaN(dObj.getTime())) {
         return `${dObj.getFullYear()}/${String(dObj.getMonth() + 1).padStart(2, "0")}/${String(dObj.getDate()).padStart(2, "0")}`;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return "Invalid Date";
   };
@@ -1026,12 +1002,28 @@ export default function NewPrescriptionPage() {
     try {
       const currentUser = userData?.id || "unknown-user";
       let billingId: string | undefined = undefined;
+      let billingPaymentStatus: "unpaid" | "paid" | undefined = undefined;
       let isDualRoute = false;
 
       try {
         const apt = appointments.find((a) => a.id === appointmentId);
 
-        if (apt) {
+        // Don't create a second consultation invoice for a visit that's
+        // already billed (e.g. by front-office's createConsultationBill at
+        // check-in) — reuse the existing one instead.
+        const existingBillId =
+          (apt as any)?.consultationBillingId || apt?.billingId;
+        const existingBilling = existingBillId
+          ? await appointmentBillingService
+              .getBillingById(existingBillId)
+              .catch(() => null)
+          : null;
+
+        if (existingBilling && existingBilling.status !== "cancelled") {
+          billingId = existingBilling.id;
+          billingPaymentStatus =
+            existingBilling.paymentStatus === "paid" ? "paid" : "unpaid";
+        } else if (apt) {
           const pat = patients.find((p) => p.id === patientId);
           const docInfo = doctors.find((d) => d.id === doctorId);
           const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
@@ -1135,8 +1127,8 @@ export default function NewPrescriptionPage() {
             amount: price,
           };
 
-          const taxPercentage1 = appointmentBillingSettings?.enableTax
-            ? appointmentBillingSettings.defaultTaxPercentage || 0
+          const taxPercentage1 = applyTax
+            ? appointmentBillingSettings?.defaultTaxPercentage || 0
             : 0;
           const totals1 = appointmentBillingService.calculateInvoiceTotals(
             [billingItem] as any,
@@ -1201,8 +1193,8 @@ export default function NewPrescriptionPage() {
           ? { assignedExpertId: selectedExpertId }
           : {}),
         billingId: billingId || null,
-        billingStatus: billingId ? "unpaid" : "paid",
-        paymentStatus: billingId ? "unpaid" : "paid",
+        billingStatus: billingId ? billingPaymentStatus || "unpaid" : "paid",
+        paymentStatus: billingId ? billingPaymentStatus || "unpaid" : "paid",
         updatedAt: new Date(),
       } as any);
 
@@ -1292,73 +1284,11 @@ export default function NewPrescriptionPage() {
       const newPrescriptionId =
         await prescriptionService.createPrescription(prescriptionData);
 
-      // =================== PATHOLOGY AUTO-BILLING DRAFT ===================
-      if (sendToPathology && selectedPathologyTests.length > 0) {
-        try {
-          const pat = patients.find((p) => p.id === patientId);
-          const docInfo = doctors.find((d) => d.id === doctorId);
-
-          const pathItems = selectedPathologyTests.map((t) => ({
-            id: crypto.randomUUID(),
-            testId: t.testId,
-            testName: t.testName,
-            price: t.price,
-            quantity: 1,
-            amount: t.price,
-          }));
-          const pathTaxPercentage = pathologyBillingSettingsForTax?.enableTax
-            ? pathologyBillingSettingsForTax.defaultTaxPercentage || 0
-            : 0;
-          const pathTotals = pathologyBillingService.calculateInvoiceTotals(
-            pathItems as any,
-            "percent",
-            0,
-            pathTaxPercentage,
-          );
-
-          const draftPathologyBilling = {
-            invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-            clinicId: clinicId!,
-            branchId: effectiveBranchId ?? clinicId!,
-            patientId,
-            patientName: pat?.name || "Unknown Patient",
-            patientPhone: pat?.mobile || "",
-            patientGender: pat?.gender || "",
-            patientPanVat: pat?.patientPanVat || undefined,
-            doctorId,
-            doctorName: docInfo?.name || "Unknown Doctor",
-            doctorType: (docInfo?.doctorType || "regular") as
-              | "regular"
-              | "visitor",
-            invoiceDate: new Date(),
-            items: pathItems,
-            subtotal: pathTotals.subtotal,
-            itemDiscountAmount: 0,
-            mainDiscountAmount: 0,
-            discountType: "percent" as const,
-            discountValue: 0,
-            discountAmount: pathTotals.discountAmount,
-            taxPercentage: pathTaxPercentage,
-            taxAmount: pathTotals.taxAmount,
-            totalAmount: pathTotals.totalAmount,
-            status: "draft" as const,
-            paymentStatus: "unpaid" as const,
-            paidAmount: 0,
-            balanceAmount: pathTotals.totalAmount,
-            createdBy: currentUser,
-            notes: "Prescribed via Clinical Consultation",
-          };
-
-          await pathologyBillingService.createBilling(
-            draftPathologyBilling as any,
-          );
-        } catch (pathErr) {
-          console.error(
-            "Error auto-generating pathology billing draft:",
-            pathErr,
-          );
-        }
-      }
+      // Pathology tests are NOT auto-billed here. Prescribing them only
+      // flags intent (sendToPathology/pathologyTests, saved above) — an
+      // actual invoice, and the IRD sync that happens the instant one is
+      // created, only happens once staff review/select/discount the tests
+      // from the Pathology Billing tab's "Pending Orders" queue.
 
       // =================== PHASE 4: AUTOMATED SMART BILLING & COMMISSION LOGGING ===================
       if (appointmentId) {
@@ -1391,7 +1321,20 @@ export default function NewPrescriptionPage() {
         try {
           const apt = appointments.find((a) => a.id === appointmentId);
 
-          if (apt) {
+          // Don't create a second consultation invoice for a visit that's
+          // already billed (e.g. by front-office's createConsultationBill
+          // at check-in, or by handleCompleteNoPrescription above).
+          const existingBillId4 =
+            (apt as any)?.consultationBillingId || apt?.billingId;
+          const existingBilling4 = existingBillId4
+            ? await appointmentBillingService
+                .getBillingById(existingBillId4)
+                .catch(() => null)
+            : null;
+          const alreadyBilled4 =
+            !!existingBilling4 && existingBilling4.status !== "cancelled";
+
+          if (apt && !alreadyBilled4) {
             const pat = patients.find((p) => p.id === patientId);
             const docInfo = doctors.find((d) => d.id === doctorId);
 
@@ -1487,8 +1430,8 @@ export default function NewPrescriptionPage() {
               amount: price,
             };
 
-            const taxPercentage3 = appointmentBillingSettings?.enableTax
-              ? appointmentBillingSettings.defaultTaxPercentage || 0
+            const taxPercentage3 = applyTax
+              ? appointmentBillingSettings?.defaultTaxPercentage || 0
               : 0;
             const totals3 = appointmentBillingService.calculateInvoiceTotals(
               [billingItem] as any,
@@ -1667,18 +1610,17 @@ export default function NewPrescriptionPage() {
                     const hr12 = hr % 12 || 12;
 
                     formattedTime = `${hr12}:${minutes} ${ampm}`;
-                  } catch {}
+                  } catch { }
 
                   const isActiveSession = appointmentId === appt.id;
 
                   return (
                     <div
                       key={appt.id}
-                      className={`p-4 rounded-[12px] border transition-all flex flex-col justify-between gap-3.5 shadow-sm relative ${
-                        isActiveSession
+                      className={`p-4 rounded-[12px] border transition-all flex flex-col justify-between gap-3.5 shadow-sm relative ${isActiveSession
                           ? "border-primary bg-primary/[0.03] ring-1 ring-primary/30"
                           : "border-border-base hover:border-indigo-500/40 bg-surface hover:shadow-md"
-                      }`}
+                        }`}
                     >
                       <div className="flex justify-between items-start gap-2">
                         <div>
@@ -2463,6 +2405,22 @@ export default function NewPrescriptionPage() {
                 value={notes}
                 onChange={(e: any) => setNotes(e.target.value)}
               />
+              <div className="flex items-center gap-3 bg-surface-2 p-3 rounded-[12px] border border-border-base">
+                <input
+                  checked={applyTax}
+                  className="w-4 h-4 accent-primary cursor-pointer"
+                  id="applyTaxRx"
+                  type="checkbox"
+                  onChange={(e) => setApplyTax(e.target.checked)}
+                />
+                <label
+                  className="text-[13px] font-medium text-text-main cursor-pointer"
+                  htmlFor="applyTaxRx"
+                >
+                  Apply Tax to any Invoice Generated
+                </label>
+              </div>
+
               <div className="flex items-center gap-3 bg-primary/5 p-4 rounded-[12px] border border-primary/20">
                 <input
                   checked={sendToPharmacy}

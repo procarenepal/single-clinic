@@ -17,8 +17,7 @@ import {
 } from "@/components/ui/dropdown";
 import { useAuthContext } from "@/context/AuthContext";
 import { referralPartnerService } from "@/services/referralPartnerService";
-import { branchService } from "@/services/branchService";
-import { Branch, ReferralPartner } from "@/types/models";
+import { ReferralPartner } from "@/types/models";
 import { addToast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
@@ -33,23 +32,13 @@ export default function ReferralPartnersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchMap, setBranchMap] = useState<Record<string, string>>({});
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const itemsPerPage = 8;
 
-  const branchId = userData?.branchId ?? null;
   const isClinicAdmin = userData?.role === "clinic-admin";
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
 
   useEffect(() => {
     loadPartners();
-  }, [clinicId, effectiveBranchId]);
+  }, [clinicId]);
 
   const loadPartners = async () => {
     if (!clinicId) return;
@@ -57,7 +46,6 @@ export default function ReferralPartnersPage() {
       setLoading(true);
       const data = await referralPartnerService.getReferralPartnersByClinic(
         clinicId,
-        effectiveBranchId,
       );
 
       setPartners(data);
@@ -71,40 +59,6 @@ export default function ReferralPartnersPage() {
       setLoading(false);
     }
   };
-
-  // Load branches for clinic-wide admins
-  useEffect(() => {
-    if (!clinicId) return;
-    if (!isClinicAdmin || branchId) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches(clinicId, true);
-
-        if (cancelled) return;
-        setBranches(data);
-        const map: Record<string, string> = {};
-
-        data.forEach((b) => {
-          map[b.id] = b.name;
-        });
-        setBranchMap(map);
-        if (data.length > 0) {
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (err) {
-        console.error("Referral branches fetch error:", err);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
 
   const handleToggleStatus = async (
     partnerId: string,
@@ -195,23 +149,6 @@ export default function ReferralPartnersPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          {!branchId && isClinicAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-mountain-500">Branch</span>
-              <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                value={selectedBranchId ?? ""}
-                onChange={(e) => setSelectedBranchId(e.target.value || null)}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.isMainBranch ? " (all branches)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <Button
             color="primary"
             startContent={<IoAddOutline className="w-4 h-4" />}

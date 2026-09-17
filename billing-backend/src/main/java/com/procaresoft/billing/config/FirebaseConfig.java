@@ -35,6 +35,9 @@ public class FirebaseConfig {
     @Value("${firebase.service-account.path:}")
     private String serviceAccountPath;
 
+    @Value("${firebase.storage-bucket:}")
+    private String storageBucket;
+
     @PostConstruct
     public void init() {
         if (!FirebaseApp.getApps().isEmpty()) {
@@ -47,10 +50,12 @@ public class FirebaseConfig {
                         + "reject requests with 401 until this is set.");
                 return;
             }
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(credentialStream))
-                    .build();
-            FirebaseApp.initializeApp(options);
+            FirebaseOptions.Builder optionsBuilder = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(credentialStream));
+            if (storageBucket != null && !storageBucket.isBlank()) {
+                optionsBuilder.setStorageBucket(storageBucket);
+            }
+            FirebaseApp.initializeApp(optionsBuilder.build());
             log.info("Firebase Admin SDK initialized successfully.");
         } catch (Exception e) {
             log.error("Firebase Admin SDK initialization failed. All authenticated endpoints will reject "

@@ -60,14 +60,9 @@ export const medicineService = {
 
   async getMedicineBrandsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<MedicineBrand[]> {
     try {
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(
         collection(db, MEDICINE_BRANDS_COLLECTION),
@@ -139,14 +134,9 @@ export const medicineService = {
 
   async getMedicineCategoriesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<MedicineCategory[]> {
     try {
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(
         collection(db, MEDICINE_CATEGORIES_COLLECTION),
@@ -226,10 +216,9 @@ export const medicineService = {
   async getMedicinesByClinic(
     clinicId?: string,
     isActive?: boolean,
-    branchId?: string,
   ): Promise<Medicine[]> {
     try {
-      const cacheKey = `cache_medicines_${clinicId}_${isActive}_${branchId}`;
+      const cacheKey = `cache_medicines_${clinicId}_${isActive}`;
       if (typeof window !== "undefined") {
         const cached = sessionStorage.getItem(cacheKey);
         if (cached) {
@@ -253,10 +242,6 @@ export const medicineService = {
       }
       if (typeof isActive === "boolean") {
         constraints.push(where("isActive", "==", isActive));
-      }
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
       }
 
       const q = query(collection(db, MEDICINES_COLLECTION), ...constraints);
@@ -302,11 +287,10 @@ export const medicineService = {
     try {
       const { pageSize, lastDoc, searchPrefix, branchId } = options;
       const baseConstraints: any[] = [];
-      /*
-      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
+
+      if (clinicId) {
         baseConstraints.push(where("clinicId", "==", clinicId));
       }
-      */
 
       if (branchId) {
         baseConstraints.push(where("branchId", "==", branchId));
@@ -369,18 +353,12 @@ export const medicineService = {
   async getMedicinesCountByClinic(
     clinicId?: string,
     searchPrefix?: string,
-    branchId?: string,
   ): Promise<number> {
     try {
       const baseConstraints: any[] = [];
-      /*
-      if (clinicId && clinicId !== "standalone" && clinicId !== "default") {
-        baseConstraints.push(where("clinicId", "==", clinicId));
-      }
-      */
 
-      if (branchId) {
-        baseConstraints.push(where("branchId", "==", branchId));
+      if (clinicId) {
+        baseConstraints.push(where("clinicId", "==", clinicId));
       }
 
       const q = query(collection(db, MEDICINES_COLLECTION), ...baseConstraints);
@@ -687,14 +665,9 @@ export const medicineService = {
 
   async getStockByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<(MedicineStock & { medicine: Medicine })[]> {
     try {
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(
         collection(db, MEDICINE_STOCK_COLLECTION),
@@ -703,7 +676,7 @@ export const medicineService = {
       const querySnapshot = await getDocs(q);
 
       // Fetch all medicines once (this is cached) instead of N+1 individual queries
-      const allMedicines = await this.getMedicinesByClinic(clinicId, undefined, branchId);
+      const allMedicines = await this.getMedicinesByClinic(clinicId, undefined);
       const medicinesMap = new Map(allMedicines.map(m => [m.id, m]));
 
       const stockWithMedicines = querySnapshot.docs.map((stockDoc) => {
@@ -731,7 +704,6 @@ export const medicineService = {
   async getStockByMedicineIds(
     clinicId: string,
     medicineIds: string[],
-    branchId?: string,
     forceRefresh: boolean = false,
   ): Promise<
     { medicineId: string; currentStock: number; schemeStock: number }[]
@@ -747,7 +719,7 @@ export const medicineService = {
         hash = ((hash << 5) - hash) + char;
         hash = hash & hash;
       }
-      const cacheKey = `cache_stock_${clinicId}_${branchId}_${hash}`;
+      const cacheKey = `cache_stock_${clinicId}_${hash}`;
 
       if (!forceRefresh && typeof window !== "undefined") {
         const cached = sessionStorage.getItem(cacheKey);
@@ -773,10 +745,6 @@ export const medicineService = {
       for (let i = 0; i < medicineIds.length; i += BATCH_SIZE) {
         const batch = medicineIds.slice(i, i + BATCH_SIZE);
         const constraints: any[] = [where("medicineId", "in", batch)];
-
-        if (branchId) {
-          constraints.push(where("branchId", "==", branchId));
-        }
 
         const q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
@@ -1112,14 +1080,9 @@ export const medicineService = {
   async getStockTransactions(
     medicineId: string,
     limitCount: number = 50,
-    branchId?: string,
   ): Promise<StockTransaction[]> {
     try {
       const constraints: any[] = [where("medicineId", "==", medicineId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(
         collection(db, STOCK_TRANSACTIONS_COLLECTION),
@@ -1195,7 +1158,6 @@ export const medicineService = {
 
   async getStockTransactionsByClinic(
     clinicId: string,
-    branchId?: string,
     type?:
       | "purchase"
       | "sale"
@@ -1208,10 +1170,6 @@ export const medicineService = {
   ): Promise<StockTransaction[]> {
     try {
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       if (type) {
         constraints.push(where("type", "==", type));
@@ -1300,20 +1258,11 @@ export const medicineService = {
 
   async getSuppliersByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<Supplier[]> {
     try {
-      let q;
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
 
-      if (branchId) {
-        q = query(
-          collection(db, SUPPLIERS_COLLECTION),
-
-          where("branchId", "==", branchId),
-        );
-      } else {
-        q = query(collection(db, SUPPLIERS_COLLECTION));
-      }
+      const q = query(collection(db, SUPPLIERS_COLLECTION), ...constraints);
       const querySnapshot = await getDocs(q);
 
       const suppliers = querySnapshot.docs.map((doc) => {
@@ -1412,20 +1361,14 @@ export const medicineService = {
 
   async getSupplierPurchaseRecords(
     clinicId: string,
-    branchId?: string,
   ): Promise<SupplierPurchaseRecord[]> {
     try {
-      let q;
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
 
-      if (branchId) {
-        q = query(
-          collection(db, PURCHASE_RECORDS_COLLECTION),
-
-          where("branchId", "==", branchId),
-        );
-      } else {
-        q = query(collection(db, PURCHASE_RECORDS_COLLECTION));
-      }
+      const q = query(
+        collection(db, PURCHASE_RECORDS_COLLECTION),
+        ...constraints,
+      );
 
       const querySnapshot = await getDocs(q);
 
@@ -1481,23 +1424,12 @@ export const medicineService = {
 
   async getPurchaseRecordsBySupplier(
     supplierId: string,
-    branchId?: string,
   ): Promise<SupplierPurchaseRecord[]> {
     try {
-      let q;
-
-      if (branchId) {
-        q = query(
-          collection(db, PURCHASE_RECORDS_COLLECTION),
-          where("supplierId", "==", supplierId),
-          where("branchId", "==", branchId),
-        );
-      } else {
-        q = query(
-          collection(db, PURCHASE_RECORDS_COLLECTION),
-          where("supplierId", "==", supplierId),
-        );
-      }
+      const q = query(
+        collection(db, PURCHASE_RECORDS_COLLECTION),
+        where("supplierId", "==", supplierId),
+      );
 
       const querySnapshot = await getDocs(q);
 
@@ -1525,25 +1457,13 @@ export const medicineService = {
 
   async getOverduePurchaseRecords(
     clinicId: string,
-    branchId?: string,
   ): Promise<SupplierPurchaseRecord[]> {
     try {
-      let q;
+      const q = query(
+        collection(db, PURCHASE_RECORDS_COLLECTION),
 
-      if (branchId) {
-        q = query(
-          collection(db, PURCHASE_RECORDS_COLLECTION),
-
-          where("branchId", "==", branchId),
-          where("paymentStatus", "in", ["pending", "partial"]),
-        );
-      } else {
-        q = query(
-          collection(db, PURCHASE_RECORDS_COLLECTION),
-
-          where("paymentStatus", "in", ["pending", "partial"]),
-        );
-      }
+        where("paymentStatus", "in", ["pending", "partial"]),
+      );
 
       const querySnapshot = await getDocs(q);
       const records = querySnapshot.docs.map((doc) => {
@@ -1580,7 +1500,6 @@ export const medicineService = {
   // Get purchase records statistics for dashboard
   async getPurchaseRecordsStats(
     clinicId: string,
-    branchId?: string,
   ): Promise<{
     totalRecords: number;
     totalAmount: number;
@@ -1590,8 +1509,8 @@ export const medicineService = {
   }> {
     try {
       const [allRecords, overdueRecords] = await Promise.all([
-        this.getSupplierPurchaseRecords(clinicId, branchId),
-        this.getOverduePurchaseRecords(clinicId, branchId),
+        this.getSupplierPurchaseRecords(clinicId),
+        this.getOverduePurchaseRecords(clinicId),
       ]);
 
       const totalAmount = allRecords.reduce(
@@ -1647,20 +1566,14 @@ export const medicineService = {
 
   async getSupplierPayments(
     clinicId: string,
-    branchId?: string,
   ): Promise<SupplierPayment[]> {
     try {
-      let q;
+      const constraints: any[] = [where("clinicId", "==", clinicId)];
 
-      if (branchId) {
-        q = query(
-          collection(db, SUPPLIER_PAYMENTS_COLLECTION),
-
-          where("branchId", "==", branchId),
-        );
-      } else {
-        q = query(collection(db, SUPPLIER_PAYMENTS_COLLECTION));
-      }
+      const q = query(
+        collection(db, SUPPLIER_PAYMENTS_COLLECTION),
+        ...constraints,
+      );
 
       const snapshot = await getDocs(q);
 
@@ -1700,25 +1613,16 @@ export const medicineService = {
   async getSupplierPaymentsBySupplier(
     supplierId: string,
     clinicId: string,
-    branchId?: string,
   ): Promise<SupplierPayment[]> {
     try {
       let q;
 
-      if (branchId) {
-        q = query(
-          collection(db, SUPPLIER_PAYMENTS_COLLECTION),
+      const constraints: any[] = [
+        where("supplierId", "==", supplierId),
+        where("clinicId", "==", clinicId),
+      ];
 
-          where("branchId", "==", branchId),
-          where("supplierId", "==", supplierId),
-        );
-      } else {
-        q = query(
-          collection(db, SUPPLIER_PAYMENTS_COLLECTION),
-
-          where("supplierId", "==", supplierId),
-        );
-      }
+      q = query(collection(db, SUPPLIER_PAYMENTS_COLLECTION), ...constraints);
 
       const snapshot = await getDocs(q);
 
@@ -1788,25 +1692,13 @@ export const medicineService = {
   async getSupplierLedgerEntries(
     supplierId: string,
     clinicId: string,
-    branchId?: string,
   ): Promise<SupplierLedgerEntry[]> {
     try {
-      let q;
+      const q = query(
+        collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
 
-      if (branchId) {
-        q = query(
-          collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
-
-          where("branchId", "==", branchId),
-          where("supplierId", "==", supplierId),
-        );
-      } else {
-        q = query(
-          collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
-
-          where("supplierId", "==", supplierId),
-        );
-      }
+        where("supplierId", "==", supplierId),
+      );
 
       const snapshot = await getDocs(q);
 
@@ -1837,14 +1729,9 @@ export const medicineService = {
 
   async getSupplierLedgerBalances(
     clinicId: string,
-    branchId?: string,
   ): Promise<Record<string, number>> {
     try {
       const constraints = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(
         collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
@@ -1892,13 +1779,11 @@ export const medicineService = {
   async calculateSupplierBalance(
     supplierId: string,
     clinicId: string,
-    branchId?: string,
   ): Promise<number> {
     try {
       const entries = await this.getSupplierLedgerEntries(
         supplierId,
         clinicId,
-        branchId,
       );
 
       if (entries.length === 0) {

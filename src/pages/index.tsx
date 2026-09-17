@@ -25,7 +25,6 @@ import {
   landingPageService,
   LandingPageContent,
 } from "@/services/landingPageService";
-import { clinicService } from "@/services/clinicService";
 import BeforeAfterGallery from "@/components/BeforeAfterGallery";
 import MeetTheTeam from "@/components/MeetTheTeam";
 
@@ -87,7 +86,6 @@ function HeroBlobs() {
 export default function IndexPage() {
   const [content, setContent] = useState<LandingPageContent | null>(null);
   const [loading, setLoading] = useState(true);
-  const [clinicAddress, setClinicAddress] = useState<string | null>(null);
 
   const CLINIC_ID = "main-clinic";
 
@@ -107,33 +105,12 @@ export default function IndexPage() {
     fetchContent();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const fetchClinicAddress = async () => {
-      try {
-        const all = await clinicService.getAllClinics();
-
-        if (cancelled || all.length === 0) return;
-        const clinic = all[0];
-        const parts = [
-          clinic.address,
-          clinic.city,
-          clinic.state,
-          clinic.country,
-        ].filter(Boolean);
-
-        if (parts.length > 0) setClinicAddress(parts.join(", "));
-      } catch {
-        /* silently fall back to landing page content */
-      }
-    };
-
-    fetchClinicAddress();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Previously also fetched clinicService.getAllClinics() to override the
+  // address with a live clinic record — but that's a super-admin-only read
+  // (this is a PUBLIC landing page, visited by unauthenticated visitors) and
+  // was always silently failing. content.contact.location (from
+  // landingPageService, which already exists precisely for public-facing
+  // content) is the correct source for this, not the clinics collection.
 
   const testimonials = [
     {
@@ -1123,7 +1100,7 @@ export default function IndexPage() {
                 {
                   icon: <MapPin className="w-4 h-4" />,
                   label: "Address",
-                  value: clinicAddress ?? content.contact.location,
+                  value: content.contact.location,
                 },
                 {
                   icon: <Clock className="w-4 h-4" />,
@@ -1211,7 +1188,7 @@ export default function IndexPage() {
                     className="text-sm mb-5"
                     style={{ color: "rgb(var(--color-text-muted))" }}
                   >
-                    {clinicAddress ?? content.contact.location}
+                    {content.contact.location}
                   </p>
                 </div>
                 <button

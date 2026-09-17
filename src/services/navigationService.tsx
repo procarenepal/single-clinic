@@ -517,7 +517,7 @@ class NavigationService {
 
     try {
       try {
-        if (clinicId && clinicId !== "default") {
+        if (clinicId) {
           const clinic = await clinicService.getClinicById(clinicId);
 
           isMultiBranchEnabled = clinic?.isMultiBranchEnabled || false;

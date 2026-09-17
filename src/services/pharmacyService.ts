@@ -337,6 +337,25 @@ export const pharmacyService = {
             );
           }
 
+          // D2. Apply this item's own discount to its FEFO-resolved gross
+          // amount before it's added to the purchase's running total —
+          // per-item discount must be applied to the batch-resolved price,
+          // not the client's pre-submission estimate, since batch prices can
+          // legitimately differ from what the cart showed.
+          const rawItemTotalAmount = itemTotalAmount;
+          const itemDiscountType = (item as any).discountType || "flat";
+          const itemDiscountValue = (item as any).discountValue || 0;
+          let itemDiscountAmount =
+            itemDiscountType === "percentage"
+              ? (rawItemTotalAmount * itemDiscountValue) / 100
+              : itemDiscountValue;
+
+          itemDiscountAmount = Math.max(
+            0,
+            Math.min(itemDiscountAmount, rawItemTotalAmount),
+          );
+          itemTotalAmount = rawItemTotalAmount - itemDiscountAmount;
+
           newGrossTotal += itemTotalAmount;
 
           // E. Record exact batch numbers and prices sold in purchase item metadata
@@ -366,7 +385,7 @@ export const pharmacyService = {
 
           const weightedSalePrice =
             item.quantity > 0
-              ? itemTotalAmount / item.quantity
+              ? rawItemTotalAmount / item.quantity
               : item.salePrice;
 
           let finalExpiryDate = item.expiryDate;
@@ -390,6 +409,9 @@ export const pharmacyService = {
             ...item,
             salePrice: weightedSalePrice,
             amount: itemTotalAmount,
+            discountType: itemDiscountType,
+            discountValue: itemDiscountValue,
+            discountAmount: itemDiscountAmount,
             batchNumber: batchString || "DEFAULT",
             expiryDate: finalExpiryDate,
           });
@@ -454,7 +476,15 @@ export const pharmacyService = {
           });
         }
 
-        return { id: purchaseRef.id, purchaseNo: generatedPurchaseNo };
+        return {
+          id: purchaseRef.id,
+          purchaseNo: generatedPurchaseNo,
+          items: updatedPurchaseItems,
+          total: newGrossTotal,
+          discount: finalDiscount,
+          taxAmount: finalTaxAmount,
+          netAmount: finalNetAmount,
+        };
       });
 
       // Auto-create follow-up if paid
@@ -516,7 +546,17 @@ export const pharmacyService = {
         const javaClinic = await clinicService.getClinicById(
           purchaseData.clinicId,
         );
-        const invoiceItems = purchaseData.items.map((item) => ({
+        // Use the transaction's FEFO-resolved, discount-applied items and
+        // totals (purchaseIdObj) rather than the client-submitted
+        // purchaseData — batch pricing and per-item discounts are only known
+        // once the transaction above has run, and IRD must be told the real
+        // sold amounts, not the pre-submission estimate.
+        const finalItems = purchaseIdObj.items || purchaseData.items;
+        const finalNetAmount = purchaseIdObj.netAmount ?? purchaseData.netAmount ?? 0;
+        const finalTaxAmountForIrd = purchaseIdObj.taxAmount ?? purchaseData.taxAmount ?? 0;
+        const finalDiscountForIrd = purchaseIdObj.discount ?? purchaseData.discount;
+
+        const invoiceItems = finalItems.map((item: any) => ({
           itemName:
             item.medicineName || (item as any).description || "Medicine",
           quantity: item.quantity || 1,
@@ -528,17 +568,14 @@ export const pharmacyService = {
           firebasePatientId: (purchaseData as any).patientId || "",
           buyerName: purchaseData.patientName || "Cash Sales",
           buyerPan: (purchaseData as any).patientPanVat || "",
-          totalAmount: purchaseData.netAmount || 0,
+          totalAmount: finalNetAmount,
           taxableAmount:
-            (purchaseData.taxAmount || 0) > 0
-              ? (purchaseData.netAmount || 0) - (purchaseData.taxAmount || 0)
+            finalTaxAmountForIrd > 0
+              ? finalNetAmount - finalTaxAmountForIrd
               : 0,
-          taxAmount: purchaseData.taxAmount || 0,
-          exemptAmount:
-            (purchaseData.taxAmount || 0) === 0
-              ? purchaseData.netAmount || 0
-              : 0,
-          discountAmount: purchaseData.discount,
+          taxAmount: finalTaxAmountForIrd,
+          exemptAmount: finalTaxAmountForIrd === 0 ? finalNetAmount : 0,
+          discountAmount: finalDiscountForIrd,
           paymentMethod: purchaseData.paymentType,
           irdEnabled: Boolean(javaClinic?.irdEnabled),
           fiscalYear: getNepaliFiscalYear(
@@ -551,7 +588,7 @@ export const pharmacyService = {
           idempotencyKey: computeIdempotencyKey({
             clinicId: purchaseData.clinicId,
             buyerName: purchaseData.patientName || "Cash Sales",
-            totalAmount: purchaseData.netAmount || 0,
+            totalAmount: finalNetAmount,
             items: invoiceItems,
           }),
           items: invoiceItems,
@@ -652,15 +689,10 @@ export const pharmacyService = {
    */
   async getMedicinePurchasesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<MedicinePurchase[]> {
     try {
       const purchasesRef = collection(db, MEDICINE_PURCHASES_COLLECTION);
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(purchasesRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -1169,7 +1201,6 @@ export const pharmacyService = {
   async getMedicinePurchasesByPaymentStatus(
     clinicId: string,
     paymentStatus: "paid" | "pending" | "partial",
-    branchId?: string,
   ): Promise<MedicinePurchase[]> {
     try {
       // clinicId was accepted as a parameter but never actually used to
@@ -1182,14 +1213,6 @@ export const pharmacyService = {
         where("paymentStatus", "==", paymentStatus),
       );
 
-      if (branchId) {
-        q = query(
-          purchasesRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("paymentStatus", "==", paymentStatus),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
 
@@ -1274,20 +1297,12 @@ export const pharmacyService = {
    */
   async getMedicineUsageByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
       let q = query(usageRef, where("clinicId", "==", clinicId));
 
       // Filter by branch if specified
-      if (branchId) {
-        q = query(
-          usageRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
 
@@ -1314,7 +1329,6 @@ export const pharmacyService = {
   async getMedicineUsageByMedicine(
     clinicId: string,
     medicineId: string,
-    branchId?: string,
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
@@ -1324,14 +1338,6 @@ export const pharmacyService = {
         where("medicineId", "==", medicineId),
       );
 
-      if (branchId) {
-        q = query(
-          usageRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("medicineId", "==", medicineId),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
 
@@ -1358,7 +1364,6 @@ export const pharmacyService = {
   async getMedicineUsageByPatient(
     clinicId: string,
     patientId: string,
-    branchId?: string,
   ): Promise<MedicineUsage[]> {
     try {
       const usageRef = collection(db, MEDICINE_USAGE_COLLECTION);
@@ -1368,14 +1373,6 @@ export const pharmacyService = {
         where("patientId", "==", patientId),
       );
 
-      if (branchId) {
-        q = query(
-          usageRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-          where("patientId", "==", patientId),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
 
@@ -1439,7 +1436,6 @@ export const pharmacyService = {
     clinicId: string,
     startDate: Date,
     endDate: Date,
-    branchId?: string,
   ): Promise<{
     totalPurchases: number;
     totalAmount: number;
@@ -1447,10 +1443,7 @@ export const pharmacyService = {
     averageOrderValue: number;
   }> {
     try {
-      const purchases = await this.getMedicinePurchasesByClinic(
-        clinicId,
-        branchId,
-      );
+      const purchases = await this.getMedicinePurchasesByClinic(clinicId);
 
       const filteredPurchases = purchases.filter(
         (purchase) =>
@@ -1491,7 +1484,6 @@ export const pharmacyService = {
     clinicId: string,
     startDate: Date,
     endDate: Date,
-    branchId?: string,
   ): Promise<{
     totalUsageRecords: number;
     totalQuantityUsed: number;
@@ -1502,10 +1494,7 @@ export const pharmacyService = {
     }>;
   }> {
     try {
-      const usageRecords = await this.getMedicineUsageByClinic(
-        clinicId,
-        branchId,
-      );
+      const usageRecords = await this.getMedicineUsageByClinic(clinicId);
 
       const filteredUsage = usageRecords.filter(
         (usage) => usage.usageDate >= startDate && usage.usageDate <= endDate,
@@ -1563,22 +1552,11 @@ export const pharmacyService = {
    */
   async getPharmacySettings(
     clinicId: string,
-    branchId?: string,
   ): Promise<PharmacySettings | null> {
     try {
       const settingsRef = collection(db, PHARMACY_SETTINGS_COLLECTION);
       let q = query(settingsRef, where("clinicId", "==", clinicId));
 
-      if (branchId) {
-        // Must AND with clinicId, not replace it — dropping clinicId here
-        // would return another clinic's settings that happen to share this
-        // branchId, a real cross-tenant data leak.
-        q = query(
-          settingsRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
 
@@ -1747,7 +1725,6 @@ export const pharmacyService = {
       PaymentMethod,
       "id" | "key" | "isCustom" | "createdAt"
     >,
-    branchId?: string,
   ): Promise<string> {
     try {
       const id = doc(collection(db, "temp")).id; // Generate unique ID
@@ -1762,7 +1739,7 @@ export const pharmacyService = {
       };
 
       // Get current settings or create default ones
-      let currentSettings = await this.getPharmacySettings(clinicId, branchId);
+      let currentSettings = await this.getPharmacySettings(clinicId);
 
       if (!currentSettings) {
         // Create default settings if they don't exist
@@ -1770,7 +1747,7 @@ export const pharmacyService = {
         const settingsData = {
           ...defaultSettings,
           clinicId,
-          branchId: branchId || "",
+          branchId: clinicId || "",
           updatedBy: "", // Will be set by the caller
         };
 
@@ -1778,7 +1755,7 @@ export const pharmacyService = {
         await this.savePharmacySettings(settingsData);
 
         // Get the newly created settings
-        currentSettings = await this.getPharmacySettings(clinicId, branchId);
+        currentSettings = await this.getPharmacySettings(clinicId);
 
         if (!currentSettings) {
           throw new Error("Failed to create default pharmacy settings");
@@ -1820,13 +1797,9 @@ export const pharmacyService = {
     clinicId: string,
     paymentMethodId: string,
     updates: Partial<Omit<PaymentMethod, "id" | "isCustom" | "createdAt">>,
-    branchId?: string,
   ): Promise<void> {
     try {
-      const currentSettings = await this.getPharmacySettings(
-        clinicId,
-        branchId,
-      );
+      const currentSettings = await this.getPharmacySettings(clinicId);
 
       if (!currentSettings) {
         throw new Error(
@@ -1870,13 +1843,9 @@ export const pharmacyService = {
   async deletePaymentMethod(
     clinicId: string,
     paymentMethodId: string,
-    branchId?: string,
   ): Promise<void> {
     try {
-      const currentSettings = await this.getPharmacySettings(
-        clinicId,
-        branchId,
-      );
+      const currentSettings = await this.getPharmacySettings(clinicId);
 
       if (!currentSettings) {
         throw new Error(

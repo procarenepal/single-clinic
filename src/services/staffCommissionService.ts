@@ -24,7 +24,6 @@ class StaffCommissionService {
     staffId: string,
     staffName: string,
     clinicId: string,
-    branchId: string,
     patientId: string,
     patientName: string,
     appointmentTypeName: string,
@@ -40,7 +39,7 @@ class StaffCommissionService {
         staffId,
         staffName,
         clinicId,
-        branchId,
+        branchId: clinicId,
         billingId: `reg_staff_${Date.now()}`,
         billingType: "appointment",
         invoiceNumber: "REG-COMM-STAFF",
@@ -89,6 +88,7 @@ class StaffCommissionService {
       const q = query(
         collection(db, this.collectionName),
         where("staffId", "==", staffId),
+        where("clinicId", "==", clinicId),
       );
 
       const querySnapshot = await getDocs(q);

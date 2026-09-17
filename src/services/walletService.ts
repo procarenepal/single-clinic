@@ -23,7 +23,6 @@ export const walletService = {
   async addFunds(
     patientId: string,
     clinicId: string,
-    branchId: string,
     amount: number,
     paymentMethod: string,
     notes: string,
@@ -36,7 +35,7 @@ export const walletService = {
       const transaction: Omit<WalletTransaction, "id"> = {
         patientId,
         clinicId,
-        branchId,
+        branchId: clinicId,
         type: "deposit",
         amount,
         paymentMethod,
@@ -74,7 +73,6 @@ export const walletService = {
   async deductFunds(
     patientId: string,
     clinicId: string,
-    branchId: string,
     amount: number,
     invoiceId: string,
     notes: string,
@@ -101,7 +99,7 @@ export const walletService = {
       const transaction: Omit<WalletTransaction, "id"> = {
         patientId,
         clinicId,
-        branchId,
+        branchId: clinicId,
         type: "deduction",
         amount,
         referenceId: invoiceId,
@@ -142,7 +140,6 @@ export const walletService = {
   async refundFunds(
     patientId: string,
     clinicId: string,
-    branchId: string,
     amount: number,
     referenceId: string,
     notes: string,
@@ -154,7 +151,7 @@ export const walletService = {
       const transaction: Omit<WalletTransaction, "id"> = {
         patientId,
         clinicId,
-        branchId,
+        branchId: clinicId,
         type: "refund",
         amount,
         referenceId,
@@ -196,6 +193,7 @@ export const walletService = {
       const q = query(
         collection(db, WALLET_TRANSACTIONS_COLLECTION),
         where("patientId", "==", patientId),
+        where("clinicId", "==", clinicId),
       );
 
       const snapshot = await getDocs(q);

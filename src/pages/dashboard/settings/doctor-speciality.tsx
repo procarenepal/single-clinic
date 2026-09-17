@@ -80,7 +80,6 @@ const DoctorSpecialityPage: React.FC = () => {
       const specialitiesData = await specialityService.getSpecialitiesByClinic(
         clinicId,
         false,
-        effectiveBranchId,
       );
 
       setSpecialities(specialitiesData);

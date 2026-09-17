@@ -45,14 +45,12 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { branchService } from "@/services/branchService";
 import { sendConfirmedSMS } from "@/services/sendMessageService";
 import {
   Appointment,
   Patient,
   Doctor,
   AppointmentType,
-  Branch,
 } from "@/types/models";
 import {
   getBlinkingCssClass,
@@ -186,7 +184,7 @@ export default function AppointmentsPage() {
   const [searchParams] = useSearchParams();
   const initialDoctorId = searchParams.get("doctorId") || "all";
 
-  const { clinicId, userData, currentUser, branchId, isClinicAdmin: checkAdmin, isSystemOwner: checkOwner } = useAuthContext();
+  const { clinicId, userData, currentUser, isClinicAdmin: checkAdmin, isSystemOwner: checkOwner } = useAuthContext();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -216,52 +214,9 @@ export default function AppointmentsPage() {
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
     [],
   );
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-
   const itemsPerPage = 6;
 
   const isClinicAdmin = checkAdmin() || checkOwner();
-
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
-
-  // Load branches for clinic-wide admins (no fixed branchId)
-  useEffect(() => {
-    if (!clinicId) return;
-    if (!isClinicAdmin || branchId) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches();
-
-        if (cancelled) return;
-        setBranches(data);
-        if (data.length > 0) {
-          // Ordered by isMainBranch desc in service; first entry is main branch
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch (err) {
-        console.error("Appointments branches fetch error:", err);
-        if (!cancelled) {
-          setBranches([]);
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
 
   // Load static supporting data
   useEffect(() => {
@@ -280,8 +235,8 @@ export default function AppointmentsPage() {
         if (!isAdmin && userEmail) {
           try {
             const [matchingDoctor, matchingExpert] = await Promise.all([
-              doctorService.getDoctorByEmail(userEmail),
-              expertService.getExpertByEmail(userEmail),
+              doctorService.getDoctorByEmail(userEmail, clinicId),
+              expertService.getExpertByEmail(userEmail, clinicId),
             ]);
 
             const matchingProvider = matchingDoctor || matchingExpert;
@@ -303,10 +258,7 @@ export default function AppointmentsPage() {
           await Promise.all([
             patientService.getPatients(clinicId),
             doctorService.getDoctors(clinicId),
-            appointmentTypeService.getAppointmentTypesByClinic(
-              clinicId,
-              effectiveBranchId,
-            ),
+            appointmentTypeService.getAppointmentTypesByClinic(clinicId),
           ]);
 
         if (!cancelled) {
@@ -328,7 +280,7 @@ export default function AppointmentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [clinicId, userData?.email, effectiveBranchId]);
+  }, [clinicId, userData?.email]);
 
   // Live sync
   useEffect(() => {
@@ -356,19 +308,16 @@ export default function AppointmentsPage() {
       ? isExpertUser
         ? appointmentService.subscribeToExpertAppointments(
           currentDoctorId,
-          effectiveBranchId,
           handleSnapshot,
           handleError,
         )
         : appointmentService.subscribeToDoctorAppointments(
           currentDoctorId,
-          effectiveBranchId,
           handleSnapshot,
           handleError,
         )
       : appointmentService.subscribeToClinicAppointments(
-        undefined, // clinicId
-        effectiveBranchId,
+        clinicId,
         handleSnapshot,
         handleError,
       );
@@ -377,7 +326,7 @@ export default function AppointmentsPage() {
       isActive = false;
       unsubscribe?.();
     };
-  }, [clinicId, currentDoctorId, effectiveBranchId, isClinicAdmin, isDoctorResolved]);
+  }, [clinicId, currentDoctorId, isClinicAdmin, isDoctorResolved]);
 
   // Refetch patients if a new appointment comes in with an unknown patient ID
   const [attemptedMissingPatientIds, setAttemptedMissingPatientIds] = useState<Set<string>>(new Set());
@@ -490,7 +439,6 @@ export default function AppointmentsPage() {
           appt.patientId,
           appt.clinicId || clinicId || "standalone",
           appointmentId,
-          appt.branchId || branchId || undefined,
         ).catch((err) => console.error("Auto confirmation SMS failed:", err));
       }
 
@@ -831,23 +779,6 @@ export default function AppointmentsPage() {
           </p>
         </div>
         <div className="flex gap-3 items-center">
-          {!branchId && isClinicAdmin && branches.length > 0 && (
-            <div className="flex items-center gap-1 mr-2">
-              <span className="text-[11px] text-text-muted">Branch</span>
-              <select
-                className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                value={selectedBranchId ?? ""}
-                onChange={(e) => setSelectedBranchId(e.target.value || null)}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.isMainBranch ? " (all branches)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <div className="flex p-0.5 bg-surface-2 rounded border border-border-base shadow-none">
             <button
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] font-medium transition ${layoutType === "tabbed" ? "bg-surface text-primary shadow-sm" : "text-text-muted hover:text-text-main"}`}

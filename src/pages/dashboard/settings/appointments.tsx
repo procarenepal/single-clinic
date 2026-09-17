@@ -39,7 +39,7 @@ import { useTheme } from "@/context/ThemeContext";
 
 export default function AppointmentSettingsPage() {
   const modalState = useModalState(false);
-  const { clinicId, branchId, currentUser, userData, isClinicAdmin } =
+  const { clinicId, currentUser, userData, isClinicAdmin } =
     useAuthContext();
   const { isDark } = useTheme();
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
@@ -75,8 +75,6 @@ export default function AppointmentSettingsPage() {
       console.log(
         "Loading appointment types directly from Firebase for clinic:",
         clinicId,
-        "branch:",
-        branchId,
       );
 
       // Always fetch directly from Firebase - bypass cache completely
@@ -88,21 +86,7 @@ export default function AppointmentSettingsPage() {
       console.log("Fetching directly from Firestore...");
       const appointmentTypesRef = collection(db, "appointment_types");
 
-      // For individual clinics, we only filter by clinicId
-      // For multi-branch clinics, we may need to filter by branchId too
-      let q;
-
-      if (branchId) {
-        // User has a specific branch - filter by both clinicId and branchId
-        q = query(
-          appointmentTypesRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-        );
-      } else {
-        // Individual clinic - show all for clinic
-        q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
-      }
+      const q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
 
       const querySnapshot = await getDocs(q);
       const types: AppointmentType[] = [];
@@ -140,7 +124,6 @@ export default function AppointmentSettingsPage() {
     try {
       console.log("Saving appointment type:", type);
       console.log("User data:", userData);
-      console.log("Branch ID:", branchId);
 
       let savedId: string | undefined;
 
@@ -168,13 +151,9 @@ export default function AppointmentSettingsPage() {
           billAtFrontDesk: type.billAtFrontDesk ?? false,
           calculateCommission: type.calculateCommission ?? true,
           clinicId,
+          branchId: clinicId,
           createdBy: currentUser.uid,
         };
-
-        // Only include branchId if the user has one (for multi-branch clinics)
-        if (branchId) {
-          newTypeData.branchId = branchId;
-        }
 
         console.log("New type data:", newTypeData);
         savedId =
@@ -325,15 +304,12 @@ export default function AppointmentSettingsPage() {
         const newType: any = {
           ...type,
           clinicId,
+          branchId: clinicId,
           isActive: true,
           createdBy: currentUser.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         };
-
-        if (branchId) {
-          newType.branchId = branchId;
-        }
 
         return addDoc(appointmentTypesRef, newType);
       });

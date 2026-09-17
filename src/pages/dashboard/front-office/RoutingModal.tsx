@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { IoCloseOutline } from "react-icons/io5";
 
@@ -19,6 +19,10 @@ interface RoutingModalProps {
   setRoutingDoctorId: React.Dispatch<React.SetStateAction<string>>;
   routingChargeConsultation: boolean;
   setRoutingChargeConsultation: React.Dispatch<React.SetStateAction<boolean>>;
+  /** Per-invoice tax override for the consultation bill this routing action
+   * may create — only relevant while routingChargeConsultation is checked. */
+  routingApplyTax?: boolean;
+  setRoutingApplyTax?: React.Dispatch<React.SetStateAction<boolean>>;
   experts?: any[];
   routingExpertId?: string;
   setRoutingExpertId?: React.Dispatch<React.SetStateAction<string>>;
@@ -26,6 +30,12 @@ interface RoutingModalProps {
    * rooms only — computed by front-office-desk.tsx from live appointment
    * state, excluding the patient currently being routed. */
   occupiedCabins?: Record<string, string>;
+  /** doctorId the appointment's existing consultation bill (if any) was
+   * billed to, and whether that bill is already paid — used to hide
+   * "Charge Consultation Fee" when it's already settled for the doctor
+   * currently selected, and show it again for a different doctor. */
+  routingConsultationBillDoctorId?: string;
+  routingConsultationBillPaid?: boolean;
 }
 
 export const RoutingModal: React.FC<RoutingModalProps> = ({
@@ -45,11 +55,32 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
   setRoutingDoctorId,
   routingChargeConsultation,
   setRoutingChargeConsultation,
+  routingApplyTax = false,
+  setRoutingApplyTax,
   experts = [],
   routingExpertId = "",
   setRoutingExpertId,
   occupiedCabins = {},
+  routingConsultationBillDoctorId,
+  routingConsultationBillPaid = false,
 }) => {
+  // Already settled for the doctor currently selected in this dropdown —
+  // hide the charge checkbox so staff can't re-charge a fee that's already
+  // paid. Picking a different (not-yet-billed) doctor brings it back.
+  const alreadySettledForSelectedDoctor = Boolean(
+    routingConsultationBillPaid &&
+      routingDoctorId &&
+      routingConsultationBillDoctorId === routingDoctorId,
+  );
+
+  useEffect(() => {
+    if (alreadySettledForSelectedDoctor) {
+      if (routingChargeConsultation) setRoutingChargeConsultation(false);
+      if (routingAddCommission) setRoutingAddCommission(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alreadySettledForSelectedDoctor]);
+
   if (!isOpen || !appointment) return null;
 
   const modalRoot = document.body;
@@ -108,15 +139,34 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
                 </select>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-text-main font-medium">
-                <input
-                  checked={routingChargeConsultation}
-                  className="w-3.5 h-3.5 text-primary rounded focus:ring-primary border-border-base"
-                  type="checkbox"
-                  onChange={(e) => setRoutingChargeConsultation(e.target.checked)}
-                />
-                Charge Doctor Consultation Fee & Settle Bill
-              </label>
+              {alreadySettledForSelectedDoctor ? (
+                <p className="text-[11.5px] text-health-600 font-medium">
+                  ✓ Consultation fee already settled for this doctor.
+                </p>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-text-main font-medium">
+                    <input
+                      checked={routingChargeConsultation}
+                      className="w-3.5 h-3.5 text-primary rounded focus:ring-primary border-border-base"
+                      type="checkbox"
+                      onChange={(e) => setRoutingChargeConsultation(e.target.checked)}
+                    />
+                    Charge Doctor Consultation Fee & Settle Bill
+                  </label>
+                  {routingChargeConsultation && setRoutingApplyTax && (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-text-muted font-medium ml-5">
+                      <input
+                        checked={routingApplyTax}
+                        className="w-3.5 h-3.5 text-primary rounded focus:ring-primary border-border-base"
+                        type="checkbox"
+                        onChange={(e) => setRoutingApplyTax(e.target.checked)}
+                      />
+                      Apply Tax to Invoice
+                    </label>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -208,7 +258,8 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
           <div className="flex-1 flex items-center mt-2 px-2">
             {(routingTarget === "doctor" || routingTarget === "expert") &&
               routingCabin &&
-              routingCabin !== "unassigned" && (
+              routingCabin !== "unassigned" &&
+              !alreadySettledForSelectedDoctor && (
                 <label className="flex items-center gap-2 cursor-pointer text-xs text-text-main font-medium">
                   <input
                     checked={routingAddCommission}

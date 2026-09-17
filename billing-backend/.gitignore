@@ -3,3 +3,8 @@ target/
 .idea/
 *.iml
 .mvn/wrapper/maven-wrapper.jar
+
+# Downloaded/restored MySQL backups and safety dumps — real patient/billing
+# data, never commit (see scripts/README.md)
+scripts/restored/
+restored/

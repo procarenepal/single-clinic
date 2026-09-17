@@ -331,7 +331,7 @@ export default function PatientPrescriptionsTab({
   patientId,
 }: PatientPrescriptionsTabProps) {
   const navigate = useNavigate();
-  const { clinicId, branchId, userData } = useAuthContext();
+  const { clinicId, userData } = useAuthContext();
   const newPrescriptionModal = useModalState(false);
 
   // Data
@@ -590,7 +590,7 @@ export default function PatientPrescriptionsTab({
       await prescriptionService.createPrescription({
         patientId: formData.patientId,
         clinicId: clinicId!,
-        branchId: branchId || "main-branch",
+        branchId: clinicId || "main-branch",
         appointmentId: formData.appointmentId || undefined,
         doctorId: formData.doctorId,
         items: formData.items.map((item) => ({

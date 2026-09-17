@@ -25,6 +25,22 @@ const getDocMock = vi.fn();
 const getDocsMock = vi.fn().mockResolvedValue({ docs: [], empty: true });
 const whereMock = vi.fn((...args: any[]) => ({ __where: args }));
 const queryMock = vi.fn((...args: any[]) => ({ __query: args }));
+// consumeSession re-reads-and-writes inside a runTransaction (added later as
+// a race-condition fix — see patientPackageService.ts) — without mocking it,
+// it falls through to the real firebase/firestore SDK, which then rejects
+// the fake `db` object with "Expected type 'Firestore'". transaction.get()
+// delegates to the same getDocMock queue as the pre-transaction read, so
+// tests that reach the transaction need one extra queued value for it.
+const runTransactionMock = vi.fn(async (...args: any[]) => {
+  const [, updateFn] = args;
+  const transaction = {
+    get: (...getArgs: any[]) => getDocMock(...getArgs),
+    update: (...updateArgs: any[]) => updateDocMock(...updateArgs),
+    set: (...updateArgs: any[]) => updateDocMock(...updateArgs),
+  };
+
+  return updateFn(transaction);
+});
 
 vi.mock("firebase/firestore", async () => {
   const actual = await vi.importActual("firebase/firestore");
@@ -43,6 +59,7 @@ vi.mock("firebase/firestore", async () => {
     })),
     query: (...args: any[]) => queryMock(...args),
     where: (...args: any[]) => whereMock(...args),
+    runTransaction: (...args: any[]) => runTransactionMock(...args),
     increment: (n: number) => ({ __increment: n }),
     arrayUnion: (...args: any[]) => ({ __arrayUnion: args }),
     Timestamp: {
@@ -118,6 +135,17 @@ describe("consumeSession — duplicate-consumption guard (bug fix)", () => {
     getDocMock.mockResolvedValueOnce({
       exists: () => false, // treatmentPackage lookup for wallet deduction
     });
+    getDocMock.mockResolvedValueOnce({
+      exists: () => true, // transaction's fresh re-read of the package
+      data: () =>
+        makePackage({
+          usedSessions: 3,
+          sessions: [
+            { sessionNumber: 1, status: "completed", appointmentId: "appt_1" },
+            { sessionNumber: 2, status: "pending" },
+          ],
+        }),
+    });
 
     await patientPackageService.consumeSession("pkg_1", {
       appointmentId: "appt_2",
@@ -162,6 +190,14 @@ describe("consumeSession — expiry enforced off expiresAt, not stale status (bu
         }),
     });
     getDocMock.mockResolvedValueOnce({ exists: () => false });
+    getDocMock.mockResolvedValueOnce({
+      exists: () => true, // transaction's fresh re-read of the package
+      data: () =>
+        makePackage({
+          status: "active",
+          expiresAt: { toDate: () => futureDate },
+        }),
+    });
 
     await patientPackageService.consumeSession("pkg_1", {
       appointmentId: "appt_new",
@@ -269,7 +305,6 @@ describe("walletService.refundFunds", () => {
     await walletService.refundFunds(
       "pat_1",
       "clinic_1",
-      "branch_1",
       800,
       "pkg_1",
       "Unused sessions refund",
@@ -301,15 +336,6 @@ describe("getPatientPackagesByClinic", () => {
 
     expect(whereMock).toHaveBeenCalledTimes(1);
     expect(whereMock).toHaveBeenCalledWith("clinicId", "==", "clinic_1");
-  });
-
-  it("also filters by branchId when provided", async () => {
-    getDocsMock.mockResolvedValueOnce({ docs: [], empty: true });
-
-    await patientPackageService.getPatientPackagesByClinic("clinic_1", "branch_1");
-
-    expect(whereMock).toHaveBeenCalledTimes(2);
-    expect(whereMock).toHaveBeenCalledWith("branchId", "==", "branch_1");
   });
 
   it("returns mapped packages from the query results", async () => {

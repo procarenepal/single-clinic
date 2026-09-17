@@ -585,7 +585,6 @@ export const smsService = {
    */
   async getSMSLogs(
     clinicId: string,
-    branchId?: string,
     limitCount = 50,
   ): Promise<SMSLog[]> {
     try {
@@ -595,14 +594,6 @@ export const smsService = {
         limit(limitCount),
       );
 
-      if (branchId) {
-        q = query(
-          collection(db, SMS_LOGS_COLLECTION),
-
-          where("branchId", "==", branchId),
-          limit(limitCount),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
 
@@ -675,21 +666,13 @@ export const smsService = {
    */
   async getSMSTemplates(
     clinicId: string,
-    branchId?: string,
   ): Promise<SMSTemplate[]> {
     try {
-      const q = branchId
-        ? query(
-            collection(db, SMS_TEMPLATES_COLLECTION),
+      const q = query(
+        collection(db, SMS_TEMPLATES_COLLECTION),
 
-            where("branchId", "==", branchId),
-            where("isActive", "==", true),
-          )
-        : query(
-            collection(db, SMS_TEMPLATES_COLLECTION),
-
-            where("isActive", "==", true),
-          );
+        where("isActive", "==", true),
+      );
 
       const querySnapshot = await getDocs(q);
 
@@ -784,9 +767,21 @@ export const smsService = {
    */
   async getSMSSettings(clinicId: string): Promise<SMSSettings | null> {
     try {
-      const settingsDoc = await getDoc(
+      let settingsDoc = await getDoc(
         doc(db, SMS_SETTINGS_COLLECTION, clinicId),
       );
+
+      // Self-heal: a clinic that's never had SMS settings saved (e.g. after
+      // a data wipe/reseed) shouldn't silently fail every SMS trigger — seed
+      // defaults from VITE_SMS_* env vars once, then proceed normally.
+      if (!settingsDoc.exists()) {
+        try {
+          await this.createDefaultSMSSettings(clinicId, null, "system");
+          settingsDoc = await getDoc(doc(db, SMS_SETTINGS_COLLECTION, clinicId));
+        } catch (createError) {
+          console.error("Error creating default SMS settings:", createError);
+        }
+      }
 
       if (settingsDoc.exists()) {
         const data = settingsDoc.data();
@@ -855,9 +850,6 @@ export const smsService = {
       };
 
       // Only add branchId if it has a value (not null/undefined)
-      if (branchId) {
-        defaultSettings.branchId = branchId;
-      }
 
       // Use setDoc with clinicId as document ID instead of addDoc
       await setDoc(doc(db, SMS_SETTINGS_COLLECTION, clinicId), {
@@ -883,10 +875,9 @@ export const smsService = {
     recipientName: string,
     createdBy: string,
     templateId?: string,
-    branchId?: string,
   ): Promise<void> {
     try {
-      // Get SMS settings for the clinic
+      // Get SMS settings for the clinic (self-heals if missing — see getSMSSettings)
       const smsSettings = await this.getSMSSettings(clinicId);
 
       if (!smsSettings) {
@@ -917,7 +908,6 @@ export const smsService = {
       };
 
       // Only add optional fields if they have values (avoid undefined)
-      if (branchId) logData.branchId = branchId;
       if (templateId) logData.templateId = templateId;
       if (!isSuccess) logData.errorMessage = "SMS sending failed";
 
@@ -998,7 +988,6 @@ export const smsService = {
    */
   async getSMSStatistics(
     clinicId: string,
-    branchId?: string,
   ): Promise<{
     totalSent: number;
     totalFailed: number;
@@ -1010,20 +999,8 @@ export const smsService = {
     try {
       const [smsSettings, logsSnapshot, templatesSnapshot] = await Promise.all([
         this.getSMSSettings(clinicId),
-        getDocs(
-          query(
-            collection(db, SMS_LOGS_COLLECTION),
-
-            ...(branchId ? [where("branchId", "==", branchId)] : []),
-          ),
-        ),
-        getDocs(
-          query(
-            collection(db, SMS_TEMPLATES_COLLECTION),
-
-            ...(branchId ? [where("branchId", "==", branchId)] : []),
-          ),
-        ),
+        getDocs(query(collection(db, SMS_LOGS_COLLECTION))),
+        getDocs(query(collection(db, SMS_TEMPLATES_COLLECTION))),
       ]);
 
       const logs = logsSnapshot.docs.map((doc) => doc.data());
@@ -1869,7 +1846,6 @@ export const smsService = {
     patientId: string,
     clinicId: string,
     appointmentId: string,
-    branchId?: string,
   ): Promise<boolean> {
     try {
       // Get patient, clinic, and appointment information
@@ -1955,7 +1931,7 @@ export const smsService = {
       // Log the SMS
       await this.createSMSLog({
         clinicId,
-        branchId: branchId || patient.branchId,
+        branchId: patient.branchId,
         patientId,
         patientName,
         patientPhone: phoneNumber,
@@ -1980,7 +1956,6 @@ export const smsService = {
     patientId: string,
     clinicId: string,
     appointmentId: string,
-    branchId?: string,
   ): Promise<boolean> {
     try {
       // Get patient, clinic, and appointment information
@@ -2085,7 +2060,7 @@ export const smsService = {
       // Log the SMS
       await this.createSMSLog({
         clinicId,
-        branchId: branchId || patient.branchId,
+        branchId: patient.branchId,
         patientId,
         patientName,
         patientPhone: phoneNumber,

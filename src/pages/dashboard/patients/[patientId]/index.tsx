@@ -106,7 +106,10 @@ export default function PatientDetailPage() {
 
       if (!isAdmin && userData?.email) {
         try {
-          const docInfo = await doctorService.getDoctorByEmail(userData.email);
+          const docInfo = await doctorService.getDoctorByEmail(
+            userData.email,
+            clinicId,
+          );
 
           if (docInfo && patientData && patientData.doctorId !== docInfo.id) {
             addToast({

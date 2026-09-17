@@ -33,7 +33,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import { title, subtitle } from "@/components/primitives";
 
 export default function NotesSectionsPage() {
-  const { clinicId, branchId, currentUser } = useAuthContext();
+  const { clinicId, currentUser } = useAuthContext();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [sections, setSections] = useState<NotesSection[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -143,7 +143,7 @@ export default function NotesSectionsPage() {
       const sectionData: Omit<NotesSection, "id" | "createdAt" | "updatedAt"> =
         {
           clinicId: clinicId!,
-          branchId: branchId || "",
+          branchId: "",
           sectionLabel: formData.label.trim(),
           sectionKey: formData.key.trim(),
           isActive: formData.isActive,

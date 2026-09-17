@@ -73,7 +73,7 @@ const CommunicationPage: React.FC = () => {
     const loadGlobalStats = async () => {
       try {
         const [logs, smsSettings] = await Promise.all([
-          smsService.getSMSLogs(clinicId, undefined, 500),
+          smsService.getSMSLogs(clinicId, 500),
           getSMSSettings(clinicId),
         ]);
 

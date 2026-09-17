@@ -150,11 +150,6 @@ const ReferralPartnerProfilePage = lazy(
   () => import("@/pages/dashboard/referral-partners/profile"),
 );
 
-// Lazy load branch management pages
-const BranchManagementPage = lazy(
-  () => import("@/pages/dashboard/branches/index"),
-);
-const NewBranchPage = lazy(() => import("@/pages/dashboard/new-branch"));
 
 // Lazy load reports page
 const ReportsPage = lazy(() => import("@/pages/dashboard/reports/index"));
@@ -869,24 +864,6 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="settings/referral-partners/:partnerId"
-                          />
-
-                          {/* Branch Management Routes */}
-                          <Route
-                            element={
-                              <ClinicAdminRoute>
-                                <BranchManagementPage />
-                              </ClinicAdminRoute>
-                            }
-                            path="branches"
-                          />
-                          <Route
-                            element={
-                              <ClinicAdminRoute>
-                                <NewBranchPage />
-                              </ClinicAdminRoute>
-                            }
-                            path="branches/new"
                           />
 
                           {/* Reports Route */}

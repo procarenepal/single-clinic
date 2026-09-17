@@ -25,6 +25,7 @@ import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
 import { StatusBadge } from "@/components/billing/StatusBadge";
 import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 import { pathologyBillingService } from "@/services/pathologyBillingService";
+import { billingApi } from "@/services/api/billingApi";
 import { clinicService } from "@/services/clinicService";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
@@ -332,6 +333,12 @@ export default function PathologyInvoiceDetailPage() {
       .updateBilling(invoice.id, { printCount: (invoice.printCount || 0) + 1 })
       .catch(console.error);
 
+    // Mirror into the MySQL Schedule 5 ledger too — best-effort, never
+    // blocks the print itself.
+    if ((invoice as any).javaInvoiceId) {
+      billingApi.recordPrint((invoice as any).javaInvoiceId).catch(console.error);
+    }
+
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
     if (!printWindow) {
@@ -633,8 +640,7 @@ export default function PathologyInvoiceDetailPage() {
               </Button>
             )}
             {invoice.status !== "cancelled" &&
-              invoice.status !== "finalized" &&
-              invoice.paymentStatus !== "paid" && (
+              invoice.status !== "finalized" && (
                 <Button
                   color="danger"
                   size="sm"

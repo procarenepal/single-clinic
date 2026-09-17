@@ -46,7 +46,7 @@ export default function FollowupModal({
   defaultCategory = "general",
   onSaved,
 }: FollowupModalProps) {
-  const { clinicId, branchId, currentUser } = useAuthContext();
+  const { clinicId, currentUser } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientHistory, setPatientHistory] = useState<any>(null);
@@ -314,7 +314,7 @@ export default function FollowupModal({
 
       const payload: Omit<PatientFollowup, "id" | "createdAt" | "updatedAt"> = {
         clinicId: clinicId || "",
-        branchId: branchId || "",
+        branchId: "",
         patientId:
           followup?.patientId || formData.patientId || `walkin_${Date.now()}`,
         patientName: formData.patientName,

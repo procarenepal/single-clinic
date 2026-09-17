@@ -41,7 +41,6 @@ export default function ManageCallLogsPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isDeleteOpen, setDeleteOpen] = useState(false);
   const [deletingCallLog, setDeletingCallLog] = useState<CallLog | null>(null);
-  const [defaultBranchId, setDefaultBranchId] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   // Current date for default values
@@ -59,24 +58,7 @@ export default function ManageCallLogsPage() {
   // Load call logs when component mounts
   useEffect(() => {
     loadCallLogs();
-    loadDefaultBranch();
   }, [clinicId]);
-
-  const loadDefaultBranch = async () => {
-    if (!clinicId) return;
-
-    try {
-      const { branchService } = await import("@/services/branchService");
-      const mainBranch = await branchService.getMainBranch(clinicId);
-
-      if (mainBranch) {
-        setDefaultBranchId(mainBranch.id);
-      }
-    } catch (error) {
-      console.error("Error loading default branch:", error);
-      // If we can't get the main branch, we'll create a default one if needed
-    }
-  };
 
   const loadCallLogs = async () => {
     if (!clinicId) return;
@@ -113,9 +95,6 @@ export default function ManageCallLogsPage() {
       return;
     }
 
-    // Get branchId from userData (fallback to clinicId if no specific branch)
-    const branchIdToUse = userData?.branchId || defaultBranchId || clinicId;
-
     try {
       setSubmitting(true);
 
@@ -124,7 +103,7 @@ export default function ManageCallLogsPage() {
         const updateData = {
           ...callLogForm,
           receivedOn: new Date(callLogForm.receivedOn),
-          branchId: branchIdToUse,
+          branchId: clinicId,
         };
 
         await callLogService.updateCallLog(selectedCallLog.id, updateData);
@@ -138,7 +117,7 @@ export default function ManageCallLogsPage() {
         const callLogData = {
           ...callLogForm,
           receivedOn: new Date(callLogForm.receivedOn),
-          branchId: branchIdToUse,
+          branchId: clinicId,
           createdBy: currentUser.uid,
         };
 

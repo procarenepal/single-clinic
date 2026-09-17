@@ -3,7 +3,6 @@
  * Replaced: Card, Button, Input, Select, Autocomplete, Table, Chip,
  *           Divider, Pagination, Modal, Switch, Tabs (@heroui)
  */
-import type { Branch } from "@/types/models";
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -53,7 +52,6 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { branchService } from "@/services/branchService";
 import { treatmentCategoryService } from "@/services/treatmentCategoryService";
 import {
   getLastPaymentMethod,
@@ -102,6 +100,8 @@ function SearchSelect({
   required,
   hint,
   placeholder,
+  onQuickAdd,
+  quickAddLabel,
 }: {
   label: string;
   items: { id: string; primary: string; secondary?: string }[];
@@ -111,6 +111,8 @@ function SearchSelect({
   required?: boolean;
   hint?: string;
   placeholder?: string;
+  onQuickAdd?: () => void;
+  quickAddLabel?: string;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -190,6 +192,21 @@ function SearchSelect({
                   )}
                 </button>
               ))
+            )}
+            {onQuickAdd && (
+              <button
+                className="w-full text-left px-3 py-2 border-t border-border-base text-primary hover:bg-surface-2 flex items-center gap-1.5"
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onQuickAdd();
+                }}
+              >
+                <IoAddOutline className="w-3.5 h-3.5" />
+                <span className="text-[12.5px] font-medium">
+                  {quickAddLabel || "Add new"}
+                </span>
+              </button>
             )}
           </div>
         </>
@@ -394,16 +411,7 @@ export default function AppointmentBillingPage() {
   const [searchParams] = useSearchParams();
   const filterDate = searchParams.get("date");
 
-  const branchId = userData?.branchId ?? null;
   const isClinicAdmin = userData?.role === "clinic-admin";
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const mainBranchId = branches.find((b) => b.isMainBranch)?.id ?? null;
-  const effectiveBranchId =
-    branchId ??
-    (mainBranchId && selectedBranchId === mainBranchId
-      ? undefined
-      : (selectedBranchId ?? undefined));
 
   // Tabs: 'create' | 'manage' | 'settings'
   const [activeTab, setActiveTab] = useState(filterDate ? "manage" : "create");
@@ -436,6 +444,16 @@ export default function AppointmentBillingPage() {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [selectedBilling, setSelectedBilling] =
     useState<AppointmentBilling | null>(null);
+
+  // ── Quick-add patient (walk-in / one-time customer) ─────────────────────
+  const [showQuickAddPatient, setShowQuickAddPatient] = useState(false);
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
+  const [quickAddForm, setQuickAddForm] = useState({
+    name: "",
+    mobile: "",
+    gender: "other" as "male" | "female" | "other",
+    address: "",
+  });
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -522,42 +540,9 @@ export default function AppointmentBillingPage() {
     }
   };
 
-  // Load branches for clinic-wide admins (no fixed branchId)
-  useEffect(() => {
-    if (!clinicId || !isClinicAdmin || branchId) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await branchService.getClinicBranches(clinicId, true);
-
-        if (cancelled) return;
-        setBranches(data);
-        if (data.length > 0) {
-          setSelectedBranchId((prev) => prev ?? data[0].id);
-        } else {
-          setSelectedBranchId(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setBranches([]);
-          setSelectedBranchId(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clinicId, isClinicAdmin, branchId]);
-
-  useEffect(() => {
-    if (branchId) setSelectedBranchId(null);
-  }, [branchId]);
-
   useEffect(() => {
     loadData();
-  }, [clinicId, filterDate, effectiveBranchId]);
+  }, [clinicId, filterDate]);
   useEffect(() => {
     if (filterDate) setActiveTab("manage");
   }, [filterDate]);
@@ -586,21 +571,16 @@ export default function AppointmentBillingPage() {
       setFormData((prev) => ({ ...prev, applyTax: Boolean(settings.enableTax) }));
 
       const [pData, dData, expData, aData, bData, tcData] = await Promise.all([
-        patientService.getPatientsByClinic(clinicId, effectiveBranchId),
-        doctorService.getDoctorsByClinic(clinicId, effectiveBranchId),
-        expertService.getExpertsByClinic(clinicId, effectiveBranchId),
+        patientService.getPatientsByClinic(clinicId),
+        doctorService.getDoctorsByClinic(clinicId),
+        expertService.getExpertsByClinic(clinicId),
         appointmentTypeService.getAppointmentTypesByClinic(
           clinicId,
-          effectiveBranchId,
         ),
         appointmentBillingService.getBillingByClinic(
           clinicId,
-          effectiveBranchId,
         ),
-        treatmentCategoryService.getCategoriesByClinic(
-          clinicId,
-          effectiveBranchId,
-        ),
+        treatmentCategoryService.getCategoriesByClinic(clinicId),
       ]);
 
       setPatients(pData);
@@ -639,6 +619,84 @@ export default function AppointmentBillingPage() {
       addToast({ title: "Error loading data", color: "danger" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickAddPatient = async () => {
+    if (!clinicId) return;
+    const name = quickAddForm.name.trim();
+    const mobile = quickAddForm.mobile.trim();
+
+    if (!name || !mobile) {
+      addToast({
+        title: "Validation Error",
+        description: "Name and mobile number are required.",
+        color: "danger",
+      });
+
+      return;
+    }
+
+    setQuickAddSaving(true);
+    try {
+      const regNumber =
+        await patientService.getNextRegistrationNumber(clinicId);
+      const newPatientId = await patientService.createPatient({
+        regNumber,
+        name,
+        mobile,
+        address: quickAddForm.address.trim() || "N/A",
+        gender: quickAddForm.gender,
+        dob: new Date(),
+        age: "",
+        doctorId: "",
+        medicalConditions: [],
+        clinicId,
+        branchId: clinicId,
+        isActive: true,
+        isCritical: false,
+        createdBy: currentUser?.uid || "",
+      });
+
+      const newPatient: Patient = {
+        id: newPatientId,
+        regNumber,
+        name,
+        mobile,
+        address: quickAddForm.address.trim() || "N/A",
+        gender: quickAddForm.gender,
+        dob: new Date(),
+        age: "",
+        doctorId: "",
+        medicalConditions: [],
+        clinicId,
+        branchId: clinicId,
+        isActive: true,
+        isCritical: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdBy: currentUser?.uid || "",
+      };
+
+      setPatients((prev) => [newPatient, ...prev]);
+      await handlePatientChange(newPatientId);
+
+      addToast({
+        title: "Patient added",
+        description: `${name} added and selected for this invoice.`,
+        color: "success",
+      });
+
+      setQuickAddForm({ name: "", mobile: "", gender: "other", address: "" });
+      setShowQuickAddPatient(false);
+    } catch (e) {
+      addToast({
+        title: "Error",
+        description: "Failed to add patient. Please try again.",
+        color: "danger",
+      });
+    } finally {
+      setQuickAddSaving(false);
     }
   };
 
@@ -696,6 +754,7 @@ export default function AppointmentBillingPage() {
           const unbilled = allAppointments.filter(
             (app) =>
               !app.billingId && // Not already billed
+              !(app as any).consultationBillingId && // Not already auto-billed at check-in/routing
               app.status !== "cancelled" &&
               app.status !== "no-show",
           );
@@ -900,6 +959,10 @@ export default function AppointmentBillingPage() {
   };
 
   const handleCreateSubmit = async () => {
+    // Re-entrancy guard: setSubmitting(true) below doesn't disable the
+    // submit button until React's next render, so a fast double-click can
+    // otherwise slip a second call through and create a duplicate invoice.
+    if (submitting) return;
     if (!clinicId || !currentUser || !billingSettings) return;
     if (!formData.patientId || !formData.items.length) {
       addToast({ title: "Fill required fields", color: "warning" });
@@ -915,6 +978,66 @@ export default function AppointmentBillingPage() {
       addToast({ title: "Select doctor for all items", color: "warning" });
 
       return;
+    }
+
+    // Block (don't just warn) if this form's items re-bill the SAME
+    // appointment type as an already-billed visit today — items on this
+    // form can be added manually via "Add Item" with no awareness of
+    // appointments at all, so this is the one place in this tab that can
+    // otherwise silently create a second consultation invoice for a visit
+    // that was already auto-billed. Scoped to a literal duplicate (same
+    // appointmentTypeId) so a legitimate second invoice for something
+    // different (e.g. a same-day lab add-on) is never blocked.
+    if (formData.patientId && formData.patientId !== "walk-in") {
+      try {
+        const { appointmentService } = await import(
+          "@/services/appointmentService"
+        );
+        const todaysAppointments = (
+          await appointmentService.getAppointmentsByPatient(formData.patientId)
+        ).filter((a) => {
+          const isToday =
+            a.appointmentDate.toDateString() === new Date().toDateString();
+
+          return isToday && (a as any).status !== "cancelled";
+        });
+
+        const duplicateAppt = todaysAppointments.find((a) => {
+          const existingBillId =
+            (a as any).consultationBillingId || (a as any).billingId;
+
+          if (!existingBillId) return false;
+
+          return formData.items.some(
+            (item) => item.appointmentTypeId === a.appointmentTypeId,
+          );
+        });
+
+        if (duplicateAppt) {
+          const existingBillId =
+            (duplicateAppt as any).consultationBillingId ||
+            (duplicateAppt as any).billingId;
+          const existingBilling =
+            await appointmentBillingService.getBillingById(existingBillId);
+          const existingInvoiceNumber =
+            existingBilling?.invoiceNumber || existingBillId;
+
+          addToast({
+            title: "Duplicate invoice blocked",
+            description: `${formData.patientName} already has invoice ${existingInvoiceNumber} covering this same visit today. Edit that invoice instead of creating a new one.`,
+            color: "danger",
+          });
+
+          return;
+        }
+      } catch (checkError) {
+        // Best-effort check only — never block invoice creation because
+        // this lookup itself failed.
+        console.error(
+          "Error checking for existing today's invoice:",
+          checkError,
+        );
+      }
     }
 
     try {
@@ -949,7 +1072,7 @@ export default function AppointmentBillingPage() {
       const data: Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt"> = {
         invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         clinicId,
-        branchId: effectiveBranchId || userData?.branchId || "",
+        branchId: "",
         ...formDataForSave,
         // buyerPan is what print/Java-invoice logic actually reads;
         // patientPanVat (also set via ...formData above) is used elsewhere
@@ -1049,7 +1172,6 @@ export default function AppointmentBillingPage() {
       setOtherModulesDue(0);
       const up = await appointmentBillingService.getBillingByClinic(
         clinicId,
-        effectiveBranchId,
       );
 
       if (up) setBillings(up);
@@ -1190,7 +1312,6 @@ export default function AppointmentBillingPage() {
       addToast({ title: "Payment recorded", color: "success" });
       const up = await appointmentBillingService.getBillingByClinic(
         clinicId,
-        effectiveBranchId,
       );
 
       if (up) setBillings(up);
@@ -1299,16 +1420,13 @@ export default function AppointmentBillingPage() {
         name: categoryForm.name.trim(),
         description: categoryForm.description.trim(),
         clinicId,
-        branchId: effectiveBranchId || undefined,
         isActive: true,
         createdBy: currentUser.uid,
       });
       addToast({ title: "Category added", color: "success" });
       setCategoryForm({ name: "", description: "" });
-      const cats = await treatmentCategoryService.getCategoriesByClinic(
-        clinicId,
-        effectiveBranchId,
-      );
+      const cats =
+        await treatmentCategoryService.getCategoriesByClinic(clinicId);
 
       setTreatmentCategories(cats);
     } catch (e: any) {
@@ -1378,23 +1496,6 @@ export default function AppointmentBillingPage() {
             Create and manage appointment invoices
           </p>
         </div>
-        {!branchId && isClinicAdmin && branches.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-text-muted">Branch</span>
-            <select
-              className="h-8 px-2.5 py-0 text-[12px] border border-border-base rounded bg-surface text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-              value={selectedBranchId ?? ""}
-              onChange={(e) => setSelectedBranchId(e.target.value || null)}
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                  {b.isMainBranch ? " (all branches)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       <div className="bg-surface border border-border-base rounded overflow-hidden">
@@ -1441,8 +1542,10 @@ export default function AppointmentBillingPage() {
                   secondary: p.regNumber,
                 }))}
                 label="Patient"
+                quickAddLabel="Quick add new patient"
                 value={formData.patientId}
                 onChange={(id) => handlePatientChange(id)}
+                onQuickAdd={() => setShowQuickAddPatient(true)}
               />
 
               <FlatInput
@@ -2049,6 +2152,7 @@ export default function AppointmentBillingPage() {
                               invoiceType="appointment"
                               recordId={b.id}
                               synced={Boolean(b.irdSynced)}
+                              onSynced={loadData}
                             />
                           </td>
                           <td className="px-3 py-2.5">
@@ -2365,11 +2469,15 @@ export default function AppointmentBillingPage() {
                           "📲 Digital Wallet",
                           "🏦 Bank",
                           "📋 Cheque",
-                        ].map((i) => (
-                          <option key={i.charAt(0)} value={i.charAt(0)}>
-                            {i}
-                          </option>
-                        ))}
+                        ].map((i) => {
+                          const emoji = i.split(" ")[0];
+
+                          return (
+                            <option key={emoji} value={emoji}>
+                              {i}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div className="flex items-center mt-6">
@@ -2905,6 +3013,86 @@ export default function AppointmentBillingPage() {
         </ModalShell>
       )}
 
+      {showQuickAddPatient && (
+        <ModalShell
+          disabled={quickAddSaving}
+          footer={
+            <>
+              <Button
+                disabled={quickAddSaving}
+                variant="bordered"
+                onClick={() => setShowQuickAddPatient(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                color="primary"
+                disabled={quickAddSaving}
+                onClick={handleQuickAddPatient}
+              >
+                {quickAddSaving ? "Adding..." : "Add & Select"}
+              </Button>
+            </>
+          }
+          size="md"
+          subtitle={
+            <p className="text-[12px] text-text-muted">
+              For walk-in / one-time customers — just enough to bill this
+              visit. Full registration can be completed later from Patients.
+            </p>
+          }
+          title="Quick Add Patient"
+          onClose={() => setShowQuickAddPatient(false)}
+        >
+          <div className="flex flex-col gap-3">
+            <FlatInput
+              required
+              label="Name"
+              value={quickAddForm.name}
+              onChange={(v) =>
+                setQuickAddForm((p) => ({ ...p, name: v }))
+              }
+            />
+            <FlatInput
+              required
+              label="Mobile"
+              placeholder="98XXXXXXXX"
+              value={quickAddForm.mobile}
+              onChange={(v) =>
+                setQuickAddForm((p) => ({ ...p, mobile: v }))
+              }
+            />
+            <div className="flex flex-col gap-1">
+              <label className="text-[12px] font-medium text-text-muted">
+                Gender
+              </label>
+              <div className="flex items-center h-9 border border-border-base rounded bg-surface">
+                <select
+                  className="flex-1 h-full bg-transparent px-2.5 text-[12.5px] text-text-main outline-none"
+                  value={quickAddForm.gender}
+                  onChange={(e) =>
+                    setQuickAddForm((p) => ({
+                      ...p,
+                      gender: e.target.value as "male" | "female" | "other",
+                    }))
+                  }
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+            <FlatInput
+              label="Address (optional)"
+              value={quickAddForm.address}
+              onChange={(v) =>
+                setQuickAddForm((p) => ({ ...p, address: v }))
+              }
+            />
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 }

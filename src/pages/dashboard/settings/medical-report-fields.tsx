@@ -47,7 +47,7 @@ const FIELD_TYPES = [
 ];
 
 export default function MedicalReportFieldsPage() {
-  const { clinicId, branchId, currentUser } = useAuthContext();
+  const { clinicId, currentUser } = useAuthContext();
   const modalState = useModalState(false);
   const [fields, setFields] = useState<MedicalReportField[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -214,7 +214,7 @@ export default function MedicalReportFieldsPage() {
         "id" | "createdAt" | "updatedAt"
       > = {
         clinicId: clinicId!,
-        branchId: branchId!,
+        branchId: "",
         fieldLabel: formData.label.trim(),
         fieldKey: formData.key.trim(),
         fieldType: formData.fieldType,

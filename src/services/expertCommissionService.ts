@@ -206,12 +206,13 @@ class ExpertCommissionService {
   // Get all commissions for an expert
   async getCommissionsByExpert(
     expertId: string,
-    clinicId: string, // Kept for signature compatibility
+    clinicId: string,
   ): Promise<ExpertCommission[]> {
     try {
       const q = query(
         collection(db, this.collectionName),
         where("expertId", "==", expertId),
+        where("clinicId", "==", clinicId),
       );
 
       const querySnapshot = await getDocs(q);
@@ -384,7 +385,6 @@ class ExpertCommissionService {
     expertId: string,
     expertName: string,
     clinicId: string,
-    branchId: string,
     patientId: string,
     patientName: string,
     appointmentTypeName: string,
@@ -400,7 +400,7 @@ class ExpertCommissionService {
         expertId,
         expertName,
         clinicId,
-        branchId,
+        branchId: clinicId,
         billingId: `reg_${Date.now()}`,
         billingType: "appointment",
         invoiceNumber: "REG-COMM",

@@ -40,12 +40,6 @@ interface PurchaseRecordFormData {
 
 interface PurchaseRecordsTabProps {
   onStatsChange?: () => void;
-  /**
-   * Effective branch scope for this view.
-   * For branch users this matches their fixed branchId.
-   * For clinic admins this is the branch selected on the parent page.
-   */
-  effectiveBranchId?: string | null;
 }
 
 function ModalShell({
@@ -124,9 +118,8 @@ function ModalShell({
 
 export default function PurchaseRecordsTab({
   onStatsChange,
-  effectiveBranchId,
 }: PurchaseRecordsTabProps) {
-  const { userData, clinicId, branchId } = useAuthContext();
+  const { clinicId, userData } = useAuthContext();
   const [purchaseRecords, setPurchaseRecords] = useState<
     SupplierPurchaseRecord[]
   >([]);
@@ -150,8 +143,7 @@ export default function PurchaseRecordsTab({
     notes: "",
   });
 
-  const branchScopeId =
-    effectiveBranchId ?? userData?.branchId ?? branchId ?? null;
+  const branchScopeId = clinicId ?? null;
 
   useEffect(() => {
     if (clinicId) {
@@ -186,7 +178,6 @@ export default function PurchaseRecordsTab({
     try {
       const records = await medicineService.getSupplierPurchaseRecords(
         clinicId,
-        branchScopeId || undefined,
       );
 
       setPurchaseRecords(records);
@@ -207,7 +198,6 @@ export default function PurchaseRecordsTab({
     try {
       const suppliersData = await medicineService.getSuppliersByClinic(
         clinicId,
-        branchScopeId || undefined,
       );
 
       setSuppliers(suppliersData);

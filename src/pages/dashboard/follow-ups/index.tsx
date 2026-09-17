@@ -66,7 +66,7 @@ const renderServiceProduct = (item: PatientFollowup, filter: string) => {
 };
 
 export default function FollowupsPage() {
-  const { currentUser, clinicId, branchId } = useAuthContext();
+  const { currentUser, clinicId } = useAuthContext();
   const [followups, setFollowups] = useState<PatientFollowup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,7 +97,7 @@ export default function FollowupsPage() {
 
   useEffect(() => {
     loadFollowups();
-  }, [clinicId, branchId]);
+  }, [clinicId]);
 
   useEffect(() => {
     if (clinicId && currentUser?.uid) {
@@ -171,7 +171,6 @@ export default function FollowupsPage() {
     try {
       const data = await followupService.getFollowups(
         clinicId,
-        branchId || undefined,
       );
 
       setFollowups(data);

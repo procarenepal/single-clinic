@@ -6,11 +6,15 @@ function isAuthenticated() {
 return request.auth != null;
 }
 
-// Check if user is a super admin
+// Check if user is a super admin. Single-clinic deployment: clinic-admin
+// is treated as equivalent to super-admin everywhere isSuperAdmin() is
+// checked, since there's only ever one clinic and no cross-tenant data to
+// protect a clinic-admin from seeing.
 function isSuperAdmin() {
 return isAuthenticated() &&
 exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super-admin';
+(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super-admin' ||
+ get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-admin');
 }
 
 // Check if user is clinic admin or clinic super admin
@@ -198,11 +202,13 @@ allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
 
 // Audit Logs collection rules
 match /audit_logs/{logId} {
-// Helper function to check if user is super admin
+// Helper function to check if user is super admin. Single-clinic
+// deployment: clinic-admin is treated as equivalent everywhere.
 function isSuperAdmin() {
   return isAuthenticated() &&
          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super-admin';
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super-admin' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-admin');
 }
 
 // Helper function to check if user belongs to the log's clinic
@@ -237,6 +243,655 @@ function belongsToAnyClinic() {
 // Allow super admins to query all logs
 // Allow clinic users to query logs (they'll be filtered by clinicId in the query)
 allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+// Landing Page Content collection rules — public marketing content shown to
+// unauthenticated visitors on the site's homepage (src/pages/index.tsx), so
+// read must NOT require authentication. Had no rules at all before (fell
+// through to the default deny-all), silently forcing every visitor onto the
+// hardcoded default content. Writes stay restricted to clinic admins editing
+// their own clinic's content.
+// Staff collection rules — had NO rules at all before (same deny-all
+// fallthrough bug as /experts, /notifications, /enquiries, /landing_pages —
+// every staff read/write was always rejected regardless of clinic membership).
+// Daily Stock Snapshots, Supplier Payments, and Pathology reference-data
+// collections (test types, units, categories, parameters) all had NO rules
+// at all before (same deny-all fallthrough bug as /experts, /notifications,
+// /enquiries, /landing_pages, /staff above) — every read/write was always
+// rejected regardless of clinic membership.
+match /dailyStockSnapshots/{snapshotId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /dailyStockSnapshots {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /supplier_payments/{paymentId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  belongsToClinic(request.resource.data.clinicId)));
+
+  allow update, delete: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+}
+
+match /supplier_payments {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /patientFollowups/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /patientFollowups {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /patientPackages/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /patientPackages {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /treatmentPackages/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /treatmentPackages {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /referralPartners/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /referralPartners {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /account_bills/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /account_bills {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /vendors/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /vendors {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /itemPurchases/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /itemPurchases {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /staff_attendance/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /staff_attendance {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /leaveRequests/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /leaveRequests {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /leaveBalances/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /leaveBalances {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /leaveTypes/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /leaveTypes {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /supplier_ledger_entries/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /supplier_ledger_entries {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /treatment_categories/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /treatment_categories {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /pathologyTests/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /pathologyTests {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /pathologyTestTypes/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /pathologyTestTypes {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /pathologyUnits/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /pathologyUnits {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /pathologyCategories/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /pathologyCategories {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /pathologyParameters/{docId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /pathologyParameters {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /staff/{staffId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  belongsToClinic(request.resource.data.clinicId) &&
+                  request.resource.data.createdBy == request.auth.uid));
+
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
+                  belongsToClinic(resource.data.clinicId) &&
+                  request.resource.data.clinicId == resource.data.clinicId));
+
+  allow delete: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+}
+
+match /staff {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+// Enquiries collection rules — had NO rules at all before (same
+// deny-all fallthrough bug as /experts, /notifications, /landing_pages
+// above), so every enquiry read/write was always rejected regardless of
+// clinic membership.
+match /enquiries/{enquiryId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  belongsToClinic(request.resource.data.clinicId) &&
+                  request.resource.data.createdBy == request.auth.uid));
+
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
+                  belongsToClinic(resource.data.clinicId) &&
+                  request.resource.data.clinicId == resource.data.clinicId));
+
+  allow delete: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+}
+
+match /enquiries {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /landing_pages/{clinicId} {
+  allow read: if true;
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                 get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId &&
+                 (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-admin' ||
+                  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinic-super-admin')));
 }
 
 // Clinics collection rules
@@ -675,6 +1330,93 @@ match /doctors {
   }
   
   // Allow clinic users to query doctors (they'll be filtered by clinicId in the query)
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+// Experts collection rules — mirrors /doctors exactly. This collection had
+// NO rules at all before (fell through to the default deny-all), so every
+// expert read/write was silently rejected regardless of clinic membership.
+match /experts/{expertId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  belongsToClinic(request.resource.data.clinicId) &&
+                  request.resource.data.createdBy == request.auth.uid &&
+                  request.resource.data.keys().hasAll(['name', 'expertType', 'speciality', 'phone', 'licenseNumber', 'clinicId', 'createdBy', 'isActive'])));
+
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
+                  belongsToClinic(resource.data.clinicId) &&
+                  request.resource.data.clinicId == resource.data.clinicId));
+
+  allow delete: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
+                  belongsToClinic(resource.data.clinicId)));
+}
+
+// Experts collection-level rules for queries
+match /experts {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+// Notifications collection rules — also had NO rules at all before (same
+// deny-all fallthrough bug as /experts above). Notifications are read via a
+// live onSnapshot listener AND queried with a clinicId filter, so both a
+// doc-level read and a collection-level list rule are needed.
+match /notifications/{notificationId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  belongsToClinic(request.resource.data.clinicId) &&
+                  request.resource.data.keys().hasAll(['clinicId', 'title', 'message', 'type', 'read', 'createdAt'])));
+
+  // markAsRead/markAllAsRead only ever toggle the `read` field.
+  allow update: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null &&
+                  belongsToClinic(resource.data.clinicId) &&
+                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])));
+
+  allow delete: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+}
+
+match /notifications {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
   allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
 }
 
@@ -2662,6 +3404,180 @@ match /labTechnicians {
 }
 
 // Doctor Commissions collection rules
+match /clinic_holidays/{holidayId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /clinic_holidays {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /prescription_templates/{templateId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /prescription_templates {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+// Write-only queue collection — a Cloud Function polls/consumes these via
+// admin credentials (bypassing these rules), matching the sms_test_logs
+// pattern. Clinic staff only ever create them (scheduling a reminder), never
+// query them back client-side (confirmed: zero client-side reads in code).
+match /doctorAppointmentReminders/{reminderId} {
+  allow create: if isAuthenticated() &&
+                request.resource.data.clinicId != null &&
+                request.resource.data.doctorId != null &&
+                request.resource.data.appointmentId != null;
+  allow read: if isAuthenticated();
+}
+
+match /walletTransactions/{transactionId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /walletTransactions {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /expertCommissions/{commissionId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /expertCommissions {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /referralCommissions/{commissionId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /referralCommissions {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
+match /staffCommissions/{commissionId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  allow write: if isAuthenticated() &&
+               (isSuperAdmin() ||
+                (request.resource.data.clinicId != null &&
+                 belongsToClinic(request.resource.data.clinicId)));
+}
+
+match /staffCommissions {
+  function belongsToAnyClinic() {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId != null;
+  }
+
+  allow list: if isAuthenticated() && (isSuperAdmin() || belongsToAnyClinic());
+}
+
 match /doctorCommissions/{commissionId} {
   // Helper function to check if user belongs to the clinic
   function belongsToClinic(clinicId) {

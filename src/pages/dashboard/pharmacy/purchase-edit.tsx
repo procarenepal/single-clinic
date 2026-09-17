@@ -130,10 +130,9 @@ export default function PurchaseEditPage() {
           medicineService.getMedicinesByClinic(
             clinicId,
             undefined,
-            invoiceBranchId,
           ),
-          itemService.getItemsByClinic(clinicId, invoiceBranchId),
-          pharmacyService.getPharmacySettings(clinicId, invoiceBranchId),
+          itemService.getItemsByClinic(clinicId),
+          pharmacyService.getPharmacySettings(clinicId),
         ]);
 
         setPurchase(purchaseData);

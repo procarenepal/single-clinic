@@ -18,7 +18,7 @@ import { addToast } from "@/components/ui/toast";
 import { db } from "@/config/firebase";
 
 export default function PatientWalletTab({ patient }: { patient: Patient }) {
-  const { clinicId, branchId, currentUser } = useAuthContext();
+  const { clinicId, currentUser } = useAuthContext();
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -181,7 +181,6 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
       await walletService.addFunds(
         patient.id,
         clinicId,
-        branchId || "",
         depositAmount,
         paymentMethod,
         notes,

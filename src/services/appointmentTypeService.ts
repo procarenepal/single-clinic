@@ -136,15 +136,8 @@ export const appointmentTypeService = {
    */
   async getAppointmentTypesByClinic(
     clinicId?: string,
-    branchId?: string,
   ): Promise<AppointmentType[]> {
-    const types = await this.getAppointmentTypes(clinicId);
-
-    if (branchId) {
-      return types.filter((t) => t.branchId === branchId);
-    }
-
-    return types;
+    return await this.getAppointmentTypes(clinicId);
   },
 
   /**
@@ -152,16 +145,17 @@ export const appointmentTypeService = {
    */
   async getAppointmentTypesByClinicAndBranch(
     _clinicId: string,
-    branchId: string,
   ): Promise<AppointmentType[]> {
-    return this.getAppointmentTypesByClinic(_clinicId, branchId);
+    return this.getAppointmentTypesByClinic(_clinicId);
   },
 
   /**
    * Get all active appointment types
    */
-  async getActiveAppointmentTypes(): Promise<AppointmentType[]> {
-    const types = await this.getAppointmentTypes();
+  async getActiveAppointmentTypes(
+    clinicId?: string,
+  ): Promise<AppointmentType[]> {
+    const types = await this.getAppointmentTypes(clinicId);
 
     return types.filter((t) => t.isActive);
   },
@@ -170,16 +164,9 @@ export const appointmentTypeService = {
    * Alias for backward compatibility
    */
   async getActiveAppointmentTypesByClinic(
-    _clinicId?: string,
-    branchId?: string,
+    clinicId?: string,
   ): Promise<AppointmentType[]> {
-    const types = await this.getActiveAppointmentTypes();
-
-    if (branchId) {
-      return types.filter((t) => t.branchId === branchId);
-    }
-
-    return types;
+    return await this.getActiveAppointmentTypes(clinicId);
   },
 
   /**
@@ -187,9 +174,8 @@ export const appointmentTypeService = {
    */
   async getActiveAppointmentTypesByClinicAndBranch(
     _clinicId: string,
-    branchId: string,
   ): Promise<AppointmentType[]> {
-    return this.getActiveAppointmentTypesByClinic(_clinicId, branchId);
+    return this.getActiveAppointmentTypesByClinic(_clinicId);
   },
 
   /**

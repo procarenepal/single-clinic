@@ -52,7 +52,7 @@ import { accountService } from "@/services/accountService";
 import { AccountBill, Vendor } from "@/types/models";
 
 export default function AccountsPage() {
-  const { clinicId, userData, branchId } = useAuthContext();
+  const { clinicId, userData } = useAuthContext();
   const [bills, setBills] = useState<AccountBill[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,14 +121,14 @@ export default function AccountsPage() {
     if (clinicId) {
       loadData();
     }
-  }, [clinicId, branchId]);
+  }, [clinicId]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const [billsData, vendorsData] = await Promise.all([
-        accountService.getBillsByClinic(clinicId!, branchId || undefined),
-        accountService.getVendorsByClinic(clinicId!, branchId || undefined),
+        accountService.getBillsByClinic(clinicId!),
+        accountService.getVendorsByClinic(clinicId!),
       ]);
 
       setBills(billsData);
@@ -176,7 +176,7 @@ export default function AccountsPage() {
         paymentStatus: status,
         billDate: new Date(billForm.billDate),
         clinicId: clinicId!,
-        branchId: branchId || "",
+        branchId: "",
         createdBy: userData?.id || "",
       });
 
@@ -305,7 +305,7 @@ export default function AccountsPage() {
         ...vendorForm,
         isActive: true,
         clinicId: clinicId!,
-        branchId: branchId || "",
+        branchId: "",
         createdBy: userData?.id || "",
       });
 
@@ -321,7 +321,7 @@ export default function AccountsPage() {
           id,
           isActive: true,
           clinicId: clinicId!,
-          branchId: branchId || "",
+          branchId: "",
           createdAt: new Date(),
           updatedAt: new Date(),
           createdBy: userData?.id || "",

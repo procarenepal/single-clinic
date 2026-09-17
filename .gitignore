@@ -63,3 +63,11 @@ vite.config.ts.timestamp-*.mjs
 
 # Claude Code local tool config — not part of the app
 .claude/
+
+# Ad-hoc data exports/backups made during admin scripts — never commit
+# real user/patient data or DB dumps to the repo
+auth-users-backup-*.json
+firestore-backup-*/
+full-wipe-backup-*/
+mysql-*-backup-*.sql
+mysql-audit-log-backup-*.sql

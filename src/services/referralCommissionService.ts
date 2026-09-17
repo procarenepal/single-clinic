@@ -126,7 +126,6 @@ class ReferralCommissionService {
   async createRegistrationCommission(
     partner: ReferralPartner,
     clinicId: string,
-    branchId: string,
     patientId: string,
     patientName: string,
     appointmentTypeName: string,
@@ -141,7 +140,7 @@ class ReferralCommissionService {
         partnerId: partner.id!,
         partnerName: partner.name,
         clinicId,
-        branchId,
+        branchId: clinicId,
         billingId: `reg_${Date.now()}`, // Synthetic ID for registration-based commission
         invoiceNumber: "REG-COMM", // Placeholder for registration commission
         invoiceDate: new Date(),
@@ -192,6 +191,7 @@ class ReferralCommissionService {
       const simpleQuery = query(
         collection(db, this.collectionName),
         where("partnerId", "==", partnerId),
+        where("clinicId", "==", clinicId),
       );
 
       let querySnapshot;
@@ -200,7 +200,7 @@ class ReferralCommissionService {
         const orderedQuery = query(
           collection(db, this.collectionName),
           where("partnerId", "==", partnerId),
-
+          where("clinicId", "==", clinicId),
           orderBy("createdAt", "desc"),
         );
 

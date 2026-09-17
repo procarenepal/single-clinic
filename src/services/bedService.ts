@@ -43,7 +43,6 @@ export const bedService = {
    */
   async getCategoriesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<BedCategory[]> {
     try {
       const categoriesRef = collection(db, BED_CATEGORIES_COLLECTION);
@@ -51,10 +50,6 @@ export const bedService = {
         where("isActive", "==", true),
         where("clinicId", "==", clinicId),
       ];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(categoriesRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -180,17 +175,13 @@ export const bedService = {
   /**
    * Get all beds for a specific clinic
    */
-  async getBedsByClinic(clinicId: string, branchId?: string): Promise<Bed[]> {
+  async getBedsByClinic(clinicId: string): Promise<Bed[]> {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
       const constraints: any[] = [
         where("isActive", "==", true),
         where("clinicId", "==", clinicId),
       ];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(bedsRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -220,7 +211,6 @@ export const bedService = {
    */
   async getAvailableBedsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<Bed[]> {
     try {
       const bedsRef = collection(db, BEDS_COLLECTION);
@@ -229,10 +219,6 @@ export const bedService = {
         where("isActive", "==", true),
         where("clinicId", "==", clinicId),
       ];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(bedsRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -381,15 +367,10 @@ export const bedService = {
    */
   async getAllotmentsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(allotmentsRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -432,7 +413,6 @@ export const bedService = {
    */
   async getActiveAllotmentsByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
@@ -440,10 +420,6 @@ export const bedService = {
         where("status", "==", "active"),
         where("clinicId", "==", clinicId),
       ];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(allotmentsRef, ...constraints);
       const querySnapshot = await getDocs(q);

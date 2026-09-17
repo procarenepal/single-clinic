@@ -65,7 +65,7 @@ const SettingsTab: React.FC = () => {
     if (clinicId) {
       const [updatedSettings, logs] = await Promise.all([
         getSMSSettings(clinicId),
-        smsService.getSMSLogs(clinicId, undefined, 500),
+        smsService.getSMSLogs(clinicId, 500),
       ]);
 
       if (updatedSettings) {

@@ -148,7 +148,6 @@ class DoctorCommissionService {
     doctorId: string,
     doctorName: string,
     clinicId: string,
-    branchId: string,
     patientId: string,
     patientName: string,
     appointmentTypeName: string,
@@ -164,7 +163,7 @@ class DoctorCommissionService {
         doctorId,
         doctorName,
         clinicId,
-        branchId,
+        branchId: clinicId,
         billingId: `reg_${Date.now()}`, // Synthetic ID for registration-based commission
         billingType: "appointment",
         invoiceNumber: "REG-COMM", // Placeholder for registration commission
@@ -290,13 +289,14 @@ class DoctorCommissionService {
   // Get all commissions for a doctor
   async getCommissionsByDoctor(
     doctorId: string,
-    clinicId: string, // Kept for signature compatibility
+    clinicId: string,
   ): Promise<DoctorCommission[]> {
     try {
       // Try ordered query first, fallback to simple query if index doesn't exist
       const simpleQuery = query(
         collection(db, this.collectionName),
         where("doctorId", "==", doctorId),
+        where("clinicId", "==", clinicId),
       );
 
       let querySnapshot;
@@ -306,6 +306,7 @@ class DoctorCommissionService {
         const orderedQuery = query(
           collection(db, this.collectionName),
           where("doctorId", "==", doctorId),
+          where("clinicId", "==", clinicId),
           orderBy("createdAt", "desc"),
         );
 

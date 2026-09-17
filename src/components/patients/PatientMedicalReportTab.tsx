@@ -214,7 +214,6 @@ export const PatientMedicalReportTab: React.FC<
     try {
       await MedicalReportResponseService.savePatientResponses(
         clinicId,
-        authUserData?.branchId || "",
         patientId,
         responses,
         currentUser.uid,

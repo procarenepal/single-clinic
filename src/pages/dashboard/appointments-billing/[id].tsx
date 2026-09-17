@@ -33,6 +33,7 @@ import { ReasonConfirmModal } from "@/components/ui/ReasonConfirmModal";
 import { StatusBadge } from "@/components/billing/StatusBadge";
 import { IrdSyncBadge } from "@/components/billing/IrdSyncBadge";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { billingApi } from "@/services/api/billingApi";
 import { appointmentService } from "@/services/appointmentService";
 import { clinicService } from "@/services/clinicService";
 import { patientService } from "@/services/patientService";
@@ -717,6 +718,12 @@ export default function InvoiceDetailPage() {
       printCount: (invoice.printCount || 0) + 1
     }).catch(console.error);
 
+    // Mirror into the MySQL Schedule 5 ledger too — best-effort, never
+    // blocks the print itself.
+    if ((invoice as any).javaInvoiceId) {
+      billingApi.recordPrint((invoice as any).javaInvoiceId).catch(console.error);
+    }
+
     // Create a new window for printing
     const printWindow = window.open("", "_blank", "width=800,height=600");
 
@@ -976,8 +983,7 @@ export default function InvoiceDetailPage() {
               </Button>
             )}
             {invoice.status !== "cancelled" &&
-              invoice.status !== "finalized" &&
-              invoice.paymentStatus !== "paid" && (
+              invoice.status !== "finalized" && (
                 <Button
                   color="danger"
                   size="sm"
@@ -1660,11 +1666,16 @@ export default function InvoiceDetailPage() {
             </div>
             <div className="lg:col-span-1">
               {(() => {
-                const totalAmount = Math.round(
-                  paymentSplits.reduce(
-                    (sum, s) => sum + (parseFloat(s.amount) || 0),
-                    0,
-                  ),
+                // Not rounded — the actual payment application in
+                // handlePaymentSubmit uses these exact raw values (parseFloat
+                // amount vs. invoice.balanceAmount), so rounding only here
+                // desynced this preview from what actually happens: a
+                // payment that exactly matches a fractional balance (e.g.
+                // 734.5) would round up to 735 for display while the balance
+                // stayed 734.5, showing a false "Overpaid by NPR 0.5".
+                const totalAmount = paymentSplits.reduce(
+                  (sum, s) => sum + (parseFloat(s.amount) || 0),
+                  0,
                 );
 
                 if (totalAmount > 0) {

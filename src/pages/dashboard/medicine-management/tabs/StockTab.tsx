@@ -37,20 +37,13 @@ import {
 interface StockTabProps {
   clinicSettings: ClinicSettings | null;
   onStatsChange: () => void;
-  /**
-   * Effective branch scope for this view.
-   * For branch users this matches their fixed branchId.
-   * For clinic admins this is the branch selected on the parent page.
-   */
-  effectiveBranchId?: string | null;
 }
 
 export default function StockTab({
   clinicSettings,
   onStatsChange,
-  effectiveBranchId,
 }: StockTabProps) {
-  const { userData, clinicId, branchId } = useAuthContext();
+  const { userData, clinicId } = useAuthContext();
   const [stockItems, setStockItems] = useState<
     (MedicineStock & { medicine: Medicine })[]
   >([]);
@@ -89,7 +82,7 @@ export default function StockTab({
     invoiceNumber: "",
   });
 
-  const branchScopeId = effectiveBranchId ?? branchId ?? null;
+  const branchScopeId = clinicId ?? null;
 
   useEffect(() => {
     if (clinicId) {
@@ -103,10 +96,7 @@ export default function StockTab({
 
     setIsLoading(true);
     try {
-      const data = await medicineService.getStockByClinic(
-        clinicId,
-        branchScopeId || undefined,
-      );
+      const data = await medicineService.getStockByClinic(clinicId);
 
       setStockItems(data);
     } catch (error) {
@@ -124,11 +114,7 @@ export default function StockTab({
     if (!clinicId) return;
 
     try {
-      const data = await medicineService.getMedicinesByClinic(
-        clinicId,
-        true,
-        branchScopeId || undefined,
-      );
+      const data = await medicineService.getMedicinesByClinic(clinicId, true);
 
       setMedicines(data);
     } catch (error) {

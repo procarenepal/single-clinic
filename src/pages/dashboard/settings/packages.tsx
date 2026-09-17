@@ -16,7 +16,8 @@ import {
 import { addToast } from "@/components/ui/toast";
 
 export default function PackagesSettingsPage() {
-  const { clinicId, branchId } = useAuthContext();
+  const { clinicId } = useAuthContext();
+  const branchId = clinicId ?? null;
   const [packages, setPackages] = useState<TreatmentPackage[]>([]);
   const [selectedPackages, setSelectedPackages] = useState<Set<string>>(
     new Set(),
@@ -47,7 +48,6 @@ export default function PackagesSettingsPage() {
       setLoading(true);
       const data = await packageService.getPackagesByClinic(
         clinicId,
-        branchId || undefined,
       );
 
       setPackages(data);

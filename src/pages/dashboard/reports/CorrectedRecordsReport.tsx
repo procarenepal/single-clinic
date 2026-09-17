@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import * as XLSX from "xlsx";
 import NepaliDate from "nepali-datetime";
-import { IoDownloadOutline, IoWarningOutline } from "react-icons/io5";
+import { IoDownloadOutline, IoPrintOutline, IoWarningOutline } from "react-icons/io5";
 import { Button } from "@/components/ui/button";
 import { AppointmentBilling, PathologyBilling, MedicinePurchase } from "@/types/models";
 
@@ -131,6 +131,72 @@ export const CorrectedRecordsReport: React.FC<CorrectedRecordsReportProps> = ({
     XLSX.writeFile(workbook, "IRD_Corrected_Records_Report.xlsx");
   };
 
+  // Printing the live page (window.print()) would capture the whole app
+  // shell around this tab (filters, other tabs, sidebar) — build a
+  // standalone document with just this table and print that instead,
+  // matching BillingAuditLogReport's approach.
+  const printReport = () => {
+    const rowsHtml = records
+      .map(
+        (r) => `
+        <tr>
+          <td>${r.date} (BS: ${r.bsDate})</td>
+          <td>${r.source}</td>
+          <td>${r.correctionType}</td>
+          <td>${r.invoiceNumber}</td>
+          <td>${r.linkedRecord}</td>
+          <td>${r.reason}</td>
+        </tr>`,
+      )
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<title>Corrected & Cancelled Records</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #1e293b; }
+  h1 { font-size: 16px; margin: 0 0 4px 0; }
+  p { font-size: 11px; color: #64748b; margin: 0 0 16px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; }
+  th { background: #f1f5f9; }
+  @media print { @page { margin: 10mm; } }
+</style>
+</head>
+<body>
+  <h1>Corrected & Cancelled Records</h1>
+  <p>Every invoice whose effectiveness was ended (cancelled) or superseded by a Credit Note.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Date (AD/BS)</th>
+        <th>Source</th>
+        <th>Type</th>
+        <th>Original Invoice</th>
+        <th>Linked Record</th>
+        <th>Reason</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+  <script>
+    window.addEventListener("load", () => { window.print(); });
+    window.addEventListener("afterprint", () => { window.close(); });
+  </script>
+</body>
+</html>`;
+
+    const printWindow = window.open("", "_blank", "width=1000,height=700");
+
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+    }
+  };
+
   return (
     <div className="px-4 py-4 space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -143,15 +209,26 @@ export const CorrectedRecordsReport: React.FC<CorrectedRecordsReportProps> = ({
             Every invoice whose effectiveness was ended (cancelled) or superseded by a Credit Note — required as a separate, printable report per IRD's Electronic Billing Procedure.
           </p>
         </div>
-        <Button
-          color="primary"
-          isDisabled={records.length === 0}
-          size="sm"
-          startContent={<IoDownloadOutline className="w-4 h-4" />}
-          onPress={exportToExcel}
-        >
-          Export Excel
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            isDisabled={records.length === 0}
+            size="sm"
+            startContent={<IoPrintOutline className="w-4 h-4" />}
+            variant="flat"
+            onPress={printReport}
+          >
+            Print
+          </Button>
+          <Button
+            color="primary"
+            isDisabled={records.length === 0}
+            size="sm"
+            startContent={<IoDownloadOutline className="w-4 h-4" />}
+            onPress={exportToExcel}
+          >
+            Export Excel
+          </Button>
+        </div>
       </div>
 
       <div className="clarity-card p-0 overflow-hidden border border-mountain-200 rounded-lg">

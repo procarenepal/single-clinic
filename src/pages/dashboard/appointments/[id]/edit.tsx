@@ -17,7 +17,6 @@ import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { branchService } from "@/services/branchService";
 import { adToBS, bsToAD } from "@/utils/dateConverter";
 import { Appointment, Patient, Doctor, AppointmentType } from "@/types/models";
 
@@ -180,7 +179,7 @@ function CustomInput({
 export default function EditAppointmentPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clinicId, currentUser, userData, branchId, isSystemOwner } = useAuthContext();
+  const { clinicId, currentUser, isSystemOwner } = useAuthContext();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -251,36 +250,15 @@ export default function EditAppointmentPage() {
           return;
         }
 
-        // Enforce branch-level access for branch staff
-        const userBranchId = branchId || userData?.branchId;
-
-        if (
-          userBranchId &&
-          appointmentData.branchId &&
-          appointmentData.branchId !== userBranchId
-        ) {
-          setError("Appointment not found");
-
-          return;
-        }
-
         setAppointment(appointmentData);
-
-        // For individual clinics use clinic-wide queries (no branchId); for multi-branch use appointment's branch
-        const isMultiBranch =
-          await branchService.isMultiBranchEnabled(clinicId);
-        const branchIdForData = isMultiBranch
-          ? (appointmentData.branchId ?? undefined)
-          : undefined;
 
         // Load all required data in parallel
         const [patientsData, doctorsData, appointmentTypesData] =
           await Promise.all([
-            patientService.getPatientsByClinic(clinicId, branchIdForData),
-            doctorService.getDoctorsByClinic(clinicId, branchIdForData),
+            patientService.getPatientsByClinic(clinicId),
+            doctorService.getDoctorsByClinic(clinicId),
             appointmentTypeService.getAppointmentTypesByClinic(
               clinicId,
-              branchIdForData,
             ),
           ]);
 

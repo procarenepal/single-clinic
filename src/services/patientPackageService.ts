@@ -10,6 +10,7 @@ import {
   Timestamp,
   increment,
   arrayUnion,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -92,14 +93,9 @@ export const patientPackageService = {
    */
   async getPatientPackagesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<PatientPackage[]> {
     try {
       const constraints = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(
         collection(db, PATIENT_PACKAGES_COLLECTION),
@@ -292,86 +288,130 @@ export const patientPackageService = {
         throw new Error("Cannot consume session: No sessions remaining in this package");
       }
 
-      const updates: any = {
-        usedSessions: increment(1),
-        updatedAt: Timestamp.now(),
-      };
+      // Deduct the session's wallet cost BEFORE marking the session
+      // consumed, so a failed deduction (e.g. insufficient balance) blocks
+      // consumption instead of silently granting a free session. If the
+      // deduction succeeds here but the atomic consume-transaction below
+      // then fails (e.g. lost a race to another concurrent consumeSession
+      // call), the deduction is refunded so money is never taken without a
+      // session actually being consumed.
+      let deductedSessionCost = 0;
 
-      if (auditData) {
-        // Strip undefined values to prevent Firestore arrayUnion errors
-        const cleanAuditData = Object.fromEntries(
-          Object.entries(auditData).filter(([_, v]) => v !== undefined),
-        );
+      if (data.packageId && totalSessions > 0) {
+        const pkgRef = doc(db, "treatmentPackages", data.packageId);
+        const pkgSnap = await getDoc(pkgRef);
 
-        updates.sessionHistory = arrayUnion({
-          ...cleanAuditData,
-          consumedAt: Timestamp.now(),
-        });
+        if (pkgSnap.exists()) {
+          const pkgData = pkgSnap.data();
+          const walletCreditAmount = pkgData.walletCreditAmount || 0;
 
-        // Find the specific session ticket to mark as completed
-        // First try to find one linked to this appointment
-        let targetIndex = sessions.findIndex(
-          (s) =>
-            s.appointmentId === auditData.appointmentId &&
-            s.status !== "completed",
-        );
+          if (walletCreditAmount > 0) {
+            const sessionCost = Math.round(walletCreditAmount / totalSessions);
 
-        // If not found, just grab the first pending or in-progress
-        if (targetIndex === -1) {
-          targetIndex = sessions.findIndex((s) => s.status !== "completed");
-        }
+            if (sessionCost > 0) {
+              const { walletService } = await import("./walletService");
 
-        if (targetIndex !== -1) {
-          sessions[targetIndex] = {
-            ...sessions[targetIndex],
-            status: "completed",
-            clinicianId: auditData.clinicianId,
-            clinicianName: auditData.clinicianName,
-            consumedAt: new Date(),
-          };
-          updates.sessions = sessions;
-        }
-      }
-
-      if (currentUsed + 1 >= totalSessions) {
-        updates.status = "completed";
-      }
-
-      await updateDoc(docRef, updates);
-
-      // Automatically deduct proportional session value from the wallet
-      try {
-        if (data.packageId && totalSessions > 0) {
-          const pkgRef = doc(db, "treatmentPackages", data.packageId);
-          const pkgSnap = await getDoc(pkgRef);
-
-          if (pkgSnap.exists()) {
-            const pkgData = pkgSnap.data();
-            const walletCreditAmount = pkgData.walletCreditAmount || 0;
-
-            if (walletCreditAmount > 0) {
-              const sessionCost = Math.round(
-                walletCreditAmount / totalSessions,
+              await walletService.deductFunds(
+                data.patientId,
+                data.clinicId,
+                sessionCost,
+                data.id, // using package ticket as reference
+                `Consumed 1 session of ${data.packageName} (Ticket #${currentUsed + 1})`,
+                auditData?.clinicianId || "system",
               );
-
-              if (sessionCost > 0) {
-                const { walletService } = await import("./walletService");
-
-                await walletService.deductFunds(
-                  data.patientId,
-                  data.clinicId,
-                  data.branchId || data.clinicId,
-                  sessionCost,
-                  data.id, // using package ticket as reference
-                  `Consumed 1 session of ${data.packageName} (Ticket #${currentUsed + 1})`,
-                  auditData?.clinicianId || "system",
-                );
-              }
+              deductedSessionCost = sessionCost;
             }
           }
         }
-      } catch (walletErr) {
-        console.error("Error deducting session value from wallet:", walletErr);
+      }
+
+      try {
+        // Re-check-and-write inside a transaction so two concurrent
+        // consumeSession calls on this package can't both pass the
+        // currentUsed >= totalSessions guard before either commits.
+        await runTransaction(db, async (transaction) => {
+          const freshSnap = await transaction.get(docRef);
+
+          if (!freshSnap.exists()) throw new Error("Package not found");
+
+          const freshData = freshSnap.data() as PatientPackage;
+          const freshUsed = freshData.usedSessions || 0;
+          const freshTotal = freshData.totalSessions || 0;
+          const freshSessions = freshData.sessions || [];
+
+          if (freshUsed >= freshTotal) {
+            throw new Error("Cannot consume session: No sessions remaining in this package");
+          }
+
+          const updates: any = {
+            usedSessions: increment(1),
+            updatedAt: Timestamp.now(),
+          };
+
+          if (auditData) {
+            // Strip undefined values to prevent Firestore arrayUnion errors
+            const cleanAuditData = Object.fromEntries(
+              Object.entries(auditData).filter(([_, v]) => v !== undefined),
+            );
+
+            updates.sessionHistory = arrayUnion({
+              ...cleanAuditData,
+              consumedAt: Timestamp.now(),
+            });
+
+            // Find the specific session ticket to mark as completed
+            // First try to find one linked to this appointment
+            let targetIndex = freshSessions.findIndex(
+              (s) =>
+                s.appointmentId === auditData.appointmentId &&
+                s.status !== "completed",
+            );
+
+            // If not found, just grab the first pending or in-progress
+            if (targetIndex === -1) {
+              targetIndex = freshSessions.findIndex((s) => s.status !== "completed");
+            }
+
+            if (targetIndex !== -1) {
+              freshSessions[targetIndex] = {
+                ...freshSessions[targetIndex],
+                status: "completed",
+                clinicianId: auditData.clinicianId,
+                clinicianName: auditData.clinicianName,
+                consumedAt: new Date(),
+              };
+              updates.sessions = freshSessions;
+            }
+          }
+
+          if (freshUsed + 1 >= freshTotal) {
+            updates.status = "completed";
+          }
+
+          transaction.update(docRef, updates);
+        });
+      } catch (consumeErr) {
+        if (deductedSessionCost > 0) {
+          try {
+            const { walletService } = await import("./walletService");
+
+            await walletService.refundFunds(
+              data.patientId,
+              data.clinicId,
+              deductedSessionCost,
+              data.id,
+              "Session consumption failed after wallet deduction — automatic reversal",
+              auditData?.clinicianId || "system",
+            );
+          } catch (refundErr) {
+            console.error(
+              "Error reversing wallet deduction after failed session consumption:",
+              refundErr,
+            );
+          }
+        }
+
+        throw consumeErr;
       }
     } catch (error) {
       console.error("Error consuming session:", error);
@@ -420,7 +460,6 @@ export const patientPackageService = {
       await walletService.refundFunds(
         data.patientId,
         data.clinicId,
-        data.branchId || data.clinicId,
         refundAmount,
         id,
         `Refund for ${unusedSessions} unused session(s) of ${data.packageName}. Reason: ${reason}`,

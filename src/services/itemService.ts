@@ -24,14 +24,13 @@ export const itemService = {
   /**
    * Get all items for a specific clinic
    */
-  async getItemsByClinic(clinicId: string, branchId?: string): Promise<Item[]> {
+  async getItemsByClinic(clinicId: string): Promise<Item[]> {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
-      const constraints: any[] = [where("isActive", "==", true)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
+      const constraints: any[] = [
+        where("isActive", "==", true),
+        where("clinicId", "==", clinicId),
+      ];
 
       const q = query(itemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -197,7 +196,6 @@ export const itemService = {
   async getItemsByCategory(
     clinicId: string,
     category: string,
-    branchId?: string,
   ): Promise<Item[]> {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
@@ -205,10 +203,6 @@ export const itemService = {
         where("category", "==", category),
         where("isActive", "==", true),
       ];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(itemsRef, ...constraints);
       const querySnapshot = await getDocs(q);
@@ -240,26 +234,15 @@ export const itemService = {
   async searchItems(
     clinicId: string,
     searchTerm: string,
-    branchId?: string,
   ): Promise<Item[]> {
     try {
       const itemsRef = collection(db, ITEMS_COLLECTION);
-      let q = query(
+      const q = query(
         itemsRef,
 
         where("isActive", "==", true),
         orderBy("name"),
       );
-
-      if (branchId) {
-        q = query(
-          itemsRef,
-
-          where("branchId", "==", branchId),
-          where("isActive", "==", true),
-          orderBy("name"),
-        );
-      }
 
       const querySnapshot = await getDocs(q);
       const items: Item[] = [];
@@ -292,10 +275,9 @@ export const itemService = {
    */
   async getItemCategories(
     clinicId: string,
-    branchId?: string,
   ): Promise<string[]> {
     try {
-      const items = await this.getItemsByClinic(clinicId, branchId);
+      const items = await this.getItemsByClinic(clinicId);
       const categories = new Set<string>();
 
       items.forEach((item) => {
@@ -345,15 +327,10 @@ export const itemService = {
    */
   async getItemPurchasesByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<ItemPurchase[]> {
     try {
       const purchasesRef = collection(db, ITEM_PURCHASES_COLLECTION);
       const constraints: any[] = [where("clinicId", "==", clinicId)];
-
-      if (branchId) {
-        constraints.push(where("branchId", "==", branchId));
-      }
 
       const q = query(purchasesRef, ...constraints);
       const querySnapshot = await getDocs(q);

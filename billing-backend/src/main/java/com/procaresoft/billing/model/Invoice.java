@@ -120,6 +120,18 @@ public class Invoice {
     @Column(name = "ird_needs_manual_review", nullable = false)
     private boolean irdNeedsManualReview = false;
 
+    // Reprint tracking (Schedule 5 clause 6(ङ) / clause 6(च)'s "Copy of
+    // Original" numbering) — the frontend increments this via /record-print
+    // alongside its own Firestore printCount write, so both sides agree.
+    @Column(name = "print_count", nullable = false)
+    private int printCount = 0;
+
+    @Column(name = "last_printed_at")
+    private LocalDateTime lastPrintedAt;
+
+    @Column(name = "last_printed_by")
+    private String lastPrintedBy;
+
     // Invoice Items
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<InvoiceItem> items = new ArrayList<>();

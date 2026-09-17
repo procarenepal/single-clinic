@@ -4,17 +4,19 @@ service firebase.storage {
     // Clinic verification documents: PDF or images, max 5MB. Auth required for read/write.
     match /clinic-documents/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 5 * 1024 * 1024
         && (request.resource.contentType == 'application/pdf'
             || request.resource.contentType.matches('image/.*'));
+      allow delete: if request.auth != null;
     }
     // Clinic logos: images only, max 2MB. Auth required for read/write.
     match /clinic-logos/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
     }
 
     // Print-layout logos (settings/print-layout.tsx uploads here — a
@@ -23,50 +25,115 @@ service firebase.storage {
     // default-deny fallback). Images only, max 2MB. Auth required.
     match /logos/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
     }
 
     // Clinic cover photos: banner images, max 5MB. Auth required for read/write.
     match /clinic-covers/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
     }
 
     // Doctor verification documents: PDF or images, max 5MB. Auth required for read/write.
     match /doctor-documents/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 5 * 1024 * 1024
         && (request.resource.contentType == 'application/pdf'
             || request.resource.contentType.matches('image/.*'));
+      allow delete: if request.auth != null;
     }
 
     // Doctor profile/cover photos: images only, max 2MB. Public read for profile; auth write.
     match /doctor-photos/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
     }
 
     // Clinic gallery photos (up to 10 per clinic, not logo/banner). Public read for profile; auth write.
     match /clinic-gallery/{clinicId}/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 3 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
     }
 
     // Catalog province images: banner/thumbnail images for provinces, max 5MB. Auth required.
     match /catalog_provinces/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
+    // Patient medical record documents (AddDocumentModal.tsx /
+    // medicalRecordsService.ts — no rule existed for this path before, so
+    // every upload hit the default-deny fallback with a storage/unauthorized
+    // error). PDF, common office docs, or images per the modal's own accept
+    // list; max 10MB matching uploadFileToFirebase's usage here. Auth required.
+    match /medical_records/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if request.auth != null;
+    }
+
+    // User profile avatars (EditProfileModal.tsx, path avatars/{uid}/...) —
+    // same missing-rule gap as above. Images only, max 2MB. Auth required.
+    match /avatars/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
+    // Generic uploads via FileUploadComponent.tsx (e.g. HR staff photos) —
+    // its `uploadType` prop maps to one of these three folders, none of
+    // which had a rule before. Max 10MB matches the component's own default.
+    match /images/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+    match /documents/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if request.auth != null;
+    }
+    match /files/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if request.auth != null;
+    }
+
+    // MySQL database backups (nightly mysqldump output — full raw patient/
+    // billing PII and financial data — uploaded server-side by
+    // billing-backend/DatabaseBackupService.java via the Firebase Admin SDK,
+    // which authenticates independently of these rules and is therefore
+    // unaffected by the deny-all below). Deliberately restricted to zero
+    // client access: retrievable only via Firebase Console/gcloud by the
+    // project owner, never through the app itself. Satisfies IRD Electronic
+    // Invoice Procedure clause 6(ढ) — "backup access restricted to
+    // authorized users."
+    match /mysql-backups/{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
     }
   }
 }

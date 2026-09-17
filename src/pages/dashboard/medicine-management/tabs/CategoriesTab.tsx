@@ -136,7 +136,6 @@ export default function CategoriesTab({
     try {
       const data = await medicineService.getMedicineCategoriesByClinic(
         clinicId,
-        branchScopeId || undefined,
       );
 
       setCategories(data);

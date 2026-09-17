@@ -52,6 +52,10 @@ export interface UnifiedInvoice {
   // normal tax invoice, per IRD's cancellation/return provisions.
   isCreditNote?: boolean;
   creditNoteNote?: string;
+  // A cancelled invoice must never print looking like a valid, unmarked tax
+  // document — same visual-distinction requirement as Credit Note above.
+  isCancelled?: boolean;
+  cancelledNote?: string;
 }
 
 const formatCurrency = (amount: number) => `NPR ${amount.toLocaleString()}`;
@@ -338,8 +342,10 @@ export const generateUnifiedInvoiceHTML = (
     <div class="content">
       <div class="document-title">
         ${invoice.isCreditNote ? `<div style="text-align: center; font-weight: 800; font-size: 15px; color: #b91c1c; letter-spacing: 0.05em; border: 2px solid #b91c1c; padding: 4px 0; margin-bottom: 6px;">मूल्य फिर्ता बिजक (CREDIT NOTE / SALES RETURN)</div>` : ""}
+        ${invoice.isCancelled ? `<div style="text-align: center; font-weight: 800; font-size: 15px; color: #b91c1c; letter-spacing: 0.05em; border: 2px solid #b91c1c; padding: 4px 0; margin-bottom: 6px;">रद्द गरिएको बिजक (CANCELLED — NOT A VALID TAX DOCUMENT)</div>` : ""}
         <h2>${getIrdInvoiceTitle(invoice.taxAmount, isVatRegistered)}</h2>
         ${invoice.isCreditNote && invoice.creditNoteNote ? `<div style="font-size: 11px; color: #b91c1c; font-weight: 600; margin-top: 6px; text-align: center;">${invoice.creditNoteNote}</div>` : ""}
+        ${invoice.isCancelled && invoice.cancelledNote ? `<div style="font-size: 11px; color: #b91c1c; font-weight: 600; margin-top: 6px; text-align: center;">${invoice.cancelledNote}</div>` : ""}
       </div>
 
       <div style="border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: ${isThermal ? "6px 0" : "8px 0"}; margin: 10px 0;">
@@ -426,7 +432,7 @@ export const generateUnifiedInvoiceHTML = (
             <td>Gross Amount</td>
             <td class="text-right">${formatCurrency(invoice.subtotal)}</td>
           </tr>
-          ${(invoice.discountAmount || 0) > 0 ? `<tr><td>Discount % (${invoice.subtotal > 0 ? (((invoice.discountAmount || 0) / invoice.subtotal) * 100).toFixed(1) : "0.0"}%)</td><td class="text-right">- ${formatCurrency(invoice.discountAmount || 0)}</td></tr>` : ""}
+          <tr><td>Discount % (${invoice.subtotal > 0 ? (((invoice.discountAmount || 0) / invoice.subtotal) * 100).toFixed(1) : "0.0"}%)</td><td class="text-right">- ${formatCurrency(invoice.discountAmount || 0)}</td></tr>
           ${isVatRegistered ? `<tr><td>Taxable Amount</td><td class="text-right">${formatCurrency(getIrdTaxableAmount(invoice.taxAmount, invoice.taxableAmount, invoice.subtotal - (invoice.discountAmount || 0)))}</td></tr>` : ""}
           ${isVatRegistered && (invoice.taxPercentage || 0) > 0 ? `<tr><td>VAT (${invoice.taxPercentage}%)</td><td class="text-right">${formatCurrency(invoice.taxAmount || 0)}</td></tr>` : ""}
           <tr class="font-bold">
@@ -510,6 +516,8 @@ export const generateInvoiceHTML = (
     paymentMethod: billing.paymentMethod,
     isCreditNote: billing.isCreditNote,
     creditNoteNote: billing.isCreditNote ? billing.notes : undefined,
+    isCancelled: billing.status === "cancelled",
+    cancelledNote: billing.status === "cancelled" ? billing.notes : undefined,
     items: billing.items.map(i => ({
       name: i.testName,
       subtext: i.testType ? `(${i.testType})` : undefined,
@@ -585,6 +593,8 @@ export const generateAppointmentInvoiceHTML = (
     paymentMethod: invoice.paymentMethod,
     isCreditNote: invoice.isCreditNote,
     creditNoteNote: invoice.isCreditNote ? invoice.notes : undefined,
+    isCancelled: invoice.status === "cancelled",
+    cancelledNote: invoice.status === "cancelled" ? invoice.notes : undefined,
     cliniciansHtml,
     items: invoice.items.map(i => ({
       name: i.appointmentTypeName,

@@ -27,6 +27,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAuthContext } from "@/context/AuthContext";
 import { useModalState } from "@/hooks/useModalState";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { appointmentService } from "@/services/appointmentService";
 import { pathologyBillingService } from "@/services/pathologyBillingService";
 import { pharmacyService } from "@/services/pharmacyService";
 import { doctorService } from "@/services/doctorService";
@@ -65,6 +66,9 @@ interface InvoiceFormData {
   discountType: "flat" | "percent";
   discountValue: number;
   notes: string;
+  /** UI-only per-invoice tax override — stripped before saving, not a field
+   * on AppointmentBilling itself. Same pattern as appointments-billing.tsx. */
+  applyTax: boolean;
 }
 
 // ── Design helpers ────────────────────────────────────────────────────────────
@@ -421,6 +425,7 @@ export default function PatientBillingTab({
     discountType: "percent",
     discountValue: 0,
     notes: "",
+    applyTax: false,
   };
   const [formData, setFormData] = useState<InvoiceFormData>(emptyForm);
   const [calculations, setCalculations] = useState({
@@ -538,7 +543,7 @@ export default function PatientBillingTab({
       formData.items,
       formData.discountType,
       formData.discountValue,
-      billingSettings.enableTax ? billingSettings.defaultTaxPercentage : 0,
+      formData.applyTax ? billingSettings.defaultTaxPercentage : 0,
     );
 
     setCalculations(totals);
@@ -546,6 +551,7 @@ export default function PatientBillingTab({
     formData.items,
     formData.discountType,
     formData.discountValue,
+    formData.applyTax,
     billingSettings,
   ]);
 
@@ -655,6 +661,57 @@ export default function PatientBillingTab({
 
       return;
     }
+    // Block (don't just warn) if this form's items re-bill the SAME
+    // appointment type as an already-billed visit today — this tab has no
+    // other visibility into appointments, so it's otherwise the one place
+    // in the app that can silently create a second invoice for a visit
+    // that was already auto-billed at check-in/routing. Scoped to a
+    // literal duplicate (same appointmentTypeId) so a legitimate second
+    // invoice for something different is never blocked.
+    try {
+      const todaysAppointments = (
+        await appointmentService.getAppointmentsByPatient(formData.patientId)
+      ).filter((a) => {
+        const isToday =
+          a.appointmentDate.toDateString() === new Date().toDateString();
+
+        return isToday && (a as any).status !== "cancelled";
+      });
+
+      const duplicateAppt = todaysAppointments.find((a) => {
+        const existingBillId =
+          (a as any).consultationBillingId || (a as any).billingId;
+
+        if (!existingBillId) return false;
+
+        return formData.items.some(
+          (item) => item.appointmentTypeId === a.appointmentTypeId,
+        );
+      });
+
+      if (duplicateAppt) {
+        const existingBillId =
+          (duplicateAppt as any).consultationBillingId ||
+          (duplicateAppt as any).billingId;
+        const existingBilling =
+          await appointmentBillingService.getBillingById(existingBillId);
+        const existingInvoiceNumber =
+          existingBilling?.invoiceNumber || existingBillId;
+
+        addToast({
+          title: "Duplicate invoice blocked",
+          description: `${formData.patientName} already has invoice ${existingInvoiceNumber} covering this same visit today. Edit that invoice instead of creating a new one.`,
+          color: "danger",
+        });
+
+        return;
+      }
+    } catch (checkError) {
+      // Best-effort check only — never block invoice creation because this
+      // lookup itself failed.
+      console.error("Error checking for existing today's invoice:", checkError);
+    }
+
     setSubmitting(true);
     try {
       // Derive root doctor fields from the first item
@@ -683,7 +740,7 @@ export default function PatientBillingTab({
         discountAmount: calculations.totalDiscount,
         itemDiscountAmount: calculations.itemDiscountAmount,
         mainDiscountAmount: calculations.mainDiscountAmount,
-        taxPercentage: billingSettings.enableTax
+        taxPercentage: formData.applyTax
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
@@ -817,12 +874,11 @@ export default function PatientBillingTab({
     });
   const fmtCur = (n: number) => `NPR ${n.toLocaleString()}`;
 
-  const filtered = billings.filter(
-    (b) => statusFilter === "all" || b.paymentStatus === statusFilter,
-  );
-  const pendingInvs = billings.filter((b) => b.paymentStatus !== "paid");
-
-  const stats = {
+  // Appointment-only figures — kept separate from the merged view below
+  // because the "Outstanding Across All Modules" banner needs the
+  // appointment-only due to sit alongside pathology/pharmacy due as
+  // independent numbers, not double-counted into a combined total.
+  const apptStats = {
     total: billings.length,
     totalAmount: billings.reduce((s, b) => s + b.totalAmount, 0),
     paid: billings.reduce((s, b) => s + b.paidAmount, 0),
@@ -865,12 +921,99 @@ export default function PatientBillingTab({
     0,
   );
   const pharmacyDue = pharmacyDuesByPurchase.reduce((s, x) => s + x.due, 0);
-  const combinedDue = stats.pending + pathologyDue + pharmacyDue;
+  const combinedDue = apptStats.pending + pathologyDue + pharmacyDue;
   const hasCrossModuleDue = pathologyDue > 0 || pharmacyDue > 0;
 
   const newBalance = selectedBilling
     ? selectedBilling.balanceAmount - (parseFloat(paymentForm.amount) || 0)
     : 0;
+
+  // ── Unified billing rows (appointment + pathology + pharmacy) ──────────────
+  // The main Billing History list/stat cards below show every billing type
+  // for this patient, not just appointment invoices — cancelled pathology
+  // records are excluded (matches how the appointment side already treats
+  // cancelled invoices as not part of the "real" billing picture here).
+  type UnifiedBillingRow = {
+    id: string;
+    source: "appointment" | "pathology" | "pharmacy";
+    invoiceNumber: string;
+    subtitle: string;
+    date: Date;
+    paymentMethod?: string;
+    paidAmount: number;
+    balanceAmount: number;
+    totalAmount: number;
+    paymentStatus: "unpaid" | "partial" | "paid" | "pending";
+    viewPath: string;
+  };
+
+  const unifiedRows: UnifiedBillingRow[] = [
+    ...billings.map(
+      (b): UnifiedBillingRow => ({
+        id: b.id,
+        source: "appointment",
+        invoiceNumber: b.invoiceNumber,
+        subtitle: `${b.doctorName} — ${b.items.map((i) => i.appointmentTypeName).join(", ")}`,
+        date: b.invoiceDate,
+        paymentMethod: b.paymentMethod,
+        paidAmount: b.paidAmount,
+        balanceAmount: b.balanceAmount,
+        totalAmount: b.totalAmount,
+        paymentStatus: b.paymentStatus,
+        viewPath: `/dashboard/appointments-billing/${b.id}`,
+      }),
+    ),
+    ...pathologyBillings
+      .filter((b) => b.status !== "cancelled")
+      .map(
+        (b): UnifiedBillingRow => ({
+          id: b.id,
+          source: "pathology",
+          invoiceNumber: b.invoiceNumber,
+          subtitle: `Pathology — ${b.items.map((i) => i.testName).join(", ")}`,
+          date: b.invoiceDate,
+          paymentMethod: b.paymentMethod,
+          paidAmount: b.paidAmount,
+          balanceAmount: b.balanceAmount,
+          totalAmount: b.totalAmount,
+          paymentStatus: b.paymentStatus,
+          viewPath: `/dashboard/pathology-billing/${b.id}`,
+        }),
+      ),
+    ...pharmacyPurchases.map((p): UnifiedBillingRow => {
+      const due = getPharmacyDue(p);
+      const paid = Math.round(
+        (p.paymentHistory || []).reduce((s, x) => s + x.amount, 0),
+      );
+
+      return {
+        id: p.id,
+        source: "pharmacy",
+        invoiceNumber: p.purchaseNo,
+        subtitle: `Pharmacy — ${p.items.map((i) => i.medicineName).join(", ")}`,
+        date: p.purchaseDate,
+        paymentMethod: p.paymentType,
+        paidAmount: paid,
+        balanceAmount: due,
+        totalAmount: p.netAmount,
+        paymentStatus: p.paymentStatus === "pending" ? "unpaid" : p.paymentStatus,
+        viewPath: `/dashboard/pharmacy/purchase/${p.id}`,
+      };
+    }),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const filtered = unifiedRows.filter(
+    (b) => statusFilter === "all" || b.paymentStatus === statusFilter,
+  );
+  const pendingInvs = unifiedRows.filter((b) => b.paymentStatus !== "paid");
+
+  const stats = {
+    total: unifiedRows.length,
+    totalAmount: unifiedRows.reduce((s, b) => s + b.totalAmount, 0),
+    paid: unifiedRows.reduce((s, b) => s + b.paidAmount, 0),
+    pending: unifiedRows.reduce((s, b) => s + b.balanceAmount, 0),
+    unpaid: unifiedRows.filter((b) => b.paymentStatus === "unpaid").length,
+  };
 
   // ── Render ──────────────────────────────────────────────────────────────────
   if (loading)
@@ -912,6 +1055,10 @@ export default function PatientBillingTab({
           startContent={<IoAddOutline className="w-3.5 h-3.5" />}
           onClick={() => {
             setShowInvoiceModal(true);
+            setFormData((prev) => ({
+              ...prev,
+              applyTax: false,
+            }));
             if (formData.items.length === 0) {
               addItem();
             }
@@ -934,7 +1081,7 @@ export default function PatientBillingTab({
           </div>
           <div className="p-3 space-y-3">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <StatCard label="Appointment Due" value={fmtCur(stats.pending)} />
+              <StatCard label="Appointment Due" value={fmtCur(apptStats.pending)} />
               <StatCard label="Pathology Due" value={fmtCur(pathologyDue)} />
               <StatCard label="Pharmacy Due" value={fmtCur(pharmacyDue)} />
               <StatCard label="Total Due" value={fmtCur(combinedDue)} />
@@ -1048,10 +1195,10 @@ export default function PatientBillingTab({
                     {inv.invoiceNumber}
                   </p>
                   <p className="text-[11.5px] text-text-muted">
-                    {inv.doctorName}
+                    {inv.subtitle}
                   </p>
                   <p className="text-[11px] text-text-muted/60">
-                    Date: {fmtDate(inv.invoiceDate)}
+                    Date: {fmtDate(inv.date)}
                   </p>
                 </div>
                 <div className="text-right">
@@ -1120,11 +1267,10 @@ export default function PatientBillingTab({
                         <PayBadge status={b.paymentStatus} />
                       </div>
                       <p className="text-[12px] text-text-muted">
-                        {b.doctorName} —{" "}
-                        {b.items.map((i) => i.appointmentTypeName).join(", ")}
+                        {b.subtitle}
                       </p>
                       <div className="flex flex-wrap gap-3 text-[11.5px] text-text-muted/60 mt-0.5">
-                        <span>Date: {fmtDate(b.invoiceDate)}</span>
+                        <span>Date: {fmtDate(b.date)}</span>
                         {b.paymentMethod && (
                           <span>
                             Method: {b.paymentMethod.replace("_", " ")}
@@ -1153,9 +1299,7 @@ export default function PatientBillingTab({
                         size="sm"
                         startContent={<IoEyeOutline className="w-3 h-3" />}
                         variant="bordered"
-                        onClick={() =>
-                          navigate(`/dashboard/appointments-billing/${b.id}`)
-                        }
+                        onClick={() => navigate(b.viewPath)}
                       >
                         View
                       </Button>
@@ -1165,7 +1309,17 @@ export default function PatientBillingTab({
                           size="sm"
                           startContent={<IoCash className="w-3 h-3" />}
                           variant="bordered"
-                          onClick={() => openPayment(b)}
+                          onClick={() => {
+                            if (b.source === "appointment") {
+                              const original = billings.find(
+                                (x) => x.id === b.id,
+                              );
+
+                              if (original) openPayment(original);
+                            } else {
+                              navigate(`${b.viewPath}?action=payment`);
+                            }
+                          }}
                         >
                           Pay
                         </Button>
@@ -1445,6 +1599,22 @@ export default function PatientBillingTab({
                         }
                       />
                     </div>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        checked={formData.applyTax}
+                        className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                        type="checkbox"
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            applyTax: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span className="text-[12px] text-text-muted font-medium select-none">
+                        Apply Tax to Invoice
+                      </span>
+                    </label>
                     <FlatInput
                       label="Notes"
                       placeholder="Additional notes (optional)"
@@ -1475,7 +1645,7 @@ export default function PatientBillingTab({
                               ],
                             ]
                           : []),
-                        ...(billingSettings?.enableTax
+                        ...(formData.applyTax && billingSettings
                           ? [
                               [
                                 `${billingSettings.taxLabel} (${billingSettings.defaultTaxPercentage}%)`,

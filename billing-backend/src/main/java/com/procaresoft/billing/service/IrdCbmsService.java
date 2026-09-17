@@ -133,6 +133,14 @@ public class IrdCbmsService {
     }
 
     private String resolveBaseUrl(ClinicIrdConfig config) {
+        // Mock environment always wins, regardless of what's saved in
+        // ird_api_url — the settings UI auto-fills that field with the real
+        // IRD endpoint for display purposes even while "Mock" is selected,
+        // and a manual override must never accidentally route mock-mode
+        // traffic to IRD's real API.
+        if ("mock".equals(config.getIrdEnvironment())) {
+            return "mock";
+        }
         String manual = config.getIrdApiUrl();
         if (manual != null && !manual.isBlank()) {
             return manual.replaceAll("/$", "");
@@ -154,10 +162,19 @@ public class IrdCbmsService {
         payload.put("total_sales", invoice.getTotalAmount());
         payload.put("taxable_sales_vat", invoice.getTaxableAmount());
         payload.put("vat", invoice.getTaxAmount());
+        // Excise, Health Service Tax, and Education Service Fee are not
+        // charged by this system — sent as 0 to match IRD's documented
+        // field list exactly (CBMS API Technical Document for Software
+        // Developers), rather than omitting them or sending an undocumented
+        // "zero_rated_sales" field their model binder doesn't expect.
+        payload.put("excisable_amount", 0);
         payload.put("excise", 0);
-        payload.put("tax_exempted_sales", invoice.getExemptAmount());
-        payload.put("zero_rated_sales", 0);
+        payload.put("taxable_sales_hst", 0);
+        payload.put("hst", 0);
+        payload.put("amount_for_esf", 0);
+        payload.put("esf", 0);
         payload.put("export_sales", 0);
+        payload.put("tax_exempted_sales", invoice.getExemptAmount());
         payload.put("isrealtime", true);
         payload.put("datetimeClient", java.time.LocalDateTime.now().toString());
         return payload;

@@ -12,15 +12,19 @@ import {
   runTransaction,
 } from "firebase/firestore";
 
-import { db } from "../config/firebase";
+import { db, auth } from "../config/firebase";
 import {
   PathologyBilling,
   PathologyBillingSettings,
   PathologyBillingItem,
 } from "../types/models";
+import { calculateTaxBreakdown } from "../utils/taxEngine";
 
 import { doctorCommissionService } from "./doctorCommissionService";
 import { referralCommissionService } from "./referralCommissionService";
+import { expertCommissionService } from "./expertCommissionService";
+import { staffCommissionService } from "./staffCommissionService";
+import { walletService } from "./walletService";
 
 const PATHOLOGY_BILLING_COLLECTION = "pathologyBilling";
 const PATHOLOGY_BILLING_SETTINGS_COLLECTION = "pathologyBillingSettings";
@@ -35,9 +39,11 @@ const PATHOLOGY_BILLING_SETTINGS_COLLECTION = "pathologyBillingSettings";
  */
 async function reverseCommissionsForBilling(billingId: string): Promise<void> {
   try {
-    const [docComms, refComms] = await Promise.all([
+    const [docComms, refComms, expComms, staffComms] = await Promise.all([
       doctorCommissionService.getCommissionsByBillingId(billingId),
       referralCommissionService.getCommissionsByBillingId(billingId),
+      expertCommissionService.getCommissionsByBillingId(billingId),
+      staffCommissionService.getCommissionsByBillingId(billingId),
     ]);
 
     await Promise.all([
@@ -47,9 +53,44 @@ async function reverseCommissionsForBilling(billingId: string): Promise<void> {
       ...refComms
         .filter((c) => c.status !== "cancelled")
         .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
+      ...expComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => expertCommissionService.updateCommissionStatus(c.id, "cancelled")),
+      ...staffComms
+        .filter((c) => c.status !== "cancelled")
+        .map((c) => staffCommissionService.updateCommissionStatus(c.id, "cancelled")),
     ]);
   } catch (error) {
     console.error("Error reversing commissions for pathology billing:", billingId, error);
+  }
+}
+
+/**
+ * Refund a wallet-paid invoice's collected amount back to the patient's
+ * wallet on cancel/credit-note (mirrors appointmentBillingService's
+ * equivalent). Only applies when paid via wallet with money collected.
+ * Failures are logged, not thrown — must not block the cancel/credit-note.
+ */
+async function refundWalletIfApplicable(
+  billing: PathologyBilling,
+  reason: string,
+  createdBy: string,
+): Promise<void> {
+  if (billing.paymentMethod !== "wallet" || !(billing.paidAmount > 0)) {
+    return;
+  }
+
+  try {
+    await walletService.refundFunds(
+      billing.patientId,
+      billing.clinicId,
+      billing.paidAmount,
+      billing.id,
+      reason,
+      createdBy,
+    );
+  } catch (error) {
+    console.error("Error refunding wallet payment for pathology billing:", billing.id, error);
   }
 }
 
@@ -115,7 +156,6 @@ export const pathologyBillingService = {
    */
   async updateBillingSettings(
     clinicId: string,
-    branchId: string,
     settings: Partial<PathologyBillingSettings>,
     updatedBy: string,
   ): Promise<void> {
@@ -130,7 +170,7 @@ export const pathologyBillingService = {
       const data = {
         ...settings,
         clinicId,
-        branchId,
+        branchId: clinicId,
         updatedAt: now,
         updatedBy,
       };
@@ -150,7 +190,6 @@ export const pathologyBillingService = {
         await setDoc(settingsRef, {
           ...defaultSettings,
           ...data,
-          branchId,
           createdAt: now,
         });
       }
@@ -479,6 +518,30 @@ export const pathologyBillingService = {
         javaResult.invoiceNumber,
       );
 
+      if (!Boolean((billingData as any).isCreditNote)) {
+        // Best-effort audit log — logging failures must never mask a
+        // successful invoice creation as a save failure.
+        try {
+          const { auditLogService } = await import("./auditLogService");
+
+          await auditLogService.logDiscountTaxChange({
+            performedBy: auth.currentUser?.uid || "system",
+            clinicId: billingData.clinicId,
+            branchId: (billingData as any).branchId,
+            billingId: docRef.id,
+            invoiceNumber: javaResult.invoiceNumber,
+            after: {
+              discountType: (billingData as any).discountType,
+              discountValue: (billingData as any).discountValue,
+              applyTax: taxPercentage > 0,
+              taxPercentage,
+            },
+          });
+        } catch (auditError) {
+          console.error("Error logging discount/tax audit event:", auditError);
+        }
+      }
+
       return { id: docRef.id, invoiceNumber: javaResult.invoiceNumber };
     } catch (error) {
       console.error("Error creating pathology billing:", error);
@@ -556,6 +619,8 @@ export const pathologyBillingService = {
             "cbmsResponseCode",
             "status",
             "hasCreditNote",
+            "finalizedBy",
+            "finalizedAt",
           ]);
           const financialKeys = [
             "totalAmount",
@@ -639,6 +704,58 @@ export const pathologyBillingService = {
 
       await updateDoc(billingRef, data);
       console.log("Pathology billing updated:", id);
+
+      if (existing.exists()) {
+        const existingData = existing.data() as PathologyBilling;
+        const discountTaxKeys = ["discountType", "discountValue", "taxPercentage"] as const;
+        const discountTaxChanged = discountTaxKeys.some(
+          (k) =>
+            k in billingData &&
+            (((billingData as any)[k] || 0) !== ((existingData as any)[k] || 0)),
+        );
+
+        if (discountTaxChanged) {
+          // Best-effort audit log — logging failures must never mask a
+          // successful billing update as a failure.
+          try {
+            const { auditLogService } = await import("./auditLogService");
+
+            await auditLogService.logDiscountTaxChange({
+              performedBy: auth.currentUser?.uid || "system",
+              clinicId: existingData.clinicId,
+              branchId: (existingData as any).branchId,
+              billingId: id,
+              invoiceNumber: existingData.invoiceNumber,
+              before: {
+                discountType: (existingData as any).discountType,
+                discountValue: (existingData as any).discountValue,
+                applyTax: (existingData.taxPercentage || 0) > 0,
+                taxPercentage: existingData.taxPercentage,
+              },
+              after: {
+                discountType:
+                  "discountType" in billingData
+                    ? (billingData as any).discountType
+                    : (existingData as any).discountType,
+                discountValue:
+                  "discountValue" in billingData
+                    ? (billingData as any).discountValue
+                    : (existingData as any).discountValue,
+                applyTax:
+                  (("taxPercentage" in billingData
+                    ? billingData.taxPercentage
+                    : existingData.taxPercentage) || 0) > 0,
+                taxPercentage:
+                  "taxPercentage" in billingData
+                    ? billingData.taxPercentage
+                    : existingData.taxPercentage,
+              },
+            });
+          } catch (auditError) {
+            console.error("Error logging discount/tax audit event:", auditError);
+          }
+        }
+      }
     } catch (error) {
       console.error("Error updating pathology billing:", error);
       throw error;
@@ -683,7 +800,6 @@ export const pathologyBillingService = {
    */
   async getBillingByClinic(
     clinicId: string,
-    branchId?: string,
   ): Promise<PathologyBilling[]> {
     try {
       if (!clinicId) {
@@ -691,18 +807,7 @@ export const pathologyBillingService = {
       }
 
       const billingRef = collection(db, PATHOLOGY_BILLING_COLLECTION);
-      let q = query(billingRef, where("clinicId", "==", clinicId));
-
-      if (branchId) {
-        // Must AND with clinicId, not replace it — dropping clinicId here
-        // would return every clinic's billing records that happen to share
-        // this branchId, a real cross-tenant data leak.
-        q = query(
-          billingRef,
-          where("clinicId", "==", clinicId),
-          where("branchId", "==", branchId),
-        );
-      }
+      const q = query(billingRef, where("clinicId", "==", clinicId));
 
       const querySnapshot = await getDocs(q);
       const billings: PathologyBilling[] = [];
@@ -873,6 +978,7 @@ export const pathologyBillingService = {
     });
 
     await reverseCommissionsForBilling(id);
+    await refundWalletIfApplicable(billing, cancellationNote, "system");
   },
 
   /**
@@ -975,6 +1081,7 @@ export const pathologyBillingService = {
       // commission was earned on it (the credit note document itself never
       // earns commission, since finalizeInvoice is never called on it).
       await reverseCommissionsForBilling(original.id);
+      await refundWalletIfApplicable(original, reason, createdBy);
 
       return newCreditNoteId;
     } catch (error) {
@@ -1122,25 +1229,34 @@ export const pathologyBillingService = {
     taxAmount: number;
     totalAmount: number;
   } {
-    const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
-
-    let discountAmount = 0;
-
-    if (discountType === "flat") {
-      discountAmount = Math.min(discountValue, subtotal);
-    } else if (discountType === "percent") {
-      discountAmount = (subtotal * discountValue) / 100;
-    }
-
-    const amountAfterDiscount = subtotal - discountAmount;
-    const taxAmount = (amountAfterDiscount * taxPercentage) / 100;
-    const totalAmount = amountAfterDiscount + taxAmount;
+    // Delegates to the shared taxEngine.ts (same engine appointments/
+    // procedures/prescriptions already use) instead of the bespoke math
+    // this used to do — the old version had no taxable/exempt split (taxed
+    // the whole post-discount amount unconditionally) and no clamping
+    // against negative/over-discount. Every item is marked isTaxable: true
+    // to exactly preserve this function's existing "100% of the
+    // post-discount amount is taxed" behavior for its current caller.
+    const breakdown = calculateTaxBreakdown({
+      items: items.map((item) => ({
+        id: item.id,
+        itemName: item.testName,
+        quantity: item.quantity,
+        price: item.price,
+        discountType: item.discountType,
+        discountValue: item.discountValue,
+        isTaxable: true,
+      })),
+      discountType,
+      discountValue,
+      defaultTaxPercentage: taxPercentage,
+      isTaxEnabled: taxPercentage > 0,
+    });
 
     return {
-      subtotal,
-      discountAmount,
-      taxAmount,
-      totalAmount,
+      subtotal: breakdown.subtotal,
+      discountAmount: breakdown.totalDiscountAmount,
+      taxAmount: breakdown.taxAmount,
+      totalAmount: breakdown.totalAmount,
     };
   },
 };

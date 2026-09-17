@@ -137,7 +137,6 @@ export default function BrandsTab({
     try {
       const data = await medicineService.getMedicineBrandsByClinic(
         clinicId,
-        branchScopeId || undefined,
       );
 
       setBrands(data);

@@ -199,7 +199,10 @@ export default function ProfilePage() {
       try {
         setLoadingDoctorOrExpert(true);
         // Check doctor first
-        const doctorData = await doctorService.getDoctorByEmail(email);
+        const doctorData = await doctorService.getDoctorByEmail(
+          email,
+          userData?.clinicId,
+        );
 
         if (doctorData) {
           setDoctor(doctorData);
@@ -211,7 +214,10 @@ export default function ProfilePage() {
           ]);
         } else {
           // Check expert
-          const expertData = await expertService.getExpertByEmail(email);
+          const expertData = await expertService.getExpertByEmail(
+            email,
+            userData?.clinicId,
+          );
 
           if (expertData) {
             setExpert(expertData);

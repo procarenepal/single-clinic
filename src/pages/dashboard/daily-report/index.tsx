@@ -28,8 +28,7 @@ import {
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
-import { branchService } from "@/services/branchService";
-import { Patient, Doctor, AppointmentType, Branch } from "@/types/models";
+import { Patient, Doctor, AppointmentType } from "@/types/models";
 
 // Helper function to format date
 const formatDate = (date: Date | string): string => {
@@ -88,16 +87,7 @@ export default function DailyReportPage() {
   );
   const [isExporting, setIsExporting] = useState(false);
 
-  // Branch scope: user's branch or clinic-admin's selection
-  const userBranchId = userData?.branchId ?? null;
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [isMultiBranch, setIsMultiBranch] = useState(false);
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const isClinicAdmin = userData?.role === "clinic-admin";
-  const effectiveBranchId = userBranchId ?? selectedBranchId ?? undefined;
-  const currentBranchName = effectiveBranchId
-    ? branches.find((b) => b.id === effectiveBranchId)?.name
-    : undefined;
 
   // Resolve current doctor ID if the user is a doctor
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
@@ -108,7 +98,10 @@ export default function DailyReportPage() {
 
     (async () => {
       try {
-        const doc = await doctorService.getDoctorByEmail(userData.email!);
+        const doc = await doctorService.getDoctorByEmail(
+          userData.email!,
+          clinicId,
+        );
 
         if (doc) setCurrentDoctorId(doc.id);
       } catch {
@@ -125,8 +118,8 @@ export default function DailyReportPage() {
       try {
         const [patientsData, doctorsData, appointmentTypesData] =
           await Promise.all([
-            patientService.getPatientsByClinic(clinicId, effectiveBranchId),
-            doctorService.getDoctorsByClinic(clinicId, effectiveBranchId),
+            patientService.getPatientsByClinic(clinicId),
+            doctorService.getDoctorsByClinic(clinicId),
             appointmentTypeService.getActiveAppointmentTypesByClinic(clinicId),
           ]);
 
@@ -139,36 +132,9 @@ export default function DailyReportPage() {
     };
 
     loadSupportingData();
-  }, [clinicId, effectiveBranchId]);
+  }, [clinicId]);
 
-  // Load branches for multi-branch clinic admins (no fixed branch)
-  useEffect(() => {
-    const loadBranches = async () => {
-      if (!clinicId || !isClinicAdmin) return;
-
-      try {
-        const multiBranchEnabled =
-          await branchService.isMultiBranchEnabled(clinicId);
-
-        setIsMultiBranch(multiBranchEnabled);
-
-        if (multiBranchEnabled) {
-          const branchesData = await branchService.getClinicBranches(
-            clinicId,
-            false,
-          );
-
-          setBranches(branchesData);
-        }
-      } catch (error) {
-        console.error("Error loading branches:", error);
-      }
-    };
-
-    loadBranches();
-  }, [clinicId, isClinicAdmin]);
-
-  // Load daily report data when date or branch changes
+  // Load daily report data when date changes
   useEffect(() => {
     const loadReportData = async () => {
       if (!clinicId || !selectedDate) return;
@@ -179,7 +145,6 @@ export default function DailyReportPage() {
         const data = await dailyReportService.getDailyReportData(
           clinicId,
           date,
-          effectiveBranchId,
         );
 
         // Filter data if the user is a doctor
@@ -213,14 +178,7 @@ export default function DailyReportPage() {
     };
 
     loadReportData();
-  }, [
-    clinicId,
-    selectedDate,
-    effectiveBranchId,
-    isClinicAdmin,
-    currentDoctorId,
-    doctors,
-  ]);
+  }, [clinicId, selectedDate, isClinicAdmin, currentDoctorId, doctors]);
 
   // Helper functions to get names
   const getPatientNameById = (patientId: string): string => {
@@ -327,34 +285,7 @@ export default function DailyReportPage() {
       .reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
   };
 
-  // Branch-wise revenue breakdown: only when viewing all branches (no single branch selected)
-  const branchRevenueBreakdown =
-    isMultiBranch && isClinicAdmin && branches.length > 0 && !effectiveBranchId
-      ? branches
-        .map((branch) => {
-          // DailyBillingSummary does not carry branchId; use total billing for the overview
-          const branchBilling = reportData.billing.filter((b) =>
-            isCreatedOnSelectedDate(b.date),
-          );
-          const revenue = branchBilling.reduce(
-            (sum, b) => sum + (b.totalAmount || 0),
-            0,
-          );
-          const invoiceCount = branchBilling.length;
-
-          return {
-            branchId: branch.id,
-            branchName: branch.name,
-            branchCode: branch.code,
-            isMainBranch: branch.isMainBranch,
-            revenue,
-            invoiceCount,
-          };
-        })
-        .filter((b) => b.revenue > 0 || b.invoiceCount > 0)
-      : [];
-
-  // Handle export (pass branchName when report is branch-scoped)
+  // Handle export
   const handleExportExcel = () => {
     setIsExporting(true);
     try {
@@ -364,7 +295,7 @@ export default function DailyReportPage() {
         reportData,
         date,
         undefined,
-        currentBranchName,
+        undefined,
         patients,
         doctors,
         appointmentTypes,
@@ -385,7 +316,7 @@ export default function DailyReportPage() {
         reportData,
         date,
         undefined,
-        currentBranchName,
+        undefined,
         patients,
         doctors,
         appointmentTypes,
@@ -437,7 +368,7 @@ export default function DailyReportPage() {
           <div>
             <h1 className="text-[18px] font-bold text-text-main">
               Daily Report
-              {currentBranchName ? ` — ${currentBranchName}` : ""}
+              
             </h1>
             <p className="text-[12px] text-text-muted mt-0.5">
               View and export daily statistics for patients, appointments, and
@@ -446,25 +377,6 @@ export default function DailyReportPage() {
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
-            {isMultiBranch &&
-              isClinicAdmin &&
-              !userBranchId &&
-              branches.length > 0 && (
-                <select
-                  className="h-8 px-2.5 py-0 text-[11.5px] border border-border-base rounded-md bg-surface text-text-main focus:outline-none focus:border-primary min-w-[140px]"
-                  value={selectedBranchId ?? ""}
-                  onChange={(e) => setSelectedBranchId(e.target.value || null)}
-                >
-                  <option value="">All branches</option>
-                  {branches
-                    .filter((b) => !b.isMainBranch)
-                    .map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                </select>
-              )}
             <div className="w-40 shrink-0 flex flex-col gap-1">
               <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider pl-0.5">
                 Date Filter
@@ -820,89 +732,6 @@ export default function DailyReportPage() {
                 </div>
               </div>
             </div>
-
-            {/* Branch-wise Revenue Breakdown — only when viewing all branches */}
-            {isMultiBranch &&
-              isClinicAdmin &&
-              !effectiveBranchId &&
-              branches.length > 0 && (
-                <Card className="clarity-card border border-mountain-200">
-                  <CardHeader className="px-3 py-2 border-b border-mountain-100">
-                    <div className="flex items-center gap-2">
-                      <IoReceiptOutline
-                        className="text-mountain-500"
-                        size={18}
-                      />
-                      <h3 className="text-[13px] font-semibold text-mountain-900">
-                        Branch-wise Revenue Breakdown
-                      </h3>
-                    </div>
-                  </CardHeader>
-                  <Divider className="border-mountain-100" />
-                  <CardBody className="p-3">
-                    {branchRevenueBreakdown.length === 0 ? (
-                      <div className="text-center py-8 text-mountain-500 text-[13px]">
-                        No revenue recorded across branches on{" "}
-                        {formatDate(selectedDate)}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {branchRevenueBreakdown.map((branch) => (
-                          <Card
-                            key={branch.branchId}
-                            className="clarity-card border border-mountain-200 bg-slate-50/50"
-                          >
-                            <CardBody className="p-3">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-[13px] font-semibold text-mountain-900">
-                                      {branch.branchName}
-                                    </p>
-                                    {branch.isMainBranch && (
-                                      <Chip
-                                        color="primary"
-                                        size="sm"
-                                        variant="flat"
-                                      >
-                                        Main
-                                      </Chip>
-                                    )}
-                                  </div>
-                                  <p className="text-[11px] text-mountain-400 mt-0.5">
-                                    Code: {branch.branchCode}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-[15px] font-bold text-health-600">
-                                    {formatCurrency(branch.revenue)}
-                                  </p>
-                                  <p className="text-[11px] text-mountain-500">
-                                    {branch.invoiceCount} invoice
-                                    {branch.invoiceCount !== 1 ? "s" : ""}
-                                  </p>
-                                </div>
-                              </div>
-                            </CardBody>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
-                    {branchRevenueBreakdown.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-mountain-100">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[13px] font-semibold text-mountain-900">
-                            Total Revenue (All Branches)
-                          </p>
-                          <p className="text-[15px] font-bold text-saffron-600">
-                            {formatCurrency(summaryStats.totalRevenue)}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </CardBody>
-                </Card>
-              )}
 
             {/* Patients Section — clarity-card, clarity-table */}
             <Card className="clarity-card border border-mountain-200">
