@@ -231,6 +231,13 @@ describe("refundUnusedSessions — happy path", () => {
       exists: () => true,
       data: () => makePackage({ totalSessions: 10, usedSessions: 4 }), // 6 unused
     });
+    // Second getDoc — refundUnusedSessions' server-side cap check reads the
+    // linked treatmentPackages doc for walletCreditAmount. 6 unused sessions
+    // * (3000 / 10) = 1800 max, so the 1200 refund below is within range.
+    getDocMock.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ walletCreditAmount: 3000 }),
+    });
 
     await patientPackageService.refundUnusedSessions(
       "pkg_1",

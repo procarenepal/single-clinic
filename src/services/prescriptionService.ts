@@ -544,7 +544,22 @@ export const prescriptionService = {
         batch.delete(itemRef);
       });
 
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (batchError) {
+        // A batch update targeting an item.id that no longer exists (e.g.
+        // another editor deleted/regenerated it between this function's own
+        // fresh existingItems read above and this commit — a narrow
+        // multi-editor race) fails the whole batch atomically with an
+        // opaque Firestore error. Surface something actionable instead.
+        console.error(
+          "Error committing prescription items batch (items may have changed since this form was opened):",
+          batchError,
+        );
+        throw new Error(
+          "Could not save prescription items — they may have been changed by another user. Please reload and try again.",
+        );
+      }
     } catch (error) {
       console.error("Error updating prescription items:", error);
       throw error;

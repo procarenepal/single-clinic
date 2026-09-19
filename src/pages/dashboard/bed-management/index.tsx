@@ -447,7 +447,28 @@ export default function BedManagementPage() {
       };
 
       if (isEditing) {
-        await bedService.updateAllotment(allotmentForm.id, allotmentData);
+        const originalAllotment = allotments.find(
+          (a) => a.id === allotmentForm.id,
+        );
+        const isNewlyDischarging =
+          !!allotmentForm.dischargeDate &&
+          originalAllotment?.status === "active";
+
+        if (isNewlyDischarging) {
+          // Route through dischargeAllotment so the linked bed is
+          // transactionally freed too — updateAllotment only ever touches
+          // the allotment document, so using it here left the bed stuck
+          // "occupied" forever.
+          await bedService.dischargeAllotment(
+            allotmentForm.id,
+            new Date(allotmentForm.dischargeDate!),
+          );
+          const { status, dischargeDate, ...otherFields } = allotmentData;
+
+          await bedService.updateAllotment(allotmentForm.id, otherFields);
+        } else {
+          await bedService.updateAllotment(allotmentForm.id, allotmentData);
+        }
         addToast({
           title: "Success",
           description: "Allotment updated successfully",

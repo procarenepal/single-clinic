@@ -24,7 +24,25 @@ import { expertCommissionService } from "../expertCommissionService";
 const addDocMock       = vi.fn().mockResolvedValue({ id: "comm_id_1" });
 const updateDocMock    = vi.fn().mockResolvedValue(undefined);
 const getDocMock       = vi.fn();
-const getDoctorsMock   = vi.fn().mockResolvedValue({ docs: [] });
+// Default: the duplicate-guard query always finds nothing pre-existing —
+// individual tests can override with mockResolvedValueOnce for a real
+// duplicate doc if a test specifically wants to exercise that path.
+const getDoctorsMock   = vi.fn().mockResolvedValue({ empty: true, docs: [] });
+// payCommission wraps its read-validate-write in runTransaction (race-condition
+// fix — see doctorCommissionService.ts) — without mocking it, it falls through
+// to the real Firestore SDK, which rejects the fake `db` object. transaction.get/
+// update delegate to the same getDocMock/updateDocMock queues the plain-call
+// tests already use, so existing mockResolvedValueOnce/assertion patterns keep
+// working unchanged.
+const runTransactionMock = vi.fn(async (_db: any, updateFn: any) => {
+  const transaction = {
+    get: (...getArgs: any[]) => getDocMock(...getArgs),
+    update: (...updateArgs: any[]) => updateDocMock(...updateArgs),
+    set: (...updateArgs: any[]) => updateDocMock(...updateArgs),
+  };
+
+  return updateFn(transaction);
+});
 
 vi.mock("firebase/firestore", async () => {
   const actual = await vi.importActual("firebase/firestore");
@@ -39,6 +57,7 @@ vi.mock("firebase/firestore", async () => {
     query: vi.fn(),
     where: vi.fn(),
     orderBy: vi.fn(),
+    runTransaction: (db: any, updateFn: any) => runTransactionMock(db, updateFn),
     increment: (n: number) => ({ __increment: n }),
     Timestamp: {
       fromDate: (d: Date) => ({ seconds: Math.floor(d.getTime() / 1000) }),
@@ -133,6 +152,10 @@ function simulateRecordPaymentGuard(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks does not drop queued mockResolvedValueOnce values — reset
+  // getDocMock explicitly so a value queued (and, pre-runTransaction-mock,
+  // sometimes left unconsumed) by one test can never leak into the next.
+  getDocMock.mockReset();
   addDocMock.mockResolvedValue({ id: "comm_id_1" });
   updateDocMock.mockResolvedValue(undefined);
 });

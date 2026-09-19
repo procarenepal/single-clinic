@@ -8,6 +8,7 @@ import {
   Timestamp,
   updateDoc,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -81,50 +82,55 @@ export const walletService = {
     try {
       const now = new Date();
       const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
-      
-      const { getDoc } = await import("firebase/firestore");
-      const patientSnap = await getDoc(patientRef);
-      if (!patientSnap.exists()) {
-        throw new Error("Patient not found");
-      }
-      
-      const patientData = patientSnap.data();
-      const currentBalance = patientData.walletBalance || 0;
-      
-      if (currentBalance < amount) {
-        throw new Error("Insufficient wallet balance");
-      }
+      const transactionRef = doc(collection(db, WALLET_TRANSACTIONS_COLLECTION));
 
-      // 1. Record the transaction
-      const transaction: Omit<WalletTransaction, "id"> = {
-        patientId,
-        clinicId,
-        branchId: clinicId,
-        type: "deduction",
-        amount,
-        referenceId: invoiceId,
-        notes,
-        createdAt: now,
-        createdBy,
-      };
+      // The balance check + decrement must be atomic — two concurrent
+      // deductions for the same patient (e.g. two invoices paid via wallet
+      // at nearly the same moment, or the double-payment race in
+      // appointmentBillingService.recordPayment) could otherwise both read
+      // the same pre-deduction balance, both pass the sufficiency check,
+      // and both apply increment(-amount), driving the balance negative.
+      // Mirrors the same pattern already used correctly in
+      // patientPackageService's session-consumption transaction.
+      await runTransaction(db, async (dbTransaction) => {
+        const patientSnap = await dbTransaction.get(patientRef);
 
-      const docRef = await addDoc(
-        collection(db, WALLET_TRANSACTIONS_COLLECTION),
-        {
-          ...transaction,
+        if (!patientSnap.exists()) {
+          throw new Error("Patient not found");
+        }
+
+        const patientData = patientSnap.data();
+        const currentBalance = patientData.walletBalance || 0;
+
+        if (currentBalance < amount) {
+          throw new Error("Insufficient wallet balance");
+        }
+
+        const transactionData: Omit<WalletTransaction, "id"> = {
+          patientId,
+          clinicId,
+          branchId: clinicId,
+          type: "deduction",
+          amount,
+          referenceId: invoiceId,
+          notes,
+          createdAt: now,
+          createdBy,
+        };
+
+        dbTransaction.set(transactionRef, {
+          ...transactionData,
           createdAt: Timestamp.fromDate(now),
-        },
-      );
+        });
 
-      // 2. Update the patient's wallet balance
-
-      await updateDoc(patientRef, {
-        // Increment with a negative value to deduct
-        walletBalance: increment(-amount),
-        updatedAt: Timestamp.now(),
+        dbTransaction.update(patientRef, {
+          // Increment with a negative value to deduct
+          walletBalance: increment(-amount),
+          updatedAt: Timestamp.now(),
+        });
       });
 
-      return docRef.id;
+      return transactionRef.id;
     } catch (error) {
       console.error("Error deducting funds from wallet:", error);
       throw error;

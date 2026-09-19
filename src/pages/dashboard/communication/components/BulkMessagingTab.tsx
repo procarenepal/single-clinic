@@ -244,25 +244,21 @@ const BulkMessagingTab: React.FC = () => {
 
         if (!phone) continue;
 
-        const response = { success: false, error: "SMS disabled" };
-
-        await smsService.createSMSLog({
-          clinicId: clinicId!,
-          message: patientMessage,
-          type: "manual",
-          recipientType: "patient",
-          patientId: patient.id,
-          patientName: patient.name,
-          patientPhone: phone,
-          createdBy: currentUser?.uid || "system",
-          status: response.success ? "sent" : "failed",
-          ...(response.success
-            ? {}
-            : { errorMessage: response.error || "Delivery failure" }),
-        });
-
-        if (response.success) successCount++;
-        else failCount++;
+        // sendManualSMS actually calls the SMS provider AND writes its own
+        // log transactionally — it used to be faked out here with a
+        // hardcoded failure and a manual, separate log write, so every
+        // "campaign" silently sent nothing while reporting a normal-looking
+        // summary.
+        await smsService.sendManualSMS(
+          clinicId!,
+          phone,
+          patientMessage,
+          "patient",
+          patient.id,
+          patient.name,
+          currentUser?.uid || "system",
+        );
+        successCount++;
       } catch (error) {
         console.error(`Failed to send to ${patient.name}:`, error);
         failCount++;

@@ -77,7 +77,8 @@ public class BillingController {
         String invoiceNumber = (request.getPreAssignedInvoiceNumber() != null
                 && !request.getPreAssignedInvoiceNumber().isBlank())
                         ? request.getPreAssignedInvoiceNumber()
-                        : invoiceSequenceService.generateNextInvoiceNumber(clinicId, request.getFiscalYear());
+                        : invoiceSequenceService.generateNextInvoiceNumber(clinicId, request.getFiscalYear(),
+                                request.getInvoicePrefix());
         invoice.setInvoiceNumber(invoiceNumber);
         invoice.setInvoiceDate(LocalDate.now());
         invoice.setFiscalYear(request.getFiscalYear());
@@ -92,6 +93,10 @@ public class BillingController {
         invoice.setExemptAmount(request.getExemptAmount());
         invoice.setDiscountAmount(request.getDiscountAmount());
         invoice.setPaymentMethod(request.getPaymentMethod());
+        if (request.isReturn()) {
+            invoice.setRefInvoiceNumber(request.getRefInvoiceNumber());
+            invoice.setReasonForReturn(request.getReasonForReturn());
+        }
 
         invoice.setIrdSynced(false);
 
@@ -105,7 +110,25 @@ public class BillingController {
             invoice.addItem(item);
         }
 
-        Invoice savedInvoice = invoiceRepository.save(invoice);
+        Invoice savedInvoice;
+        try {
+            savedInvoice = invoiceRepository.save(invoice);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // The (clinic_id, idempotency_key) unique index (V5 migration)
+            // is the real, DB-level backstop for the check above — two
+            // concurrent retries of the same create-invoice request can
+            // both pass the findByClinicIdAndIdempotencyKey check before
+            // either commits, but only one INSERT can win here. This
+            // transaction is now rollback-only (Hibernate marks the
+            // persistence context unusable after a failed flush), so we
+            // can't safely re-query for the winner's row here — return a
+            // clean 409 instead of an opaque 500; the client's own retry
+            // (same idempotency key, a fresh request/transaction) will
+            // cleanly hit the idempotent-retry branch above and get the
+            // winner's invoice back.
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This invoice was already created by a concurrent request — please retry.");
+        }
 
         if (request.isIrdEnabled()) {
             IrdCbmsService.SyncResult syncResult = irdCbmsService.syncInvoice(savedInvoice, request.getFiscalYear(),

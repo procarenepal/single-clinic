@@ -214,7 +214,10 @@ describe("expertCommissionService.createCommission — discount-adjusted base (b
       invoiceDate: new Date(),
       patientId: "pat_1",
       patientName: "Test Patient",
-      items: [{ appointmentTypeName: "Laser" }],
+      // item.amount already reflects itemDiscountAmount applied (1000 - 100),
+      // matching how real AppointmentBillingItem.amount is populated
+      // elsewhere in the codebase.
+      items: [{ appointmentTypeName: "Laser", amount: 900 }],
       subtotal: 1000,
       itemDiscountAmount: 100, // item-level discount
       mainDiscountAmount: 50, // invoice-level discount
@@ -250,7 +253,7 @@ describe("expertCommissionService.createCommission — discount-adjusted base (b
       invoiceDate: new Date(),
       patientId: "pat_1",
       patientName: "Test Patient",
-      items: [{ appointmentTypeName: "Laser" }],
+      items: [{ appointmentTypeName: "Laser", amount: 20 }], // 100 - 80 itemDiscount
       subtotal: 100,
       itemDiscountAmount: 80,
       mainDiscountAmount: 50, // discounts (130) exceed subtotal (100)

@@ -309,7 +309,7 @@ const SettingsTab: React.FC = () => {
                 if (manual !== null) {
                   const val = parseFloat(manual);
 
-                  if (!isNaN(val)) {
+                  if (!isNaN(val) && val >= 0) {
                     updateSMSSettings(
                       clinicId!,
                       { smsBalance: val },

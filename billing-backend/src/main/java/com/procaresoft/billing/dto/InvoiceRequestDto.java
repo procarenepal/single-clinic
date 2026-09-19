@@ -64,6 +64,28 @@ public class InvoiceRequestDto {
     /** True for a sales-return invoice — routes the IRD submission to /api/billreturn instead of /api/bill. */
     private boolean isReturn;
 
+    /**
+     * Required (per IRD's CBMS API doc) when isReturn is true — the invoice
+     * number of the original invoice this credit note reverses. Sent to IRD
+     * as ref_invoice_number. Ignored when isReturn is false.
+     */
+    private String refInvoiceNumber;
+
+    /**
+     * Required (per IRD's CBMS API doc) when isReturn is true — the stated
+     * reason for the return. Sent to IRD as reason_for_return. Ignored when
+     * isReturn is false.
+     */
+    private String reasonForReturn;
+
+    /**
+     * Optional prefix to use instead of the server's hardcoded default
+     * (e.g. the clinic's configured invoicePrefix billing setting, or
+     * "CN" for a credit note) — see InvoiceSequenceService's overload.
+     * Ignored when preAssignedInvoiceNumber is also supplied.
+     */
+    private String invoicePrefix;
+
     @NotEmpty(message = "items must not be empty")
     private List<@Valid InvoiceItemDto> items;
 

@@ -2159,7 +2159,27 @@ export default function ReportsPage() {
                     <p className="clarity-stat-value text-health-600">
                       NPR{" "}
                       {filteredPharmacyPurchases
-                        .reduce((sum, purchase) => sum + purchase.netAmount, 0)
+                        .reduce((sum, purchase) => {
+                          // Net out returns — a returned sale shouldn't
+                          // overstate revenue.
+                          const returnedAmount =
+                            purchase.totalReturnedAmount &&
+                            purchase.totalReturnedAmount > 0
+                              ? purchase.totalReturnedAmount
+                              : (purchase.returns ?? []).reduce(
+                                  (retSum, r) =>
+                                    retSum + Math.abs(r.totalAmount || 0),
+                                  0,
+                                );
+
+                          return (
+                            sum +
+                            Math.max(
+                              0,
+                              (purchase.netAmount || 0) - returnedAmount,
+                            )
+                          );
+                        }, 0)
                         .toLocaleString()}
                     </p>
                     <p className="clarity-stat-label">Total Purchase Value</p>

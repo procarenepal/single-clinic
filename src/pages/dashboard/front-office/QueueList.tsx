@@ -117,6 +117,7 @@ export interface QueueListProps {
   onSendBack?: (appt: any) => void;
   onToggleHold?: (appt: any) => void;
   onMarkNoShow?: (appt: any) => void;
+  onReinstateNoShow?: (appt: any) => void;
   onToggleUrgent?: (appt: any) => void;
   /** Reports whether a keyed action (e.g. `complete-consultation-<id>`) is
    * currently mid-flight, so buttons that fire a write directly (not via a
@@ -169,6 +170,7 @@ export const QueueList: React.FC<QueueListProps> = ({
   onSendBack,
   onToggleHold,
   onMarkNoShow,
+  onReinstateNoShow,
   onToggleUrgent,
   isActionPending,
 }) => {
@@ -337,6 +339,28 @@ export const QueueList: React.FC<QueueListProps> = ({
                             onClick={() => onMarkNoShow(firstScheduledAppt)}
                           >
                             No-Show
+                          </button>
+                        );
+                      })()}
+
+                    {/* Undo for a mistaken No-Show — previously a dead-end
+                        status with no way back to "scheduled". */}
+                    {onReinstateNoShow &&
+                      (() => {
+                        const noShowAppt = appts.find(
+                          (a) => getPatientStage(a) === "no-show",
+                        );
+
+                        if (!noShowAppt) return null;
+
+                        return (
+                          <button
+                            className="h-8 px-2.5 whitespace-nowrap rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-colors outline-none"
+                            title="Reinstate to scheduled"
+                            type="button"
+                            onClick={() => onReinstateNoShow(noShowAppt)}
+                          >
+                            Reinstate
                           </button>
                         );
                       })()}

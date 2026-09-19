@@ -735,6 +735,9 @@ export default function NewAppointmentPage() {
           assignedExpertId:
             row.clinicianType === "expert" ? row.clinicianId : undefined,
           appointmentDate: new Date(appointmentInfo.appointmentDate),
+          appointmentBS: appointmentInfo.appointmentBS
+            ? new Date(appointmentInfo.appointmentBS)
+            : undefined,
           appointmentTypeId: row.appointmentTypeId,
           status: "scheduled",
           registrationDate: new Date(appointmentInfo.registrationDate),

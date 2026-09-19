@@ -862,10 +862,23 @@ export interface MedicinePurchaseItem {
   salePrice: number;
   quantity: number;
   amount: number;
-  batchNumber?: string; // Batch sold from
+  batchNumber?: string; // Batch sold from (display string, may span multiple batches)
   type?: "medicine" | "item"; // Support both medicines and items
   discountType?: "flat" | "percentage";
   discountValue?: number;
+  /** MRP (tax-INCLUSIVE) as entered by staff for this line — Nepal pharmacy
+   * convention. When set, salePrice/taxableAmount/vat for this line are
+   * back-calculated from mrp using taxRate (taxable = mrp / (1 + rate/100)),
+   * rather than tax being added on top of a tax-exclusive salePrice. */
+  mrp?: number;
+  /** Per-line VAT rate, e.g. 13 — auto-filled from the selected Medicine's
+   * catalog taxRate, editable per line. Falls back to the purchase-level
+   * taxPercentage when the medicine has no catalog rate configured. */
+  taxRate?: number;
+  /** Structured per-batch breakdown of this line item's FEFO allocation —
+   * lets a return restore quantity to the exact batch(es) sold from,
+   * unlike the display-only batchNumber string above. */
+  batchAllocations?: { stockDocId: string; quantity: number }[];
 }
 
 // Line item inside a medicine purchase return
@@ -1414,6 +1427,12 @@ export interface PatientFollowup {
 
   // Visit context
   appointmentId?: string; // Optional link to the originating appointment
+  /** Id of the originating AppointmentBilling/PathologyBilling record —
+   * distinct from appointmentId, which some auto-creation call sites were
+   * incorrectly populating with this same billing id. */
+  billingId?: string;
+  /** Id of the originating MedicinePurchase record, for pharmacy-category follow-ups. */
+  purchaseId?: string;
   visitDate?: Date; // The date of the original visit
   session?: string; // e.g. "1st", "2nd", "3rd"
 
@@ -1439,7 +1458,11 @@ export interface PatientFollowup {
   };
 
   nextFollowupDate?: Date; // Next explicitly set follow-up date
-  followedBy?: string; // ID/Name of the staff assigned
+  followedBy?: string; // Display name of the staff assigned (denormalized, for display only)
+  /** Real uid of the assigned staff member — followedBy alone was a free-text
+   * display-name string with no reliable way to query "my assigned follow-ups"
+   * by identity. Populate both going forward; followedBy stays for display. */
+  followedByUserId?: string;
 
   // Clinical notes
   service?: string; // Service received (e.g. "HYDRAFACIAL ST", "PRP FACE")
@@ -1677,6 +1700,7 @@ export interface AppointmentBillingItem {
   discountValue?: number;
   discountAmount?: number;
   isTaxable?: boolean; // Whether tax applies to this item
+  taxRate?: number; // Per-item VAT rate override, e.g. 13. Falls back to the clinic's defaultTaxPercentage when unset. Only meaningful when isTaxable is true.
   amount: number; // (price * quantity) - discountAmount
 }
 
@@ -1756,6 +1780,7 @@ export interface AppointmentBilling {
   // Credit Note / Returns
   isCreditNote?: boolean;
   linkedInvoiceId?: string; // ID of the original invoice this credit note reverses
+  linkedInvoiceNumber?: string; // invoice NUMBER (not doc id) of the original — sent to IRD as ref_invoice_number
   creditNoteReason?: string;
   hasCreditNote?: boolean; // set on the ORIGINAL invoice once it has been reversed — prevents issuing a second Credit Note against it
 
@@ -2093,6 +2118,8 @@ export interface PathologyBillingItem {
   amount: number; // (price * quantity) - discountAmount
   sampleType?: string; // e.g., "Blood", "Urine"
   isUrgent?: boolean; // Fast-track status
+  isTaxable?: boolean; // Whether tax applies to this test (default true — most tests are taxable goods/services)
+  taxRate?: number; // Per-item VAT rate override, e.g. 13. Falls back to the clinic's defaultTaxPercentage when unset. Only meaningful when isTaxable is true.
 }
 
 // Payment Event model for tracking multiple payment installments
@@ -2162,6 +2189,7 @@ export interface PathologyBilling {
   // Credit Note / Returns
   isCreditNote?: boolean;
   linkedInvoiceId?: string; // ID of the original invoice this credit note reverses
+  linkedInvoiceNumber?: string; // invoice NUMBER (not doc id) of the original — sent to IRD as ref_invoice_number
   creditNoteReason?: string;
   hasCreditNote?: boolean; // set on the ORIGINAL invoice once it has been reversed — prevents issuing a second Credit Note against it
 

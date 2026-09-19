@@ -18,6 +18,7 @@ import {
   Input,
   Select,
   SelectItem,
+  SelectSection,
   Chip,
 } from "@heroui/react";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
@@ -83,6 +84,7 @@ export default function FollowupModal({
     sessionStatuses: {} as Record<string, any>,
     nextFollowupDate: "",
     followedBy: "",
+    followedByUserId: "",
     noteHistory: [] as any[],
     newNote: "",
   });
@@ -152,6 +154,8 @@ export default function FollowupModal({
             ? new Date(followup.nextFollowupDate).toISOString().split("T")[0]
             : "",
           followedBy: followup.followedBy || currentUser?.displayName || "",
+          followedByUserId:
+            followup.followedByUserId || currentUser?.uid || "",
           noteHistory: followup.noteHistory || [],
           newNote: "",
         });
@@ -179,6 +183,7 @@ export default function FollowupModal({
           sessionStatuses: {},
           nextFollowupDate: "",
           followedBy: currentUser?.displayName || "",
+          followedByUserId: currentUser?.uid || "",
           noteHistory: [],
           newNote: "",
         });
@@ -339,6 +344,7 @@ export default function FollowupModal({
         createdBy: followup?.createdBy || currentUser?.uid || "",
         nextFollowupDate: parseDate(formData.nextFollowupDate),
         followedBy: formData.followedBy,
+        followedByUserId: formData.followedByUserId || undefined,
         noteHistory: finalNoteHistory,
       };
 
@@ -821,6 +827,13 @@ export default function FollowupModal({
                     <label className="text-[11px] font-bold text-[rgb(var(--color-text-muted))] uppercase tracking-wider mb-1.5 block">
                       Overall Status
                     </label>
+                    {/* Grouped into Lifecycle (is this follow-up still open)
+                        vs Outcome (how did the interaction actually go) —
+                        overallStatus's 10 values conflate both concerns in
+                        one flat list; this only changes how they're
+                        presented, not the stored field/values themselves,
+                        so nothing downstream that reads overallStatus needs
+                        to change. */}
                     <Select
                       selectedKeys={[formData.overallStatus]}
                       size="sm"
@@ -828,16 +841,20 @@ export default function FollowupModal({
                         handleChange("overallStatus", e.target.value)
                       }
                     >
-                      <SelectItem key="pending">Pending</SelectItem>
-                      <SelectItem key="completed">Completed</SelectItem>
-                      <SelectItem key="no-answer">No Answer</SelectItem>
-                      <SelectItem key="wrong-no">Wrong Number</SelectItem>
-                      <SelectItem key="satisfy">Satisfied</SelectItem>
-                      <SelectItem key="not-satisfy">Not Satisfied</SelectItem>
-                      <SelectItem key="complain">Complain</SelectItem>
-                      <SelectItem key="angry">Angry</SelectItem>
-                      <SelectItem key="will-come">Will Come</SelectItem>
-                      <SelectItem key="cancelled">Cancelled</SelectItem>
+                      <SelectSection showDivider title="Lifecycle">
+                        <SelectItem key="pending">Pending</SelectItem>
+                        <SelectItem key="completed">Completed</SelectItem>
+                        <SelectItem key="cancelled">Cancelled</SelectItem>
+                      </SelectSection>
+                      <SelectSection title="Outcome (call result)">
+                        <SelectItem key="satisfy">Satisfied</SelectItem>
+                        <SelectItem key="not-satisfy">Not Satisfied</SelectItem>
+                        <SelectItem key="will-come">Will Come</SelectItem>
+                        <SelectItem key="complain">Complain</SelectItem>
+                        <SelectItem key="angry">Angry</SelectItem>
+                        <SelectItem key="no-answer">No Answer</SelectItem>
+                        <SelectItem key="wrong-no">Wrong Number</SelectItem>
+                      </SelectSection>
                     </Select>
                   </div>
                   <div className="mt-4">
@@ -847,15 +864,33 @@ export default function FollowupModal({
                     <Select
                       placeholder="Select staff"
                       selectedKeys={
-                        formData.followedBy ? [formData.followedBy] : []
+                        formData.followedByUserId
+                          ? [formData.followedByUserId]
+                          : []
                       }
                       size="sm"
-                      onChange={(e) =>
-                        handleChange("followedBy", e.target.value)
-                      }
+                      onChange={(e) => {
+                        // Store the real user id (for reliable "my assigned
+                        // follow-ups" queries later) alongside the display
+                        // name (kept for existing UI rendering) — previously
+                        // only the display-name string was stored, with no
+                        // way to look this up by actual identity.
+                        const selectedUser = users.find(
+                          (u) => u.id === e.target.value,
+                        );
+
+                        setFormData((prev) => ({
+                          ...prev,
+                          followedByUserId: e.target.value,
+                          followedBy:
+                            selectedUser?.displayName ||
+                            selectedUser?.email ||
+                            "",
+                        }));
+                      }}
                     >
                       {users.map((u) => (
-                        <SelectItem key={u.displayName || u.email || u.id}>
+                        <SelectItem key={u.id}>
                           {u.displayName || u.email}
                         </SelectItem>
                       ))}

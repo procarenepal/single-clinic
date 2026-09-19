@@ -52,7 +52,15 @@ export function isBillingLocked(
  * invoice-side cancellation/credit-note is the primary, legally-required
  * action and must not be blocked by a commission-bookkeeping error.
  */
-async function reverseCommissionsForBilling(billingId: string): Promise<void> {
+export async function reverseCommissionsForBilling(
+  billingId: string,
+  // Fraction of each commission to claw back — 1 (default) fully cancels
+  // the commission, matching a full cancel/credit-note. A value < 1 (e.g.
+  // a package refund for N of T unused sessions) only reduces each
+  // commission proportionally instead, leaving the clinician's earnings
+  // for the portion of service already delivered intact.
+  reversalRatio: number = 1,
+): Promise<void> {
   try {
     const { doctorCommissionService } = await import(
       "./doctorCommissionService"
@@ -74,20 +82,59 @@ async function reverseCommissionsForBilling(billingId: string): Promise<void> {
       staffCommissionService.getCommissionsByBillingId(billingId),
     ]);
 
-    await Promise.all([
-      ...docComms
-        .filter((c) => c.status !== "cancelled")
-        .map((c) => doctorCommissionService.updateCommissionStatus(c.id, "cancelled")),
-      ...expComms
-        .filter((c) => c.status !== "cancelled")
-        .map((c) => expertCommissionService.updateCommissionStatus(c.id, "cancelled")),
-      ...refComms
-        .filter((c) => c.status !== "cancelled")
-        .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
-      ...staffComms
-        .filter((c) => c.status !== "cancelled")
-        .map((c) => staffCommissionService.updateCommissionStatus(c.id, "cancelled")),
-    ]);
+    const ratio = Math.min(1, Math.max(0, reversalRatio));
+
+    if (ratio >= 1) {
+      await Promise.all([
+        ...docComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) => doctorCommissionService.updateCommissionStatus(c.id, "cancelled")),
+        ...expComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) => expertCommissionService.updateCommissionStatus(c.id, "cancelled")),
+        ...refComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
+        ...staffComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) => staffCommissionService.updateCommissionStatus(c.id, "cancelled")),
+      ]);
+    } else {
+      await Promise.all([
+        ...docComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) =>
+            doctorCommissionService.reduceCommissionAmount(
+              c.id,
+              c.commissionAmount * ratio,
+            ),
+          ),
+        ...expComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) =>
+            expertCommissionService.reduceCommissionAmount(
+              c.id,
+              c.commissionAmount * ratio,
+            ),
+          ),
+        ...refComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) =>
+            referralCommissionService.reduceCommissionAmount(
+              c.id,
+              c.commissionAmount * ratio,
+            ),
+          ),
+        ...staffComms
+          .filter((c) => c.status !== "cancelled")
+          .map((c) =>
+            staffCommissionService.reduceCommissionAmount(
+              c.id,
+              c.commissionAmount * ratio,
+            ),
+          ),
+      ]);
+    }
   } catch (error) {
     console.error("Error reversing commissions for billing:", billingId, error);
   }
@@ -214,6 +261,28 @@ export const appointmentBillingService = {
     updatedBy: string,
   ): Promise<void> {
     try {
+      // A bad value here silently reaches every future invoice's tax/
+      // commission calculation, including ones synced to IRD — reject
+      // out-of-range values instead of writing them.
+      if (
+        settings.defaultTaxPercentage !== undefined &&
+        (settings.defaultTaxPercentage < 0 || settings.defaultTaxPercentage > 100)
+      ) {
+        throw new Error("Default tax percentage must be between 0 and 100.");
+      }
+      if (
+        settings.defaultCommission !== undefined &&
+        (settings.defaultCommission < 0 || settings.defaultCommission > 100)
+      ) {
+        throw new Error("Default commission percentage must be between 0 and 100.");
+      }
+      if (
+        settings.defaultDiscountValue !== undefined &&
+        settings.defaultDiscountValue < 0
+      ) {
+        throw new Error("Default discount value cannot be negative.");
+      }
+
       const settingsRef = doc(
         db,
         APPOINTMENT_BILLING_SETTINGS_COLLECTION,
@@ -580,7 +649,9 @@ export const appointmentBillingService = {
             discountValue: i.discountValue,
             isTaxable:
               i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
-            taxRate: taxPercentage,
+            // Per-item override when set — calculateTaxBreakdown falls back
+            // to defaultTaxPercentage itself when this is undefined.
+            taxRate: i.taxRate,
           })),
           discountType: billingData.discountType || "flat",
           discountValue: billingData.discountValue || 0,
@@ -592,6 +663,18 @@ export const appointmentBillingService = {
     // Clinic Settings > IRD CBMS Configuration actually writes to) — never
     // on ClinicSettings, which has its own same-named but always-unset field.
     const clinic = await clinicService.getClinicById(billingData.clinicId);
+
+    // The clinic's configured invoicePrefix used to be computed by
+    // generateInvoiceNumber() and then silently discarded here (the Java
+    // backend always used its own hardcoded "INV" default) — including for
+    // credit notes, which lost their intended "CN-" distinguishing prefix
+    // in the process. Pass it through instead.
+    const settingsForPrefix = await this.getBillingSettings(
+      billingData.clinicId,
+    ).catch(() => null);
+    const invoicePrefix = isCreditNote
+      ? "CN"
+      : settingsForPrefix?.invoicePrefix || undefined;
 
     const invoiceItems = (billingData.items || []).map((item) => ({
       itemName: item.appointmentTypeName || "Service",
@@ -617,7 +700,17 @@ export const appointmentBillingService = {
       irdEnabled: Boolean(clinic?.irdEnabled),
       fiscalYear: getNepaliFiscalYear(new Date()),
       // Credit notes/sales returns must route to IRD's /api/billreturn, not /api/bill.
-      isReturn: Boolean((billingData as any).isCreditNote),
+      isReturn: isCreditNote,
+      // IRD's /api/billreturn requires these two beyond a normal /api/bill —
+      // see IrdCbmsService.buildPayload's isReturn branch. Ignored server-side
+      // when isReturn is false.
+      refInvoiceNumber: isCreditNote
+        ? (billingData as any).linkedInvoiceNumber
+        : undefined,
+      reasonForReturn: isCreditNote
+        ? (billingData as any).creditNoteReason
+        : undefined,
+      invoicePrefix,
       // Deterministic per-content key — a network-drop retry of this exact
       // submission reuses it, so the backend returns the already-created
       // invoice instead of minting a duplicate.
@@ -1086,6 +1179,15 @@ export const appointmentBillingService = {
         throw new Error("This invoice is already fully paid.");
       }
 
+      if (
+        discountAmount > 0 &&
+        isBillingLocked(billing)
+      ) {
+        throw new Error(
+          "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead.",
+        );
+      }
+
       // Handle discount
       const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
       const newMainDiscountAmount =
@@ -1102,23 +1204,6 @@ export const appointmentBillingService = {
         paymentStatus = "paid";
       } else if (newPaidAmount > 0) {
         paymentStatus = "partial";
-      }
-
-      // If paying via wallet, verify balance and deduct funds
-      if (paymentMethod === "wallet") {
-        const patient = await patientService.getPatientById(billing.patientId);
-
-        if (!patient || (patient.walletBalance || 0) < paymentAmount) {
-          throw new Error("Insufficient wallet balance");
-        }
-        await walletService.deductFunds(
-          billing.patientId,
-          billing.clinicId,
-          paymentAmount,
-          id,
-          paymentNotes || `Paid Invoice ${billing.invoiceNumber || "Draft"}`,
-          auth.currentUser?.uid || "system",
-        );
       }
 
       // Prepare update data, only including non-empty optional fields
@@ -1157,7 +1242,72 @@ export const appointmentBillingService = {
         newPaymentEvent,
       ];
 
-      await this.updateBilling(id, updateData);
+      // Atomically claim this payment (re-check + write in one
+      // transaction) before any side effects — two concurrent calls
+      // (double-click, a retried network request) could otherwise both
+      // pass the non-atomic "already paid" check above and both proceed
+      // to deduct the wallet and create commissions for a single real
+      // payment. Only one of two racing transactions can win; the loser
+      // throws the same "already fully paid" error instead of silently
+      // double-processing.
+      const billingRef = doc(db, APPOINTMENT_BILLING_COLLECTION, id);
+
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(billingRef);
+
+        if (!snap.exists()) {
+          throw new Error("Billing record not found");
+        }
+
+        const current = snap.data() as AppointmentBilling;
+
+        if (current.paymentStatus === "paid" && paymentAmount > 0) {
+          throw new Error("This invoice is already fully paid.");
+        }
+
+        transaction.update(billingRef, {
+          ...updateData,
+          updatedAt: Timestamp.now(),
+        });
+      });
+
+      // If paying via wallet, verify balance and deduct funds — after the
+      // claim above succeeds, so only the winner of a concurrent race
+      // reaches here. deductFunds is itself transactional (see
+      // walletService.ts), so the balance check/decrement can't go
+      // negative under concurrent wallet payments either.
+      if (paymentMethod === "wallet") {
+        try {
+          const patient = await patientService.getPatientById(
+            billing.patientId,
+          );
+
+          if (!patient || (patient.walletBalance || 0) < paymentAmount) {
+            throw new Error("Insufficient wallet balance");
+          }
+          await walletService.deductFunds(
+            billing.patientId,
+            billing.clinicId,
+            paymentAmount,
+            id,
+            paymentNotes || `Paid Invoice ${billing.invoiceNumber || "Draft"}`,
+            auth.currentUser?.uid || "system",
+          );
+        } catch (walletError) {
+          // Compensate: revert the claim above so the invoice doesn't end
+          // up looking paid when no funds were actually collected.
+          await updateDoc(billingRef, {
+            totalAmount: billing.totalAmount,
+            mainDiscountAmount: billing.mainDiscountAmount || 0,
+            discountAmount: billing.discountAmount || 0,
+            paidAmount: billing.paidAmount,
+            balanceAmount: billing.balanceAmount,
+            paymentStatus: billing.paymentStatus,
+            updatedAt: Timestamp.now(),
+          });
+          throw walletError;
+        }
+      }
 
       // Also find and update the associated appointment in the appointments collection
       try {
@@ -1234,25 +1384,74 @@ export const appointmentBillingService = {
                 .map((item) => item.appointmentTypeName)
                 .join(" | ");
 
-              await followupService.createFollowup({
-                clinicId: billing.clinicId,
-                branchId: billing.branchId || "",
-                category: "appointment",
-                patientId: billing.patientId,
-                patientName: patient.name,
-                patientMobile: patient.mobile || patient.phone || "",
-                appointmentId: id, // using billing id as reference
-                visitDate: new Date(),
-                session: "1st",
-                initStatus: "good",
-                overallStatus: "pending",
-                service: services,
-                createdBy: auth.currentUser?.uid || "system",
-              } as any);
-              console.log("Auto-created appointment followup for billing", id);
+              // Reuse an existing pending follow-up for this patient
+              // (matching the dedup FollowupModal already does for manual
+              // creation) instead of always inserting a new one — otherwise
+              // a patient with several paid visits accumulates a separate
+              // fragmented pending follow-up per visit.
+              const existing = await followupService.findPendingFollowup(
+                billing.patientId,
+                "appointment",
+              );
+              // Default the next follow-up 7 days out so this actually
+              // surfaces under the Today/Tomorrow filters eventually —
+              // previously auto-created follow-ups never got a date at
+              // all, so they were only ever visible under "All Dates".
+              const nextFollowupDate = new Date();
+
+              nextFollowupDate.setDate(nextFollowupDate.getDate() + 7);
+
+              if (existing) {
+                await followupService.updateFollowup(existing.id, {
+                  billingId: id,
+                  visitDate: new Date(),
+                  service: services,
+                  nextFollowupDate:
+                    existing.nextFollowupDate || nextFollowupDate,
+                });
+              } else {
+                await followupService.createFollowup({
+                  clinicId: billing.clinicId,
+                  branchId: billing.branchId || "",
+                  category: "appointment",
+                  patientId: billing.patientId,
+                  patientName: patient.name,
+                  patientMobile: patient.mobile || patient.phone || "",
+                  billingId: id,
+                  visitDate: new Date(),
+                  session: "1st",
+                  initStatus: "good",
+                  overallStatus: "pending",
+                  service: services,
+                  nextFollowupDate,
+                  createdBy: auth.currentUser?.uid || "system",
+                } as any);
+              }
+              console.log("Auto-created/updated appointment followup for billing", id);
             }
           } catch (e) {
             console.error("Failed to auto-create followup:", e);
+            // Previously silent beyond console — a failure here meant staff
+            // had no way of knowing a follow-up was supposed to exist for
+            // this paid invoice. Surface it into the existing Audit Logs
+            // page instead of inventing new infrastructure.
+            try {
+              const { auditLogService } = await import("./auditLogService");
+
+              await auditLogService.logEvent(
+                "operation_failed",
+                billing.clinicId,
+                {
+                  operation: "auto_create_followup",
+                  billingId: id,
+                  patientId: billing.patientId,
+                },
+                "failure",
+                e instanceof Error ? e.message : String(e),
+              );
+            } catch {
+              // Audit logging is itself best-effort — never let it mask the original error path.
+            }
           }
         }
 
@@ -1389,13 +1588,35 @@ export const appointmentBillingService = {
                 );
               }
             } else if (r.type === "expert") {
-              await expertCommissionService.createCommission(
-                r.id,
-                r.name,
-                billing,
-                r.commissionPercentage,
-                currentUserId,
+              // Same double-commission guard as the doctor branch above —
+              // exclude items this expert already earns TREATING commission
+              // on, so a referral bonus for the same expert on a different
+              // item doesn't also re-count their own item, and isn't based
+              // on the whole invoice subtotal instead of just the referred
+              // item(s).
+              const expertItemsForReferral = billing.items.filter(
+                (item: any) => item.doctorId !== r.id,
               );
+
+              if (expertItemsForReferral.length > 0) {
+                const referralBillingData = {
+                  ...billing,
+                  items: expertItemsForReferral.map((i: any) => ({
+                    ...i,
+                    doctorId: undefined,
+                    doctorName: undefined,
+                    commission: undefined,
+                  })),
+                };
+
+                await expertCommissionService.createCommission(
+                  r.id,
+                  r.name,
+                  referralBillingData,
+                  r.commissionPercentage,
+                  currentUserId,
+                );
+              }
             } else if (r.type === "staff") {
               await staffCommissionService.createRegistrationCommission(
                 r.id,
@@ -1408,6 +1629,7 @@ export const appointmentBillingService = {
                 r.commissionAmount,
                 r.commissionPercentage,
                 currentUserId,
+                billing.id,
               );
             }
           }
@@ -1536,7 +1758,10 @@ export const appointmentBillingService = {
         discountType: i.discountType,
         discountValue: i.discountValue,
         isTaxable: i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
-        taxRate: taxPercentage,
+        // Per-item override when set (e.g. a service taxed at a different
+        // rate than the clinic default) — calculateTaxBreakdown falls back
+        // to defaultTaxPercentage itself when this is undefined.
+        taxRate: i.taxRate,
       })),
       discountType,
       discountValue,
@@ -1796,12 +2021,6 @@ export const appointmentBillingService = {
         amount: -Math.abs(item.amount),
       }));
 
-      // Generate invoice number
-      const nextInvoiceNumber = await this.generateInvoiceNumber(
-        original.clinicId,
-      );
-      const creditNoteInvoiceNumber = `CN-${nextInvoiceNumber}`;
-
       // Strip id/createdAt/updatedAt before spreading — `...original` alone
       // would otherwise carry the ORIGINAL invoice's Firestore doc-id into
       // this new document as a plain field, which then silently overrides
@@ -1813,7 +2032,7 @@ export const appointmentBillingService = {
         "id" | "createdAt" | "updatedAt"
       > = {
         ...originalWithoutId,
-        invoiceNumber: creditNoteInvoiceNumber,
+        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         invoiceDate: new Date(),
         items: negativeItems,
 
@@ -1834,6 +2053,7 @@ export const appointmentBillingService = {
         // Credit note links
         isCreditNote: true,
         linkedInvoiceId: original.id,
+        linkedInvoiceNumber: original.invoiceNumber,
         creditNoteReason: reason,
         notes: `Credit Note for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
 
@@ -1853,7 +2073,24 @@ export const appointmentBillingService = {
       // createBilling already submitted this to the Java backend with
       // isReturn: true (routed to IRD's /api/billreturn) — no separate
       // sync call needed here.
-      const newCreditNoteId = await this.createBilling(creditNoteData);
+      const { id: newCreditNoteId, invoiceNumber: newCreditNoteInvoiceNumber } =
+      await this.createBilling(creditNoteData);
+
+      // Re-check hasCreditNote immediately before marking it, narrowing
+      // (though not fully closing — createBilling above is a network round
+      // trip to the Java backend that can't participate in a Firestore
+      // transaction) the window where two concurrent issueCreditNote calls
+      // could both pass the top-of-function check and both create a
+      // negative-amount credit note for the same original invoice. If a
+      // concurrent call already won, surface a clear error instead of
+      // silently double-reversing commissions/wallet refunds below.
+      const recheck = await this.getBillingById(original.id);
+
+      if (recheck?.hasCreditNote) {
+        throw new Error(
+          `A Credit Note was already issued for this invoice by another action (credit note ${newCreditNoteId} was still created for invoice ${original.invoiceNumber} and needs manual review).`,
+        );
+      }
 
       // Update original invoice to note it has been reversed, and mark it
       // so a second Credit Note can never be issued against it.
@@ -1861,7 +2098,7 @@ export const appointmentBillingService = {
         hasCreditNote: true,
         notes:
           (original.notes ? original.notes + "\n" : "") +
-          `Reversed by Credit Note ${creditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
+          `Reversed by Credit Note ${newCreditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
       });
 
       // The credit note fully offsets the original sale — reverse whatever

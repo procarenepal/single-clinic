@@ -621,9 +621,10 @@ export default function PathologyBillingTab({
     // calculation — the old inline math here taxed the entire post-discount
     // amount unconditionally with no taxable/exempt concept, and didn't
     // clamp discount against negative/over-discount the way taxEngine does.
-    // Every pathology test is marked isTaxable: true to exactly preserve
-    // today's "100% of the post-discount amount is taxed" behavior — this
-    // is a pure engine swap, not a behavior change, for the common case.
+    // Tests default to isTaxable: true (preserving the old "100% of the
+    // post-discount amount is taxed" behavior) but can now be overridden
+    // per-item, and each taxable item can carry its own tax rate instead of
+    // one clinic-wide percentage applied uniformly.
     const taxPercentage = formData.applyTax
       ? billingSettings.defaultTaxPercentage
       : 0;
@@ -635,7 +636,8 @@ export default function PathologyBillingTab({
         price: item.price,
         discountType: item.discountType,
         discountValue: item.discountValue,
-        isTaxable: true,
+        isTaxable: item.isTaxable !== undefined ? item.isTaxable : true,
+        taxRate: item.taxRate,
       })),
       discountType: formData.discountType,
       discountValue: formData.discountValue,
@@ -2024,7 +2026,7 @@ export default function PathologyBillingTab({
                   </datalist>
 
                   {/* Header row */}
-                  <div className="hidden md:grid grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 px-3 pb-2 items-center">
+                  <div className="hidden md:grid grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_0.75fr_1.2fr_auto] gap-3 px-3 pb-2 items-center">
                     <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Test Name
                     </div>
@@ -2047,6 +2049,9 @@ export default function PathologyBillingTab({
                       Disc. Val
                     </div>
                     <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                      Tax %
+                    </div>
+                    <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                       Amount
                     </div>
                     <div className="w-[32px]" />
@@ -2055,7 +2060,7 @@ export default function PathologyBillingTab({
                   {formData.items.map((item, index) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-1 md:grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
+                      className="grid grid-cols-1 md:grid-cols-[3.5fr_1.2fr_0.5fr_1fr_0.75fr_1fr_1fr_0.75fr_1.2fr_auto] gap-3 items-center p-3 md:p-1.5 border border-border-base rounded-lg md:border-transparent md:rounded-none md:border-b md:border-border-base/50 md:bg-transparent bg-surface-2/20"
                     >
                       <div>
                         <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
@@ -2185,6 +2190,31 @@ export default function PathologyBillingTab({
                               parseFloat(e.target.value) || 0,
                             )
                           }
+                        />
+                      </div>
+                      <div>
+                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
+                          Tax %
+                        </label>
+                        <input
+                          className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main disabled:opacity-50"
+                          disabled={!formData.applyTax || item.isTaxable === false}
+                          max={100}
+                          min={0}
+                          placeholder="0"
+                          type="number"
+                          value={
+                            item.taxRate ?? billingSettings?.defaultTaxPercentage ?? 0
+                          }
+                          onChange={(e) => {
+                            const n = parseFloat(e.target.value);
+
+                            updateInvoiceItem(
+                              index,
+                              "taxRate",
+                              Math.min(100, Math.max(0, isNaN(n) ? 0 : n)),
+                            );
+                          }}
                         />
                       </div>
                       <div>
@@ -2934,12 +2964,17 @@ export default function PathologyBillingTab({
                   <Input
                     description="e.g. 13 for standard Nepal VAT"
                     label="Default Tax Percentage"
+                    max={100}
+                    min={0}
                     type="number"
                     value={taxSettingsForm.defaultTaxPercentage.toString()}
                     onChange={(e) =>
                       setTaxSettingsForm((p) => ({
                         ...p,
-                        defaultTaxPercentage: parseFloat(e.target.value) || 0,
+                        defaultTaxPercentage: Math.min(
+                          100,
+                          Math.max(0, parseFloat(e.target.value) || 0),
+                        ),
                       }))
                     }
                   />

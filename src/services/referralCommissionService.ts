@@ -10,6 +10,7 @@ import {
   orderBy,
   Timestamp,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -294,53 +295,60 @@ class ReferralCommissionService {
     paidBy?: string,
   ): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, commissionId);
-      const commissionDoc = await getDoc(docRef);
-
-      if (!commissionDoc.exists()) {
-        throw new Error("Commission record not found");
-      }
-
-      const currentCommission = commissionDoc.data() as ReferralCommission;
-
       if (paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
 
-      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
-      if (paidAmount > remainingAmount) {
-        throw new Error("Payment amount cannot exceed remaining commission balance.");
-      }
+      const docRef = doc(db, this.collectionName, commissionId);
 
-      const updateData: any = {
-        paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
-        paymentMethod,
-        paidDate: Timestamp.fromDate(new Date()),
-        updatedAt: Timestamp.fromDate(new Date()),
-        status:
-          (currentCommission.paidAmount || 0) + paidAmount >=
-          currentCommission.commissionAmount
-            ? "paid"
-            : "pending",
-      };
+      // Read-validate-write inside one transaction — see the identical fix
+      // in doctorCommissionService.payCommission for the race it prevents.
+      await runTransaction(db, async (transaction) => {
+        const commissionDoc = await transaction.get(docRef);
 
-      if (paymentReference !== undefined)
-        updateData.paymentReference = paymentReference;
-      if (paymentNotes !== undefined) updateData.paymentNotes = paymentNotes;
-      if (paidBy !== undefined) updateData.paidBy = paidBy;
+        if (!commissionDoc.exists()) {
+          throw new Error("Commission record not found");
+        }
 
-      await updateDoc(docRef, updateData);
+        const currentCommission = commissionDoc.data() as ReferralCommission;
+        const remainingAmount =
+          currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
 
-      // Update partner's pending balance (decrease it as payment is made)
-      const partnerRef = doc(
-        db,
-        "referralPartners",
-        currentCommission.partnerId,
-      );
+        if (paidAmount > remainingAmount) {
+          throw new Error(
+            "Payment amount cannot exceed remaining commission balance.",
+          );
+        }
 
-      await updateDoc(partnerRef, {
-        totalCommissionBalance: increment(-paidAmount),
-        updatedAt: Timestamp.now(),
+        const updateData: any = {
+          paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
+          paymentMethod,
+          paidDate: Timestamp.fromDate(new Date()),
+          updatedAt: Timestamp.fromDate(new Date()),
+          status:
+            (currentCommission.paidAmount || 0) + paidAmount >=
+            currentCommission.commissionAmount
+              ? "paid"
+              : "pending",
+        };
+
+        if (paymentReference !== undefined)
+          updateData.paymentReference = paymentReference;
+        if (paymentNotes !== undefined) updateData.paymentNotes = paymentNotes;
+        if (paidBy !== undefined) updateData.paidBy = paidBy;
+
+        transaction.update(docRef, updateData);
+
+        const partnerRef = doc(
+          db,
+          "referralPartners",
+          currentCommission.partnerId,
+        );
+
+        transaction.update(partnerRef, {
+          totalCommissionBalance: increment(-paidAmount),
+          updatedAt: Timestamp.now(),
+        });
       });
     } catch (error) {
       console.error("Error paying referral commission:", error);
@@ -368,7 +376,13 @@ class ReferralCommissionService {
         clinicId,
       );
 
-      const stats = commissions.reduce(
+      // Cancelled/reversed commissions must not count toward totals — see
+      // the identical fix/rationale in doctorCommissionService.getCommissionStats.
+      const liveCommissions = commissions.filter(
+        (c) => c.status !== "cancelled",
+      );
+
+      const stats = liveCommissions.reduce(
         (acc, commission) => {
           acc.totalCommission += commission.commissionAmount;
           acc.paidCommission += commission.paidAmount || 0;
@@ -442,6 +456,60 @@ class ReferralCommissionService {
       });
     } catch (error) {
       console.error("Error updating referral commission status:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reduce a still-pending commission by a proportional amount (e.g. a
+   * partial package refund) rather than fully cancelling it. Never reduces
+   * below 0, and never claws back an already-paid-out portion.
+   */
+  async reduceCommissionAmount(
+    commissionId: string,
+    reduceByAmount: number,
+  ): Promise<void> {
+    if (reduceByAmount <= 0) return;
+    try {
+      const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+
+      const commissionData = commissionDoc.data() as ReferralCommission;
+
+      if (commissionData.status === "cancelled") return;
+
+      const paidAmount = commissionData.paidAmount || 0;
+      const outstanding = Math.max(
+        0,
+        commissionData.commissionAmount - paidAmount,
+      );
+      const actualReduction = Math.min(reduceByAmount, outstanding);
+
+      if (actualReduction <= 0) return;
+
+      const newCommissionAmount = Math.max(
+        0,
+        commissionData.commissionAmount - actualReduction,
+      );
+
+      const partnerRef = doc(db, "referralPartners", commissionData.partnerId);
+
+      await updateDoc(partnerRef, {
+        totalCommissionEarned: increment(-actualReduction),
+        totalCommissionBalance: increment(-actualReduction),
+        updatedAt: Timestamp.now(),
+      });
+
+      await updateDoc(docRef, {
+        commissionAmount: newCommissionAmount,
+        updatedAt: Timestamp.fromDate(new Date()),
+      });
+    } catch (error) {
+      console.error("Error reducing referral commission amount:", error);
       throw error;
     }
   }

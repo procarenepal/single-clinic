@@ -9,6 +9,7 @@ import {
   Timestamp,
   getDoc,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
@@ -31,16 +32,43 @@ class StaffCommissionService {
     commissionAmount: number,
     commissionPercentage: number,
     createdBy: string,
+    // The real invoice id this commission is earned on. Optional only for
+    // backward compatibility with any caller that hasn't been updated —
+    // omitting it disables the duplicate-guard below, since a synthesized
+    // per-call id can never collide. Every real call site should pass this.
+    billingId?: string,
   ): Promise<string | null> {
     try {
       if (commissionAmount <= 0) return null;
+
+      // Prevent duplicate commissions if this is ever called twice for the
+      // same invoice (retry after a partial failure, a double click, etc.)
+      // — previously impossible to guard at all, since billingId was
+      // synthesized fresh (`reg_staff_${Date.now()}`) on every single call
+      // regardless of which real invoice it came from.
+      if (billingId) {
+        const existingQuery = query(
+          collection(db, this.collectionName),
+          where("billingId", "==", billingId),
+          where("staffId", "==", staffId),
+        );
+        const existingDocs = await getDocs(existingQuery);
+
+        if (!existingDocs.empty) {
+          console.warn(
+            `Staff commission already exists for staff ${staffId} on billing ID ${billingId}. Skipping.`,
+          );
+
+          return null;
+        }
+      }
 
       const commissionData: Omit<StaffCommission, "id"> = {
         staffId,
         staffName,
         clinicId,
         branchId: clinicId,
-        billingId: `reg_staff_${Date.now()}`,
+        billingId: billingId || `reg_staff_${Date.now()}`,
         billingType: "appointment",
         invoiceNumber: "REG-COMM-STAFF",
         appointmentDate: new Date(),
@@ -184,6 +212,60 @@ class StaffCommissionService {
     }
   }
 
+  /**
+   * Reduce a still-pending commission by a proportional amount (e.g. a
+   * partial package refund) rather than fully cancelling it. Never reduces
+   * below 0, and never claws back an already-paid-out portion.
+   */
+  async reduceCommissionAmount(
+    commissionId: string,
+    reduceByAmount: number,
+  ): Promise<void> {
+    if (reduceByAmount <= 0) return;
+    try {
+      const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+
+      const commissionData = commissionDoc.data() as StaffCommission;
+
+      if (commissionData.status === "cancelled") return;
+
+      const paidAmount = commissionData.paidAmount || 0;
+      const outstanding = Math.max(
+        0,
+        commissionData.commissionAmount - paidAmount,
+      );
+      const actualReduction = Math.min(reduceByAmount, outstanding);
+
+      if (actualReduction <= 0) return;
+
+      const newCommissionAmount = Math.max(
+        0,
+        commissionData.commissionAmount - actualReduction,
+      );
+
+      const staffRef = doc(db, "staff", commissionData.staffId);
+
+      await updateDoc(staffRef, {
+        totalCommissionEarned: increment(-actualReduction),
+        totalCommissionBalance: increment(-actualReduction),
+        updatedAt: Timestamp.now(),
+      });
+
+      await updateDoc(docRef, {
+        commissionAmount: newCommissionAmount,
+        updatedAt: Timestamp.fromDate(new Date()),
+      });
+    } catch (error) {
+      console.error("Error reducing staff commission amount:", error);
+      throw error;
+    }
+  }
+
   // Get all commissions for a clinic
   async getCommissionsByClinic(clinicId: string): Promise<StaffCommission[]> {
     try {
@@ -220,49 +302,56 @@ class StaffCommissionService {
     paidBy?: string,
   ): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, commissionId);
-      const commissionDoc = await getDoc(docRef);
-
-      if (!commissionDoc.exists()) {
-        throw new Error("Commission record not found");
-      }
-
-      const currentCommission = commissionDoc.data() as StaffCommission;
-
       if (paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
 
-      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
-      if (paidAmount > remainingAmount) {
-        throw new Error("Payment amount cannot exceed remaining commission balance.");
-      }
+      const docRef = doc(db, this.collectionName, commissionId);
 
-      const updateData: any = {
-        paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
-        paymentMethod,
-        paidDate: Timestamp.fromDate(new Date()),
-        updatedAt: Timestamp.fromDate(new Date()),
-        status:
-          (currentCommission.paidAmount || 0) + paidAmount >=
-          currentCommission.commissionAmount
-            ? "paid"
-            : "pending",
-      };
+      // Read-validate-write inside one transaction — see the identical fix
+      // in doctorCommissionService.payCommission for the race it prevents.
+      await runTransaction(db, async (transaction) => {
+        const commissionDoc = await transaction.get(docRef);
 
-      if (paymentReference !== undefined)
-        updateData.paymentReference = paymentReference;
-      if (paymentNotes !== undefined) updateData.paymentNotes = paymentNotes;
-      if (paidBy !== undefined) updateData.paidBy = paidBy;
+        if (!commissionDoc.exists()) {
+          throw new Error("Commission record not found");
+        }
 
-      await updateDoc(docRef, updateData);
+        const currentCommission = commissionDoc.data() as StaffCommission;
+        const remainingAmount =
+          currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
 
-      // Update staff's pending balance
-      const staffRef = doc(db, "staff", currentCommission.staffId);
+        if (paidAmount > remainingAmount) {
+          throw new Error(
+            "Payment amount cannot exceed remaining commission balance.",
+          );
+        }
 
-      await updateDoc(staffRef, {
-        totalCommissionBalance: increment(-paidAmount),
-        updatedAt: Timestamp.now(),
+        const updateData: any = {
+          paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
+          paymentMethod,
+          paidDate: Timestamp.fromDate(new Date()),
+          updatedAt: Timestamp.fromDate(new Date()),
+          status:
+            (currentCommission.paidAmount || 0) + paidAmount >=
+            currentCommission.commissionAmount
+              ? "paid"
+              : "pending",
+        };
+
+        if (paymentReference !== undefined)
+          updateData.paymentReference = paymentReference;
+        if (paymentNotes !== undefined) updateData.paymentNotes = paymentNotes;
+        if (paidBy !== undefined) updateData.paidBy = paidBy;
+
+        transaction.update(docRef, updateData);
+
+        const staffRef = doc(db, "staff", currentCommission.staffId);
+
+        transaction.update(staffRef, {
+          totalCommissionBalance: increment(-paidAmount),
+          updatedAt: Timestamp.now(),
+        });
       });
     } catch (error) {
       console.error("Error paying staff commission:", error);

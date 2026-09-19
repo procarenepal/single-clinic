@@ -455,6 +455,38 @@ export const patientPackageService = {
         throw new Error("Refund amount must be greater than 0.");
       }
 
+      // Derive the same per-session wallet value consumeSession uses, so a
+      // caller-supplied refundAmount can be capped server-side instead of
+      // trusted outright — previously an arbitrary amount unrelated to the
+      // actual unused-session value could be typed in and refunded.
+      const totalSessions = data.totalSessions || 0;
+      // Used below to reverse only a PROPORTIONAL share of the commission
+      // earned on the original sale — falls back to unusedSessions/totalSessions
+      // when the package's original wallet value can't be read.
+      let commissionReversalRatio =
+        totalSessions > 0 ? unusedSessions / totalSessions : 1;
+
+      if (data.packageId && totalSessions > 0) {
+        const pkgRef = doc(db, "treatmentPackages", data.packageId);
+        const pkgSnap = await getDoc(pkgRef);
+
+        if (pkgSnap.exists()) {
+          const walletCreditAmount = pkgSnap.data().walletCreditAmount || 0;
+          const sessionCost = Math.round(walletCreditAmount / totalSessions);
+          const maxRefund = sessionCost * unusedSessions;
+
+          if (refundAmount > maxRefund) {
+            throw new Error(
+              `Refund amount cannot exceed the value of the ${unusedSessions} unused session(s): NPR ${maxRefund}.`,
+            );
+          }
+
+          if (walletCreditAmount > 0) {
+            commissionReversalRatio = refundAmount / walletCreditAmount;
+          }
+        }
+      }
+
       const { walletService } = await import("./walletService");
 
       await walletService.refundFunds(
@@ -465,6 +497,30 @@ export const patientPackageService = {
         `Refund for ${unusedSessions} unused session(s) of ${data.packageName}. Reason: ${reason}`,
         createdBy,
       );
+
+      // Reverse the PROPORTIONAL share of commission earned on the original
+      // package-sale invoice — every other cancellation/refund path in the
+      // system reverses commission (appointment/pathology cancelBilling,
+      // issueCreditNote), but this is a PARTIAL refund (unused sessions
+      // only): a full reversal would claw back commission for sessions the
+      // clinician already delivered, not just the refunded unused ones.
+      if ((data as any).billingId) {
+        try {
+          const { reverseCommissionsForBilling } = await import(
+            "./appointmentBillingService"
+          );
+
+          await reverseCommissionsForBilling(
+            (data as any).billingId,
+            commissionReversalRatio,
+          );
+        } catch (commissionError) {
+          console.error(
+            "Error reversing commission for refunded package:",
+            commissionError,
+          );
+        }
+      }
 
       await updateDoc(docRef, {
         status: "refunded",

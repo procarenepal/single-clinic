@@ -9,6 +9,7 @@ import {
   Timestamp,
   getDoc,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
@@ -53,7 +54,7 @@ class ExpertCommissionService {
             }
 
             const percentage =
-              typeof item.commission === "number"
+              typeof item.commission === "number" && item.commission >= 0
                 ? item.commission
                 : defaultExpertCommissionPercent;
 
@@ -79,6 +80,25 @@ class ExpertCommissionService {
           }, 0);
 
           if (groupCommissionAmount <= 0) return null;
+
+          // Prevent duplicate commissions if this is ever called twice for
+          // the same invoice (retry after a partial failure, a double
+          // click before the button disables, etc.) — mirrors the existing
+          // guard in doctorCommissionService.createPathologyCommissions.
+          const existingQuery = query(
+            collection(db, this.collectionName),
+            where("billingId", "==", billing.id),
+            where("expertId", "==", eId),
+          );
+          const existingDocs = await getDocs(existingQuery);
+
+          if (!existingDocs.empty) {
+            console.warn(
+              `Commission already exists for expert ${eId} on billing ID ${billing.id}. Skipping.`,
+            );
+
+            return null;
+          }
 
           const effectivePercentage =
             groupSubtotal > 0
@@ -144,18 +164,45 @@ class ExpertCommissionService {
     createdBy: string,
   ): Promise<string | null> {
     try {
+      // Prevent duplicate commissions if this is ever called twice for the
+      // same invoice (retry after a partial failure, a double click before
+      // the button disables, etc.) — mirrors the guard already present in
+      // createCommissionsFromBilling and every other commission-creation
+      // function; this one was previously missing it entirely.
+      const existingQuery = query(
+        collection(db, this.collectionName),
+        where("billingId", "==", billing.id),
+        where("expertId", "==", expertId),
+      );
+      const existingDocs = await getDocs(existingQuery);
 
+      if (!existingDocs.empty) {
+        console.warn(
+          `Commission already exists for expert ${expertId} on billing ID ${billing.id}. Skipping.`,
+        );
 
-      // Use the same discount-adjusted, pre-tax base every other commission
-      // path uses (doctorCommissionService.createCommission,
-      // expertCommissionService.createCommissionsFromBilling) — this
-      // function previously used billing.totalAmount (tax-inclusive),
-      // systematically overpaying relative to the equivalent doctor/partner
-      // referral-bonus path on the same invoice.
-      const effectiveBase =
-        (billing.subtotal || 0) -
-        (billing.itemDiscountAmount || 0) -
-        (billing.mainDiscountAmount || 0);
+        return null;
+      }
+
+      // Base the commission on the sum of the ITEMS actually passed in
+      // (discount-prorated), not the whole invoice's billing.subtotal —
+      // this function is also used for a referral bonus where the caller
+      // deliberately filters out the referrer's own treating items first
+      // (appointmentBillingService.recordPayment), and using the raw
+      // invoice-wide subtotal would double-count those excluded items and
+      // base the bonus on money the referrer didn't actually refer.
+      const totalItemAmounts =
+        (billing.subtotal || 1) - (billing.itemDiscountAmount || 0);
+      const validTotal = totalItemAmounts > 0 ? totalItemAmounts : 1;
+      const mainDiscount = billing.mainDiscountAmount || 0;
+      const discountRatio = (validTotal - mainDiscount) / validTotal;
+      const effectiveBase = (billing.items || []).reduce(
+        (sum, item: any) =>
+          item.calculateCommission === false
+            ? sum
+            : sum + item.amount * discountRatio,
+        0,
+      );
       const commissionAmount =
         (Math.max(effectiveBase, 0) * expertCommissionPercent) / 100;
 
@@ -170,8 +217,15 @@ class ExpertCommissionService {
         date: billing.invoiceDate,
         patientId: billing.patientId || "",
         patientName: billing.patientName,
-        serviceNames: billing.items.map((item) => item.appointmentTypeName),
-        totalInvoiceAmount: billing.totalAmount,
+        serviceNames: billing.items
+          .filter((item: any) => item.calculateCommission !== false)
+          .map((item) => item.appointmentTypeName),
+        // The eligible, discount-adjusted base this commission was actually
+        // computed on (matches doctorCommissionService.createCommission's
+        // groupSubtotal) — not the whole invoice's tax-inclusive total,
+        // which previously made an "effective %" computed from these two
+        // fields together come out nonsensically low.
+        totalInvoiceAmount: effectiveBase,
         commissionPercentage: expertCommissionPercent,
         commissionAmount,
         status: "pending",
@@ -260,48 +314,55 @@ class ExpertCommissionService {
     paidBy?: string,
   ): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, commissionId);
-      const commissionDoc = await getDoc(docRef);
-
-      if (!commissionDoc.exists()) {
-        throw new Error("Commission record not found");
-      }
-
-      const currentCommission = commissionDoc.data() as ExpertCommission;
-
       if (paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
 
-      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
-      if (paidAmount > remainingAmount) {
-        throw new Error("Payment amount cannot exceed remaining commission balance.");
-      }
+      const docRef = doc(db, this.collectionName, commissionId);
 
-      const updateData: any = {
-        paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
-        paymentMethod,
-        paidDate: Timestamp.fromDate(new Date()),
-        updatedAt: Timestamp.fromDate(new Date()),
-        status:
-          (currentCommission.paidAmount || 0) + paidAmount >=
-          currentCommission.commissionAmount
-            ? "paid"
-            : "pending",
-      };
+      // Read-validate-write inside one transaction — see the identical fix
+      // in doctorCommissionService.payCommission for the race it prevents.
+      await runTransaction(db, async (transaction) => {
+        const commissionDoc = await transaction.get(docRef);
 
-      if (paymentReference) updateData.paymentReference = paymentReference;
-      if (paymentNotes) updateData.paymentNotes = paymentNotes;
-      if (paidBy) updateData.paidBy = paidBy;
+        if (!commissionDoc.exists()) {
+          throw new Error("Commission record not found");
+        }
 
-      await updateDoc(docRef, updateData);
+        const currentCommission = commissionDoc.data() as ExpertCommission;
+        const remainingAmount =
+          currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
 
-      // Update expert's pending balance
-      const expertRef = doc(db, "experts", currentCommission.expertId);
+        if (paidAmount > remainingAmount) {
+          throw new Error(
+            "Payment amount cannot exceed remaining commission balance.",
+          );
+        }
 
-      await updateDoc(expertRef, {
-        totalCommissionBalance: increment(-paidAmount),
-        updatedAt: Timestamp.now(),
+        const updateData: any = {
+          paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
+          paymentMethod,
+          paidDate: Timestamp.fromDate(new Date()),
+          updatedAt: Timestamp.fromDate(new Date()),
+          status:
+            (currentCommission.paidAmount || 0) + paidAmount >=
+            currentCommission.commissionAmount
+              ? "paid"
+              : "pending",
+        };
+
+        if (paymentReference) updateData.paymentReference = paymentReference;
+        if (paymentNotes) updateData.paymentNotes = paymentNotes;
+        if (paidBy) updateData.paidBy = paidBy;
+
+        transaction.update(docRef, updateData);
+
+        const expertRef = doc(db, "experts", currentCommission.expertId);
+
+        transaction.update(expertRef, {
+          totalCommissionBalance: increment(-paidAmount),
+          updatedAt: Timestamp.now(),
+        });
       });
     } catch (error) {
       console.error("Error paying expert commission:", error);
@@ -373,6 +434,60 @@ class ExpertCommissionService {
       });
     } catch (error) {
       console.error("Error updating expert commission status:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reduce a still-pending commission by a proportional amount (e.g. a
+   * partial package refund) rather than fully cancelling it. Never reduces
+   * below 0, and never claws back an already-paid-out portion.
+   */
+  async reduceCommissionAmount(
+    commissionId: string,
+    reduceByAmount: number,
+  ): Promise<void> {
+    if (reduceByAmount <= 0) return;
+    try {
+      const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+
+      const commissionData = commissionDoc.data() as ExpertCommission;
+
+      if (commissionData.status === "cancelled") return;
+
+      const paidAmount = commissionData.paidAmount || 0;
+      const outstanding = Math.max(
+        0,
+        commissionData.commissionAmount - paidAmount,
+      );
+      const actualReduction = Math.min(reduceByAmount, outstanding);
+
+      if (actualReduction <= 0) return;
+
+      const newCommissionAmount = Math.max(
+        0,
+        commissionData.commissionAmount - actualReduction,
+      );
+
+      const expertRef = doc(db, "experts", commissionData.expertId);
+
+      await updateDoc(expertRef, {
+        totalCommissionEarned: increment(-actualReduction),
+        totalCommissionBalance: increment(-actualReduction),
+        updatedAt: Timestamp.now(),
+      });
+
+      await updateDoc(docRef, {
+        commissionAmount: newCommissionAmount,
+        updatedAt: Timestamp.fromDate(new Date()),
+      });
+    } catch (error) {
+      console.error("Error reducing expert commission amount:", error);
       throw error;
     }
   }

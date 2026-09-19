@@ -10,6 +10,7 @@ import {
   Timestamp,
   getDoc,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
@@ -84,6 +85,25 @@ class DoctorCommissionService {
           }, 0);
 
           if (groupCommissionAmount <= 0) return null;
+
+          // Prevent duplicate commissions if this is ever called twice for
+          // the same invoice (retry after a partial failure, a double
+          // click before the button disables, etc.) — mirrors the existing
+          // guard in createPathologyCommissions/createReferralCommission.
+          const existingQuery = query(
+            collection(db, this.collectionName),
+            where("billingId", "==", billing.id),
+            where("doctorId", "==", dId),
+          );
+          const existingDocs = await getDocs(existingQuery);
+
+          if (!existingDocs.empty) {
+            console.warn(
+              `Commission already exists for doctor ${dId} on billing ID ${billing.id}. Skipping.`,
+            );
+
+            return null;
+          }
 
           const effectivePercentage =
             groupSubtotal > 0
@@ -373,59 +393,65 @@ class DoctorCommissionService {
     paidBy?: string,
   ): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, commissionId);
-
-      // Get current commission data
-      const commissionDoc = await getDoc(docRef);
-
-      if (!commissionDoc.exists()) {
-        throw new Error("Commission record not found");
-      }
-
-      const currentCommission = commissionDoc.data() as DoctorCommission;
-
-      // Validate payment amount
       if (paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
 
-      const remainingAmount = currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
-      if (paidAmount > remainingAmount) {
-        throw new Error("Payment amount cannot exceed remaining commission balance.");
-      }
+      const docRef = doc(db, this.collectionName, commissionId);
 
-      // Update the commission record
-      const updateData: any = {
-        paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
-        paymentMethod,
-        paidDate: Timestamp.fromDate(new Date()),
-        updatedAt: Timestamp.fromDate(new Date()),
-        status:
-          (currentCommission.paidAmount || 0) + paidAmount >=
-          currentCommission.commissionAmount
-            ? "paid"
-            : "pending",
-      };
+      // Read-validate-write inside one transaction so two concurrent partial
+      // payments against the same commission (double-click, two staff
+      // paying simultaneously) can't both pass the remaining-balance check
+      // against a stale read and jointly overpay past commissionAmount —
+      // the same class of race appointmentBillingService.recordPayment was
+      // hardened against with runTransaction.
+      await runTransaction(db, async (transaction) => {
+        const commissionDoc = await transaction.get(docRef);
 
-      // Only include optional fields if they have values
-      if (paymentReference !== undefined) {
-        updateData.paymentReference = paymentReference;
-      }
-      if (paymentNotes !== undefined) {
-        updateData.paymentNotes = paymentNotes;
-      }
-      if (paidBy !== undefined) {
-        updateData.paidBy = paidBy;
-      }
+        if (!commissionDoc.exists()) {
+          throw new Error("Commission record not found");
+        }
 
-      await updateDoc(docRef, updateData);
+        const currentCommission = commissionDoc.data() as DoctorCommission;
+        const remainingAmount =
+          currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
 
-      // Update doctor's pending balance (decrease it as payment is made)
-      const doctorRef = doc(db, "doctors", currentCommission.doctorId);
+        if (paidAmount > remainingAmount) {
+          throw new Error(
+            "Payment amount cannot exceed remaining commission balance.",
+          );
+        }
 
-      await updateDoc(doctorRef, {
-        totalCommissionBalance: increment(-paidAmount),
-        updatedAt: Timestamp.now(),
+        const updateData: any = {
+          paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
+          paymentMethod,
+          paidDate: Timestamp.fromDate(new Date()),
+          updatedAt: Timestamp.fromDate(new Date()),
+          status:
+            (currentCommission.paidAmount || 0) + paidAmount >=
+            currentCommission.commissionAmount
+              ? "paid"
+              : "pending",
+        };
+
+        if (paymentReference !== undefined) {
+          updateData.paymentReference = paymentReference;
+        }
+        if (paymentNotes !== undefined) {
+          updateData.paymentNotes = paymentNotes;
+        }
+        if (paidBy !== undefined) {
+          updateData.paidBy = paidBy;
+        }
+
+        transaction.update(docRef, updateData);
+
+        const doctorRef = doc(db, "doctors", currentCommission.doctorId);
+
+        transaction.update(doctorRef, {
+          totalCommissionBalance: increment(-paidAmount),
+          updatedAt: Timestamp.now(),
+        });
       });
     } catch (error) {
       console.error("Error paying commission:", error);
@@ -448,7 +474,16 @@ class DoctorCommissionService {
     try {
       const commissions = await this.getCommissionsByDoctor(doctorId, clinicId);
 
-      const stats = commissions.reduce(
+      // Cancelled/reversed commissions must not count toward totals — they
+      // were never actually earned/collected (updateCommissionStatus already
+      // reverses the doctor's own totalCommissionEarned/Balance fields for
+      // these; this stats aggregate needs to agree with that, not include
+      // reversed records as if they were still live).
+      const liveCommissions = commissions.filter(
+        (c) => c.status !== "cancelled",
+      );
+
+      const stats = liveCommissions.reduce(
         (acc, commission) => {
           acc.totalCommission += commission.commissionAmount;
           acc.paidCommission += commission.paidAmount || 0;
@@ -520,6 +555,63 @@ class DoctorCommissionService {
       });
     } catch (error) {
       console.error("Error updating commission status:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reduce a still-pending commission by a proportional amount (e.g. a
+   * partial package refund for N of T sessions should only claw back N/T of
+   * the commission, leaving the clinician's earnings for sessions already
+   * delivered intact) — unlike updateCommissionStatus("cancelled"), which is
+   * all-or-nothing. Never reduces below 0, and never claws back the portion
+   * already paid out (payouts are a separate, already-settled event).
+   */
+  async reduceCommissionAmount(
+    commissionId: string,
+    reduceByAmount: number,
+  ): Promise<void> {
+    if (reduceByAmount <= 0) return;
+    try {
+      const docRef = doc(db, this.collectionName, commissionId);
+      const commissionDoc = await getDoc(docRef);
+
+      if (!commissionDoc.exists()) {
+        throw new Error("Commission not found");
+      }
+
+      const commissionData = commissionDoc.data() as DoctorCommission;
+
+      if (commissionData.status === "cancelled") return;
+
+      const paidAmount = commissionData.paidAmount || 0;
+      const outstanding = Math.max(
+        0,
+        commissionData.commissionAmount - paidAmount,
+      );
+      const actualReduction = Math.min(reduceByAmount, outstanding);
+
+      if (actualReduction <= 0) return;
+
+      const newCommissionAmount = Math.max(
+        0,
+        commissionData.commissionAmount - actualReduction,
+      );
+
+      const doctorRef = doc(db, "doctors", commissionData.doctorId);
+
+      await updateDoc(doctorRef, {
+        totalCommissionEarned: increment(-actualReduction),
+        totalCommissionBalance: increment(-actualReduction),
+        updatedAt: Timestamp.now(),
+      });
+
+      await updateDoc(docRef, {
+        commissionAmount: newCommissionAmount,
+        updatedAt: Timestamp.fromDate(new Date()),
+      });
+    } catch (error) {
+      console.error("Error reducing commission amount:", error);
       throw error;
     }
   }

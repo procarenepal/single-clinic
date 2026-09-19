@@ -779,6 +779,47 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                     </span>
                   </label>
 
+                  {/* Invoice-level discount for whichever consultation bill
+                      this check-in creates — previously there was no way to
+                      apply a discount here at all. */}
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div>
+                      <label className="block text-[10.5px] font-semibold text-text-muted mb-1">
+                        Discount Type
+                      </label>
+                      <select
+                        className="w-full h-8 px-2 text-[12px] border border-border-base rounded bg-surface text-text-main"
+                        value={quickIntakeForm.discountType}
+                        onChange={(e) =>
+                          setQuickIntakeForm((prev: any) => ({
+                            ...prev,
+                            discountType: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="percent">Percentage (%)</option>
+                        <option value="flat">Flat (NPR)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10.5px] font-semibold text-text-muted mb-1">
+                        Discount Value
+                      </label>
+                      <input
+                        className="w-full h-8 px-2 text-[12px] border border-border-base rounded bg-surface text-text-main"
+                        min={0}
+                        type="number"
+                        value={quickIntakeForm.discountValue || ""}
+                        onChange={(e) =>
+                          setQuickIntakeForm((prev: any) => ({
+                            ...prev,
+                            discountValue: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
                   {/* Payment details for Package Sales */}
                   {quickIntakeForm.appointmentTypeId.startsWith("pkg_") && (
                     <>

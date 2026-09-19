@@ -210,6 +210,7 @@ export const pharmacyService = {
             qty: number;
             price: number;
             expiryDate?: any;
+            stockDocId: string;
           }[] = [];
           let itemTotalAmount = 0;
 
@@ -261,6 +262,7 @@ export const pharmacyService = {
               qty: qtyToDeduct,
               price: batchPrice,
               expiryDate: batchStockData.expiryDate || null,
+              stockDocId: batch.docRef.id,
             });
 
             // Queue batch-wise stock document updates
@@ -414,6 +416,15 @@ export const pharmacyService = {
             discountAmount: itemDiscountAmount,
             batchNumber: batchString || "DEFAULT",
             expiryDate: finalExpiryDate,
+            // Structured per-batch breakdown (batchNumber above is only a
+            // display string) — lets a later return restore quantity to
+            // the SPECIFIC batch doc(s) this sale actually deducted from,
+            // instead of guessing at whichever medicineStock doc a plain
+            // medicineId query happens to return first.
+            batchAllocations: batchesUsed.map((b) => ({
+              stockDocId: b.stockDocId,
+              quantity: b.qty,
+            })),
           });
         }
 
@@ -497,26 +508,72 @@ export const pharmacyService = {
             .filter(Boolean)
             .join(", ");
 
-          await followupService.createFollowup({
-            clinicId: purchaseData.clinicId,
-            branchId: purchaseData.branchId || "",
-            category: "pharmacy",
-            patientId: (purchaseData as any).patientId || "walk-in-pharmacy",
-            patientName: purchaseData.patientName,
-            patientMobile: purchaseData.patientPhone || "",
-            visitDate: new Date(),
-            session: "1st",
-            initStatus: "good",
-            overallStatus: "pending",
-            product: products,
-            createdBy: purchaseData.createdBy || "system",
-          } as any);
+          // A shared constant "walk-in-pharmacy" patientId collapsed every
+          // walk-in customer's follow-ups under one identity — any query by
+          // patientId (including the dedup lookup below) would mix them
+          // together. Scope walk-ins to this specific purchase instead, so
+          // each walk-in sale gets its own distinct pseudo-identity.
+          const patientId =
+            (purchaseData as any).patientId ||
+            `walk-in-pharmacy-${purchaseIdObj.id}`;
+          const isRealPatient = Boolean((purchaseData as any).patientId);
+
+          const existing = isRealPatient
+            ? await followupService.findPendingFollowup(patientId, "pharmacy")
+            : null;
+          const nextFollowupDate = new Date();
+
+          nextFollowupDate.setDate(nextFollowupDate.getDate() + 7);
+
+          if (existing) {
+            await followupService.updateFollowup(existing.id, {
+              purchaseId: purchaseIdObj.id,
+              visitDate: new Date(),
+              product: products,
+              nextFollowupDate:
+                existing.nextFollowupDate || nextFollowupDate,
+            });
+          } else {
+            await followupService.createFollowup({
+              clinicId: purchaseData.clinicId,
+              branchId: purchaseData.branchId || "",
+              category: "pharmacy",
+              patientId,
+              patientName: purchaseData.patientName,
+              patientMobile: purchaseData.patientPhone || "",
+              purchaseId: purchaseIdObj.id,
+              visitDate: new Date(),
+              session: "1st",
+              initStatus: "good",
+              overallStatus: "pending",
+              product: products,
+              nextFollowupDate,
+              createdBy: purchaseData.createdBy || "system",
+            } as any);
+          }
           console.log(
-            "Auto-created pharmacy followup for purchase",
+            "Auto-created/updated pharmacy followup for purchase",
             purchaseIdObj.id,
           );
         } catch (e) {
           console.error("Failed to auto-create pharmacy followup:", e);
+          try {
+            const { auditLogService } = await import("./auditLogService");
+
+            await auditLogService.logEvent(
+              "operation_failed",
+              purchaseData.clinicId,
+              {
+                operation: "auto_create_followup",
+                purchaseId: purchaseIdObj.id,
+                patientId: (purchaseData as any).patientId,
+              },
+              "failure",
+              e instanceof Error ? e.message : String(e),
+            );
+          } catch {
+            // best-effort — never mask the original error path
+          }
         }
       }
       // Java backend + MySQL is the sole authority for IRD sync. It's called
@@ -867,26 +924,65 @@ export const pharmacyService = {
               .filter(Boolean)
               .join(", ") || "";
 
-          await followupService.createFollowup({
-            clinicId: prevData.clinicId,
-            branchId: prevData.branchId || "",
-            category: "pharmacy",
-            patientId: prevData.patientId || "walk-in-pharmacy",
-            patientName: patientName,
-            patientMobile: patientPhone,
-            visitDate: new Date(),
-            session: "1st",
-            initStatus: "good",
-            overallStatus: "pending",
-            product: products,
-            createdBy: prevData.createdBy || "system",
-          } as any);
+          const patientId = prevData.patientId || `walk-in-pharmacy-${id}`;
+          const isRealPatient = Boolean(prevData.patientId);
+
+          const existing = isRealPatient
+            ? await followupService.findPendingFollowup(patientId, "pharmacy")
+            : null;
+          const nextFollowupDate = new Date();
+
+          nextFollowupDate.setDate(nextFollowupDate.getDate() + 7);
+
+          if (existing) {
+            await followupService.updateFollowup(existing.id, {
+              purchaseId: id,
+              visitDate: new Date(),
+              product: products,
+              nextFollowupDate:
+                existing.nextFollowupDate || nextFollowupDate,
+            });
+          } else {
+            await followupService.createFollowup({
+              clinicId: prevData.clinicId,
+              branchId: prevData.branchId || "",
+              category: "pharmacy",
+              patientId,
+              patientName: patientName,
+              patientMobile: patientPhone,
+              purchaseId: id,
+              visitDate: new Date(),
+              session: "1st",
+              initStatus: "good",
+              overallStatus: "pending",
+              product: products,
+              nextFollowupDate,
+              createdBy: prevData.createdBy || "system",
+            } as any);
+          }
           console.log(
-            "Auto-created pharmacy followup after update for purchase",
+            "Auto-created/updated pharmacy followup after update for purchase",
             id,
           );
         } catch (e) {
           console.error("Failed to auto-create pharmacy followup:", e);
+          try {
+            const { auditLogService } = await import("./auditLogService");
+
+            await auditLogService.logEvent(
+              "operation_failed",
+              prevData.clinicId,
+              {
+                operation: "auto_create_followup",
+                purchaseId: id,
+                patientId: prevData.patientId,
+              },
+              "failure",
+              e instanceof Error ? e.message : String(e),
+            );
+          } catch {
+            // best-effort — never mask the original error path
+          }
         }
       }
     } catch (error) {
@@ -916,7 +1012,12 @@ export const pharmacyService = {
       const purchaseRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseId);
 
       const medicineItems = returnData.items;
-      const stockRefs: Record<string, any> = {};
+
+      // Fallback-only lookup (legacy purchase items with no recorded
+      // batchAllocations) — the real, batch-accurate stock refs are
+      // resolved inside the transaction below, once the original
+      // purchase's per-item batchAllocations are known.
+      const fallbackStockRefs: Record<string, any> = {};
 
       for (const item of medicineItems) {
         const q = query(
@@ -927,7 +1028,7 @@ export const pharmacyService = {
         const snap = await getDocs(q);
 
         if (!snap.empty) {
-          stockRefs[item.medicineId] = doc(
+          fallbackStockRefs[item.medicineId] = doc(
             db,
             "medicineStock",
             snap.docs[0].id,
@@ -980,14 +1081,77 @@ export const pharmacyService = {
           }
         }
 
-        // 2. Read all Stock Documents
-        const stockSnaps: Record<string, any> = {};
+        // 2. Build a restoration plan per returned item: restore quantity
+        // to the SPECIFIC batch doc(s) the original sale actually deducted
+        // from (recorded as batchAllocations at sale time), instead of
+        // whichever medicineStock doc a plain medicineId query happens to
+        // return first — otherwise stock can be "returned" into an
+        // unrelated (possibly already-expired) batch, corrupting FEFO
+        // ordering and expiry tracking even though the medicine's total
+        // stock count still ends up numerically correct.
+        const restorationPlans: Record<
+          string,
+          { stockRef: any; quantity: number }[]
+        > = {};
 
-        for (const medicineId in stockRefs) {
-          const snap = await transaction.get(stockRefs[medicineId]);
+        for (const item of medicineItems) {
+          const originalItem = originalPurchase.items?.find(
+            (i: any) => i.id === item.purchaseItemId,
+          );
+          const allocations = (originalItem as any)?.batchAllocations as
+            | { stockDocId: string; quantity: number }[]
+            | undefined;
+          const plan: { stockRef: any; quantity: number }[] = [];
 
-          if (snap.exists()) {
-            stockSnaps[medicineId] = snap.data();
+          if (allocations && allocations.length > 0) {
+            let remaining = item.quantity;
+
+            for (const alloc of allocations) {
+              if (remaining <= 0) break;
+              const take = Math.min(remaining, alloc.quantity);
+
+              if (take > 0) {
+                plan.push({
+                  stockRef: doc(db, "medicineStock", alloc.stockDocId),
+                  quantity: take,
+                });
+                remaining -= take;
+              }
+            }
+            // Shouldn't happen given the over-return guard above, but
+            // stay safe: any leftover goes onto the last known batch.
+            if (remaining > 0 && plan.length > 0) {
+              plan[plan.length - 1].quantity += remaining;
+            }
+          }
+
+          if (plan.length === 0) {
+            // Legacy item with no batchAllocations recorded — fall back
+            // to whichever medicineStock doc exists for this medicine.
+            const fallbackRef = fallbackStockRefs[item.medicineId];
+
+            if (fallbackRef) {
+              plan.push({ stockRef: fallbackRef, quantity: item.quantity });
+            }
+          }
+
+          restorationPlans[item.purchaseItemId] = plan;
+        }
+
+        // 3. Read every referenced stock doc (all transactional reads must
+        // precede writes) — cached by path since multiple items can share
+        // a batch.
+        const stockDocCache: Record<string, any> = {};
+
+        for (const plan of Object.values(restorationPlans)) {
+          for (const entry of plan) {
+            const key = entry.stockRef.path;
+
+            if (!(key in stockDocCache)) {
+              const snap = await transaction.get(entry.stockRef);
+
+              stockDocCache[key] = snap.exists() ? snap.data() : null;
+            }
           }
         }
 
@@ -1039,36 +1203,47 @@ export const pharmacyService = {
           updatedAt: now,
         });
 
-        // Update Stock and Create Transactions
+        // Update Stock and Create Transactions — restore each item's
+        // returned quantity to the specific batch doc(s) it was actually
+        // sold from (restorationPlans), not just "some" stock doc for the
+        // medicine.
         for (const item of medicineItems) {
           const itemType = purchaseItemTypeMap.get(item.purchaseItemId);
 
           if (itemType !== "medicine" && itemType !== undefined) continue;
 
-          const currentStockData = stockSnaps[item.medicineId];
+          const plan = restorationPlans[item.purchaseItemId] || [];
 
-          if (currentStockData) {
+          for (const entry of plan) {
+            const currentStockData = stockDocCache[entry.stockRef.path];
+
+            if (!currentStockData) continue;
+
             const newStock =
-              (currentStockData.currentStock || 0) + item.quantity;
+              (currentStockData.currentStock || 0) + entry.quantity;
 
-            // Update stock
-            transaction.update(stockRefs[item.medicineId], {
+            transaction.update(entry.stockRef, {
               currentStock: newStock,
               updatedBy: returnData.createdBy,
               updatedAt: now,
             });
+            // Keep the cache in sync in case a later plan entry (a
+            // different item) touches the same batch doc again in this
+            // same transaction.
+            currentStockData.currentStock = newStock;
 
-            // Create stock transaction
             const logRef = doc(collection(db, "stockTransactions"));
 
             transaction.set(logRef, {
               medicineId: item.medicineId,
               type: "returned",
-              quantity: item.quantity,
-              previousStock: currentStockData.currentStock || 0,
-              newStock: newStock,
+              quantity: entry.quantity,
+              previousStock: newStock - entry.quantity,
+              newStock,
               unitPrice: Math.abs(item.amount / item.quantity),
-              totalAmount: Math.abs(item.amount),
+              totalAmount: Math.abs(
+                (item.amount / item.quantity) * entry.quantity,
+              ),
               referenceId: originalPurchase.purchaseNo || purchaseId,
               reason: item.reason || "Return from pharmacy sale",
               clinicId: returnData.clinicId,
@@ -1144,6 +1319,13 @@ export const pharmacyService = {
               purchase.purchaseDate || new Date(),
             ),
             isReturn: true,
+            // IRD's /api/billreturn requires these two beyond a normal
+            // /api/bill — see IrdCbmsService.buildPayload's isReturn branch.
+            // purchase.purchaseNo is the exact value originally sent as this
+            // sale's invoice_number (createMedicinePurchase passes it as
+            // preAssignedInvoiceNumber), so it's the correct reference here.
+            refInvoiceNumber: purchase.purchaseNo,
+            reasonForReturn: returnData.notes,
             // Deterministic per-content key — a network-drop retry of this
             // exact submission reuses it, so the backend returns the
             // already-created invoice instead of minting a duplicate.

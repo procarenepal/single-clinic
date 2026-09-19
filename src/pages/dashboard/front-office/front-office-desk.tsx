@@ -17,7 +17,15 @@ import {
   IoKeypadOutline,
   IoPulseOutline,
 } from "react-icons/io5";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  writeBatch,
+  doc,
+  Timestamp,
+} from "firebase/firestore";
 
 import { TriageModal } from "./TriageModal";
 import { RoutingModal } from "./RoutingModal";
@@ -311,7 +319,10 @@ export default function FrontOfficeDesk() {
       console.error("Error sending patient back to lobby:", err);
       addToast({
         title: "Failed to Send Back",
-        description: "Could not update the patient's status. Please try again.",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Could not update the patient's status. Please try again.",
         color: "danger",
       });
     } finally {
@@ -330,10 +341,19 @@ export default function FrontOfficeDesk() {
       setIsTogglingHold(true);
       try {
         const turningOn = !appt.onHold;
+        // Audit trail: who put this patient on hold/resumed them and why —
+        // previously this state change left zero trace of the acting user,
+        // unlike Send Back to Lobby and routing, which already append a
+        // notes marker.
+        const priorNotes = appt.notes || "";
+        const marker = turningOn
+          ? `[Hold Started by ${currentUser?.uid || "unknown"}] ${reason || "No reason given"}`
+          : `[Hold Resumed by ${currentUser?.uid || "unknown"}]`;
 
         await appointmentService.updateAppointment(appt.id, {
           onHold: turningOn,
           onHoldReason: turningOn ? reason : "",
+          notes: priorNotes ? `${priorNotes}\n${marker}` : marker,
           updatedAt: new Date(),
         } as any);
         addToast({
@@ -348,7 +368,10 @@ export default function FrontOfficeDesk() {
         console.error("Error toggling patient hold state:", err);
         addToast({
           title: "Failed to Update Hold Status",
-          description: "Could not update the patient's status. Please try again.",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Could not update the patient's status. Please try again.",
           color: "danger",
         });
       } finally {
@@ -376,7 +399,14 @@ export default function FrontOfficeDesk() {
   const handleMarkNoShow = (appt: Appointment) =>
     runGuarded(`mark-no-show-${appt.id}`, async () => {
       try {
+        const priorNotes = appt.notes || "";
+        const marker = `[Marked No-Show by ${currentUser?.uid || "unknown"}]`;
+
         await appointmentService.updateAppointmentStatus(appt.id, "no-show");
+        await appointmentService.updateAppointment(appt.id, {
+          notes: priorNotes ? `${priorNotes}\n${marker}` : marker,
+          updatedAt: new Date(),
+        } as any);
         addToast({
           title: "Marked No-Show",
           description: `${getPatientName(appt.patientId)} did not check in for their appointment.`,
@@ -386,7 +416,41 @@ export default function FrontOfficeDesk() {
         console.error("Error marking appointment as no-show:", err);
         addToast({
           title: "Failed to Mark No-Show",
-          description: "Could not update the appointment. Please try again.",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Could not update the appointment. Please try again.",
+          color: "danger",
+        });
+      }
+    });
+
+  // Undo path for a mistaken no-show — previously "no-show" was a dead-end
+  // status with no way back to "scheduled" anywhere in the UI.
+  const handleReinstateNoShow = (appt: Appointment) =>
+    runGuarded(`reinstate-no-show-${appt.id}`, async () => {
+      try {
+        const priorNotes = appt.notes || "";
+        const marker = `[Reinstated to Scheduled by ${currentUser?.uid || "unknown"}]`;
+
+        await appointmentService.updateAppointmentStatus(appt.id, "scheduled");
+        await appointmentService.updateAppointment(appt.id, {
+          notes: priorNotes ? `${priorNotes}\n${marker}` : marker,
+          updatedAt: new Date(),
+        } as any);
+        addToast({
+          title: "Reinstated",
+          description: `${getPatientName(appt.patientId)} is back on the schedule.`,
+          color: "success",
+        });
+      } catch (err) {
+        console.error("Error reinstating no-show appointment:", err);
+        addToast({
+          title: "Failed to Reinstate",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Could not update the appointment. Please try again.",
           color: "danger",
         });
       }
@@ -413,14 +477,21 @@ export default function FrontOfficeDesk() {
         );
         const next = !siblingAppts.some((a) => a.isUrgent);
 
-        await Promise.all(
-          siblingAppts.map((a) =>
-            appointmentService.updateAppointment(a.id, {
-              isUrgent: next,
-              updatedAt: new Date(),
-            } as any),
-          ),
-        );
+        // A batched write is all-or-nothing — previously this used
+        // Promise.all, so a mid-flight network failure on one sibling could
+        // leave others updated and others not, permanently desyncing the
+        // header badge from the individual rows with no indication of
+        // which ones actually changed.
+        const batch = writeBatch(db);
+
+        for (const a of siblingAppts) {
+          batch.update(doc(db, "appointments", a.id), {
+            isUrgent: next,
+            updatedAt: Timestamp.now(),
+          });
+        }
+        await batch.commit();
+
         addToast({
           title: next ? "Marked Urgent" : "Urgent Flag Cleared",
           description: next
@@ -432,7 +503,10 @@ export default function FrontOfficeDesk() {
         console.error("Error toggling urgent flag:", err);
         addToast({
           title: "Failed to Update Urgent Flag",
-          description: "Could not update the patient's status. Please try again.",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Could not update the patient's status. Please try again.",
           color: "danger",
         });
       }
@@ -460,7 +534,10 @@ export default function FrontOfficeDesk() {
       console.error("Error toggling doctor duty status:", err);
       addToast({
         title: "Failed to Update Status",
-        description: "Could not update this doctor's duty status.",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Could not update this doctor's duty status.",
         color: "danger",
       });
     } finally {
@@ -483,7 +560,10 @@ export default function FrontOfficeDesk() {
       console.error("Error toggling expert duty status:", err);
       addToast({
         title: "Failed to Update Status",
-        description: "Could not update this expert's duty status.",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Could not update this expert's duty status.",
         color: "danger",
       });
     } finally {
@@ -555,6 +635,10 @@ export default function FrontOfficeDesk() {
   const [routingChargeConsultation, setRoutingChargeConsultation] =
     useState(false);
   const [routingApplyTax, setRoutingApplyTax] = useState(false);
+  const [routingDiscountType, setRoutingDiscountType] = useState<
+    "flat" | "percent"
+  >("percent");
+  const [routingDiscountValue, setRoutingDiscountValue] = useState(0);
 
   // Procedure log modal state
   const [isProcedureModalOpen, setIsProcedureModalOpen] = useState(false);
@@ -732,6 +816,8 @@ export default function FrontOfficeDesk() {
     paymentReference: "",
     generateConsultationBill: true,
     applyTax: true,
+    discountType: "percent" as "flat" | "percent",
+    discountValue: 0,
     startSessionInstantly: false,
     sendDirectlyToCabin: false,
     addDoctorCommission: true,
@@ -777,6 +863,8 @@ export default function FrontOfficeDesk() {
       paymentReference: "",
       generateConsultationBill: true,
       applyTax: false,
+      discountType: "percent",
+      discountValue: 0,
       startSessionInstantly: false,
       sendDirectlyToCabin: false,
       addDoctorCommission: true,
@@ -952,6 +1040,12 @@ export default function FrontOfficeDesk() {
       },
       (err) => {
         console.error("Live appointments subscription error:", err);
+        addToast({
+          title: "Live Updates Interrupted",
+          description:
+            "Lost connection to the live patient queue — the board may be showing stale data. Please refresh.",
+          color: "danger",
+        });
       },
     );
 
@@ -973,6 +1067,12 @@ export default function FrontOfficeDesk() {
       (err) => {
         console.error("Live billings subscription error:", err);
         setLoading(false);
+        addToast({
+          title: "Live Updates Interrupted",
+          description:
+            "Lost connection to live billing data — invoice status shown may be stale. Please refresh.",
+          color: "danger",
+        });
       },
     );
 
@@ -995,6 +1095,12 @@ export default function FrontOfficeDesk() {
       },
       (err) => {
         console.error("Live prescriptions subscription error:", err);
+        addToast({
+          title: "Live Updates Interrupted",
+          description:
+            "Lost connection to live prescription data — the Pharmacy stage indicator may be stale.",
+          color: "warning",
+        });
       },
     );
 
@@ -1106,6 +1212,12 @@ export default function FrontOfficeDesk() {
     // clinic-wide setting when the caller doesn't have its own checkbox
     // for this yet, so existing call sites keep working unchanged.
     applyTax?: boolean,
+    // Optional discount for this consultation invoice — previously
+    // hardcoded to 0/none with no way for any caller to supply one.
+    // Undefined/0 preserves today's no-discount behavior for existing
+    // call sites.
+    discountType?: "flat" | "percent",
+    discountValue?: number,
   ) => {
     if (!clinicId) return;
 
@@ -1131,6 +1243,12 @@ export default function FrontOfficeDesk() {
             "Error checking existing consultation billing status:",
             err,
           );
+          addToast({
+            title: "Could Not Verify Existing Invoice",
+            description:
+              "Reusing the existing consultation invoice without confirming it isn't cancelled — please double-check billing for this patient.",
+            color: "warning",
+          });
 
           // Can't confirm the existing invoice is safe to replace — fail
           // safe and reuse it rather than risk creating a duplicate.
@@ -1399,8 +1517,8 @@ export default function FrontOfficeDesk() {
         : 0;
       const totals = appointmentBillingService.calculateInvoiceTotals(
         items,
-        "percent",
-        0,
+        discountType || "percent",
+        discountValue || 0,
         taxPercentage,
       );
 
@@ -1429,10 +1547,10 @@ export default function FrontOfficeDesk() {
         invoiceDate: new Date(),
         items: items,
         subtotal: totals.subtotal,
-        itemDiscountAmount: 0,
-        mainDiscountAmount: 0,
-        discountType: "percent" as const,
-        discountValue: 0,
+        itemDiscountAmount: totals.itemDiscountAmount,
+        mainDiscountAmount: totals.mainDiscountAmount,
+        discountType: discountType || ("percent" as const),
+        discountValue: discountValue || 0,
         discountAmount: totals.totalDiscount,
         taxPercentage,
         taxAmount: totals.taxAmount,
@@ -1752,6 +1870,8 @@ export default function FrontOfficeDesk() {
               true,
               undefined,
               routingApplyTax,
+              routingDiscountType,
+              routingDiscountValue,
             )) || "";
         }
 
@@ -1782,7 +1902,10 @@ export default function FrontOfficeDesk() {
         console.error("Error routing patient:", err);
         addToast({
           title: "Routing Failed",
-          description: "Failed to update cabin routing.",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Failed to update cabin routing.",
           color: "danger",
         });
       }
@@ -1794,8 +1917,38 @@ export default function FrontOfficeDesk() {
     cabinName: string,
   ) => {
     try {
+      // This direct cabin-edit path previously had no occupancy check at
+      // all (unlike handleConfirmRoute), so staff could manually place a
+      // patient into a room another patient was already routed to — apply
+      // the same exclusive-cabin conflict check here.
+      if (cabinName && EXCLUSIVE_CABIN_NAMES.has(cabinName)) {
+        const conflictingAppt = appointments.find(
+          (a) =>
+            a.id !== appointmentId &&
+            a.status === "in-progress" &&
+            a.cabinName === cabinName,
+        );
+
+        if (conflictingAppt) {
+          addToast({
+            title: "Room/Cabin Occupied",
+            description: `${cabinName} is currently occupied by ${getPatientName(conflictingAppt.patientId)}. Please choose a different room.`,
+            color: "warning",
+          });
+
+          return;
+        }
+      }
+
+      // Audit trail: who (re)assigned the cabin — this direct edit path
+      // previously left zero trace, unlike Send Back to Lobby/routing.
+      const targetAppt = appointments.find((a) => a.id === appointmentId);
+      const priorNotes = targetAppt?.notes || "";
+      const marker = `[Cabin set to "${cabinName || "Unassigned"}" by ${currentUser?.uid || "unknown"}]`;
+
       await appointmentService.updateAppointment(appointmentId, {
         cabinName: cabinName,
+        notes: priorNotes ? `${priorNotes}\n${marker}` : marker,
         updatedAt: new Date(),
       } as any);
       addToast({
@@ -1807,7 +1960,10 @@ export default function FrontOfficeDesk() {
       console.error("Error assigning cabin:", err);
       addToast({
         title: "Assignment Failed",
-        description: "Could not update Room/Cabin. Please try again.",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Could not update Room/Cabin. Please try again.",
         color: "danger",
       });
     }
@@ -2105,30 +2261,60 @@ export default function FrontOfficeDesk() {
           return;
         }
 
-        // Check state integrity to prevent premature settlement
-        const isFullyPaid =
-          appt.billingStatus === "paid" || appt.paymentStatus === "paid";
-        let hasOutstandingBalance = !isFullyPaid;
+        // Check state integrity to prevent premature settlement. An
+        // appointment can carry TWO independent billing links —
+        // consultationBillingId (doctor fee, set by createConsultationBill)
+        // and billingId (a separate procedure/appointment-type charge, set
+        // by ensureBookedAppointmentTypeBilled) — each updated by a
+        // different code path. Previously only ONE was checked here
+        // (whichever billingId happened to be truthy, or the single
+        // appt.billingStatus mirror field), so a patient with a paid
+        // consultation fee but an unpaid procedure charge (or vice versa)
+        // could be checked out with real money still owed on the OTHER
+        // invoice. Every linked bill that actually exists must be
+        // paid/zero before checkout proceeds.
+        const linkedBillIds = Array.from(
+          new Set(
+            [appt.billingId, (appt as any).consultationBillingId].filter(
+              (id): id is string => Boolean(id),
+            ),
+          ),
+        );
 
-        const pendingBillId =
-          appt.billingId || (appt as any).consultationBillingId;
+        let hasOutstandingBalance: boolean;
 
-        if (pendingBillId) {
-          const matchingBill = billings.find((b) => b.id === pendingBillId);
+        if (linkedBillIds.length > 0) {
+          hasOutstandingBalance = linkedBillIds.some((id) => {
+            const matchingBill = billings.find((b) => b.id === id);
 
-          if (matchingBill && matchingBill.totalAmount <= 0) {
-            hasOutstandingBalance = false;
-          }
+            if (!matchingBill) return false; // can't find it — don't block on missing data
+            if (matchingBill.totalAmount <= 0) return false;
+
+            return !(
+              matchingBill.status === "paid" ||
+              matchingBill.paymentStatus === "paid"
+            );
+          });
+        } else {
+          // No linked bill at all — fall back to the appointment's own
+          // mirrored status fields (e.g. a legacy record).
+          hasOutstandingBalance = !(
+            appt.billingStatus === "paid" || appt.paymentStatus === "paid"
+          );
         }
 
         if (hasOutstandingBalance) {
           addToast({
             title: "Premature Settlement",
             description:
-              "Cannot complete checkout. Outstanding balance exists on this appointment.",
+              "Cannot complete checkout. Outstanding balance exists on this appointment — record payment first.",
             color: "warning",
           });
-          // We will not block it entirely if it's a zero-amount bill or handled externally, but warn.
+          // Actually block — this toast previously described a rule that
+          // was never enforced, letting a patient be checked out (and
+          // getPatientStage/downstream UI treat the visit as fully done)
+          // while still owing money, with no re-flag anywhere afterward.
+          return;
         }
 
         await appointmentService.updateAppointment(appointmentId, {
@@ -2306,13 +2492,34 @@ export default function FrontOfficeDesk() {
         currentUser?.uid || "front-desk",
       );
 
-      // 2. Add metadata record directly on the appointment to state triage is completed
+      // 2. Add metadata record directly on the appointment to state triage is
+      // completed. Append-only — a prior routing/send-back-to-lobby marker
+      // (e.g. "[Routed to: Doctor]", "[Sent Back to Lobby] ...") must not be
+      // silently erased by triage the way a flat overwrite previously did.
+      const priorNotes = selectedAppointment.notes || "";
+      const triageNoteLine = `[Triage Vitals Recorded] BP: ${formattedBP}, Temp: ${formattedTemp}\nComplaints: ${formattedComplaints}`;
       const updateData: any = {
-        notes: `[Triage Vitals Recorded] BP: ${formattedBP}, Temp: ${formattedTemp}\nComplaints: ${formattedComplaints}`,
+        notes: priorNotes ? `${priorNotes}\n${triageNoteLine}` : triageNoteLine,
         updatedAt: new Date(),
       };
 
-      if (routeTarget) {
+      // Only actually route to in-progress if a clinician for that target is
+      // really assigned — otherwise this appointment silently lands on the
+      // Expert (or Doctor) tab with nobody actually responsible for it.
+      const hasAssignedClinicianForTarget =
+        routeTarget === "doctor"
+          ? Boolean(
+              selectedAppointment.doctorId &&
+                selectedAppointment.doctorId !== "unassigned",
+            )
+          : routeTarget === "expert"
+            ? Boolean(
+                (selectedAppointment as any).assignedExpertId &&
+                  (selectedAppointment as any).assignedExpertId !== "unassigned",
+              )
+            : false;
+
+      if (routeTarget && hasAssignedClinicianForTarget) {
         updateData.status = "in-progress";
         // Fallback to assigned cabin if it's already selected
         updateData.cabinName = selectedAppointment.cabinName || "";
@@ -2323,6 +2530,12 @@ export default function FrontOfficeDesk() {
         ) {
           updateData.doctorConsultationCompleted = true;
         }
+      } else if (routeTarget && !hasAssignedClinicianForTarget) {
+        addToast({
+          title: "No Clinician Assigned",
+          description: `Vitals were saved, but the patient was NOT routed — no ${routeTarget} is assigned to this appointment yet.`,
+          color: "warning",
+        });
       }
 
       await appointmentService.updateAppointment(
@@ -2779,9 +2992,14 @@ export default function FrontOfficeDesk() {
     | "expert"
     | "billing"
     | "pharmacy"
+    | "no-show"
     | "completed" => {
     const status = appt.status?.toLowerCase();
 
+    // Previously fell through every branch to the default "completed" case
+    // below — a no-show appointment rendered identically to a genuinely
+    // completed visit anywhere the UI groups/filters by stage.
+    if (status === "no-show") return "no-show";
     if (status === "scheduled") return "scheduled";
     if (status === "confirmed") {
       // Check if triage vitals note header prefix exists inside notes field
@@ -3021,6 +3239,8 @@ export default function FrontOfficeDesk() {
         routingApplyTax={routingApplyTax}
         routingCabin={routingCabin}
         routingChargeConsultation={routingChargeConsultation}
+        routingDiscountType={routingDiscountType}
+        routingDiscountValue={routingDiscountValue}
         routingDoctorId={routingDoctorId}
         routingExpertId={routingExpertId}
         routingTarget={routingTarget}
@@ -3028,12 +3248,16 @@ export default function FrontOfficeDesk() {
         setRoutingApplyTax={setRoutingApplyTax}
         setRoutingCabin={setRoutingCabin}
         setRoutingChargeConsultation={setRoutingChargeConsultation}
+        setRoutingDiscountType={setRoutingDiscountType}
+        setRoutingDiscountValue={setRoutingDiscountValue}
         setRoutingDoctorId={setRoutingDoctorId}
         setRoutingExpertId={setRoutingExpertId}
         onClose={() => {
           setIsRoutingModalOpen(false);
           setRoutingExpertId("");
           setRoutingDoctorId("");
+          setRoutingDiscountType("percent");
+          setRoutingDiscountValue(0);
         }}
         onConfirm={handleConfirmRoute}
       />
@@ -3689,6 +3913,8 @@ export default function FrontOfficeDesk() {
                 true,
                 quickIntakeForm.clinicians,
                 quickIntakeForm.applyTax,
+                quickIntakeForm.discountType,
+                quickIntakeForm.discountValue,
               );
             } catch (billErr) {
               console.error(
@@ -3829,6 +4055,8 @@ export default function FrontOfficeDesk() {
               shouldGenerateConsFee,
               quickIntakeForm.clinicians,
               quickIntakeForm.applyTax,
+              quickIntakeForm.discountType,
+              quickIntakeForm.discountValue,
             );
           } catch (billErr) {
             console.error(
@@ -3976,6 +4204,8 @@ export default function FrontOfficeDesk() {
         paymentReference: "",
         generateConsultationBill: true,
         applyTax: false,
+        discountType: "percent",
+        discountValue: 0,
         addDoctorCommission: true,
         addExpertCommission: true,
         startSessionInstantly: false,
@@ -5661,6 +5891,7 @@ export default function FrontOfficeDesk() {
               loading={loading}
               onToggleUrgent={handleToggleUrgent}
               onMarkNoShow={handleMarkNoShow}
+              onReinstateNoShow={handleReinstateNoShow}
               onSendBack={setSendBackAppt}
               onToggleHold={handleHoldButtonClick}
             />

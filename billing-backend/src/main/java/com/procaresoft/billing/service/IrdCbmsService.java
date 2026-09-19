@@ -55,7 +55,7 @@ public class IrdCbmsService {
         ClinicIrdConfig config = configOpt.get();
 
         String baseUrl = resolveBaseUrl(config);
-        Map<String, Object> payload = buildPayload(invoice, config, fiscalYear);
+        Map<String, Object> payload = buildPayload(invoice, config, fiscalYear, isReturn);
 
         if ("mock".equals(baseUrl)) {
             log.info("MOCK IRD sync for invoice {} (clinic {})", invoice.getInvoiceNumber(), invoice.getClinicId());
@@ -148,7 +148,7 @@ public class IrdCbmsService {
         return ENVIRONMENT_ENDPOINTS.getOrDefault(config.getIrdEnvironment(), "mock");
     }
 
-    private Map<String, Object> buildPayload(Invoice invoice, ClinicIrdConfig config, String fiscalYear) {
+    private Map<String, Object> buildPayload(Invoice invoice, ClinicIrdConfig config, String fiscalYear, boolean isReturn) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("username", config.getIrdApiUsername());
         payload.put("password", config.getIrdApiPassword());
@@ -177,6 +177,20 @@ public class IrdCbmsService {
         payload.put("tax_exempted_sales", invoice.getExemptAmount());
         payload.put("isrealtime", true);
         payload.put("datetimeClient", java.time.LocalDateTime.now().toString());
+
+        // /api/billreturn requires 4 fields beyond /api/bill's set (CBMS API
+        // Technical Document, "API to post credit note (sales return)"):
+        // ref_invoice_number, credit_note_number, credit_note_date,
+        // reason_for_return. credit_note_number/date are just this credit
+        // note's own invoice_number/invoice_date — only the reference to the
+        // ORIGINAL invoice and the reason are separately persisted fields.
+        if (isReturn) {
+            payload.put("ref_invoice_number", invoice.getRefInvoiceNumber() != null ? invoice.getRefInvoiceNumber() : "");
+            payload.put("credit_note_number", invoice.getInvoiceNumber());
+            payload.put("credit_note_date", invoice.getInvoiceDate() != null ? invoice.getInvoiceDate().toString() : "");
+            payload.put("reason_for_return", invoice.getReasonForReturn() != null ? invoice.getReasonForReturn() : "");
+        }
+
         return payload;
     }
 

@@ -34,6 +34,22 @@ public class InvoiceSequenceService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public String generateNextInvoiceNumber(String clinicId, String fiscalYear) {
+        return generateNextInvoiceNumber(clinicId, fiscalYear, null);
+    }
+
+    /**
+     * Same as {@link #generateNextInvoiceNumber(String, String)}, but with an
+     * optional caller-supplied prefix (e.g. the clinic's configured
+     * invoicePrefix billing setting, or "CN" for a credit note) instead of
+     * the hardcoded "INV" — previously every invoice used the hardcoded
+     * prefix regardless of what a clinic's billing settings said, and
+     * credit notes had no way to be distinguished by number at all. The
+     * underlying counter/sequence is unchanged — only the string label
+     * varies, so numbering stays one continuous gapless sequence per
+     * clinic+fiscal year as IRD expects.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String generateNextInvoiceNumber(String clinicId, String fiscalYear, String prefix) {
         if (clinicId == null || clinicId.isBlank()) {
             throw new IllegalArgumentException("clinicId is required to generate an invoice number");
         }
@@ -43,7 +59,8 @@ public class InvoiceSequenceService {
 
         invoiceSequenceRepository.upsertIncrement(clinicId, fiscalYear);
         Long lastNumber = invoiceSequenceRepository.findLastNumber(clinicId, fiscalYear);
+        String effectivePrefix = (prefix == null || prefix.isBlank()) ? PREFIX : prefix;
 
-        return PREFIX + "-" + fiscalYear + "-" + String.format("%04d", lastNumber);
+        return effectivePrefix + "-" + fiscalYear + "-" + String.format("%04d", lastNumber);
     }
 }

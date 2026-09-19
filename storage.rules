@@ -89,14 +89,18 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
-    // User profile avatars (EditProfileModal.tsx, path avatars/{uid}/...) —
-    // same missing-rule gap as above. Images only, max 2MB. Auth required.
-    match /avatars/{allPaths=**} {
+    // User profile avatars (EditProfileModal.tsx, path avatars/{uid}/...).
+    // Read stays clinic-wide (profile photos are commonly shown to all
+    // staff), but write/delete is scoped to the owning uid — any
+    // authenticated user could previously overwrite or delete any other
+    // user's avatar. Images only, max 2MB.
+    match /avatars/{uid}/{allPaths=**} {
       allow read: if request.auth != null;
       allow create, update: if request.auth != null
+        && request.auth.uid == uid
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // Generic uploads via FileUploadComponent.tsx (e.g. HR staff photos) —

@@ -73,6 +73,28 @@ export interface InvoiceRequestDto {
   isReturn?: boolean;
 
   /**
+   * Required (per IRD's CBMS API) when isReturn is true — the invoice
+   * number of the original invoice this credit note reverses. Sent to IRD
+   * as ref_invoice_number. Ignored when isReturn is false.
+   */
+  refInvoiceNumber?: string;
+
+  /**
+   * Required (per IRD's CBMS API) when isReturn is true — the stated reason
+   * for the return. Sent to IRD as reason_for_return. Ignored when isReturn
+   * is false.
+   */
+  reasonForReturn?: string;
+
+  /**
+   * Optional prefix to use instead of the Java backend's hardcoded "INV"
+   * default (e.g. the clinic's configured invoicePrefix billing setting,
+   * or "CN" for a credit note). Ignored when preAssignedInvoiceNumber is
+   * also supplied.
+   */
+  invoicePrefix?: string;
+
+  /**
    * Client-generated key identifying this specific create-invoice attempt.
    * Lets a retry after a dropped connection return the already-created
    * invoice instead of creating a duplicate — see src/utils/idempotencyKey.ts.

@@ -47,8 +47,6 @@ export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngi
 
   let grossSubtotal = 0;
   let totalItemDiscount = 0;
-  let grossTaxableSubtotal = 0;
-  let grossExemptSubtotal = 0;
 
   // Step 1: Evaluate item-level subtotals & item-level discounts
   const processedItems = items.map((item) => {
@@ -73,12 +71,6 @@ export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngi
     grossSubtotal += itemGross;
     totalItemDiscount += itemDisc;
 
-    if (itemIsTaxable) {
-      grossTaxableSubtotal += itemNet;
-    } else {
-      grossExemptSubtotal += itemNet;
-    }
-
     return {
       ...item,
       quantity: qty,
@@ -87,7 +79,12 @@ export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngi
       itemDiscount: itemDisc,
       netBeforeMainDiscount: itemNet,
       isTaxable: itemIsTaxable,
-      taxRate: item.taxRate ?? defaultTaxPercentage,
+      // Clamped defense-in-depth: settings validation should already
+      // reject an out-of-range tax percentage before it's saved, but a
+      // negative/absurd rate reaching this engine (e.g. legacy data,
+      // an untrusted per-item override) must not produce a negative or
+      // wildly inflated tax amount.
+      taxRate: Math.min(100, Math.max(0, item.taxRate ?? defaultTaxPercentage)),
     };
   });
 
@@ -102,26 +99,30 @@ export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngi
   }
   mainDiscount = Math.max(0, mainDiscount);
 
-  // Step 3: Allocate main discount pro-rata between Taxable and Exempt subtotals
-  let taxableMainDiscount = 0;
-  let exemptMainDiscount = 0;
-
-  if (netSubtotalAfterItemDiscounts > 0 && mainDiscount > 0) {
-    const taxableRatio = grossTaxableSubtotal / netSubtotalAfterItemDiscounts;
-    taxableMainDiscount = mainDiscount * taxableRatio;
-    exemptMainDiscount = mainDiscount - taxableMainDiscount;
-  }
-
-  // Step 4: Calculate net Taxable Amount and net Exempt Amount
-  const netTaxableSales = Math.max(0, grossTaxableSubtotal - taxableMainDiscount);
-  const netExemptSales = Math.max(0, grossExemptSubtotal - exemptMainDiscount);
-
-  // Step 5: Compute VAT (13%) on net Taxable Sales
+  // Step 3-5: Allocate the main discount pro-rata onto EACH item (not just
+  // a taxable/exempt bucket split), then compute VAT per item at that
+  // item's OWN clamped tax rate and sum — items can carry genuinely
+  // different rates (e.g. a 13% service alongside a 0%/exempt one), so a
+  // single blended rate over the whole invoice would be wrong whenever
+  // rates differ across items.
+  let netTaxableSales = 0;
+  let netExemptSales = 0;
   let vatAmount = 0;
-  if (grossTaxableSubtotal > 0 && isTaxEnabled) {
-    const effectiveRate = defaultTaxPercentage / 100;
-    vatAmount = netTaxableSales * effectiveRate;
-  }
+
+  processedItems.forEach((item) => {
+    const itemMainDiscountShare =
+      netSubtotalAfterItemDiscounts > 0 && mainDiscount > 0
+        ? mainDiscount * (item.netBeforeMainDiscount / netSubtotalAfterItemDiscounts)
+        : 0;
+    const netItemAmount = Math.max(0, item.netBeforeMainDiscount - itemMainDiscountShare);
+
+    if (item.isTaxable && isTaxEnabled) {
+      netTaxableSales += netItemAmount;
+      vatAmount += netItemAmount * (item.taxRate / 100);
+    } else {
+      netExemptSales += netItemAmount;
+    }
+  });
 
   // Round currency outputs to 2 decimal places cleanly
   const subtotal = Math.round(grossSubtotal * 100) / 100;

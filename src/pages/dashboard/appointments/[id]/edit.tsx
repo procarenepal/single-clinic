@@ -16,9 +16,16 @@ import { addToast } from "@/components/ui/toast";
 import { appointmentService } from "@/services/appointmentService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { adToBS, bsToAD } from "@/utils/dateConverter";
-import { Appointment, Patient, Doctor, AppointmentType } from "@/types/models";
+import {
+  Appointment,
+  Patient,
+  Doctor,
+  Expert,
+  AppointmentType,
+} from "@/types/models";
 
 // ── Custom UI Helpers (Clinic Clarity) ─────────────────────────────────────
 function CustomSearchSelect({
@@ -190,6 +197,7 @@ export default function EditAppointmentPage() {
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>(
     [],
   );
@@ -202,6 +210,7 @@ export default function EditAppointmentPage() {
     appointmentBS: "",
     startTime: "",
     endTime: "",
+    clinicianType: "doctor" as "doctor" | "expert",
     doctorId: "",
     appointmentTypeId: "",
     status: "scheduled" as
@@ -253,10 +262,11 @@ export default function EditAppointmentPage() {
         setAppointment(appointmentData);
 
         // Load all required data in parallel
-        const [patientsData, doctorsData, appointmentTypesData] =
+        const [patientsData, doctorsData, expertsData, appointmentTypesData] =
           await Promise.all([
             patientService.getPatientsByClinic(clinicId),
             doctorService.getDoctorsByClinic(clinicId),
+            expertService.getExpertsByClinic(clinicId),
             appointmentTypeService.getAppointmentTypesByClinic(
               clinicId,
             ),
@@ -264,7 +274,12 @@ export default function EditAppointmentPage() {
 
         setPatients(patientsData);
         setDoctors(doctorsData);
+        setExperts(expertsData);
         setAppointmentTypes(appointmentTypesData);
+
+        const hasExpert =
+          (appointmentData as any).assignedExpertId &&
+          (appointmentData as any).assignedExpertId !== "unassigned";
 
         // Initialize form data
         setFormData({
@@ -282,7 +297,10 @@ export default function EditAppointmentPage() {
             : "",
           startTime: appointmentData.startTime || "",
           endTime: appointmentData.endTime || "",
-          doctorId: appointmentData.doctorId,
+          clinicianType: hasExpert ? "expert" : "doctor",
+          doctorId: hasExpert
+            ? (appointmentData as any).assignedExpertId
+            : appointmentData.doctorId,
           appointmentTypeId: appointmentData.appointmentTypeId,
           status: appointmentData.status,
           reason: appointmentData.reason || "",
@@ -373,7 +391,19 @@ export default function EditAppointmentPage() {
       // Prepare update data
       const updateData: Partial<Appointment> = {
         patientId: formData.patientId,
-        doctorId: formData.doctorId,
+        doctorId:
+          formData.clinicianType === "doctor"
+            ? formData.doctorId
+            : "unassigned",
+        // Explicit null (not undefined) when switching to a doctor —
+        // appointmentService.updateAppointment strips undefined fields
+        // before writing, so an undefined value here would silently leave
+        // a stale assignedExpertId from a prior expert assignment in
+        // place instead of actually clearing it.
+        assignedExpertId:
+          formData.clinicianType === "expert"
+            ? formData.doctorId
+            : (null as any),
         appointmentTypeId: formData.appointmentTypeId,
         appointmentDate: new Date(formData.appointmentDate),
         appointmentBS: formData.appointmentBS
@@ -524,18 +554,53 @@ export default function EditAppointmentPage() {
                   }
                 />
 
-                {/* Doctor Selection */}
+                {/* Clinician Type */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-medium text-mountain-700">
+                    Clinician Type
+                  </label>
+                  <select
+                    className="flex-1 w-full text-[13.5px] px-3 h-[38px] bg-white border border-mountain-200 rounded outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-100 text-mountain-800"
+                    value={formData.clinicianType}
+                    onChange={(e) => {
+                      const newType = e.target.value as "doctor" | "expert";
+
+                      setFormData((prev) => ({
+                        ...prev,
+                        clinicianType: newType,
+                        doctorId: "",
+                      }));
+                    }}
+                  >
+                    <option value="doctor">Doctor</option>
+                    <option value="expert">Expert</option>
+                  </select>
+                </div>
+
+                {/* Doctor/Expert Selection */}
                 <CustomSearchSelect
                   required
-                  items={doctors
-                    .filter((_d: any) => _d.isActive !== false)
-                    .map((d) => ({
-                      id: d.id,
-                      primary: d.name,
-                      secondary: d.speciality,
-                    }))}
-                  label="Doctor"
-                  placeholder="Search and select doctor"
+                  items={
+                    formData.clinicianType === "doctor"
+                      ? doctors
+                          .filter((_d: any) => _d.isActive !== false)
+                          .map((d) => ({
+                            id: d.id,
+                            primary: d.name,
+                            secondary: d.speciality,
+                          }))
+                      : experts
+                          .filter((_e: any) => _e.isActive !== false)
+                          .map((e) => ({
+                            id: e.id,
+                            primary: e.name,
+                            secondary: (e as any).speciality || "Expert",
+                          }))
+                  }
+                  label={
+                    formData.clinicianType === "doctor" ? "Doctor" : "Expert"
+                  }
+                  placeholder={`Search and select ${formData.clinicianType}`}
                   value={formData.doctorId}
                   onChange={(id) =>
                     setFormData((prev) => ({ ...prev, doctorId: id }))

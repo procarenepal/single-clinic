@@ -139,7 +139,14 @@ export const dailyReportService = {
         doctorName: string,
         createdDate: Date | null,
         paymentHistory: any[] | undefined,
+        status?: string,
       ) => {
+        // A cancelled invoice never counts as revenue — matches how the
+        // Reports > Pathology tab already excludes cancelled invoices;
+        // this shared helper previously didn't, so a same-day cancelled
+        // appointment invoice still inflated Daily Report revenue.
+        if (status === "cancelled") return;
+
         let paidToday = 0;
         let hasPaymentToday = false;
 
@@ -210,6 +217,7 @@ export const dailyReportService = {
           billing.doctorName || "",
           billing.invoiceDate ? new Date(billing.invoiceDate) : null,
           billing.paymentHistory,
+          (billing as any).status,
         );
       });
 
@@ -219,12 +227,27 @@ export const dailyReportService = {
             ? 0
             : (purchase as any).balanceAmount || purchase.netAmount || 0;
 
+        // Net out returns — a returned sale shouldn't overstate revenue.
+        const returnedAmount =
+          (purchase as any).totalReturnedAmount &&
+          (purchase as any).totalReturnedAmount > 0
+            ? (purchase as any).totalReturnedAmount
+            : ((purchase as any).returns ?? []).reduce(
+                (retSum: number, r: any) =>
+                  retSum + Math.abs(r.totalAmount || 0),
+                0,
+              );
+        const netAmount = Math.max(
+          0,
+          (purchase.netAmount || 0) - returnedAmount,
+        );
+
         processInvoice(
           purchase.id,
           "pharmacy",
           purchase.purchaseNo,
           purchase.patientName || "Walk-in Customer",
-          purchase.netAmount || 0,
+          netAmount,
           bal,
           purchase.paymentStatus || "unpaid",
           "Pharmacy Counter",
@@ -245,6 +268,7 @@ export const dailyReportService = {
           "Pathology Lab",
           billing.invoiceDate ? new Date(billing.invoiceDate) : null,
           billing.paymentHistory,
+          (billing as any).status,
         );
       });
 

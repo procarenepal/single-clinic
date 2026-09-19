@@ -149,7 +149,25 @@ const SendSMSTab: React.FC = () => {
   const checkFunctionHealth = async () => {
     setFunctionStatus("checking");
     try {
-      setFunctionStatus("online");
+      if (!clinicId) {
+        setFunctionStatus("offline");
+
+        return;
+      }
+
+      // Not a real provider reachability probe (no such lightweight
+      // endpoint exists) — but this at least confirms the clinic has SMS
+      // configured at all, instead of unconditionally claiming "online"
+      // regardless of whether an API key/sender ID/URL is even set.
+      const settings = await smsService.getSMSSettings(clinicId);
+      const isConfigured = !!(
+        settings?.isActive &&
+        settings.apiKey &&
+        settings.senderId &&
+        settings.apiUrl
+      );
+
+      setFunctionStatus(isConfigured ? "online" : "offline");
     } catch (e) {
       setFunctionStatus("offline");
       addToast({

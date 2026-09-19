@@ -23,6 +23,14 @@ interface RoutingModalProps {
    * may create — only relevant while routingChargeConsultation is checked. */
   routingApplyTax?: boolean;
   setRoutingApplyTax?: React.Dispatch<React.SetStateAction<boolean>>;
+  /** Discount for the consultation bill this routing action may create —
+   * only relevant while routingChargeConsultation is checked. */
+  routingDiscountType?: "flat" | "percent";
+  setRoutingDiscountType?: React.Dispatch<
+    React.SetStateAction<"flat" | "percent">
+  >;
+  routingDiscountValue?: number;
+  setRoutingDiscountValue?: React.Dispatch<React.SetStateAction<number>>;
   experts?: any[];
   routingExpertId?: string;
   setRoutingExpertId?: React.Dispatch<React.SetStateAction<string>>;
@@ -57,6 +65,10 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
   setRoutingChargeConsultation,
   routingApplyTax = false,
   setRoutingApplyTax,
+  routingDiscountType = "percent",
+  setRoutingDiscountType,
+  routingDiscountValue = 0,
+  setRoutingDiscountValue,
   experts = [],
   routingExpertId = "",
   setRoutingExpertId,
@@ -165,6 +177,45 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
                       Apply Tax to Invoice
                     </label>
                   )}
+                  {routingChargeConsultation &&
+                    setRoutingDiscountType &&
+                    setRoutingDiscountValue && (
+                      <div className="grid grid-cols-2 gap-2 ml-5">
+                        <div>
+                          <label className="block text-[10.5px] font-semibold text-text-muted mb-1">
+                            Discount Type
+                          </label>
+                          <select
+                            className="w-full h-8 px-2 text-[12px] border border-border-base rounded bg-surface text-text-main"
+                            value={routingDiscountType}
+                            onChange={(e) =>
+                              setRoutingDiscountType(
+                                e.target.value as "flat" | "percent",
+                              )
+                            }
+                          >
+                            <option value="percent">Percentage (%)</option>
+                            <option value="flat">Flat (NPR)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10.5px] font-semibold text-text-muted mb-1">
+                            Discount Value
+                          </label>
+                          <input
+                            className="w-full h-8 px-2 text-[12px] border border-border-base rounded bg-surface text-text-main"
+                            min={0}
+                            type="number"
+                            value={routingDiscountValue || ""}
+                            onChange={(e) =>
+                              setRoutingDiscountValue(
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                    )}
                 </>
               )}
             </div>

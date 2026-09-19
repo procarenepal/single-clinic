@@ -434,6 +434,11 @@ interface PurchaseItem {
   isPriceOverridden?: boolean;
   discountType?: "flat" | "percentage";
   discountValue?: number;
+  /** Per-item VAT rate, e.g. 13 — auto-filled from the selected medicine's
+   * catalog taxRate, editable. Falls back to purchaseForm.taxPercentage
+   * when unset. Sale price fields above are MRP (tax-INCLUSIVE); taxable/
+   * VAT are back-calculated from this rate, not added on top. */
+  taxRate?: number;
 }
 
 interface MedicinePurchaseReturnItem {
@@ -1278,7 +1283,11 @@ export default function PharmacyPage() {
     }
   }, [activeTab, clinicId]);
 
-  // Calculate amounts when items change
+  // Calculate amounts when items change. Sale prices entered per item are
+  // MRP — tax-INCLUSIVE, per Nepal pharmacy convention — so taxable/VAT are
+  // back-calculated per item at that item's OWN rate (item.taxRate, falling
+  // back to purchaseForm.taxPercentage), then summed, instead of adding one
+  // blended rate on top of the total the way this used to work.
   useEffect(() => {
     const total = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
 
@@ -1291,12 +1300,25 @@ export default function PharmacyPage() {
       discountAmount = (total * purchaseForm.discountPercentage) / 100;
     }
 
-    const taxableAmount = Number(
-      Math.max(0, total - discountAmount).toFixed(2),
-    );
-    const taxAmount = Number(
-      ((taxableAmount * purchaseForm.taxPercentage) / 100).toFixed(2),
-    );
+    // Discount is applied proportionally across items (same ratio for
+    // every item) so the taxable/VAT split still adds up to total - discount.
+    const discountRatio = total > 0 ? Math.min(1, discountAmount / total) : 0;
+
+    let taxableAmount = 0;
+    let taxAmount = 0;
+
+    purchaseItems.forEach((item) => {
+      const rate = item.taxRate ?? purchaseForm.taxPercentage;
+      const grossMrp = item.amount * (1 - discountRatio);
+      const itemTaxable = rate > 0 ? grossMrp / (1 + rate / 100) : grossMrp;
+      const itemVat = grossMrp - itemTaxable;
+
+      taxableAmount += itemTaxable;
+      taxAmount += itemVat;
+    });
+
+    taxableAmount = Number(Math.max(0, taxableAmount).toFixed(2));
+    taxAmount = Number(Math.max(0, taxAmount).toFixed(2));
     const netAmount = Number(
       (taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0)).toFixed(
         2,
@@ -1332,10 +1354,19 @@ export default function PharmacyPage() {
       return isToday(purchaseDate);
     });
 
-    const total = todayPurchases.reduce(
-      (sum, purchase) => sum + (purchase.netAmount || 0),
-      0,
-    );
+    const total = todayPurchases.reduce((sum, purchase) => {
+      // Net out returns — matches getDailyReportSummary's formula below, so
+      // a returned sale doesn't overstate revenue indefinitely.
+      const returnedAmount =
+        purchase.totalReturnedAmount && purchase.totalReturnedAmount > 0
+          ? purchase.totalReturnedAmount
+          : (purchase.returns ?? []).reduce(
+              (retSum, r) => retSum + Math.abs(r.totalAmount || 0),
+              0,
+            );
+
+      return sum + Math.max(0, (purchase.netAmount || 0) - returnedAmount);
+    }, 0);
 
     setDailySalesTotal(total);
 
@@ -2014,6 +2045,12 @@ export default function PharmacyPage() {
                 updatedItem.salePrice = defaultPrice; // Keep for backward compatibility
                 updatedItem.regularSalePrice = defaultPrice; // Default regular price
                 updatedItem.schemeSalePrice = defaultPrice; // Default scheme price (can be updated)
+                // Auto-fill this line's tax rate from the product's catalog
+                // rate (editable per line) — falls back to the purchase-level
+                // rate elsewhere when the medicine isn't VAT-applied/configured.
+                updatedItem.taxRate = selectedMedicine.isVatApplied
+                  ? selectedMedicine.vatPercentage
+                  : undefined;
                 updatedItem.expiryDate = toISODateString(
                   selectedMedicine.expiryDate,
                 );
@@ -7381,7 +7418,7 @@ export default function PharmacyPage() {
                                     return (
                                       <CustomInput
                                         required
-                                        label="Regular Sale Price (NPR)"
+                                        label="Regular MRP, incl. tax (NPR)"
                                         startContent={
                                           <span className="text-[11px] text-text-muted/40">
                                             NPR
@@ -7407,7 +7444,7 @@ export default function PharmacyPage() {
                                     return (
                                       <CustomInput
                                         required
-                                        label="Scheme Sale Price (NPR)"
+                                        label="Scheme MRP, incl. tax (NPR)"
                                         startContent={
                                           <span className="text-[11px] text-text-muted/40">
                                             NPR
@@ -7434,7 +7471,7 @@ export default function PharmacyPage() {
                               ) : (
                                 <CustomInput
                                   required
-                                  label="Sale Price"
+                                  label="MRP, incl. tax (NPR)"
                                   startContent={
                                     <span className="text-[11px] text-text-muted/40">
                                       NPR
@@ -7526,6 +7563,27 @@ export default function PharmacyPage() {
                                     parseFloat(e.target.value) || 0,
                                   )
                                 }
+                              />
+                            </div>
+                            <div className="col-span-12 sm:col-span-4">
+                              <CustomInput
+                                label="Tax Rate (% of MRP)"
+                                max="100"
+                                min="0"
+                                step="any"
+                                type="number"
+                                value={(
+                                  item.taxRate ?? purchaseForm.taxPercentage
+                                ).toString()}
+                                onChange={(e: any) => {
+                                  const n = parseFloat(e.target.value);
+
+                                  updatePurchaseItem(
+                                    item.id,
+                                    "taxRate",
+                                    Math.min(100, Math.max(0, isNaN(n) ? 0 : n)),
+                                  );
+                                }}
                               />
                             </div>
 

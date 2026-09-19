@@ -48,6 +48,12 @@ interface LocalPurchaseItem {
   salePrice: number;
   quantity: number;
   amount: number;
+  /** Per-item VAT rate, e.g. 13 — auto-filled from the selected medicine's
+   * catalog rate, editable. Falls back to purchaseForm.taxPercentage when
+   * unset. salePrice is MRP (tax-INCLUSIVE); taxable/VAT are back-calculated
+   * from it, not added on top — matches the create-purchase flow in
+   * pharmacy.tsx. */
+  taxRate?: number;
 }
 
 export default function PurchaseEditPage() {
@@ -151,6 +157,7 @@ export default function PurchaseEditPage() {
             salePrice: item.salePrice,
             quantity: item.quantity,
             amount: item.amount,
+            taxRate: (item as any).taxRate,
           }),
         );
 
@@ -184,11 +191,31 @@ export default function PurchaseEditPage() {
     loadData();
   }, [purchaseId, clinicId, userData?.branchId, navigate]);
 
-  // Calculate amounts when items change
+  // Calculate amounts when items change. Sale prices are MRP — tax-INCLUSIVE
+  // — so VAT is back-calculated per item at that item's own rate (falling
+  // back to purchaseForm.taxPercentage), then summed, matching the
+  // create-purchase flow in pharmacy.tsx rather than adding one blended
+  // rate on top of the total.
   useEffect(() => {
     const total = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
-    const taxAmount = Math.round((total * purchaseForm.taxPercentage) / 100);
-    const netAmount = Math.round(total + taxAmount - purchaseForm.discount);
+    const discountRatio =
+      total > 0 ? Math.min(1, purchaseForm.discount / total) : 0;
+
+    let taxAmount = 0;
+
+    purchaseItems.forEach((item) => {
+      const rate = item.taxRate ?? purchaseForm.taxPercentage;
+      const grossMrp = item.amount * (1 - discountRatio);
+      const itemTaxable = rate > 0 ? grossMrp / (1 + rate / 100) : grossMrp;
+
+      taxAmount += grossMrp - itemTaxable;
+    });
+
+    taxAmount = Math.round(Math.max(0, taxAmount));
+    // total already includes tax (MRP-inclusive) — netAmount is just the
+    // discounted total, not total-plus-tax-again. taxAmount is kept as the
+    // informational taxable/VAT split for reporting/IRD, not an addition.
+    const netAmount = Math.round(total - purchaseForm.discount);
 
     setPurchaseForm((prev) => ({
       ...prev,
@@ -241,6 +268,9 @@ export default function PurchaseEditPage() {
               if (selectedMedicine) {
                 updatedItem.productName = selectedMedicine.name;
                 updatedItem.salePrice = selectedMedicine.price || 0;
+                updatedItem.taxRate = selectedMedicine.isVatApplied
+                  ? selectedMedicine.vatPercentage
+                  : undefined;
                 updatedItem.expiryDate = selectedMedicine.expiryDate
                   ? selectedMedicine.expiryDate.toISOString().split("T")[0]
                   : "";
@@ -325,6 +355,7 @@ export default function PurchaseEditPage() {
           quantity: item.quantity,
           amount: item.amount,
           type: item.type,
+          taxRate: item.taxRate,
         }));
 
       const updateData = {
@@ -641,7 +672,7 @@ export default function PurchaseEditPage() {
 
                       <Input
                         isRequired
-                        label="Sale Price *"
+                        label="MRP, incl. tax (NPR) *"
                         startContent="NPR"
                         type="number"
                         value={(item.salePrice || 0).toString()}
@@ -652,6 +683,25 @@ export default function PurchaseEditPage() {
                             parseFloat(e.target.value) || 0,
                           )
                         }
+                      />
+
+                      <Input
+                        label="Tax Rate (% of MRP)"
+                        max={100}
+                        min={0}
+                        type="number"
+                        value={(
+                          item.taxRate ?? purchaseForm.taxPercentage
+                        ).toString()}
+                        onChange={(e) => {
+                          const n = parseFloat(e.target.value);
+
+                          updatePurchaseItem(
+                            item.id,
+                            "taxRate",
+                            Math.min(100, Math.max(0, isNaN(n) ? 0 : n)),
+                          );
+                        }}
                       />
 
                       <Input

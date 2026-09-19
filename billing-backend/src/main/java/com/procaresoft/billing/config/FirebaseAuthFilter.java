@@ -56,7 +56,13 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
 
         try {
-            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token);
+            // checkRevoked=true costs an extra Firebase Auth lookup per
+            // request, but without it a deactivated/revoked user's
+            // still-unexpired token (issued up to 1hr ago) keeps working
+            // against this billing/IRD-sync API even after an admin
+            // deactivates them — deactivation today is only enforced
+            // client-side (ProtectedRoute), not by token verification.
+            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token, true);
             request.setAttribute("userUid", decodedToken.getUid());
             request.setAttribute("clinicId", resolveClinicId(decodedToken.getUid()));
 

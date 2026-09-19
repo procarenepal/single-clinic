@@ -1564,49 +1564,6 @@ export default function HRPage() {
     }
   };
 
-  const injectTestAbsences = async () => {
-    if (!clinicId || staff.length === 0) return;
-    const testStaff =
-      staff.find((s) => s.name.toUpperCase().includes("ALINA")) || staff[0];
-
-    try {
-      setLoading(true);
-      const now = new Date();
-
-      for (let i = 1; i <= 6; i++) {
-        const pastDate = new Date();
-
-        pastDate.setDate(now.getDate() - i);
-
-        await hrService.markAttendance({
-          staffId: testStaff.id,
-          staffName: testStaff.name,
-          date: pastDate,
-          checkIn: null,
-          checkOut: null,
-          status: "absent",
-          clinicId: clinicId,
-          branchId: branchId || "",
-        });
-      }
-      addToast({
-        title: "Test Data Added",
-        description: `Added 6 absences for ${testStaff.name} to test deductions!`,
-        color: "success",
-      });
-      loadData();
-    } catch (e) {
-      console.error(e);
-      addToast({
-        title: "Error",
-        description: "Failed to add test data",
-        color: "danger",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const markPresent = async (member: StaffMember) => {
     if (!clinicId) {
       addToast({
@@ -1714,13 +1671,6 @@ export default function HRPage() {
             onPress={() => setIsHolidaysModalOpen(true)}
           >
             Manage Holidays
-          </Button>
-          <Button
-            className="font-semibold h-7 px-3 text-[11px] bg-amber-500 text-white"
-            radius="sm"
-            onPress={injectTestAbsences}
-          >
-            Inject Test Absences
           </Button>
           <Button
             className="font-semibold h-7 px-3 text-[11px]"

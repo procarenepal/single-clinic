@@ -347,6 +347,19 @@ export const bedService = {
    */
   async deleteBed(id: string): Promise<void> {
     try {
+      const activeAllotmentsQuery = query(
+        collection(db, BED_ALLOTMENTS_COLLECTION),
+        where("bedId", "==", id),
+        where("status", "==", "active"),
+      );
+      const activeAllotmentsSnap = await getDocs(activeAllotmentsQuery);
+
+      if (!activeAllotmentsSnap.empty) {
+        throw new Error(
+          "Cannot delete a bed with an active allotment — discharge the patient first.",
+        );
+      }
+
       const bedRef = doc(db, BEDS_COLLECTION, id);
 
       await updateDoc(bedRef, {

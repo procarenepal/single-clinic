@@ -48,6 +48,43 @@ const formatCurrency = (amount: number): string => {
 };
 
 /**
+ * Same "created on this exact date" check the Daily Report screen uses
+ * (daily-report/index.tsx's isCreatedOnSelectedDate) — revenue/invoice-count
+ * totals must only include invoices actually created that day, not every
+ * invoice that merely received a payment that day, or the exported
+ * document silently disagrees with what's on screen for the same date.
+ */
+const isCreatedOnDate = (billingDate: Date | string, reportDate: Date): boolean => {
+  const d = new Date(billingDate);
+
+  return (
+    d.getFullYear() === reportDate.getFullYear() &&
+    d.getMonth() === reportDate.getMonth() &&
+    d.getDate() === reportDate.getDate()
+  );
+};
+
+/**
+ * A returned sale's netAmount is never reduced on the purchase document
+ * itself (only totalReturnedAmount/returns[] record it) — every revenue
+ * sum over purchases must subtract this or a returned sale overstates
+ * pharmacy revenue indefinitely. Matches the same formula already used
+ * correctly in pharmacy.tsx's getDailyReportSummary.
+ */
+const netPurchaseAmount = (purchase: MedicinePurchase): number => {
+  const returnedAmount =
+    (purchase as any).totalReturnedAmount &&
+    (purchase as any).totalReturnedAmount > 0
+      ? (purchase as any).totalReturnedAmount
+      : ((purchase as any).returns ?? []).reduce(
+          (retSum: number, r: any) => retSum + Math.abs(r.totalAmount || 0),
+          0,
+        );
+
+  return Math.max(0, (purchase.netAmount || 0) - returnedAmount);
+};
+
+/**
  * Export daily report to Excel
  */
 export const exportDailyReportToExcel = (
@@ -87,6 +124,15 @@ export const exportDailyReportToExcel = (
     }
     addEmptyRow(2);
 
+    // Revenue/invoice-count metrics only count invoices actually created on
+    // this date (matches the Daily Report screen's invoicesCreatedToday) —
+    // Cash Collected intentionally still sums over every invoice touched
+    // today regardless of when it was created (cash-flow, not accrual),
+    // same split the screen uses.
+    const billingCreatedToday = reportData.billing.filter((b) =>
+      isCreatedOnDate(b.date, date),
+    );
+
     // Summary Section
     addRow(["Summary"]);
     addRow(["Metric", "Value"]);
@@ -104,12 +150,12 @@ export const exportDailyReportToExcel = (
       "Cancelled Appointments",
       reportData.appointments.filter((a) => a.status === "cancelled").length,
     ]);
-    addRow(["Total Invoices", reportData.billing.length]);
+    addRow(["Total Invoices", billingCreatedToday.length]);
     addRow([
       "Total Revenue",
       formatCurrency(
         Math.round(
-          reportData.billing.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+          billingCreatedToday.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
         ),
       ),
     ]);
@@ -125,7 +171,7 @@ export const exportDailyReportToExcel = (
       "Total Due",
       formatCurrency(
         Math.round(
-          reportData.billing.reduce(
+          billingCreatedToday.reduce(
             (sum, b) => sum + (b.balanceAmount || 0),
             0,
           ),
@@ -277,6 +323,14 @@ export const exportDailyReportToPDF = (
     doc.text("Summary", margin, yPosition);
     yPosition += 8;
 
+    // Revenue/invoice-count metrics only count invoices actually created on
+    // this date (matches the Daily Report screen and the Excel export) —
+    // Cash Collected intentionally still sums over every invoice touched
+    // today regardless of when it was created.
+    const billingCreatedToday = reportData.billing.filter((b) =>
+      isCreatedOnDate(b.date, date),
+    );
+
     const summaryData = [
       ["Metric", "Value"],
       ["Total New Patients", reportData.patients.length.toString()],
@@ -299,12 +353,12 @@ export const exportDailyReportToPDF = (
           .filter((a) => a.status === "cancelled")
           .length.toString(),
       ],
-      ["Total Invoices", reportData.billing.length.toString()],
+      ["Total Invoices", billingCreatedToday.length.toString()],
       [
         "Total Revenue",
         formatCurrency(
           Math.round(
-            reportData.billing.reduce(
+            billingCreatedToday.reduce(
               (sum, b) => sum + (b.totalAmount || 0),
               0,
             ),
@@ -323,7 +377,7 @@ export const exportDailyReportToPDF = (
         "Total Due",
         formatCurrency(
           Math.round(
-            reportData.billing.reduce(
+            billingCreatedToday.reduce(
               (sum, b) => sum + (b.balanceAmount || 0),
               0,
             ),
@@ -525,7 +579,7 @@ export const exportPharmacyDailyReportToExcel = (
 
     // Calculate summary
     const totalSales = Math.round(
-      purchases.reduce((sum, p) => sum + (p.netAmount || 0), 0),
+      purchases.reduce((sum, p) => sum + netPurchaseAmount(p), 0),
     );
     const totalItems = purchases.reduce(
       (sum, p) =>
@@ -697,7 +751,7 @@ export const exportPharmacyDailyReportToPDF = (
 
     // Calculate summary
     const totalSales = Math.round(
-      purchases.reduce((sum, p) => sum + (p.netAmount || 0), 0),
+      purchases.reduce((sum, p) => sum + netPurchaseAmount(p), 0),
     );
     const totalItems = purchases.reduce(
       (sum, p) =>

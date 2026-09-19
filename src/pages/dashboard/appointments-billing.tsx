@@ -227,6 +227,7 @@ function FlatInput({
   hint,
   required,
   min,
+  max,
   step,
 }: {
   label: string;
@@ -240,6 +241,7 @@ function FlatInput({
   hint?: string;
   required?: boolean;
   min?: string;
+  max?: string;
   step?: string;
 }) {
   return (
@@ -259,6 +261,7 @@ function FlatInput({
         <input
           className="flex-1 w-full px-2.5 text-[12.5px] bg-transparent focus:outline-none text-text-main placeholder:text-text-muted/40 disabled:text-text-muted/30"
           disabled={disabled}
+          max={max}
           min={min}
           placeholder={placeholder}
           step={step}
@@ -1602,7 +1605,7 @@ export default function AppointmentBillingPage() {
                   {formData.items.map((item, i) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 border border-border-base rounded-lg items-end bg-surface-2/40 shadow-none"
+                      className="grid grid-cols-1 md:grid-cols-[repeat(13,minmax(0,1fr))] gap-3 p-3 border border-border-base rounded-lg items-end bg-surface-2/40 shadow-none"
                     >
                       <div className="md:col-span-3">
                         <SearchSelect
@@ -1720,6 +1723,27 @@ export default function AppointmentBillingPage() {
                               commission: parseFloat(v) || 0,
                             })
                           }
+                        />
+                      </div>
+                      <div className="md:col-span-1">
+                        <FlatInput
+                          disabled={!formData.applyTax}
+                          label="Tax %"
+                          max="100"
+                          min="0"
+                          type="number"
+                          value={(
+                            item.taxRate ??
+                            billingSettings?.defaultTaxPercentage ??
+                            13
+                          ).toString()}
+                          onChange={(v) => {
+                            const n = parseFloat(v);
+
+                            updateInvoiceItem(i, {
+                              taxRate: Math.min(100, Math.max(0, isNaN(n) ? 0 : n)),
+                            });
+                          }}
                         />
                       </div>
                       <div className="md:col-span-2 flex items-end gap-2">
@@ -2369,12 +2393,17 @@ export default function AppointmentBillingPage() {
                   <FlatInput
                     hint="e.g. 13 for standard Nepal VAT"
                     label="Default Tax Percentage"
+                    max="100"
+                    min="0"
                     type="number"
                     value={taxSettingsForm.defaultTaxPercentage.toString()}
                     onChange={(v) =>
                       setTaxSettingsForm((p) => ({
                         ...p,
-                        defaultTaxPercentage: parseFloat(v) || 0,
+                        defaultTaxPercentage: Math.min(
+                          100,
+                          Math.max(0, parseFloat(v) || 0),
+                        ),
                       }))
                     }
                   />

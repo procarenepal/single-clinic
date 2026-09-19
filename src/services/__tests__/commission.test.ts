@@ -10,6 +10,12 @@ vi.mock("firebase/firestore", () => ({
   doc: vi.fn(),
   addDoc: vi.fn(),
   updateDoc: vi.fn(),
+  query: vi.fn(),
+  where: vi.fn(),
+  orderBy: vi.fn(),
+  // No pre-existing commission for this billing/clinician in any of these
+  // tests — the duplicate-guard query should always see "nothing found".
+  getDocs: vi.fn().mockResolvedValue({ empty: true, docs: [] }),
   increment: vi.fn((val) => val),
   Timestamp: {
     fromDate: vi.fn((date) => date),

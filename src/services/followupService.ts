@@ -3,6 +3,7 @@ import type {
   FollowupStatus,
   FollowupInitStatus,
   FollowupUpdatedStatus,
+  FollowupCategory,
 } from "@/types/models";
 
 import {
@@ -22,6 +23,21 @@ import {
 import { db } from "@/config/firebase";
 
 const COLLECTION = "patientFollowups";
+
+// ─── Status helpers ─────────────────────────────────────────────────────────
+// overallStatus conflates two concerns: true LIFECYCLE state (is this
+// follow-up still open) and OUTCOME/sentiment (how did the call go). The
+// lifecycle-closing values are exactly these two — everything else
+// (satisfy/not-satisfy/will-come/complain/angry/no-answer/wrong-no) is an
+// outcome value that leaves the follow-up open unless overallStatus is also
+// separately set to "completed"/"cancelled". Use this helper everywhere
+// instead of ad-hoc `!== "completed" && !== "cancelled"` checks, so the
+// definition of "still open" lives in exactly one place.
+const CLOSED_STATUSES: FollowupStatus[] = ["completed", "cancelled"];
+
+export function isFollowupOpen(status: FollowupStatus): boolean {
+  return !CLOSED_STATUSES.includes(status);
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -43,6 +59,8 @@ function mapDoc(id: string, data: any): PatientFollowup {
     patientName: data.patientName || "",
     patientMobile: data.patientMobile || "",
     appointmentId: data.appointmentId,
+    billingId: data.billingId,
+    purchaseId: data.purchaseId,
     visitDate: toDate(data.visitDate),
     session: data.session,
     initStatus: (data.initStatus as FollowupInitStatus) || "neutral",
@@ -56,6 +74,7 @@ function mapDoc(id: string, data: any): PatientFollowup {
     },
     nextFollowupDate: toDate(data.nextFollowupDate),
     followedBy: data.followedBy,
+    followedByUserId: data.followedByUserId,
     sessionStatuses: data.sessionStatuses || {},
     service: data.service,
     product: data.product,
@@ -140,7 +159,12 @@ export const followupService = {
   async getFollowups(
     clinicId: string,
   ): Promise<PatientFollowup[]> {
-    const q = query(collection(db, COLLECTION));
+    // Previously ignored clinicId entirely and queried the whole collection
+    // unscoped — harmless today only because this deployment is
+    // permanently single-clinic (see single-clinic-deployment convention
+    // elsewhere in the app), but the parameter existing and being silently
+    // discarded was actively misleading.
+    const q = query(collection(db, COLLECTION), where("clinicId", "==", clinicId));
 
     const snap = await getDocs(q);
     const results = snap.docs.map((d) => mapDoc(d.id, d.data()));
@@ -179,7 +203,8 @@ export const followupService = {
   },
 
   /**
-   * Get follow-ups that are due today or in the next N days.
+   * Get follow-ups that are due today or in the next N days (upcoming only
+   * — excludes anything already overdue; see getOverdueFollowups for that).
    */
   async getDueFollowups(
     clinicId: string,
@@ -192,12 +217,64 @@ export const followupService = {
     cutoff.setDate(cutoff.getDate() + days);
 
     return all.filter((f) => {
-      if (f.overallStatus === "completed" || f.overallStatus === "cancelled")
-        return false;
-      const dates = Object.values(f.followupDates).filter(Boolean) as Date[];
+      if (!isFollowupOpen(f.overallStatus)) return false;
+      const dates = [
+        ...Object.values(f.followupDates),
+        f.nextFollowupDate,
+      ].filter(Boolean) as Date[];
 
       return dates.some((d) => d >= now && d <= cutoff);
     });
+  },
+
+  /**
+   * Get follow-ups that are OVERDUE — still open (not completed/cancelled)
+   * with every one of their set dates already in the past, OR with no date
+   * set at all. Previously there was no overdue concept anywhere: a
+   * follow-up due days ago just silently dropped out of the Today/Tomorrow
+   * filters with nothing surfacing it again. A follow-up with no date set
+   * at all (every auto-created one, before this fix) is treated as overdue
+   * too — it's been sitting unactioned since creation with no way to ever
+   * become "due" on its own.
+   */
+  async getOverdueFollowups(clinicId: string): Promise<PatientFollowup[]> {
+    const all = await this.getFollowups(clinicId);
+    const now = new Date();
+
+    return all.filter((f) => {
+      if (!isFollowupOpen(f.overallStatus)) return false;
+
+      const dates = [
+        ...Object.values(f.followupDates),
+        f.nextFollowupDate,
+      ].filter(Boolean) as Date[];
+
+      if (dates.length === 0) return true; // never scheduled — needs attention
+      return dates.every((d) => d < now);
+    });
+  },
+
+  /**
+   * Find an existing PENDING follow-up for a patient (optionally scoped to
+   * one category), so auto-creation call sites can update/reuse it instead
+   * of always inserting a new document — mirrors the dedup check
+   * FollowupModal.tsx already does for manual creation, which none of the
+   * 4 auto-creation sites (appointment/pathology/pharmacy billing) had.
+   */
+  async findPendingFollowup(
+    patientId: string,
+    category?: FollowupCategory,
+  ): Promise<PatientFollowup | null> {
+    if (!patientId) return null;
+
+    const existing = await this.getPatientFollowups(patientId);
+    const match = existing.find(
+      (f) =>
+        f.overallStatus === "pending" &&
+        (!category || f.category === category),
+    );
+
+    return match || null;
   },
 
   /**

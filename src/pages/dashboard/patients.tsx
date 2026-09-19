@@ -271,6 +271,12 @@ export default function PatientsPage() {
   const [search, setSearch] = useState("");
   const [genderFilter, setGenderFilter] = useState("all");
   const [criticalFilter, setCriticalFilter] = useState("all");
+  // Default descending (newest/highest reg# first) — critical patients
+  // still always sort first regardless of direction, since that's a
+  // priority flag, not a data-order preference.
+  const [regSortDirection, setRegSortDirection] = useState<"asc" | "desc">(
+    "desc",
+  );
   const [ageMin, setAgeMin] = useState("");
   const [ageMax, setAgeMax] = useState("");
   const [regStart, setRegStart] = useState("");
@@ -670,11 +676,11 @@ export default function PatientsPage() {
     .sort((a, b) => {
       // Critical patients always first
       if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
-      // Then sort by regNumber numerically ascending (lowest reg# first)
+      // Then sort by regNumber numerically, direction toggle-controlled
       const aReg = parseInt(String(a.regNumber || "0"), 10) || 0;
       const bReg = parseInt(String(b.regNumber || "0"), 10) || 0;
 
-      return aReg - bReg;
+      return regSortDirection === "asc" ? aReg - bReg : bReg - aReg;
     });
 
   const totalPages = useServerPagination
@@ -688,7 +694,7 @@ export default function PatientsPage() {
       const aReg = parseInt(String(a.regNumber || "0"), 10) || 0;
       const bReg = parseInt(String(b.regNumber || "0"), 10) || 0;
 
-      return aReg - bReg;
+      return regSortDirection === "asc" ? aReg - bReg : bReg - aReg;
     });
   const pagePatients = useServerPagination
     ? sortByReg(patients)
@@ -1039,6 +1045,17 @@ export default function PatientsPage() {
               <option value="non-critical">Non-Critical</option>
             </NativeSelect>
 
+            {/* Sort direction (by Reg#) */}
+            <NativeSelect
+              value={regSortDirection}
+              onChange={(v) => {
+                setRegSortDirection(v as "asc" | "desc");
+                setPage(1);
+              }}
+            >
+              <option value="desc">Reg# Newest First</option>
+              <option value="asc">Reg# Oldest First</option>
+            </NativeSelect>
 
             {/* Advanced filters */}
             <Button

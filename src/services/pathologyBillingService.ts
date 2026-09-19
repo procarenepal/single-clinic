@@ -160,6 +160,22 @@ export const pathologyBillingService = {
     updatedBy: string,
   ): Promise<void> {
     try {
+      // A bad value here silently reaches every future invoice's tax
+      // calculation, including ones synced to IRD — reject out-of-range
+      // values instead of writing them.
+      if (
+        settings.defaultTaxPercentage !== undefined &&
+        (settings.defaultTaxPercentage < 0 || settings.defaultTaxPercentage > 100)
+      ) {
+        throw new Error("Default tax percentage must be between 0 and 100.");
+      }
+      if (
+        settings.defaultDiscountValue !== undefined &&
+        settings.defaultDiscountValue < 0
+      ) {
+        throw new Error("Default discount value cannot be negative.");
+      }
+
       const settingsRef = doc(
         db,
         PATHOLOGY_BILLING_SETTINGS_COLLECTION,
@@ -437,6 +453,15 @@ export const pathologyBillingService = {
       fiscalYear: getNepaliFiscalYear(new Date()),
       // Credit notes/sales returns must route to IRD's /api/billreturn, not /api/bill.
       isReturn: Boolean((billingData as any).isCreditNote),
+      // IRD's /api/billreturn requires these two beyond a normal /api/bill —
+      // see IrdCbmsService.buildPayload's isReturn branch. Ignored server-side
+      // when isReturn is false.
+      refInvoiceNumber: (billingData as any).isCreditNote
+        ? (billingData as any).linkedInvoiceNumber
+        : undefined,
+      reasonForReturn: (billingData as any).isCreditNote
+        ? (billingData as any).creditNoteReason
+        : undefined,
       // Deterministic per-content key — a network-drop retry of this exact
       // submission reuses it, so the backend returns the already-created
       // invoice instead of minting a duplicate.
@@ -909,34 +934,14 @@ export const pathologyBillingService = {
 
       // Note: IRD Sync is now handled by the Java Backend upon creation.
 
-      // Create commissions for referring sources
-      if (billing.referringDoctors && billing.referringDoctors.length > 0) {
-        for (const refDoc of billing.referringDoctors) {
-          if (refDoc.calculatedAmount <= 0) continue;
-
-          if (refDoc.type === "partner") {
-            // Handle referral partners
-            const partnerData = {
-              id: refDoc.doctorId,
-              name: refDoc.doctorName,
-              defaultCommission: refDoc.commissionValue,
-            } as any;
-
-            await referralCommissionService.createPathologyCommission(
-              billing,
-              partnerData,
-              refDoc.calculatedAmount,
-              finalizedBy,
-            );
-          } else {
-            // Default to regular doctors
-            await doctorCommissionService.createPathologyCommissions(
-              { ...billing, referringDoctors: [refDoc] } as any,
-              finalizedBy,
-            );
-          }
-        }
-      }
+      // Commission for referring sources is intentionally NOT created here —
+      // finalizing an invoice does not mean the clinic has been paid.
+      // Commission generation moved to recordPayment() (gated on the
+      // unpaid/partial -> paid transition), matching how appointment
+      // billing already works — see appointmentBillingService.recordPayment.
+      // Previously this ran unconditionally on finalize, so a finalized but
+      // never-paid (or later-cancelled-before-payment) invoice could still
+      // generate a referring doctor's commission on money never collected.
     } catch (error) {
       console.error("Error finalizing pathology invoice:", error);
       throw error;
@@ -1047,6 +1052,7 @@ export const pathologyBillingService = {
         // Credit note links
         isCreditNote: true,
         linkedInvoiceId: original.id,
+        linkedInvoiceNumber: original.invoiceNumber,
         creditNoteReason: reason,
         notes: `Credit Note for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
 
@@ -1168,6 +1174,48 @@ export const pathologyBillingService = {
 
       await this.updateBilling(id, updateData);
 
+      // Create commissions for referring sources — strictly on the
+      // unpaid/partial -> paid transition (never re-fires on an already-paid
+      // invoice, and never fires on finalize/draft), matching
+      // appointmentBillingService.recordPayment's timing.
+      if (
+        paymentStatus === "paid" &&
+        billing.paymentStatus !== "paid" &&
+        billing.referringDoctors &&
+        billing.referringDoctors.length > 0
+      ) {
+        for (const refDoc of billing.referringDoctors) {
+          if (refDoc.calculatedAmount <= 0) continue;
+
+          try {
+            if (refDoc.type === "partner") {
+              const partnerData = {
+                id: refDoc.doctorId,
+                name: refDoc.doctorName,
+                defaultCommission: refDoc.commissionValue,
+              } as any;
+
+              await referralCommissionService.createPathologyCommission(
+                billing,
+                partnerData,
+                refDoc.calculatedAmount,
+                recordedBy || "system",
+              );
+            } else {
+              await doctorCommissionService.createPathologyCommissions(
+                { ...billing, referringDoctors: [refDoc] } as any,
+                recordedBy || "system",
+              );
+            }
+          } catch (commErr) {
+            console.error(
+              "Error creating pathology referral commission on payment:",
+              commErr,
+            );
+          }
+        }
+      }
+
       // Auto-create follow-up if paid
       if (
         paymentStatus === "paid" &&
@@ -1187,24 +1235,64 @@ export const pathologyBillingService = {
               .map((item) => item.testName)
               .join(" | ");
 
-            await followupService.createFollowup({
-              clinicId: billing.clinicId,
-              branchId: billing.branchId || "",
-              category: "pathology",
-              patientId: billing.patientId,
-              patientName: patient.name,
-              patientMobile: patient.mobile || patient.phone || "",
-              visitDate: new Date(),
-              session: "1st",
-              initStatus: "good",
-              overallStatus: "pending",
-              service: services,
-              createdBy: recordedBy || "system",
-            } as any);
-            console.log("Auto-created pathology followup for billing", id);
+            // Reuse an existing pending follow-up for this patient instead
+            // of always inserting a new one — see the identical fix in
+            // appointmentBillingService.recordPayment.
+            const existing = await followupService.findPendingFollowup(
+              billing.patientId,
+              "pathology",
+            );
+            const nextFollowupDate = new Date();
+
+            nextFollowupDate.setDate(nextFollowupDate.getDate() + 7);
+
+            if (existing) {
+              await followupService.updateFollowup(existing.id, {
+                billingId: id,
+                visitDate: new Date(),
+                service: services,
+                nextFollowupDate:
+                  existing.nextFollowupDate || nextFollowupDate,
+              });
+            } else {
+              await followupService.createFollowup({
+                clinicId: billing.clinicId,
+                branchId: billing.branchId || "",
+                category: "pathology",
+                patientId: billing.patientId,
+                patientName: patient.name,
+                patientMobile: patient.mobile || patient.phone || "",
+                billingId: id,
+                visitDate: new Date(),
+                session: "1st",
+                initStatus: "good",
+                overallStatus: "pending",
+                service: services,
+                nextFollowupDate,
+                createdBy: recordedBy || "system",
+              } as any);
+            }
+            console.log("Auto-created/updated pathology followup for billing", id);
           }
         } catch (e) {
           console.error("Failed to auto-create followup:", e);
+          try {
+            const { auditLogService } = await import("./auditLogService");
+
+            await auditLogService.logEvent(
+              "operation_failed",
+              billing.clinicId,
+              {
+                operation: "auto_create_followup",
+                billingId: id,
+                patientId: billing.patientId,
+              },
+              "failure",
+              e instanceof Error ? e.message : String(e),
+            );
+          } catch {
+            // best-effort — never mask the original error path
+          }
         }
       }
     } catch (error) {

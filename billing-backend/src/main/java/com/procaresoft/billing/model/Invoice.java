@@ -98,6 +98,20 @@ public class Invoice {
     @Column(name = "payment_method")
     private String paymentMethod;
 
+    /**
+     * Credit-note / sales-return fields required by IRD's CBMS
+     * /api/billreturn endpoint (ird_api_documentation.pdf) — the original
+     * invoice number being reversed, and the mandatory stated reason. Null
+     * for a normal (non-return) invoice. credit_note_number/credit_note_date
+     * sent to IRD are derived from this row's own invoiceNumber/invoiceDate
+     * at sync time, so they don't need separate columns.
+     */
+    @Column(name = "ref_invoice_number")
+    private String refInvoiceNumber;
+
+    @Column(name = "reason_for_return", length = 1000)
+    private String reasonForReturn;
+
     // IRD Sync Tracking
     @Column(name = "ird_synced", nullable = false)
     private boolean irdSynced = false;

@@ -365,6 +365,26 @@ export const patientService = {
 
       await deleteDoc(docRef); // Hard delete
 
+      // Best-effort cleanup of this patient's follow-up records — a hard
+      // patient delete previously left patientFollowups permanently
+      // orphaned (denormalized patientId with no reference-integrity
+      // cleanup anywhere), where they'd sit forever as dead entries no
+      // staff member could ever action. Non-blocking: a cleanup failure
+      // here must never prevent the patient delete itself from succeeding.
+      try {
+        const { followupService } = await import("./followupService");
+        const followups = await followupService.getPatientFollowups(id);
+
+        await Promise.all(
+          followups.map((f) => followupService.deleteFollowup(f.id)),
+        );
+      } catch (followupError) {
+        console.error(
+          "Error cleaning up follow-ups for deleted patient:",
+          followupError,
+        );
+      }
+
       // Invalidate cache to ensure deleted patient is removed from search
       if (clinicId) {
         cacheService.invalidateClinicPatients(clinicId);

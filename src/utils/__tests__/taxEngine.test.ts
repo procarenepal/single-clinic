@@ -54,4 +54,19 @@ describe("taxEngine", () => {
     expect(result.taxAmount).toBe(117);    // 13% of 900
     expect(result.totalAmount).toBe(1917);  // 900 + 900 + 117
   });
+
+  it("sums VAT per item at each item's OWN tax rate, not one blended invoice-wide rate", () => {
+    const result = calculateTaxBreakdown({
+      items: [
+        { itemName: "Standard Service (13%)", quantity: 1, price: 1000, isTaxable: true, taxRate: 13 },
+        { itemName: "Reduced-Rate Item (5%)", quantity: 1, price: 1000, isTaxable: true, taxRate: 5 },
+      ],
+      isTaxEnabled: true,
+      defaultTaxPercentage: 13, // must NOT be applied to the 5% item
+    });
+
+    expect(result.taxableAmount).toBe(2000);
+    expect(result.taxAmount).toBe(180); // 13% of 1000 + 5% of 1000 = 130 + 50
+    expect(result.totalAmount).toBe(2180);
+  });
 });

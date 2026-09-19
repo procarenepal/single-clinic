@@ -12,6 +12,7 @@ import {
   Button,
   Select,
   SelectItem,
+  SelectSection,
   useDisclosure,
   Tooltip,
   Tabs,
@@ -30,7 +31,7 @@ import toast from "react-hot-toast";
 import FollowupModal from "./FollowupModal";
 
 import { useAuthContext } from "@/context/AuthContext";
-import { followupService } from "@/services/followupService";
+import { followupService, isFollowupOpen } from "@/services/followupService";
 import { rbacService } from "@/services/rbacService";
 
 const renderServiceProduct = (item: PatientFollowup, filter: string) => {
@@ -199,7 +200,31 @@ export default function FollowupsPage() {
           : cat === categoryFilter;
 
       let matchesDate = true;
-      if (dateFilter !== "all") {
+      if (dateFilter === "overdue") {
+        // Open (not completed/cancelled) AND either every date it has is
+        // already in the past, or it was never given a date at all —
+        // previously there was no way to see this at all: an unactioned
+        // follow-up with a past date, or one of the many auto-created
+        // follow-ups that never got a date, simply vanished from every
+        // filter except "All Dates".
+        const isOpen = isFollowupOpen(f.overallStatus);
+        const datesToCheck: Date[] = [];
+
+        if (f.nextFollowupDate) datesToCheck.push(new Date(f.nextFollowupDate));
+        if (f.followupDates) {
+          if (f.followupDates.first) datesToCheck.push(new Date(f.followupDates.first));
+          if (f.followupDates.second) datesToCheck.push(new Date(f.followupDates.second));
+          if (f.followupDates.third) datesToCheck.push(new Date(f.followupDates.third));
+          if (f.followupDates.fourth) datesToCheck.push(new Date(f.followupDates.fourth));
+          if (f.followupDates.fifth) datesToCheck.push(new Date(f.followupDates.fifth));
+        }
+
+        const now = new Date();
+        const allPast =
+          datesToCheck.length === 0 || datesToCheck.every((d) => d < now);
+
+        matchesDate = isOpen && allPast;
+      } else if (dateFilter !== "all") {
         const datesToCheck: Date[] = [];
         if (f.nextFollowupDate) datesToCheck.push(new Date(f.nextFollowupDate));
         if (f.followupDates) {
@@ -225,6 +250,31 @@ export default function FollowupsPage() {
       return matchesSearch && matchesStatus && matchesCategory && matchesDate;
     });
   }, [followups, searchQuery, statusFilter, categoryFilter, dateFilter, allowedCategories]);
+
+  // Total overdue count, independent of the current filters — surfaced as
+  // a badge so staff notice unactioned follow-ups without having to
+  // remember to switch the date filter. Previously there was no "overdue"
+  // concept anywhere in the app (not stored, not computed, not shown).
+  const overdueCount = useMemo(() => {
+    const now = new Date();
+
+    return followups.filter((f) => {
+      if (!isFollowupOpen(f.overallStatus)) return false;
+
+      const datesToCheck: Date[] = [];
+
+      if (f.nextFollowupDate) datesToCheck.push(new Date(f.nextFollowupDate));
+      if (f.followupDates) {
+        if (f.followupDates.first) datesToCheck.push(new Date(f.followupDates.first));
+        if (f.followupDates.second) datesToCheck.push(new Date(f.followupDates.second));
+        if (f.followupDates.third) datesToCheck.push(new Date(f.followupDates.third));
+        if (f.followupDates.fourth) datesToCheck.push(new Date(f.followupDates.fourth));
+        if (f.followupDates.fifth) datesToCheck.push(new Date(f.followupDates.fifth));
+      }
+
+      return datesToCheck.length === 0 || datesToCheck.every((d) => d < now);
+    }).length;
+  }, [followups]);
 
   const groupedFollowups = useMemo(() => {
     const groups: Record<
@@ -360,6 +410,31 @@ export default function FollowupsPage() {
     }
   };
 
+  // Explicit, auditable "mark complete" action — previously the ONLY way a
+  // follow-up became "completed" was the implicit side effect of setting
+  // any Updated Status value, with no distinct, intentional completion
+  // step. This doesn't remove that shortcut, it just adds a real one.
+  const handleMarkComplete = async (item: PatientFollowup) => {
+    try {
+      await followupService.updateFollowup(item.id, {
+        overallStatus: "completed",
+        logs: [
+          ...(item.logs || []),
+          {
+            date: new Date(),
+            note: "Marked complete",
+            user: currentUser?.displayName || currentUser?.email || undefined,
+          },
+        ],
+      });
+      toast.success("Follow-up marked complete");
+      loadFollowups();
+    } catch (err) {
+      toast.error("Failed to mark follow-up complete");
+      console.error(err);
+    }
+  };
+
   const formatDate = (date?: Date) => {
     if (!date) return "-";
 
@@ -394,9 +469,21 @@ export default function FollowupsPage() {
     <div className="p-6 max-w-[1600px] mx-auto w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">
-            Patient Follow-ups
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-text-primary">
+              Patient Follow-ups
+            </h1>
+            {overdueCount > 0 && (
+              <button
+                className="px-2.5 py-1 rounded-full bg-danger/10 text-danger text-xs font-semibold hover:bg-danger/20 transition-colors"
+                title="Overdue follow-ups — not completed and past due (or never scheduled)"
+                type="button"
+                onClick={() => setDateFilter("overdue")}
+              >
+                {overdueCount} Overdue
+              </button>
+            )}
+          </div>
           <p className="text-sm text-text-muted mt-1">
             Track and manage patient follow-up schedules and statuses
           </p>
@@ -467,6 +554,7 @@ export default function FollowupsPage() {
                 if (e.target.value) setDateFilter(e.target.value);
               }}
             >
+              <SelectItem key="overdue">Overdue</SelectItem>
               <SelectItem key="today">Today</SelectItem>
               <SelectItem key="tomorrow">Tomorrow</SelectItem>
               <SelectItem key="yesterday">Yesterday</SelectItem>
@@ -481,16 +569,20 @@ export default function FollowupsPage() {
               }}
             >
               <SelectItem key="all">All Statuses</SelectItem>
-              <SelectItem key="pending">Pending</SelectItem>
-              <SelectItem key="completed">Completed</SelectItem>
-              <SelectItem key="no-answer">No Answer</SelectItem>
-              <SelectItem key="wrong-no">Wrong Number</SelectItem>
-              <SelectItem key="satisfy">Satisfied</SelectItem>
-              <SelectItem key="not-satisfy">Not Satisfied</SelectItem>
-              <SelectItem key="complain">Complain</SelectItem>
-              <SelectItem key="angry">Angry</SelectItem>
-              <SelectItem key="will-come">Will Come</SelectItem>
-              <SelectItem key="cancelled">Cancelled</SelectItem>
+              <SelectSection showDivider title="Lifecycle">
+                <SelectItem key="pending">Pending</SelectItem>
+                <SelectItem key="completed">Completed</SelectItem>
+                <SelectItem key="cancelled">Cancelled</SelectItem>
+              </SelectSection>
+              <SelectSection title="Outcome (call result)">
+                <SelectItem key="satisfy">Satisfied</SelectItem>
+                <SelectItem key="not-satisfy">Not Satisfied</SelectItem>
+                <SelectItem key="will-come">Will Come</SelectItem>
+                <SelectItem key="complain">Complain</SelectItem>
+                <SelectItem key="angry">Angry</SelectItem>
+                <SelectItem key="no-answer">No Answer</SelectItem>
+                <SelectItem key="wrong-no">Wrong Number</SelectItem>
+              </SelectSection>
             </Select>
           </div>
           <div className="flex items-center gap-2">
@@ -818,6 +910,16 @@ export default function FollowupsPage() {
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex justify-end gap-2">
+                                    {item.overallStatus !== "completed" && (
+                                      <Button
+                                        color="success"
+                                        size="sm"
+                                        variant="flat"
+                                        onClick={() => handleMarkComplete(item)}
+                                      >
+                                        Mark Complete
+                                      </Button>
+                                    )}
                                     <Button
                                       color="primary"
                                       size="sm"
@@ -1096,6 +1198,16 @@ export default function FollowupsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-2">
+                        {item.overallStatus !== "completed" && (
+                          <Button
+                            color="success"
+                            size="sm"
+                            variant="flat"
+                            onClick={() => handleMarkComplete(item)}
+                          >
+                            Mark Complete
+                          </Button>
+                        )}
                         <Button
                           color="primary"
                           size="sm"
