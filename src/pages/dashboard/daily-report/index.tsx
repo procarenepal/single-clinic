@@ -567,7 +567,7 @@ export default function DailyReportPage() {
               {/* Pathology Revenue */}
               <div
                 className="bg-surface border border-border-base rounded-md p-3.5 flex flex-col justify-between cursor-pointer hover:border-primary/40 transition-colors shadow-sm min-h-[90px]"
-                onClick={() => navigate(`/dashboard/pathology/billing`)}
+                onClick={() => navigate(`/dashboard/pathology`)}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -612,7 +612,7 @@ export default function DailyReportPage() {
               {/* Pharmacy Revenue */}
               <div
                 className="bg-surface border border-border-base rounded-md p-3.5 flex flex-col justify-between cursor-pointer hover:border-primary/40 transition-colors shadow-sm min-h-[90px]"
-                onClick={() => navigate(`/dashboard/pharmacy/billing`)}
+                onClick={() => navigate(`/dashboard/pharmacy`)}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
