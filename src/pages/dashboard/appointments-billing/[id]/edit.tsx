@@ -351,6 +351,8 @@ export default function EditInvoicePage() {
     totalDiscount: 0,
     taxAmount: 0,
     totalAmount: 0,
+    taxableAmount: 0,
+    exemptAmount: 0,
   });
 
   useEffect(() => {
@@ -661,6 +663,8 @@ export default function EditInvoicePage() {
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
+        taxableAmount: calculations.taxableAmount,
+        exemptAmount: calculations.exemptAmount,
         totalAmount: newTotalAmount,
         balanceAmount: newBalanceAmount,
         paymentStatus,

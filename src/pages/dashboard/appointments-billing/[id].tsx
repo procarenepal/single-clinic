@@ -1192,9 +1192,36 @@ export default function InvoiceDetailPage() {
                     </span>
                   </div>
                 )}
+              {(invoice.taxableAmount || 0) > 0 &&
+                (invoice.exemptAmount || 0) > 0 && (
+                  <>
+                    <div className="flex justify-between text-[rgb(var(--color-text-muted))]">
+                      <span>Taxable Amount:</span>
+                      <span>{formatCurrency(invoice.taxableAmount || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-[rgb(var(--color-text-muted))]">
+                      <span>Exempt Amount:</span>
+                      <span>{formatCurrency(invoice.exemptAmount || 0)}</span>
+                    </div>
+                  </>
+                )}
               {invoice.taxAmount > 0 && (
                 <div className="flex justify-between">
-                  <span>Tax ({invoice.taxPercentage}%):</span>
+                  {/* invoice.taxPercentage is the invoice-level toggle's
+                      rate, not necessarily what was actually charged — a
+                      mixed invoice (e.g. one taxable item alongside an
+                      exempt one) is taxed at each item's own rate, so the
+                      effective % shown here is derived from the real
+                      taxable base instead of the toggle's blanket rate. */}
+                  <span>
+                    Tax (
+                    {invoice.taxableAmount && invoice.taxableAmount > 0
+                      ? Math.round(
+                          (invoice.taxAmount / invoice.taxableAmount) * 100,
+                        )
+                      : invoice.taxPercentage}
+                    %):
+                  </span>
                   <span>{formatCurrency(invoice.taxAmount)}</span>
                 </div>
               )}

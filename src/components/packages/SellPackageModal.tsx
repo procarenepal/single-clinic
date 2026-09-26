@@ -9,6 +9,7 @@ import {
   ModalBody,
   ModalFooter,
 } from "@/components/ui";
+import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
 import { AppointmentBillingSettings, Patient, TreatmentPackage } from "@/types/models";
 import { packageService } from "@/services/packageService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
@@ -220,6 +221,8 @@ export default function SellPackageModal({
         discountAmount: totals.totalDiscount,
         taxPercentage,
         taxAmount: totals.taxAmount,
+        taxableAmount: totals.taxableAmount,
+        exemptAmount: totals.exemptAmount,
         totalAmount: totals.totalAmount,
         status: "draft" as const,
         paymentStatus: "unpaid" as const,
@@ -367,21 +370,27 @@ export default function SellPackageModal({
                   Search Existing Patient{" "}
                   <span className="text-red-500">*</span>
                 </label>
-                <select
-                  required
-                  className="w-full px-3 py-2 text-[13px] border border-border-base rounded bg-white focus:outline-none focus:border-primary"
-                  value={selectedPatientId}
-                  onChange={(e) => setSelectedPatientId(e.target.value)}
+                {/* Was a plain unsearchable <select> despite the "Search"
+                    label — with 100+ patients, staff had to scroll a giant
+                    native dropdown by eye. Matches the real search-as-you-type
+                    patient picker already used in QuickIntakeModal. */}
+                <Autocomplete
+                  isRequired
+                  placeholder="Type a patient name or phone number..."
+                  selectedKey={selectedPatientId || null}
+                  onSelectionChange={(key) =>
+                    setSelectedPatientId(key ? String(key) : "")
+                  }
                 >
-                  <option disabled value="">
-                    Select a patient...
-                  </option>
                   {patients.map((p) => (
-                    <option key={p.id} value={p.id}>
+                    <AutocompleteItem
+                      key={p.id}
+                      textValue={`${p.name} ${p.regNumber || ""} ${p.mobile || ""}`}
+                    >
                       {p.name} ({p.regNumber || p.mobile || "No Contact"})
-                    </option>
+                    </AutocompleteItem>
                   ))}
-                </select>
+                </Autocomplete>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 p-3 bg-surface border border-border-base rounded-md">

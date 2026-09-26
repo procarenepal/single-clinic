@@ -656,7 +656,14 @@ export const appointmentBillingService = {
           discountType: billingData.discountType || "flat",
           discountValue: billingData.discountValue || 0,
           defaultTaxPercentage: taxPercentage,
-          isTaxEnabled: taxPercentage > 0,
+          // A service configured taxable on its own category (e.g. a Skin
+          // Test) must still be taxed even when the invoice-level "Apply
+          // Tax" toggle is off/unchecked — that toggle is a clinic-wide
+          // override for invoices with no taxable items at all, not a gate
+          // that should silently zero out an item explicitly marked taxable.
+          isTaxEnabled:
+            taxPercentage > 0 ||
+            (billingData.items || []).some((i) => i.isTaxable === true),
         });
 
     // IRD's irdEnabled/credentials live on the Clinic document (that's what
@@ -1687,7 +1694,7 @@ export const appointmentBillingService = {
                   invoiceDate: billing.invoiceDate,
                   totalAmount: newTotalAmount,
                   taxAmount: billing.taxAmount || 0,
-                  isTaxEnabled: billing.taxPercentage > 0,
+                  isTaxEnabled: (billing.taxAmount || 0) > 0,
                 },
               });
 
@@ -1766,7 +1773,9 @@ export const appointmentBillingService = {
       discountType,
       discountValue,
       defaultTaxPercentage: taxPercentage,
-      isTaxEnabled: taxPercentage > 0,
+      // Same reasoning as createBilling() above: a category-taxable item
+      // must be taxed regardless of the invoice-level "Apply Tax" toggle.
+      isTaxEnabled: taxPercentage > 0 || items.some((i) => i.isTaxable === true),
     });
 
     return {

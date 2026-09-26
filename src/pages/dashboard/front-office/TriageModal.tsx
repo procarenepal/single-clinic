@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   IoCloseOutline,
@@ -47,6 +47,26 @@ export const TriageModal: React.FC<TriageModalProps> = ({
   hasDoctor,
   hasExpert,
 }) => {
+  // Escape-to-close and focus-on-open — see the identical fix/rationale in
+  // QuickIntakeModal.tsx.
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    panelRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !appointment) return null;
 
   const modalRoot = document.body;
@@ -85,7 +105,11 @@ export const TriageModal: React.FC<TriageModalProps> = ({
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="bg-surface rounded border border-border-base shadow-xl max-w-2xl w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div
+        ref={panelRef}
+        className="bg-surface rounded border border-border-base shadow-xl max-w-2xl w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200 outline-none"
+        tabIndex={-1}
+      >
         <div className="px-5 py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
           <div>
             <h3 className="font-bold text-[14.5px] text-text-main">
@@ -97,6 +121,7 @@ export const TriageModal: React.FC<TriageModalProps> = ({
             </p>
           </div>
           <button
+            aria-label="Close"
             className="text-text-muted hover:text-text-main p-1"
             onClick={onClose}
           >

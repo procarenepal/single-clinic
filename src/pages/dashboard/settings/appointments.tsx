@@ -137,7 +137,18 @@ export default function AppointmentSettingsPage() {
           color: type.color || "none",
           billAtFrontDesk: type.billAtFrontDesk ?? false,
           calculateCommission: type.calculateCommission ?? true,
-        });
+          isTaxable: type.isTaxable ?? false,
+          // Firestore's updateDoc rejects `undefined` — use null to clear a
+          // field instead (e.g. unchecking Taxable clears a previously-set rate).
+          taxRate:
+            type.isTaxable && typeof type.taxRate === "number"
+              ? type.taxRate
+              : null,
+          defaultCommission:
+            type.calculateCommission && typeof type.defaultCommission === "number"
+              ? type.defaultCommission
+              : null,
+        } as any);
         savedId = editingType.id;
       } else {
         // Add new type
@@ -150,10 +161,24 @@ export default function AppointmentSettingsPage() {
           color: type.color || "none",
           billAtFrontDesk: type.billAtFrontDesk ?? false,
           calculateCommission: type.calculateCommission ?? true,
+          isTaxable: type.isTaxable ?? false,
           clinicId,
           branchId: clinicId,
           createdBy: currentUser.uid,
         };
+
+        // Only include these when they have a real value — addDoc rejects
+        // `undefined`, so an unset rate/commission is simply omitted rather
+        // than written as undefined.
+        if (type.isTaxable && typeof type.taxRate === "number") {
+          newTypeData.taxRate = type.taxRate;
+        }
+        if (
+          type.calculateCommission &&
+          typeof type.defaultCommission === "number"
+        ) {
+          newTypeData.defaultCommission = type.defaultCommission;
+        }
 
         console.log("New type data:", newTypeData);
         savedId =
@@ -964,6 +989,80 @@ function AppointmentTypeModal({
             <p className="text-xs text-text-muted ml-7 leading-relaxed">
               If checked, this service will be included in doctor/expert commission calculations. Uncheck to exclude (e.g., for basic registration fees).
             </p>
+            {formData.calculateCommission && (
+              <div className="ml-7 mt-2 max-w-[200px]">
+                <Input
+                  label="Default Commission % (optional)"
+                  min="0"
+                  max="100"
+                  placeholder="Uses clinician's own default"
+                  type="number"
+                  value={
+                    formData.defaultCommission === undefined
+                      ? ""
+                      : String(formData.defaultCommission)
+                  }
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      defaultCommission:
+                        e.target.value === ""
+                          ? undefined
+                          : Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)),
+                    }))
+                  }
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Sourced automatically into every invoice item billed for this
+              service (Quick Intake, Appointment Billing, front-office
+              routing) instead of staff manually toggling tax per invoice
+              regardless of which service is actually being charged. */}
+          <div className="flex flex-col gap-1 p-3 rounded-lg border border-border-base bg-surface-2/30 mt-2">
+            <Checkbox
+              className="font-medium"
+              isSelected={formData.isTaxable ?? false}
+              onValueChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  isTaxable: value,
+                }))
+              }
+            >
+              Taxable
+            </Checkbox>
+            <p className="text-xs text-text-muted ml-7 leading-relaxed">
+              If checked, invoices for this service are automatically taxed
+              at the rate below (e.g. a Skin Test), instead of a Doctor
+              Consultation on the same invoice which may be tax-exempt.
+            </p>
+            {formData.isTaxable && (
+              <div className="ml-7 mt-2 max-w-[200px]">
+                <Input
+                  label="Tax Rate %"
+                  min="0"
+                  max="100"
+                  placeholder="Uses clinic default"
+                  type="number"
+                  value={
+                    formData.taxRate === undefined
+                      ? ""
+                      : String(formData.taxRate)
+                  }
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      taxRate:
+                        e.target.value === ""
+                          ? undefined
+                          : Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)),
+                    }))
+                  }
+                />
+              </div>
+            )}
           </div>
         </div>
       </ModalBody>

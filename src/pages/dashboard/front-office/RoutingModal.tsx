@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { IoCloseOutline } from "react-icons/io5";
 
@@ -93,6 +93,26 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alreadySettledForSelectedDoctor]);
 
+  // Escape-to-close and focus-on-open — see the identical fix/rationale in
+  // QuickIntakeModal.tsx.
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    panelRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !appointment) return null;
 
   const modalRoot = document.body;
@@ -111,7 +131,11 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="bg-surface rounded border border-border-base shadow-xl max-w-md w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div
+        ref={panelRef}
+        className="bg-surface rounded border border-border-base shadow-xl max-w-md w-full mx-4 relative z-10 animate-in fade-in zoom-in-95 duration-200 outline-none"
+        tabIndex={-1}
+      >
         <div className="px-5 py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
           <div>
             <h3 className="font-bold text-[14.5px] text-text-main">
@@ -123,6 +147,7 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
             </p>
           </div>
           <button
+            aria-label="Close"
             className="text-text-muted hover:text-text-main p-1"
             onClick={onClose}
           >
@@ -301,13 +326,43 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
           <p className="text-xs text-text-muted">
             Routing this patient will mark their status as{" "}
             <strong>In Consultation</strong> and alert the assigned clinician (
-            {hasDoc ? clinicianName : "Expert"}).
+            {(() => {
+              // Reflect whoever is actually being routed to in THIS action
+              // (routingTarget + the dropdown selection), not the original
+              // appointment's pre-existing doctorId — that stale value made
+              // this text say "Expert" even while asking staff to "Select
+              // Doctor" whenever the appointment itself had no doctor set
+              // yet (e.g. an expert-to-doctor handoff after Record
+              // Procedure Log).
+              if (routingTarget === "doctor") {
+                return (
+                  doctors.find((d) => d.id === routingDoctorId)?.name ||
+                  "the selected doctor"
+                );
+              }
+              if (routingTarget === "expert") {
+                return (
+                  experts.find((e) => e.id === routingExpertId)?.name ||
+                  "the selected expert"
+                );
+              }
+
+              return hasDoc ? clinicianName : "Expert";
+            })()}
+            ).
           </p>
         </div>
 
         <div className="mt-4 pt-4 border-t border-border-base flex gap-2 justify-end px-5 pb-5">
           <div className="flex-1 flex items-center mt-2 px-2">
-            {(routingTarget === "doctor" || routingTarget === "expert") &&
+            {/* Expert routing never bills anything at this step — the
+                expert's invoice/commission is created later at "Complete
+                Consultation"/"Record Procedure Log" using the appointment
+                category's own commission settings, so this checkbox would
+                have no effect there. Doctor routing is the only path that
+                actually consumes routingAddCommission (see the
+                createConsultationBill call in handleConfirmRoute). */}
+            {routingTarget === "doctor" &&
               routingCabin &&
               routingCabin !== "unassigned" &&
               !alreadySettledForSelectedDoctor && (

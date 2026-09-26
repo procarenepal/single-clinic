@@ -116,8 +116,16 @@ class ExpertCommissionService {
             date: billing.invoiceDate,
             patientId: billing.patientId || "",
             patientName: billing.patientName || "Unknown",
-            serviceNames: group.items.map((item) => item.appointmentTypeName),
-            totalInvoiceAmount: billing.totalAmount, // Total for the whole invoice
+            serviceNames: group.items
+              .filter((item: any) => item.calculateCommission !== false)
+              .map((item) => item.appointmentTypeName),
+            // This expert's own discount-adjusted eligible base (mirrors
+            // doctorCommissionService.createCommission's groupSubtotal) —
+            // NOT the whole invoice's tax-inclusive total, which previously
+            // made the effective % implied by totalInvoiceAmount/commissionAmount
+            // come out nonsensically low whenever other clinicians' items or
+            // tax were also on the same invoice.
+            totalInvoiceAmount: groupSubtotal,
             commissionPercentage: effectivePercentage,
             commissionAmount: groupCommissionAmount,
             status: "pending",

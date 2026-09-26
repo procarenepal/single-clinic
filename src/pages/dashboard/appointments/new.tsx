@@ -704,6 +704,8 @@ export default function NewAppointmentPage() {
           discountAmount: totals.totalDiscount,
           taxPercentage,
           taxAmount: totals.taxAmount,
+          taxableAmount: totals.taxableAmount,
+          exemptAmount: totals.exemptAmount,
           totalAmount: totals.totalAmount,
 
           buyerPan: appointmentInfo.buyerPan.trim(),

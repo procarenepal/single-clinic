@@ -330,6 +330,19 @@ export interface AppointmentType {
   color?: string; // Color identifier for theme-dynamic blinking rows
   billAtFrontDesk?: boolean; // Whether to bill automatically at check-in
   calculateCommission?: boolean; // Whether to include in doctor/expert commission calculations
+  /** Whether this specific service is taxable — sourced automatically into
+   * invoice items billed for this type, instead of staff manually toggling
+   * tax per invoice regardless of what service is actually being charged. */
+  isTaxable?: boolean;
+  /** VAT %, e.g. 13. Only meaningful when isTaxable is true. Falls back to
+   * the clinic's defaultTaxPercentage when unset (a type can be taxable
+   * without specifying its own rate). */
+  taxRate?: number;
+  /** This service's own commission %, taking priority over the performing
+   * clinician's blanket defaultCommission when set. Only meaningful when
+   * calculateCommission isn't false. Blank/unset falls back to the
+   * clinician's own default, exactly as before this field existed. */
+  defaultCommission?: number;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the appointment type
@@ -1956,6 +1969,13 @@ export interface PathologyTestType {
   clinicId: string;
   branchId: string;
   isActive: boolean;
+  /** Whether this specific test is taxable — sourced automatically into
+   * invoice items billed for this test type, instead of staff manually
+   * toggling tax per invoice regardless of which test is being charged. */
+  isTaxable?: boolean;
+  /** VAT %, e.g. 13. Only meaningful when isTaxable is true. Falls back to
+   * the clinic's defaultTaxPercentage when unset. */
+  taxRate?: number;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -2161,6 +2181,8 @@ export interface PathologyBilling {
   discountAmount: number; // Calculated discount amount
   taxPercentage: number; // Tax percentage applied
   taxAmount: number; // Calculated tax amount
+  taxableAmount?: number; // Net taxable base actually subject to VAT (per-item, category-driven — may be less than subtotal-discount when only some tests are taxable)
+  exemptAmount?: number; // Net exempt base (tests marked non-taxable)
   totalAmount: number; // Final amount after discount and tax
 
   // Status and Audit

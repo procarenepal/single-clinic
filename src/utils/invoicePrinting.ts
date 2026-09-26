@@ -506,7 +506,16 @@ export const generateInvoiceHTML = (
     patientAddress: billing.patientAddress,
     subtotal: billing.subtotal || 0,
     discountAmount: billing.discountAmount || 0,
-    taxableAmount: (billing.taxPercentage || 0) > 0 ? (billing.subtotal || 0) - (billing.discountAmount || 0) : undefined,
+    // Prefer the actual per-item taxable base stored on the invoice (items
+    // can each be independently taxable) — only fall back to "the whole
+    // post-discount amount" when that real figure wasn't persisted (legacy
+    // invoices predating per-item tax).
+    taxableAmount:
+      typeof billing.taxableAmount === "number"
+        ? billing.taxableAmount
+        : (billing.taxPercentage || 0) > 0
+          ? (billing.subtotal || 0) - (billing.discountAmount || 0)
+          : undefined,
     taxPercentage: billing.taxPercentage || 0,
     taxAmount: billing.taxAmount || 0,
     totalAmount: billing.totalAmount || 0,
@@ -582,7 +591,16 @@ export const generateAppointmentInvoiceHTML = (
     patientAddress: patient?.address,
     subtotal: invoice.subtotal || 0,
     discountAmount: invoice.discountAmount || 0,
-    taxableAmount: invoice.taxPercentage > 0 ? (invoice.subtotal - invoice.discountAmount) : undefined,
+    // Same reasoning as the pathology wrapper above: prefer the real
+    // per-item taxable base when it was persisted on the invoice, since a
+    // mixed invoice (e.g. a taxable Skin Test alongside an exempt Doctor
+    // Consultation) is not "the whole post-discount amount".
+    taxableAmount:
+      typeof invoice.taxableAmount === "number"
+        ? invoice.taxableAmount
+        : invoice.taxPercentage > 0
+          ? invoice.subtotal - invoice.discountAmount
+          : undefined,
     taxPercentage: invoice.taxPercentage || 0,
     taxAmount: invoice.taxAmount || 0,
     totalAmount: invoice.totalAmount || 0,

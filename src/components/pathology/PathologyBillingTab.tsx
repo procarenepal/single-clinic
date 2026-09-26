@@ -442,6 +442,8 @@ export default function PathologyBillingTab({
     totalDiscount: 0,
     taxAmount: 0,
     totalAmount: 0,
+    taxableAmount: 0,
+    exemptAmount: 0,
   });
 
   // Unified test catalog for search
@@ -611,6 +613,8 @@ export default function PathologyBillingTab({
         totalDiscount: 0,
         taxAmount: 0,
         totalAmount: 0,
+        taxableAmount: 0,
+        exemptAmount: 0,
       });
 
       return;
@@ -642,7 +646,13 @@ export default function PathologyBillingTab({
       discountType: formData.discountType,
       discountValue: formData.discountValue,
       defaultTaxPercentage: taxPercentage,
-      isTaxEnabled: taxPercentage > 0,
+      // A test type configured taxable on its own (e.g. via Pathology Test
+      // Price Settings) must still be taxed even when the invoice-level
+      // "Apply Tax" toggle is off — that toggle shouldn't silently zero out
+      // an item explicitly marked taxable at the category level.
+      isTaxEnabled:
+        taxPercentage > 0 ||
+        formData.items.some((i) => i.isTaxable === true),
     });
 
     const subtotal = breakdown.subtotal;
@@ -652,6 +662,8 @@ export default function PathologyBillingTab({
     const afterDiscount = breakdown.taxableAmount + breakdown.exemptAmount;
     const taxAmount = breakdown.taxAmount;
     const totalAmount = breakdown.totalAmount;
+    const taxableAmount = breakdown.taxableAmount;
+    const exemptAmount = breakdown.exemptAmount;
 
     // Recalculate doctor commissions based on after-discount subtotal
     const updatedReferringDoctors = formData.referringDoctors.map((doc) => {
@@ -673,6 +685,8 @@ export default function PathologyBillingTab({
       totalDiscount,
       taxAmount,
       totalAmount,
+      taxableAmount,
+      exemptAmount,
     });
 
     setFormData((prev) => ({
@@ -742,6 +756,17 @@ export default function PathologyBillingTab({
         amount:
           (matchingType ? matchingType.price : updatedItems[index].price) *
           updatedItems[index].quantity,
+        // Sourced automatically from this test's own settings (Test Price
+        // configuration) instead of staff manually toggling tax per invoice
+        // regardless of which test is being charged — left undefined
+        // (falls back to the existing invoice-level toggle) when no
+        // matching catalog entry has tax configured.
+        isTaxable: matchingType
+          ? matchingType.isTaxable
+          : updatedItems[index].isTaxable,
+        taxRate: matchingType
+          ? matchingType.taxRate
+          : updatedItems[index].taxRate,
       };
     } else if (field === "quantity") {
       const qty = parseInt(value) || 1;
@@ -1038,6 +1063,8 @@ export default function PathologyBillingTab({
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
+        taxableAmount: calculations.taxableAmount,
+        exemptAmount: calculations.exemptAmount,
         totalAmount: calculations.totalAmount,
         referringDoctors: formData.referringDoctors,
         notes: formData.notes?.trim() || null,

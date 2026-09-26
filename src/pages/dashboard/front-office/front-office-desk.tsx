@@ -657,7 +657,13 @@ export default function FrontOfficeDesk() {
   const [finaliseSelectedItems, setFinaliseSelectedItems] = useState<string[]>(
     [],
   );
-  const [itemExperts, setItemExperts] = useState<Record<string, string>>({});
+  // Multiple clinicians can jointly perform one recommended procedure item
+  // (e.g. two experts on the same treatment) — each gets their own line
+  // item on an even split of the fee, with their own commission computed on
+  // their own share, rather than forcing one clinician to take sole credit.
+  const [itemExperts, setItemExperts] = useState<Record<string, string[]>>(
+    {},
+  );
   // Discount/tax entered for THIS finalization action — applied to whichever
   // invoice branch handleFinaliseProcedure actually writes to (patch an
   // existing unlocked invoice, or create a fresh one), reusing the same
@@ -676,10 +682,10 @@ export default function FrontOfficeDesk() {
 
       if (rec?.items && Array.isArray(rec.items)) {
         setFinaliseSelectedItems(rec.items.map((i: any) => i.id));
-        const initialExperts: Record<string, string> = {};
+        const initialExperts: Record<string, string[]> = {};
 
         rec.items.forEach((i: any) => {
-          initialExperts[i.id] = "";
+          initialExperts[i.id] = [];
         });
         setItemExperts(initialExperts);
       }
@@ -1323,7 +1329,13 @@ export default function FrontOfficeDesk() {
         let clConsultationPrice = 0;
 
         if (cl.chargeConsultation) {
-          if (docInfo) {
+          // Front desk's own per-row price override (Quick Intake's clinician
+          // rows now show and let staff edit the price before check-in)
+          // always wins — previously staff had no visibility into this
+          // price at all until after the invoice was already created.
+          if (typeof cl.price === "number" && !isNaN(cl.price)) {
+            clConsultationPrice = cl.price;
+          } else if (docInfo) {
             if (docInfo.consultationCharge !== undefined) {
               clConsultationPrice = Number(docInfo.consultationCharge);
             } else {
@@ -1371,7 +1383,11 @@ export default function FrontOfficeDesk() {
                   : docInfo?.defaultCommission) || 0
                 : 0;
 
-            if (commissionPct > 0 && perSessionValue > 0) {
+            if (perSessionValue > 0) {
+              // Always record which clinician performed this session — even
+              // with commissionPct 0 (unchecked "Add Commission" or no
+              // default set) — so the session has an invoice/audit trail
+              // instead of silently vanishing from the visit record.
               clApptTypeItem = {
                 id: crypto.randomUUID(),
                 appointmentTypeId: cl.appointmentTypeId,
@@ -1385,7 +1401,7 @@ export default function FrontOfficeDesk() {
                   : docInfo?.name || "GP",
                 amount: perSessionValue,
               };
-              hasPackageSessionCommissionItem = true;
+              hasPackageSessionCommissionItem = commissionPct > 0;
             }
           } else {
             console.warn(
@@ -1442,6 +1458,26 @@ export default function FrontOfficeDesk() {
                 finalPrice = Number(docInfo.consultationCharge);
               }
 
+              // Front desk's own per-row price override wins over both the
+              // catalog price and the doctor's default consultation charge
+              // — see the identical override in the clConsultationPrice
+              // block above.
+              if (typeof cl.price === "number" && !isNaN(cl.price)) {
+                finalPrice = cl.price;
+              }
+
+              // This service's own commission % (Appointment Type Settings)
+              // takes priority over the clinician's blanket default —
+              // previously commission always came from the doctor/expert
+              // alone, regardless of which service was actually billed.
+              const resolvedCommission =
+                apptType.calculateCommission !== false &&
+                typeof apptType.defaultCommission === "number"
+                  ? apptType.defaultCommission
+                  : (isExpert
+                    ? expInfo?.defaultCommission
+                    : docInfo?.defaultCommission) || 0;
+
               clApptTypeItem = {
                 id: crypto.randomUUID(),
                 appointmentTypeId: apptType.id,
@@ -1450,15 +1486,19 @@ export default function FrontOfficeDesk() {
                 quantity: 1,
                 commission:
                   cl.addCommission && apptType.calculateCommission !== false
-                    ? (isExpert
-                      ? expInfo?.defaultCommission
-                      : docInfo?.defaultCommission) || 0
+                    ? resolvedCommission
                     : 0,
+                calculateCommission: apptType.calculateCommission,
                 doctorId: cl.clinicianId,
                 doctorName: isExpert
                   ? expInfo?.name || "Expert"
                   : docInfo?.name || "GP",
                 amount: finalPrice,
+                // Sourced automatically from the service instead of staff
+                // manually toggling tax per invoice regardless of which
+                // service is being charged.
+                isTaxable: apptType.isTaxable,
+                taxRate: apptType.taxRate,
               };
               totalInvoiceAmount += finalPrice;
             }
@@ -1466,21 +1506,32 @@ export default function FrontOfficeDesk() {
         }
 
         if (clConsultationPrice > 0 && !clApptTypeItem) {
+          // Falls through here for a manually-priced row (cl.price override)
+          // whose appointmentTypeId didn't resolve to a real category — must
+          // still attribute to whichever clinician type this row actually
+          // is, not always the doctor (an expert row can reach here too via
+          // the cl.price override above, which isn't doctor-only).
+          const fallbackClinician = isExpert ? expInfo : docInfo;
+
           totalInvoiceAmount += clConsultationPrice;
           items.push({
             id: crypto.randomUUID(),
             appointmentTypeId: "consultation-fee",
-            appointmentTypeName: `Doctor Consultation Fee - ${docInfo?.name
-              ? docInfo.name.startsWith("Dr.")
-                ? docInfo.name
-                : `Dr. ${docInfo.name}`
-              : "Dr. GP"
-              }`,
+            appointmentTypeName: isExpert
+              ? `Consultation Fee - ${fallbackClinician?.name || "Expert"}`
+              : `Doctor Consultation Fee - ${fallbackClinician?.name
+                ? fallbackClinician.name.startsWith("Dr.")
+                  ? fallbackClinician.name
+                  : `Dr. ${fallbackClinician.name}`
+                : "Dr. GP"
+                }`,
             price: clConsultationPrice,
             quantity: 1,
-            commission: cl.addCommission ? docInfo?.defaultCommission || 0 : 0,
+            commission: cl.addCommission
+              ? fallbackClinician?.defaultCommission || 0
+              : 0,
             doctorId: cl.clinicianId,
-            doctorName: docInfo?.name || "Unknown Doctor",
+            doctorName: fallbackClinician?.name || "Unknown Clinician",
             amount: clConsultationPrice,
           });
         }
@@ -1554,6 +1605,8 @@ export default function FrontOfficeDesk() {
         discountAmount: totals.totalDiscount,
         taxPercentage,
         taxAmount: totals.taxAmount,
+        taxableAmount: totals.taxableAmount,
+        exemptAmount: totals.exemptAmount,
         totalAmount: totals.totalAmount,
         // A zero-total package-session-commission item is deliberately
         // NOT auto-marked "paid" here — commission is only ever generated
@@ -1708,12 +1761,22 @@ export default function FrontOfficeDesk() {
       ? null
       : getLastSeenDoctorId(appt.patientId, appt.id);
 
+    // Default from the booked appointment category's own settings instead
+    // of always starting unchecked — the commission formula in
+    // createConsultationBill is `cl.addCommission && calculateCommission`,
+    // so leaving this false by default silently zeroed commission on every
+    // single routing action even for a category explicitly configured to
+    // earn one, forcing staff to remember to re-check it every time.
+    const apptType = appointmentTypes.find(
+      (t) => t.id === appt.appointmentTypeId,
+    );
+
     setRoutingAppointment(appt);
     setRoutingCabin(appt.cabinName || "");
     setRoutingDoctorId(alreadyAssigned || lastSeenDoctorId || "");
     setRoutingChargeConsultation(false);
-    setRoutingApplyTax(false);
-    setRoutingAddCommission(false);
+    setRoutingApplyTax(Boolean(apptType?.isTaxable));
+    setRoutingAddCommission(apptType?.calculateCommission !== false);
     setRoutingTarget("doctor");
     setIsRoutingModalOpen(true);
 
@@ -1733,6 +1796,12 @@ export default function FrontOfficeDesk() {
     const appt = appointments.find((a) => a.id === appointmentId);
 
     if (!appt) return;
+
+    // Same category-driven default as handleSendToDoctor above.
+    const apptType = appointmentTypes.find(
+      (t) => t.id === appt.appointmentTypeId,
+    );
+
     setRoutingAppointment(appt);
     setRoutingCabin(appt.cabinName || "");
     setRoutingExpertId(
@@ -1740,9 +1809,9 @@ export default function FrontOfficeDesk() {
         ? appt.assignedExpertId
         : "",
     );
-    setRoutingAddCommission(false);
+    setRoutingAddCommission(apptType?.calculateCommission !== false);
     setRoutingChargeConsultation(false);
-    setRoutingApplyTax(false);
+    setRoutingApplyTax(Boolean(apptType?.isTaxable));
     setRoutingTarget("expert");
     setIsRoutingModalOpen(true);
   };
@@ -2047,7 +2116,14 @@ export default function FrontOfficeDesk() {
         appointmentTypeName: apptType.name || "Procedure/Service Fee",
         price: price,
         quantity: 1,
-        commission: (docInfo as any)?.defaultCommission || 0,
+        commission:
+          apptType.calculateCommission !== false &&
+          typeof apptType.defaultCommission === "number"
+            ? apptType.defaultCommission
+            : (docInfo as any)?.defaultCommission || 0,
+        calculateCommission: apptType.calculateCommission,
+        isTaxable: apptType.isTaxable,
+        taxRate: apptType.taxRate,
         doctorId: clinicianId,
         doctorName: docInfo?.name || "Clinician",
         amount: price,
@@ -2075,6 +2151,8 @@ export default function FrontOfficeDesk() {
         mainDiscountAmount: totals.mainDiscountAmount,
         discountAmount: totals.totalDiscount,
         taxAmount: totals.taxAmount,
+        taxableAmount: totals.taxableAmount,
+        exemptAmount: totals.exemptAmount,
         totalAmount: totals.totalAmount,
         balanceAmount: newBalance,
         paymentStatus: newPaymentStatus,
@@ -2834,7 +2912,28 @@ export default function FrontOfficeDesk() {
         });
 
         setIsProcedureModalOpen(false);
-        setRoutingAppointment(selectedAppointment);
+
+        // This handoff bills a genuinely separate "Doctor Consultation" —
+        // selectedAppointment.appointmentTypeId is still whatever the EXPERT's
+        // procedure category was (e.g. Skin Test), which has nothing to do
+        // with the doctor being routed to next. Passing that id through
+        // unchanged would silently bill the expert's procedure a second
+        // time (its own price/tax/commission) under a "Doctor Consultation
+        // Fee" label — resolve the real Doctor Consultation category by
+        // name and override it on the in-memory routing copy so
+        // handleConfirmRoute's createConsultationBill call (which reads
+        // routingAppointment.appointmentTypeId) bills the correct category.
+        // The original Firestore appointment document is untouched.
+        const doctorConsultationType = appointmentTypes.find(
+          (t) => t.name?.toLowerCase() === "doctor consultation",
+        );
+
+        setRoutingAppointment({
+          ...selectedAppointment,
+          appointmentTypeId:
+            doctorConsultationType?.id ||
+            selectedAppointment.appointmentTypeId,
+        } as any);
         setRoutingCabin(selectedAppointment.cabinName || "");
         setRoutingDoctorId(
           selectedAppointment.doctorId &&
@@ -2843,8 +2942,10 @@ export default function FrontOfficeDesk() {
             : "",
         );
         setRoutingChargeConsultation(false);
-        setRoutingApplyTax(false);
-        setRoutingAddCommission(false);
+        setRoutingApplyTax(Boolean(doctorConsultationType?.isTaxable));
+        setRoutingAddCommission(
+          doctorConsultationType?.calculateCommission !== false,
+        );
         setRoutingTarget("doctor");
         setIsRoutingModalOpen(true);
 
@@ -3784,6 +3885,8 @@ export default function FrontOfficeDesk() {
           discountAmount: pkgTotals.totalDiscount,
           taxPercentage: pkgTaxPercentage,
           taxAmount: pkgTotals.taxAmount,
+          taxableAmount: pkgTotals.taxableAmount,
+          exemptAmount: pkgTotals.exemptAmount,
           totalAmount: pkgTotals.totalAmount,
           status: "draft" as const,
           paymentStatus: "unpaid" as const,
@@ -4237,6 +4340,7 @@ export default function FrontOfficeDesk() {
         activePatientPackages={activePatientPackages}
         addReferrerRow={addReferrerRow}
         appointmentTypes={appointmentTypes}
+        defaultTaxPercentage={billingSettings?.defaultTaxPercentage || 0}
         doctors={doctors}
         experts={experts}
         intakeMode={intakeMode}
@@ -4303,45 +4407,54 @@ export default function FrontOfficeDesk() {
             finaliseSelectedItems.includes(i.id),
           );
 
-          procedureItemsToAdd = billedItems.map((i: any) => {
-            const assignedExpertId = itemExperts[i.id];
-            let itemClinicianId = clinicianId;
-            let itemClinicianName = clinicianName;
-            let itemComm = defaultComm;
-
-            if (assignedExpertId) {
-              const cl =
-                experts.find((e) => e.id === assignedExpertId) ||
-                doctors.find((d) => d.id === assignedExpertId);
-
-              if (cl) {
-                itemClinicianId = cl.id;
-                itemClinicianName = cl.name;
-                itemComm = cl.defaultCommission || 0;
-              }
-            }
-
+          procedureItemsToAdd = billedItems.flatMap((i: any) => {
+            const assignedIds =
+              itemExperts[i.id] && itemExperts[i.id].length > 0
+                ? itemExperts[i.id]
+                : [clinicianId];
+            const shareCount = assignedIds.length;
+            const shareFee = i.fee / shareCount;
             const pType = appointmentTypes.find((t) => t.id === i.id);
 
-            if (pType && pType.calculateCommission === false) {
-              itemComm = 0;
-            }
+            return assignedIds.map((cid) => {
+              const cl =
+                experts.find((e) => e.id === cid) ||
+                doctors.find((d) => d.id === cid);
+              let itemComm = cl?.defaultCommission || defaultComm;
 
-            return {
-              id: crypto.randomUUID(),
-              appointmentTypeId:
-                apptToFinalise.appointmentTypeId || "procedure-fee",
-              appointmentTypeName: `${i.name} (Procedure Fee)`,
-              price: i.fee,
-              quantity: 1,
-              commission: itemComm,
-              doctorId: itemClinicianId,
-              doctorName: itemClinicianName,
-              discountValue: 0,
-              discountType: "percent" as const,
-              discountAmount: 0,
-              amount: i.fee,
-            };
+              // Category's own commission % takes priority over each
+              // clinician's individual default — same priority rule used
+              // everywhere else this session.
+              if (pType) {
+                if (pType.calculateCommission === false) {
+                  itemComm = 0;
+                } else if (typeof pType.defaultCommission === "number") {
+                  itemComm = pType.defaultCommission;
+                }
+              }
+
+              return {
+                id: crypto.randomUUID(),
+                appointmentTypeId:
+                  apptToFinalise.appointmentTypeId || "procedure-fee",
+                appointmentTypeName:
+                  shareCount > 1
+                    ? `${i.name} (Procedure Fee — ${cl?.name || "Clinician"}'s share)`
+                    : `${i.name} (Procedure Fee)`,
+                price: shareFee,
+                quantity: 1,
+                commission: itemComm,
+                calculateCommission: pType?.calculateCommission,
+                isTaxable: pType?.isTaxable,
+                taxRate: pType?.taxRate,
+                doctorId: cl?.id || clinicianId,
+                doctorName: cl?.name || clinicianName,
+                discountValue: 0,
+                discountType: "percent" as const,
+                discountAmount: 0,
+                amount: shareFee,
+              };
+            });
           });
           totalFee = billedItems.reduce(
             (sum: number, i: any) => sum + i.fee,
@@ -4349,21 +4462,22 @@ export default function FrontOfficeDesk() {
           );
         } else {
           let procComm = defaultComm;
+          let procType: (typeof appointmentTypes)[number] | undefined;
 
           if (rec.items && rec.items.length === 1) {
-            const pType = appointmentTypes.find(
+            procType = appointmentTypes.find(
               (t) => t.id === rec.items[0].id,
             );
-
-            if (pType && pType.calculateCommission === false) {
-              procComm = 0;
-            }
           } else {
             // If multiple or unknown, try to match by name
-            const pType = appointmentTypes.find((t) => t.name === rec.name);
+            procType = appointmentTypes.find((t) => t.name === rec.name);
+          }
 
-            if (pType && pType.calculateCommission === false) {
+          if (procType) {
+            if (procType.calculateCommission === false) {
               procComm = 0;
+            } else if (typeof procType.defaultCommission === "number") {
+              procComm = procType.defaultCommission;
             }
           }
 
@@ -4376,6 +4490,9 @@ export default function FrontOfficeDesk() {
               price: rec.fee,
               quantity: 1,
               commission: procComm,
+              calculateCommission: procType?.calculateCommission,
+              isTaxable: procType?.isTaxable,
+              taxRate: procType?.taxRate,
               doctorId: clinicianId,
               doctorName: clinicianName,
               discountValue: 0,
@@ -4394,13 +4511,26 @@ export default function FrontOfficeDesk() {
           const billing =
             await appointmentBillingService.getBillingById(billingId);
 
-          if (billing && isBillingLocked(billing)) {
+          if (!billing) {
+            // billingId was set on the appointment but the invoice it
+            // points to no longer resolves (deleted, or a stale/orphaned
+            // reference) — previously this silently dropped the procedure
+            // fee (neither branch below ran, yet billingId stayed truthy so
+            // the "create fresh invoice" fallback further down never fired
+            // either). Treat it the same as a locked invoice: fall through
+            // to creating a new one instead of losing the charge.
+            console.warn(
+              `Billing record ${billingId} referenced by appointment ${apptToFinalise.id} was not found — creating a new invoice for this procedure instead.`,
+            );
+            followUpAfterLock = true;
+            billingId = null;
+          } else if (isBillingLocked(billing)) {
             // This invoice may already be IRD-synced (sync happens at
             // creation, not at a later "Finalize") — updateBilling would
             // throw rather than silently patch a locked invoice's items.
             followUpAfterLock = true;
             billingId = null;
-          } else if (billing) {
+          } else {
             const updatedItems = [
               ...(billing.items || []),
               ...procedureItemsToAdd,
@@ -4499,6 +4629,8 @@ export default function FrontOfficeDesk() {
               mainDiscountAmount: totals.mainDiscountAmount,
               discountAmount: totals.totalDiscount,
               taxAmount: totals.taxAmount,
+              taxableAmount: totals.taxableAmount,
+              exemptAmount: totals.exemptAmount,
               totalAmount: totals.totalAmount,
               balanceAmount: newBalance,
               paymentStatus: newPaymentStatus,
@@ -4607,6 +4739,8 @@ export default function FrontOfficeDesk() {
             discountAmount: procTotals.totalDiscount,
             taxPercentage: procTaxPercentage,
             taxAmount: procTotals.taxAmount,
+            taxableAmount: procTotals.taxableAmount,
+            exemptAmount: procTotals.exemptAmount,
             totalAmount: procTotals.totalAmount,
             status: "draft" as const,
             paymentStatus: "unpaid" as const,
@@ -4631,8 +4765,11 @@ export default function FrontOfficeDesk() {
 
       if (rec && rec.items && Array.isArray(rec.items)) {
         for (const i of rec.items) {
-          if (finaliseSelectedItems.includes(i.id) && itemExperts[i.id]) {
-            firstAssignedExpert = itemExperts[i.id];
+          if (
+            finaliseSelectedItems.includes(i.id) &&
+            itemExperts[i.id]?.length
+          ) {
+            firstAssignedExpert = itemExperts[i.id][0];
             break;
           }
         }
@@ -4923,7 +5060,14 @@ export default function FrontOfficeDesk() {
               appointmentTypeName: appointmentTypeName,
               price: price,
               quantity: 1,
-              commission: docInfo?.defaultCommission || 0,
+              commission:
+                apptType?.calculateCommission !== false &&
+                typeof apptType?.defaultCommission === "number"
+                  ? apptType.defaultCommission
+                  : docInfo?.defaultCommission || 0,
+              calculateCommission: apptType?.calculateCommission,
+              isTaxable: apptType?.isTaxable,
+              taxRate: apptType?.taxRate,
               doctorId: clinicianId,
               doctorName: docInfo
                 ? docInfo.name.startsWith("Dr.") || isExpert
@@ -4990,6 +5134,8 @@ export default function FrontOfficeDesk() {
               discountAmount: settleTotals.totalDiscount,
               taxPercentage: settleTaxPercentage,
               taxAmount: settleTotals.taxAmount,
+              taxableAmount: settleTotals.taxableAmount,
+              exemptAmount: settleTotals.exemptAmount,
               totalAmount: settleTotals.totalAmount,
               status: "draft" as const,
               paymentStatus: "unpaid" as const,
@@ -5103,7 +5249,10 @@ export default function FrontOfficeDesk() {
           icon: <IoPlayOutline className="w-4 h-4" />,
           colorClass:
             "bg-indigo-500 text-white hover:bg-indigo-600 animate-pulse",
-          onClick: () => handleSendToDoctor(appt.id),
+          onClick: () =>
+            hasDoctor
+              ? handleSendToDoctor(appt.id)
+              : handleSendToExpert(appt.id),
         };
       case "doctor": {
         if (currentExpertId && !currentDoctorId) {
@@ -6079,7 +6228,7 @@ export default function FrontOfficeDesk() {
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
               onClick={() => setApptToFinalise(null)}
             />
-            <div className="bg-surface rounded border border-border-base shadow-xl max-w-md w-full mx-4 relative z-10 p-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-surface rounded border border-border-base shadow-xl max-w-md sm:max-w-xl w-full mx-4 relative z-10 p-5 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
               <h3 className="font-bold text-lg text-text-main mb-2">
                 Finalise Procedure
               </h3>
@@ -6097,7 +6246,7 @@ export default function FrontOfficeDesk() {
                       (item: any) => (
                         <div
                           key={item.id}
-                          className="flex justify-between items-center bg-surface border border-border-base rounded p-2"
+                          className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 bg-surface border border-border-base rounded p-2"
                         >
                           <Checkbox
                             isSelected={finaliseSelectedItems.includes(item.id)}
@@ -6118,38 +6267,72 @@ export default function FrontOfficeDesk() {
                               {item.name}
                             </span>
                           </Checkbox>
-                          <div className="flex flex-col items-end gap-1 mt-2 sm:mt-0">
+                          <div className="flex flex-col items-start sm:items-end gap-1 w-full sm:w-56 shrink-0">
                             <span className="text-[12.5px] text-text-muted font-semibold">
                               NPR {item.fee.toLocaleString()}
                             </span>
-                            <select
-                              className="text-[11px] border border-border-base rounded px-1 py-0.5 bg-surface-2 w-40 focus:outline-primary"
-                              value={itemExperts[item.id] || ""}
-                              onChange={(e) =>
-                                setItemExperts((prev) => ({
-                                  ...prev,
-                                  [item.id]: e.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">
-                                Auto (Prescribing Clinician)
-                              </option>
-                              <optgroup label="Experts">
-                                {experts.map((exp) => (
-                                  <option key={exp.id} value={exp.id}>
-                                    {exp.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                              <optgroup label="Doctors">
-                                {doctors.map((doc) => (
-                                  <option key={doc.id} value={doc.id}>
-                                    {doc.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            </select>
+                            <div className="w-full max-h-28 overflow-y-auto border border-border-base rounded bg-surface-2 p-1">
+                              <p className="text-[9.5px] text-text-muted px-1 pb-1">
+                                Assign clinician(s) — blank = Auto
+                              </p>
+                              {[
+                                ...experts.map((e) => ({
+                                  ...e,
+                                  group: "Expert",
+                                })),
+                                ...doctors.map((d) => ({
+                                  ...d,
+                                  group: "Doctor",
+                                })),
+                              ].map((cl) => {
+                                const selected = (
+                                  itemExperts[item.id] || []
+                                ).includes(cl.id);
+
+                                return (
+                                  <label
+                                    key={`${cl.group}-${cl.id}`}
+                                    className="flex items-center gap-1.5 px-1 py-0.5 text-[10.5px] hover:bg-surface rounded cursor-pointer"
+                                  >
+                                    <input
+                                      checked={selected}
+                                      className="h-3 w-3"
+                                      type="checkbox"
+                                      onChange={(e) =>
+                                        setItemExperts((prev) => {
+                                          const current = prev[item.id] || [];
+                                          const next = e.target.checked
+                                            ? [...current, cl.id]
+                                            : current.filter(
+                                              (id) => id !== cl.id,
+                                            );
+
+                                          return {
+                                            ...prev,
+                                            [item.id]: next,
+                                          };
+                                        })
+                                      }
+                                    />
+                                    <span className="truncate">
+                                      {cl.name}{" "}
+                                      <span className="text-text-muted/60">
+                                        ({cl.group})
+                                      </span>
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            {(itemExperts[item.id]?.length || 0) > 1 && (
+                              <p className="text-[9.5px] text-primary text-left sm:text-right">
+                                Split {itemExperts[item.id].length}-way: NPR{" "}
+                                {(
+                                  item.fee / itemExperts[item.id].length
+                                ).toFixed(0)}{" "}
+                                each
+                              </p>
+                            )}
                           </div>
                         </div>
                       ),
@@ -6279,7 +6462,7 @@ export default function FrontOfficeDesk() {
                 );
               })()}
 
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
                 <button
                   className="px-4 py-2 rounded text-sm font-semibold border border-border-base text-text-muted hover:text-red-500 hover:border-red-500 hover:bg-red-50 transition-colors"
                   disabled={isFinalisingProcedure}

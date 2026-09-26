@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { IoCloseOutline, IoSearchOutline } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
@@ -25,11 +25,59 @@ export const getClinicianTypeDefaults = (
     (t: any) => t.name?.toLowerCase() === wantedName,
   );
 
+  // Prefer the matched category's own settings (source of truth) over the
+  // doctor/expert guess — a category configured to bill at front desk or
+  // calculate commission should win regardless of clinician type.
   return {
-    chargeConsultation: type === "doctor",
-    addCommission: type === "expert",
+    chargeConsultation: match
+      ? Boolean(match.billAtFrontDesk)
+      : type === "doctor",
+    addCommission: match
+      ? match.calculateCommission !== false
+      : type === "expert",
     appointmentTypeId: match?.id || "",
   };
+};
+
+/**
+ * Best-effort preview price for a clinician row — mirrors (simplified) the
+ * authoritative pricing logic in front-office-desk.tsx's createConsultationBill
+ * (catalog appointment-type price, or the doctor's own consultationCharge for
+ * a consultation category, or 0 for consuming an already-paid package
+ * session) so staff can see roughly what they're about to charge BEFORE
+ * submitting, and adjust it if needed. The real invoice total is always
+ * computed server-side by calculateInvoiceTotals — this is a preview, not
+ * the source of truth.
+ */
+export const getDefaultRowPrice = (
+  row: { clinicianType: "doctor" | "expert"; clinicianId: string; appointmentTypeId: string },
+  appointmentTypes: any[],
+  packages: any[],
+  doctors: any[],
+): number => {
+  if (!row.appointmentTypeId) return 0;
+  if (row.appointmentTypeId.startsWith("consume_pkg_")) return 0;
+  if (row.appointmentTypeId.startsWith("pkg_")) {
+    const pkg = packages.find((p) => `pkg_${p.id}` === row.appointmentTypeId);
+
+    return pkg?.price || 0;
+  }
+
+  const apptType = appointmentTypes.find((t) => t.id === row.appointmentTypeId);
+
+  if (!apptType) return 0;
+
+  const isConsultation = apptType.name?.toLowerCase().includes("consult");
+
+  if (isConsultation && row.clinicianType === "doctor" && row.clinicianId) {
+    const doc = doctors.find((d) => d.id === row.clinicianId);
+
+    if (doc?.consultationCharge !== undefined) {
+      return Number(doc.consultationCharge);
+    }
+  }
+
+  return Number(apptType.price) || 0;
 };
 
 export interface QuickIntakeModalProps {
@@ -59,6 +107,10 @@ export interface QuickIntakeModalProps {
   addReferrerRow: () => void;
   updateReferrerRow: (index: number, key: string, value: any) => void;
   removeReferrerRow: (index: number) => void;
+  /** Clinic's default tax %, for the live total preview below — matches
+   * what appointmentBillingService.calculateInvoiceTotals will actually
+   * apply when "Apply Tax to Invoice" is checked. */
+  defaultTaxPercentage?: number;
 }
 
 export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
@@ -88,7 +140,31 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
   addReferrerRow,
   updateReferrerRow,
   removeReferrerRow,
+  defaultTaxPercentage = 0,
 }) => {
+  // Escape-to-close and focus-on-open — matches the pattern already
+  // established on the app's other modal shells (appointments-billing.tsx's
+  // ModalShell, the shared src/components/ui/modal.tsx); this modal never
+  // had it, so pressing Escape (an instinctive habit) did nothing and left
+  // the backdrop intercepting every subsequent click until a page reload.
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    panelRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   const setIsQuickIntakeOpen = (open: boolean) => {
     if (!open) onClose();
@@ -108,7 +184,11 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
 
       {/* Scroll container — sits over backdrop */}
       <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4 pointer-events-none">
-        <div className="bg-surface rounded border border-border-base shadow-2xl w-full max-w-6xl relative my-auto pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
+        <div
+          ref={panelRef}
+          className="bg-surface rounded border border-border-base shadow-2xl w-full max-w-6xl relative my-auto pointer-events-auto animate-in fade-in zoom-in-95 duration-200 outline-none"
+          tabIndex={-1}
+        >
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-border-base bg-surface-2 flex justify-between items-center">
             <div>
               <h3 className="font-bold text-[14px] sm:text-[14.5px] text-text-main">
@@ -119,6 +199,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
               </p>
             </div>
             <button
+              aria-label="Close"
               className="text-text-muted hover:text-text-main p-1"
               onClick={() => setIsQuickIntakeOpen(false)}
             >
@@ -587,19 +668,28 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
 
                                   setQuickIntakeForm((prev: any) => ({
                                     ...prev,
-                                    clinicians: prev.clinicians.map((c: any) =>
-                                      c.id === row.id
-                                        ? {
-                                            ...c,
-                                            clinicianType: newType,
-                                            clinicianId: "",
-                                            ...getClinicianTypeDefaults(
-                                              newType,
-                                              appointmentTypes,
-                                            ),
-                                          }
-                                        : c,
-                                    ),
+                                    clinicians: prev.clinicians.map((c: any) => {
+                                      if (c.id !== row.id) return c;
+                                      const updated = {
+                                        ...c,
+                                        clinicianType: newType,
+                                        clinicianId: "",
+                                        ...getClinicianTypeDefaults(
+                                          newType,
+                                          appointmentTypes,
+                                        ),
+                                      };
+
+                                      return {
+                                        ...updated,
+                                        price: getDefaultRowPrice(
+                                          updated,
+                                          appointmentTypes,
+                                          packages,
+                                          doctors,
+                                        ),
+                                      };
+                                    }),
                                   }));
                                 }}
                               >
@@ -617,14 +707,23 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 onChange={(e) => {
                                   setQuickIntakeForm((prev: any) => ({
                                     ...prev,
-                                    clinicians: prev.clinicians.map((c: any) =>
-                                      c.id === row.id
-                                        ? {
-                                            ...c,
-                                            clinicianId: e.target.value,
-                                          }
-                                        : c,
-                                    ),
+                                    clinicians: prev.clinicians.map((c: any) => {
+                                      if (c.id !== row.id) return c;
+                                      const updated = {
+                                        ...c,
+                                        clinicianId: e.target.value,
+                                      };
+
+                                      return {
+                                        ...updated,
+                                        price: getDefaultRowPrice(
+                                          updated,
+                                          appointmentTypes,
+                                          packages,
+                                          doctors,
+                                        ),
+                                      };
+                                    }),
                                   }));
                                 }}
                               >
@@ -663,14 +762,43 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                   if (key) {
                                     setQuickIntakeForm((prev: any) => ({
                                       ...prev,
-                                      clinicians: prev.clinicians.map((c: any) =>
-                                        c.id === row.id
-                                          ? {
-                                              ...c,
-                                              appointmentTypeId: String(key),
-                                            }
-                                          : c,
-                                      ),
+                                      clinicians: prev.clinicians.map((c: any) => {
+                                        if (c.id !== row.id) return c;
+                                        const updated = {
+                                          ...c,
+                                          appointmentTypeId: String(key),
+                                        };
+                                        // Previously "Charge Fee"/"Add
+                                        // Commission" defaulted purely from
+                                        // doctor-vs-expert, completely
+                                        // ignoring which specific service
+                                        // was picked. Now they default from
+                                        // the selected service's own
+                                        // settings instead — still editable
+                                        // by staff afterward for a one-off
+                                        // exception.
+                                        const at = appointmentTypes.find(
+                                          (t: any) => t.id === String(key),
+                                        );
+
+                                        if (at) {
+                                          updated.chargeConsultation = Boolean(
+                                            at.billAtFrontDesk,
+                                          );
+                                          updated.addCommission =
+                                            at.calculateCommission !== false;
+                                        }
+
+                                        return {
+                                          ...updated,
+                                          price: getDefaultRowPrice(
+                                            updated,
+                                            appointmentTypes,
+                                            packages,
+                                            doctors,
+                                          ),
+                                        };
+                                      }),
                                     }));
                                   }
                                 }}
@@ -755,6 +883,42 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 </label>
                               </div>
                             )}
+                          {/* Previously invisible until after the invoice was
+                              already created — staff had no way to see, let
+                              alone adjust, what this row would actually
+                              charge. Auto-filled from the catalog/doctor's
+                              consultation fee, editable. */}
+                          {row.chargeConsultation &&
+                            row.clinicianId &&
+                            row.clinicianId !== "unassigned" && (
+                              <div className="mt-2 max-w-[200px]">
+                                <label className="block text-[11px] font-semibold text-text-muted mb-1">
+                                  Price (NPR)
+                                </label>
+                                <input
+                                  className="w-full h-8 px-2.5 text-[12.5px] border border-border-base rounded outline-none focus:border-primary bg-surface text-text-main transition-colors"
+                                  min={0}
+                                  type="number"
+                                  value={row.price ?? ""}
+                                  onChange={(e) => {
+                                    const n = parseFloat(e.target.value);
+
+                                    setQuickIntakeForm((prev: any) => ({
+                                      ...prev,
+                                      clinicians: prev.clinicians.map(
+                                        (c: any) =>
+                                          c.id === row.id
+                                            ? {
+                                                ...c,
+                                                price: isNaN(n) ? 0 : n,
+                                              }
+                                            : c,
+                                      ),
+                                    }));
+                                  }}
+                                />
+                              </div>
+                            )}
                         </div>
                       ),
                     )}
@@ -819,6 +983,62 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       />
                     </div>
                   </div>
+
+                  {/* Live estimate — previously staff committed to "Complete
+                      Check-In" with zero visibility into what invoice total
+                      they were about to create. This mirrors (client-side)
+                      the same math calculateInvoiceTotals applies
+                      server-side; that call remains the authoritative total
+                      actually billed. */}
+                  {(() => {
+                    const chargingRows = (quickIntakeForm.clinicians || []).filter(
+                      (c: any) =>
+                        c.chargeConsultation &&
+                        c.clinicianId &&
+                        c.clinicianId !== "unassigned",
+                    );
+
+                    if (chargingRows.length === 0) return null;
+
+                    const subtotal = chargingRows.reduce(
+                      (sum: number, c: any) => sum + (Number(c.price) || 0),
+                      0,
+                    );
+                    const discountAmount =
+                      quickIntakeForm.discountType === "percent"
+                        ? (subtotal * (quickIntakeForm.discountValue || 0)) / 100
+                        : Math.min(quickIntakeForm.discountValue || 0, subtotal);
+                    const afterDiscount = Math.max(0, subtotal - discountAmount);
+                    const taxAmount = quickIntakeForm.applyTax
+                      ? (afterDiscount * defaultTaxPercentage) / 100
+                      : 0;
+                    const total = afterDiscount + taxAmount;
+
+                    return (
+                      <div className="mt-1 p-2.5 rounded border border-border-base bg-surface-2/50 text-[12px] space-y-1">
+                        <div className="flex justify-between text-text-muted">
+                          <span>Subtotal</span>
+                          <span>NPR {subtotal.toLocaleString()}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between text-text-muted">
+                            <span>Discount</span>
+                            <span>- NPR {discountAmount.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {taxAmount > 0 && (
+                          <div className="flex justify-between text-text-muted">
+                            <span>Tax ({defaultTaxPercentage}%)</span>
+                            <span>NPR {taxAmount.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-bold text-text-main pt-1 border-t border-border-base">
+                          <span>Estimated Total</span>
+                          <span>NPR {total.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Payment details for Package Sales */}
                   {quickIntakeForm.appointmentTypeId.startsWith("pkg_") && (

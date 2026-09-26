@@ -342,6 +342,8 @@ export default function PathologyPage() {
     categoryId: "",
     parameterId: "",
     price: "",
+    isTaxable: false,
+    taxRate: "",
   });
 
   const [isEditing, setIsEditing] = useState(false);
@@ -1729,6 +1731,8 @@ export default function PathologyPage() {
       categoryId: "",
       parameterId: "",
       price: "",
+      isTaxable: false,
+      taxRate: "",
     });
     setIsEditing(false);
   };
@@ -1804,6 +1808,17 @@ export default function PathologyPage() {
         branchId: clinicId!,
         isActive: true,
         createdBy: currentUser?.uid || "",
+        isTaxable: testTypeForm.isTaxable,
+        // null (not undefined — pathologyService strips undefined but keeps
+        // null, correctly clearing a previously-set rate) when not taxable
+        // or left blank.
+        taxRate:
+          testTypeForm.isTaxable && testTypeForm.taxRate.trim()
+            ? Math.min(
+                100,
+                Math.max(0, parseFloat(testTypeForm.taxRate) || 0),
+              )
+            : (null as any),
       };
 
       if (isEditing) {
@@ -1850,6 +1865,9 @@ export default function PathologyPage() {
       categoryId: isCategory ? testType.targetId || "" : "",
       parameterId: !isCategory ? testType.targetId || "" : "",
       price: testType.price.toString(),
+      isTaxable: testType.isTaxable ?? false,
+      taxRate:
+        testType.taxRate !== undefined ? String(testType.taxRate) : "",
     });
     setIsEditing(true);
     testTypeModalState.open();
@@ -5049,6 +5067,46 @@ export default function PathologyPage() {
                     setTestTypeForm((prev) => ({ ...prev, price: v }))
                   }
                 />
+
+                {/* Sourced automatically into every invoice item billed for
+                    this test (Pathology Billing) instead of staff manually
+                    toggling tax per invoice regardless of which test is
+                    actually being charged. */}
+                <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border-base bg-surface-2/30">
+                  <label className="flex items-center gap-2 cursor-pointer text-[13px] font-medium text-text-main">
+                    <input
+                      checked={testTypeForm.isTaxable}
+                      className="w-3.5 h-3.5 rounded border-border-base text-primary focus:ring-primary cursor-pointer"
+                      type="checkbox"
+                      onChange={(e) =>
+                        setTestTypeForm((prev) => ({
+                          ...prev,
+                          isTaxable: e.target.checked,
+                        }))
+                      }
+                    />
+                    Taxable
+                  </label>
+                  <p className="text-xs text-text-muted ml-5.5 leading-relaxed">
+                    If checked, invoices for this test are automatically
+                    taxed at the rate below.
+                  </p>
+                  {testTypeForm.isTaxable && (
+                    <div className="max-w-[160px] mt-1">
+                      <Input
+                        label="Tax Rate %"
+                        max="100"
+                        min="0"
+                        placeholder="Uses clinic default"
+                        type="number"
+                        value={testTypeForm.taxRate}
+                        onValueChange={(v) =>
+                          setTestTypeForm((prev) => ({ ...prev, taxRate: v }))
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="px-5 py-3 border-t border-border-base/50 bg-surface-2 flex justify-end gap-2">
                 <Button variant="light" onClick={testTypeModalState.close}>

@@ -493,6 +493,8 @@ export default function AppointmentBillingPage() {
     totalDiscount: 0,
     taxAmount: 0,
     totalAmount: 0,
+    taxableAmount: 0,
+    exemptAmount: 0,
   });
   const [patientDue, setPatientDue] = useState(0);
   const [otherModulesDue, setOtherModulesDue] = useState(0);
@@ -926,7 +928,24 @@ export default function AppointmentBillingPage() {
           );
           const clinician = doc || exp;
 
-          item.commission = clinician?.defaultCommission || 0;
+          // This service's own commission % (configured in Appointment Type
+          // Settings) takes priority over the clinician's blanket default —
+          // previously commission always came from the doctor/expert alone,
+          // regardless of which service was actually being billed.
+          item.commission =
+            at.calculateCommission !== false &&
+            typeof at.defaultCommission === "number"
+              ? at.defaultCommission
+              : clinician?.defaultCommission || 0;
+          item.calculateCommission = at.calculateCommission;
+
+          // Sourced automatically from the service instead of staff
+          // manually toggling tax per invoice regardless of which service
+          // is being charged — left undefined (falls back to the existing
+          // invoice-level toggle/clinic default) when the type doesn't
+          // specify its own tax settings.
+          item.isTaxable = at.isTaxable;
+          item.taxRate = at.taxRate;
         }
       }
 
@@ -935,8 +954,16 @@ export default function AppointmentBillingPage() {
         const doc = doctors.find((d) => d.id === updates.doctorId);
         const exp = experts.find((e) => e.id === updates.doctorId);
         const clinician = doc || exp;
+        const at = appointmentTypes.find(
+          (t) => t.id === item.appointmentTypeId,
+        );
 
-        item.commission = clinician?.defaultCommission || 0;
+        item.commission =
+          at &&
+          at.calculateCommission !== false &&
+          typeof at.defaultCommission === "number"
+            ? at.defaultCommission
+            : clinician?.defaultCommission || 0;
         item.doctorName = clinician?.name || "";
       }
 
@@ -1095,6 +1122,8 @@ export default function AppointmentBillingPage() {
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
+        taxableAmount: calculations.taxableAmount,
+        exemptAmount: calculations.exemptAmount,
         totalAmount: calculations.totalAmount,
         status: "draft",
         paymentStatus: "unpaid",
@@ -1726,25 +1755,54 @@ export default function AppointmentBillingPage() {
                         />
                       </div>
                       <div className="md:col-span-1">
-                        <FlatInput
-                          disabled={!formData.applyTax}
-                          label="Tax %"
-                          max="100"
-                          min="0"
-                          type="number"
-                          value={(
-                            item.taxRate ??
-                            billingSettings?.defaultTaxPercentage ??
-                            13
-                          ).toString()}
-                          onChange={(v) => {
-                            const n = parseFloat(v);
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[12px] font-medium text-text-muted flex items-center gap-1">
+                            <input
+                              checked={item.isTaxable ?? false}
+                              className="h-3.5 w-3.5"
+                              disabled={!formData.applyTax}
+                              type="checkbox"
+                              onChange={(e) =>
+                                updateInvoiceItem(i, {
+                                  isTaxable: e.target.checked,
+                                  // Default to the clinic's rate the moment
+                                  // staff manually flip this item taxable —
+                                  // a category-sourced item already carries
+                                  // its own rate from updateInvoiceItem's
+                                  // appointmentTypeId branch above.
+                                  taxRate: e.target.checked
+                                    ? (item.taxRate ??
+                                      billingSettings?.defaultTaxPercentage ??
+                                      13)
+                                    : item.taxRate,
+                                })
+                              }
+                            />
+                            Taxable
+                          </label>
+                          <FlatInput
+                            disabled={!formData.applyTax || !item.isTaxable}
+                            label=""
+                            max="100"
+                            min="0"
+                            type="number"
+                            value={(
+                              item.taxRate ??
+                              billingSettings?.defaultTaxPercentage ??
+                              13
+                            ).toString()}
+                            onChange={(v) => {
+                              const n = parseFloat(v);
 
-                            updateInvoiceItem(i, {
-                              taxRate: Math.min(100, Math.max(0, isNaN(n) ? 0 : n)),
-                            });
-                          }}
-                        />
+                              updateInvoiceItem(i, {
+                                taxRate: Math.min(
+                                  100,
+                                  Math.max(0, isNaN(n) ? 0 : n),
+                                ),
+                              });
+                            }}
+                          />
+                        </div>
                       </div>
                       <div className="md:col-span-2 flex items-end gap-2">
                         <div className="flex-1">

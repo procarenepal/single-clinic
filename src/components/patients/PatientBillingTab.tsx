@@ -435,6 +435,8 @@ export default function PatientBillingTab({
     totalDiscount: 0,
     taxAmount: 0,
     totalAmount: 0,
+    taxableAmount: 0,
+    exemptAmount: 0,
   });
 
   // ── Load ────────────────────────────────────────────────────────────────────
@@ -744,6 +746,8 @@ export default function PatientBillingTab({
           ? billingSettings.defaultTaxPercentage
           : 0,
         taxAmount: calculations.taxAmount,
+        taxableAmount: calculations.taxableAmount,
+        exemptAmount: calculations.exemptAmount,
         totalAmount: calculations.totalAmount,
         status: "draft" as const,
         paymentStatus: "unpaid" as const,
