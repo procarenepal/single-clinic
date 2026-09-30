@@ -582,6 +582,8 @@ export const pharmacyService = {
           total: newGrossTotal,
           discount: finalDiscount,
           taxAmount: finalTaxAmount,
+          taxableAmount,
+          exemptAmount,
           netAmount: finalNetAmount,
         };
       });
@@ -679,12 +681,11 @@ export const pharmacyService = {
       let javaSyncError: string | undefined;
 
       try {
-        const { billingApi } = await import("./api/billingApi");
+        const { billingApi, buildInvoicePayload } = await import(
+          "./api/billingApi"
+        );
         const { getNepaliFiscalYear } = await import("./irdCbmsService");
         const { clinicService } = await import("./clinicService");
-        const { computeIdempotencyKey } = await import(
-          "../utils/idempotencyKey"
-        );
         // IRD's irdEnabled lives on the Clinic document (that's what Clinic
         // Settings > IRD CBMS Configuration actually writes to) — never on
         // ClinicSettings, which has its own same-named but always-unset field.
@@ -700,6 +701,17 @@ export const pharmacyService = {
         const finalNetAmount = purchaseIdObj.netAmount ?? purchaseData.netAmount ?? 0;
         const finalTaxAmountForIrd = purchaseIdObj.taxAmount ?? purchaseData.taxAmount ?? 0;
         const finalDiscountForIrd = purchaseIdObj.discount ?? purchaseData.discount;
+        // The transaction already computed the real per-item taxable/exempt
+        // split (see pharmacyService.createPurchase's "F. Calculate final
+        // consistent parent totals" — it buckets each item by its OWN
+        // taxRate, not a blanket invoice-level one) and persisted it onto
+        // the purchase record. Previously this block recomputed a cruder
+        // all-taxable-or-all-exempt split from `finalTaxAmountForIrd > 0`
+        // alone, so a mixed-rate purchase (some medicines taxable, some
+        // VAT-exempt) reported the WRONG split to IRD even though the
+        // saved record and printed invoice already had the correct one.
+        const finalTaxableAmount = purchaseIdObj.taxableAmount ?? 0;
+        const finalExemptAmount = purchaseIdObj.exemptAmount ?? 0;
 
         const invoiceItems = finalItems.map((item: any) => ({
           itemName:
@@ -707,19 +719,22 @@ export const pharmacyService = {
           quantity: item.quantity || 1,
           rate: item.amount / item.quantity || 0,
           totalAmount: item.amount || 0,
-          isTaxable: (purchaseData.taxPercentage || 0) > 0,
+          // Each item's own resolved rate (falls back to the purchase-level
+          // default only when the medicine has no catalog rate configured —
+          // see MedicinePurchaseItem.taxRate), not a blanket "taxable iff
+          // the whole purchase's default rate is > 0".
+          isTaxable:
+            (item.taxRate ?? purchaseData.taxPercentage ?? 0) > 0,
         }));
-        const payload = {
-          firebasePatientId: (purchaseData as any).patientId || "",
-          buyerName: purchaseData.patientName || "Cash Sales",
-          buyerPan: (purchaseData as any).patientPanVat || "",
+        const payload = buildInvoicePayload({
+          clinicId: purchaseData.clinicId,
+          patientId: (purchaseData as any).patientId,
+          patientName: purchaseData.patientName,
+          patientPanVat: (purchaseData as any).patientPanVat,
           totalAmount: finalNetAmount,
-          taxableAmount:
-            finalTaxAmountForIrd > 0
-              ? finalNetAmount - finalTaxAmountForIrd
-              : 0,
+          taxableAmount: finalTaxableAmount,
           taxAmount: finalTaxAmountForIrd,
-          exemptAmount: finalTaxAmountForIrd === 0 ? finalNetAmount : 0,
+          exemptAmount: finalExemptAmount,
           discountAmount: finalDiscountForIrd,
           paymentMethod: purchaseData.paymentType,
           irdEnabled: Boolean(javaClinic?.irdEnabled),
@@ -727,17 +742,8 @@ export const pharmacyService = {
             purchaseData.purchaseDate || new Date(),
           ),
           preAssignedInvoiceNumber: purchaseIdObj.purchaseNo,
-          // Deterministic per-content key — a network-drop retry of this
-          // exact submission reuses it, so the backend returns the
-          // already-created invoice instead of minting a duplicate.
-          idempotencyKey: computeIdempotencyKey({
-            clinicId: purchaseData.clinicId,
-            buyerName: purchaseData.patientName || "Cash Sales",
-            totalAmount: finalNetAmount,
-            items: invoiceItems,
-          }),
           items: invoiceItems,
-        };
+        });
 
         const result = await billingApi.createInvoice(payload);
 
@@ -1354,12 +1360,11 @@ export const pharmacyService = {
 
         if (purchaseDoc.exists()) {
           const purchase = purchaseDoc.data() as MedicinePurchase;
-          const { billingApi } = await import("./api/billingApi");
+          const { billingApi, buildInvoicePayload } = await import(
+            "./api/billingApi"
+          );
           const { getNepaliFiscalYear } = await import("./irdCbmsService");
           const { clinicService } = await import("./clinicService");
-          const { computeIdempotencyKey } = await import(
-            "../utils/idempotencyKey"
-          );
           // IRD's irdEnabled lives on the Clinic document (that's what Clinic
           // Settings > IRD CBMS Configuration actually writes to) — never on
           // ClinicSettings, which has its own same-named but always-unset field.
@@ -1394,10 +1399,11 @@ export const pharmacyService = {
             totalAmount: -Math.abs(item.amount || 0),
             isTaxable: isOriginalTaxable,
           }));
-          const payload = {
-            firebasePatientId: (purchase as any).patientId || "",
-            buyerName: purchase.patientName || "Cash Sales",
-            buyerPan: (purchase as any).patientPanVat || "",
+          const payload = buildInvoicePayload({
+            clinicId: returnData.clinicId,
+            patientId: (purchase as any).patientId,
+            patientName: purchase.patientName,
+            patientPanVat: (purchase as any).patientPanVat,
             totalAmount: -Math.abs(returnData.totalAmount),
             taxableAmount: -returnTaxableAmount,
             taxAmount: -returnTaxAmount,
@@ -1418,17 +1424,8 @@ export const pharmacyService = {
             // notes already use — cosmetic only; the underlying number still
             // comes from the same shared sequence either way.
             invoicePrefix: "CN",
-            // Deterministic per-content key — a network-drop retry of this
-            // exact submission reuses it, so the backend returns the
-            // already-created invoice instead of minting a duplicate.
-            idempotencyKey: computeIdempotencyKey({
-              clinicId: returnData.clinicId,
-              buyerName: purchase.patientName || "Cash Sales",
-              totalAmount: -Math.abs(returnData.totalAmount),
-              items: returnItems,
-            }),
             items: returnItems,
-          };
+          });
 
           const result = await billingApi.createInvoice(payload);
 

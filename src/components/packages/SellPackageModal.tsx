@@ -178,65 +178,17 @@ export default function SellPackageModal({
         finalPatientPanVat = pat.patientPanVat;
       }
 
-      const taxPercentage = applyTax
-        ? billingSettings?.defaultTaxPercentage || 0
-        : 0;
-
       // 2. Create the Billing record
-      const billingItem = {
-        id: crypto.randomUUID(),
-        appointmentTypeId: "package-sale",
-        appointmentTypeName: `Package: ${pkg.name}`,
-        price: pkg.price,
-        quantity: 1,
-        commission: 0,
-        doctorId: "unassigned",
-        doctorName: "Clinic",
-        amount: pkg.price,
-        // TreatmentPackage has no isTaxable/taxRate setting of its own — the
-        // invoice-level "Apply Tax" toggle is the ONLY way to tax a package
-        // sale, so this item must explicitly mirror it (calculateInvoiceTotals
-        // no longer defaults an unconfigured item to taxable-when-toggle-on —
-        // see appointmentBillingService.ts / front-office-desk.tsx's matching
-        // fix — so without this a package sale could never be taxed at all).
-        isTaxable: taxPercentage > 0,
-      };
-      const totals = appointmentBillingService.calculateInvoiceTotals(
-        [billingItem],
-        "percent",
-        0,
-        taxPercentage,
-      );
-
-      const billingData = {
-        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-        clinicId: clinicId,
-        branchId: clinicId,
+      const billingData = appointmentBillingService.buildPackageSaleBillingData({
+        pkg,
+        clinicId,
         patientId: finalPatientId,
         patientName: finalPatientName,
         patientPanVat: finalPatientPanVat,
-        doctorId: "unassigned",
-        doctorName: "Clinic",
-        doctorType: "regular" as const,
-        invoiceDate: new Date(),
-        items: [billingItem],
-        subtotal: totals.subtotal,
-        itemDiscountAmount: 0,
-        mainDiscountAmount: 0,
-        discountType: "percent" as const,
-        discountValue: 0,
-        discountAmount: totals.totalDiscount,
-        taxPercentage,
-        taxAmount: totals.taxAmount,
-        taxableAmount: totals.taxableAmount,
-        exemptAmount: totals.exemptAmount,
-        totalAmount: totals.totalAmount,
-        status: "draft" as const,
-        paymentStatus: "unpaid" as const,
-        paidAmount: 0,
-        balanceAmount: totals.totalAmount,
+        applyTax,
+        defaultTaxPercentage: billingSettings?.defaultTaxPercentage,
         createdBy: currentUser.uid,
-      };
+      });
 
       const { id: billingId } =
         await appointmentBillingService.createBilling(billingData);

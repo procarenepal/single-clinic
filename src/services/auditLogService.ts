@@ -36,6 +36,31 @@ export interface PaginationOptions {
 }
 
 /**
+ * Recursively removes `undefined` values (including inside nested objects
+ * and arrays) — Firestore's addDoc/setDoc reject undefined anywhere in the
+ * document tree, not just at the top level.
+ */
+function deepStripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => deepStripUndefined(item)) as unknown as T;
+  }
+
+  if (value !== null && typeof value === "object" && !(value instanceof Date)) {
+    const cleaned: Record<string, unknown> = {};
+
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (val !== undefined) {
+        cleaned[key] = deepStripUndefined(val);
+      }
+    }
+
+    return cleaned as T;
+  }
+
+  return value;
+}
+
+/**
  * Service for managing audit logs
  */
 export const auditLogService = {
@@ -48,10 +73,14 @@ export const auditLogService = {
     try {
       const logsRef = collection(db, AUDIT_LOGS_COLLECTION);
 
-      // Clean up undefined values from logData to prevent Firestore errors
-      const sanitizedLogData = Object.fromEntries(
-        Object.entries(logData).filter(([_, value]) => value !== undefined),
-      );
+      // Clean up undefined values from logData to prevent Firestore errors.
+      // This used to only strip TOP-LEVEL undefined keys — Firestore
+      // rejects undefined anywhere in the object tree, not just at the
+      // top, so a nested field like details.before (undefined for a
+      // brand-new invoice with no prior state to diff against) still
+      // slipped through and threw on every logDiscountTaxChange call at
+      // invoice creation time. Now strips undefined at every level.
+      const sanitizedLogData = deepStripUndefined(logData);
 
       const logEntry = {
         ...sanitizedLogData,

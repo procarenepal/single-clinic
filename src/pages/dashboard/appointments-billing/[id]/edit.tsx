@@ -498,25 +498,22 @@ export default function EditInvoicePage() {
         );
 
         if (appointmentType) {
-          item.appointmentTypeName = appointmentType.name;
-          item.price = appointmentType.price;
-          item.categoryId = appointmentType.categoryId;
-
           const selectedDoctor = doctors.find(
             (d) => d.id === (item.doctorId || prev.doctorId),
           );
 
-          if (selectedDoctor) {
-            item.commission = selectedDoctor.defaultCommission;
-          }
-
-          // Sourced automatically from the service's own tax settings —
-          // this used to never be copied over at all, so every edited/
-          // added item had isTaxable permanently undefined regardless of
-          // what its Appointment Type actually configures. Matches
-          // appointments-billing.tsx's updateInvoiceItem (create form).
-          item.isTaxable = appointmentType.isTaxable;
-          item.taxRate = appointmentType.taxRate;
+          // Shared with the create-invoice form (appointments-billing.tsx)
+          // — also fixes this edit page not previously honoring a
+          // category's own configured commission override (it only ever
+          // used the doctor's blanket default), and not copying isTaxable/
+          // taxRate from the Appointment Type at all.
+          Object.assign(
+            item,
+            appointmentBillingService.resolveItemFieldsFromAppointmentType(
+              appointmentType,
+              selectedDoctor?.defaultCommission,
+            ),
+          );
         } else {
           // Check if it's a custom item from another row
           const customItem = prev.items.find(
@@ -943,14 +940,27 @@ export default function EditInvoicePage() {
                         value={item.doctorId || ""}
                         onChange={(id) => {
                           const d = doctors.find((doc) => doc.id === id);
+                          const currentType = appointmentTypes.find(
+                            (t) => t.id === item.appointmentTypeId,
+                          );
+                          // A category's own commission override must
+                          // survive a doctor change — this used to always
+                          // reset to the doctor's blanket default,
+                          // discarding whatever the selected service's own
+                          // rate was.
+                          const commission = currentType
+                            ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                                currentType,
+                                d?.defaultCommission,
+                              ).commission
+                            : (d?.defaultCommission ??
+                              billingSettings?.defaultCommission ??
+                              0);
 
                           updateInvoiceItem(index, {
                             doctorId: id,
                             doctorName: d?.name || "",
-                            commission:
-                              d?.defaultCommission ??
-                              billingSettings?.defaultCommission ??
-                              0,
+                            commission,
                           });
                         }}
                       />

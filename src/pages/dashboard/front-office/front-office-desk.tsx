@@ -1487,13 +1487,13 @@ export default function FrontOfficeDesk() {
               // takes priority over the clinician's blanket default —
               // previously commission always came from the doctor/expert
               // alone, regardless of which service was actually billed.
-              const resolvedCommission =
-                apptType.calculateCommission !== false &&
-                typeof apptType.defaultCommission === "number"
-                  ? apptType.defaultCommission
-                  : (isExpert
+              const resolvedFields =
+                appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                  apptType,
+                  isExpert
                     ? expInfo?.defaultCommission
-                    : docInfo?.defaultCommission) || 0;
+                    : docInfo?.defaultCommission,
+                );
 
               clApptTypeItem = {
                 id: crypto.randomUUID(),
@@ -1503,9 +1503,9 @@ export default function FrontOfficeDesk() {
                 quantity: 1,
                 commission:
                   cl.addCommission && apptType.calculateCommission !== false
-                    ? resolvedCommission
+                    ? resolvedFields.commission
                     : 0,
-                calculateCommission: apptType.calculateCommission,
+                calculateCommission: resolvedFields.calculateCommission,
                 doctorId: cl.clinicianId,
                 doctorName: isExpert
                   ? expInfo?.name || "Expert"
@@ -1514,8 +1514,8 @@ export default function FrontOfficeDesk() {
                 // Sourced automatically from the service instead of staff
                 // manually toggling tax per invoice regardless of which
                 // service is being charged.
-                isTaxable: apptType.isTaxable,
-                taxRate: apptType.taxRate,
+                isTaxable: resolvedFields.isTaxable,
+                taxRate: resolvedFields.taxRate,
               };
               totalInvoiceAmount += finalPrice;
             }
@@ -2127,20 +2127,22 @@ export default function FrontOfficeDesk() {
         doctors.find((d) => d.id === clinicianId) ||
         experts.find((e) => e.id === clinicianId);
 
+      const resolvedFields =
+        appointmentBillingService.resolveItemFieldsFromAppointmentType(
+          apptType,
+          (docInfo as any)?.defaultCommission,
+        );
+
       const newItem = {
         id: crypto.randomUUID(),
         appointmentTypeId: appt.appointmentTypeId,
         appointmentTypeName: apptType.name || "Procedure/Service Fee",
         price: price,
         quantity: 1,
-        commission:
-          apptType.calculateCommission !== false &&
-          typeof apptType.defaultCommission === "number"
-            ? apptType.defaultCommission
-            : (docInfo as any)?.defaultCommission || 0,
-        calculateCommission: apptType.calculateCommission,
-        isTaxable: apptType.isTaxable,
-        taxRate: apptType.taxRate,
+        commission: resolvedFields.commission,
+        calculateCommission: resolvedFields.calculateCommission,
+        isTaxable: resolvedFields.isTaxable,
+        taxRate: resolvedFields.taxRate,
         doctorId: clinicianId,
         doctorName: docInfo?.name || "Clinician",
         amount: price,
@@ -3859,68 +3861,18 @@ export default function FrontOfficeDesk() {
       }
 
       if (isPackageSale && pkg) {
-        const pkgTaxPercentage = quickIntakeForm.applyTax
-          ? billingSettings?.defaultTaxPercentage || 0
-          : 0;
-
         // 1. Create the Billing record (invoice number resolved by the Java backend)
-        const billingItem = {
-          id: crypto.randomUUID(),
-          appointmentTypeId: "package-sale",
-          appointmentTypeName: `Package: ${pkg.name}`,
-          price: pkg.price,
-          quantity: 1,
-          commission: 0,
-          doctorId: "unassigned",
-          doctorName: "Clinic",
-          amount: pkg.price,
-          // TreatmentPackage has no isTaxable/taxRate setting of its own
-          // (unlike AppointmentType/PathologyTestType) — the invoice-level
-          // "Apply Tax" toggle is the ONLY way to tax a package sale, so
-          // this item must explicitly mirror it. calculateInvoiceTotals no
-          // longer defaults an unconfigured item to taxable-when-toggle-on
-          // (that fallback caused a different bug for category-driven
-          // items — see appointmentBillingService.ts), so without this,
-          // a package sale could never be taxed at all, even with Apply
-          // Tax checked.
-          isTaxable: pkgTaxPercentage > 0,
-        };
-        const pkgTotals = appointmentBillingService.calculateInvoiceTotals(
-          [billingItem],
-          "percent",
-          0,
-          pkgTaxPercentage,
-        );
-
-        const billingData = {
-          invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
+        const billingData = appointmentBillingService.buildPackageSaleBillingData({
+          pkg,
           clinicId: clinicId!,
           branchId: branchId || clinicId!,
           patientId: patientIdToUse,
           patientName: patientNameToUse,
           patientPanVat: patientPanVatToUse,
-          doctorId: "unassigned",
-          doctorName: "Clinic",
-          doctorType: "regular" as const,
-          invoiceDate: new Date(),
-          items: [billingItem],
-          subtotal: pkgTotals.subtotal,
-          itemDiscountAmount: 0,
-          mainDiscountAmount: 0,
-          discountType: "percent" as const,
-          discountValue: 0,
-          discountAmount: pkgTotals.totalDiscount,
-          taxPercentage: pkgTaxPercentage,
-          taxAmount: pkgTotals.taxAmount,
-          taxableAmount: pkgTotals.taxableAmount,
-          exemptAmount: pkgTotals.exemptAmount,
-          totalAmount: pkgTotals.totalAmount,
-          status: "draft" as const,
-          paymentStatus: "unpaid" as const,
-          paidAmount: 0,
-          balanceAmount: pkgTotals.totalAmount,
+          applyTax: quickIntakeForm.applyTax,
+          defaultTaxPercentage: billingSettings?.defaultTaxPercentage,
           createdBy: currentUser?.uid || "system",
-        };
+        });
 
         const { id: billingId } =
           await appointmentBillingService.createBilling(billingData);
@@ -4447,18 +4399,20 @@ export default function FrontOfficeDesk() {
               const cl =
                 experts.find((e) => e.id === cid) ||
                 doctors.find((d) => d.id === cid);
-              let itemComm = cl?.defaultCommission || defaultComm;
-
               // Category's own commission % takes priority over each
               // clinician's individual default — same priority rule used
               // everywhere else this session.
-              if (pType) {
-                if (pType.calculateCommission === false) {
-                  itemComm = 0;
-                } else if (typeof pType.defaultCommission === "number") {
-                  itemComm = pType.defaultCommission;
-                }
-              }
+              const resolvedFields = pType
+                ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                    pType,
+                    cl?.defaultCommission ?? defaultComm,
+                  )
+                : {
+                    commission: cl?.defaultCommission || defaultComm,
+                    calculateCommission: undefined,
+                    isTaxable: undefined,
+                    taxRate: undefined,
+                  };
 
               return {
                 id: crypto.randomUUID(),
@@ -4470,10 +4424,10 @@ export default function FrontOfficeDesk() {
                     : `${i.name} (Procedure Fee)`,
                 price: shareFee,
                 quantity: 1,
-                commission: itemComm,
-                calculateCommission: pType?.calculateCommission,
-                isTaxable: pType?.isTaxable,
-                taxRate: pType?.taxRate,
+                commission: resolvedFields.commission,
+                calculateCommission: resolvedFields.calculateCommission,
+                isTaxable: resolvedFields.isTaxable,
+                taxRate: resolvedFields.taxRate,
                 doctorId: cl?.id || clinicianId,
                 doctorName: cl?.name || clinicianName,
                 discountValue: 0,
@@ -4488,7 +4442,6 @@ export default function FrontOfficeDesk() {
             0,
           );
         } else {
-          let procComm = defaultComm;
           let procType: (typeof appointmentTypes)[number] | undefined;
 
           if (rec.items && rec.items.length === 1) {
@@ -4500,13 +4453,17 @@ export default function FrontOfficeDesk() {
             procType = appointmentTypes.find((t) => t.name === rec.name);
           }
 
-          if (procType) {
-            if (procType.calculateCommission === false) {
-              procComm = 0;
-            } else if (typeof procType.defaultCommission === "number") {
-              procComm = procType.defaultCommission;
-            }
-          }
+          const resolvedProcFields = procType
+            ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                procType,
+                defaultComm,
+              )
+            : {
+                commission: defaultComm,
+                calculateCommission: undefined,
+                isTaxable: undefined,
+                taxRate: undefined,
+              };
 
           procedureItemsToAdd = [
             {
@@ -4516,10 +4473,10 @@ export default function FrontOfficeDesk() {
               appointmentTypeName: `${rec.name} (Procedure Fee)`,
               price: rec.fee,
               quantity: 1,
-              commission: procComm,
-              calculateCommission: procType?.calculateCommission,
-              isTaxable: procType?.isTaxable,
-              taxRate: procType?.taxRate,
+              commission: resolvedProcFields.commission,
+              calculateCommission: resolvedProcFields.calculateCommission,
+              isTaxable: resolvedProcFields.isTaxable,
+              taxRate: resolvedProcFields.taxRate,
               doctorId: clinicianId,
               doctorName: clinicianName,
               discountValue: 0,
@@ -5081,20 +5038,28 @@ export default function FrontOfficeDesk() {
               price = Number(docInfo.consultationCharge);
             }
 
+            const resolvedFields = apptType
+              ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                  apptType,
+                  docInfo?.defaultCommission,
+                )
+              : {
+                  commission: docInfo?.defaultCommission || 0,
+                  calculateCommission: undefined,
+                  isTaxable: undefined,
+                  taxRate: undefined,
+                };
+
             const billingItem = {
               id: crypto.randomUUID(),
               appointmentTypeId: appt.appointmentTypeId || "manual-gp-fee",
               appointmentTypeName: appointmentTypeName,
               price: price,
               quantity: 1,
-              commission:
-                apptType?.calculateCommission !== false &&
-                typeof apptType?.defaultCommission === "number"
-                  ? apptType.defaultCommission
-                  : docInfo?.defaultCommission || 0,
-              calculateCommission: apptType?.calculateCommission,
-              isTaxable: apptType?.isTaxable,
-              taxRate: apptType?.taxRate,
+              commission: resolvedFields.commission,
+              calculateCommission: resolvedFields.calculateCommission,
+              isTaxable: resolvedFields.isTaxable,
+              taxRate: resolvedFields.taxRate,
               doctorId: clinicianId,
               doctorName: docInfo
                 ? docInfo.name.startsWith("Dr.") || isExpert

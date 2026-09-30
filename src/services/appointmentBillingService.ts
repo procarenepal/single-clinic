@@ -17,6 +17,7 @@ import {
   AppointmentBilling,
   AppointmentBillingSettings,
   AppointmentBillingItem,
+  AppointmentType,
   PaymentMethod,
 } from "../types/models";
 import { calculateTaxBreakdown } from "../utils/taxEngine";
@@ -614,12 +615,11 @@ export const appointmentBillingService = {
       );
     }
 
-    const { billingApi } = await import("./api/billingApi");
+    const { billingApi, buildInvoicePayload } = await import(
+      "./api/billingApi"
+    );
     const { clinicService } = await import("./clinicService");
     const { getNepaliFiscalYear } = await import("./irdCbmsService");
-    const { computeIdempotencyKey } = await import(
-      "../utils/idempotencyKey"
-    );
 
     const taxPercentage = billingData.taxPercentage || 0;
     const isCreditNote = Boolean((billingData as any).isCreditNote);
@@ -698,16 +698,20 @@ export const appointmentBillingService = {
       quantity: item.quantity || 1,
       rate: item.price || 0,
       totalAmount: item.amount || 0,
-      isTaxable:
-        item.isTaxable !== undefined ? item.isTaxable : taxPercentage > 0,
+      // Each item's own explicit setting — matches the fix to
+      // calculateInvoiceTotals/resolveItemFieldsFromAppointmentType, which
+      // no longer treats "unconfigured" as "taxable whenever the toggle's
+      // on". This line-item flag previously still had that stale fallback.
+      isTaxable: item.isTaxable === true,
     }));
 
     // Only intent (irdEnabled) travels to the Java backend — actual IRD
     // credentials are resolved server-side per clinic, never sent from here.
-    const invoicePayload = {
-      firebasePatientId: billingData.patientId || "",
-      buyerName: billingData.patientName || "Cash Sales",
-      buyerPan: billingData.patientPanVat || "",
+    const invoicePayload = buildInvoicePayload({
+      clinicId: billingData.clinicId,
+      patientId: billingData.patientId,
+      patientName: billingData.patientName,
+      patientPanVat: billingData.patientPanVat,
       totalAmount: calc.totalAmount,
       taxableAmount: calc.taxableAmount,
       taxAmount: calc.taxAmount,
@@ -718,27 +722,11 @@ export const appointmentBillingService = {
       fiscalYear: getNepaliFiscalYear(new Date()),
       // Credit notes/sales returns must route to IRD's /api/billreturn, not /api/bill.
       isReturn: isCreditNote,
-      // IRD's /api/billreturn requires these two beyond a normal /api/bill —
-      // see IrdCbmsService.buildPayload's isReturn branch. Ignored server-side
-      // when isReturn is false.
-      refInvoiceNumber: isCreditNote
-        ? (billingData as any).linkedInvoiceNumber
-        : undefined,
-      reasonForReturn: isCreditNote
-        ? (billingData as any).creditNoteReason
-        : undefined,
+      refInvoiceNumber: (billingData as any).linkedInvoiceNumber,
+      reasonForReturn: (billingData as any).creditNoteReason,
       invoicePrefix,
-      // Deterministic per-content key — a network-drop retry of this exact
-      // submission reuses it, so the backend returns the already-created
-      // invoice instead of minting a duplicate.
-      idempotencyKey: computeIdempotencyKey({
-        clinicId: billingData.clinicId,
-        buyerName: billingData.patientName || "Cash Sales",
-        totalAmount: calc.totalAmount,
-        items: invoiceItems,
-      }),
       items: invoiceItems,
-    };
+    });
 
     // Blocking, authoritative call. Throws (propagates to caller) on failure —
     // we do not create a Firestore invoice record with no backing ledger entry.
@@ -1781,6 +1769,137 @@ export const appointmentBillingService = {
   },
 
   // =================== UTILITY FUNCTIONS ===================
+
+  /**
+   * Resolves the fields an invoice item should take on when a specific
+   * Appointment Type is selected for it: price, commission (the type's own
+   * rate takes priority over the clinician's blanket default), and tax
+   * settings (isTaxable/taxRate copied verbatim — undefined when the type
+   * doesn't configure its own, which the billing/tax engine correctly
+   * treats as NOT taxable, never as "inherit the invoice-level toggle").
+   *
+   * This exact lookup-and-copy logic used to be reimplemented independently
+   * in every place an invoice item gets built from an Appointment Type
+   * (Create Invoice, Edit Invoice, Patient Billing Tab, prescriptions'
+   * auto-billing) — which is exactly how the same "isTaxable never copied
+   * over" bug ended up needing to be fixed in four-plus places
+   * independently instead of once. New call sites should use this instead
+   * of re-deriving these fields by hand.
+   */
+  resolveItemFieldsFromAppointmentType(
+    appointmentType: AppointmentType,
+    clinicianDefaultCommission?: number,
+  ): {
+    appointmentTypeName: string;
+    price: number;
+    categoryId?: string;
+    commission: number;
+    calculateCommission?: boolean;
+    isTaxable?: boolean;
+    taxRate?: number;
+  } {
+    return {
+      appointmentTypeName: appointmentType.name,
+      price: appointmentType.price,
+      categoryId: appointmentType.categoryId,
+      commission:
+        appointmentType.calculateCommission !== false &&
+        typeof appointmentType.defaultCommission === "number"
+          ? appointmentType.defaultCommission
+          : clinicianDefaultCommission || 0,
+      calculateCommission: appointmentType.calculateCommission,
+      isTaxable: appointmentType.isTaxable,
+      taxRate: appointmentType.taxRate,
+    };
+  },
+
+  /**
+   * Builds the full billingData for a one-off package sale (a $0-commission,
+   * clinic-attributed invoice with a single "Package: <name>" item) — ready
+   * to pass straight to createBilling(). TreatmentPackage has no
+   * isTaxable/taxRate setting of its own (unlike AppointmentType/
+   * PathologyTestType), so the invoice-level Apply Tax toggle is the ONLY
+   * way to tax a package sale; this bakes that in.
+   *
+   * This exact construction used to be duplicated near-verbatim in both
+   * front-office-desk.tsx's Quick-Intake package-sale branch and
+   * SellPackageModal.tsx — a second, independent place the same
+   * isTaxable-must-mirror-the-toggle fix had to land.
+   */
+  buildPackageSaleBillingData(params: {
+    pkg: { name: string; price: number };
+    clinicId: string;
+    branchId?: string;
+    patientId: string;
+    patientName: string;
+    patientPanVat?: string;
+    applyTax: boolean;
+    defaultTaxPercentage?: number;
+    createdBy: string;
+  }): Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt"> {
+    const {
+      pkg,
+      clinicId,
+      branchId,
+      patientId,
+      patientName,
+      patientPanVat,
+      applyTax,
+      defaultTaxPercentage,
+      createdBy,
+    } = params;
+    const taxPercentage = applyTax ? defaultTaxPercentage || 0 : 0;
+
+    const billingItem: AppointmentBillingItem = {
+      id: crypto.randomUUID(),
+      appointmentTypeId: "package-sale",
+      appointmentTypeName: `Package: ${pkg.name}`,
+      price: pkg.price,
+      quantity: 1,
+      commission: 0,
+      doctorId: "unassigned",
+      doctorName: "Clinic",
+      amount: pkg.price,
+      isTaxable: taxPercentage > 0,
+    };
+
+    const totals = this.calculateInvoiceTotals(
+      [billingItem],
+      "percent",
+      0,
+      taxPercentage,
+    );
+
+    return {
+      invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
+      clinicId,
+      branchId: branchId || clinicId,
+      patientId,
+      patientName,
+      patientPanVat,
+      doctorId: "unassigned",
+      doctorName: "Clinic",
+      doctorType: "regular",
+      invoiceDate: new Date(),
+      items: [billingItem],
+      subtotal: totals.subtotal,
+      itemDiscountAmount: 0,
+      mainDiscountAmount: 0,
+      discountType: "percent",
+      discountValue: 0,
+      discountAmount: totals.totalDiscount,
+      taxPercentage,
+      taxAmount: totals.taxAmount,
+      taxableAmount: totals.taxableAmount,
+      exemptAmount: totals.exemptAmount,
+      totalAmount: totals.totalAmount,
+      status: "draft",
+      paymentStatus: "unpaid",
+      paidAmount: 0,
+      balanceAmount: totals.totalAmount,
+      createdBy,
+    };
+  },
 
   /**
    * Calculate invoice totals from items

@@ -349,12 +349,11 @@ export const pathologyBillingService = {
       );
     }
 
-    const { billingApi } = await import("./api/billingApi");
+    const { billingApi, buildInvoicePayload } = await import(
+      "./api/billingApi"
+    );
     const { clinicService } = await import("./clinicService");
     const { getNepaliFiscalYear } = await import("./irdCbmsService");
-    const { computeIdempotencyKey } = await import(
-      "../utils/idempotencyKey"
-    );
 
     // IRD's irdEnabled/credentials live on the Clinic document (that's what
     // Clinic Settings > IRD CBMS Configuration actually writes to) — never
@@ -412,10 +411,11 @@ export const pathologyBillingService = {
 
     // Only intent (irdEnabled) travels to the Java backend — actual IRD
     // credentials are resolved server-side per clinic, never sent from here.
-    const invoicePayload = {
-      firebasePatientId: billingData.patientId || "",
-      buyerName: billingData.patientName || "Cash Sales",
-      buyerPan: billingData.patientPanVat || "",
+    const invoicePayload = buildInvoicePayload({
+      clinicId: billingData.clinicId,
+      patientId: billingData.patientId,
+      patientName: billingData.patientName,
+      patientPanVat: billingData.patientPanVat,
       totalAmount,
       taxableAmount,
       taxAmount,
@@ -426,27 +426,11 @@ export const pathologyBillingService = {
       fiscalYear: getNepaliFiscalYear(new Date()),
       // Credit notes/sales returns must route to IRD's /api/billreturn, not /api/bill.
       isReturn: isCreditNote,
-      // IRD's /api/billreturn requires these two beyond a normal /api/bill —
-      // see IrdCbmsService.buildPayload's isReturn branch. Ignored server-side
-      // when isReturn is false.
-      refInvoiceNumber: isCreditNote
-        ? (billingData as any).linkedInvoiceNumber
-        : undefined,
-      reasonForReturn: isCreditNote
-        ? (billingData as any).creditNoteReason
-        : undefined,
+      refInvoiceNumber: (billingData as any).linkedInvoiceNumber,
+      reasonForReturn: (billingData as any).creditNoteReason,
       invoicePrefix,
-      // Deterministic per-content key — a network-drop retry of this exact
-      // submission reuses it, so the backend returns the already-created
-      // invoice instead of minting a duplicate.
-      idempotencyKey: computeIdempotencyKey({
-        clinicId: billingData.clinicId,
-        buyerName: billingData.patientName || "Cash Sales",
-        totalAmount,
-        items: invoiceItems,
-      }),
       items: invoiceItems,
-    };
+    });
 
     // Blocking, authoritative call. Throws (propagates to caller) on failure —
     // we do not create a Firestore invoice record with no backing ledger entry.
@@ -1046,6 +1030,22 @@ export const pathologyBillingService = {
       // that locally-guessed number never matched what was actually saved.
       const { id: newCreditNoteId, invoiceNumber: creditNoteInvoiceNumber } =
         await this.createBilling(creditNoteData);
+
+      // Re-check hasCreditNote immediately before marking it, narrowing
+      // (though not fully closing — createBilling above is a network round
+      // trip to the Java backend that can't participate in a Firestore
+      // transaction) the window where two concurrent issueCreditNote calls
+      // could both pass the top-of-function check and both create a
+      // negative-amount credit note for the same original invoice. Mirrors
+      // appointmentBillingService.issueCreditNote's same guard — this was
+      // missing here entirely.
+      const recheck = await this.getBillingById(original.id);
+
+      if (recheck?.hasCreditNote) {
+        throw new Error(
+          `A Credit Note was already issued for this invoice by another action (credit note ${newCreditNoteId} was still created for invoice ${original.invoiceNumber} and needs manual review).`,
+        );
+      }
 
       // Update original invoice to note it has been reversed, and mark it
       // so a second Credit Note can never be issued against it.

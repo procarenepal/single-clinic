@@ -590,28 +590,23 @@ export default function PatientBillingTab({
         );
 
         if (at) {
-          item.appointmentTypeName = at.name;
-          item.price = at.price;
-          item.categoryId = at.categoryId;
-
           const doc = doctors.find(
             (d) => d.id === (item.doctorId || p.doctorId),
           );
 
-          if (at.calculateCommission === false) {
-            item.commission = 0;
-          } else {
-            item.commission = doc?.defaultCommission || 0;
-          }
-
-          // Sourced automatically from the service's own tax settings —
-          // this used to never be copied over at all, so every item
-          // created here had isTaxable permanently undefined regardless
-          // of what its Appointment Type actually configures (e.g. a
-          // Skin Test's Taxable setting was silently ignored). Matches
-          // appointments-billing.tsx's updateInvoiceItem.
-          item.isTaxable = at.isTaxable;
-          item.taxRate = at.taxRate;
+          // Shared with the create/edit invoice forms — also fixes this
+          // tab not previously honoring a category's own configured
+          // commission override (only the doctor's blanket default was
+          // ever used), and not copying isTaxable/taxRate from the
+          // Appointment Type at all (e.g. a Skin Test's Taxable setting
+          // was silently ignored).
+          Object.assign(
+            item,
+            appointmentBillingService.resolveItemFieldsFromAppointmentType(
+              at,
+              doc?.defaultCommission,
+            ),
+          );
         }
       }
 
@@ -1462,23 +1457,13 @@ export default function PatientBillingTab({
                             label="Appointment Type"
                             placeholder="Search or seed services..."
                             value={item.appointmentTypeId}
-                            onChange={(id) => {
-                              const apptType = appointmentTypes.find(
-                                (t) => t.id === id,
-                              );
-                              const updateObj: any = { appointmentTypeId: id };
-
-                              if (apptType) {
-                                updateObj.appointmentTypeName = apptType.name;
-                                updateObj.price = apptType.price;
-                                updateObj.amount =
-                                  apptType.price * item.quantity;
-                                if (apptType.calculateCommission === false) {
-                                  updateObj.commission = 0;
-                                }
-                              }
-                              updateItem(idx, updateObj);
-                            }}
+                            onChange={(id) =>
+                              // updateItem's own appointmentTypeId branch
+                              // resolves price/commission/tax/amount from
+                              // the selected type — no need to duplicate
+                              // that lookup here.
+                              updateItem(idx, { appointmentTypeId: id })
+                            }
                           />
                         </div>
                         <div className="sm:col-span-2">
@@ -1505,16 +1490,24 @@ export default function PatientBillingTab({
                               const apptType = appointmentTypes.find(
                                 (t) => t.id === item.appointmentTypeId,
                               );
+                              // A category's own commission override must
+                              // survive a doctor change — this used to
+                              // never apply apptType.defaultCommission at
+                              // all, only ever the doctor's blanket default
+                              // (or 0 when the category excludes commission).
+                              const commission = apptType
+                                ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                                    apptType,
+                                    d?.defaultCommission,
+                                  ).commission
+                                : (d?.defaultCommission ??
+                                  billingSettings?.defaultCommission ??
+                                  0);
 
                               updateItem(idx, {
                                 doctorId: id,
                                 doctorName: d?.name || "",
-                                commission:
-                                  apptType?.calculateCommission === false
-                                    ? 0
-                                    : (d?.defaultCommission ??
-                                      billingSettings?.defaultCommission ??
-                                      0),
+                                commission,
                               });
                             }}
                           />

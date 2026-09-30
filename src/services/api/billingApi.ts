@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { auth } from "../../config/firebase";
+import { computeIdempotencyKey } from "../../utils/idempotencyKey";
 
 // Configure Axios instance for billing API
 const billingApiClient = axios.create({
@@ -102,6 +103,73 @@ export interface InvoiceRequestDto {
   idempotencyKey?: string;
 
   items: InvoiceItemDto[];
+}
+
+/**
+ * Builds the InvoiceRequestDto sent to POST /api/billing/create, including
+ * its idempotencyKey. This exact field mapping used to be independently
+ * reimplemented at every call site that submits an invoice to the Java
+ * backend (appointmentBillingService, pathologyBillingService,
+ * pharmacyService's purchase-create and purchase-return flows) —
+ * field-for-field identical in three of the four, differing only in how
+ * each domain resolves its own totals/items/invoice number beforehand.
+ * Callers still compute those domain-specific values themselves; this only
+ * centralizes assembling them into the wire payload.
+ */
+export function buildInvoicePayload(params: {
+  clinicId: string;
+  patientId?: string;
+  patientName?: string;
+  patientPanVat?: string;
+  totalAmount: number;
+  taxableAmount: number;
+  taxAmount: number;
+  exemptAmount: number;
+  discountAmount?: number;
+  paymentMethod?: string;
+  irdEnabled: boolean;
+  fiscalYear: string;
+  /** Pharmacy only — see InvoiceRequestDto.preAssignedInvoiceNumber. */
+  preAssignedInvoiceNumber?: string;
+  /** e.g. a clinic's configured prefix, or "CN" for a credit note. */
+  invoicePrefix?: string;
+  isReturn?: boolean;
+  /** Required when isReturn is true — ignored otherwise. */
+  refInvoiceNumber?: string;
+  /** Required when isReturn is true — ignored otherwise. */
+  reasonForReturn?: string;
+  items: InvoiceItemDto[];
+}): InvoiceRequestDto {
+  const buyerName = params.patientName || "Cash Sales";
+
+  return {
+    firebasePatientId: params.patientId || "",
+    buyerName,
+    buyerPan: params.patientPanVat || "",
+    totalAmount: params.totalAmount,
+    taxableAmount: params.taxableAmount,
+    taxAmount: params.taxAmount,
+    exemptAmount: params.exemptAmount,
+    discountAmount: params.discountAmount,
+    paymentMethod: params.paymentMethod,
+    irdEnabled: params.irdEnabled,
+    fiscalYear: params.fiscalYear,
+    preAssignedInvoiceNumber: params.preAssignedInvoiceNumber,
+    isReturn: params.isReturn,
+    refInvoiceNumber: params.isReturn ? params.refInvoiceNumber : undefined,
+    reasonForReturn: params.isReturn ? params.reasonForReturn : undefined,
+    invoicePrefix: params.invoicePrefix,
+    // Deterministic per-content key — a network-drop retry of this exact
+    // submission reuses it, so the backend returns the already-created
+    // invoice instead of minting a duplicate.
+    idempotencyKey: computeIdempotencyKey({
+      clinicId: params.clinicId,
+      buyerName,
+      totalAmount: params.totalAmount,
+      items: params.items,
+    }),
+    items: params.items,
+  };
 }
 
 export interface ClinicIrdConfigRequest {

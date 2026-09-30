@@ -922,10 +922,6 @@ export default function AppointmentBillingPage() {
         );
 
         if (at) {
-          item.appointmentTypeName = at.name;
-          item.price = at.price;
-          item.categoryId = at.categoryId;
-
           const doc = doctors.find(
             (d) => d.id === (item.doctorId || p.doctorId),
           );
@@ -934,24 +930,13 @@ export default function AppointmentBillingPage() {
           );
           const clinician = doc || exp;
 
-          // This service's own commission % (configured in Appointment Type
-          // Settings) takes priority over the clinician's blanket default —
-          // previously commission always came from the doctor/expert alone,
-          // regardless of which service was actually being billed.
-          item.commission =
-            at.calculateCommission !== false &&
-            typeof at.defaultCommission === "number"
-              ? at.defaultCommission
-              : clinician?.defaultCommission || 0;
-          item.calculateCommission = at.calculateCommission;
-
-          // Sourced automatically from the service instead of staff
-          // manually toggling tax per invoice regardless of which service
-          // is being charged — left undefined (falls back to the existing
-          // invoice-level toggle/clinic default) when the type doesn't
-          // specify its own tax settings.
-          item.isTaxable = at.isTaxable;
-          item.taxRate = at.taxRate;
+          Object.assign(
+            item,
+            appointmentBillingService.resolveItemFieldsFromAppointmentType(
+              at,
+              clinician?.defaultCommission,
+            ),
+          );
         }
       }
 
@@ -964,12 +949,12 @@ export default function AppointmentBillingPage() {
           (t) => t.id === item.appointmentTypeId,
         );
 
-        item.commission =
-          at &&
-          at.calculateCommission !== false &&
-          typeof at.defaultCommission === "number"
-            ? at.defaultCommission
-            : clinician?.defaultCommission || 0;
+        item.commission = at
+          ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
+              at,
+              clinician?.defaultCommission,
+            ).commission
+          : clinician?.defaultCommission || 0;
         item.doctorName = clinician?.name || "";
       }
 

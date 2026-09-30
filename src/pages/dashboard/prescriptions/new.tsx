@@ -1039,6 +1039,7 @@ export default function NewPrescriptionPage() {
           let appointmentTypeName = "General Consultation";
           let apptTypeIsTaxable: boolean | undefined;
           let apptTypeTaxRate: number | undefined;
+          let apptTypeCommission: number | undefined;
 
           if (apt.appointmentTypeId) {
             const apptType =
@@ -1047,10 +1048,17 @@ export default function NewPrescriptionPage() {
               );
 
             if (apptType) {
-              price = Number(apptType.price) || 500;
-              appointmentTypeName = apptType.name || "General Consultation";
-              apptTypeIsTaxable = apptType.isTaxable;
-              apptTypeTaxRate = apptType.taxRate;
+              const resolved =
+                appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                  apptType,
+                  docInfo?.defaultCommission,
+                );
+
+              price = Number(resolved.price) || 500;
+              appointmentTypeName = resolved.appointmentTypeName || "General Consultation";
+              apptTypeIsTaxable = resolved.isTaxable;
+              apptTypeTaxRate = resolved.taxRate;
+              apptTypeCommission = resolved.commission;
             }
           }
 
@@ -1125,7 +1133,7 @@ export default function NewPrescriptionPage() {
             appointmentTypeName: appointmentTypeName,
             price: price,
             quantity: 1,
-            commission: docInfo?.defaultCommission || 0,
+            commission: apptTypeCommission ?? (docInfo?.defaultCommission || 0),
             doctorId: doctorId,
             doctorName: docInfo?.name || "Unknown Doctor",
             amount: price,
@@ -1354,6 +1362,7 @@ export default function NewPrescriptionPage() {
             let appointmentTypeName = "General Consultation";
             let apptTypeIsTaxable: boolean | undefined;
             let apptTypeTaxRate: number | undefined;
+            let apptTypeCommission: number | undefined;
 
             if (apt.appointmentTypeId) {
               const apptType =
@@ -1362,10 +1371,17 @@ export default function NewPrescriptionPage() {
                 );
 
               if (apptType) {
-                price = Number(apptType.price) || 500;
-                appointmentTypeName = apptType.name || "General Consultation";
-                apptTypeIsTaxable = apptType.isTaxable;
-                apptTypeTaxRate = apptType.taxRate;
+                const resolved =
+                  appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                    apptType,
+                    docInfo?.defaultCommission,
+                  );
+
+                price = Number(resolved.price) || 500;
+                appointmentTypeName = resolved.appointmentTypeName || "General Consultation";
+                apptTypeIsTaxable = resolved.isTaxable;
+                apptTypeTaxRate = resolved.taxRate;
+                apptTypeCommission = resolved.commission;
               }
             }
 
@@ -1440,7 +1456,7 @@ export default function NewPrescriptionPage() {
               appointmentTypeName: appointmentTypeName,
               price: price,
               quantity: 1,
-              commission: docInfo?.defaultCommission || 0,
+              commission: apptTypeCommission ?? (docInfo?.defaultCommission || 0),
               doctorId: doctorId,
               doctorName: docInfo?.name || "Unknown Doctor",
               amount: price,

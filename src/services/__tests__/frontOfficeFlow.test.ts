@@ -56,15 +56,22 @@ vi.mock("@/config/firebase", () => ({
   db: {},
 }));
 
-vi.mock("../api/billingApi", () => ({
-  billingApi: {
-    createInvoice: vi.fn().mockResolvedValue({
-      id: 1,
-      invoiceNumber: "INV-2080.081-0001",
-      irdSynced: false,
-    }),
-  },
-}));
+vi.mock("../api/billingApi", async () => {
+  const actual = await vi.importActual<typeof import("../api/billingApi")>(
+    "../api/billingApi",
+  );
+
+  return {
+    ...actual,
+    billingApi: {
+      createInvoice: vi.fn().mockResolvedValue({
+        id: 1,
+        invoiceNumber: "INV-2080.081-0001",
+        irdSynced: false,
+      }),
+    },
+  };
+});
 
 describe("Front Office Patient Journey (End-to-End Flow)", () => {
   beforeEach(() => {
