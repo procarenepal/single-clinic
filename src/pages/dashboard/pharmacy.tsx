@@ -738,6 +738,7 @@ export default function PharmacyPage() {
     taxAmount: 0,
     handlingAmount: 0,
     taxableAmount: 0,
+    exemptAmount: 0,
     netAmount: 0,
     paymentType: "cash" as string,
     paymentNote: "",
@@ -1291,44 +1292,92 @@ export default function PharmacyPage() {
   useEffect(() => {
     const total = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
 
-    // Calculate discount based on type
+    // Each item's OWN discount (Item Discount Type/Item Discount) is applied
+    // first — this used to be a purely decorative pair of fields: typing a
+    // value here changed nothing, because the invoice-level discount ratio
+    // below was computed straight off the raw item.amount, and item.amount
+    // itself is never reduced by discountValue/discountType anywhere (see
+    // updatePurchaseItem — amount only reacts to quantity/price/stockType
+    // changes). Compute each item's net-after-its-own-discount here so it
+    // actually affects the taxable/tax/total figures.
+    const itemsWithOwnDiscount = purchaseItems.map((item) => {
+      const dVal = item.discountValue || 0;
+      const dType = item.discountType || "flat";
+      let ownDiscount =
+        dType === "percentage" ? (item.amount * dVal) / 100 : dVal;
+
+      ownDiscount = Math.min(Math.max(0, ownDiscount), item.amount);
+
+      return {
+        item,
+        netAfterOwnDiscount: Math.max(0, item.amount - ownDiscount),
+      };
+    });
+    const totalAfterItemDiscounts = itemsWithOwnDiscount.reduce(
+      (sum, x) => sum + x.netAfterOwnDiscount,
+      0,
+    );
+
+    // Invoice-level discount (Discount Type/Discount (NPR)) is then applied
+    // on top of the already item-discounted subtotal, not the raw total.
     let discountAmount = 0;
 
     if (purchaseForm.discountType === "flat") {
       discountAmount = purchaseForm.discount;
     } else if (purchaseForm.discountType === "percent") {
-      discountAmount = (total * purchaseForm.discountPercentage) / 100;
+      discountAmount =
+        (totalAfterItemDiscounts * purchaseForm.discountPercentage) / 100;
     }
 
     // Discount is applied proportionally across items (same ratio for
     // every item) so the taxable/VAT split still adds up to total - discount.
-    const discountRatio = total > 0 ? Math.min(1, discountAmount / total) : 0;
+    const discountRatio =
+      totalAfterItemDiscounts > 0
+        ? Math.min(1, discountAmount / totalAfterItemDiscounts)
+        : 0;
 
     let taxableAmount = 0;
+    let exemptAmount = 0;
     let taxAmount = 0;
 
-    purchaseItems.forEach((item) => {
+    itemsWithOwnDiscount.forEach(({ item, netAfterOwnDiscount }) => {
       const rate = item.taxRate ?? purchaseForm.taxPercentage;
-      const grossMrp = item.amount * (1 - discountRatio);
-      const itemTaxable = rate > 0 ? grossMrp / (1 + rate / 100) : grossMrp;
-      const itemVat = grossMrp - itemTaxable;
+      const grossMrp = netAfterOwnDiscount * (1 - discountRatio);
 
-      taxableAmount += itemTaxable;
-      taxAmount += itemVat;
+      // A rate-0 item (e.g. VAT-exempt medicine) contributes its whole
+      // amount to EXEMPT, not taxable — the previous version treated
+      // `grossMrp / (1 + 0/100)` (i.e. the whole amount) as "taxable" for
+      // every item regardless of rate, so the "Taxable" summary card
+      // included exempt medicines' full price alongside genuinely-taxed
+      // ones instead of separating them, matching the Taxable/Exempt split
+      // taxEngine.ts already uses correctly everywhere else in this app.
+      if (rate > 0) {
+        const itemTaxable = grossMrp / (1 + rate / 100);
+
+        taxableAmount += itemTaxable;
+        taxAmount += grossMrp - itemTaxable;
+      } else {
+        exemptAmount += grossMrp;
+      }
     });
 
     taxableAmount = Number(Math.max(0, taxableAmount).toFixed(2));
+    exemptAmount = Number(Math.max(0, exemptAmount).toFixed(2));
     taxAmount = Number(Math.max(0, taxAmount).toFixed(2));
     const netAmount = Number(
-      (taxableAmount + taxAmount + (purchaseForm.handlingAmount || 0)).toFixed(
-        2,
-      ),
+      (
+        taxableAmount +
+        exemptAmount +
+        taxAmount +
+        (purchaseForm.handlingAmount || 0)
+      ).toFixed(2),
     );
 
     setPurchaseForm((prev) => ({
       ...prev,
       total,
       taxableAmount,
+      exemptAmount,
       taxAmount,
       netAmount: Math.max(0, netAmount),
     }));
@@ -2045,12 +2094,19 @@ export default function PharmacyPage() {
                 updatedItem.salePrice = defaultPrice; // Keep for backward compatibility
                 updatedItem.regularSalePrice = defaultPrice; // Default regular price
                 updatedItem.schemeSalePrice = defaultPrice; // Default scheme price (can be updated)
-                // Auto-fill this line's tax rate from the product's catalog
-                // rate (editable per line) — falls back to the purchase-level
-                // rate elsewhere when the medicine isn't VAT-applied/configured.
+                // Auto-fill this line's tax rate from the product's own
+                // catalog settings (editable per line afterward). Unlike
+                // AppointmentType/PathologyTestType, Medicine.isVatApplied/
+                // vatPercentage are never "unset" — every medicine has an
+                // explicit true/false VAT status — so a VAT-exempt medicine
+                // must resolve to a definite 0% here, not `undefined`.
+                // `undefined` previously fell back to the invoice-level
+                // default rate elsewhere (item.taxRate ?? purchaseForm.taxPercentage),
+                // silently taxing an explicitly VAT-exempt medicine at the
+                // clinic's default rate instead of exempting it.
                 updatedItem.taxRate = selectedMedicine.isVatApplied
-                  ? selectedMedicine.vatPercentage
-                  : undefined;
+                  ? selectedMedicine.vatPercentage ?? 0
+                  : 0;
                 updatedItem.expiryDate = toISODateString(
                   selectedMedicine.expiryDate,
                 );
@@ -2465,6 +2521,11 @@ export default function PharmacyPage() {
           stockType: item.stockType || "regular", // Stock type preference
           discountType: item.discountType || "flat",
           discountValue: item.discountValue || 0,
+          // Each item's own catalog tax rate — was previously dropped here
+          // entirely, so the server-side purchase transaction (pharmacyService.ts)
+          // had no way to know a medicine's real rate and fell back to
+          // taxing every item at one blanket invoice-level rate.
+          taxRate: item.taxRate,
         }));
 
       // Calculate discount amount based on type
@@ -2649,6 +2710,7 @@ export default function PharmacyPage() {
         taxAmount: 0,
         handlingAmount: 0,
         taxableAmount: 0,
+        exemptAmount: 0,
         netAmount: 0,
         paymentType: pharmacySettings?.defaultPaymentMethod || "cash",
         paymentNote: "",
@@ -7783,6 +7845,10 @@ export default function PharmacyPage() {
                         value: `NPR ${(purchaseForm.taxableAmount || 0).toLocaleString()}`,
                       },
                       {
+                        label: "Exempt",
+                        value: `NPR ${(purchaseForm.exemptAmount || 0).toLocaleString()}`,
+                      },
+                      {
                         label: "Tax",
                         value: `NPR ${(purchaseForm.taxAmount || 0).toLocaleString()}`,
                       },
@@ -7793,7 +7859,7 @@ export default function PharmacyPage() {
                     ].map((col, i) => (
                       <div
                         key={i}
-                        className={`flex-1 px-3 py-2 text-center ${i < 3 ? "border-r border-[rgb(var(--color-border))]" : ""}`}
+                        className={`flex-1 px-3 py-2 text-center ${i < 4 ? "border-r border-[rgb(var(--color-border))]" : ""}`}
                       >
                         <p className="text-[10.5px] text-[rgb(var(--color-text-muted)/0.7)] uppercase tracking-[0.06em]">
                           {col.label}

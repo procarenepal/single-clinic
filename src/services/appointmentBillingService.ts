@@ -647,8 +647,18 @@ export const appointmentBillingService = {
             price: i.price,
             discountType: i.discountType,
             discountValue: i.discountValue,
-            isTaxable:
-              i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
+            // An item with no explicit isTaxable of its own must default to
+            // NOT taxable — this used to fall back to "taxable whenever the
+            // invoice-level Apply Tax toggle is on", which silently taxed
+            // every category that had never been re-saved since the
+            // per-category Taxable setting was introduced (isTaxable still
+            // `undefined` in Firestore even though its settings modal shows
+            // "Taxable" unchecked). Apply Tax is a GATE (nothing is taxed
+            // when it's off, even an item explicitly marked taxable — see
+            // isTaxEnabled below) and a category can OVERRIDE that gate by
+            // explicitly setting isTaxable: true; it must never fill in a
+            // missing per-item value.
+            isTaxable: i.isTaxable === true,
             // Per-item override when set — calculateTaxBreakdown falls back
             // to defaultTaxPercentage itself when this is undefined.
             taxRate: i.taxRate,
@@ -750,6 +760,26 @@ export const appointmentBillingService = {
         invoiceDate: billingData.invoiceDate
           ? Timestamp.fromDate(billingData.invoiceDate)
           : Timestamp.now(),
+        // Persist the SAME authoritative totals just computed/sent to
+        // Java/IRD above (`calc`), instead of trusting the caller's own
+        // copy of these figures on billingData — closes the gap where the
+        // Firestore record (and everything read from it: Invoice Details,
+        // print, PDF) could in principle diverge from what was actually
+        // reported to IRD, e.g. if a future caller of createBilling ever
+        // computed its own totals slightly differently than
+        // calculateTaxBreakdown.
+        subtotal: (calc as any).subtotal ?? billingData.subtotal,
+        discountAmount:
+          (calc as any).totalDiscountAmount ?? billingData.discountAmount,
+        itemDiscountAmount:
+          (calc as any).itemDiscountAmount ?? billingData.itemDiscountAmount,
+        mainDiscountAmount:
+          (calc as any).mainDiscountAmount ?? billingData.mainDiscountAmount,
+        taxableAmount: calc.taxableAmount,
+        taxAmount: calc.taxAmount,
+        exemptAmount: calc.exemptAmount,
+        totalAmount: calc.totalAmount,
+        balanceAmount: calc.totalAmount - (billingData.paidAmount || 0),
         javaInvoiceId: javaResult.id,
         irdSynced: Boolean(javaResult.irdSynced),
         irdSyncDate: javaResult.irdSyncDate
@@ -1195,15 +1225,28 @@ export const appointmentBillingService = {
         );
       }
 
-      // Handle discount
-      const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
-      const newMainDiscountAmount =
-        (billing.mainDiscountAmount || 0) + discountAmount;
-      const newTotalDiscountAmount =
-        (billing.discountAmount || 0) + discountAmount;
+      // Handle discount — rounded to 2 decimals throughout, matching this
+      // app's established IRD monetary convention (see taxEngine.ts).
+      // Without this, floating-point drift from earlier arithmetic (e.g.
+      // 497.00000000000006) can make a fully-paid invoice fail the
+      // newPaidAmount >= newTotalAmount check below and get stuck showing
+      // "PARTIAL" forever despite the displayed paid/total amounts looking
+      // identical (see the identical fix in pathologyBillingService.recordPayment).
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const newTotalAmount = round2(
+        Math.max(0, billing.totalAmount - discountAmount),
+      );
+      const newMainDiscountAmount = round2(
+        (billing.mainDiscountAmount || 0) + discountAmount,
+      );
+      const newTotalDiscountAmount = round2(
+        (billing.discountAmount || 0) + discountAmount,
+      );
 
-      const newPaidAmount = billing.paidAmount + paymentAmount;
-      const newBalanceAmount = Math.max(0, newTotalAmount - newPaidAmount);
+      const newPaidAmount = round2(billing.paidAmount + paymentAmount);
+      const newBalanceAmount = round2(
+        Math.max(0, newTotalAmount - newPaidAmount),
+      );
 
       let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
 
@@ -1764,7 +1807,10 @@ export const appointmentBillingService = {
         price: i.price,
         discountType: i.discountType,
         discountValue: i.discountValue,
-        isTaxable: i.isTaxable !== undefined ? i.isTaxable : taxPercentage > 0,
+        // See createBilling()'s matching comment — an item with no
+        // explicit isTaxable must default to NOT taxable, never inherit
+        // "taxable" just because the invoice-level toggle happens to be on.
+        isTaxable: i.isTaxable === true,
         // Per-item override when set (e.g. a service taxed at a different
         // rate than the clinic default) — calculateTaxBreakdown falls back
         // to defaultTaxPercentage itself when this is undefined.
@@ -2121,6 +2167,159 @@ export const appointmentBillingService = {
     } catch (error) {
       console.error("Error issuing credit note:", error);
       throw error;
+    }
+  },
+
+  /**
+   * Issue a PARTIAL credit note against an already IRD-synced invoice —
+   * for reversing only a portion of its value (e.g. refunding N of T
+   * unused sessions on a package-sale invoice), unlike issueCreditNote's
+   * always-100% reversal. Scales every item/amount by `ratio` instead of
+   * negating them outright, links back to the original invoice, and syncs
+   * to IRD via the same /api/billreturn path a full credit note uses — so
+   * the tax authority's record of this invoice's revenue gets corrected
+   * instead of silently staying overstated.
+   *
+   * The caller is responsible for the wallet refund and commission
+   * reversal at the same ratio (see patientPackageService.refundUnusedSessions,
+   * which already does both) — this function only produces the IRD-facing
+   * paper trail. It never throws: a patient getting their money back must
+   * never be blocked by a tax-sync technicality, so failures are logged
+   * loudly for accounting to follow up on instead.
+   */
+  async issuePartialCreditNote(
+    originalBillingId: string,
+    ratio: number,
+    reason: string,
+    createdBy: string,
+  ): Promise<string | null> {
+    try {
+      const clampedRatio = Math.min(1, Math.max(0, ratio));
+
+      if (clampedRatio <= 0) return null;
+
+      const original = await this.getBillingById(originalBillingId);
+
+      if (!original) {
+        console.error(
+          `Cannot issue partial credit note: billing ${originalBillingId} not found.`,
+        );
+
+        return null;
+      }
+
+      if (!original.irdSynced) {
+        console.warn(
+          `Skipping IRD partial credit note for billing ${originalBillingId} — original invoice was never IRD-synced.`,
+        );
+
+        return null;
+      }
+
+      if (original.hasCreditNote) {
+        console.warn(
+          `Skipping IRD partial credit note for billing ${originalBillingId} — a credit note already exists for it.`,
+        );
+
+        return null;
+      }
+
+      // Rounded to 2 decimals throughout — this app's established IRD
+      // monetary convention (see taxEngine.ts's identical Math.round(x*100)/100
+      // pattern and irdCbmsService.ts's toFixed(2)). An arbitrary ratio
+      // (e.g. 2/7 unused sessions) otherwise produces long floating-point
+      // artifacts on a document that gets filed with IRD.
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+
+      const scaledItems = original.items.map((item) => ({
+        ...item,
+        price: round2(-Math.abs((item.price || 0) * clampedRatio)),
+        amount: round2(-Math.abs((item.amount || 0) * clampedRatio)),
+      }));
+
+      const {
+        id: _originalId,
+        createdAt: _originalCreatedAt,
+        updatedAt: _originalUpdatedAt,
+        ...originalWithoutId
+      } = original;
+
+      const pct = Math.round(clampedRatio * 100);
+      const scaledTotalAmount = round2(
+        -Math.abs(original.totalAmount * clampedRatio),
+      );
+      const creditNoteData: Omit<
+        AppointmentBilling,
+        "id" | "createdAt" | "updatedAt"
+      > = {
+        ...originalWithoutId,
+        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
+        invoiceDate: new Date(),
+        items: scaledItems,
+
+        subtotal: round2(-Math.abs(original.subtotal * clampedRatio)),
+        itemDiscountAmount: round2(
+          -Math.abs((original.itemDiscountAmount || 0) * clampedRatio),
+        ),
+        mainDiscountAmount: round2(
+          -Math.abs((original.mainDiscountAmount || 0) * clampedRatio),
+        ),
+        discountAmount: round2(
+          -Math.abs(original.discountAmount * clampedRatio),
+        ),
+        taxAmount: round2(-Math.abs(original.taxAmount * clampedRatio)),
+        totalAmount: scaledTotalAmount,
+
+        status: "finalized",
+        paymentStatus: "paid",
+        paidAmount: scaledTotalAmount,
+        balanceAmount: 0,
+
+        isCreditNote: true,
+        linkedInvoiceId: original.id,
+        linkedInvoiceNumber: original.invoiceNumber,
+        creditNoteReason: reason,
+        notes: `Partial Credit Note (${pct}%) for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
+
+        irdSynced: false,
+        irdSyncDate: undefined,
+        cbmsResponseCode: undefined,
+
+        createdBy,
+        finalizedBy: createdBy,
+        finalizedAt: new Date(),
+
+        paymentHistory: [],
+      };
+
+      const {
+        id: newCreditNoteId,
+        invoiceNumber: newCreditNoteInvoiceNumber,
+      } = await this.createBilling(creditNoteData);
+
+      // Same narrow concurrent-issue guard as issueCreditNote.
+      const recheck = await this.getBillingById(original.id);
+
+      if (recheck?.hasCreditNote) {
+        console.error(
+          `A Credit Note was already issued for invoice ${original.invoiceNumber} by another action — partial credit note ${newCreditNoteId} was still created for it and needs manual review.`,
+        );
+
+        return newCreditNoteId;
+      }
+
+      await this.updateBilling(original.id, {
+        hasCreditNote: true,
+        notes:
+          (original.notes ? original.notes + "\n" : "") +
+          `Partially reversed (${pct}%) by Credit Note ${newCreditNoteInvoiceNumber} on ${new Date().toLocaleDateString()}`,
+      });
+
+      return newCreditNoteId;
+    } catch (error) {
+      console.error("Error issuing partial credit note:", error);
+
+      return null;
     }
   },
 

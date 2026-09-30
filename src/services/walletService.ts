@@ -78,6 +78,12 @@ export const walletService = {
     invoiceId: string,
     notes: string,
     createdBy: string,
+    // Defaults to "invoice" so the existing appointmentBillingService call
+    // site (paying an invoice with wallet funds) keeps working unchanged —
+    // patientPackageService's session-consumption deduction passes
+    // "package" explicitly, since its "invoiceId" argument is actually a
+    // patientPackage id with no invoice page to link to.
+    referenceType: "invoice" | "package" = "invoice",
   ): Promise<string> {
     try {
       const now = new Date();
@@ -113,6 +119,7 @@ export const walletService = {
           type: "deduction",
           amount,
           referenceId: invoiceId,
+          referenceType,
           notes,
           createdAt: now,
           createdBy,

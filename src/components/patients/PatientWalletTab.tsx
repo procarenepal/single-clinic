@@ -5,6 +5,7 @@ import {
   IoTimeOutline,
   IoArrowForwardOutline,
   IoCashOutline,
+  IoCheckmarkCircleOutline,
 } from "react-icons/io5";
 import { Link } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
@@ -12,6 +13,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { Patient, WalletTransaction, PatientPackage } from "@/types/models";
 import { walletService } from "@/services/walletService";
 import { patientPackageService } from "@/services/patientPackageService";
+import { doctorService } from "@/services/doctorService";
+import { expertService } from "@/services/expertService";
 import { useAuthContext } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { addToast } from "@/components/ui/toast";
@@ -39,10 +42,99 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [loadingSuggestedAmount, setLoadingSuggestedAmount] = useState(false);
 
+  // "Log Session" — records a visit against an already-paid package
+  // directly from this tab, skipping the full front-office check-in flow
+  // (see logStandaloneSession in patientPackageService.ts).
+  const [logSessionPkg, setLogSessionPkg] = useState<PatientPackage | null>(
+    null,
+  );
+  const [clinicians, setClinicians] = useState<
+    {
+      id: string;
+      name: string;
+      type: "doctor" | "expert";
+      defaultCommission?: number;
+    }[]
+  >([]);
+  const [logClinicianKey, setLogClinicianKey] = useState("");
+  const [logSubmitting, setLogSubmitting] = useState(false);
+
   useEffect(() => {
     loadTransactions();
     loadPackages();
+    loadClinicians();
   }, [patient.id, clinicId]);
+
+  const loadClinicians = async () => {
+    if (!clinicId) return;
+    try {
+      const [doctors, experts] = await Promise.all([
+        doctorService.getDoctors(clinicId),
+        expertService.getExperts(clinicId),
+      ]);
+
+      setClinicians([
+        ...doctors
+          .filter((d: any) => d.isActive !== false)
+          .map((d) => ({
+            id: d.id,
+            name: d.name,
+            type: "doctor" as const,
+            defaultCommission: (d as any).defaultCommission,
+          })),
+        ...experts
+          .filter((e: any) => e.isActive !== false)
+          .map((e) => ({
+            id: e.id,
+            name: e.name,
+            type: "expert" as const,
+            defaultCommission: (e as any).defaultCommission,
+          })),
+      ]);
+    } catch (error) {
+      console.error("Error loading clinicians for session log:", error);
+    }
+  };
+
+  const handleLogSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!logSessionPkg || !currentUser || !logClinicianKey) return;
+
+    const clinician = clinicians.find(
+      (c) => `${c.type}:${c.id}` === logClinicianKey,
+    );
+
+    if (!clinician) return;
+
+    try {
+      setLogSubmitting(true);
+      await patientPackageService.logStandaloneSession(
+        logSessionPkg,
+        patient.name,
+        clinician,
+        currentUser.uid,
+      );
+
+      addToast({
+        title: "Session Logged",
+        description: `1 session of ${logSessionPkg.packageName} recorded for ${clinician.name}.`,
+        color: "success",
+      });
+      setLogSessionPkg(null);
+      setLogClinicianKey("");
+      loadPackages();
+      loadTransactions();
+    } catch (error) {
+      addToast({
+        title: "Could Not Log Session",
+        description:
+          error instanceof Error ? error.message : "Failed to log session.",
+        color: "danger",
+      });
+    } finally {
+      setLogSubmitting(false);
+    }
+  };
 
   const loadPackages = async () => {
     if (!clinicId) return;
@@ -297,15 +389,31 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                   </p>
                 ) : (
                   pkg.totalSessions - pkg.usedSessions > 0 && (
-                    <Button
-                      className="self-start"
-                      size="sm"
-                      startContent={<IoCashOutline className="w-3.5 h-3.5" />}
-                      variant="bordered"
-                      onClick={() => openRefundModal(pkg)}
-                    >
-                      Refund Unused Sessions
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        color="primary"
+                        size="sm"
+                        startContent={
+                          <IoCheckmarkCircleOutline className="w-3.5 h-3.5" />
+                        }
+                        onClick={() => {
+                          setLogSessionPkg(pkg);
+                          setLogClinicianKey("");
+                        }}
+                      >
+                        Log Session
+                      </Button>
+                      <Button
+                        size="sm"
+                        startContent={
+                          <IoCashOutline className="w-3.5 h-3.5" />
+                        }
+                        variant="bordered"
+                        onClick={() => openRefundModal(pkg)}
+                      >
+                        Refund Unused Sessions
+                      </Button>
+                    </div>
                   )
                 )}
 
@@ -508,6 +616,12 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                           </>
                         ) : t.type === "refund" ? (
                           "Package refund"
+                        ) : t.referenceType === "package" ? (
+                          // Package-session deductions reference a
+                          // patientPackage id, not an invoice — there's no
+                          // invoice to link to (no charge was made), so
+                          // don't render a broken "Used on Invoice" link.
+                          "Package session used"
                         ) : (
                           <div className="flex items-center gap-1 flex-wrap">
                             Used on Invoice
@@ -609,6 +723,85 @@ export default function PatientWalletTab({ patient }: { patient: Patient }) {
                 </Button>
                 <Button color="primary" isLoading={submitting} type="submit">
                   Add Funds
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Log Session Modal */}
+      {logSessionPkg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onClick={() => setLogSessionPkg(null)}
+        >
+          <div
+            className="bg-surface border border-border-base rounded shadow-2xl max-w-sm w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-border-base bg-surface-2 flex justify-between items-center">
+              <h3 className="text-[14px] font-semibold text-text-main">
+                Log Session
+              </h3>
+            </div>
+            <form className="p-4 space-y-4" onSubmit={handleLogSession}>
+              <p className="text-[12.5px] text-text-muted">
+                {logSessionPkg.packageName} —{" "}
+                <span className="font-semibold text-text-main">
+                  {logSessionPkg.usedSessions + 1} of{" "}
+                  {logSessionPkg.totalSessions}
+                </span>{" "}
+                will be marked used. No new charge — this session is already
+                paid for.
+              </p>
+              <div>
+                <label className="text-[12px] font-medium text-text-muted mb-1 block">
+                  Clinician <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  className="w-full px-3 py-2 text-[13px] border border-border-base rounded focus:outline-none focus:border-primary bg-white"
+                  value={logClinicianKey}
+                  onChange={(e) => setLogClinicianKey(e.target.value)}
+                >
+                  <option value="">-- Select Clinician --</option>
+                  <optgroup label="Doctors">
+                    {clinicians
+                      .filter((c) => c.type === "doctor")
+                      .map((c) => (
+                        <option key={`doctor:${c.id}`} value={`doctor:${c.id}`}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Experts">
+                    {clinicians
+                      .filter((c) => c.type === "expert")
+                      .map((c) => (
+                        <option key={`expert:${c.id}`} value={`expert:${c.id}`}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  color="default"
+                  disabled={logSubmitting}
+                  variant="bordered"
+                  onClick={() => setLogSessionPkg(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  color="primary"
+                  disabled={!logClinicianKey}
+                  isLoading={logSubmitting}
+                  type="submit"
+                >
+                  Log Session
                 </Button>
               </div>
             </form>

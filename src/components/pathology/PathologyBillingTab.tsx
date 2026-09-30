@@ -2220,8 +2220,21 @@ export default function PathologyBillingTab({
                         />
                       </div>
                       <div>
-                        <label className="md:hidden text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 block">
-                          Tax %
+                        <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <input
+                            checked={item.isTaxable !== false}
+                            className="w-3 h-3 cursor-pointer accent-primary"
+                            title="Whether this test is taxable — defaults to taxable unless its catalog Test Type (or this box) explicitly marks it exempt"
+                            type="checkbox"
+                            onChange={(e) =>
+                              updateInvoiceItem(
+                                index,
+                                "isTaxable",
+                                e.target.checked,
+                              )
+                            }
+                          />
+                          <span className="md:hidden">Taxable · </span>Tax %
                         </label>
                         <input
                           className="w-full h-9 px-2.5 text-[12.5px] border border-border-base rounded bg-surface focus:outline-none focus:border-primary text-text-main disabled:opacity-50"

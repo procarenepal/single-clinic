@@ -241,10 +241,22 @@ export default function DailyReportPage() {
       (sum, b) => sum + (b.totalAmount || 0),
       0,
     ),
-    totalRevenueCollected: reportData.billing.reduce(
+    // "Collected" for a revenue card must only count payments against
+    // invoices from THIS SAME revenue bucket (created today) — otherwise a
+    // same-day payment clearing an OLD invoice's due (e.g. a prior clinical
+    // visit) shows up as "Collected" next to a Revenue figure that never
+    // included it, making a category look like it collected money it has
+    // zero recorded revenue for. That old-due money is now surfaced
+    // separately as `*DueCollected` instead of being folded in silently.
+    totalRevenueCollected: invoicesCreatedToday.reduce(
       (sum, b) => sum + (b.paidAmount || 0),
       0,
     ),
+    totalDueCollected: reportData.billing
+      .filter((b) => !b.isCreatedToday)
+      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+    // True total cash received today regardless of when the invoice was
+    // created — today's revenue collected + old dues cleared today.
     totalCashCollected: reportData.billing.reduce(
       (sum, b) => sum + (b.paidAmount || 0),
       0,
@@ -256,8 +268,11 @@ export default function DailyReportPage() {
     clinicalRevenue: invoicesCreatedToday
       .filter((b) => b.type === "appointment")
       .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    clinicalRevenueCollected: reportData.billing
+    clinicalRevenueCollected: invoicesCreatedToday
       .filter((b) => b.type === "appointment")
+      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+    clinicalDueCollected: reportData.billing
+      .filter((b) => b.type === "appointment" && !b.isCreatedToday)
       .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
     clinicalCashCollected: reportData.billing
       .filter((b) => b.type === "appointment")
@@ -268,8 +283,11 @@ export default function DailyReportPage() {
     pathologyRevenue: invoicesCreatedToday
       .filter((b) => b.type === "pathology")
       .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    pathologyRevenueCollected: reportData.billing
+    pathologyRevenueCollected: invoicesCreatedToday
       .filter((b) => b.type === "pathology")
+      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+    pathologyDueCollected: reportData.billing
+      .filter((b) => b.type === "pathology" && !b.isCreatedToday)
       .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
     pathologyDue: invoicesCreatedToday
       .filter((b) => b.type === "pathology")
@@ -277,8 +295,11 @@ export default function DailyReportPage() {
     pharmacyRevenue: invoicesCreatedToday
       .filter((b) => b.type === "pharmacy")
       .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    pharmacyRevenueCollected: reportData.billing
+    pharmacyRevenueCollected: invoicesCreatedToday
       .filter((b) => b.type === "pharmacy")
+      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
+    pharmacyDueCollected: reportData.billing
+      .filter((b) => b.type === "pharmacy" && !b.isCreatedToday)
       .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
     pharmacyDue: invoicesCreatedToday
       .filter((b) => b.type === "pharmacy")
@@ -500,6 +521,17 @@ export default function DailyReportPage() {
                       </span>
                     </div>
                   )}
+                  {summaryStats.totalDueCollected > 0 && (
+                    <div
+                      className="flex justify-between items-center bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded font-medium"
+                      title="Payments received today against invoices created on OTHER days (old dues cleared) — not part of Total Revenue above"
+                    >
+                      <span>Old Due Collected</span>
+                      <span>
+                        {formatCurrency(summaryStats.totalDueCollected)}
+                      </span>
+                    </div>
+                  )}
                   {summaryStats.totalDue > 0 && (
                     <div className="flex justify-between items-center bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium">
                       <span>Due</span>
@@ -507,6 +539,7 @@ export default function DailyReportPage() {
                     </div>
                   )}
                   {summaryStats.totalRevenueCollected === 0 &&
+                    summaryStats.totalDueCollected === 0 &&
                     summaryStats.totalDue === 0 && (
                       <span className="text-text-muted opacity-60">
                         No revenue data
@@ -549,6 +582,17 @@ export default function DailyReportPage() {
                       </span>
                     </div>
                   )}
+                  {summaryStats.clinicalDueCollected > 0 && (
+                    <div
+                      className="flex justify-between items-center bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded font-medium"
+                      title="Payments received today against clinical invoices created on OTHER days (old dues cleared) — not part of Clinical Revenue above"
+                    >
+                      <span>Old Due Collected</span>
+                      <span>
+                        {formatCurrency(summaryStats.clinicalDueCollected)}
+                      </span>
+                    </div>
+                  )}
                   {summaryStats.clinicalDue > 0 && (
                     <div className="flex justify-between items-center bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium">
                       <span>Due</span>
@@ -556,6 +600,7 @@ export default function DailyReportPage() {
                     </div>
                   )}
                   {summaryStats.clinicalRevenueCollected === 0 &&
+                    summaryStats.clinicalDueCollected === 0 &&
                     summaryStats.clinicalDue === 0 && (
                       <span className="text-text-muted opacity-60">
                         No revenue data
@@ -594,6 +639,17 @@ export default function DailyReportPage() {
                       </span>
                     </div>
                   )}
+                  {summaryStats.pathologyDueCollected > 0 && (
+                    <div
+                      className="flex justify-between items-center bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded font-medium"
+                      title="Payments received today against pathology invoices created on OTHER days (old dues cleared) — not part of Pathology Revenue above"
+                    >
+                      <span>Old Due Collected</span>
+                      <span>
+                        {formatCurrency(summaryStats.pathologyDueCollected)}
+                      </span>
+                    </div>
+                  )}
                   {summaryStats.pathologyDue > 0 && (
                     <div className="flex justify-between items-center bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium">
                       <span>Due</span>
@@ -601,6 +657,7 @@ export default function DailyReportPage() {
                     </div>
                   )}
                   {summaryStats.pathologyRevenueCollected === 0 &&
+                    summaryStats.pathologyDueCollected === 0 &&
                     summaryStats.pathologyDue === 0 && (
                       <span className="text-text-muted opacity-60">
                         No revenue data
@@ -639,6 +696,17 @@ export default function DailyReportPage() {
                       </span>
                     </div>
                   )}
+                  {summaryStats.pharmacyDueCollected > 0 && (
+                    <div
+                      className="flex justify-between items-center bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded font-medium"
+                      title="Payments received today against pharmacy invoices created on OTHER days (old dues cleared) — not part of Pharmacy Revenue above"
+                    >
+                      <span>Old Due Collected</span>
+                      <span>
+                        {formatCurrency(summaryStats.pharmacyDueCollected)}
+                      </span>
+                    </div>
+                  )}
                   {summaryStats.pharmacyDue > 0 && (
                     <div className="flex justify-between items-center bg-red-500/10 text-red-600 px-1.5 py-0.5 rounded font-medium">
                       <span>Due</span>
@@ -646,6 +714,7 @@ export default function DailyReportPage() {
                     </div>
                   )}
                   {summaryStats.pharmacyRevenueCollected === 0 &&
+                    summaryStats.pharmacyDueCollected === 0 &&
                     summaryStats.pharmacyDue === 0 && (
                       <span className="text-text-muted opacity-60">
                         No revenue data

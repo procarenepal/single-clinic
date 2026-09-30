@@ -243,7 +243,14 @@ export interface WalletTransaction {
   type: "deposit" | "deduction" | "refund";
   amount: number;
   paymentMethod?: string; // e.g. "cash", "card" for deposits
-  referenceId?: string; // invoiceId if deduction, patientPackageId if refund, or external reference for deposit
+  referenceId?: string; // invoiceId or patientPackageId depending on referenceType, or external reference for deposit
+  // Disambiguates what referenceId actually points to — a deduction can be
+  // either "paying an invoice with wallet funds" (referenceId = invoice id,
+  // links to Appointment Billing) or "consuming a package session"
+  // (referenceId = patientPackage id, which has no invoice page at all).
+  // Missing on old transactions predating this field — treat as "invoice"
+  // for backward compatibility with existing deduction rows.
+  referenceType?: "invoice" | "package";
   notes?: string;
   createdAt: Date;
   createdBy: string;
@@ -274,6 +281,12 @@ export interface TreatmentPackage {
   clinicId: string;
   branchId?: string;
   isActive: boolean;
+  // Same category-driven commission model as AppointmentType — whether
+  // consuming a session of this package earns the performing clinician a
+  // commission, and at what rate, configured once on the package instead
+  // of relying solely on the clinician's own blanket default.
+  calculateCommission?: boolean; // false = never earns commission on this package's sessions, regardless of clinician defaults
+  defaultCommission?: number; // this package's own commission %, taking priority over the performing clinician's own default when set
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -961,6 +974,18 @@ export interface MedicinePurchase {
   discount: number;
   taxPercentage: number;
   taxAmount: number;
+  /**
+   * Sum of each item's own back-calculated taxable base (post-discount,
+   * VAT-exclusive) across only the items that actually carry a tax rate.
+   * Persisted separately from `total`/`netAmount` because a mixed-rate
+   * purchase (some medicines taxable, some VAT-exempt) has no single
+   * correct "taxable amount" derivable from the invoice-level fields alone
+   * — printing/IRD reporting needs this real per-item-summed figure, not a
+   * blanket percentage of the whole invoice.
+   */
+  taxableAmount?: number;
+  /** Sum of exempt (0%-rate) items' post-discount amounts. See taxableAmount. */
+  exemptAmount?: number;
   netAmount: number;
   /**
    * Key of the payment method used for this purchase. Should correspond to

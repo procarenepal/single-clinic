@@ -178,6 +178,10 @@ export default function SellPackageModal({
         finalPatientPanVat = pat.patientPanVat;
       }
 
+      const taxPercentage = applyTax
+        ? billingSettings?.defaultTaxPercentage || 0
+        : 0;
+
       // 2. Create the Billing record
       const billingItem = {
         id: crypto.randomUUID(),
@@ -189,11 +193,14 @@ export default function SellPackageModal({
         doctorId: "unassigned",
         doctorName: "Clinic",
         amount: pkg.price,
+        // TreatmentPackage has no isTaxable/taxRate setting of its own — the
+        // invoice-level "Apply Tax" toggle is the ONLY way to tax a package
+        // sale, so this item must explicitly mirror it (calculateInvoiceTotals
+        // no longer defaults an unconfigured item to taxable-when-toggle-on —
+        // see appointmentBillingService.ts / front-office-desk.tsx's matching
+        // fix — so without this a package sale could never be taxed at all).
+        isTaxable: taxPercentage > 0,
       };
-
-      const taxPercentage = applyTax
-        ? billingSettings?.defaultTaxPercentage || 0
-        : 0;
       const totals = appointmentBillingService.calculateInvoiceTotals(
         [billingItem],
         "percent",

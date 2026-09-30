@@ -56,6 +56,42 @@ export const pharmacyService = {
     try {
       const { getNepaliFiscalYear } = await import("./irdCbmsService");
       const currentRealFiscalYear = getNepaliFiscalYear(new Date());
+
+      // Reserve the receipt number from the SAME shared Java-side invoice
+      // sequence used by appointment/pathology billing (InvoiceSequenceService),
+      // so pharmacy sales interleave into the one gapless per-clinic sequence
+      // IRD expects instead of a separate, pharmacy-only Firestore counter
+      // (which is what this used to do — pharmacy invoice numbers never lined
+      // up with the rest of the clinic's numbering). This is reserved BEFORE
+      // the stock-deduction transaction below because that transaction is
+      // irreversible once committed and must not block on this backend being
+      // reachable — see the Java sync comment further down for the same
+      // reasoning. If reservation fails (Java down/network issue), the
+      // transaction below falls back to the old local counter for just this
+      // one purchase rather than blocking a real sale.
+      let reservedInvoiceNumber: string | undefined;
+
+      try {
+        const { billingApi } = await import("./api/billingApi");
+        const settingsSnapForPrefix = await getDoc(
+          doc(db, PHARMACY_SETTINGS_COLLECTION, purchaseData.clinicId),
+        );
+        const prefixForReservation =
+          (settingsSnapForPrefix.exists()
+            ? (settingsSnapForPrefix.data() as PharmacySettings).invoicePrefix
+            : undefined) || "PUR";
+
+        reservedInvoiceNumber = await billingApi.reserveInvoiceNumber({
+          fiscalYear: currentRealFiscalYear,
+          prefix: prefixForReservation,
+        });
+      } catch (reserveError) {
+        console.error(
+          "Failed to reserve a shared invoice number for this pharmacy purchase — falling back to the local counter for this sale only:",
+          reserveError,
+        );
+      }
+
       const medicineItems = purchaseData.items.filter(
         (item) => item.type === "medicine" || !item.type,
       );
@@ -105,41 +141,48 @@ export const pharmacyService = {
           activeBatchesByMedicine[medicineId] = loadedBatches;
         }
 
-        // 1.5. Read Pharmacy Settings for Atomic Invoice Number Generation
-        const settingsRef = doc(
-          db,
-          PHARMACY_SETTINGS_COLLECTION,
-          purchaseData.clinicId,
-        );
-        const settingsSnap = await transaction.get(settingsRef);
-        let settings = settingsSnap.exists()
-          ? (settingsSnap.data() as PharmacySettings)
-          : null;
+        // 1.5. Determine the purchase/receipt number. The normal path uses
+        // reservedInvoiceNumber, already atomically allocated above from the
+        // SHARED Java-side sequence — this old Firestore-only counter is now
+        // only a degraded fallback for the rare case that reservation failed
+        // (Java unreachable), so a real backend outage can't block the sale.
+        let generatedPurchaseNo =
+          reservedInvoiceNumber || purchaseData.purchaseNo;
 
-        let generatedPurchaseNo = purchaseData.purchaseNo; // fallback to provided
+        if (!generatedPurchaseNo) {
+          const settingsRef = doc(
+            db,
+            PHARMACY_SETTINGS_COLLECTION,
+            purchaseData.clinicId,
+          );
+          const settingsSnap = await transaction.get(settingsRef);
+          const settings = settingsSnap.exists()
+            ? (settingsSnap.data() as PharmacySettings)
+            : null;
 
-        if (settings) {
-          let nextInvoiceNum = settings.nextInvoiceNumber || 1;
-          const settingsUpdates: any = { updatedAt: serverTimestamp() };
+          if (settings) {
+            let nextInvoiceNum = settings.nextInvoiceNumber || 1;
+            const settingsUpdates: any = { updatedAt: serverTimestamp() };
 
-          if (settings.currentFiscalYear !== currentRealFiscalYear) {
-            nextInvoiceNum = 1;
-            settingsUpdates.currentFiscalYear = currentRealFiscalYear;
-            settingsUpdates.nextInvoiceNumber = 2;
+            if (settings.currentFiscalYear !== currentRealFiscalYear) {
+              nextInvoiceNum = 1;
+              settingsUpdates.currentFiscalYear = currentRealFiscalYear;
+              settingsUpdates.nextInvoiceNumber = 2;
+            } else {
+              settingsUpdates.nextInvoiceNumber = nextInvoiceNum + 1;
+            }
+
+            const formattedFiscalYear = currentRealFiscalYear
+              .substring(2)
+              .replace(".", "/");
+            const prefix = settings.invoicePrefix || "PUR";
+
+            generatedPurchaseNo = `${formattedFiscalYear}-${prefix}-${nextInvoiceNum.toString().padStart(4, "0")}`;
+
+            transaction.update(settingsRef, settingsUpdates);
           } else {
-            settingsUpdates.nextInvoiceNumber = nextInvoiceNum + 1;
+            generatedPurchaseNo = `PUR-${Date.now()}`;
           }
-
-          const formattedFiscalYear = currentRealFiscalYear
-            .substring(2)
-            .replace(".", "/");
-          const prefix = settings.invoicePrefix || "PUR";
-
-          generatedPurchaseNo = `${formattedFiscalYear}-${prefix}-${nextInvoiceNum.toString().padStart(4, "0")}`;
-
-          transaction.update(settingsRef, settingsUpdates);
-        } else if (!generatedPurchaseNo) {
-          generatedPurchaseNo = `PUR-${Date.now()}`;
         }
 
         // 2. Prepare data for updates
@@ -428,17 +471,60 @@ export const pharmacyService = {
           });
         }
 
-        // F. Calculate final consistent parent totals based on dynamic batch items
+        // F. Calculate final consistent parent totals based on dynamic batch
+        // items. `newGrossTotal` here is already net of each item's OWN
+        // discount (see D2 above). This used to apply one blanket
+        // `purchaseData.taxPercentage` to the whole discounted total AND
+        // add it ON TOP — but sale prices are MRP, which is already
+        // tax-INCLUSIVE per Nepal pharmacy convention, so that was
+        // literally double-taxing every purchase (VAT baked into the MRP,
+        // plus a second VAT charge added on top), and it ignored any
+        // medicine explicitly configured at a different rate from the
+        // invoice-level default, always taxing every item at one blended
+        // rate instead. Fixed to back the VAT out of each item's own
+        // MRP-inclusive amount at that item's own rate, matching the
+        // create-purchase form's calculation (see pharmacy.tsx).
         const finalDiscount = Math.min(
           purchaseData.discount || 0,
           newGrossTotal,
         );
+        const invoiceDiscountRatio =
+          newGrossTotal > 0 ? finalDiscount / newGrossTotal : 0;
 
-        const taxableAmount = Math.max(0, newGrossTotal - finalDiscount);
-        const finalTaxAmount = Math.round(
-          taxableAmount * ((purchaseData.taxPercentage || 0) / 100),
-        );
-        const finalNetAmount = Math.round(taxableAmount + finalTaxAmount);
+        let rawTaxableAmount = 0;
+        let rawExemptAmount = 0;
+        let rawTaxAmount = 0;
+
+        for (const item of updatedPurchaseItems) {
+          const rate =
+            typeof (item as any).taxRate === "number"
+              ? (item as any).taxRate
+              : purchaseData.taxPercentage || 0;
+          const grossMrp = (item.amount || 0) * (1 - invoiceDiscountRatio);
+
+          // A rate-0 item is EXEMPT, not "taxable at 0%" — previously its
+          // whole amount was folded into rawTaxableAmount regardless of
+          // rate, mislabeling an exempt medicine's price as part of the
+          // taxable base (matches the identical fix in pharmacy.tsx's
+          // live-preview calculation).
+          if (rate > 0) {
+            const itemTaxable = grossMrp / (1 + rate / 100);
+
+            rawTaxableAmount += itemTaxable;
+            rawTaxAmount += grossMrp - itemTaxable;
+          } else {
+            rawExemptAmount += grossMrp;
+          }
+        }
+
+        // Rounded to 2 decimals — this app's established IRD monetary
+        // convention (see taxEngine.ts).
+        const taxableAmount = Math.round(Math.max(0, rawTaxableAmount) * 100) / 100;
+        const exemptAmount = Math.round(Math.max(0, rawExemptAmount) * 100) / 100;
+        const finalTaxAmount = Math.round(Math.max(0, rawTaxAmount) * 100) / 100;
+        const finalNetAmount =
+          Math.round((taxableAmount + exemptAmount + finalTaxAmount) * 100) /
+          100;
 
         // 3. Perform Writes
         // Create Purchase/Invoice with batch-filled items and dynamically computed totals
@@ -451,6 +537,8 @@ export const pharmacyService = {
           total: newGrossTotal,
           discount: finalDiscount,
           taxAmount: finalTaxAmount,
+          taxableAmount,
+          exemptAmount,
           netAmount: finalNetAmount,
           id: purchaseRef.id,
           createdAt: serverTimestamp(),
@@ -1326,6 +1414,10 @@ export const pharmacyService = {
             // preAssignedInvoiceNumber), so it's the correct reference here.
             refInvoiceNumber: purchase.purchaseNo,
             reasonForReturn: returnData.notes,
+            // Matches the "CN-" convention appointment/pathology credit
+            // notes already use — cosmetic only; the underlying number still
+            // comes from the same shared sequence either way.
+            invoicePrefix: "CN",
             // Deterministic per-content key — a network-drop retry of this
             // exact submission reuses it, so the backend returns the
             // already-created invoice instead of minting a duplicate.

@@ -7,6 +7,7 @@ import { useAuthContext } from "@/context/AuthContext";
 import {
   Button,
   Input,
+  Checkbox,
   Modal,
   ModalContent,
   ModalHeader,
@@ -36,6 +37,8 @@ export default function PackagesSettingsPage() {
     walletCreditAmount: "",
     totalSessions: "",
     validityDays: "",
+    calculateCommission: true,
+    defaultCommission: "",
   });
 
   useEffect(() => {
@@ -68,6 +71,11 @@ export default function PackagesSettingsPage() {
         walletCreditAmount: pkg.walletCreditAmount.toString(),
         totalSessions: pkg.totalSessions?.toString() || "",
         validityDays: pkg.validityDays?.toString() || "",
+        calculateCommission: pkg.calculateCommission !== false,
+        defaultCommission:
+          pkg.defaultCommission !== undefined
+            ? String(pkg.defaultCommission)
+            : "",
       });
     } else {
       setEditingPkg(null);
@@ -78,6 +86,8 @@ export default function PackagesSettingsPage() {
         walletCreditAmount: "",
         totalSessions: "",
         validityDays: "",
+        calculateCommission: true,
+        defaultCommission: "",
       });
     }
     setIsModalOpen(true);
@@ -94,6 +104,17 @@ export default function PackagesSettingsPage() {
       const totalSessions = formData.totalSessions
         ? parseInt(formData.totalSessions)
         : undefined;
+      const validityDays = formData.validityDays
+        ? parseInt(formData.validityDays)
+        : undefined;
+
+      const commissionValue =
+        formData.calculateCommission && formData.defaultCommission.trim()
+          ? Math.min(
+              100,
+              Math.max(0, parseFloat(formData.defaultCommission) || 0),
+            )
+          : undefined;
 
       if (editingPkg) {
         await packageService.updatePackage(editingPkg.id, {
@@ -101,10 +122,14 @@ export default function PackagesSettingsPage() {
           description: formData.description,
           price,
           walletCreditAmount: walletCredit,
-          totalSessions,
-          validityDays: formData.validityDays
-            ? parseInt(formData.validityDays)
-            : undefined,
+          // Firestore's updateDoc rejects `undefined` outright — `null`
+          // explicitly clears a previously-set value when left blank
+          // (this was the actual bug: totalSessions/validityDays passed
+          // `undefined` here whenever the field was empty).
+          totalSessions: (totalSessions ?? null) as any,
+          validityDays: (validityDays ?? null) as any,
+          calculateCommission: formData.calculateCommission,
+          defaultCommission: (commissionValue ?? null) as any,
         });
         addToast({
           title: "Updated",
@@ -117,15 +142,19 @@ export default function PackagesSettingsPage() {
           description: formData.description,
           price,
           walletCreditAmount: walletCredit,
-          totalSessions,
-          validityDays: formData.validityDays
-            ? parseInt(formData.validityDays)
-            : undefined,
           isActive: true,
           clinicId,
           branchId,
           createdBy: "system",
-        });
+          calculateCommission: formData.calculateCommission,
+          // Fresh addDoc — omit each key entirely rather than writing
+          // `undefined`, which Firestore also rejects on create.
+          ...(totalSessions !== undefined && { totalSessions }),
+          ...(validityDays !== undefined && { validityDays }),
+          ...(commissionValue !== undefined && {
+            defaultCommission: commissionValue,
+          }),
+        } as any);
         addToast({
           title: "Created",
           description: "Package created successfully",
@@ -521,6 +550,43 @@ export default function PackagesSettingsPage() {
                     }))
                   }
                 />
+              </div>
+              <div className="flex flex-col gap-1 p-3 rounded-lg border border-border-base bg-surface-2/30">
+                <Checkbox
+                  className="font-medium"
+                  isSelected={formData.calculateCommission}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      calculateCommission: value,
+                    }))
+                  }
+                >
+                  Calculate Commission
+                </Checkbox>
+                <p className="text-xs text-text-muted ml-7 leading-relaxed">
+                  If checked, consuming a session of this package earns the
+                  performing doctor/expert a commission. Uncheck to exclude
+                  this package's sessions from commission entirely.
+                </p>
+                {formData.calculateCommission && (
+                  <div className="ml-7 mt-2 max-w-[200px]">
+                    <Input
+                      label="Default Commission % (optional)"
+                      max="100"
+                      min="0"
+                      placeholder="Uses clinician's own default"
+                      type="number"
+                      value={formData.defaultCommission}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          defaultCommission: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
               </div>
             </ModalBody>
             <ModalFooter>

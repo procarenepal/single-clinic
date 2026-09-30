@@ -194,7 +194,7 @@ export const medicineService = {
     try {
       const medicinesRef = collection(db, MEDICINES_COLLECTION);
       const docRef = await addDoc(medicinesRef, {
-        ...medicineData,
+        ...this.stripUndefined(medicineData),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -413,9 +413,22 @@ export const medicineService = {
       const docRef = doc(db, MEDICINES_COLLECTION, id);
 
       await updateDoc(docRef, {
-        ...updateData,
+        ...this.stripUndefined(updateData),
         updatedAt: serverTimestamp(),
       });
+
+      // Clear cache on mutation — createMedicine/deleteMedicine already did
+      // this; updateMedicine was missing it, so an edit (e.g. toggling
+      // Apply VAT) saved correctly to Firestore but the next
+      // getMedicinesByClinic() call kept serving the stale pre-edit
+      // sessionStorage cache, making the edit look like it "didn't stick"
+      // in the list and in the Edit modal's own pre-fill.
+      if (typeof window !== "undefined") {
+        Object.keys(sessionStorage).forEach((key) => {
+          if (key.startsWith("cache_medicines_"))
+            sessionStorage.removeItem(key);
+        });
+      }
     } catch (error) {
       console.error("Error updating medicine:", error);
       throw error;
@@ -900,32 +913,39 @@ export const medicineService = {
       const totalDiff = diffReg + diffSch;
 
       if (totalDiff !== 0) {
+        // A "set" adjustment can raise regular stock while lowering scheme
+        // stock (or vice versa) on the SAME doc when there's only one stock
+        // record for this medicine/branch — the common case. Issuing two
+        // separate transaction.update() calls on that one doc (one from the
+        // add-branch below, one from the deduct-branch) throws at runtime
+        // ("a document cannot be updated twice in the same transaction"), so
+        // every doc's net delta is accumulated here first and applied with
+        // exactly one update() per doc.
+        const deltaByDocId = new Map<string, { reg: number; sch: number }>();
+        const addDelta = (docId: string, reg: number, sch: number) => {
+          const existing = deltaByDocId.get(docId) || { reg: 0, sch: 0 };
+
+          deltaByDocId.set(docId, {
+            reg: existing.reg + reg,
+            sch: existing.sch + sch,
+          });
+        };
+        let newStockToCreate: { reg: number; sch: number } | null = null;
+
         if (diffReg > 0 || diffSch > 0) {
           const firstDoc = docs[0];
 
           if (firstDoc) {
-            transaction.update(firstDoc.ref, {
-              currentStock:
-                (firstDoc.data.currentStock || 0) + (diffReg > 0 ? diffReg : 0),
-              schemeStock:
-                (firstDoc.data.schemeStock || 0) + (diffSch > 0 ? diffSch : 0),
-              updatedAt: serverTimestamp(),
-            });
+            addDelta(
+              firstDoc.id,
+              diffReg > 0 ? diffReg : 0,
+              diffSch > 0 ? diffSch : 0,
+            );
           } else {
-            const newStockRef = doc(collection(db, MEDICINE_STOCK_COLLECTION));
-
-            transaction.set(newStockRef, {
-              medicineId,
-              currentStock: diffReg > 0 ? diffReg : 0,
-              schemeStock: diffSch > 0 ? diffSch : 0,
-              minimumStock: 10,
-              reorderLevel: 20,
-              clinicId,
-              branchId: branchId || "",
-              updatedBy: createdBy,
-              updatedAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
-            });
+            newStockToCreate = {
+              reg: diffReg > 0 ? diffReg : 0,
+              sch: diffSch > 0 ? diffSch : 0,
+            };
           }
         }
 
@@ -957,15 +977,38 @@ export const medicineService = {
             );
 
             if (deductReg > 0 || deductSch > 0) {
-              transaction.update(d.ref, {
-                currentStock: (d.data.currentStock || 0) - deductReg,
-                schemeStock: (d.data.schemeStock || 0) - deductSch,
-                updatedAt: serverTimestamp(),
-              });
+              addDelta(d.id, -deductReg, -deductSch);
               remainingRegToDeduct -= deductReg;
               remainingSchToDeduct -= deductSch;
             }
           }
+        }
+
+        for (const [docId, delta] of deltaByDocId.entries()) {
+          const d = docs.find((doc) => doc.id === docId)!;
+
+          transaction.update(d.ref, {
+            currentStock: (d.data.currentStock || 0) + delta.reg,
+            schemeStock: (d.data.schemeStock || 0) + delta.sch,
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        if (newStockToCreate) {
+          const newStockRef = doc(collection(db, MEDICINE_STOCK_COLLECTION));
+
+          transaction.set(newStockRef, {
+            medicineId,
+            currentStock: newStockToCreate.reg,
+            schemeStock: newStockToCreate.sch,
+            minimumStock: 10,
+            reorderLevel: 20,
+            clinicId,
+            branchId: branchId || "",
+            updatedBy: createdBy,
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          });
         }
 
         const oldTotal = totalCurrentRegular + totalCurrentScheme;
@@ -995,6 +1038,124 @@ export const medicineService = {
       const oldTotal = totalCurrentRegular + totalCurrentScheme;
 
       return { oldTotal, newTotal: oldTotal, totalDiff: 0 };
+    });
+  },
+
+  /**
+   * Atomically refill (or deduct from) ONE specific batch's stock record,
+   * identified by medicineId+batchNumber+clinicId. Previously
+   * (MedicinesTab.tsx handleRefillStock) the current stock was read with a
+   * plain getMedicineStockByBatch() call, then written back with a separate
+   * updateMedicineStock/createMedicineStock call — the exact stale-read
+   * race the rest of this file's transactional helpers (adjustStock,
+   * recordStockTransaction) were written to close. Also clamps a "deduct"
+   * at 0 so an over-large deduction can't leave the batch at negative
+   * stock (it previously wrote `current - qty` unclamped).
+   */
+  async refillBatchStock(params: {
+    medicineId: string;
+    batchNumber: string;
+    clinicId: string;
+    branchId: string;
+    isAdd: boolean;
+    regularQty: number;
+    schemeQty: number;
+    updatedBy: string;
+    expiryDate?: Date;
+    costPrice?: number;
+    salePrice?: number;
+    supplierId?: string;
+  }): Promise<{
+    stockId: string;
+    previousRegularStock: number;
+    previousSchemeStock: number;
+    newRegularStock: number;
+    newSchemeStock: number;
+  }> {
+    // Transactions can't run arbitrary queries — resolve which stock doc
+    // (if any) matches this batch first, then re-read THAT doc
+    // transactionally so the actual math is computed from data at the
+    // moment of commit, not the point the refill modal was opened.
+    const existingQuery = query(
+      collection(db, MEDICINE_STOCK_COLLECTION),
+      where("medicineId", "==", params.medicineId),
+      where("batchNumber", "==", params.batchNumber),
+      where("clinicId", "==", params.clinicId),
+    );
+    const existingSnapshot = await getDocs(existingQuery);
+    const existingRef = existingSnapshot.empty
+      ? null
+      : existingSnapshot.docs[0].ref;
+
+    return runTransaction(db, async (transaction) => {
+      const existingSnap = existingRef
+        ? await transaction.get(existingRef)
+        : null;
+      const existingData = existingSnap?.exists() ? existingSnap.data() : null;
+
+      const currentRegularStock = existingData?.currentStock || 0;
+      const currentSchemeStock = existingData?.schemeStock || 0;
+
+      const newRegularStock = params.isAdd
+        ? currentRegularStock + params.regularQty
+        : Math.max(0, currentRegularStock - params.regularQty);
+      const newSchemeStock = params.isAdd
+        ? currentSchemeStock + params.schemeQty
+        : Math.max(0, currentSchemeStock - params.schemeQty);
+
+      if (existingRef) {
+        transaction.update(existingRef, {
+          ...this.stripUndefined({
+            currentStock: newRegularStock,
+            schemeStock: newSchemeStock,
+            lastRestocked: serverTimestamp(),
+            updatedBy: params.updatedBy,
+            expiryDate: params.expiryDate,
+            costPrice: params.costPrice,
+            salePrice: params.salePrice,
+            supplierId: params.supplierId,
+          }),
+          updatedAt: serverTimestamp(),
+        });
+
+        return {
+          stockId: existingRef.id,
+          previousRegularStock: currentRegularStock,
+          previousSchemeStock: currentSchemeStock,
+          newRegularStock,
+          newSchemeStock,
+        };
+      }
+
+      const newRef = doc(collection(db, MEDICINE_STOCK_COLLECTION));
+
+      transaction.set(newRef, {
+        ...this.stripUndefined({
+          medicineId: params.medicineId,
+          batchNumber: params.batchNumber,
+          currentStock: newRegularStock,
+          schemeStock: newSchemeStock,
+          minimumStock: 10,
+          reorderLevel: 20,
+          clinicId: params.clinicId,
+          branchId: params.branchId || "",
+          updatedBy: params.updatedBy,
+          expiryDate: params.expiryDate,
+          costPrice: params.costPrice,
+          salePrice: params.salePrice,
+          supplierId: params.supplierId,
+        }),
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      });
+
+      return {
+        stockId: newRef.id,
+        previousRegularStock: 0,
+        previousSchemeStock: 0,
+        newRegularStock,
+        newSchemeStock,
+      };
     });
   },
 
@@ -2036,9 +2197,17 @@ export const medicineService = {
     try {
       const stockItems = await this.getStockByClinic(clinicId);
 
-      return stockItems.filter(
-        (item) => item.currentStock <= item.reorderLevel,
-      );
+      // Match StockTab.tsx's own low-stock definition (currentStock +
+      // schemeStock vs. the per-item reorderLevel) — this used to compare
+      // currentStock alone, ignoring schemeStock entirely, so a medicine
+      // with 0 regular stock but plenty of scheme stock was wrongly
+      // flagged as low/out of stock here while StockTab correctly showed
+      // it as in-stock.
+      return stockItems.filter((item) => {
+        const totalStock = (item.currentStock || 0) + (item.schemeStock || 0);
+
+        return totalStock <= item.reorderLevel;
+      });
     } catch (error) {
       console.error("Error fetching low stock items:", error);
       throw error;

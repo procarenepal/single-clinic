@@ -268,9 +268,17 @@ export default function PurchaseEditPage() {
               if (selectedMedicine) {
                 updatedItem.productName = selectedMedicine.name;
                 updatedItem.salePrice = selectedMedicine.price || 0;
+                // Medicine.isVatApplied/vatPercentage are never "unset" —
+                // every medicine has an explicit true/false VAT status — so
+                // a VAT-exempt medicine must resolve to a definite 0% here,
+                // not `undefined` (which previously fell back to the
+                // invoice-level default rate via
+                // `item.taxRate ?? purchaseForm.taxPercentage` below,
+                // silently taxing an explicitly VAT-exempt medicine at the
+                // clinic's default rate instead of exempting it).
                 updatedItem.taxRate = selectedMedicine.isVatApplied
-                  ? selectedMedicine.vatPercentage
-                  : undefined;
+                  ? selectedMedicine.vatPercentage ?? 0
+                  : 0;
                 updatedItem.expiryDate = selectedMedicine.expiryDate
                   ? selectedMedicine.expiryDate.toISOString().split("T")[0]
                   : "";

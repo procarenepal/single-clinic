@@ -603,6 +603,15 @@ export default function PatientBillingTab({
           } else {
             item.commission = doc?.defaultCommission || 0;
           }
+
+          // Sourced automatically from the service's own tax settings —
+          // this used to never be copied over at all, so every item
+          // created here had isTaxable permanently undefined regardless
+          // of what its Appointment Type actually configures (e.g. a
+          // Skin Test's Taxable setting was silently ignored). Matches
+          // appointments-billing.tsx's updateInvoiceItem.
+          item.isTaxable = at.isTaxable;
+          item.taxRate = at.taxRate;
         }
       }
 
@@ -1535,7 +1544,30 @@ export default function PatientBillingTab({
                             }
                           />
                         </div>
-                        <div className="sm:col-span-5">
+                        <div className="sm:col-span-2">
+                          <label
+                            className="text-[12px] font-medium text-text-muted flex items-center gap-1.5 h-9"
+                            title="Whether this service is taxable — sourced from its Appointment Type, editable per line"
+                          >
+                            <input
+                              checked={item.isTaxable === true}
+                              className="h-3.5 w-3.5"
+                              type="checkbox"
+                              onChange={(e) =>
+                                updateItem(idx, {
+                                  isTaxable: e.target.checked,
+                                  taxRate: e.target.checked
+                                    ? (item.taxRate ??
+                                      billingSettings?.defaultTaxPercentage ??
+                                      13)
+                                    : item.taxRate,
+                                })
+                              }
+                            />
+                            Taxable
+                          </label>
+                        </div>
+                        <div className="sm:col-span-3">
                           <FlatInput
                             readOnly
                             label="Amount"

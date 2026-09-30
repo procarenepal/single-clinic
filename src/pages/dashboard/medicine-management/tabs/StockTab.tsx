@@ -215,14 +215,23 @@ export default function StockTab({
   };
 
   const handleSaveStock = async () => {
+    // reorderLevel is marked required (*) in the form below but was never
+    // actually checked here — leaving it blank let `parseInt("")` (NaN)
+    // through to Firestore, which then silently broke every downstream
+    // low-stock comparison (`totalStock <= reorderLevel` is always false
+    // against NaN), permanently hiding that item from low-stock alerts.
     if (
       !stockFormData.medicineId ||
       !stockFormData.currentStock ||
-      !stockFormData.minimumStock
+      !stockFormData.minimumStock ||
+      !stockFormData.reorderLevel ||
+      isNaN(parseInt(stockFormData.currentStock)) ||
+      isNaN(parseInt(stockFormData.minimumStock)) ||
+      isNaN(parseInt(stockFormData.reorderLevel))
     ) {
       addToast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields with valid numbers",
       });
 
       return;

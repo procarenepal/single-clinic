@@ -794,6 +794,12 @@ export default function AppointmentBillingPage() {
                 discountAmount: 0,
                 amount: price,
                 appointmentId: app.id,
+                // Sourced from the appointment's own Appointment Type — this
+                // used to be left unset entirely, so category-driven tax
+                // settings were silently ignored for items auto-populated
+                // from a patient's unbilled appointments.
+                isTaxable: at?.isTaxable,
+                taxRate: at?.taxRate,
               } as any;
             });
 
@@ -1631,7 +1637,18 @@ export default function AppointmentBillingPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {formData.items.map((item, i) => (
+                  {formData.items.map((item, i) => {
+                    // An item with no explicit isTaxable is NOT taxable —
+                    // calculateInvoiceTotals/createBilling treat it exactly
+                    // this way (isTaxable === true required; no longer
+                    // falls back to the invoice-level Apply Tax toggle,
+                    // which used to silently tax any category that had
+                    // never been re-saved since the per-category Taxable
+                    // setting was introduced). The checkbox mirrors that
+                    // directly — no separate "effective" fallback needed.
+                    const effectiveIsTaxable = item.isTaxable === true;
+
+                    return (
                     <div
                       key={item.id}
                       className="grid grid-cols-1 md:grid-cols-[repeat(13,minmax(0,1fr))] gap-3 p-3 border border-border-base rounded-lg items-end bg-surface-2/40 shadow-none"
@@ -1758,7 +1775,7 @@ export default function AppointmentBillingPage() {
                         <div className="flex flex-col gap-1">
                           <label className="text-[12px] font-medium text-text-muted flex items-center gap-1">
                             <input
-                              checked={item.isTaxable ?? false}
+                              checked={effectiveIsTaxable}
                               className="h-3.5 w-3.5"
                               disabled={!formData.applyTax}
                               type="checkbox"
@@ -1781,7 +1798,7 @@ export default function AppointmentBillingPage() {
                             Taxable
                           </label>
                           <FlatInput
-                            disabled={!formData.applyTax || !item.isTaxable}
+                            disabled={!formData.applyTax || !effectiveIsTaxable}
                             label=""
                             max="100"
                             min="0"
@@ -1821,7 +1838,8 @@ export default function AppointmentBillingPage() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

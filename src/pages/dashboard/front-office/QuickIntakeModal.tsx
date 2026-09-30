@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Spinner } from "@/components/ui";
 import { Autocomplete, AutocompleteItem } from "@/components/ui/autocomplete";
+import { calculateTaxBreakdown } from "@/utils/taxEngine";
 
 /**
  * Sensible per-clinician-type defaults for a newly-added (or retyped) row:
@@ -1000,19 +1001,40 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
 
                     if (chargingRows.length === 0) return null;
 
-                    const subtotal = chargingRows.reduce(
-                      (sum: number, c: any) => sum + (Number(c.price) || 0),
-                      0,
-                    );
-                    const discountAmount =
-                      quickIntakeForm.discountType === "percent"
-                        ? (subtotal * (quickIntakeForm.discountValue || 0)) / 100
-                        : Math.min(quickIntakeForm.discountValue || 0, subtotal);
-                    const afterDiscount = Math.max(0, subtotal - discountAmount);
-                    const taxAmount = quickIntakeForm.applyTax
-                      ? (afterDiscount * defaultTaxPercentage) / 100
-                      : 0;
-                    const total = afterDiscount + taxAmount;
+                    // Per-row isTaxable (from each row's own Appointment
+                    // Type) fed into the SAME calculateTaxBreakdown engine
+                    // calculateInvoiceTotals uses server-side — this used to
+                    // apply defaultTaxPercentage to the WHOLE combined
+                    // subtotal whenever Apply Tax was on, ignoring which
+                    // rows were actually taxable, so this preview could show
+                    // staff an inflated total that didn't match what was
+                    // actually billed once they submitted.
+                    const breakdown = calculateTaxBreakdown({
+                      items: chargingRows.map((c: any) => {
+                        const apptType = appointmentTypes.find(
+                          (t: any) => t.id === c.appointmentTypeId,
+                        );
+
+                        return {
+                          itemName: apptType?.name || "Service",
+                          quantity: 1,
+                          price: Number(c.price) || 0,
+                          isTaxable: apptType?.isTaxable === true,
+                          taxRate: apptType?.taxRate,
+                        };
+                      }),
+                      discountType: quickIntakeForm.discountType,
+                      discountValue: quickIntakeForm.discountValue || 0,
+                      defaultTaxPercentage,
+                      isTaxEnabled: Boolean(quickIntakeForm.applyTax),
+                    });
+
+                    const subtotal = breakdown.subtotal;
+                    const discountAmount = breakdown.totalDiscountAmount;
+                    const afterDiscount =
+                      breakdown.taxableAmount + breakdown.exemptAmount;
+                    const taxAmount = breakdown.taxAmount;
+                    const total = breakdown.totalAmount;
 
                     return (
                       <div className="mt-1 p-2.5 rounded border border-border-base bg-surface-2/50 text-[12px] space-y-1">

@@ -865,16 +865,31 @@ export default function PurchaseRecordsTab({
                   setFormData((prev) => {
                     const updated = { ...prev, billNumber: newBillNo };
 
-                    // Global lookup by Bill Number to auto-populate Supplier and financial data
-                    if (!editingRecord && newBillNo.trim()) {
+                    // Lookup by Bill Number + Supplier to auto-populate
+                    // financial data. Bill/invoice numbers are assigned by
+                    // each supplier independently and are NOT guaranteed
+                    // globally unique — matching by bill number alone (as
+                    // this used to) could silently adopt an unrelated
+                    // supplier's record (whichever happened to share that
+                    // bill number), and if saved, handleSubmit's own
+                    // existing-match check (which DOES filter by both
+                    // fields) would then overwrite that unrelated
+                    // supplier's purchase record instead of creating a new
+                    // one. Only auto-match once a supplier is already
+                    // selected, scoped to that supplier.
+                    if (
+                      !editingRecord &&
+                      newBillNo.trim() &&
+                      updated.supplierId
+                    ) {
                       const match = purchaseRecords.find(
                         (r) =>
                           r.billNumber.trim().toLowerCase() ===
-                          newBillNo.trim().toLowerCase(),
+                            newBillNo.trim().toLowerCase() &&
+                          r.supplierId === updated.supplierId,
                       );
 
                       if (match) {
-                        updated.supplierId = match.supplierId;
                         updated.totalAmount = match.totalAmount.toString();
                         updated.paidAmount = match.paidAmount.toString();
                         updated.notes = match.notes || "";
@@ -888,15 +903,17 @@ export default function PurchaseRecordsTab({
               />
               {!editingRecord &&
                 formData.billNumber &&
+                formData.supplierId &&
                 purchaseRecords.some(
                   (r) =>
                     r.billNumber.trim().toLowerCase() ===
-                    formData.billNumber.trim().toLowerCase(),
+                      formData.billNumber.trim().toLowerCase() &&
+                    r.supplierId === formData.supplierId,
                 ) && (
                   <div className="mt-1 flex items-center gap-1 text-[11px] text-teal-600 font-medium bg-teal-50 px-2 py-1 rounded border border-teal-100">
                     <IoCheckmarkCircleOutline className="w-3 h-3" />
                     <span>
-                      Existing bill found. Supplier and data auto-loaded.
+                      Existing bill found for this supplier. Data auto-loaded.
                     </span>
                   </div>
                 )}

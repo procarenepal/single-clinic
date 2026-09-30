@@ -680,7 +680,10 @@ export default function MedicinesTab({
         price: medicine.price?.toString() || "",
         costPrice: medicine.costPrice?.toString() || "",
         isVatApplied: medicine.isVatApplied || false,
-        vatPercentage: medicine.vatPercentage || 13,
+        // `??` not `||` — a medicine genuinely stored at 0% VAT must stay 0,
+        // not fall back to 13 just because 0 is falsy. `|| 13` here made
+        // every 0%-VAT medicine's edit form silently show/re-save 13%.
+        vatPercentage: medicine.vatPercentage ?? 13,
       };
 
       return newList;
@@ -856,7 +859,10 @@ export default function MedicinesTab({
         isAddingCategory: false,
         newCategoryName: "",
         isVatApplied: medicine.isVatApplied || false,
-        vatPercentage: medicine.vatPercentage || 13,
+        // See the identical `??` fix in handleSelectSuggestion above — a
+        // medicine genuinely stored at 0% VAT must stay 0 in the Edit
+        // modal, not silently revert to 13% on open/re-save.
+        vatPercentage: medicine.vatPercentage ?? 13,
       },
     ]);
     modalState.open();
@@ -1253,7 +1259,11 @@ export default function MedicinesTab({
 
     setIsLoading(true);
     try {
-      // Get current stock for this specific batch
+      // Get current stock for this specific batch (used below only for
+      // display context on the stock-transaction log entries — the actual
+      // add/deduct math is now computed atomically inside
+      // refillBatchStock's own transaction, not from this snapshot, so a
+      // concurrent refill/sale on the same batch can no longer clobber it).
       const batchNum = refillFormData.batchNumber || "DEFAULT";
       const existingStock = await medicineService.getMedicineStockByBatch(
         medicineForRefill.id,
@@ -1264,12 +1274,29 @@ export default function MedicinesTab({
       const currentSchemeStock = existingStock?.schemeStock || 0;
 
       const isAdd = refillFormData.transactionType === "add";
-      const newRegularStock = isAdd
-        ? currentRegularStock + regularQty
-        : currentRegularStock - regularQty;
-      const newSchemeStock = isAdd
-        ? currentSchemeStock + schemeQty
-        : currentSchemeStock - schemeQty;
+
+      const refillResult = await medicineService.refillBatchStock({
+        medicineId: medicineForRefill.id,
+        batchNumber: batchNum,
+        clinicId,
+        branchId: branchScopeId || "",
+        isAdd,
+        regularQty,
+        schemeQty,
+        updatedBy: userData.id,
+        expiryDate: refillFormData.expiryDate
+          ? new Date(refillFormData.expiryDate)
+          : undefined,
+        costPrice: refillFormData.regularCostPrice
+          ? parseFloat(refillFormData.regularCostPrice)
+          : undefined,
+        salePrice: refillFormData.regularSalePrice
+          ? parseFloat(refillFormData.regularSalePrice)
+          : undefined,
+        supplierId: refillFormData.supplierId || undefined,
+      });
+      const newRegularStock = refillResult.newRegularStock;
+      const newSchemeStock = refillResult.newSchemeStock;
 
       // Create stock transaction for regular stock if quantity !== 0
       if (regularQty !== 0) {
@@ -1369,49 +1396,8 @@ export default function MedicinesTab({
         await medicineService.createStockTransaction(schemeTransactionData);
       }
 
-      // Update or create stock record
-      if (existingStock) {
-        await medicineService.updateMedicineStock(existingStock.id, {
-          currentStock: newRegularStock,
-          schemeStock: newSchemeStock,
-          lastRestocked: new Date(),
-          updatedBy: userData.id,
-          // Sync batch prices and expiry on existing batch refill
-          expiryDate: refillFormData.expiryDate
-            ? new Date(refillFormData.expiryDate)
-            : existingStock.expiryDate,
-          costPrice: refillFormData.regularCostPrice
-            ? parseFloat(refillFormData.regularCostPrice)
-            : existingStock.costPrice,
-          salePrice: refillFormData.regularSalePrice
-            ? parseFloat(refillFormData.regularSalePrice)
-            : existingStock.salePrice,
-          supplierId:
-            refillFormData.supplierId || existingStock.supplierId || "",
-        });
-      } else {
-        await medicineService.createMedicineStock({
-          medicineId: medicineForRefill.id,
-          currentStock: newRegularStock,
-          schemeStock: newSchemeStock,
-          minimumStock: 10,
-          reorderLevel: 20,
-          clinicId,
-          branchId: branchScopeId || "",
-          updatedBy: userData.id,
-          batchNumber: batchNum,
-          expiryDate: refillFormData.expiryDate
-            ? new Date(refillFormData.expiryDate)
-            : undefined,
-          costPrice: refillFormData.regularCostPrice
-            ? parseFloat(refillFormData.regularCostPrice)
-            : undefined,
-          salePrice: refillFormData.regularSalePrice
-            ? parseFloat(refillFormData.regularSalePrice)
-            : undefined,
-          supplierId: refillFormData.supplierId || undefined,
-        });
-      }
+      // Stock record itself (create-or-update) was already applied
+      // atomically by refillBatchStock above.
 
       // Update core medicine details with latest batch info if it's a purchase/addition
       if (isAdd) {

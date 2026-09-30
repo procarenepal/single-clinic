@@ -16,6 +16,16 @@ export interface DailyBillingSummary {
   date: Date; // Date of the invoice or payment
   paymentStatus: string;
   doctorName?: string;
+  /**
+   * Whether the invoice itself was created on the selected date, vs. only
+   * receiving a payment on it (e.g. clearing a due from an older invoice).
+   * "Revenue" cards should count only isCreatedToday invoices; "Collected"
+   * cards sum paidAmount across ALL of them — so a same-day due payment on
+   * an old invoice can make Collected exceed Revenue for a category. This
+   * flag lets the UI split that out instead of presenting one "Collected"
+   * number that silently mixes today's sales with old-due clearance.
+   */
+  isCreatedToday: boolean;
 }
 
 export interface DailyReportData {
@@ -201,6 +211,7 @@ export const dailyReportService = {
             date: createdDate || new Date(),
             paymentStatus: paymentStatus || "unpaid",
             doctorName,
+            isCreatedToday,
           });
         }
       };

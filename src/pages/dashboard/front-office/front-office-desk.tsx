@@ -1375,12 +1375,28 @@ export default function FrontOfficeDesk() {
           if (pkg) {
             const sessionCount =
               patientPkg?.totalSessions || pkg.totalSessions || 1;
-            const perSessionValue = pkg.price > 0 ? pkg.price / sessionCount : 0;
-            const commissionPct =
-              cl.addCommission
-                ? (isExpert
+            // Rounded to 2 decimals matching this app's established IRD
+            // monetary convention (see taxEngine.ts) — an unrounded
+            // division (e.g. 25000/3) produces long floating-point
+            // artifacts that would otherwise flow straight into the
+            // invoice amount and commission calculation.
+            const perSessionValue =
+              pkg.price > 0
+                ? Math.round((pkg.price / sessionCount) * 100) / 100
+                : 0;
+            // This package's own commission % (Package Settings) takes
+            // priority over the clinician's blanket default — same
+            // category-priority rule already used for AppointmentType.
+            const resolvedCommission =
+              pkg.calculateCommission !== false &&
+              typeof pkg.defaultCommission === "number"
+                ? pkg.defaultCommission
+                : (isExpert
                   ? expInfo?.defaultCommission
-                  : docInfo?.defaultCommission) || 0
+                  : docInfo?.defaultCommission) || 0;
+            const commissionPct =
+              cl.addCommission && pkg.calculateCommission !== false
+                ? resolvedCommission
                 : 0;
 
             if (perSessionValue > 0) {
@@ -1395,6 +1411,7 @@ export default function FrontOfficeDesk() {
                 price: 0,
                 quantity: 1,
                 commission: commissionPct,
+                calculateCommission: pkg.calculateCommission,
                 doctorId: cl.clinicianId,
                 doctorName: isExpert
                   ? expInfo?.name || "Expert"
@@ -3842,6 +3859,10 @@ export default function FrontOfficeDesk() {
       }
 
       if (isPackageSale && pkg) {
+        const pkgTaxPercentage = quickIntakeForm.applyTax
+          ? billingSettings?.defaultTaxPercentage || 0
+          : 0;
+
         // 1. Create the Billing record (invoice number resolved by the Java backend)
         const billingItem = {
           id: crypto.randomUUID(),
@@ -3853,11 +3874,17 @@ export default function FrontOfficeDesk() {
           doctorId: "unassigned",
           doctorName: "Clinic",
           amount: pkg.price,
+          // TreatmentPackage has no isTaxable/taxRate setting of its own
+          // (unlike AppointmentType/PathologyTestType) — the invoice-level
+          // "Apply Tax" toggle is the ONLY way to tax a package sale, so
+          // this item must explicitly mirror it. calculateInvoiceTotals no
+          // longer defaults an unconfigured item to taxable-when-toggle-on
+          // (that fallback caused a different bug for category-driven
+          // items — see appointmentBillingService.ts), so without this,
+          // a package sale could never be taxed at all, even with Apply
+          // Tax checked.
+          isTaxable: pkgTaxPercentage > 0,
         };
-
-        const pkgTaxPercentage = quickIntakeForm.applyTax
-          ? billingSettings?.defaultTaxPercentage || 0
-          : 0;
         const pkgTotals = appointmentBillingService.calculateInvoiceTotals(
           [billingItem],
           "percent",

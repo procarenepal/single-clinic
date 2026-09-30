@@ -315,9 +315,15 @@ export const patientPackageService = {
                 data.patientId,
                 data.clinicId,
                 sessionCost,
-                data.id, // using package ticket as reference
+                // `data` came from docSnap.data(), which never includes the
+                // document's own id — `id` (the function's own parameter)
+                // is the actual patientPackage id. Using data.id here always
+                // passed undefined, which Firestore rejects when writing the
+                // wallet transaction (Transaction.set() invalid data error).
+                id,
                 `Consumed 1 session of ${data.packageName} (Ticket #${currentUsed + 1})`,
                 auditData?.clinicianId || "system",
+                "package",
               );
               deductedSessionCost = sessionCost;
             }
@@ -399,7 +405,7 @@ export const patientPackageService = {
               data.patientId,
               data.clinicId,
               deductedSessionCost,
-              data.id,
+              id, // see the identical data.id fix above — data.data() has no id
               "Session consumption failed after wallet deduction — automatic reversal",
               auditData?.clinicianId || "system",
             );
@@ -417,6 +423,154 @@ export const patientPackageService = {
       console.error("Error consuming session:", error);
       throw error;
     }
+  },
+
+  /**
+   * Log a package session directly (e.g. from the patient's Wallet &
+   * Deposits tab) without going through the full front-office check-in/
+   * routing flow — for a patient who is only coming in to use an
+   * already-paid session, not booking anything new. Creates a minimal,
+   * already-completed appointment record (so the visit still shows up in
+   * the patient's appointment history/reports), consumes the session
+   * ticket against it, and — matching the exact commission mechanism the
+   * full front-office check-in flow uses for package sessions — creates a
+   * zero-charge invoice for the session's per-session value and records a
+   * zero-amount payment against it, which is what actually triggers
+   * doctorCommissionService/expertCommissionService to generate a payable
+   * commission record. This keeps commission reporting identical
+   * regardless of which flow logged the session.
+   *
+   * Commission rate priority: the package's own `defaultCommission`
+   * (Package Settings) wins over the clinician's own blanket default when
+   * both `calculateCommission !== false` and a rate is set — same
+   * category-priority rule used for AppointmentType elsewhere in the app.
+   */
+  async logStandaloneSession(
+    pkg: PatientPackage,
+    patientName: string,
+    clinician: {
+      id: string;
+      name: string;
+      type: "doctor" | "expert";
+      defaultCommission?: number;
+    },
+    createdBy: string,
+  ): Promise<string> {
+    const { appointmentService } = await import("./appointmentService");
+
+    const now = new Date();
+    const appointmentId = await appointmentService.createAppointment({
+      patientId: pkg.patientId,
+      clinicId: pkg.clinicId,
+      branchId: pkg.clinicId,
+      doctorId: clinician.type === "doctor" ? clinician.id : "unassigned",
+      assignedExpertId: clinician.type === "expert" ? clinician.id : undefined,
+      appointmentTypeId: "package-session",
+      patientPackageId: pkg.id,
+      appointmentDate: now,
+      registrationDate: now,
+      status: "completed",
+      reason: `Package session — ${pkg.packageName}`,
+      billingStatus: "paid",
+      paymentStatus: "paid",
+      createdBy,
+    } as any);
+
+    await this.consumeSession(pkg.id, {
+      appointmentId,
+      clinicianId: clinician.id,
+      clinicianName: clinician.name,
+    });
+
+    try {
+      const pkgRef = doc(db, "treatmentPackages", pkg.packageId);
+      const pkgSnap = await getDoc(pkgRef);
+      const pkgData = pkgSnap.exists() ? (pkgSnap.data() as any) : null;
+
+      const commissionEligible = pkgData?.calculateCommission !== false;
+      const commissionRate = commissionEligible
+        ? typeof pkgData?.defaultCommission === "number"
+          ? pkgData.defaultCommission
+          : clinician.defaultCommission || 0
+        : 0;
+
+      const sessionCount = pkg.totalSessions || 1;
+      // Rounded to 2 decimals — matches this app's established IRD
+      // monetary convention (see taxEngine.ts) and the identical fix in
+      // front-office-desk.tsx's own package-session commission item.
+      const perSessionValue =
+        pkgData?.price > 0
+          ? Math.round((pkgData.price / sessionCount) * 100) / 100
+          : 0;
+
+      if (commissionRate > 0 && perSessionValue > 0) {
+        const { appointmentBillingService } = await import(
+          "./appointmentBillingService"
+        );
+
+        const billingItem = {
+          id: crypto.randomUUID(),
+          appointmentTypeId: "package-session",
+          appointmentTypeName: `Package Session — ${pkg.packageName}`,
+          price: 0,
+          quantity: 1,
+          commission: commissionRate,
+          calculateCommission: true,
+          doctorId: clinician.id,
+          doctorName: clinician.name,
+          amount: perSessionValue,
+        };
+
+        const { id: billingId } = await appointmentBillingService.createBilling(
+          {
+            invoiceNumber: "",
+            clinicId: pkg.clinicId,
+            branchId: pkg.clinicId,
+            patientId: pkg.patientId,
+            patientName,
+            doctorId: clinician.id,
+            doctorName: clinician.name,
+            doctorType: "regular",
+            appointmentId,
+            invoiceDate: now,
+            items: [billingItem as any],
+            subtotal: 0,
+            itemDiscountAmount: 0,
+            mainDiscountAmount: 0,
+            discountType: "percent",
+            discountValue: 0,
+            discountAmount: 0,
+            taxPercentage: 0,
+            taxAmount: 0,
+            totalAmount: 0,
+            status: "draft",
+            paymentStatus: "unpaid",
+            paidAmount: 0,
+            balanceAmount: 0,
+            createdBy,
+          } as any,
+        );
+
+        await appointmentBillingService.recordPayment(
+          billingId,
+          0,
+          "package",
+          undefined,
+          `Package session logged from Wallet & Deposits — ${pkg.packageName}.`,
+        );
+      }
+    } catch (commissionErr) {
+      // Commission generation is best-effort here — the session itself
+      // (ticket consumed, wallet deducted, appointment recorded) has
+      // already succeeded above and must not be rolled back just because
+      // the commission side-effect failed.
+      console.error(
+        "Error generating commission for logged package session:",
+        commissionErr,
+      );
+    }
+
+    return appointmentId;
   },
 
   /**
@@ -518,6 +672,33 @@ export const patientPackageService = {
           console.error(
             "Error reversing commission for refunded package:",
             commissionError,
+          );
+        }
+
+        // IRD compliance: the original package-sale invoice was already
+        // filed as full revenue at time of sale. Without a Credit Note,
+        // that filed amount stays overstated relative to what the clinic
+        // actually retained after this refund — a wallet-only reversal is
+        // invisible to IRD entirely. Issue a Credit Note scaled to the
+        // same ratio as the commission reversal above, so the filed
+        // revenue correction matches the actual refund. Best-effort by
+        // design (see issuePartialCreditNote) — never blocks the refund
+        // itself from completing.
+        try {
+          const { appointmentBillingService } = await import(
+            "./appointmentBillingService"
+          );
+
+          await appointmentBillingService.issuePartialCreditNote(
+            (data as any).billingId,
+            commissionReversalRatio,
+            `Refund for ${unusedSessions} unused session(s) of ${data.packageName}. Reason: ${reason}`,
+            createdBy,
+          );
+        } catch (creditNoteError) {
+          console.error(
+            "Error issuing IRD credit note for refunded package:",
+            creditNoteError,
           );
         }
       }

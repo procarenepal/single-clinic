@@ -147,6 +147,30 @@ public class BillingController {
         return ResponseEntity.ok(savedInvoice);
     }
 
+    /**
+     * Atomically reserves the next number from the SAME shared invoice
+     * sequence used by /create, without creating an Invoice row. Exists for
+     * pharmacy, whose Firestore stock-deduction transaction is irreversible
+     * and must complete even if the /create Java call afterward fails or is
+     * slow — pharmacy reserves a number here first, uses it as the receipt
+     * number for that transaction, then passes it back as
+     * preAssignedInvoiceNumber when it later calls /create, so no second
+     * number is minted. This is what keeps pharmacy on the same gapless,
+     * per-clinic+fiscal-year counter as appointment/pathology invoices
+     * instead of a separate numbering track.
+     */
+    @PostMapping("/reserve-number")
+    @Transactional
+    public ResponseEntity<java.util.Map<String, String>> reserveNumber(
+            @Valid @RequestBody com.procaresoft.billing.dto.ReserveInvoiceNumberRequestDto request,
+            HttpServletRequest httpRequest) {
+        String clinicId = requireClinicId(httpRequest);
+        String invoiceNumber = invoiceSequenceService.generateNextInvoiceNumber(
+                clinicId, request.getFiscalYear(), request.getPrefix());
+
+        return ResponseEntity.ok(java.util.Map.of("invoiceNumber", invoiceNumber));
+    }
+
     @GetMapping("/patient/{firebasePatientId}")
     public ResponseEntity<org.springframework.data.domain.Page<Invoice>> getPatientInvoices(
             @PathVariable String firebasePatientId,

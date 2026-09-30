@@ -206,6 +206,29 @@ export const billingApi = {
   },
 
   /**
+   * Atomically reserve the next number from the shared invoice sequence
+   * WITHOUT creating an invoice row. For callers (currently only pharmacy)
+   * that must have a real, IRD-sequence number in hand before some other
+   * irreversible state change (e.g. a Firestore stock-deduction transaction)
+   * commits — see BillingController.reserveNumber. Throws on failure; the
+   * caller is expected to fall back to a clearly-marked degraded path
+   * (pharmacy's own local counter) rather than block the sale entirely on
+   * this backend being reachable.
+   */
+  async reserveInvoiceNumber(params: {
+    fiscalYear: string;
+    prefix?: string;
+  }): Promise<string> {
+    const response = await billingApiClient.post("/reserve-number", params);
+
+    if (!response.data?.invoiceNumber) {
+      throw new Error("Java backend did not return a reserved invoice number");
+    }
+
+    return response.data.invoiceNumber;
+  },
+
+  /**
    * Retry syncing an invoice with IRD CBMS. Credentials are resolved
    * server-side from the invoice's clinic — only fiscalYear/isReturn travel here.
    */

@@ -9,7 +9,6 @@ import {
   query,
   where,
   Timestamp,
-  runTransaction,
 } from "firebase/firestore";
 
 import { db, auth } from "../config/firebase";
@@ -325,61 +324,6 @@ export const pathologyBillingService = {
   // =================== INVOICE OPERATIONS ===================
 
   /**
-   * Generate next invoice number for a clinic
-   */
-  async generateInvoiceNumber(clinicId: string): Promise<string> {
-    try {
-      const { getNepaliFiscalYear } = await import("./irdCbmsService");
-      const currentRealFiscalYear = getNepaliFiscalYear(new Date());
-
-      const settingsRef = doc(
-        db,
-        PATHOLOGY_BILLING_SETTINGS_COLLECTION,
-        clinicId,
-      );
-
-      const invoiceNumber = await runTransaction(db, async (transaction) => {
-        const settingsDoc = await transaction.get(settingsRef);
-
-        if (!settingsDoc.exists()) {
-          throw new Error("Pathology billing settings not found for clinic");
-        }
-
-        const settings = settingsDoc.data() as PathologyBillingSettings;
-
-        let nextInvoiceNum = settings.nextInvoiceNumber || 1;
-        const updates: any = {
-          updatedAt: Timestamp.now(),
-        };
-
-        if (settings.currentFiscalYear !== currentRealFiscalYear) {
-          nextInvoiceNum = 1;
-          updates.currentFiscalYear = currentRealFiscalYear;
-          updates.nextInvoiceNumber = 2; // Next will be 2
-        } else {
-          updates.nextInvoiceNumber = nextInvoiceNum + 1;
-        }
-
-        // Format fiscal year from "2080.81" to "80/81"
-        const formattedFiscalYear = currentRealFiscalYear
-          .substring(2)
-          .replace(".", "/");
-        const generatedInvoiceNumber = `${formattedFiscalYear}-${settings.invoicePrefix}-${nextInvoiceNum.toString().padStart(4, "0")}`;
-
-        // Increment the next invoice number atomically
-        transaction.update(settingsRef, updates);
-
-        return generatedInvoiceNumber;
-      });
-
-      return invoiceNumber;
-    } catch (error) {
-      console.error("Error generating pathology invoice number:", error);
-      throw error;
-    }
-  },
-
-  /**
    * Create a new pathology billing record
    */
   /**
@@ -420,22 +364,51 @@ export const pathologyBillingService = {
     const taxPercentage = billingData.taxPercentage || 0;
     const taxAmount = billingData.taxAmount || 0;
     const totalAmount = billingData.totalAmount || 0;
-    let taxableAmount = 0;
-    let exemptAmount = 0;
+    // Trust the per-item, category-driven breakdown the create-invoice form
+    // already computed via calculateTaxBreakdown (billingData.taxableAmount/
+    // exemptAmount) instead of recomputing a cruder all-or-nothing split
+    // here — this used to derive taxableAmount purely from the blanket
+    // invoice-level taxPercentage, so a mixed invoice (some tests taxable,
+    // some exempt at the catalog level) reported the WRONG split to
+    // IRD/MySQL even though the Firestore record and printed invoice
+    // (which do use billingData's real figures) showed the correct one.
+    const taxableAmount = billingData.taxableAmount ?? 0;
+    const exemptAmount = billingData.exemptAmount ?? 0;
 
-    if (taxPercentage > 0) {
-      taxableAmount = totalAmount - taxAmount;
-    } else {
-      exemptAmount = totalAmount;
-    }
+    // Mirrors calculateTaxBreakdown's own gating exactly (see
+    // PathologyBillingTab.tsx's calculateTotals): the invoice-level toggle
+    // OR any explicitly-taxable item turns tax on overall, and each item's
+    // OWN isTaxable defaults to true (per PathologyBillingItem.isTaxable's
+    // documented default) unless explicitly set false.
+    const isTaxEnabledOverall =
+      taxPercentage > 0 ||
+      (billingData.items || []).some((i) => i.isTaxable === true);
 
     const invoiceItems = (billingData.items || []).map((item) => ({
       itemName: item.testName || "Pathology Test",
       quantity: 1,
       rate: item.price || 0,
       totalAmount: item.price || 0,
-      isTaxable: taxPercentage > 0,
+      // Each item's own resolved taxable state, not a blanket "taxable iff
+      // the invoice-level toggle is on" that ignored per-item catalog
+      // configuration and could mark an explicitly-taxable test as exempt
+      // to IRD whenever staff forgot to flip the invoice toggle (or vice
+      // versa, tax an item explicitly configured exempt).
+      isTaxable: isTaxEnabledOverall && item.isTaxable !== false,
     }));
+
+    // The clinic's configured invoicePrefix used to be computed by this
+    // service's own generateInvoiceNumber() and then silently discarded —
+    // the Java backend always fell back to its hardcoded "INV" default,
+    // including for credit notes (losing their intended "CN-" prefix).
+    // Mirrors appointmentBillingService.createBilling's same fix.
+    const isCreditNote = Boolean((billingData as any).isCreditNote);
+    const settingsForPrefix = await this.getBillingSettings(
+      billingData.clinicId,
+    ).catch(() => null);
+    const invoicePrefix = isCreditNote
+      ? "CN"
+      : settingsForPrefix?.invoicePrefix || undefined;
 
     // Only intent (irdEnabled) travels to the Java backend — actual IRD
     // credentials are resolved server-side per clinic, never sent from here.
@@ -452,16 +425,17 @@ export const pathologyBillingService = {
       irdEnabled: Boolean(clinic?.irdEnabled),
       fiscalYear: getNepaliFiscalYear(new Date()),
       // Credit notes/sales returns must route to IRD's /api/billreturn, not /api/bill.
-      isReturn: Boolean((billingData as any).isCreditNote),
+      isReturn: isCreditNote,
       // IRD's /api/billreturn requires these two beyond a normal /api/bill —
       // see IrdCbmsService.buildPayload's isReturn branch. Ignored server-side
       // when isReturn is false.
-      refInvoiceNumber: (billingData as any).isCreditNote
+      refInvoiceNumber: isCreditNote
         ? (billingData as any).linkedInvoiceNumber
         : undefined,
-      reasonForReturn: (billingData as any).isCreditNote
+      reasonForReturn: isCreditNote
         ? (billingData as any).creditNoteReason
         : undefined,
+      invoicePrefix,
       // Deterministic per-content key — a network-drop retry of this exact
       // submission reuses it, so the backend returns the already-created
       // invoice instead of minting a duplicate.
@@ -1016,12 +990,6 @@ export const pathologyBillingService = {
         amount: -Math.abs(item.amount),
       }));
 
-      // Generate invoice number
-      const nextInvoiceNumber = await this.generateInvoiceNumber(
-        original.clinicId,
-      );
-      const creditNoteInvoiceNumber = `CN-${nextInvoiceNumber}`;
-
       // Strip id/createdAt/updatedAt before spreading — `...original` alone
       // would otherwise carry the ORIGINAL invoice's Firestore doc-id into
       // this new document as a plain field, which then silently overrides
@@ -1033,7 +1001,7 @@ export const pathologyBillingService = {
         "id" | "createdAt" | "updatedAt"
       > = {
         ...originalWithoutId,
-        invoiceNumber: creditNoteInvoiceNumber,
+        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
         invoiceDate: new Date(),
         items: negativeItems,
 
@@ -1071,8 +1039,13 @@ export const pathologyBillingService = {
 
       // createBilling already submitted this to the Java backend with
       // isReturn: true (routed to IRD's /api/billreturn) — no separate
-      // sync call needed here.
-      const newCreditNoteId = await this.createBilling(creditNoteData);
+      // sync call needed here. Its returned invoiceNumber is the real,
+      // Java-sequence-assigned number — this used to be pre-computed
+      // locally beforehand and used for the note below, but createBilling
+      // always overwrites invoiceNumber with the Java-assigned one, so
+      // that locally-guessed number never matched what was actually saved.
+      const { id: newCreditNoteId, invoiceNumber: creditNoteInvoiceNumber } =
+        await this.createBilling(creditNoteData);
 
       // Update original invoice to note it has been reversed, and mark it
       // so a second Credit Note can never be issued against it.
@@ -1122,10 +1095,23 @@ export const pathologyBillingService = {
         throw new Error("This invoice is already fully paid.");
       }
 
-      const newTotalAmount = Math.max(0, billing.totalAmount - discountAmount);
-      const newDiscountAmount = (billing.discountAmount || 0) + discountAmount;
-      const newPaidAmount = (billing.paidAmount || 0) + paymentAmount;
-      const newBalanceAmount = Math.max(0, newTotalAmount - newPaidAmount);
+      // Rounded to 2 decimals throughout — matches this app's established
+      // IRD monetary convention (see taxEngine.ts). Without this, floating-
+      // point drift from earlier arithmetic (e.g. 497.00000000000006) can
+      // make a fully-paid invoice fail the newPaidAmount >= newTotalAmount
+      // check below and get stuck showing "PARTIAL" forever despite the
+      // displayed paid/total amounts looking identical.
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const newTotalAmount = round2(
+        Math.max(0, billing.totalAmount - discountAmount),
+      );
+      const newDiscountAmount = round2(
+        (billing.discountAmount || 0) + discountAmount,
+      );
+      const newPaidAmount = round2((billing.paidAmount || 0) + paymentAmount);
+      const newBalanceAmount = round2(
+        Math.max(0, newTotalAmount - newPaidAmount),
+      );
 
       let paymentStatus: "unpaid" | "partial" | "paid" = "unpaid";
 

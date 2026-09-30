@@ -1037,6 +1037,8 @@ export default function NewPrescriptionPage() {
 
           let price = 500; // sensible GP fallback price in NPR
           let appointmentTypeName = "General Consultation";
+          let apptTypeIsTaxable: boolean | undefined;
+          let apptTypeTaxRate: number | undefined;
 
           if (apt.appointmentTypeId) {
             const apptType =
@@ -1047,6 +1049,8 @@ export default function NewPrescriptionPage() {
             if (apptType) {
               price = Number(apptType.price) || 500;
               appointmentTypeName = apptType.name || "General Consultation";
+              apptTypeIsTaxable = apptType.isTaxable;
+              apptTypeTaxRate = apptType.taxRate;
             }
           }
 
@@ -1125,6 +1129,12 @@ export default function NewPrescriptionPage() {
             doctorId: doctorId,
             doctorName: docInfo?.name || "Unknown Doctor",
             amount: price,
+            // Sourced from the appointment's own Appointment Type — this
+            // used to be left unset entirely, so category-driven tax
+            // settings (e.g. a taxable procedure type) were silently
+            // ignored for invoices auto-created from this flow.
+            isTaxable: apptTypeIsTaxable,
+            taxRate: apptTypeTaxRate,
           };
 
           const taxPercentage1 = applyTax
@@ -1342,6 +1352,8 @@ export default function NewPrescriptionPage() {
 
             let price = 500; // sensible GP fallback price in NPR
             let appointmentTypeName = "General Consultation";
+            let apptTypeIsTaxable: boolean | undefined;
+            let apptTypeTaxRate: number | undefined;
 
             if (apt.appointmentTypeId) {
               const apptType =
@@ -1352,6 +1364,8 @@ export default function NewPrescriptionPage() {
               if (apptType) {
                 price = Number(apptType.price) || 500;
                 appointmentTypeName = apptType.name || "General Consultation";
+                apptTypeIsTaxable = apptType.isTaxable;
+                apptTypeTaxRate = apptType.taxRate;
               }
             }
 
@@ -1430,6 +1444,10 @@ export default function NewPrescriptionPage() {
               doctorId: doctorId,
               doctorName: docInfo?.name || "Unknown Doctor",
               amount: price,
+              // See the matching billingItem above — sourced from the
+              // appointment's own Appointment Type.
+              isTaxable: apptTypeIsTaxable,
+              taxRate: apptTypeTaxRate,
             };
 
             const taxPercentage3 = applyTax

@@ -1083,6 +1083,7 @@ export default function PurchaseDetailPage() {
           discountAmount: purchase.discount,
           taxPercentage: purchase.taxPercentage,
           taxAmount: purchase.taxAmount,
+          taxableAmount: purchase.taxableAmount,
           totalAmount: purchase.netAmount,
           paidAmount,
           balanceAmount: dueAmount,

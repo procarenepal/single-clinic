@@ -195,10 +195,10 @@ function DoctorSelect({
   const triggerRef = useRef<HTMLDivElement>(null);
   const filtered = q
     ? doctors.filter(
-        (d) =>
-          d.name.toLowerCase().includes(q.toLowerCase()) ||
-          d.speciality?.toLowerCase().includes(q.toLowerCase()),
-      )
+      (d) =>
+        d.name.toLowerCase().includes(q.toLowerCase()) ||
+        d.speciality?.toLowerCase().includes(q.toLowerCase()),
+    )
     : doctors;
   const selected = doctors.find((d) => d.id === value);
 
@@ -629,15 +629,14 @@ function ReferralSourceSelect({
                         </p>
                       </div>
                       <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                          p.rawType === "doctor"
+                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${p.rawType === "doctor"
                             ? "bg-blue-50 text-blue-600 border border-blue-100"
                             : p.rawType === "expert"
                               ? "bg-purple-50 text-purple-600 border border-purple-100"
                               : p.rawType === "staff"
                                 ? "bg-teal-50 text-teal-600 border border-teal-100"
                                 : "bg-orange-50 text-orange-600 border border-orange-100"
-                        }`}
+                          }`}
                       >
                         {p.rawType}
                       </span>
@@ -1569,13 +1568,13 @@ const NewPatientPage: React.FC = () => {
                 ? profile.referrals
                 : profile.referralPartnerId
                   ? [
-                      {
-                        type: profile.referralType || "referral-partner",
-                        id: profile.referralPartnerId,
-                        name: profile.referredBy,
-                        commissionPercentage: 0,
-                      },
-                    ]
+                    {
+                      type: profile.referralType || "referral-partner",
+                      id: profile.referralPartnerId,
+                      name: profile.referredBy,
+                      commissionPercentage: 0,
+                    },
+                  ]
                   : [];
 
             for (const ref of referralsToUse) {
@@ -1714,7 +1713,6 @@ const NewPatientPage: React.FC = () => {
               appointmentTypeId: appt.appointmentType,
               startTime: appt.startTime,
             };
-
             await Promise.allSettled([
               scheduleAppointmentReminder(reminderPayload),
               scheduleDoctorAppointmentReminder(reminderPayload),
@@ -1741,11 +1739,11 @@ const NewPatientPage: React.FC = () => {
             doctorName,
             appointmentDate: appt.appointmentDate
               ? new Date(appt.appointmentDate).toLocaleDateString("en-US", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })
               : "",
             appointmentType: apptTypeName,
           });
@@ -1822,16 +1820,15 @@ const NewPatientPage: React.FC = () => {
   ${opdTicket.gender ? `<div class="row"><span class="label">Gender</span><span class="value">${opdTicket.gender.charAt(0).toUpperCase() + opdTicket.gender.slice(1)}</span></div>` : ""}
   ${opdTicket.age ? `<div class="row"><span class="label">Age</span><span class="value">${opdTicket.age}</span></div>` : ""}
   ${opdTicket.doctorName ? `<div class="row"><span class="label">Assigned Doctor</span><span class="value">Dr. ${opdTicket.doctorName}</span></div>` : ""}
-  ${
-    opdTicket.appointmentDate || opdTicket.appointmentType
-      ? `
+  ${opdTicket.appointmentDate || opdTicket.appointmentType
+        ? `
   <div class="appt-box">
     <div class="appt-title">📅 Appointment</div>
     ${opdTicket.appointmentType ? `<div class="row"><span class="label">Type</span><span class="value">${opdTicket.appointmentType}</span></div>` : ""}
     ${opdTicket.appointmentDate ? `<div class="row"><span class="label">Date</span><span class="value">${opdTicket.appointmentDate}</span></div>` : ""}
   </div>`
-      : ""
-  }
+        : ""
+      }
   <div class="footer">
     Issued: ${new Date().toLocaleString()}<br/>
     Please show this slip at reception.
@@ -1892,13 +1889,12 @@ const NewPatientPage: React.FC = () => {
               <div className="flex items-center gap-2.5">
                 <div
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 border-2 transition-colors
-                  ${
-                    done
+                  ${done
                       ? "bg-primary border-primary text-white"
                       : active
                         ? "bg-surface border-primary text-primary"
                         : "bg-surface border-border-base text-text-muted"
-                  }`}
+                    }`}
                 >
                   {done ? <IoCheckmarkCircleOutline className="w-4 h-4" /> : n}
                 </div>
@@ -2553,7 +2549,7 @@ const NewPatientPage: React.FC = () => {
                     disabled
                     type="date"
                     value={appt.registrationDate}
-                    onChange={() => {}}
+                    onChange={() => { }}
                   />
                 </Field>
 
@@ -2570,7 +2566,7 @@ const NewPatientPage: React.FC = () => {
                     }
                     endContent={
                       dateConv.isConverting &&
-                      dateConv.field === "appointmentDate" ? (
+                        dateConv.field === "appointmentDate" ? (
                         <Spinner size="xs" />
                       ) : undefined
                     }
@@ -2601,7 +2597,7 @@ const NewPatientPage: React.FC = () => {
                     }
                     endContent={
                       dateConv.isConverting &&
-                      dateConv.field === "appointmentBS" ? (
+                        dateConv.field === "appointmentBS" ? (
                         <Spinner size="xs" />
                       ) : appt.appointmentBS &&
                         dateConv.lastConversion.timestamp > 0 ? (

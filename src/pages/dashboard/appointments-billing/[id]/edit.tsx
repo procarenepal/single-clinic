@@ -509,6 +509,14 @@ export default function EditInvoicePage() {
           if (selectedDoctor) {
             item.commission = selectedDoctor.defaultCommission;
           }
+
+          // Sourced automatically from the service's own tax settings —
+          // this used to never be copied over at all, so every edited/
+          // added item had isTaxable permanently undefined regardless of
+          // what its Appointment Type actually configures. Matches
+          // appointments-billing.tsx's updateInvoiceItem (create form).
+          item.isTaxable = appointmentType.isTaxable;
+          item.taxRate = appointmentType.taxRate;
         } else {
           // Check if it's a custom item from another row
           const customItem = prev.items.find(
@@ -888,6 +896,7 @@ export default function EditInvoicePage() {
                   <div className="w-[100px] shrink-0 px-1">Disc. Type</div>
                   <div className="w-[100px] shrink-0 px-1">Disc. Val</div>
                   <div className="w-[100px] shrink-0 px-1">Comm.</div>
+                  <div className="w-[80px] shrink-0 px-1">Taxable</div>
                   <div className="w-[120px] shrink-0 px-1 text-right">
                     Amount
                   </div>
@@ -947,7 +956,7 @@ export default function EditInvoicePage() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-6 xl:flex gap-3 xl:w-auto">
+                    <div className="grid grid-cols-2 lg:grid-cols-7 xl:flex gap-3 xl:w-auto">
                       <div className="w-full xl:w-[110px] xl:shrink-0">
                         <CustomInput
                           hideLabelDesktop={true}
@@ -1027,6 +1036,30 @@ export default function EditInvoicePage() {
                             })
                           }
                         />
+                      </div>
+
+                      <div className="w-full xl:w-[80px] flex flex-col gap-1.5 xl:justify-end xl:shrink-0">
+                        <label
+                          className="text-[13px] font-medium text-mountain-700 flex items-center gap-1.5 h-[38px]"
+                          title="Whether this service is taxable — sourced from its Appointment Type, editable per line"
+                        >
+                          <input
+                            checked={item.isTaxable === true}
+                            className="h-3.5 w-3.5"
+                            type="checkbox"
+                            onChange={(e) =>
+                              updateInvoiceItem(index, {
+                                isTaxable: e.target.checked,
+                                taxRate: e.target.checked
+                                  ? (item.taxRate ??
+                                    billingSettings?.defaultTaxPercentage ??
+                                    13)
+                                  : item.taxRate,
+                              })
+                            }
+                          />
+                          <span className="xl:hidden">Taxable</span>
+                        </label>
                       </div>
 
                       <div className="w-full xl:w-[120px] flex flex-col gap-1.5 xl:justify-end xl:shrink-0">

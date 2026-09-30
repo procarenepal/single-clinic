@@ -77,6 +77,14 @@ export default function MedicineManagementPage() {
           { currentStock: number; schemeStock: number; reorderLevel: number }
         > = {};
 
+        const settings = settingsOverride ?? clinicSettings;
+        // Clinic-wide fallback used only when a stock record has no
+        // reorderLevel of its own — `?? 10` (not `|| 10`) so an admin who
+        // deliberately configures a threshold of 0 is respected instead of
+        // silently coerced to 10.
+        const lowStockThreshold = settings?.lowStockThreshold ?? 10;
+        const expiryAlertDays = settings?.expiryAlertDays || 30;
+
         stockData.forEach((stock) => {
           medicineStocks[stock.medicineId] =
             (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
@@ -84,17 +92,13 @@ export default function MedicineManagementPage() {
             aggregatedStocks[stock.medicineId] = {
               currentStock: 0,
               schemeStock: 0,
-              reorderLevel: stock.reorderLevel || 10,
+              reorderLevel: stock.reorderLevel ?? lowStockThreshold,
             };
           }
           aggregatedStocks[stock.medicineId].currentStock += stock.currentStock;
           aggregatedStocks[stock.medicineId].schemeStock +=
             stock.schemeStock || 0;
         });
-
-        const settings = settingsOverride ?? clinicSettings;
-        const lowStockThreshold = settings?.lowStockThreshold || 10;
-        const expiryAlertDays = settings?.expiryAlertDays || 30;
 
         const lowStockItems = Object.values(aggregatedStocks).filter((s) => {
           const totalStock = s.currentStock + s.schemeStock;
@@ -173,6 +177,10 @@ export default function MedicineManagementPage() {
           { currentStock: number; schemeStock: number; reorderLevel: number }
         > = {};
 
+        // See loadDashboardStats above for why `??` (not `||`) is used here.
+        const lowStockThreshold = settings?.lowStockThreshold ?? 10;
+        const expiryAlertDays = settings?.expiryAlertDays || 30;
+
         stockData.forEach((stock) => {
           medicineStocks[stock.medicineId] =
             (medicineStocks[stock.medicineId] || 0) + stock.currentStock;
@@ -180,7 +188,7 @@ export default function MedicineManagementPage() {
             aggregatedStocks[stock.medicineId] = {
               currentStock: 0,
               schemeStock: 0,
-              reorderLevel: stock.reorderLevel || 10,
+              reorderLevel: stock.reorderLevel ?? lowStockThreshold,
             };
           }
           aggregatedStocks[stock.medicineId].currentStock += stock.currentStock;
@@ -188,8 +196,6 @@ export default function MedicineManagementPage() {
             stock.schemeStock || 0;
         });
 
-        const lowStockThreshold = settings?.lowStockThreshold || 10;
-        const expiryAlertDays = settings?.expiryAlertDays || 30;
         const lowStockItems = Object.values(aggregatedStocks).filter((s) => {
           const totalStock = s.currentStock + s.schemeStock;
 
@@ -437,7 +443,7 @@ export default function MedicineManagementPage() {
                 </p>
                 {clinicSettings && (
                   <p className="text-[10px] text-warning font-semibold mt-1 leading-none">
-                    Threshold: ≤{clinicSettings.lowStockThreshold || 10}
+                    Threshold: ≤{clinicSettings.lowStockThreshold ?? 10}
                   </p>
                 )}
               </div>

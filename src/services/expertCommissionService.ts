@@ -47,7 +47,7 @@ class ExpertCommissionService {
         async ([eId, group]) => {
           // Calculate total commission amount for this expert's items
           let groupSubtotal = 0;
-          const groupCommissionAmount = group.items.reduce((total, item) => {
+          const rawCommissionAmount = group.items.reduce((total, item) => {
             // Explicitly skip items where calculateCommission is false from the business total entirely
             if (item.calculateCommission === false) {
               return total;
@@ -78,6 +78,14 @@ class ExpertCommissionService {
 
             return total + itemCommissionAmount;
           }, 0);
+
+          // Rounded to 2 decimals — matches this app's established IRD
+          // monetary convention (see taxEngine.ts) and the identical fix in
+          // doctorCommissionService.createCommission — an unrounded
+          // floating-point sum otherwise produces artifacts like
+          // 999.9995999999999 on a stored commission record.
+          const groupCommissionAmount = Math.round(rawCommissionAmount * 100) / 100;
+          groupSubtotal = Math.round(groupSubtotal * 100) / 100;
 
           if (groupCommissionAmount <= 0) return null;
 
