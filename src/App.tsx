@@ -118,6 +118,9 @@ const EditAppointmentPage = lazy(
 const MedicineManagementPage = lazy(
   () => import("@/pages/dashboard/medicine-management/index"),
 );
+const BillingCounterPage = lazy(
+  () => import("@/pages/dashboard/billing-counter"),
+);
 const PharmacyPage = lazy(() => import("@/pages/dashboard/pharmacy"));
 const PurchaseDetailPage = lazy(
   () => import("@/pages/dashboard/pharmacy/purchase-detail"),
@@ -532,6 +535,16 @@ export default function App() {
                               </RbacProtectedRoute>
                             }
                             path="appointments-billing/:id/edit"
+                          />
+                          {/* One invoice for the whole visit — consultation,
+                              lab tests and medicines on a single bill. */}
+                          <Route
+                            element={
+                              <RbacProtectedRoute pagePath="/dashboard/billing-counter">
+                                <BillingCounterPage />
+                              </RbacProtectedRoute>
+                            }
+                            path="billing-counter"
                           />
                           {/* Map the general /dashboard/billing route to the same component */}
                           <Route

@@ -1740,6 +1740,19 @@ export interface AppointmentBillingItem {
   isTaxable?: boolean; // Whether tax applies to this item
   taxRate?: number; // Per-item VAT rate override, e.g. 13. Falls back to the clinic's defaultTaxPercentage when unset. Only meaningful when isTaxable is true.
   amount: number; // (price * quantity) - discountAmount
+  /**
+   * What this line actually charges for, so a single invoice can mix a
+   * consultation, a lab test and a dispensed medicine — which is what the
+   * unified billing counter produces. Absent on every record written before
+   * that counter existed, and those are all services, so `undefined` must be
+   * read as "service" rather than as missing data.
+   *
+   * `appointmentTypeId` carries the source catalogue id for a lab or medicine
+   * line (the pathologyTests / medicines document id). That field has always
+   * held free-form values here ("manual", "consultation-fee", a package id),
+   * so no parallel id field is introduced.
+   */
+  lineKind?: "service" | "lab" | "medicine";
 }
 
 // Main appointment billing/invoice record
