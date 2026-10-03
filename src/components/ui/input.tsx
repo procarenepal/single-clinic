@@ -68,6 +68,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     },
     ref,
   ) => {
+    // A rendered <label> that names no field is decorative: clicking it does
+    // not focus the input, and a screen reader announces the input unlabelled.
+    // An explicit id passed by the caller always wins so existing markup and
+    // any htmlFor pointing at it keep working.
+    const generatedId = React.useId();
+    const inputId = (rest.id as string | undefined) ?? generatedId;
+
     const [internal, setInternal] = React.useState(defaultValue ?? "");
     const isControlled = value !== undefined;
     const currentValue = isControlled ? value : internal;
@@ -98,6 +105,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               "text-xs font-medium text-text-main",
               classNames?.label,
             )}
+            htmlFor={inputId}
           >
             {label}
             {isRequired && <span className="text-danger ml-0.5">*</span>}
@@ -134,6 +142,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               classNames?.input,
             )}
             disabled={isDisabled ?? rest.disabled}
+            id={inputId}
             readOnly={isReadOnly ?? rest.readOnly}
             required={isRequired ?? rest.required}
             value={currentValue}
