@@ -2651,18 +2651,27 @@ match /medicinePurchases/{purchaseId} {
                   request.resource.data.createdBy == request.auth.uid &&
                   request.resource.data.keys().hasAll(['purchaseNo', 'items', 'total', 'netAmount', 'paymentType', 'paymentStatus', 'purchaseDate', 'clinicId', 'createdBy'])));
   
+  // Firestore ORs every matching rule, so this block — not the stricter
+  // "IRD Compliance" block further down for the same path — is what actually
+  // decides these writes. The IRD guarantees therefore have to live here too.
+  function notTouchingIrdState() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['irdSynced', 'irdSyncDate', 'cbmsResponseCode',
+               'irdNeedsManualReview', 'irdStateAsOf', 'irdStateSource']);
+  }
+
   // Allow clinic users to update their own clinic's medicine purchases
   allow update: if isAuthenticated() && 
                 (isSuperAdmin() || 
                  (resource.data.clinicId != null && 
                   belongsToClinic(resource.data.clinicId) &&
-                  request.resource.data.clinicId == resource.data.clinicId));
+                  request.resource.data.clinicId == resource.data.clinicId))
+                && notTouchingIrdState();
   
-  // Allow clinic users to delete their own clinic's medicine purchases
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId)));
+  // IRD requires a billing record to survive entry — it is superseded by a
+  // credit note or marked inactive, never removed. No application code
+  // deletes these documents; this makes that structural.
+  allow delete: if false;
 }
 
 // Medicine Purchases collection-level rules for queries
@@ -3210,16 +3219,24 @@ match /appointmentBilling/{billingId} {
                   request.resource.data.keys().hasAll(['invoiceNumber', 'patientId', 'doctorId', 'totalAmount', 'clinicId'])));
   
   // Allow clinic users with billing access to update their own clinic's billing records
+  // Firestore ORs every matching rule, so this block — not the stricter
+  // "IRD Compliance" block further down for the same path — is what actually
+  // decides these writes. The IRD guarantees therefore have to live here too.
+  function notTouchingIrdState() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['irdSynced', 'irdSyncDate', 'cbmsResponseCode',
+               'irdNeedsManualReview', 'irdStateAsOf', 'irdStateSource']);
+  }
+
   allow update: if isAuthenticated() && 
                 (isSuperAdmin() || 
                  (hasBillingAccess(resource.data.clinicId) &&
-                  resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId));
+                  resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId))
+                && notTouchingIrdState();
   
-  // Allow clinic admins to delete their own clinic's billing records
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (hasBillingAccess(resource.data.clinicId) &&
-                  resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId));
+  // IRD requires a billing record to survive entry — superseded, never
+  // removed. No application code deletes these documents.
+  allow delete: if false;
 }
 
 // Appointment Billing collection-level rules for queries
@@ -3317,16 +3334,24 @@ match /pathologyBilling/{billingId} {
                   request.resource.data.keys().hasAll(['invoiceNumber', 'patientName', 'totalAmount', 'clinicId'])));
   
   // Allow clinic users with billing access to update their own clinic's billing records
+  // Firestore ORs every matching rule, so this block — not the stricter
+  // "IRD Compliance" block further down for the same path — is what actually
+  // decides these writes. The IRD guarantees therefore have to live here too.
+  function notTouchingIrdState() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['irdSynced', 'irdSyncDate', 'cbmsResponseCode',
+               'irdNeedsManualReview', 'irdStateAsOf', 'irdStateSource']);
+  }
+
   allow update: if isAuthenticated() && 
                 (isSuperAdmin() || 
                  (hasBillingAccess(resource.data.clinicId) &&
-                  resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId));
+                  resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId))
+                && notTouchingIrdState();
   
-  // Allow clinic admins to delete their own clinic's billing records
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (hasBillingAccess(resource.data.clinicId) &&
-                  resource.data.clinicId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId));
+  // IRD requires a billing record to survive entry — superseded, never
+  // removed. No application code deletes these documents.
+  allow delete: if false;
 }
 
 // Pathology Billing collection-level rules for queries
@@ -4075,6 +4100,17 @@ match /platform_config/{configId} {
 
 // Appointment Billing
 match /appointmentBilling/{billId} {
+  // IRD sync state is owned by the backend. It is written only by the
+  // Admin SDK (which bypasses these rules), so a client can no longer assert
+  // that something was filed with the tax authority — the bug class that let
+  // an unfiled sale be marked "synced" is now structurally impossible rather
+  // than merely removed from the code.
+  function notTouchingIrdState() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['irdSynced', 'irdSyncDate', 'cbmsResponseCode',
+               'irdNeedsManualReview', 'irdStateAsOf', 'irdStateSource']);
+  }
+
   function belongsToClinic(clinicId) {
     return isAuthenticated() &&
            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -4096,14 +4132,23 @@ match /appointmentBilling/{billId} {
   // CRITICAL IRD RULE: Cannot modify a finalized bill, except to update its IRD Sync status
   allow update: if isAuthenticated() && (
                   isSuperAdmin() || belongsToClinic(resource.data.clinicId)
-                ) && (
-                  resource.data.status != 'finalized' || 
-                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['irdSynced', 'irdSyncDate', 'cbmsResponseCode'])
-                );
+                ) && notTouchingIrdState()
+                  && resource.data.status != 'finalized';
 }
 
 // Pathology Billing
 match /pathologyBilling/{billId} {
+  // IRD sync state is owned by the backend. It is written only by the
+  // Admin SDK (which bypasses these rules), so a client can no longer assert
+  // that something was filed with the tax authority — the bug class that let
+  // an unfiled sale be marked "synced" is now structurally impossible rather
+  // than merely removed from the code.
+  function notTouchingIrdState() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['irdSynced', 'irdSyncDate', 'cbmsResponseCode',
+               'irdNeedsManualReview', 'irdStateAsOf', 'irdStateSource']);
+  }
+
   function belongsToClinic(clinicId) {
     return isAuthenticated() &&
            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -4125,14 +4170,23 @@ match /pathologyBilling/{billId} {
   // CRITICAL IRD RULE: Cannot modify a finalized bill, except to update its IRD Sync status
   allow update: if isAuthenticated() && (
                   isSuperAdmin() || belongsToClinic(resource.data.clinicId)
-                ) && (
-                  resource.data.status != 'finalized' || 
-                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['irdSynced', 'irdSyncDate', 'cbmsResponseCode'])
-                );
+                ) && notTouchingIrdState()
+                  && resource.data.status != 'finalized';
 }
 
 // Pharmacy Billing (Medicine Purchases)
 match /medicinePurchases/{purchaseId} {
+  // IRD sync state is owned by the backend. It is written only by the
+  // Admin SDK (which bypasses these rules), so a client can no longer assert
+  // that something was filed with the tax authority — the bug class that let
+  // an unfiled sale be marked "synced" is now structurally impossible rather
+  // than merely removed from the code.
+  function notTouchingIrdState() {
+    return !request.resource.data.diff(resource.data).affectedKeys()
+      .hasAny(['irdSynced', 'irdSyncDate', 'cbmsResponseCode',
+               'irdNeedsManualReview', 'irdStateAsOf', 'irdStateSource']);
+  }
+
   function belongsToClinic(clinicId) {
     return isAuthenticated() &&
            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -4154,10 +4208,65 @@ match /medicinePurchases/{purchaseId} {
   // CRITICAL IRD RULE: Cannot modify a paid bill, except to update its IRD Sync status
   allow update: if isAuthenticated() && (
                   isSuperAdmin() || belongsToClinic(resource.data.clinicId)
-                ) && (
-                  resource.data.paymentStatus != 'paid' || 
-                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['irdSynced', 'irdSyncDate', 'cbmsResponseCode'])
-                );
+                ) && notTouchingIrdState()
+                  && resource.data.paymentStatus != 'paid';
+}
+
+// Sales queued for filing in the official MySQL/IRD ledger.
+//
+// An entry is written in the same transaction as the irreversible pharmacy
+// stock deduction, and drained by the backend's outbox poller. A client may
+// enqueue work for its own clinic but may never declare that work finished:
+// status transitions belong to the Admin SDK, which bypasses these rules.
+// Otherwise a client could mark an unfiled sale "done" and it would silently
+// never reach IRD — the exact failure this queue exists to prevent.
+match /billingSyncOutbox/{entryId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId)));
+
+  // May only ever be created as fresh, unstarted work for the caller's own
+  // clinic. Two legitimate starting states:
+  //   'pending'            — a sale that just happened and must be filed.
+  //   'awaiting_approval'  — a historical sale somebody is proposing to file
+  //                          late. The poller ignores this state entirely,
+  //                          so proposing a filing can never file anything.
+  allow create: if isAuthenticated() &&
+                request.resource.data.clinicId != null &&
+                belongsToClinic(request.resource.data.clinicId) &&
+                request.resource.data.attempts == 0 &&
+                (request.resource.data.status == 'pending' ||
+                 (request.resource.data.status == 'awaiting_approval' &&
+                  request.resource.data.requestedBy == request.auth.uid));
+
+  // Clients may record why their own inline attempt failed, and nothing else.
+  allow update: if isAuthenticated() &&
+                belongsToClinic(resource.data.clinicId) &&
+                request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['lastError', 'attempts']);
+
+  // Approving a late filing releases it to the poller. Filing a tax document
+  // after the fact is consequential, so it takes a second person: whoever
+  // proposed it cannot also approve it, and the approver is recorded on the
+  // entry so the resulting ledger row is attributed to a real human.
+  allow update: if isAuthenticated() &&
+                belongsToClinic(resource.data.clinicId) &&
+                resource.data.status == 'awaiting_approval' &&
+                request.resource.data.status == 'pending' &&
+                request.resource.data.approvedBy == request.auth.uid &&
+                request.auth.uid != resource.data.requestedBy &&
+                request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['status', 'approvedBy', 'approvedAt']);
+
+  // A queued filing is evidence that a sale happened — it is never discarded
+  // from the client.
+  allow delete: if false;
 }
 
 // Default deny rule - deny all other access

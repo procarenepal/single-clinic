@@ -344,6 +344,7 @@ export const generateUnifiedInvoiceHTML = (
         ${invoice.isCreditNote ? `<div style="text-align: center; font-weight: 800; font-size: 15px; color: #b91c1c; letter-spacing: 0.05em; border: 2px solid #b91c1c; padding: 4px 0; margin-bottom: 6px;">मूल्य फिर्ता बिजक (CREDIT NOTE / SALES RETURN)</div>` : ""}
         ${invoice.isCancelled ? `<div style="text-align: center; font-weight: 800; font-size: 15px; color: #b91c1c; letter-spacing: 0.05em; border: 2px solid #b91c1c; padding: 4px 0; margin-bottom: 6px;">रद्द गरिएको बिजक (CANCELLED — NOT A VALID TAX DOCUMENT)</div>` : ""}
         <h2>${getIrdInvoiceTitle(invoice.taxAmount, isVatRegistered)}</h2>
+        ${isVatRegistered && !invoice.isCreditNote && !invoice.isCancelled && (invoice.taxAmount || 0) <= 0 ? `<div style="font-size: 10.5px; color: #64748b; text-align: center; margin-top: 3px;">No VAT applicable — all items on this bill are tax-exempt</div>` : ""}
         ${invoice.isCreditNote && invoice.creditNoteNote ? `<div style="font-size: 11px; color: #b91c1c; font-weight: 600; margin-top: 6px; text-align: center;">${invoice.creditNoteNote}</div>` : ""}
         ${invoice.isCancelled && invoice.cancelledNote ? `<div style="font-size: 11px; color: #b91c1c; font-weight: 600; margin-top: 6px; text-align: center;">${invoice.cancelledNote}</div>` : ""}
       </div>
@@ -434,7 +435,28 @@ export const generateUnifiedInvoiceHTML = (
           </tr>
           <tr><td>Discount % (${invoice.subtotal > 0 ? (((invoice.discountAmount || 0) / invoice.subtotal) * 100).toFixed(1) : "0.0"}%)</td><td class="text-right">- ${formatCurrency(invoice.discountAmount || 0)}</td></tr>
           ${isVatRegistered ? `<tr><td>Taxable Amount</td><td class="text-right">${formatCurrency(getIrdTaxableAmount(invoice.taxAmount, invoice.taxableAmount, invoice.subtotal - (invoice.discountAmount || 0)))}</td></tr>` : ""}
-          ${isVatRegistered && (invoice.taxPercentage || 0) > 0 ? `<tr><td>VAT (${invoice.taxPercentage}%)</td><td class="text-right">${formatCurrency(invoice.taxAmount || 0)}</td></tr>` : ""}
+          ${(() => {
+            if (!isVatRegistered || (invoice.taxAmount || 0) <= 0) return "";
+            // Gate on taxAmount (what was actually charged), not
+            // taxPercentage — an invoice can have real taxAmount with a
+            // missing/stale taxPercentage field (e.g. per-item tax rates
+            // that don't collapse to one invoice-level percentage), and
+            // gating on taxPercentage alone used to hide the VAT line
+            // entirely on such invoices even though tax was genuinely
+            // charged and included in the Total.
+            const taxableBase = getIrdTaxableAmount(
+              invoice.taxAmount,
+              invoice.taxableAmount,
+              invoice.subtotal - (invoice.discountAmount || 0),
+            );
+            const effectiveRate =
+              invoice.taxPercentage ||
+              (taxableBase > 0
+                ? Math.round(((invoice.taxAmount || 0) / taxableBase) * 100)
+                : 0);
+
+            return `<tr><td>VAT (${effectiveRate}%)</td><td class="text-right">${formatCurrency(invoice.taxAmount || 0)}</td></tr>`;
+          })()}
           <tr class="font-bold">
             <td>Total Amount</td>
             <td class="text-right">${formatCurrency(invoice.totalAmount)}</td>

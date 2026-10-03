@@ -23,15 +23,41 @@ public interface InvoiceRepository extends Repository<Invoice, Long> {
 
     Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 
+    /**
+     * Clinic-scoped lookup backing /invoice-by-number. invoice_number is
+     * globally unique at the DB level, so the clinic predicate can't change
+     * which row matches — it exists so one clinic can never read another's
+     * invoice by guessing its number.
+     */
+    Optional<Invoice> findByClinicIdAndInvoiceNumber(String clinicId, String invoiceNumber);
+
     Optional<Invoice> findByClinicIdAndIdempotencyKey(String clinicId, String idempotencyKey);
 
     List<Invoice> findByFirebasePatientIdOrderByInvoiceDateDesc(String firebasePatientId);
 
     Page<Invoice> findByFirebasePatientIdOrderByInvoiceDateDesc(String firebasePatientId, Pageable pageable);
 
-    List<Invoice> findByIrdSyncedFalse();
+    /**
+     * Retry candidates for IrdSyncScheduler. Bounded and filtered at the
+     * query rather than in the loop: an unbounded findByIrdSyncedFalse()
+     * loaded every unsynced invoice of every clinic — including cancelled
+     * ones and ones already parked for manual review — into memory each
+     * minute.
+     */
+    Page<Invoice> findByIrdSyncedFalseAndActiveTrueAndIrdNeedsManualReviewFalse(Pageable pageable);
 
     Page<Invoice> findByClinicIdAndFiscalYearOrderByInvoiceDateDesc(String clinicId, String fiscalYear, Pageable pageable);
 
     Page<Invoice> findByClinicIdOrderByInvoiceDateDesc(String clinicId, Pageable pageable);
+
+    // Reconciliation listings — ordered by invoice number, not date: paging
+    // over a date-ordered set is unstable when many invoices share a date,
+    // which silently corrupts a paged cross-store join.
+    Page<Invoice> findByClinicIdOrderByInvoiceNumberAsc(String clinicId, Pageable pageable);
+
+    Page<Invoice> findByClinicIdAndFiscalYearOrderByInvoiceNumberAsc(String clinicId, String fiscalYear, Pageable pageable);
+
+    Page<Invoice> findByClinicIdAndIrdSyncedFalseOrderByInvoiceNumberAsc(String clinicId, Pageable pageable);
+
+    Page<Invoice> findByClinicIdAndIrdNeedsManualReviewTrueOrderByInvoiceNumberAsc(String clinicId, Pageable pageable);
 }

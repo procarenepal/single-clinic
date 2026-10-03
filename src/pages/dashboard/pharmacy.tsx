@@ -36,6 +36,8 @@ import {
   IoEllipsisVerticalOutline,
 } from "react-icons/io5";
 
+import { calculateTaxInclusiveBreakdown } from "@/utils/taxEngine";
+
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1287,39 +1289,32 @@ export default function PharmacyPage() {
   // Calculate amounts when items change. Sale prices entered per item are
   // MRP — tax-INCLUSIVE, per Nepal pharmacy convention — so taxable/VAT are
   // back-calculated per item at that item's OWN rate (item.taxRate, falling
-  // back to purchaseForm.taxPercentage), then summed, instead of adding one
-  // blended rate on top of the total the way this used to work.
+  // back to purchaseForm.taxPercentage) via the SAME shared tax-inclusive
+  // engine the server-side purchase-creation transaction uses
+  // (calculateTaxInclusiveBreakdown), instead of a separately
+  // hand-maintained copy of this math — two independently-maintained
+  // copies of exactly this calculation is how a taxable/exempt bucketing
+  // bug shipped in one and not the other earlier this session.
   useEffect(() => {
     const total = purchaseItems.reduce((sum, item) => sum + item.amount, 0);
 
-    // Each item's OWN discount (Item Discount Type/Item Discount) is applied
-    // first — this used to be a purely decorative pair of fields: typing a
-    // value here changed nothing, because the invoice-level discount ratio
-    // below was computed straight off the raw item.amount, and item.amount
-    // itself is never reduced by discountValue/discountType anywhere (see
-    // updatePurchaseItem — amount only reacts to quantity/price/stockType
-    // changes). Compute each item's net-after-its-own-discount here so it
-    // actually affects the taxable/tax/total figures.
-    const itemsWithOwnDiscount = purchaseItems.map((item) => {
+    // A percent-type invoice-level discount is a % of the subtotal AFTER
+    // each item's own discount, not of the raw total — mirror that same
+    // base here before handing a plain flat amount to the engine (which
+    // only pro-rates a single flat/percent discount across items, it has
+    // no notion of "percent of the already-item-discounted subtotal").
+    const totalAfterItemDiscounts = purchaseItems.reduce((sum, item) => {
       const dVal = item.discountValue || 0;
-      const dType = item.discountType || "flat";
-      let ownDiscount =
-        dType === "percentage" ? (item.amount * dVal) / 100 : dVal;
+      const ownDiscount =
+        item.discountType === "percentage" ? (item.amount * dVal) / 100 : dVal;
 
-      ownDiscount = Math.min(Math.max(0, ownDiscount), item.amount);
+      return sum + Math.max(0, item.amount - Math.min(Math.max(0, ownDiscount), item.amount));
+    }, 0);
 
-      return {
-        item,
-        netAfterOwnDiscount: Math.max(0, item.amount - ownDiscount),
-      };
-    });
-    const totalAfterItemDiscounts = itemsWithOwnDiscount.reduce(
-      (sum, x) => sum + x.netAfterOwnDiscount,
-      0,
-    );
-
-    // Invoice-level discount (Discount Type/Discount (NPR)) is then applied
-    // on top of the already item-discounted subtotal, not the raw total.
+    // Invoice-level discount (Discount Type/Discount (NPR)) — the engine
+    // applies this pro-rata across items AFTER each item's own
+    // Item-Discount-Type/Item-Discount fields, same two-stage order this
+    // form already presents to the user.
     let discountAmount = 0;
 
     if (purchaseForm.discountType === "flat") {
@@ -1329,48 +1324,33 @@ export default function PharmacyPage() {
         (totalAfterItemDiscounts * purchaseForm.discountPercentage) / 100;
     }
 
-    // Discount is applied proportionally across items (same ratio for
-    // every item) so the taxable/VAT split still adds up to total - discount.
-    const discountRatio =
-      totalAfterItemDiscounts > 0
-        ? Math.min(1, discountAmount / totalAfterItemDiscounts)
-        : 0;
+    const breakdown = calculateTaxInclusiveBreakdown({
+      items: purchaseItems.map((item) => {
+        const rate = item.taxRate ?? purchaseForm.taxPercentage;
 
-    let taxableAmount = 0;
-    let exemptAmount = 0;
-    let taxAmount = 0;
-
-    itemsWithOwnDiscount.forEach(({ item, netAfterOwnDiscount }) => {
-      const rate = item.taxRate ?? purchaseForm.taxPercentage;
-      const grossMrp = netAfterOwnDiscount * (1 - discountRatio);
-
-      // A rate-0 item (e.g. VAT-exempt medicine) contributes its whole
-      // amount to EXEMPT, not taxable — the previous version treated
-      // `grossMrp / (1 + 0/100)` (i.e. the whole amount) as "taxable" for
-      // every item regardless of rate, so the "Taxable" summary card
-      // included exempt medicines' full price alongside genuinely-taxed
-      // ones instead of separating them, matching the Taxable/Exempt split
-      // taxEngine.ts already uses correctly everywhere else in this app.
-      if (rate > 0) {
-        const itemTaxable = grossMrp / (1 + rate / 100);
-
-        taxableAmount += itemTaxable;
-        taxAmount += grossMrp - itemTaxable;
-      } else {
-        exemptAmount += grossMrp;
-      }
+        return {
+          itemName: item.productName || "Item",
+          quantity: 1,
+          price: item.amount,
+          // The engine's own discount types are "flat"/"percent" — this
+          // form's per-item field uses "percentage" instead of "percent".
+          discountType:
+            item.discountType === "percentage" ? "percent" : "flat",
+          discountValue: item.discountValue || 0,
+          isTaxable: rate > 0,
+          taxRate: rate,
+        };
+      }),
+      discountType: "flat",
+      discountValue: discountAmount,
+      isTaxEnabled: true,
     });
 
-    taxableAmount = Number(Math.max(0, taxableAmount).toFixed(2));
-    exemptAmount = Number(Math.max(0, exemptAmount).toFixed(2));
-    taxAmount = Number(Math.max(0, taxAmount).toFixed(2));
+    const taxableAmount = breakdown.taxableAmount;
+    const exemptAmount = breakdown.exemptAmount;
+    const taxAmount = breakdown.taxAmount;
     const netAmount = Number(
-      (
-        taxableAmount +
-        exemptAmount +
-        taxAmount +
-        (purchaseForm.handlingAmount || 0)
-      ).toFixed(2),
+      (breakdown.totalAmount + (purchaseForm.handlingAmount || 0)).toFixed(2),
     );
 
     setPurchaseForm((prev) => ({
@@ -2588,9 +2568,9 @@ export default function PharmacyPage() {
 
       if (purchaseResult.javaSyncError) {
         addToast({
-          title: "Sale saved, but ledger/IRD sync failed",
+          title: "Sale saved, but NOT yet filed with IRD",
           description:
-            "The sale was recorded. It will be retried automatically — contact an admin if this persists.",
+            "Stock and the sale record are saved. The official ledger entry was not created, so this sale is not yet reported to IRD. Tell an administrator — it needs to be filed from the Ledger Reconciliation report.",
           color: "warning",
         });
       }

@@ -1,32 +1,6 @@
-import axios from "axios";
 import NepaliDate from "nepali-datetime";
 
 import { auth } from "../config/firebase";
-import { ClinicSettings, Clinic } from "../types/models";
-
-export interface IrdBillPayload {
-  username?: string;
-  password?: string;
-  seller_pan?: string;
-  buyer_pan?: string;
-  buyer_name?: string;
-  fiscal_year?: string;
-  invoice_number?: string;
-  invoice_date?: string; // YYYY.MM.DD
-  total_sales?: number;
-  taxable_sales_vat?: number;
-  vat?: number;
-  excisable_amount?: number;
-  excise?: number;
-  taxable_sales_hst?: number;
-  hst?: number;
-  amount_for_esf?: number;
-  esf?: number;
-  export_sales?: number;
-  tax_exempted_sales?: number;
-  isrealtime?: boolean;
-  datetimeClient?: string;
-}
 
 /**
  * Calculates the Nepali Fiscal Year (e.g., "2080.081") based on the provided date.
@@ -54,224 +28,33 @@ export const getNepaliFiscalYear = (date: Date | string): string => {
   }
 };
 
-/**
- * Formats a JS Date to "YYYY.MM.DD" as expected by the IRD API
- */
-const formatIrdDate = (date: Date | string): string => {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-
-  return `${year}.${month}.${day}`;
-};
-
-export interface SyncInvoiceParams {
-  clinicSettings: ClinicSettings;
-  clinic: Clinic;
-  invoiceData: {
-    buyerName: string;
-    buyerPan?: string;
-    invoiceNumber: string;
-    invoiceDate: Date | string;
-    totalAmount: number;
-    taxAmount: number; // Represents VAT
-    isTaxEnabled: boolean; // Flag if tax was enabled on this invoice
-  };
-  isReturn?: boolean; // True if hitting the api/billreturn endpoint
-  panNumberOverride?: string; // Fallback PAN if clinic.panNumber is not set
-}
 
 /**
- * Syncs an invoice to the IRD CBMS API.
- * This should be called immediately after an invoice is finalized in Firestore.
+ * Apply a patch to whichever module's Firestore record this invoice lives in.
  */
-export const syncInvoiceToIRD = async ({
-  clinicSettings,
-  clinic,
-  invoiceData,
-  isReturn = false,
-  panNumberOverride,
-}: SyncInvoiceParams): Promise<{
-  success: boolean;
-  responseCode?: string;
-  message?: string;
-}> => {
-  try {
-    // irdEnabled/credentials live on the Clinic document — that's what
-    // Clinic Settings > IRD CBMS Configuration actually writes to, not
-    // ClinicSettings (which has its own same-named but always-unset field).
-    if (!clinic.irdEnabled) {
-      return { success: false, message: "IRD Sync is disabled in settings." };
-    }
-
-    if (
-      !clinic.irdApiUrl ||
-      !clinic.irdApiUsername ||
-      !clinic.irdApiPassword
-    ) {
-      return {
-        success: false,
-        message: "IRD API credentials are not fully configured.",
-      };
-    }
-
-    const effectivePan = clinic.panNumber || panNumberOverride;
-
-    if (!effectivePan) {
-      return {
-        success: false,
-        message:
-          "Clinic PAN is required for IRD sync. Please set PAN in Clinic Settings or Print Layout.",
-      };
-    }
-
-    const vat = invoiceData.taxAmount || 0;
-    let taxableSalesVat = 0;
-    let taxExemptedSales = 0;
-
-    if (invoiceData.isTaxEnabled && vat > 0) {
-      taxableSalesVat = Math.max(0, invoiceData.totalAmount - vat);
-      taxExemptedSales = 0;
-    } else {
-      taxableSalesVat = 0;
-      taxExemptedSales = invoiceData.totalAmount;
-    }
-
-    const payload: IrdBillPayload = {
-      username: clinic.irdApiUsername,
-      password: clinic.irdApiPassword,
-      seller_pan: effectivePan,
-      buyer_pan: invoiceData.buyerPan || "",
-      buyer_name: invoiceData.buyerName || "Cash Sales",
-      fiscal_year: getNepaliFiscalYear(invoiceData.invoiceDate),
-      invoice_number: invoiceData.invoiceNumber,
-      invoice_date: formatIrdDate(invoiceData.invoiceDate),
-      total_sales: parseFloat(invoiceData.totalAmount.toFixed(2)),
-      taxable_sales_vat: parseFloat(taxableSalesVat.toFixed(2)),
-      vat: parseFloat(vat.toFixed(2)),
-      excisable_amount: 0,
-      excise: 0,
-      taxable_sales_hst: 0,
-      hst: 0,
-      amount_for_esf: 0,
-      esf: 0,
-      export_sales: 0,
-      tax_exempted_sales: parseFloat(taxExemptedSales.toFixed(2)),
-      isrealtime: true,
-      datetimeClient: new Date().toISOString(),
-    };
-
-    // An unconfigured environment must fail loudly rather than silently
-    // succeed via mock — a clinic admin who never chose an environment
-    // should not mistake a fake "success" for a real IRD sync.
-    if (!clinic.irdEnvironment && !clinic.irdApiUrl) {
-      return {
-        success: false,
-        message:
-          "IRD environment is not configured. Set Live/Sandbox/Mock in Clinic Settings before syncing.",
-      };
-    }
-
-    // Choose endpoint based on if it's a regular bill or a sales return
-    // Auto-resolve base URL from irdEnvironment if no manual URL is set
-    const IRD_ENDPOINTS: Record<string, string> = {
-      live: "https://cbapi.ird.gov.np",
-      sandbox: "https://cbapi.ird.gov.np/sandbox", // IRD sandbox (same host, sandbox path)
-      mock: "mock",
-    };
-    const resolvedEnv = clinic.irdEnvironment || "mock";
-    const manualUrl = clinic.irdApiUrl?.trim();
-    const baseUrl = (
-      manualUrl ||
-      IRD_ENDPOINTS[resolvedEnv] ||
-      IRD_ENDPOINTS.mock
-    ).replace(/\/$/, "");
-    const endpoint = isReturn
-      ? `${baseUrl}/api/billreturn`
-      : `${baseUrl}/api/bill`;
-
-    // --- MOCK TESTING CHECK ---
-    const isMock =
-      resolvedEnv === "mock" ||
-      baseUrl === "mock" ||
-      baseUrl.includes("localhost") ||
-      !baseUrl;
-
-    if (isMock) {
-      console.log("==== MOCK IRD SYNC ====");
-      console.log("Endpoint:", endpoint);
-      console.log("Payload:", JSON.stringify(payload, null, 2));
-      console.log("=======================");
-
-      return {
-        success: true,
-        responseCode: "200",
-        message: "MOCK: Successfully synced to IRD (Mock Mode)",
-      };
-    }
-    // --------------------------
-
-    // --- PROXY VIA FIREBASE FUNCTIONS ---
-    // irdProxy requires an authenticated caller (it forwards to a real IRD
-    // host, allowlisted server-side) — attach the current user's ID token.
-    const { auth } = await import("../config/firebase");
-    const currentUser = auth.currentUser;
-
-    if (!currentUser) {
-      return {
-        success: false,
-        message: "Not authenticated — cannot sync to IRD.",
-      };
-    }
-    const idToken = await currentUser.getIdToken();
-
-    const functionsUrl =
-      import.meta.env.VITE_FIREBASE_FUNCTIONS_URL ||
-      `https://us-central1-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
-    const proxyPayload = {
-      endpoint,
-      payload,
-    };
-
-    const execution = await axios.post(
-      `${functionsUrl}/irdProxy`,
-      proxyPayload,
-      {
-        headers: { Authorization: `Bearer ${idToken}` },
-      },
+async function patchLocalRecord(
+  invoiceType: "appointment" | "pathology" | "pharmacy",
+  invoiceId: string,
+  patch: Record<string, any>,
+): Promise<void> {
+  if (invoiceType === "appointment") {
+    const { appointmentBillingService } = await import(
+      "./appointmentBillingService"
     );
 
-    if (execution.status !== 200 || !execution.data.success) {
-      throw new Error(
-        execution.data?.message ||
-          execution.data?.error ||
-          "Proxy failed to connect to IRD",
-      );
-    }
+    await appointmentBillingService.updateBilling(invoiceId, patch);
+  } else if (invoiceType === "pathology") {
+    const { pathologyBillingService } = await import(
+      "./pathologyBillingService"
+    );
 
-    const response = execution.data;
-    const responseData = response.data;
-    const responseCode = responseData?.ResponseCode || response.status;
-    const isSuccess = responseCode === 200 || responseCode === "200";
+    await pathologyBillingService.updateBilling(invoiceId, patch);
+  } else if (invoiceType === "pharmacy") {
+    const { pharmacyService } = await import("./pharmacyService");
 
-    return {
-      success: isSuccess,
-      responseCode: String(responseCode),
-      message: responseData?.Message || "Success",
-    };
-  } catch (error: any) {
-    console.error("Error syncing to IRD:", error);
-
-    return {
-      success: false,
-      responseCode: error.response?.status
-        ? String(error.response.status)
-        : "500",
-      message: error.message || "Unknown network error",
-    };
+    await pharmacyService.updateMedicinePurchase(invoiceId, patch);
   }
-};
+}
 
 /**
  * Retry syncing a failed invoice to IRD.
@@ -336,19 +119,6 @@ export const retryIrdSync = async (
       };
     }
 
-    // Try to get PAN from print layout if clinic.panNumber is not set
-    let panNumberOverride: string | undefined;
-
-    if (!clinic.panNumber) {
-      try {
-        const printLayout = await clinicService.getPrintLayoutConfig(clinicId);
-
-        panNumberOverride = printLayout?.panNumber || undefined;
-      } catch {
-        // Print layout lookup failure is non-fatal
-      }
-    }
-
     // Map the fields properly depending on the model
     const irdInvoiceData = {
       buyerName: invoiceData.patientName || "Cash Sales",
@@ -372,104 +142,69 @@ export const retryIrdSync = async (
           : invoiceData.taxPercentage > 0,
     };
 
+    // The MySQL ledger is the only place an invoice can legitimately be
+    // filed to IRD from. A Firestore doc carrying no javaInvoiceId might
+    // still have a ledger row (the id simply never made it back), so look it
+    // up before concluding the sale was never filed.
+    const { billingApi } = await import("./api/billingApi");
+    let javaInvoiceId: number | undefined = invoiceData.javaInvoiceId;
+
+    if (!javaInvoiceId) {
+      const ledgerRow = await billingApi.getInvoiceByNumber(
+        irdInvoiceData.invoiceNumber,
+      );
+
+      if (ledgerRow) {
+        javaInvoiceId = ledgerRow.id;
+        // Backfill so the next retry takes the fast path. Best-effort: a
+        // record already (falsely) marked synced is locked by the compliance
+        // guard, and that must not block the retry we can now perform.
+        try {
+          await patchLocalRecord(invoiceType, invoiceId, {
+            javaInvoiceId: ledgerRow.id,
+          });
+        } catch (backfillError) {
+          console.warn("Could not backfill javaInvoiceId:", backfillError);
+        }
+      }
+    }
+
+    if (!javaInvoiceId) {
+      // No ledger row — this sale was never filed with IRD. Deliberately
+      // writes NOTHING to irdSynced. The previous implementation pushed
+      // straight to CBMS from the client here and then marked the record
+      // synced, which left CBMS and the ledger permanently disagreeing and
+      // hid an unfiled sale for good.
+      return {
+        success: false,
+        message:
+          "This sale has no entry in the official ledger, so it was never filed with IRD. It must be queued for filing and approved by an administrator — it cannot be marked synced from here.",
+      };
+    }
+
     let result: { success: boolean; responseCode?: string; message?: string };
 
-    if (invoiceData.javaInvoiceId) {
-      // Route the retry through the Java backend. Credentials are resolved
-      // server-side per clinic — only fiscalYear/isReturn travel here.
-      try {
-        const { billingApi } = await import("./api/billingApi");
-        const javaResult = await billingApi.retryIrdSync(
-          invoiceData.javaInvoiceId,
-          {
-            fiscalYear: getNepaliFiscalYear(irdInvoiceData.invoiceDate),
-            isReturn,
-          },
-        );
-
-        // Update local Firebase record with new Java state
-        if (invoiceType === "appointment") {
-          const { appointmentBillingService } = await import(
-            "./appointmentBillingService"
-          );
-
-          await appointmentBillingService.updateBilling(invoiceId, {
-            irdSynced: javaResult.irdSynced,
-            irdSyncDate: new Date(),
-            cbmsResponseCode: javaResult.cbmsResponseCode,
-          });
-        } else if (invoiceType === "pathology") {
-          const { pathologyBillingService } = await import(
-            "./pathologyBillingService"
-          );
-
-          await pathologyBillingService.updateBilling(invoiceId, {
-            irdSynced: javaResult.irdSynced,
-            irdSyncDate: new Date(),
-            cbmsResponseCode: javaResult.cbmsResponseCode,
-          });
-        } else if (invoiceType === "pharmacy") {
-          const { pharmacyService } = await import("./pharmacyService");
-
-          await pharmacyService.updateMedicinePurchase(invoiceId, {
-            irdSynced: javaResult.irdSynced,
-            irdSyncDate: new Date(),
-            cbmsResponseCode: javaResult.cbmsResponseCode,
-          });
-        }
-
-        result = {
-          success: javaResult.irdSynced,
-          responseCode: javaResult.cbmsResponseCode,
-          message: javaResult.irdSynced
-            ? "Java Backend Sync Success"
-            : "Java Backend Sync Failed",
-        };
-      } catch (err: any) {
-        result = { success: false, responseCode: "500", message: err.message };
-      }
-    } else {
-      // Legacy Firebase Functions Sync
-      result = await syncInvoiceToIRD({
-        clinicSettings,
-        clinic,
-        invoiceData: irdInvoiceData,
-        isReturn: false, // Assuming retries are for the main invoice for now
-        panNumberOverride,
+    // Route the retry through the Java backend. Credentials are resolved
+    // server-side per clinic — only fiscalYear/isReturn travel here.
+    try {
+      const javaResult = await billingApi.retryIrdSync(javaInvoiceId, {
+        fiscalYear: getNepaliFiscalYear(irdInvoiceData.invoiceDate),
+        isReturn,
       });
 
-      if (result.success) {
-        // Update the record
-        if (invoiceType === "appointment") {
-          const { appointmentBillingService } = await import(
-            "./appointmentBillingService"
-          );
+      // The backend mirrors the authoritative sync state onto this document
+      // itself; writing it from here as well would mean two writers for one
+      // fact, and the client is the one that can be wrong.
 
-          await appointmentBillingService.updateBilling(invoiceId, {
-            irdSynced: true,
-            irdSyncDate: new Date(),
-            cbmsResponseCode: result.responseCode,
-          });
-        } else if (invoiceType === "pathology") {
-          const { pathologyBillingService } = await import(
-            "./pathologyBillingService"
-          );
-
-          await pathologyBillingService.updateBilling(invoiceId, {
-            irdSynced: true,
-            irdSyncDate: new Date(),
-            cbmsResponseCode: result.responseCode,
-          });
-        } else if (invoiceType === "pharmacy") {
-          const { pharmacyService } = await import("./pharmacyService");
-
-          await pharmacyService.updateMedicinePurchase(invoiceId, {
-            irdSynced: true,
-            irdSyncDate: new Date(),
-            cbmsResponseCode: result.responseCode,
-          });
-        }
-      }
+      result = {
+        success: javaResult.irdSynced,
+        responseCode: javaResult.cbmsResponseCode,
+        message: javaResult.irdSynced
+          ? "Java Backend Sync Success"
+          : "Java Backend Sync Failed",
+      };
+    } catch (err: any) {
+      result = { success: false, responseCode: "500", message: err.message };
     }
 
     // Log the sync attempt (success or failure)

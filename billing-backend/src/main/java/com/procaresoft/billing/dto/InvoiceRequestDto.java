@@ -61,7 +61,18 @@ public class InvoiceRequestDto {
      */
     private String idempotencyKey;
 
-    /** True for a sales-return invoice — routes the IRD submission to /api/billreturn instead of /api/bill. */
+    /**
+     * True for a sales-return invoice — routes the IRD submission to
+     * /api/billreturn instead of /api/bill.
+     *
+     * Same Lombok/Jackson trap as InvoiceItemDto.isTaxable, and with worse
+     * consequences: the setter is setReturn(), so Jackson bound the property
+     * "return" while every client sends "isReturn". The flag never arrived,
+     * so credit notes were filed to IRD as ordinary invoices via /api/bill
+     * and stored without the ref_invoice_number / reason_for_return that a
+     * sales return requires.
+     */
+    @com.fasterxml.jackson.annotation.JsonProperty("isReturn")
     private boolean isReturn;
 
     /**
@@ -86,6 +97,17 @@ public class InvoiceRequestDto {
      */
     private String invoicePrefix;
 
+    /**
+     * The Firestore collection and document this invoice is being created
+     * from (e.g. "medicinePurchases" / "4Jb6EmIiR4oBV5zFETcF"). Optional —
+     * older clients send neither — but supplying it is what lets IRD sync
+     * state be mirrored back to exactly the right document later, instead of
+     * guessing which collection an invoice number belongs to.
+     */
+    private String sourceCollection;
+
+    private String sourceDocId;
+
     @NotEmpty(message = "items must not be empty")
     private List<@Valid InvoiceItemDto> items;
 
@@ -103,6 +125,15 @@ public class InvoiceRequestDto {
         @NotNull(message = "totalAmount is required")
         private BigDecimal totalAmount;
 
+        /**
+         * Lombok names the setter setTaxable(), so Jackson would bind the
+         * JSON property "taxable" — but every client sends "isTaxable".
+         * With Spring Boot ignoring unknown properties by default, the flag
+         * silently never arrived and every line item was stored as
+         * non-taxable. The invoice-level taxable/exempt totals filed to IRD
+         * come from their own fields and were never affected.
+         */
+        @com.fasterxml.jackson.annotation.JsonProperty("isTaxable")
         private boolean isTaxable;
     }
 }

@@ -139,9 +139,10 @@ export const IrdSyncFailuresReport: React.FC<IrdSyncFailuresReportProps> = ({
         setResolvedIds((prev) => new Set(prev).add(row.key));
       } else {
         addToast({
-          title: "IRD Sync failed again",
+          title: "Could not sync",
           description: res.message,
           color: "danger",
+          duration: 10000,
         });
       }
     } catch (e) {

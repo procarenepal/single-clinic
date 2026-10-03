@@ -70,6 +70,15 @@ export interface InvoiceRequestDto {
    */
   preAssignedInvoiceNumber?: string;
 
+  /**
+   * The Firestore collection + document this invoice is created from. Lets
+   * the backend later mirror IRD sync state onto exactly that document, and
+   * gives reconciliation an exact join key instead of matching on a number
+   * field each module names differently.
+   */
+  sourceCollection?: string;
+  sourceDocId?: string;
+
   /** True for a sales-return invoice — routes IRD submission to /api/billreturn. */
   isReturn?: boolean;
 
@@ -133,6 +142,12 @@ export function buildInvoicePayload(params: {
   preAssignedInvoiceNumber?: string;
   /** e.g. a clinic's configured prefix, or "CN" for a credit note. */
   invoicePrefix?: string;
+  /** Firestore collection this invoice is created from, e.g. "medicinePurchases". */
+  sourceCollection?: string;
+  /** Firestore document id this invoice is created from. */
+  sourceDocId?: string;
+  /** Stable identity for this filing when no invoice number is reserved yet. */
+  idempotencyDiscriminator?: string;
   isReturn?: boolean;
   /** Required when isReturn is true — ignored otherwise. */
   refInvoiceNumber?: string;
@@ -159,6 +174,8 @@ export function buildInvoicePayload(params: {
     refInvoiceNumber: params.isReturn ? params.refInvoiceNumber : undefined,
     reasonForReturn: params.isReturn ? params.reasonForReturn : undefined,
     invoicePrefix: params.invoicePrefix,
+    sourceCollection: params.sourceCollection,
+    sourceDocId: params.sourceDocId,
     // Deterministic per-content key — a network-drop retry of this exact
     // submission reuses it, so the backend returns the already-created
     // invoice instead of minting a duplicate.
@@ -167,6 +184,8 @@ export function buildInvoicePayload(params: {
       buyerName,
       totalAmount: params.totalAmount,
       items: params.items,
+      preAssignedInvoiceNumber: params.preAssignedInvoiceNumber,
+      uniqueKey: params.idempotencyDiscriminator,
     }),
     items: params.items,
   };
@@ -197,6 +216,31 @@ export interface InvoiceResponseDto {
   irdSynced: boolean;
   irdSyncDate?: string;
   cbmsResponseCode?: string;
+}
+
+/**
+ * A row of the authoritative MySQL ledger — the record IRD actually sees.
+ * Returned by the invoice-by-number lookup and the reconciliation endpoint.
+ */
+export interface LedgerRecordDto {
+  id: number;
+  invoiceNumber: string;
+  invoiceDate?: string;
+  fiscalYear?: string;
+  buyerName?: string;
+  totalAmount?: number;
+  taxableAmount?: number;
+  taxAmount?: number;
+  exemptAmount?: number;
+  discountAmount?: number;
+  irdSynced: boolean;
+  irdSyncDate?: string;
+  cbmsResponseCode?: string;
+  irdSyncAttempts?: number;
+  irdNeedsManualReview?: boolean;
+  active?: boolean;
+  sourceCollection?: string;
+  sourceDocId?: string;
 }
 
 /**
@@ -377,6 +421,73 @@ export const billingApi = {
    */
   async recordPrint(javaId: number | string): Promise<void> {
     await billingApiClient.post(`/${javaId}/record-print`, {});
+  },
+
+  /**
+   * Look up one ledger row by invoice number. Returns null when no such row
+   * exists — the signal that a sale was never filed with IRD.
+   *
+   * Fails closed by design: a missing backing endpoint also yields 404, so
+   * until that endpoint ships this reports "not filed" for every lookup.
+   * That is the safe direction — callers must never mark something
+   * IRD-synced without a confirmed ledger row.
+   */
+  async getInvoiceByNumber(
+    invoiceNumber: string,
+  ): Promise<LedgerRecordDto | null> {
+    try {
+      const response = await billingApiClient.get("/invoice-by-number", {
+        params: { invoiceNumber },
+      });
+
+      return response.data ?? null;
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
+      throw error;
+    }
+  },
+
+  /**
+   * Attach the Firestore document pointer to an existing ledger row and
+   * mirror its IRD state onto that document. Used to repair rows created
+   * before the pointer existed, whose sync badge the backend otherwise has
+   * no way to address. The mapping must come from an exact match, never a
+   * guess. Rejected for returns.
+   */
+  async attachSourcePointer(
+    ledgerId: number,
+    sourceCollection: string,
+    sourceDocId: string,
+  ): Promise<LedgerRecordDto> {
+    const response = await billingApiClient.post(
+      `/${ledgerId}/source-pointer`,
+      { sourceCollection, sourceDocId },
+    );
+
+    return response.data;
+  },
+
+  /**
+   * The ledger as reconciliation needs it — exposes the sync
+   * attempt/response/review state and source-document pointer that the
+   * Schedule 5 report deliberately omits.
+   */
+  async getReconciliation(params: {
+    fiscalYear?: string;
+    syncState?: "all" | "unsynced" | "needsReview";
+    page?: number;
+    size?: number;
+  }): Promise<PageResponse<LedgerRecordDto>> {
+    const response = await billingApiClient.get("/reconciliation", {
+      params: {
+        fiscalYear: params.fiscalYear || undefined,
+        syncState: params.syncState || "all",
+        page: params.page ?? 0,
+        size: params.size ?? 200,
+      },
+    });
+
+    return response.data;
   },
 
   /**

@@ -1,177 +1,77 @@
-import {
-  collection,
-  addDoc,
-  getDocs,
-  doc,
-  updateDoc,
-  query,
-  where,
-  Timestamp,
-  getDoc,
-  increment,
-  runTransaction,
-} from "firebase/firestore";
-
-import { db } from "@/config/firebase";
 import { ExpertCommission, AppointmentBilling } from "@/types/models";
+import {
+  ClinicianCommissionConfig,
+  GenericCommissionRecord,
+  createCommissionGrouped,
+  createCommissionFromItems,
+  createRegistrationCommission as createRegistrationCommissionCore,
+  getCommissionsByEntity,
+  payCommission as payCommissionCore,
+  updateCommissionStatus as updateCommissionStatusCore,
+  reduceCommissionAmount as reduceCommissionAmountCore,
+  getCommissionsByBillingId as getCommissionsByBillingIdCore,
+} from "@/services/clinicianCommissionService";
+
+const EXPERT_CONFIG: ClinicianCommissionConfig = {
+  entityType: "expert",
+  collectionName: "expertCommissions",
+  entityCollection: "experts",
+  idField: "expertId",
+  nameField: "expertName",
+  dateField: "date",
+};
+
+function toExpertCommission(r: GenericCommissionRecord): ExpertCommission {
+  return {
+    id: r.id,
+    expertId: r.entityId,
+    expertName: r.entityName,
+    clinicId: r.clinicId,
+    branchId: r.branchId,
+    billingId: r.billingId,
+    billingType: r.billingType as "appointment" | "pathology" | "other",
+    invoiceNumber: r.invoiceNumber,
+    date: r.serviceDate,
+    patientId: r.patientId,
+    patientName: r.patientName,
+    serviceNames: r.serviceNames,
+    totalInvoiceAmount: r.totalInvoiceAmount,
+    commissionPercentage: r.commissionPercentage,
+    commissionAmount: r.commissionAmount,
+    status: r.status,
+    paidDate: r.paidDate,
+    paidAmount: r.paidAmount,
+    paymentMethod: r.paymentMethod,
+    paymentReference: r.paymentReference,
+    paymentNotes: r.paymentNotes,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    createdBy: r.createdBy,
+    paidBy: r.paidBy,
+  };
+}
 
 class ExpertCommissionService {
-  private collectionName = "expertCommissions";
-
-  // Create commission records for multiple items across multiple experts in an invoice
+  // Create commission records for multiple items across multiple experts in
+  // an invoice — delegates to the shared core (see
+  // clinicianCommissionService.ts); this is the same "auto-group-all-items"
+  // algorithm as doctorCommissionService.createCommission.
   async createCommissionsFromBilling(
     billing: AppointmentBilling,
     defaultExpertCommissionPercent: number,
     createdBy: string,
   ): Promise<string[]> {
-    try {
-
-
-      // Group items by expertId
-      const expertGroups: Record<
-        string,
-        { expertName: string; items: typeof billing.items }
-      > = {};
-
-      billing.items.forEach((item) => {
-        const eId = item.doctorId || billing.doctorId;
-        const eName = item.doctorName || billing.doctorName;
-
-        if (!expertGroups[eId]) {
-          expertGroups[eId] = { expertName: eName, items: [] };
-        }
-        expertGroups[eId].items.push(item);
-      });
-
-      const promises = Object.entries(expertGroups).map(
-        async ([eId, group]) => {
-          // Calculate total commission amount for this expert's items
-          let groupSubtotal = 0;
-          const rawCommissionAmount = group.items.reduce((total, item) => {
-            // Explicitly skip items where calculateCommission is false from the business total entirely
-            if (item.calculateCommission === false) {
-              return total;
-            }
-
-            const percentage =
-              typeof item.commission === "number" && item.commission >= 0
-                ? item.commission
-                : defaultExpertCommissionPercent;
-
-            // Pro-rate the global invoice discount (mainDiscountAmount) onto this item
-            // item.amount is already reduced by itemDiscountAmount
-            // So we calculate the ratio based on the remaining total
-            const totalItemAmounts = (billing.subtotal || 1) - (billing.itemDiscountAmount || 0);
-            const validTotal = totalItemAmounts > 0 ? totalItemAmounts : 1;
-            const mainDiscount = billing.mainDiscountAmount || 0;
-            const discountRatio = (validTotal - mainDiscount) / validTotal;
-            const effectiveItemAmount = item.amount * discountRatio;
-
-            groupSubtotal += effectiveItemAmount;
-
-            if (!percentage || percentage <= 0) {
-              return total;
-            }
-
-            const itemCommissionAmount =
-              (effectiveItemAmount * percentage) / 100;
-
-            return total + itemCommissionAmount;
-          }, 0);
-
-          // Rounded to 2 decimals — matches this app's established IRD
-          // monetary convention (see taxEngine.ts) and the identical fix in
-          // doctorCommissionService.createCommission — an unrounded
-          // floating-point sum otherwise produces artifacts like
-          // 999.9995999999999 on a stored commission record.
-          const groupCommissionAmount = Math.round(rawCommissionAmount * 100) / 100;
-          groupSubtotal = Math.round(groupSubtotal * 100) / 100;
-
-          if (groupCommissionAmount <= 0) return null;
-
-          // Prevent duplicate commissions if this is ever called twice for
-          // the same invoice (retry after a partial failure, a double
-          // click before the button disables, etc.) — mirrors the existing
-          // guard in doctorCommissionService.createPathologyCommissions.
-          const existingQuery = query(
-            collection(db, this.collectionName),
-            where("billingId", "==", billing.id),
-            where("expertId", "==", eId),
-          );
-          const existingDocs = await getDocs(existingQuery);
-
-          if (!existingDocs.empty) {
-            console.warn(
-              `Commission already exists for expert ${eId} on billing ID ${billing.id}. Skipping.`,
-            );
-
-            return null;
-          }
-
-          const effectivePercentage =
-            groupSubtotal > 0
-              ? (groupCommissionAmount / groupSubtotal) * 100
-              : defaultExpertCommissionPercent;
-
-          const commissionData: Omit<ExpertCommission, "id"> = {
-            expertId: eId,
-            expertName: group.expertName,
-            clinicId: billing.clinicId,
-            branchId: billing.branchId || "",
-            billingId: billing.id,
-            billingType: "appointment",
-            invoiceNumber: billing.invoiceNumber || "",
-            date: billing.invoiceDate,
-            patientId: billing.patientId || "",
-            patientName: billing.patientName || "Unknown",
-            serviceNames: group.items
-              .filter((item: any) => item.calculateCommission !== false)
-              .map((item) => item.appointmentTypeName),
-            // This expert's own discount-adjusted eligible base (mirrors
-            // doctorCommissionService.createCommission's groupSubtotal) —
-            // NOT the whole invoice's tax-inclusive total, which previously
-            // made the effective % implied by totalInvoiceAmount/commissionAmount
-            // come out nonsensically low whenever other clinicians' items or
-            // tax were also on the same invoice.
-            totalInvoiceAmount: groupSubtotal,
-            commissionPercentage: effectivePercentage,
-            commissionAmount: groupCommissionAmount,
-            status: "pending",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            createdBy,
-          };
-
-          const docRef = await addDoc(collection(db, this.collectionName), {
-            ...commissionData,
-            createdAt: Timestamp.fromDate(commissionData.createdAt),
-            updatedAt: Timestamp.fromDate(commissionData.updatedAt),
-            date: Timestamp.fromDate(commissionData.date),
-          });
-
-          // Update expert's balance and lifetime earnings
-          const expertRef = doc(db, "experts", eId);
-
-          await updateDoc(expertRef, {
-            totalCommissionEarned: increment(groupCommissionAmount),
-            totalCommissionBalance: increment(groupCommissionAmount),
-            updatedAt: Timestamp.now(),
-          });
-
-          return docRef.id;
-        },
-      );
-
-      const results = await Promise.all(promises);
-
-      return results.filter((r): r is string => r !== null);
-    } catch (error) {
-      console.error("Error creating expert commissions from billing:", error);
-      throw error;
-    }
+    return createCommissionGrouped(
+      EXPERT_CONFIG,
+      billing,
+      defaultExpertCommissionPercent,
+      createdBy,
+    );
   }
 
-  // Create commission records when invoice is created
+  // Create commission records when invoice is created, computed only over a
+  // caller-supplied pre-filtered subset of items (e.g. a referral bonus that
+  // must exclude the referrer's own treating items).
   async createCommission(
     expertId: string,
     expertName: string,
@@ -179,98 +79,14 @@ class ExpertCommissionService {
     expertCommissionPercent: number,
     createdBy: string,
   ): Promise<string | null> {
-    try {
-      // Prevent duplicate commissions if this is ever called twice for the
-      // same invoice (retry after a partial failure, a double click before
-      // the button disables, etc.) — mirrors the guard already present in
-      // createCommissionsFromBilling and every other commission-creation
-      // function; this one was previously missing it entirely.
-      const existingQuery = query(
-        collection(db, this.collectionName),
-        where("billingId", "==", billing.id),
-        where("expertId", "==", expertId),
-      );
-      const existingDocs = await getDocs(existingQuery);
-
-      if (!existingDocs.empty) {
-        console.warn(
-          `Commission already exists for expert ${expertId} on billing ID ${billing.id}. Skipping.`,
-        );
-
-        return null;
-      }
-
-      // Base the commission on the sum of the ITEMS actually passed in
-      // (discount-prorated), not the whole invoice's billing.subtotal —
-      // this function is also used for a referral bonus where the caller
-      // deliberately filters out the referrer's own treating items first
-      // (appointmentBillingService.recordPayment), and using the raw
-      // invoice-wide subtotal would double-count those excluded items and
-      // base the bonus on money the referrer didn't actually refer.
-      const totalItemAmounts =
-        (billing.subtotal || 1) - (billing.itemDiscountAmount || 0);
-      const validTotal = totalItemAmounts > 0 ? totalItemAmounts : 1;
-      const mainDiscount = billing.mainDiscountAmount || 0;
-      const discountRatio = (validTotal - mainDiscount) / validTotal;
-      const effectiveBase = (billing.items || []).reduce(
-        (sum, item: any) =>
-          item.calculateCommission === false
-            ? sum
-            : sum + item.amount * discountRatio,
-        0,
-      );
-      const commissionAmount =
-        (Math.max(effectiveBase, 0) * expertCommissionPercent) / 100;
-
-      const commissionData: Omit<ExpertCommission, "id"> = {
-        expertId,
-        expertName,
-        clinicId: billing.clinicId,
-        branchId: billing.branchId,
-        billingId: billing.id,
-        billingType: "appointment",
-        invoiceNumber: billing.invoiceNumber,
-        date: billing.invoiceDate,
-        patientId: billing.patientId || "",
-        patientName: billing.patientName,
-        serviceNames: billing.items
-          .filter((item: any) => item.calculateCommission !== false)
-          .map((item) => item.appointmentTypeName),
-        // The eligible, discount-adjusted base this commission was actually
-        // computed on (matches doctorCommissionService.createCommission's
-        // groupSubtotal) — not the whole invoice's tax-inclusive total,
-        // which previously made an "effective %" computed from these two
-        // fields together come out nonsensically low.
-        totalInvoiceAmount: effectiveBase,
-        commissionPercentage: expertCommissionPercent,
-        commissionAmount,
-        status: "pending",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy,
-      };
-
-      const docRef = await addDoc(collection(db, this.collectionName), {
-        ...commissionData,
-        createdAt: Timestamp.fromDate(commissionData.createdAt),
-        updatedAt: Timestamp.fromDate(commissionData.updatedAt),
-        date: Timestamp.fromDate(commissionData.date),
-      });
-
-      // Update expert's balance and lifetime earnings
-      const expertRef = doc(db, "experts", expertId);
-
-      await updateDoc(expertRef, {
-        totalCommissionEarned: increment(commissionData.commissionAmount),
-        totalCommissionBalance: increment(commissionData.commissionAmount),
-        updatedAt: Timestamp.now(),
-      });
-
-      return docRef.id;
-    } catch (error) {
-      console.error("Error creating expert commission:", error);
-      throw error;
-    }
+    return createCommissionFromItems(
+      EXPERT_CONFIG,
+      expertId,
+      expertName,
+      billing,
+      expertCommissionPercent,
+      createdBy,
+    );
   }
 
   // Get all commissions for an expert
@@ -278,46 +94,8 @@ class ExpertCommissionService {
     expertId: string,
     clinicId: string,
   ): Promise<ExpertCommission[]> {
-    try {
-      const q = query(
-        collection(db, this.collectionName),
-        where("expertId", "==", expertId),
-        where("clinicId", "==", clinicId),
-      );
-
-      const querySnapshot = await getDocs(q);
-
-      const commissions = querySnapshot.docs.map((doc) => {
-        const data = doc.data();
-
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-          date: data.date?.toDate() || new Date(),
-          paidDate: data.paidDate?.toDate(),
-        };
-      }) as ExpertCommission[];
-
-      // Sort in-memory to bypass Firestore composite index requirement
-      return commissions.sort((a, b) => {
-        const timeA =
-          a.createdAt instanceof Date
-            ? a.createdAt.getTime()
-            : new Date(a.createdAt).getTime();
-        const timeB =
-          b.createdAt instanceof Date
-            ? b.createdAt.getTime()
-            : new Date(b.createdAt).getTime();
-
-        return timeB - timeA;
-      });
-    } catch (error) {
-      console.error("Error getting commissions by expert:", error);
-
-      return [];
-    }
+    const records = await getCommissionsByEntity(EXPERT_CONFIG, expertId, clinicId);
+    return records.map(toExpertCommission);
   }
 
   // Pay commission to expert
@@ -329,92 +107,23 @@ class ExpertCommissionService {
     paymentNotes?: string,
     paidBy?: string,
   ): Promise<void> {
-    try {
-      if (paidAmount <= 0) {
-        throw new Error("Payment amount must be greater than 0");
-      }
-
-      const docRef = doc(db, this.collectionName, commissionId);
-
-      // Read-validate-write inside one transaction — see the identical fix
-      // in doctorCommissionService.payCommission for the race it prevents.
-      await runTransaction(db, async (transaction) => {
-        const commissionDoc = await transaction.get(docRef);
-
-        if (!commissionDoc.exists()) {
-          throw new Error("Commission record not found");
-        }
-
-        const currentCommission = commissionDoc.data() as ExpertCommission;
-        const remainingAmount =
-          currentCommission.commissionAmount - (currentCommission.paidAmount || 0);
-
-        if (paidAmount > remainingAmount) {
-          throw new Error(
-            "Payment amount cannot exceed remaining commission balance.",
-          );
-        }
-
-        const updateData: any = {
-          paidAmount: (currentCommission.paidAmount || 0) + paidAmount,
-          paymentMethod,
-          paidDate: Timestamp.fromDate(new Date()),
-          updatedAt: Timestamp.fromDate(new Date()),
-          status:
-            (currentCommission.paidAmount || 0) + paidAmount >=
-            currentCommission.commissionAmount
-              ? "paid"
-              : "pending",
-        };
-
-        if (paymentReference) updateData.paymentReference = paymentReference;
-        if (paymentNotes) updateData.paymentNotes = paymentNotes;
-        if (paidBy) updateData.paidBy = paidBy;
-
-        transaction.update(docRef, updateData);
-
-        const expertRef = doc(db, "experts", currentCommission.expertId);
-
-        transaction.update(expertRef, {
-          totalCommissionBalance: increment(-paidAmount),
-          updatedAt: Timestamp.now(),
-        });
-      });
-    } catch (error) {
-      console.error("Error paying expert commission:", error);
-      throw error;
-    }
+    return payCommissionCore(
+      EXPERT_CONFIG,
+      commissionId,
+      paidAmount,
+      paymentMethod,
+      paymentReference,
+      paymentNotes,
+      paidBy,
+    );
   }
 
   // Get all commissions for a billing
   async getCommissionsByBillingId(
     billingId: string,
   ): Promise<ExpertCommission[]> {
-    try {
-      const q = query(
-        collection(db, this.collectionName),
-        where("billingId", "==", billingId),
-      );
-
-      const querySnapshot = await getDocs(q);
-
-      return querySnapshot.docs.map((doc) => {
-        const data = doc.data();
-
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-          date: data.date?.toDate() || new Date(),
-          paidDate: data.paidDate?.toDate(),
-        };
-      }) as ExpertCommission[];
-    } catch (error) {
-      console.error("Error getting expert commissions by billing ID:", error);
-
-      return [];
-    }
+    const records = await getCommissionsByBillingIdCore(EXPERT_CONFIG, billingId);
+    return records.map(toExpertCommission);
   }
 
   // Update commission status (for cancelling commissions)
@@ -422,36 +131,7 @@ class ExpertCommissionService {
     commissionId: string,
     status: "pending" | "paid" | "cancelled",
   ): Promise<void> {
-    try {
-      const docRef = doc(db, this.collectionName, commissionId);
-      const commissionDoc = await getDoc(docRef);
-
-      if (!commissionDoc.exists()) {
-        throw new Error("Commission not found");
-      }
-
-      const commissionData = commissionDoc.data() as ExpertCommission;
-
-      if (status === "cancelled" && commissionData.status !== "cancelled") {
-        const expertRef = doc(db, "experts", commissionData.expertId);
-
-        await updateDoc(expertRef, {
-          totalCommissionEarned: increment(-commissionData.commissionAmount),
-          totalCommissionBalance: increment(
-            -(commissionData.commissionAmount - (commissionData.paidAmount || 0)),
-          ),
-          updatedAt: Timestamp.now(),
-        });
-      }
-
-      await updateDoc(docRef, {
-        status,
-        updatedAt: Timestamp.fromDate(new Date()),
-      });
-    } catch (error) {
-      console.error("Error updating expert commission status:", error);
-      throw error;
-    }
+    return updateCommissionStatusCore(EXPERT_CONFIG, commissionId, status);
   }
 
   /**
@@ -463,49 +143,7 @@ class ExpertCommissionService {
     commissionId: string,
     reduceByAmount: number,
   ): Promise<void> {
-    if (reduceByAmount <= 0) return;
-    try {
-      const docRef = doc(db, this.collectionName, commissionId);
-      const commissionDoc = await getDoc(docRef);
-
-      if (!commissionDoc.exists()) {
-        throw new Error("Commission not found");
-      }
-
-      const commissionData = commissionDoc.data() as ExpertCommission;
-
-      if (commissionData.status === "cancelled") return;
-
-      const paidAmount = commissionData.paidAmount || 0;
-      const outstanding = Math.max(
-        0,
-        commissionData.commissionAmount - paidAmount,
-      );
-      const actualReduction = Math.min(reduceByAmount, outstanding);
-
-      if (actualReduction <= 0) return;
-
-      const newCommissionAmount = Math.max(
-        0,
-        commissionData.commissionAmount - actualReduction,
-      );
-
-      const expertRef = doc(db, "experts", commissionData.expertId);
-
-      await updateDoc(expertRef, {
-        totalCommissionEarned: increment(-actualReduction),
-        totalCommissionBalance: increment(-actualReduction),
-        updatedAt: Timestamp.now(),
-      });
-
-      await updateDoc(docRef, {
-        commissionAmount: newCommissionAmount,
-        updatedAt: Timestamp.fromDate(new Date()),
-      });
-    } catch (error) {
-      console.error("Error reducing expert commission amount:", error);
-      throw error;
-    }
+    return reduceCommissionAmountCore(EXPERT_CONFIG, commissionId, reduceByAmount);
   }
 
   /**
@@ -524,51 +162,19 @@ class ExpertCommissionService {
     commissionPercentage: number,
     createdBy: string,
   ): Promise<string | null> {
-    try {
-      if (commissionAmount <= 0) return null;
-
-      const commissionData: Omit<ExpertCommission, "id"> = {
-        expertId,
-        expertName,
-        clinicId,
-        branchId: clinicId,
-        billingId: `reg_${Date.now()}`,
-        billingType: "appointment",
-        invoiceNumber: "REG-COMM",
-        date: new Date(),
-        patientId,
-        patientName,
-        serviceNames: [appointmentTypeName],
-        totalInvoiceAmount: totalAmount,
-        commissionPercentage,
-        commissionAmount,
-        status: "pending",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy,
-      };
-
-      const docRef = await addDoc(collection(db, this.collectionName), {
-        ...commissionData,
-        createdAt: Timestamp.fromDate(commissionData.createdAt),
-        updatedAt: Timestamp.fromDate(commissionData.updatedAt),
-        date: Timestamp.fromDate(commissionData.date),
-      });
-
-      // Update expert's balance and lifetime earnings
-      const expertRef = doc(db, "experts", expertId);
-
-      await updateDoc(expertRef, {
-        totalCommissionEarned: increment(commissionAmount),
-        totalCommissionBalance: increment(commissionAmount),
-        updatedAt: Timestamp.now(),
-      });
-
-      return docRef.id;
-    } catch (error) {
-      console.error("Error creating registration expert commission:", error);
-      throw error;
-    }
+    return createRegistrationCommissionCore(
+      EXPERT_CONFIG,
+      expertId,
+      expertName,
+      clinicId,
+      patientId,
+      patientName,
+      appointmentTypeName,
+      totalAmount,
+      commissionAmount,
+      commissionPercentage,
+      createdBy,
+    );
   }
 }
 

@@ -1,11 +1,15 @@
 package com.procaresoft.billing.controller;
 
 import com.procaresoft.billing.dto.InvoiceRequestDto;
+import com.procaresoft.billing.dto.LedgerRecordDto;
 import com.procaresoft.billing.model.Invoice;
 import com.procaresoft.billing.model.InvoiceItem;
 import com.procaresoft.billing.repository.InvoiceRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +20,8 @@ import java.time.LocalDate;
 
 import com.procaresoft.billing.service.IrdCbmsService;
 import com.procaresoft.billing.service.AuditLogService;
+import com.procaresoft.billing.service.InvoiceCreationService;
+import com.procaresoft.billing.service.FirestoreMirrorService;
 
 @RestController
 @RequestMapping("/api/billing")
@@ -25,14 +31,19 @@ public class BillingController {
     private final IrdCbmsService irdCbmsService;
     private final com.procaresoft.billing.service.InvoiceSequenceService invoiceSequenceService;
     private final AuditLogService auditLogService;
+    private final InvoiceCreationService invoiceCreationService;
+    private final FirestoreMirrorService firestoreMirrorService;
 
     public BillingController(InvoiceRepository invoiceRepository, IrdCbmsService irdCbmsService,
             com.procaresoft.billing.service.InvoiceSequenceService invoiceSequenceService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService, InvoiceCreationService invoiceCreationService,
+            FirestoreMirrorService firestoreMirrorService) {
         this.invoiceRepository = invoiceRepository;
         this.irdCbmsService = irdCbmsService;
         this.invoiceSequenceService = invoiceSequenceService;
         this.auditLogService = auditLogService;
+        this.invoiceCreationService = invoiceCreationService;
+        this.firestoreMirrorService = firestoreMirrorService;
     }
 
     /** clinicId is resolved server-side by FirebaseAuthFilter from the caller's Firestore user doc. */
@@ -50,101 +61,129 @@ public class BillingController {
     }
 
     @PostMapping("/create")
-    @Transactional
     public ResponseEntity<Invoice> createInvoice(@Valid @RequestBody InvoiceRequestDto request,
             HttpServletRequest httpRequest) {
 
         String clinicId = requireClinicId(httpRequest);
         String userUid = requireUserUid(httpRequest);
 
-        // Idempotent retry: if this exact create attempt (same clinic + key)
-        // already produced an invoice — e.g. the first response was lost to a
-        // dropped connection and the browser retried — return that invoice
-        // instead of minting a duplicate.
-        String idempotencyKey = request.getIdempotencyKey();
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            java.util.Optional<Invoice> existing = invoiceRepository
-                    .findByClinicIdAndIdempotencyKey(clinicId, idempotencyKey);
-            if (existing.isPresent()) {
-                return ResponseEntity.ok(existing.get());
+        return ResponseEntity.ok(invoiceCreationService.createFromRequest(request, clinicId, userUid));
+    }
+
+    /**
+     * Look up one ledger row by its invoice number, scoped to the caller's
+     * clinic. 404 means no ledger entry exists — which is the only safe
+     * basis for concluding a sale was never filed with IRD.
+     */
+    @GetMapping("/invoice-by-number")
+    public ResponseEntity<LedgerRecordDto> getInvoiceByNumber(@RequestParam String invoiceNumber,
+            HttpServletRequest httpRequest) {
+
+        String clinicId = requireClinicId(httpRequest);
+
+        return invoiceRepository.findByClinicIdAndInvoiceNumber(clinicId, invoiceNumber)
+                .map(LedgerRecordDto::fromInvoice)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * The ledger as reconciliation needs to see it — including the sync
+     * attempt/response/review state and source-document pointer that
+     * Schedule 5 deliberately does not carry.
+     *
+     * syncState: all (default) | unsynced | needsReview.
+     */
+    @GetMapping("/reconciliation")
+    public ResponseEntity<Page<LedgerRecordDto>> getReconciliation(
+            @RequestParam(required = false) String fiscalYear,
+            @RequestParam(required = false, defaultValue = "all") String syncState,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size,
+            HttpServletRequest httpRequest) {
+
+        String clinicId = requireClinicId(httpRequest);
+        Pageable pageable = PageRequest.of(page, Math.min(size, 500));
+
+        Page<Invoice> result;
+        if ("unsynced".equalsIgnoreCase(syncState)) {
+            result = invoiceRepository.findByClinicIdAndIrdSyncedFalseOrderByInvoiceNumberAsc(clinicId, pageable);
+        } else if ("needsReview".equalsIgnoreCase(syncState)) {
+            result = invoiceRepository.findByClinicIdAndIrdNeedsManualReviewTrueOrderByInvoiceNumberAsc(clinicId,
+                    pageable);
+        } else if (fiscalYear != null && !fiscalYear.isBlank()) {
+            result = invoiceRepository.findByClinicIdAndFiscalYearOrderByInvoiceNumberAsc(clinicId, fiscalYear,
+                    pageable);
+        } else {
+            result = invoiceRepository.findByClinicIdOrderByInvoiceNumberAsc(clinicId, pageable);
+        }
+
+        return ResponseEntity.ok(result.map(LedgerRecordDto::fromInvoice));
+    }
+
+    /**
+     * Attach the Firestore document pointer to an existing ledger row, then
+     * mirror its IRD state onto that document.
+     *
+     * Rows created before the pointer column existed have none, so the mirror
+     * has nothing to address and their sync badge can never be corrected.
+     * The caller supplies a mapping it has already established by exact match
+     * (shared javaInvoiceId, or identical invoice number) — this is evidence,
+     * not a guess, which is why the backend accepts it.
+     *
+     * Guards: never repoints a row that already has a different pointer, and
+     * refuses returns outright — a pharmacy return's ledger row corresponds to
+     * an entry nested inside its purchase document, so mirroring onto that
+     * document would overwrite the purchase's own sync state.
+     */
+    @PostMapping("/{id}/source-pointer")
+    public ResponseEntity<LedgerRecordDto> attachSourcePointer(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body,
+            HttpServletRequest httpRequest) {
+
+        String clinicId = requireClinicId(httpRequest);
+        String collection = body.get("sourceCollection");
+        String docId = body.get("sourceDocId");
+
+        if (collection == null || collection.isBlank() || docId == null || docId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "sourceCollection and sourceDocId are both required");
+        }
+
+        return invoiceRepository.findById(id).map(invoice -> {
+            if (!clinicId.equals(invoice.getClinicId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invoice belongs to a different clinic");
             }
-        }
 
-        Invoice invoice = new Invoice();
-        invoice.setClinicId(clinicId);
-        invoice.setCreatedByUid(userUid);
-        invoice.setIdempotencyKey(idempotencyKey);
-        String invoiceNumber = (request.getPreAssignedInvoiceNumber() != null
-                && !request.getPreAssignedInvoiceNumber().isBlank())
-                        ? request.getPreAssignedInvoiceNumber()
-                        : invoiceSequenceService.generateNextInvoiceNumber(clinicId, request.getFiscalYear(),
-                                request.getInvoicePrefix());
-        invoice.setInvoiceNumber(invoiceNumber);
-        invoice.setInvoiceDate(LocalDate.now());
-        invoice.setFiscalYear(request.getFiscalYear());
-
-        invoice.setFirebasePatientId(request.getFirebasePatientId());
-        invoice.setBuyerName(request.getBuyerName());
-        invoice.setBuyerPan(request.getBuyerPan());
-
-        invoice.setTotalAmount(request.getTotalAmount());
-        invoice.setTaxableAmount(request.getTaxableAmount());
-        invoice.setTaxAmount(request.getTaxAmount());
-        invoice.setExemptAmount(request.getExemptAmount());
-        invoice.setDiscountAmount(request.getDiscountAmount());
-        invoice.setPaymentMethod(request.getPaymentMethod());
-        if (request.isReturn()) {
-            invoice.setRefInvoiceNumber(request.getRefInvoiceNumber());
-            invoice.setReasonForReturn(request.getReasonForReturn());
-        }
-
-        invoice.setIrdSynced(false);
-
-        for (InvoiceRequestDto.InvoiceItemDto itemDto : request.getItems()) {
-            InvoiceItem item = new InvoiceItem();
-            item.setItemName(itemDto.getItemName());
-            item.setQuantity(itemDto.getQuantity());
-            item.setRate(itemDto.getRate());
-            item.setTotalAmount(itemDto.getTotalAmount());
-            item.setTaxable(itemDto.isTaxable());
-            invoice.addItem(item);
-        }
-
-        Invoice savedInvoice;
-        try {
-            savedInvoice = invoiceRepository.save(invoice);
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // The (clinic_id, idempotency_key) unique index (V5 migration)
-            // is the real, DB-level backstop for the check above — two
-            // concurrent retries of the same create-invoice request can
-            // both pass the findByClinicIdAndIdempotencyKey check before
-            // either commits, but only one INSERT can win here. This
-            // transaction is now rollback-only (Hibernate marks the
-            // persistence context unusable after a failed flush), so we
-            // can't safely re-query for the winner's row here — return a
-            // clean 409 instead of an opaque 500; the client's own retry
-            // (same idempotency key, a fresh request/transaction) will
-            // cleanly hit the idempotent-retry branch above and get the
-            // winner's invoice back.
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "This invoice was already created by a concurrent request — please retry.");
-        }
-
-        if (request.isIrdEnabled()) {
-            IrdCbmsService.SyncResult syncResult = irdCbmsService.syncInvoice(savedInvoice, request.getFiscalYear(),
-                    request.isReturn());
-            savedInvoice.setIrdSynced(syncResult.isSuccess());
-            if (syncResult.isSuccess()) {
-                savedInvoice.setIrdSyncDate(java.time.LocalDateTime.now());
+            boolean isReturn = (invoice.getTotalAmount() != null && invoice.getTotalAmount().signum() < 0)
+                    || (invoice.getRefInvoiceNumber() != null && !invoice.getRefInvoiceNumber().isBlank());
+            if (isReturn) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "This is a return. Its state belongs to an entry nested inside the purchase document, "
+                                + "so pointing it at that document would overwrite the purchase's own sync state.");
             }
-            savedInvoice.setCbmsResponseCode(syncResult.getResponseCode());
-            savedInvoice = invoiceRepository.save(savedInvoice);
-        }
 
-        auditLogService.record("Invoice", savedInvoice.getId(), "CREATE", userUid, clinicId,
-                "Invoice " + savedInvoice.getInvoiceNumber() + " created (total " + savedInvoice.getTotalAmount() + ")");
+            String existing = invoice.getSourceCollection();
+            if (existing != null && !existing.isBlank()) {
+                boolean same = existing.equals(collection) && docId.equals(invoice.getSourceDocId());
+                if (!same) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "This invoice already points at " + existing + "/" + invoice.getSourceDocId());
+                }
+            } else {
+                invoice.setSourceCollection(collection);
+                invoice.setSourceDocId(docId);
+                invoiceRepository.save(invoice);
+                auditLogService.record("Invoice", invoice.getId(), "UPDATE", requireUserUid(httpRequest), clinicId,
+                        "Attached source pointer " + collection + "/" + docId
+                                + " to " + invoice.getInvoiceNumber());
+            }
 
-        return ResponseEntity.ok(savedInvoice);
+            firestoreMirrorService.mirrorSyncState(invoice);
+
+            return ResponseEntity.ok(LedgerRecordDto.fromInvoice(invoice));
+        }).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**
@@ -212,6 +251,11 @@ public class BillingController {
 
             auditLogService.record("Invoice", saved.getId(), "UPDATE", requireUserUid(httpRequest), clinicId,
                     "IRD retry-sync for " + saved.getInvoiceNumber() + ": " + (syncResult.isSuccess() ? "success" : "failed"));
+
+            // Keep the app's copy in step without relying on the caller to
+            // write it back — once clients lose write access to the IRD
+            // fields, this is the only thing that updates them.
+            firestoreMirrorService.mirrorSyncState(saved);
 
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());

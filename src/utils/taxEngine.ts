@@ -33,10 +33,36 @@ export interface TaxEngineResult {
   totalAmount: number; // Final payable grand total (taxable + exempt + VAT)
 }
 
+interface AllocatedItem {
+  isTaxable: boolean;
+  taxRate: number;
+  /** Net amount for this item after item-level AND pro-rata main discount —
+   * NOT yet split into taxable/tax/exempt, since that split differs between
+   * tax-exclusive and tax-inclusive pricing (see the two breakdown
+   * functions below, which are the only two consumers of this). */
+  netItemAmount: number;
+}
+
+interface AllocationResult {
+  subtotal: number;
+  itemDiscountAmount: number;
+  mainDiscountAmount: number;
+  totalDiscountAmount: number;
+  items: AllocatedItem[];
+}
+
 /**
- * Calculate complete invoice financial breakdown with pro-rata discount allocation
+ * Shared first half of both pricing modes: per-item discount, then the
+ * main invoice-level discount allocated pro-rata across every item (not
+ * just a taxable/exempt bucket split) based on each item's share of the
+ * post-item-discount subtotal. Identical between tax-exclusive and
+ * tax-inclusive pricing — only how `netItemAmount` is subsequently split
+ * into taxable/tax/exempt differs, which is why that split is NOT done
+ * here (see `calculateTaxBreakdown` / `calculateTaxInclusiveBreakdown`).
  */
-export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngineResult {
+function allocateItemsWithProRataDiscount(
+  input: TaxEngineCalculationInput,
+): AllocationResult {
   const {
     items = [],
     discountType = "flat",
@@ -72,11 +98,6 @@ export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngi
     totalItemDiscount += itemDisc;
 
     return {
-      ...item,
-      quantity: qty,
-      price: unitPrice,
-      gross: itemGross,
-      itemDiscount: itemDisc,
       netBeforeMainDiscount: itemNet,
       isTaxable: itemIsTaxable,
       // Clamped defense-in-depth: settings validation should already
@@ -99,36 +120,53 @@ export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngi
   }
   mainDiscount = Math.max(0, mainDiscount);
 
-  // Step 3-5: Allocate the main discount pro-rata onto EACH item (not just
-  // a taxable/exempt bucket split), then compute VAT per item at that
-  // item's OWN clamped tax rate and sum — items can carry genuinely
-  // different rates (e.g. a 13% service alongside a 0%/exempt one), so a
-  // single blended rate over the whole invoice would be wrong whenever
-  // rates differ across items.
-  let netTaxableSales = 0;
-  let netExemptSales = 0;
-  let vatAmount = 0;
-
-  processedItems.forEach((item) => {
+  // Step 3: Allocate the main discount pro-rata onto EACH item
+  const allocatedItems: AllocatedItem[] = processedItems.map((item) => {
     const itemMainDiscountShare =
       netSubtotalAfterItemDiscounts > 0 && mainDiscount > 0
         ? mainDiscount * (item.netBeforeMainDiscount / netSubtotalAfterItemDiscounts)
         : 0;
     const netItemAmount = Math.max(0, item.netBeforeMainDiscount - itemMainDiscountShare);
 
-    if (item.isTaxable && isTaxEnabled) {
-      netTaxableSales += netItemAmount;
-      vatAmount += netItemAmount * (item.taxRate / 100);
-    } else {
-      netExemptSales += netItemAmount;
-    }
+    return { isTaxable: item.isTaxable, taxRate: item.taxRate, netItemAmount };
   });
 
-  // Round currency outputs to 2 decimal places cleanly
-  const subtotal = Math.round(grossSubtotal * 100) / 100;
-  const itemDiscountAmount = Math.round(totalItemDiscount * 100) / 100;
-  const mainDiscountAmount = Math.round(mainDiscount * 100) / 100;
-  const totalDiscountAmount = Math.round((itemDiscountAmount + mainDiscountAmount) * 100) / 100;
+  return {
+    subtotal: Math.round(grossSubtotal * 100) / 100,
+    itemDiscountAmount: Math.round(totalItemDiscount * 100) / 100,
+    mainDiscountAmount: Math.round(mainDiscount * 100) / 100,
+    totalDiscountAmount: Math.round((totalItemDiscount + mainDiscount) * 100) / 100,
+    items: allocatedItems,
+  };
+}
+
+/**
+ * Calculate complete invoice financial breakdown with pro-rata discount
+ * allocation — TAX-EXCLUSIVE pricing (unit price does NOT include VAT; VAT
+ * is added on top). This is the convention for appointment and pathology
+ * billing. For pharmacy's MRP-inclusive convention, see
+ * `calculateTaxInclusiveBreakdown` below.
+ */
+export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngineResult {
+  const { subtotal, itemDiscountAmount, mainDiscountAmount, totalDiscountAmount, items } =
+    allocateItemsWithProRataDiscount(input);
+
+  // Compute VAT per item at that item's OWN clamped tax rate and sum —
+  // items can carry genuinely different rates (e.g. a 13% service alongside
+  // a 0%/exempt one), so a single blended rate over the whole invoice would
+  // be wrong whenever rates differ across items.
+  let netTaxableSales = 0;
+  let netExemptSales = 0;
+  let vatAmount = 0;
+
+  items.forEach((item) => {
+    if (item.isTaxable) {
+      netTaxableSales += item.netItemAmount;
+      vatAmount += item.netItemAmount * (item.taxRate / 100);
+    } else {
+      netExemptSales += item.netItemAmount;
+    }
+  });
 
   const taxableAmount = Math.round(netTaxableSales * 100) / 100;
   const taxAmount = Math.round(vatAmount * 100) / 100;
@@ -144,5 +182,88 @@ export function calculateTaxBreakdown(input: TaxEngineCalculationInput): TaxEngi
     taxAmount,
     exemptAmount,
     totalAmount,
+  };
+}
+
+/**
+ * Calculate complete invoice financial breakdown with pro-rata discount
+ * allocation — TAX-INCLUSIVE pricing (unit price, e.g. MRP, already
+ * includes VAT; the taxable base is backed OUT of it instead of VAT being
+ * added on top). This is Nepal's pharmacy-goods convention. A taxable
+ * item's post-discount amount is split as
+ * `taxable = netItemAmount / (1 + rate/100)`, `tax = netItemAmount - taxable`;
+ * an exempt (rate 0 or isTaxable false) item's full post-discount amount
+ * goes to `exemptAmount` untouched — never folded into `taxableAmount`,
+ * which was a real bug fixed earlier (an exempt medicine's price was
+ * being counted as part of the taxable base).
+ */
+export function calculateTaxInclusiveBreakdown(
+  input: TaxEngineCalculationInput,
+): TaxEngineResult {
+  const { subtotal, itemDiscountAmount, mainDiscountAmount, totalDiscountAmount, items } =
+    allocateItemsWithProRataDiscount(input);
+
+  let netTaxableSales = 0;
+  let netExemptSales = 0;
+  let vatAmount = 0;
+
+  items.forEach((item) => {
+    if (item.isTaxable && item.taxRate > 0) {
+      const itemTaxable = item.netItemAmount / (1 + item.taxRate / 100);
+
+      netTaxableSales += itemTaxable;
+      vatAmount += item.netItemAmount - itemTaxable;
+    } else {
+      netExemptSales += item.netItemAmount;
+    }
+  });
+
+  const taxableAmount = Math.round(Math.max(0, netTaxableSales) * 100) / 100;
+  const taxAmount = Math.round(Math.max(0, vatAmount) * 100) / 100;
+  const exemptAmount = Math.round(Math.max(0, netExemptSales) * 100) / 100;
+  // Note: for inclusive pricing, totalAmount reconstructs to the same
+  // post-discount gross the items already summed to (taxable + tax is
+  // just the taxable item's own netItemAmount split two ways) — this is
+  // expected, unlike exclusive mode where tax is genuinely additional.
+  const totalAmount = Math.round((taxableAmount + exemptAmount + taxAmount) * 100) / 100;
+
+  return {
+    subtotal,
+    itemDiscountAmount,
+    mainDiscountAmount,
+    totalDiscountAmount,
+    taxableAmount,
+    taxAmount,
+    exemptAmount,
+    totalAmount,
+  };
+}
+
+/**
+ * Low-level single-unit helper for tax-inclusive pricing — backs VAT out
+ * of one already-discounted, tax-inclusive gross amount. Exists so a
+ * live per-line UI preview (e.g. pharmacy's purchase form, showing tax for
+ * one row as the user types) can use the EXACT same math as
+ * `calculateTaxInclusiveBreakdown` without re-deriving it, which is how
+ * two independently-maintained (and independently buggy) copies of this
+ * calculation existed before.
+ */
+export function calculateInclusiveUnitBreakdown(
+  grossAmount: number,
+  taxRate: number,
+): { taxableAmount: number; taxAmount: number } {
+  const gross = Math.max(0, grossAmount || 0);
+  const rate = Math.min(100, Math.max(0, taxRate || 0));
+
+  if (rate <= 0) {
+    return { taxableAmount: 0, taxAmount: 0 };
+  }
+
+  const taxable = gross / (1 + rate / 100);
+  const tax = gross - taxable;
+
+  return {
+    taxableAmount: Math.round(taxable * 100) / 100,
+    taxAmount: Math.round(tax * 100) / 100,
   };
 }

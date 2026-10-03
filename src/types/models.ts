@@ -1924,6 +1924,8 @@ export interface ExpertCommission {
   commissionAmount: number;
   paidAmount?: number;
   paymentMethod?: string;
+  paymentReference?: string;
+  paymentNotes?: string;
   paidDate?: Date;
   status: "pending" | "paid" | "cancelled";
   createdAt: Date;

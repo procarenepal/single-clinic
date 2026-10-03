@@ -10,6 +10,16 @@
  * deliberately identical invoice (same patient, same items, same amount)
  * be created again later — e.g. the same walk-in patient buying the same
  * item again tomorrow — since enough time has passed for a new bucket.
+ *
+ * Within one bucket, though, content alone cannot tell two genuinely
+ * distinct-but-identical sales apart: a pharmacy selling the same medicine
+ * to two walk-in customers minutes apart produced the same key, and the
+ * second sale silently resolved to the first one's invoice — stock gone,
+ * nothing filed. Where the caller already holds a reserved invoice number
+ * (pharmacy reserves one per sale), that number IS the sale's identity, so
+ * it is used instead of the time bucket: a retry of the same sale reuses
+ * the same number and stays idempotent, while a different sale cannot
+ * collide no matter how identical its contents.
  */
 const BUCKET_MS = 10 * 60 * 1000; // 10 minutes — covers a realistic manual retry delay
 
@@ -29,14 +39,25 @@ export function computeIdempotencyKey(input: {
   buyerName?: string;
   totalAmount: number;
   items: unknown;
+  /** A already-reserved invoice number, when the caller has one. */
+  preAssignedInvoiceNumber?: string;
+  /**
+   * Any other stable identifier unique to this one filing — used where no
+   * number is reserved up front (a queued pharmacy return mints its credit
+   * note number only at filing time, so its queue entry id is its identity).
+   */
+  uniqueKey?: string;
 }): string {
-  const bucket = Math.floor(Date.now() / BUCKET_MS);
+  const discriminator = input.uniqueKey || input.preAssignedInvoiceNumber;
   const stable = JSON.stringify({
     clinicId: input.clinicId,
     buyerName: input.buyerName || "",
     totalAmount: input.totalAmount,
     items: input.items,
-    bucket,
+    // Exactly one discriminator: this filing's own identity when it has
+    // one, otherwise the time bucket.
+    identity: discriminator || null,
+    bucket: discriminator ? null : Math.floor(Date.now() / BUCKET_MS),
   });
 
   return fnv1aHash(stable);

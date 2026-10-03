@@ -24,6 +24,15 @@ import { referralCommissionService } from "./referralCommissionService";
 import { expertCommissionService } from "./expertCommissionService";
 import { staffCommissionService } from "./staffCommissionService";
 import { walletService } from "./walletService";
+import {
+  isRecordLocked,
+  assertFinancialFieldsUnlocked,
+  assertOnline,
+  resolveInvoicePrefix,
+  javaResultSyncFields,
+  runBlockingJavaSyncThenFirestoreWrite,
+  buildCreditNoteSkeleton,
+} from "./core/billingLifecycleCore";
 
 const PATHOLOGY_BILLING_COLLECTION = "pathologyBilling";
 const PATHOLOGY_BILLING_SETTINGS_COLLECTION = "pathologyBillingSettings";
@@ -343,11 +352,7 @@ export const pathologyBillingService = {
   async createBilling(
     billingData: Omit<PathologyBilling, "id" | "createdAt" | "updatedAt">,
   ): Promise<{ id: string; invoiceNumber: string }> {
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      throw new Error(
-        "You appear to be offline. Please check your internet connection and try again.",
-      );
-    }
+    assertOnline();
 
     const { billingApi, buildInvoicePayload } = await import(
       "./api/billingApi"
@@ -405,9 +410,15 @@ export const pathologyBillingService = {
     const settingsForPrefix = await this.getBillingSettings(
       billingData.clinicId,
     ).catch(() => null);
-    const invoicePrefix = isCreditNote
-      ? "CN"
-      : settingsForPrefix?.invoicePrefix || undefined;
+    const invoicePrefix = resolveInvoicePrefix(
+      isCreditNote,
+      settingsForPrefix?.invoicePrefix,
+    );
+
+    // Reserve the Firestore document id up front so the ledger row can point
+    // back at this exact document — Java is called before the document is
+    // written, so without this there would be no id to send.
+    const newBillingRef = doc(collection(db, PATHOLOGY_BILLING_COLLECTION));
 
     // Only intent (irdEnabled) travels to the Java backend — actual IRD
     // credentials are resolved server-side per clinic, never sent from here.
@@ -429,21 +440,14 @@ export const pathologyBillingService = {
       refInvoiceNumber: (billingData as any).linkedInvoiceNumber,
       reasonForReturn: (billingData as any).creditNoteReason,
       invoicePrefix,
+      sourceCollection: PATHOLOGY_BILLING_COLLECTION,
+      sourceDocId: newBillingRef.id,
       items: invoiceItems,
     });
 
-    // Blocking, authoritative call. Throws (propagates to caller) on failure —
-    // we do not create a Firestore invoice record with no backing ledger entry.
-    const javaResult = await billingApi.createInvoice(invoicePayload);
-
-    if (!javaResult?.invoiceNumber) {
-      throw new Error(
-        "Java backend did not return an invoice number — invoice was not created.",
-      );
-    }
-
-    try {
-      const billingRef = collection(db, PATHOLOGY_BILLING_COLLECTION);
+    return runBlockingJavaSyncThenFirestoreWrite(
+      () => billingApi.createInvoice(invoicePayload),
+      async (javaResult) => {
 
       // Recursive function to remove undefined values from objects and arrays
       const cleanUndefined = (obj: any): any => {
@@ -482,17 +486,13 @@ export const pathologyBillingService = {
         finalizedAt: billingData.finalizedAt
           ? Timestamp.fromDate(billingData.finalizedAt)
           : null,
-        javaInvoiceId: javaResult.id,
-        irdSynced: Boolean(javaResult.irdSynced),
-        irdSyncDate: javaResult.irdSyncDate
-          ? new Date(javaResult.irdSyncDate)
-          : null,
-        cbmsResponseCode: javaResult.cbmsResponseCode || null,
+        ...javaResultSyncFields(javaResult),
         createdAt: now,
         updatedAt: now,
       };
 
-      const docRef = await addDoc(billingRef, data);
+      await setDoc(newBillingRef, data);
+      const docRef = newBillingRef;
 
       console.log(
         "Pathology billing created with ID:",
@@ -526,16 +526,9 @@ export const pathologyBillingService = {
       }
 
       return { id: docRef.id, invoiceNumber: javaResult.invoiceNumber };
-    } catch (error) {
-      console.error("Error creating pathology billing:", error);
-      // The ledger entry already exists (javaResult.invoiceNumber was
-      // returned) — only the local Firestore copy failed to save. Safe to
-      // resubmit: the same idempotencyKey means the Java backend will
-      // return this same invoice rather than creating a duplicate.
-      throw new Error(
-        `Invoice ${javaResult.invoiceNumber} was recorded but could not be saved locally. Please try again — this will not create a duplicate.`,
-      );
-    }
+      },
+      "pathology",
+    );
   },
 
   /**
@@ -553,41 +546,26 @@ export const pathologyBillingService = {
 
       if (existing.exists()) {
         const existingData = existing.data() as PathologyBilling;
-        const isFinalized =
-          existingData.irdSynced ||
-          existingData.status === "paid" ||
-          existingData.status === "finalized";
+        // Pathology additionally locks on status "paid" — appointment
+        // billing does not, since appointment's payment flow never reaches
+        // "paid" as a terminal status the same way. Preserved exactly via
+        // extraLockedStatuses rather than folding the two domains' rules
+        // together.
+        const isFinalized = isRecordLocked(existingData, ["paid"]);
+
         // Numeric fields are compared with undefined/null normalized to 0 —
         // otherwise re-sending an unchanged-but-previously-unset field (e.g.
         // discountAmount: 0 when the existing record has it as undefined)
         // reads as a "change" and wrongly blocks a legitimate, purely
-        // non-financial update like recording a payment.
-        const numChanged = (key: "totalAmount" | "subtotal" | "taxAmount" | "discountAmount") =>
-          key in billingData &&
-          (billingData[key] || 0) !== (existingData[key] || 0);
-
-        const financialFieldsChanged =
-          numChanged("totalAmount") ||
-          numChanged("subtotal") ||
-          numChanged("taxAmount") ||
-          numChanged("discountAmount") ||
-          ("items" in billingData &&
-            JSON.stringify(billingData.items) !==
-              JSON.stringify(existingData.items));
-
-        if (isFinalized && financialFieldsChanged) {
-          throw new Error(
-            "IRD Tax Compliance Error: Financial fields of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
-          );
-        }
-
-        // Clause ट covers "any data" (कुनैपनि तथ्याङ्क), not just financial
-        // fields — patient identity, doctor, dates etc. must also be frozen
-        // once finalized/synced. Only system-driven bookkeeping fields
-        // (payment recording, IRD sync retries, cancellation/credit-note
-        // linkage) may still change post-finalization.
-        if (isFinalized) {
-          const allowedPostFinalizeFields = new Set([
+        // non-financial update like recording a payment. Clause ट covers
+        // "any data" (कुनैपनि तथ्याङ्क), not just financial fields — patient
+        // identity, doctor, dates etc. must also be frozen once
+        // finalized/synced. Only system-driven bookkeeping fields (payment
+        // recording, IRD sync retries, cancellation/credit-note linkage) may
+        // still change post-finalization.
+        assertFinancialFieldsUnlocked(existingData, billingData, isFinalized, {
+          financialKeys: ["totalAmount", "subtotal", "taxAmount", "discountAmount"],
+          allowlist: [
             "paidAmount",
             "balanceAmount",
             "paymentStatus",
@@ -604,43 +582,14 @@ export const pathologyBillingService = {
             "hasCreditNote",
             "finalizedBy",
             "finalizedAt",
-          ]);
-          const financialKeys = [
-            "totalAmount",
-            "subtotal",
-            "taxAmount",
-            "discountAmount",
-          ];
-
-          for (const key of Object.keys(billingData)) {
-            if (financialKeys.includes(key) || key === "items") continue;
-            if (allowedPostFinalizeFields.has(key)) continue;
-
-            if (key === "notes") {
-              const oldNotes = existingData.notes || "";
-              const newNotes = (billingData as any).notes || "";
-
-              if (newNotes === oldNotes || newNotes.startsWith(oldNotes)) continue;
-
-              throw new Error(
-                "IRD Tax Compliance Error: Notes on a finalized or IRD-synced pathology invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
-              );
-            }
-
-            const oldVal = (existingData as any)[key];
-            const newVal = (billingData as any)[key];
-            const changed =
-              typeof newVal === "object" && newVal !== null
-                ? JSON.stringify(newVal) !== JSON.stringify(oldVal)
-                : newVal !== oldVal;
-
-            if (changed) {
-              throw new Error(
-                "IRD Tax Compliance Error: Data of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
-              );
-            }
-          }
-        }
+          ],
+          financialErrorMessage:
+            "IRD Tax Compliance Error: Financial fields of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
+          notesErrorMessage:
+            "IRD Tax Compliance Error: Notes on a finalized or IRD-synced pathology invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
+          dataErrorMessage:
+            "IRD Tax Compliance Error: Data of a finalized or IRD-synced pathology invoice cannot be modified. Issue a Credit Note to make adjustments.",
+        });
       }
 
       // Recursive function to remove undefined values from objects and arrays
@@ -967,59 +916,10 @@ export const pathologyBillingService = {
         throw new Error("A Credit Note has already been issued for this invoice.");
       }
 
-      // Generate negative items
-      const negativeItems = original.items.map((item) => ({
-        ...item,
-        price: -Math.abs(item.price || 0),
-        amount: -Math.abs(item.amount),
-      }));
-
-      // Strip id/createdAt/updatedAt before spreading — `...original` alone
-      // would otherwise carry the ORIGINAL invoice's Firestore doc-id into
-      // this new document as a plain field, which then silently overrides
-      // the credit note's own doc-id everywhere it's read back.
-      const { id: _originalId, createdAt: _originalCreatedAt, updatedAt: _originalUpdatedAt, ...originalWithoutId } = original;
-
-      const creditNoteData: Omit<
-        PathologyBilling,
-        "id" | "createdAt" | "updatedAt"
-      > = {
-        ...originalWithoutId,
-        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-        invoiceDate: new Date(),
-        items: negativeItems,
-
-        // Reverse amounts
-        subtotal: -Math.abs(original.subtotal),
-        discountAmount: -Math.abs(original.discountAmount),
-        taxAmount: -Math.abs(original.taxAmount),
-        totalAmount: -Math.abs(original.totalAmount),
-
-        // Mark as paid since it's a refund
-        status: "finalized",
-        paymentStatus: "paid",
-        paidAmount: -Math.abs(original.totalAmount),
-        balanceAmount: 0,
-
-        // Credit note links
-        isCreditNote: true,
-        linkedInvoiceId: original.id,
-        linkedInvoiceNumber: original.invoiceNumber,
-        creditNoteReason: reason,
-        notes: `Credit Note for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
-
-        // Reset sync status
-        irdSynced: false,
-        irdSyncDate: undefined,
-        cbmsResponseCode: undefined,
-
+      const creditNoteData = buildCreditNoteSkeleton(original, {
+        reason,
         createdBy,
-        finalizedBy: createdBy,
-        finalizedAt: new Date(),
-
-        // Remove old payment history
-        paymentHistory: [],
-      };
+      });
 
       // createBilling already submitted this to the Java backend with
       // isReturn: true (routed to IRD's /api/billreturn) — no separate

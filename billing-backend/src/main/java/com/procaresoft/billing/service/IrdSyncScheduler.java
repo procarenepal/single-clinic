@@ -4,6 +4,7 @@ import com.procaresoft.billing.model.Invoice;
 import com.procaresoft.billing.repository.InvoiceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
@@ -31,18 +32,25 @@ public class IrdSyncScheduler {
 
     private final InvoiceRepository invoiceRepository;
     private final IrdCbmsService irdCbmsService;
+    private final FirestoreMirrorService firestoreMirrorService;
+
+    /**
+     * One page per tick. The candidate set is bounded and filtered at the
+     * query — previously every unsynced invoice of every clinic, cancelled
+     * and manual-review rows included, was loaded into memory each minute.
+     */
+    private static final int BATCH_SIZE = 100;
 
     @Scheduled(fixedDelayString = "60000")
     public void retryFailedIrdSyncs() {
-        List<Invoice> failedInvoices = invoiceRepository.findByIrdSyncedFalse();
+        List<Invoice> failedInvoices = invoiceRepository
+                .findByIrdSyncedFalseAndActiveTrueAndIrdNeedsManualReviewFalse(PageRequest.of(0, BATCH_SIZE))
+                .getContent();
         if (failedInvoices.isEmpty()) {
             return;
         }
 
         for (Invoice invoice : failedInvoices) {
-            if (invoice.isIrdNeedsManualReview()) {
-                continue;
-            }
             if (invoice.getFiscalYear() == null) {
                 // Legacy rows created before fiscalYear was tracked on Invoice — can't
                 // safely resolve which IRD fiscal-year bucket to submit under.
@@ -74,8 +82,30 @@ public class IrdSyncScheduler {
                     }
                 }
                 invoiceRepository.save(invoice);
+
+                // Tell Firestore what just happened. Without this the app
+                // keeps showing "Failed" on an invoice IRD has accepted —
+                // the ledger moves on and the screen never finds out.
+                firestoreMirrorService.mirrorSyncState(invoice);
             } catch (Exception e) {
                 log.error("Error processing invoice {}", invoice.getInvoiceNumber(), e);
+                // Record the attempt even though it threw. Without this the
+                // counter and timestamp never advance, so a permanently
+                // throwing invoice is "due" again 60 seconds later, forever,
+                // and never reaches the manual-review cutoff.
+                try {
+                    invoice.setIrdSyncAttempts(invoice.getIrdSyncAttempts() + 1);
+                    invoice.setIrdLastAttemptAt(LocalDateTime.now());
+                    if (invoice.getIrdSyncAttempts() >= MAX_ATTEMPTS) {
+                        invoice.setIrdNeedsManualReview(true);
+                        log.error("Invoice {} exceeded {} IRD sync attempts (last one threw) — flagged for manual review",
+                                invoice.getInvoiceNumber(), MAX_ATTEMPTS);
+                    }
+                    invoiceRepository.save(invoice);
+                } catch (Exception persistError) {
+                    log.error("Could not record the failed sync attempt for invoice {}",
+                            invoice.getInvoiceNumber(), persistError);
+                }
             }
         }
     }

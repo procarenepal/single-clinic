@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { configDefaults } from "vitest/config";
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tsconfigPaths()],
@@ -49,5 +50,13 @@ export default defineConfig(({ mode }) => ({
     legalComments: "none",
     // Remove console logs in production builds
     drop: mode === "production" ? ["console", "debugger"] : [],
+  },
+  test: {
+    // .claude/worktrees/** holds scratch git worktrees created by background
+    // agent tooling (each a full checkout, so it duplicates every test file
+    // in the repo) — without this, a leftover worktree gets picked up by
+    // vitest's default glob and its tests run (and can fail) alongside the
+    // real suite, which has nothing to do with any actual code change.
+    exclude: [...configDefaults.exclude, ".claude/**"],
   },
 }));

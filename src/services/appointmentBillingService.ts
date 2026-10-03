@@ -25,6 +25,15 @@ import { calculateTaxBreakdown } from "../utils/taxEngine";
 import { patientService } from "./patientService";
 import { walletService } from "./walletService";
 import { navigationService } from "./navigationService";
+import {
+  isRecordLocked,
+  assertFinancialFieldsUnlocked,
+  assertOnline,
+  resolveInvoicePrefix,
+  javaResultSyncFields,
+  runBlockingJavaSyncThenFirestoreWrite,
+  buildCreditNoteSkeleton,
+} from "./core/billingLifecycleCore";
 
 const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
@@ -39,7 +48,7 @@ const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
 export function isBillingLocked(
   billing: Pick<AppointmentBilling, "irdSynced" | "status">,
 ): boolean {
-  return Boolean(billing.irdSynced || billing.status === "finalized");
+  return isRecordLocked(billing);
 }
 
 /**
@@ -609,11 +618,7 @@ export const appointmentBillingService = {
   async createBilling(
     billingData: Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt">,
   ): Promise<{ id: string; invoiceNumber: string }> {
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      throw new Error(
-        "You appear to be offline. Please check your internet connection and try again.",
-      );
-    }
+    assertOnline();
 
     const { billingApi, buildInvoicePayload } = await import(
       "./api/billingApi"
@@ -689,9 +694,10 @@ export const appointmentBillingService = {
     const settingsForPrefix = await this.getBillingSettings(
       billingData.clinicId,
     ).catch(() => null);
-    const invoicePrefix = isCreditNote
-      ? "CN"
-      : settingsForPrefix?.invoicePrefix || undefined;
+    const invoicePrefix = resolveInvoicePrefix(
+      isCreditNote,
+      settingsForPrefix?.invoicePrefix,
+    );
 
     const invoiceItems = (billingData.items || []).map((item) => ({
       itemName: item.appointmentTypeName || "Service",
@@ -704,6 +710,13 @@ export const appointmentBillingService = {
       // on". This line-item flag previously still had that stale fallback.
       isTaxable: item.isTaxable === true,
     }));
+
+    // Reserve the Firestore document id up front so the ledger row can
+    // point back at this exact document. Java is called before the document
+    // is written, so without pre-generating the id there would be nothing to
+    // send — and the backend would later have to guess which document an
+    // invoice number belongs to in order to mirror sync state onto it.
+    const newBillingRef = doc(collection(db, APPOINTMENT_BILLING_COLLECTION));
 
     // Only intent (irdEnabled) travels to the Java backend — actual IRD
     // credentials are resolved server-side per clinic, never sent from here.
@@ -725,103 +738,85 @@ export const appointmentBillingService = {
       refInvoiceNumber: (billingData as any).linkedInvoiceNumber,
       reasonForReturn: (billingData as any).creditNoteReason,
       invoicePrefix,
+      sourceCollection: APPOINTMENT_BILLING_COLLECTION,
+      sourceDocId: newBillingRef.id,
       items: invoiceItems,
     });
 
-    // Blocking, authoritative call. Throws (propagates to caller) on failure —
-    // we do not create a Firestore invoice record with no backing ledger entry.
-    const javaResult = await billingApi.createInvoice(invoicePayload);
+    return runBlockingJavaSyncThenFirestoreWrite(
+      () => billingApi.createInvoice(invoicePayload),
+      async (javaResult) => {
+        const cleanedData = this.deepClean(billingData);
 
-    if (!javaResult?.invoiceNumber) {
-      throw new Error(
-        "Java backend did not return an invoice number — invoice was not created.",
-      );
-    }
+        const data = {
+          ...cleanedData,
+          invoiceNumber: javaResult.invoiceNumber,
+          invoiceDate: billingData.invoiceDate
+            ? Timestamp.fromDate(billingData.invoiceDate)
+            : Timestamp.now(),
+          // Persist the SAME authoritative totals just computed/sent to
+          // Java/IRD above (`calc`), instead of trusting the caller's own
+          // copy of these figures on billingData — closes the gap where the
+          // Firestore record (and everything read from it: Invoice Details,
+          // print, PDF) could in principle diverge from what was actually
+          // reported to IRD, e.g. if a future caller of createBilling ever
+          // computed its own totals slightly differently than
+          // calculateTaxBreakdown.
+          subtotal: (calc as any).subtotal ?? billingData.subtotal,
+          discountAmount:
+            (calc as any).totalDiscountAmount ?? billingData.discountAmount,
+          itemDiscountAmount:
+            (calc as any).itemDiscountAmount ?? billingData.itemDiscountAmount,
+          mainDiscountAmount:
+            (calc as any).mainDiscountAmount ?? billingData.mainDiscountAmount,
+          taxableAmount: calc.taxableAmount,
+          taxAmount: calc.taxAmount,
+          exemptAmount: calc.exemptAmount,
+          totalAmount: calc.totalAmount,
+          balanceAmount: calc.totalAmount - (billingData.paidAmount || 0),
+          ...javaResultSyncFields(javaResult),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
 
-    try {
-      const billingRef = collection(db, APPOINTMENT_BILLING_COLLECTION);
-      const cleanedData = this.deepClean(billingData);
+        await setDoc(newBillingRef, data);
+        const docRef = newBillingRef;
 
-      const data = {
-        ...cleanedData,
-        invoiceNumber: javaResult.invoiceNumber,
-        invoiceDate: billingData.invoiceDate
-          ? Timestamp.fromDate(billingData.invoiceDate)
-          : Timestamp.now(),
-        // Persist the SAME authoritative totals just computed/sent to
-        // Java/IRD above (`calc`), instead of trusting the caller's own
-        // copy of these figures on billingData — closes the gap where the
-        // Firestore record (and everything read from it: Invoice Details,
-        // print, PDF) could in principle diverge from what was actually
-        // reported to IRD, e.g. if a future caller of createBilling ever
-        // computed its own totals slightly differently than
-        // calculateTaxBreakdown.
-        subtotal: (calc as any).subtotal ?? billingData.subtotal,
-        discountAmount:
-          (calc as any).totalDiscountAmount ?? billingData.discountAmount,
-        itemDiscountAmount:
-          (calc as any).itemDiscountAmount ?? billingData.itemDiscountAmount,
-        mainDiscountAmount:
-          (calc as any).mainDiscountAmount ?? billingData.mainDiscountAmount,
-        taxableAmount: calc.taxableAmount,
-        taxAmount: calc.taxAmount,
-        exemptAmount: calc.exemptAmount,
-        totalAmount: calc.totalAmount,
-        balanceAmount: calc.totalAmount - (billingData.paidAmount || 0),
-        javaInvoiceId: javaResult.id,
-        irdSynced: Boolean(javaResult.irdSynced),
-        irdSyncDate: javaResult.irdSyncDate
-          ? new Date(javaResult.irdSyncDate)
-          : null,
-        cbmsResponseCode: javaResult.cbmsResponseCode || null,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      };
+        console.log(
+          "Appointment billing created in Firestore with ID:",
+          docRef.id,
+          "invoiceNumber:",
+          javaResult.invoiceNumber,
+        );
 
-      const docRef = await addDoc(billingRef, data);
+        if (!isCreditNote) {
+          // Best-effort audit log — logging failures must never mask a
+          // successful invoice creation as a save failure.
+          try {
+            const { auditLogService } = await import("./auditLogService");
 
-      console.log(
-        "Appointment billing created in Firestore with ID:",
-        docRef.id,
-        "invoiceNumber:",
-        javaResult.invoiceNumber,
-      );
-
-      if (!isCreditNote) {
-        // Best-effort audit log — logging failures must never mask a
-        // successful invoice creation as a save failure.
-        try {
-          const { auditLogService } = await import("./auditLogService");
-
-          await auditLogService.logDiscountTaxChange({
-            performedBy: auth.currentUser?.uid || "system",
-            clinicId: billingData.clinicId,
-            branchId: billingData.branchId,
-            billingId: docRef.id,
-            invoiceNumber: javaResult.invoiceNumber,
-            after: {
-              discountType: billingData.discountType,
-              discountValue: billingData.discountValue,
-              applyTax: taxPercentage > 0,
-              taxPercentage,
-            },
-          });
-        } catch (auditError) {
-          console.error("Error logging discount/tax audit event:", auditError);
+            await auditLogService.logDiscountTaxChange({
+              performedBy: auth.currentUser?.uid || "system",
+              clinicId: billingData.clinicId,
+              branchId: billingData.branchId,
+              billingId: docRef.id,
+              invoiceNumber: javaResult.invoiceNumber,
+              after: {
+                discountType: billingData.discountType,
+                discountValue: billingData.discountValue,
+                applyTax: taxPercentage > 0,
+                taxPercentage,
+              },
+            });
+          } catch (auditError) {
+            console.error("Error logging discount/tax audit event:", auditError);
+          }
         }
-      }
 
-      return { id: docRef.id, invoiceNumber: javaResult.invoiceNumber };
-    } catch (error) {
-      console.error("Error creating appointment billing:", error);
-      // The ledger entry already exists (javaResult.invoiceNumber was
-      // returned) — only the local Firestore copy failed to save. Safe to
-      // resubmit: the same idempotencyKey means the Java backend will
-      // return this same invoice rather than creating a duplicate.
-      throw new Error(
-        `Invoice ${javaResult.invoiceNumber} was recorded but could not be saved locally. Please try again — this will not create a duplicate.`,
-      );
-    }
+        return { id: docRef.id, invoiceNumber: javaResult.invoiceNumber };
+      },
+      "appointment",
+    );
   },
 
   /**
@@ -833,50 +828,28 @@ export const appointmentBillingService = {
   ): Promise<void> {
     try {
       const existing = await this.getBillingById(id);
-      let isAlteringFinancials = false;
 
       if (existing) {
-        const financialKeys = [
-          "totalAmount",
-          "subtotal",
-          "taxAmount",
-          "discountAmount",
-          "mainDiscountAmount",
-        ];
+        const isFinalized = isBillingLocked(existing);
+
         // undefined/null normalized to 0 — otherwise re-sending an
         // unchanged-but-previously-unset field (e.g. discountAmount: 0 when
         // the existing record has it as undefined) reads as a "change" and
         // wrongly blocks a legitimate, purely non-financial update like
-        // recording a payment.
-        const simpleValuesChanged = financialKeys.some((k) => {
-          if (k in billingData) {
-            return ((billingData as any)[k] || 0) !== ((existing as any)[k] || 0);
-          }
-
-          return false;
-        });
-
-        const itemsChanged =
-          "items" in billingData &&
-          JSON.stringify(billingData.items) !== JSON.stringify(existing.items);
-
-        isAlteringFinancials = simpleValuesChanged || itemsChanged;
-
-        const isFinalized = isBillingLocked(existing);
-
-        if (isAlteringFinancials && isFinalized) {
-          throw new Error(
-            "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead.",
-          );
-        }
-
-        // Clause ट covers "any data" (कुनैपनि तथ्याङ्क), not just financial
-        // fields — patient identity, doctor, dates etc. must also be frozen
-        // once finalized/synced. Only system-driven bookkeeping fields
-        // (payment recording, IRD sync retries, cancellation/credit-note
-        // linkage) may still change post-finalization.
-        if (isFinalized) {
-          const allowedPostFinalizeFields = new Set([
+        // recording a payment. Clause ट covers "any data" (कुनैपनि तथ्याङ्क),
+        // not just financial fields — patient identity, doctor, dates etc.
+        // must also be frozen once finalized/synced. Only system-driven
+        // bookkeeping fields (payment recording, IRD sync retries,
+        // cancellation/credit-note linkage) may still change post-finalization.
+        assertFinancialFieldsUnlocked(existing, billingData, isFinalized, {
+          financialKeys: [
+            "totalAmount",
+            "subtotal",
+            "taxAmount",
+            "discountAmount",
+            "mainDiscountAmount",
+          ],
+          allowlist: [
             "paidAmount",
             "balanceAmount",
             "paymentStatus",
@@ -894,37 +867,14 @@ export const appointmentBillingService = {
             "hasCreditNote",
             "finalizedBy",
             "finalizedAt",
-          ]);
-
-          for (const key of Object.keys(billingData)) {
-            if (financialKeys.includes(key) || key === "items") continue;
-            if (allowedPostFinalizeFields.has(key)) continue;
-
-            if (key === "notes") {
-              const oldNotes = existing.notes || "";
-              const newNotes = (billingData as any).notes || "";
-
-              if (newNotes === oldNotes || newNotes.startsWith(oldNotes)) continue;
-
-              throw new Error(
-                "IRD Tax Compliance Error: Notes on a finalized or IRD-synced invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
-              );
-            }
-
-            const oldVal = (existing as any)[key];
-            const newVal = (billingData as any)[key];
-            const changed =
-              typeof newVal === "object" && newVal !== null
-                ? JSON.stringify(newVal) !== JSON.stringify(oldVal)
-                : newVal !== oldVal;
-
-            if (changed) {
-              throw new Error(
-                "IRD Tax Compliance Error: Data of a finalized or IRD-synced invoice cannot be modified. Issue a Credit Note instead.",
-              );
-            }
-          }
-        }
+          ],
+          financialErrorMessage:
+            "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead.",
+          notesErrorMessage:
+            "IRD Tax Compliance Error: Notes on a finalized or IRD-synced invoice can only be appended to (e.g. cancellation/credit-note remarks), not rewritten.",
+          dataErrorMessage:
+            "IRD Tax Compliance Error: Data of a finalized or IRD-synced invoice cannot be modified. Issue a Credit Note instead.",
+        });
       }
 
       const billingRef = doc(db, APPOINTMENT_BILLING_COLLECTION, id);
@@ -1706,34 +1656,38 @@ export const appointmentBillingService = {
                 },
               );
 
-              await this.updateBilling(id, {
-                irdSynced: javaResult.irdSynced,
-                irdSyncDate: new Date(),
-                cbmsResponseCode: javaResult.cbmsResponseCode,
-              });
+              // Sync state is written back by the backend's mirror — the
+              // client no longer asserts it.
+              void javaResult;
             } else {
-              // Legacy pre-Java-migration invoice — fall back to the
-              // Firebase-proxied sync path.
-              const { syncInvoiceToIRD } = await import("./irdCbmsService");
-              const result = await syncInvoiceToIRD({
-                clinicSettings,
-                clinic,
-                invoiceData: {
-                  buyerName: billing.patientName || "Cash Sales",
-                  buyerPan: billing.patientPanVat || "",
-                  invoiceNumber: billing.invoiceNumber,
-                  invoiceDate: billing.invoiceDate,
-                  totalAmount: newTotalAmount,
-                  taxAmount: billing.taxAmount || 0,
-                  isTaxEnabled: (billing.taxAmount || 0) > 0,
-                },
-              });
+              // No javaInvoiceId: the invoice may still have a ledger row
+              // whose id never made it back, so look it up and re-sync
+              // through Java if so. If there is genuinely no ledger row the
+              // sale was never filed with IRD — leave irdSynced untouched
+              // and let the reconciliation report surface it. This used to
+              // push straight to CBMS from the client and then mark the
+              // record synced, which filed to the tax authority without ever
+              // creating a ledger row.
+              const { billingApi } = await import("./api/billingApi");
+              const ledgerRow = await billingApi.getInvoiceByNumber(
+                billing.invoiceNumber,
+              );
 
-              await this.updateBilling(id, {
-                irdSynced: result.success,
-                irdSyncDate: new Date(),
-                cbmsResponseCode: result.responseCode,
-              });
+              if (ledgerRow) {
+                const javaResult = await billingApi.retryIrdSync(ledgerRow.id, {
+                  fiscalYear: getNepaliFiscalYear(billing.invoiceDate),
+                  isReturn: false,
+                });
+
+                // Record only the ledger link; the backend mirrors the
+                // sync state onto this document itself.
+                void javaResult;
+                await this.updateBilling(id, { javaInvoiceId: ledgerRow.id });
+              } else {
+                console.warn(
+                  `Invoice ${billing.invoiceNumber} has no ledger entry — it was never filed with IRD. Leaving sync state untouched for reconciliation to surface.`,
+                );
+              }
             }
           }
         } catch (irdError) {
@@ -2188,61 +2142,13 @@ export const appointmentBillingService = {
         throw new Error("A Credit Note has already been issued for this invoice.");
       }
 
-      // Generate negative items
-      const negativeItems = original.items.map((item) => ({
-        ...item,
-        price: -Math.abs(item.price || 0),
-        amount: -Math.abs(item.amount),
-      }));
-
-      // Strip id/createdAt/updatedAt before spreading — `...original` alone
-      // would otherwise carry the ORIGINAL invoice's Firestore doc-id into
-      // this new document as a plain field, which then silently overrides
-      // the credit note's own doc-id everywhere it's read back.
-      const { id: _originalId, createdAt: _originalCreatedAt, updatedAt: _originalUpdatedAt, ...originalWithoutId } = original;
-
-      const creditNoteData: Omit<
-        AppointmentBilling,
-        "id" | "createdAt" | "updatedAt"
-      > = {
-        ...originalWithoutId,
-        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-        invoiceDate: new Date(),
-        items: negativeItems,
-
-        // Reverse amounts
-        subtotal: -Math.abs(original.subtotal),
-        itemDiscountAmount: -Math.abs(original.itemDiscountAmount || 0),
-        mainDiscountAmount: -Math.abs(original.mainDiscountAmount || 0),
-        discountAmount: -Math.abs(original.discountAmount),
-        taxAmount: -Math.abs(original.taxAmount),
-        totalAmount: -Math.abs(original.totalAmount),
-
-        // Mark as paid since it's a refund
-        status: "finalized",
-        paymentStatus: "paid",
-        paidAmount: -Math.abs(original.totalAmount),
-        balanceAmount: 0,
-
-        // Credit note links
-        isCreditNote: true,
-        linkedInvoiceId: original.id,
-        linkedInvoiceNumber: original.invoiceNumber,
-        creditNoteReason: reason,
-        notes: `Credit Note for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
-
-        // Reset sync status
-        irdSynced: false,
-        irdSyncDate: undefined,
-        cbmsResponseCode: undefined,
-
+      const creditNoteData = buildCreditNoteSkeleton(original, {
+        reason,
         createdBy,
-        finalizedBy: createdBy,
-        finalizedAt: new Date(),
-
-        // Remove old payment history
-        paymentHistory: [],
-      };
+        // Appointment billing tracks these two discount components
+        // separately; pathology billing has no equivalent.
+        extraNegatedFields: ["itemDiscountAmount", "mainDiscountAmount"],
+      });
 
       // createBilling already submitted this to the Java backend with
       // isReturn: true (routed to IRD's /api/billreturn) — no separate
@@ -2343,73 +2249,13 @@ export const appointmentBillingService = {
         return null;
       }
 
-      // Rounded to 2 decimals throughout — this app's established IRD
-      // monetary convention (see taxEngine.ts's identical Math.round(x*100)/100
-      // pattern and irdCbmsService.ts's toFixed(2)). An arbitrary ratio
-      // (e.g. 2/7 unused sessions) otherwise produces long floating-point
-      // artifacts on a document that gets filed with IRD.
-      const round2 = (n: number) => Math.round(n * 100) / 100;
-
-      const scaledItems = original.items.map((item) => ({
-        ...item,
-        price: round2(-Math.abs((item.price || 0) * clampedRatio)),
-        amount: round2(-Math.abs((item.amount || 0) * clampedRatio)),
-      }));
-
-      const {
-        id: _originalId,
-        createdAt: _originalCreatedAt,
-        updatedAt: _originalUpdatedAt,
-        ...originalWithoutId
-      } = original;
-
       const pct = Math.round(clampedRatio * 100);
-      const scaledTotalAmount = round2(
-        -Math.abs(original.totalAmount * clampedRatio),
-      );
-      const creditNoteData: Omit<
-        AppointmentBilling,
-        "id" | "createdAt" | "updatedAt"
-      > = {
-        ...originalWithoutId,
-        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-        invoiceDate: new Date(),
-        items: scaledItems,
-
-        subtotal: round2(-Math.abs(original.subtotal * clampedRatio)),
-        itemDiscountAmount: round2(
-          -Math.abs((original.itemDiscountAmount || 0) * clampedRatio),
-        ),
-        mainDiscountAmount: round2(
-          -Math.abs((original.mainDiscountAmount || 0) * clampedRatio),
-        ),
-        discountAmount: round2(
-          -Math.abs(original.discountAmount * clampedRatio),
-        ),
-        taxAmount: round2(-Math.abs(original.taxAmount * clampedRatio)),
-        totalAmount: scaledTotalAmount,
-
-        status: "finalized",
-        paymentStatus: "paid",
-        paidAmount: scaledTotalAmount,
-        balanceAmount: 0,
-
-        isCreditNote: true,
-        linkedInvoiceId: original.id,
-        linkedInvoiceNumber: original.invoiceNumber,
-        creditNoteReason: reason,
-        notes: `Partial Credit Note (${pct}%) for Invoice ${original.invoiceNumber}. Reason: ${reason}`,
-
-        irdSynced: false,
-        irdSyncDate: undefined,
-        cbmsResponseCode: undefined,
-
+      const creditNoteData = buildCreditNoteSkeleton(original, {
+        reason,
         createdBy,
-        finalizedBy: createdBy,
-        finalizedAt: new Date(),
-
-        paymentHistory: [],
-      };
+        ratio: clampedRatio,
+        extraNegatedFields: ["itemDiscountAmount", "mainDiscountAmount"],
+      });
 
       const {
         id: newCreditNoteId,

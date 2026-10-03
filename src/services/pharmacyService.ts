@@ -23,8 +23,16 @@ import {
   PharmacySettings,
   PaymentMethod,
 } from "../types/models";
+import { calculateTaxInclusiveBreakdown } from "../utils/taxEngine";
 
 const MEDICINE_PURCHASES_COLLECTION = "medicinePurchases";
+/**
+ * Sales that still have to reach the official MySQL/IRD ledger. An entry is
+ * created in the same transaction as the irreversible stock deduction and
+ * cleared once the ledger row exists, so a failed sync is a queued job
+ * rather than a silently lost filing.
+ */
+const BILLING_SYNC_OUTBOX_COLLECTION = "billingSyncOutbox";
 const MEDICINE_USAGE_COLLECTION = "medicineUsage";
 const PHARMACY_SETTINGS_COLLECTION = "pharmacySettings";
 
@@ -115,6 +123,15 @@ export const pharmacyService = {
           id: docVal.id,
         }));
       }
+
+      // Hoisted above the transaction so the outbox entry can be written
+      // INSIDE it: a Firestore transaction may not perform reads of its own
+      // after writes, and these are needed to build the payload.
+      const { buildInvoicePayload } = await import("./api/billingApi");
+      const { clinicService: clinicSvcForSale } = await import("./clinicService");
+      const clinicForSale = await clinicSvcForSale
+        .getClinicById(purchaseData.clinicId)
+        .catch(() => null);
 
       const purchaseIdObj = await runTransaction(db, async (transaction) => {
         // 1. Read all active stock documents for transaction consistency
@@ -473,58 +490,42 @@ export const pharmacyService = {
 
         // F. Calculate final consistent parent totals based on dynamic batch
         // items. `newGrossTotal` here is already net of each item's OWN
-        // discount (see D2 above). This used to apply one blanket
-        // `purchaseData.taxPercentage` to the whole discounted total AND
-        // add it ON TOP — but sale prices are MRP, which is already
-        // tax-INCLUSIVE per Nepal pharmacy convention, so that was
-        // literally double-taxing every purchase (VAT baked into the MRP,
-        // plus a second VAT charge added on top), and it ignored any
-        // medicine explicitly configured at a different rate from the
-        // invoice-level default, always taxing every item at one blended
-        // rate instead. Fixed to back the VAT out of each item's own
-        // MRP-inclusive amount at that item's own rate, matching the
-        // create-purchase form's calculation (see pharmacy.tsx).
+        // discount (see D2 above). Sale prices are MRP, which is already
+        // tax-INCLUSIVE per Nepal pharmacy convention — VAT must be backed
+        // OUT of each item's own MRP-inclusive amount at that item's own
+        // rate (never added on top, and never folding a 0%-rate/exempt
+        // item's amount into the taxable base), via the SAME shared
+        // tax-inclusive engine `pharmacy.tsx`'s live preview uses, instead
+        // of a separately hand-maintained copy of this math.
         const finalDiscount = Math.min(
           purchaseData.discount || 0,
           newGrossTotal,
         );
-        const invoiceDiscountRatio =
-          newGrossTotal > 0 ? finalDiscount / newGrossTotal : 0;
 
-        let rawTaxableAmount = 0;
-        let rawExemptAmount = 0;
-        let rawTaxAmount = 0;
+        const breakdown = calculateTaxInclusiveBreakdown({
+          items: updatedPurchaseItems.map((item: any) => {
+            const rate =
+              typeof item.taxRate === "number"
+                ? item.taxRate
+                : purchaseData.taxPercentage || 0;
 
-        for (const item of updatedPurchaseItems) {
-          const rate =
-            typeof (item as any).taxRate === "number"
-              ? (item as any).taxRate
-              : purchaseData.taxPercentage || 0;
-          const grossMrp = (item.amount || 0) * (1 - invoiceDiscountRatio);
+            return {
+              itemName: item.medicineName || item.description || "Item",
+              quantity: 1,
+              price: item.amount || 0,
+              isTaxable: rate > 0,
+              taxRate: rate,
+            };
+          }),
+          discountType: "flat",
+          discountValue: finalDiscount,
+          isTaxEnabled: true,
+        });
 
-          // A rate-0 item is EXEMPT, not "taxable at 0%" — previously its
-          // whole amount was folded into rawTaxableAmount regardless of
-          // rate, mislabeling an exempt medicine's price as part of the
-          // taxable base (matches the identical fix in pharmacy.tsx's
-          // live-preview calculation).
-          if (rate > 0) {
-            const itemTaxable = grossMrp / (1 + rate / 100);
-
-            rawTaxableAmount += itemTaxable;
-            rawTaxAmount += grossMrp - itemTaxable;
-          } else {
-            rawExemptAmount += grossMrp;
-          }
-        }
-
-        // Rounded to 2 decimals — this app's established IRD monetary
-        // convention (see taxEngine.ts).
-        const taxableAmount = Math.round(Math.max(0, rawTaxableAmount) * 100) / 100;
-        const exemptAmount = Math.round(Math.max(0, rawExemptAmount) * 100) / 100;
-        const finalTaxAmount = Math.round(Math.max(0, rawTaxAmount) * 100) / 100;
-        const finalNetAmount =
-          Math.round((taxableAmount + exemptAmount + finalTaxAmount) * 100) /
-          100;
+        const taxableAmount = breakdown.taxableAmount;
+        const exemptAmount = breakdown.exemptAmount;
+        const finalTaxAmount = breakdown.taxAmount;
+        const finalNetAmount = breakdown.totalAmount;
 
         // 3. Perform Writes
         // Create Purchase/Invoice with batch-filled items and dynamically computed totals
@@ -543,6 +544,66 @@ export const pharmacyService = {
           id: purchaseRef.id,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+        });
+
+        // Durable record that this sale still has to reach the official
+        // ledger. Written INSIDE the same transaction as the stock
+        // deduction, because that deduction is irreversible: once it
+        // commits, the sale has happened and must eventually be filed with
+        // IRD. Previously a failed Java call left nothing behind at all, so
+        // the sale simply never got filed and nobody found out.
+        //
+        // It deliberately does not touch stock, so draining it can never
+        // double-deduct. The idempotencyKey inside the payload is what stops
+        // a retry from creating a second ledger row.
+        const outboxRef = doc(collection(db, BILLING_SYNC_OUTBOX_COLLECTION));
+        const outboxPayload = buildInvoicePayload({
+          clinicId: purchaseData.clinicId,
+          patientId: (purchaseData as any).patientId,
+          patientName: purchaseData.patientName,
+          patientPanVat: (purchaseData as any).patientPanVat,
+          totalAmount: finalNetAmount,
+          taxableAmount,
+          taxAmount: finalTaxAmount,
+          exemptAmount,
+          discountAmount: finalDiscount,
+          paymentMethod: purchaseData.paymentType,
+          irdEnabled: Boolean(clinicForSale?.irdEnabled),
+          // The sale's own date, not today's — a sale filed late still
+          // belongs to the fiscal year it happened in.
+          fiscalYear: getNepaliFiscalYear(
+            purchaseData.purchaseDate || new Date(),
+          ),
+          preAssignedInvoiceNumber: generatedPurchaseNo,
+          sourceCollection: MEDICINE_PURCHASES_COLLECTION,
+          sourceDocId: purchaseRef.id,
+          items: updatedPurchaseItems.map((item: any) => ({
+            itemName:
+              item.medicineName || item.description || "Medicine",
+            quantity: item.quantity || 1,
+            rate: item.amount / item.quantity || 0,
+            totalAmount: item.amount || 0,
+            isTaxable: (item.taxRate ?? purchaseData.taxPercentage ?? 0) > 0,
+          })),
+        });
+
+        transaction.set(outboxRef, {
+          id: outboxRef.id,
+          // buildInvoicePayload leaves optional fields undefined, which
+          // Firestore rejects outright — and this write sits inside the
+          // stock-deduction transaction, so an undefined value here fails
+          // the whole sale. The payload is plain JSON (no Dates), so a
+          // round-trip is a safe way to drop them.
+          payload: JSON.parse(JSON.stringify(outboxPayload)),
+          clinicId: purchaseData.clinicId,
+          status: "pending",
+          attempts: 0,
+          lastError: null,
+          sourceCollection: MEDICINE_PURCHASES_COLLECTION,
+          sourceDocId: purchaseRef.id,
+          invoiceNumber: generatedPurchaseNo,
+          createdAt: serverTimestamp(),
+          nextAttemptAt: serverTimestamp(),
         });
 
         // Update Parent Medicine Totals
@@ -577,6 +638,7 @@ export const pharmacyService = {
 
         return {
           id: purchaseRef.id,
+          outboxId: outboxRef.id,
           purchaseNo: generatedPurchaseNo,
           items: updatedPurchaseItems,
           total: newGrossTotal,
@@ -742,6 +804,8 @@ export const pharmacyService = {
             purchaseData.purchaseDate || new Date(),
           ),
           preAssignedInvoiceNumber: purchaseIdObj.purchaseNo,
+          sourceCollection: MEDICINE_PURCHASES_COLLECTION,
+          sourceDocId: purchaseIdObj.id,
           items: invoiceItems,
         });
 
@@ -750,18 +814,33 @@ export const pharmacyService = {
         irdSynced = Boolean(result?.irdSynced);
         javaInvoiceId = result?.id;
 
+        // irdSynced/irdSyncDate/cbmsResponseCode are written by the backend's
+        // mirror, which is now the only writer of those fields — the client
+        // records just the ledger link.
         const docRef = doc(db, MEDICINE_PURCHASES_COLLECTION, purchaseIdObj.id);
 
-        await updateDoc(docRef, {
-          javaInvoiceId: result.id,
-          irdSynced,
-          irdSyncDate: irdSynced ? new Date() : null,
-          cbmsResponseCode: result.cbmsResponseCode || null,
-        });
+        await updateDoc(docRef, { javaInvoiceId: result.id });
         console.log(
           "Pharmacy purchase synced to Java backend with ID:",
           result.id,
         );
+
+        // Ledger row exists — the queued job is done.
+        if (purchaseIdObj.outboxId) {
+          try {
+            await updateDoc(
+              doc(db, BILLING_SYNC_OUTBOX_COLLECTION, purchaseIdObj.outboxId),
+              {
+                status: "done",
+                javaInvoiceId: result.id,
+                completedAt: serverTimestamp(),
+              },
+            );
+          } catch {
+            // Leaving it pending is harmless: the poller re-sends the same
+            // idempotencyKey and the backend returns the existing invoice.
+          }
+        }
       } catch (javaError: any) {
         javaSyncError = javaError.message || String(javaError);
         console.error(
@@ -781,6 +860,20 @@ export const pharmacyService = {
           });
         } catch {
           // Best-effort status flag only — the sale itself is already committed.
+        }
+
+        // Persist why it failed. This used to live only in a local variable,
+        // so the reason vanished on reload and nothing was left to retry
+        // from. The outbox entry stays "pending" for the poller to drain.
+        if (purchaseIdObj.outboxId) {
+          try {
+            await updateDoc(
+              doc(db, BILLING_SYNC_OUTBOX_COLLECTION, purchaseIdObj.outboxId),
+              { lastError: javaSyncError, attempts: increment(1) },
+            );
+          } catch {
+            // The entry still exists and is still pending — that is what matters.
+          }
         }
       }
 
@@ -1130,7 +1223,20 @@ export const pharmacyService = {
         }
       }
 
-      const returnId = await runTransaction(db, async (transaction) => {
+      // Hoisted above the transaction so the outbox entry can be written
+      // inside it — a Firestore transaction cannot read after it writes.
+      const { buildInvoicePayload: buildReturnPayload } = await import(
+        "./api/billingApi"
+      );
+      const { clinicService: clinicSvcForReturn } = await import("./clinicService");
+      const { getNepaliFiscalYear: fiscalYearForReturn } = await import(
+        "./irdCbmsService"
+      );
+      const clinicForReturn = await clinicSvcForReturn
+        .getClinicById(returnData.clinicId)
+        .catch(() => null);
+
+      const txOutcome = await runTransaction(db, async (transaction) => {
         // 1. Read Purchase Document
         const purchaseSnap = await transaction.get(purchaseRef);
 
@@ -1297,6 +1403,83 @@ export const pharmacyService = {
           updatedAt: now,
         });
 
+        // Queue the credit note for the official ledger, in the same
+        // transaction that restores the stock. Restoring stock and refunding
+        // money is irreversible, so once this commits the return has happened
+        // and IRD must eventually be told. Previously a failed sync here was
+        // only console.warn'd and left no trace at all — strictly worse than
+        // the sale path, because nothing recorded that a filing was owed.
+        const returnGross = Math.abs(Number(returnData.totalAmount) || 0);
+        const originalRatio =
+          (originalPurchase.netAmount || 0) > 0 && (originalPurchase.taxAmount || 0) > 0
+            ? (originalPurchase.taxAmount || 0) / (originalPurchase.netAmount || 0)
+            : 0;
+        const qTaxAmount = originalRatio > 0
+          ? Math.round(returnGross * originalRatio)
+          : 0;
+        const qTaxable = originalRatio > 0 ? returnGross - qTaxAmount : 0;
+        const qExempt = originalRatio > 0 ? 0 : returnGross;
+
+        const returnOutboxRef = doc(
+          collection(db, BILLING_SYNC_OUTBOX_COLLECTION),
+        );
+        const returnPayload = buildReturnPayload({
+          clinicId: returnData.clinicId,
+          patientId: (originalPurchase as any).patientId,
+          patientName: originalPurchase.patientName,
+          patientPanVat: (originalPurchase as any).patientPanVat,
+          totalAmount: -returnGross,
+          taxableAmount: -qTaxable,
+          taxAmount: -qTaxAmount,
+          exemptAmount: -qExempt,
+          irdEnabled: Boolean(clinicForReturn?.irdEnabled),
+          // The original sale's fiscal year, matching what the existing
+          // inline sync already sends — a credit note is filed against the
+          // period its invoice belongs to, and changing that here would be
+          // altering tax semantics, not fixing a sync bug.
+          fiscalYear: fiscalYearForReturn(
+            (originalPurchase as any).purchaseDate?.toDate?.() ||
+              (originalPurchase as any).purchaseDate ||
+              new Date(),
+          ),
+          isReturn: true,
+          refInvoiceNumber: originalPurchase.purchaseNo,
+          reasonForReturn: returnData.notes || "Pharmacy sale return",
+          invoicePrefix: "CN",
+          // The credit note number is minted by Java at filing time, so this
+          // queue entry's own id is what makes the filing unique — without a
+          // discriminator two identical returns would share an idempotency
+          // key and the second would silently resolve to the first.
+          idempotencyDiscriminator: returnOutboxRef.id,
+          sourceCollection: MEDICINE_PURCHASES_COLLECTION,
+          sourceDocId: purchaseId,
+          items: returnData.items.map((item: any) => ({
+            itemName: item.medicineName || "Return Item",
+            quantity: -Math.abs(item.quantity || 1),
+            rate: Math.abs((item.amount || 0) / (item.quantity || 1)),
+            totalAmount: -Math.abs(item.amount || 0),
+            isTaxable: originalRatio > 0,
+          })),
+        });
+
+        transaction.set(returnOutboxRef, {
+          id: returnOutboxRef.id,
+          clinicId: returnData.clinicId,
+          status: "pending",
+          attempts: 0,
+          lastError: null,
+          sourceCollection: MEDICINE_PURCHASES_COLLECTION,
+          sourceDocId: purchaseId,
+          // Identifies which nested entry in the purchase's returns array
+          // this filing belongs to.
+          returnRecordId: generatedId,
+          invoiceNumber: null,
+          isReturn: true,
+          payload: JSON.parse(JSON.stringify(returnPayload)),
+          createdAt: serverTimestamp(),
+          nextAttemptAt: serverTimestamp(),
+        });
+
         // Update Stock and Create Transactions — restore each item's
         // returned quantity to the specific batch doc(s) it was actually
         // sold from (restorationPlans), not just "some" stock doc for the
@@ -1348,8 +1531,17 @@ export const pharmacyService = {
           }
         }
 
-        return generatedId;
+        return {
+          generatedId,
+          outboxId: returnOutboxRef.id,
+          // The inline attempt must send THIS payload, not rebuild its own —
+          // a second payload would carry a different idempotency key and the
+          // same return would be filed twice.
+          queuedPayload: returnPayload,
+        };
       });
+
+      const returnId = txOutcome.generatedId;
 
       // Java backend + MySQL is the sole authority for IRD sync (see the
       // matching comment in createMedicinePurchase). Stock has already been
@@ -1360,72 +1552,13 @@ export const pharmacyService = {
 
         if (purchaseDoc.exists()) {
           const purchase = purchaseDoc.data() as MedicinePurchase;
-          const { billingApi, buildInvoicePayload } = await import(
-            "./api/billingApi"
-          );
-          const { getNepaliFiscalYear } = await import("./irdCbmsService");
-          const { clinicService } = await import("./clinicService");
-          // IRD's irdEnabled lives on the Clinic document (that's what Clinic
-          // Settings > IRD CBMS Configuration actually writes to) — never on
-          // ClinicSettings, which has its own same-named but always-unset field.
-          const javaClinic = await clinicService.getClinicById(
-            returnData.clinicId,
-          );
-          // Mirror the original sale's taxable/exempt split instead of
-          // hardcoding the return as fully exempt — a return of items from
-          // a taxed sale must reverse the same proportion of tax, or IRD's
-          // reported taxable revenue never actually decreases while the
-          // exempt total gets incorrectly inflated.
-          const originalTaxRatio =
-            (purchase.netAmount || 0) > 0 && (purchase.taxAmount || 0) > 0
-              ? (purchase.taxAmount || 0) / (purchase.netAmount || 0)
-              : 0;
-          const isOriginalTaxable = originalTaxRatio > 0;
-          const returnGrossAmount = Math.abs(returnData.totalAmount || 0);
-          const returnTaxAmount = isOriginalTaxable
-            ? Math.round(returnGrossAmount * originalTaxRatio)
-            : 0;
-          const returnTaxableAmount = isOriginalTaxable
-            ? returnGrossAmount - returnTaxAmount
-            : 0;
-          const returnExemptAmount = isOriginalTaxable
-            ? 0
-            : returnGrossAmount;
+          const { billingApi } = await import("./api/billingApi");
 
-          const returnItems = returnData.items.map((item) => ({
-            itemName: "Return Item",
-            quantity: -Math.abs(item.quantity || 1),
-            rate: item.amount / item.quantity || 0,
-            totalAmount: -Math.abs(item.amount || 0),
-            isTaxable: isOriginalTaxable,
-          }));
-          const payload = buildInvoicePayload({
-            clinicId: returnData.clinicId,
-            patientId: (purchase as any).patientId,
-            patientName: purchase.patientName,
-            patientPanVat: (purchase as any).patientPanVat,
-            totalAmount: -Math.abs(returnData.totalAmount),
-            taxableAmount: -returnTaxableAmount,
-            taxAmount: -returnTaxAmount,
-            exemptAmount: -returnExemptAmount,
-            irdEnabled: Boolean(javaClinic?.irdEnabled),
-            fiscalYear: getNepaliFiscalYear(
-              purchase.purchaseDate || new Date(),
-            ),
-            isReturn: true,
-            // IRD's /api/billreturn requires these two beyond a normal
-            // /api/bill — see IrdCbmsService.buildPayload's isReturn branch.
-            // purchase.purchaseNo is the exact value originally sent as this
-            // sale's invoice_number (createMedicinePurchase passes it as
-            // preAssignedInvoiceNumber), so it's the correct reference here.
-            refInvoiceNumber: purchase.purchaseNo,
-            reasonForReturn: returnData.notes,
-            // Matches the "CN-" convention appointment/pathology credit
-            // notes already use — cosmetic only; the underlying number still
-            // comes from the same shared sequence either way.
-            invoicePrefix: "CN",
-            items: returnItems,
-          });
+          // Send the exact payload that was queued inside the transaction.
+          // Rebuilding it here would produce a different idempotency key, and
+          // the inline attempt and the poller would each file their own
+          // credit note for the same return.
+          const payload = txOutcome.queuedPayload;
 
           const result = await billingApi.createInvoice(payload);
 
@@ -1453,10 +1586,33 @@ export const pharmacyService = {
           }
         }
       } catch (javaError: any) {
+        // No longer silently lost: the queue entry written inside the return
+        // transaction still holds the full filing, and the backend poller
+        // will drain it. Record why the inline attempt failed so the reason
+        // survives a page reload.
         console.warn(
-          "Java backend submission skipped or offline:",
+          "Pharmacy return saved; ledger filing deferred to the queue:",
           javaError.message || javaError,
         );
+        try {
+          const pendingForReturn = await getDocs(
+            query(
+              collection(db, BILLING_SYNC_OUTBOX_COLLECTION),
+              where("returnRecordId", "==", returnId),
+            ),
+          );
+
+          await Promise.all(
+            pendingForReturn.docs.map((entry) =>
+              updateDoc(entry.ref, {
+                lastError: javaError.message || String(javaError),
+                attempts: increment(1),
+              }),
+            ),
+          );
+        } catch {
+          // The entry still exists and is still pending — that is what matters.
+        }
       }
 
       return returnId;

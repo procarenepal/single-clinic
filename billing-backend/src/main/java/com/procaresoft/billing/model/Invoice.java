@@ -146,6 +146,26 @@ public class Invoice {
     @Column(name = "last_printed_by")
     private String lastPrintedBy;
 
+    /**
+     * Pointer back to the Firestore document this invoice was created from
+     * (e.g. "medicinePurchases" / "4Jb6EmIiR4oBV5zFETcF"). Lets the backend
+     * mirror IRD sync state onto exactly the right document instead of
+     * guessing by invoice number, and gives reconciliation an exact join key
+     * rather than relying on each module's differing number field.
+     *
+     * Null for rows created before this existed, and for the historical rows
+     * whose Firestore documents were wiped — those are marked
+     * 'legacy_wiped' so they can be explained rather than mistaken for drift.
+     */
+    @Column(name = "source_collection", length = 64)
+    private String sourceCollection;
+
+    @Column(name = "source_doc_id", length = 64)
+    private String sourceDocId;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
     // Invoice Items
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<InvoiceItem> items = new ArrayList<>();

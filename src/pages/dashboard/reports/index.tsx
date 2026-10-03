@@ -51,6 +51,7 @@ import { OutstandingBalancesReport } from "./OutstandingBalancesReport";
 import { IrdSyncFailuresReport } from "./IrdSyncFailuresReport";
 import { Schedule5Report } from "./Schedule5Report";
 import { BillingAuditLogReport } from "./BillingAuditLogReport";
+import { LedgerReconciliationReport } from "./LedgerReconciliationReport";
 import { PackageExpiryReport } from "./PackageExpiryReport";
 
 // Types
@@ -3070,6 +3071,18 @@ export default function ReportsPage() {
             }
           >
             <Schedule5Report />
+          </Tab>
+
+          <Tab
+            key="ledger-reconciliation"
+            title={
+              <span className="flex items-center gap-2">
+                <IoReceiptOutline className="w-4 h-4" />
+                Ledger Reconciliation
+              </span>
+            }
+          >
+            <LedgerReconciliationReport />
           </Tab>
 
           <Tab
