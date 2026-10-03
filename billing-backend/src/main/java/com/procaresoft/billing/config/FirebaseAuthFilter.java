@@ -6,6 +6,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
 import com.google.firebase.cloud.FirestoreClient;
+import com.procaresoft.billing.service.CallerAuthorizationService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,6 +51,12 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
 
     private static final Map<String, CachedClinic> CLINIC_CACHE =
             new ConcurrentHashMap<>();
+
+    private final CallerAuthorizationService callerAuthorizationService;
+
+    public FirebaseAuthFilter(CallerAuthorizationService callerAuthorizationService) {
+        this.callerAuthorizationService = callerAuthorizationService;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -117,8 +124,26 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             return;
         }
 
+        // What this caller may do to the ledger, resolved here so every
+        // endpoint can ask rather than each one re-deriving it. Same
+        // failure semantics as the clinic lookup above: an answer that
+        // cannot be determined is retryable, not a refusal.
+        CallerAuthorizationService.Caller caller;
+
+        try {
+            caller = callerAuthorizationService.resolve(decodedToken.getUid());
+        } catch (Exception e) {
+            log.error("Could not determine the permissions of authenticated uid {} — failing this request as retryable",
+                    decodedToken.getUid(), e);
+            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            response.getWriter().write("Could not check your permissions right now — please retry");
+
+            return;
+        }
+
         request.setAttribute("userUid", decodedToken.getUid());
         request.setAttribute("clinicId", clinicId);
+        request.setAttribute("caller", caller);
 
         // Deliberately outside the try/catch above: a failure raised further
         // down the chain is not an authentication problem, and reporting it as

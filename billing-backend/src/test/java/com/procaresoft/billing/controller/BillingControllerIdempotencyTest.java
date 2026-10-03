@@ -1,6 +1,7 @@
 package com.procaresoft.billing.controller;
 
 import com.procaresoft.billing.dto.InvoiceRequestDto;
+import com.procaresoft.billing.service.CallerAuthorizationService;
 import com.procaresoft.billing.model.Invoice;
 import com.procaresoft.billing.repository.InvoiceRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,6 +59,11 @@ class BillingControllerIdempotencyTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("clinicId", clinicId);
         request.setAttribute("userUid", userUid);
+        // Writing to the ledger now requires the caller to hold billing
+        // access, which FirebaseAuthFilter resolves and attaches. This test is
+        // about idempotency, so it stands in a caller who is permitted.
+        request.setAttribute("caller", new CallerAuthorizationService.Caller(
+                userUid, "staff", false, true));
         return request;
     }
 

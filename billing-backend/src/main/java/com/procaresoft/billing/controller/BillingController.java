@@ -1,6 +1,7 @@
 package com.procaresoft.billing.controller;
 
 import com.procaresoft.billing.dto.InvoiceRequestDto;
+import com.procaresoft.billing.service.CallerAuthorizationService;
 import com.procaresoft.billing.dto.LedgerRecordDto;
 import com.procaresoft.billing.model.Invoice;
 import com.procaresoft.billing.model.InvoiceItem;
@@ -56,6 +57,42 @@ public class BillingController {
         return clinicId;
     }
 
+    /**
+     * Refuse a ledger write by anyone the clinic has not given a billing
+     * screen to. Mirrors what the UI and firestore.rules already enforce —
+     * this API bypassed both, so until now any signed-in user could create
+     * invoices or draw numbers from the IRD sequence by calling it directly.
+     */
+    private CallerAuthorizationService.Caller requireLedgerWrite(HttpServletRequest httpRequest) {
+        CallerAuthorizationService.Caller caller =
+                (CallerAuthorizationService.Caller) httpRequest.getAttribute("caller");
+
+        if (caller == null || !caller.mayWriteLedger()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You do not have billing access in this clinic");
+        }
+
+        return caller;
+    }
+
+    /**
+     * Stricter gate for the actions that void an invoice or rewrite its IRD
+     * state. These are not ordinary billing: they change what the tax
+     * authority has been told, so they belong to an administrator — the same
+     * line firestore.rules already draws for outbox status transitions.
+     */
+    private CallerAuthorizationService.Caller requireLedgerAdmin(HttpServletRequest httpRequest) {
+        CallerAuthorizationService.Caller caller =
+                (CallerAuthorizationService.Caller) httpRequest.getAttribute("caller");
+
+        if (caller == null || !caller.admin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only a clinic administrator can change the IRD state of an invoice");
+        }
+
+        return caller;
+    }
+
     private String requireUserUid(HttpServletRequest httpRequest) {
         return (String) httpRequest.getAttribute("userUid");
     }
@@ -65,6 +102,7 @@ public class BillingController {
             HttpServletRequest httpRequest) {
 
         String clinicId = requireClinicId(httpRequest);
+        requireLedgerWrite(httpRequest);
         String userUid = requireUserUid(httpRequest);
 
         return ResponseEntity.ok(invoiceCreationService.createFromRequest(request, clinicId, userUid));
@@ -143,6 +181,7 @@ public class BillingController {
             HttpServletRequest httpRequest) {
 
         String clinicId = requireClinicId(httpRequest);
+        requireLedgerAdmin(httpRequest);
         String collection = body.get("sourceCollection");
         String docId = body.get("sourceDocId");
 
@@ -204,6 +243,7 @@ public class BillingController {
             @Valid @RequestBody com.procaresoft.billing.dto.ReserveInvoiceNumberRequestDto request,
             HttpServletRequest httpRequest) {
         String clinicId = requireClinicId(httpRequest);
+        requireLedgerWrite(httpRequest);
         String invoiceNumber = invoiceSequenceService.generateNextInvoiceNumber(
                 clinicId, request.getFiscalYear(), request.getPrefix());
 
@@ -234,6 +274,7 @@ public class BillingController {
             @Valid @RequestBody com.procaresoft.billing.dto.IrdSyncRequestDto request,
             HttpServletRequest httpRequest) {
         String clinicId = requireClinicId(httpRequest);
+        requireLedgerAdmin(httpRequest);
 
         return invoiceRepository.findById(id).map(invoice -> {
             if (!clinicId.equals(invoice.getClinicId())) {
@@ -276,6 +317,7 @@ public class BillingController {
             @Valid @RequestBody com.procaresoft.billing.dto.CancelInvoiceRequestDto request,
             HttpServletRequest httpRequest) {
         String clinicId = requireClinicId(httpRequest);
+        requireLedgerAdmin(httpRequest);
         String userUid = requireUserUid(httpRequest);
 
         return invoiceRepository.findById(id).map(invoice -> {
@@ -312,6 +354,7 @@ public class BillingController {
             @PathVariable Long id,
             HttpServletRequest httpRequest) {
         String clinicId = requireClinicId(httpRequest);
+        requireLedgerWrite(httpRequest);
         String userUid = requireUserUid(httpRequest);
 
         return invoiceRepository.findById(id).map(invoice -> {
