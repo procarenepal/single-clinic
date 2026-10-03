@@ -389,6 +389,10 @@ export const pharmacyService = {
             batchAllocations: batchesUsed.map((b) => ({
               stockDocId: b.stockDocId,
               quantity: b.qty,
+              // Which pool this quantity left. Without it a return credited
+              // currentStock unconditionally, quietly turning
+              // doctor-received scheme stock into bought stock.
+              isSchemeStock: stockType === "scheme",
             })),
           });
         }
@@ -1196,7 +1200,7 @@ export const pharmacyService = {
         // stock count still ends up numerically correct.
         const restorationPlans: Record<
           string,
-          { stockRef: any; quantity: number }[]
+          { stockRef: any; quantity: number; isSchemeStock: boolean }[]
         > = {};
 
         for (const item of medicineItems) {
@@ -1204,9 +1208,21 @@ export const pharmacyService = {
             (i: any) => i.id === item.purchaseItemId,
           );
           const allocations = (originalItem as any)?.batchAllocations as
-            | { stockDocId: string; quantity: number }[]
+            | {
+                stockDocId: string;
+                quantity: number;
+                isSchemeStock?: boolean;
+              }[]
             | undefined;
-          const plan: { stockRef: any; quantity: number }[] = [];
+          // Sales recorded before the pool was persisted fall back to the
+          // item's own stockType, which has always been stored.
+          const soldFromScheme =
+            (originalItem as any)?.stockType === "scheme";
+          const plan: {
+            stockRef: any;
+            quantity: number;
+            isSchemeStock: boolean;
+          }[] = [];
 
           if (allocations && allocations.length > 0) {
             let remaining = item.quantity;
@@ -1219,6 +1235,7 @@ export const pharmacyService = {
                 plan.push({
                   stockRef: doc(db, "medicineStock", alloc.stockDocId),
                   quantity: take,
+                  isSchemeStock: alloc.isSchemeStock ?? soldFromScheme,
                 });
                 remaining -= take;
               }
@@ -1236,7 +1253,11 @@ export const pharmacyService = {
             const fallbackRef = fallbackStockRefs[item.medicineId];
 
             if (fallbackRef) {
-              plan.push({ stockRef: fallbackRef, quantity: item.quantity });
+              plan.push({
+                stockRef: fallbackRef,
+                quantity: item.quantity,
+                isSchemeStock: soldFromScheme,
+              });
             }
           }
 
@@ -1389,6 +1410,11 @@ export const pharmacyService = {
         // returned quantity to the specific batch doc(s) it was actually
         // sold from (restorationPlans), not just "some" stock doc for the
         // medicine.
+        const parentRestores: Record<
+          string,
+          { regularQty: number; schemeQty: number }
+        > = {};
+
         for (const item of medicineItems) {
           const itemType = purchaseItemTypeMap.get(item.purchaseItemId);
 
@@ -1401,18 +1427,37 @@ export const pharmacyService = {
 
             if (!currentStockData) continue;
 
-            const newStock =
-              (currentStockData.currentStock || 0) + entry.quantity;
+            // Back to the pool it left. Crediting currentStock regardless
+            // silently converted doctor-received scheme stock into bought
+            // stock — sellable, and valued at the wrong price.
+            const pool = entry.isSchemeStock ? "schemeStock" : "currentStock";
+            const newStock = (currentStockData[pool] || 0) + entry.quantity;
 
             transaction.update(entry.stockRef, {
-              currentStock: newStock,
+              [pool]: newStock,
               updatedBy: returnData.createdBy,
               updatedAt: now,
             });
             // Keep the cache in sync in case a later plan entry (a
             // different item) touches the same batch doc again in this
             // same transaction.
-            currentStockData.currentStock = newStock;
+            currentStockData[pool] = newStock;
+
+            // The sale decremented the medicine's roll-up total; the return
+            // never put it back, so every return left medicines.totalStock
+            // permanently below the sum of its batches. Two numbers that are
+            // meant to agree, drifting silently.
+            if (!parentRestores[item.medicineId]) {
+              parentRestores[item.medicineId] = {
+                regularQty: 0,
+                schemeQty: 0,
+              };
+            }
+            if (entry.isSchemeStock) {
+              parentRestores[item.medicineId].schemeQty += entry.quantity;
+            } else {
+              parentRestores[item.medicineId].regularQty += entry.quantity;
+            }
 
             const logRef = doc(collection(db, "stockTransactions"));
 
@@ -1422,6 +1467,9 @@ export const pharmacyService = {
               quantity: entry.quantity,
               previousStock: newStock - entry.quantity,
               newStock,
+              // Which pool the quantity went back to, so the movement can be
+              // traced the same way a sale's can.
+              isSchemeStock: entry.isSchemeStock,
               unitPrice: Math.abs(item.amount / item.quantity),
               totalAmount: Math.abs(
                 (item.amount / item.quantity) * entry.quantity,
@@ -1433,6 +1481,24 @@ export const pharmacyService = {
               createdBy: returnData.createdBy,
               createdAt: now,
             });
+          }
+        }
+
+        // Put the medicine's roll-up total back, matching the decrement the
+        // sale applied. Without this every return left medicines.totalStock
+        // permanently below the sum of its own batches.
+        for (const [medicineId, qty] of Object.entries(parentRestores)) {
+          const updates: any = {};
+
+          if (qty.regularQty > 0) updates.totalStock = increment(qty.regularQty);
+          if (qty.schemeQty > 0) {
+            updates.totalSchemeStock = increment(qty.schemeQty);
+          }
+          if (Object.keys(updates).length > 0) {
+            transaction.update(
+              doc(collection(db, "medicines"), medicineId),
+              updates,
+            );
           }
         }
 
