@@ -16,6 +16,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Verifies a Firebase ID token on every request and resolves the caller's
@@ -31,6 +33,23 @@ import java.io.IOException;
 public class FirebaseAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(FirebaseAuthFilter.class);
+
+    /**
+     * How long a resolved clinic assignment is trusted without re-reading.
+     * Deliberately short: a minute is already enough to collapse the bursts of
+     * requests a single screen makes, which is where the availability win
+     * comes from, while keeping the window in which a changed assignment is
+     * still being served down to something a person would not notice.
+     */
+    private static final long TTL_MS = 60 * 1000L;
+    /**
+     * How long a stale entry is held when Firestore cannot be reached, so an
+     * outage does not turn into a per-request retry storm against it.
+     */
+    private static final long STALE_GRACE_MS = 60 * 1000L;
+
+    private static final Map<String, CachedClinic> CLINIC_CACHE =
+            new ConcurrentHashMap<>();
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -109,31 +128,100 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
     }
 
     /**
-     * The caller's clinic, read from their own Firestore user document.
+     * The caller's clinic, read from their own Firestore user document and
+     * cached briefly.
+     *
+     * Why the cache exists: this is on the path of EVERY request, so without
+     * it a momentary inability to reach Firestore stops all billing at once.
+     * That is not hypothetical — it was observed here as
+     * "UNAVAILABLE: Unable to resolve host firestore.googleapis.com", and
+     * every invoice creation failed until the process was restarted. A clinic
+     * assignment changes about never, so re-reading it per request bought
+     * nothing and cost availability.
+     *
+     * A stale entry is deliberately preferred over an error when the read
+     * fails: answering from a slightly old clinic assignment is strictly
+     * better than refusing to bill, and the assignment is the same value it
+     * would have read anyway. Only a cold cache turns a read failure into a
+     * 503.
+     *
+     * Deactivation is NOT weakened by this. It is enforced by
+     * verifyIdToken(token, checkRevoked=true) above, which is a separate check
+     * against Firebase Auth and runs on every request regardless of this
+     * cache. What a cache entry can delay is a *clinic reassignment* taking
+     * effect, by at most the TTL.
      *
      * Returns null only when the answer is genuinely "this user has no
      * clinic" — the document is missing, or present without a clinicId. A
-     * failure to *read* it is rethrown rather than flattened into null, so the
-     * two cases can be answered differently: one is a 403, the other a 503.
+     * null is never itself cached, and any existing entry is dropped when one
+     * is seen, so a user who is GIVEN a clinic can bill as soon as the next
+     * read happens.
+     *
+     * The converse is not immediate, and that is the honest cost of caching:
+     * a user whose clinic is removed or changed keeps resolving to the old one
+     * until their entry expires — verified, so it is a documented property
+     * rather than a surprise. It is not how access is revoked; that is
+     * verifyIdToken(checkRevoked=true) above, which consults Firebase Auth on
+     * every request and is unaffected by this cache.
      */
     private String resolveClinicId(String uid) {
-        Firestore firestore = FirestoreClient.getFirestore();
+        CachedClinic cached = CLINIC_CACHE.get(uid);
+        long now = System.currentTimeMillis();
+
+        if (cached != null && now < cached.expiresAt) {
+            return cached.clinicId;
+        }
+
         DocumentSnapshot userDoc;
 
         try {
+            Firestore firestore = FirestoreClient.getFirestore();
+
             userDoc = firestore.collection("users").document(uid).get().get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
 
             throw new IllegalStateException("Interrupted reading users/" + uid, e);
         } catch (Exception e) {
+            if (cached != null) {
+                log.warn("Could not re-read users/{} ({}) — serving the cached clinic {} so billing keeps working",
+                        uid, e.getMessage(), cached.clinicId);
+                // Hold the stale value briefly rather than hammering a
+                // Firestore that is currently unreachable on every request.
+                CLINIC_CACHE.put(uid, new CachedClinic(cached.clinicId, now + STALE_GRACE_MS));
+
+                return cached.clinicId;
+            }
+
             throw new IllegalStateException("Could not read users/" + uid, e);
         }
 
         if (!userDoc.exists()) {
+            CLINIC_CACHE.remove(uid);
+
             return null;
         }
 
-        return userDoc.getString("clinicId");
+        String clinicId = userDoc.getString("clinicId");
+
+        if (clinicId == null || clinicId.isBlank()) {
+            CLINIC_CACHE.remove(uid);
+
+            return null;
+        }
+
+        CLINIC_CACHE.put(uid, new CachedClinic(clinicId, now + TTL_MS));
+
+        return clinicId;
+    }
+
+    private static final class CachedClinic {
+        private final String clinicId;
+        private final long expiresAt;
+
+        private CachedClinic(String clinicId, long expiresAt) {
+            this.clinicId = clinicId;
+            this.expiresAt = expiresAt;
+        }
     }
 }
