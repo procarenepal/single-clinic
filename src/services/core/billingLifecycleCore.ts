@@ -187,6 +187,38 @@ export async function runBlockingJavaSyncThenFirestoreWrite<R>(
   }
 }
 
+/**
+ * Where the Firestore copy of this invoice belongs.
+ *
+ * The backend's create endpoint is idempotent: resend the same invoice and it
+ * returns the one it already made rather than minting a duplicate ledger row.
+ * That is the right behaviour for the tax ledger, but the client had no way to
+ * notice it had happened — it wrote a brand-new Firestore document every time,
+ * so one ledger row ended up with two app invoices showing the same number.
+ *
+ * The response carries the pointer the ledger row actually holds, so a replay
+ * is detectable: the returned sourceDocId is the document the FIRST create
+ * used, not the id we just minted. Resolving the write target from that
+ * pointer keeps one invariant true — the Firestore document for a ledger row
+ * is the document that ledger row points at.
+ *
+ * A replay whose target is missing (a pointer left dangling by an earlier
+ * failure) is still written, which repairs the dangle instead of adding a
+ * second document beside it.
+ */
+export function resolveReplayTarget(
+  javaResult: InvoiceResponseDto,
+  intendedDocId: string,
+): { isReplay: boolean; targetDocId: string } {
+  const pointer = javaResult.sourceDocId;
+
+  if (!pointer || pointer === intendedDocId) {
+    return { isReplay: false, targetDocId: intendedDocId };
+  }
+
+  return { isReplay: true, targetDocId: pointer };
+}
+
 /* ------------------------------------------------------------------ *
  * Credit notes
  * ------------------------------------------------------------------ */

@@ -216,6 +216,16 @@ export interface InvoiceResponseDto {
   irdSynced: boolean;
   irdSyncDate?: string;
   cbmsResponseCode?: string;
+  /**
+   * The Firestore document this ledger row belongs to, as the backend has it
+   * recorded. On a fresh create it is the id the caller just sent. On an
+   * idempotent replay it is the id of the document the ORIGINAL create used —
+   * which is how a caller can tell the two apart (see resolveReplayTarget).
+   * /create returns the whole Invoice entity, so these have always been on
+   * the wire; they were simply not declared here.
+   */
+  sourceCollection?: string;
+  sourceDocId?: string;
 }
 
 /**

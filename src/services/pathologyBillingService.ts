@@ -31,6 +31,7 @@ import {
   resolveInvoicePrefix,
   javaResultSyncFields,
   runBlockingJavaSyncThenFirestoreWrite,
+  resolveReplayTarget,
   buildCreditNoteSkeleton,
 } from "./core/billingLifecycleCore";
 
@@ -491,8 +492,28 @@ export const pathologyBillingService = {
         updatedAt: now,
       };
 
-      await setDoc(newBillingRef, data);
-      const docRef = newBillingRef;
+        // The backend may have returned an invoice it had already created
+      // (idempotent replay). Writing our own fresh document in that case
+      // would leave one ledger row with two app invoices under the same
+      // number, so follow the pointer the ledger row actually holds.
+      const { isReplay, targetDocId } = resolveReplayTarget(
+        javaResult,
+        newBillingRef.id,
+      );
+      const targetRef = isReplay
+        ? doc(db, PATHOLOGY_BILLING_COLLECTION, targetDocId)
+        : newBillingRef;
+
+      if (isReplay) {
+        const alreadyThere = await getDoc(targetRef);
+
+        if (alreadyThere.exists()) {
+          return { id: targetRef.id, invoiceNumber: javaResult.invoiceNumber };
+        }
+      }
+
+      await setDoc(targetRef, data);
+      const docRef = targetRef;
 
       console.log(
         "Pathology billing created with ID:",
