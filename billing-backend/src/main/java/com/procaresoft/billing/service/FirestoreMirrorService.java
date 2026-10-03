@@ -103,12 +103,29 @@ public class FirestoreMirrorService {
                     .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             patch.put(F_STATE_SOURCE, "java");
 
+            var ref = firestore.collection(collection).document(docId);
+
+            // A mirror patches a document that exists; it must never bring one
+            // into being. set(merge()) creates a missing document, and on the
+            // appointment/pathology create path the client pre-generates the
+            // document id and sends it here BEFORE writing the document — so
+            // this wrote a six-field stub, which turned the client's own
+            // create into an update and made firestore.rules' IRD-field
+            // lockdown reject it. The invoice then existed in the tax ledger
+            // but never in the app: precisely the divergence this mirror was
+            // built to remove. Nothing is lost by skipping: the client is
+            // about to persist these same values from the response to the very
+            // call that triggered this mirror.
+            if (!ref.get().get().exists()) {
+                log.debug("Source document {}/{} does not exist yet — nothing to mirror for {}",
+                        collection, docId, invoice.getInvoiceNumber());
+
+                return false;
+            }
+
             // merge() so the document's own business data is untouched — this
             // is a patch of six fields, not a document replacement.
-            firestore.collection(collection)
-                    .document(docId)
-                    .set(patch, SetOptions.merge())
-                    .get();
+            ref.set(patch, SetOptions.merge()).get();
 
             auditLogService.record("Invoice", invoice.getId(), "MIRROR",
                     "system", invoice.getClinicId(),
