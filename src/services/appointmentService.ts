@@ -20,6 +20,7 @@ import {
 import { db } from "@/config/firebase";
 import { cacheService } from "@/services/cacheService";
 import { Appointment } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 type AppointmentSnapshotHandler = (appointments: Appointment[]) => void;
 type AppointmentErrorHandler = (error: Error) => void;
@@ -291,9 +292,12 @@ export const appointmentService = {
   async getAppointmentsByPatient(patientId: string): Promise<Appointment[]> {
     try {
       const appointmentsCollection = collection(db, "appointments");
+      // Scoped to the clinic so Firestore can authorise the read — the
+      // rule requires resource.data.clinicId to match the caller's clinic.
       const q = query(
         appointmentsCollection,
         where("patientId", "==", patientId),
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);
@@ -322,9 +326,12 @@ export const appointmentService = {
     try {
       // No clinicId in signature; leave cache out for now or extend API
       const appointmentsCollection = collection(db, "appointments");
+      // Scoped to the clinic so Firestore can authorise the read — the
+      // rule requires resource.data.clinicId to match the caller's clinic.
       const q = query(
         appointmentsCollection,
         where("doctorId", "==", doctorId),
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);
@@ -352,13 +359,16 @@ export const appointmentService = {
   async getAppointmentsByExpert(expertId: string): Promise<Appointment[]> {
     try {
       const appointmentsCollection = collection(db, "appointments");
+      const scopedClinicId = resolveClinicId();
       const q1 = query(
         appointmentsCollection,
         where("assignedExpertId", "==", expertId),
+        where("clinicId", "==", scopedClinicId),
       );
       const q2 = query(
         appointmentsCollection,
         where("doctorId", "==", expertId),
+        where("clinicId", "==", scopedClinicId),
       );
 
       const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
@@ -735,11 +745,20 @@ export const appointmentService = {
    */
   subscribeToDoctorAppointments(
     doctorId: string,
+    clinicId: string,
     onData: AppointmentSnapshotHandler,
     onError?: AppointmentErrorHandler,
   ) {
     const appointmentsCollection = collection(db, "appointments");
-    const constraints: any[] = [where("doctorId", "==", doctorId)];
+    // clinicId has to be IN the query, not just implied: the security rule
+    // authorises a read only when resource.data.clinicId matches the caller's
+    // clinic, and Firestore rejects a listen it cannot prove is so limited.
+    // Without it this subscription failed for every non-admin user, because
+    // clinic-admin alone passes via the rule's super-admin branch.
+    const constraints: any[] = [
+      where("doctorId", "==", doctorId),
+      where("clinicId", "==", clinicId),
+    ];
 
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);
@@ -771,11 +790,16 @@ export const appointmentService = {
    */
   subscribeToExpertAppointments(
     expertId: string,
+    clinicId: string,
     onData: AppointmentSnapshotHandler,
     onError?: AppointmentErrorHandler,
   ) {
     const appointmentsCollection = collection(db, "appointments");
-    const constraints: any[] = [where("assignedExpertId", "==", expertId)];
+    // See subscribeToDoctorAppointments — same rule constraint.
+    const constraints: any[] = [
+      where("assignedExpertId", "==", expertId),
+      where("clinicId", "==", clinicId),
+    ];
 
     // Removed orderBy to avoid composite index requirement
     const q = query(appointmentsCollection, ...constraints);

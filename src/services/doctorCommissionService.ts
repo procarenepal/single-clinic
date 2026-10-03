@@ -29,6 +29,7 @@ import {
   reduceCommissionAmount as reduceCommissionAmountCore,
   getCommissionsByBillingId as getCommissionsByBillingIdCore,
 } from "@/services/clinicianCommissionService";
+import { resolveClinicId } from "./currentClinic";
 
 const DOCTOR_CONFIG: ClinicianCommissionConfig = {
   entityType: "doctor",
@@ -141,6 +142,10 @@ class DoctorCommissionService {
           collection(db, this.collectionName),
           where("billingId", "==", billing.id),
           where("doctorId", "==", refDoc.doctorId),
+          // Required for Firestore to authorise the read (see currentClinic.ts).
+          // Without it this duplicate guard threw for every non-admin user,
+          // which would have let a second commission be written.
+          where("clinicId", "==", resolveClinicId(billing.clinicId)),
         );
         const existingDocs = await getDocs(existingQuery);
 

@@ -15,6 +15,7 @@ import {
 
 import { db } from "../config/firebase";
 import { PatientPackage } from "../types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const PATIENT_PACKAGES_COLLECTION = "patientPackages";
 
@@ -77,6 +78,8 @@ export const patientPackageService = {
       const q = query(
         collection(db, PATIENT_PACKAGES_COLLECTION),
         where("patientId", "==", patientId),
+        // Required for Firestore to authorise the read (see currentClinic.ts).
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
       const snapshot = await getDocs(q);
 

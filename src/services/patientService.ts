@@ -22,6 +22,7 @@ import { Patient } from "../types/models";
 
 import { cacheService } from "@/services/cacheService";
 import { sendWelcomeSMS } from "@/services/sendMessageService";
+import { resolveClinicId } from "./currentClinic";
 
 const PATIENTS_COLLECTION = "patients";
 
@@ -446,11 +447,13 @@ export const patientService = {
   ): Promise<Patient[]> {
     try {
       const patientsRef = collection(db, PATIENTS_COLLECTION);
-      const constraints: any[] = [where("doctorId", "==", doctorId)];
-
-      if (clinicId) {
-        constraints.push(where("clinicId", "==", clinicId));
-      }
+      // Always clinic-scoped: Firestore rejects the read otherwise, and the
+      // optional form meant a caller omitting clinicId silently got denied
+      // rather than falling back (see currentClinic.ts).
+      const constraints: any[] = [
+        where("doctorId", "==", doctorId),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      ];
       const q = query(patientsRef, ...constraints);
       const querySnapshot = await getDocs(q);
 
@@ -830,8 +833,8 @@ export const patientService = {
       for (const variant of variants) {
         const q = query(
           collection(db, PATIENTS_COLLECTION),
-
           where("mobile", "==", variant),
+          where("clinicId", "==", resolveClinicId(clinicId)),
         );
         const snap = await getDocs(q);
 
@@ -868,8 +871,8 @@ export const patientService = {
     try {
       const q = query(
         collection(db, PATIENTS_COLLECTION),
-
         where("email", "==", email.trim().toLowerCase()),
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
       const snap = await getDocs(q);
 

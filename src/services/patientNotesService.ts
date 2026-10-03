@@ -1,5 +1,6 @@
 import {
   collection,
+  where,
   doc,
   setDoc,
   getDocs,
@@ -12,6 +13,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { PatientNotes } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION_NAME = "patientNotes";
 
@@ -86,7 +88,7 @@ export class PatientNotesService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-
+        where("clinicId", "==", resolveClinicId(clinicId)),
         orderBy("lastModifiedAt", "desc"),
       );
 

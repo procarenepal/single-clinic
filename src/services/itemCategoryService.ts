@@ -12,6 +12,7 @@ import {
 
 import { db } from "../config/firebase";
 import { ItemCategory } from "../types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const ITEM_CATEGORIES_COLLECTION = "itemCategories";
 
@@ -27,7 +28,12 @@ export const itemCategoryService = {
   ): Promise<ItemCategory[]> {
     try {
       const categoriesRef = collection(db, ITEM_CATEGORIES_COLLECTION);
-      const constraints: any[] = [where("isActive", "==", true)];
+      // Required for Firestore to authorise the read: the rule matches
+      // resource.data.clinicId against the caller's clinic.
+      const constraints: any[] = [
+        where("isActive", "==", true),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      ];
 
       const q = query(categoriesRef, ...constraints);
       const querySnapshot = await getDocs(q);

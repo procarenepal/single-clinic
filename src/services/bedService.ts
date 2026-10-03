@@ -14,6 +14,7 @@ import {
 
 import { db } from "../config/firebase";
 import { Bed, BedCategory, BedAllotment } from "../types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const BED_CATEGORIES_COLLECTION = "bedCategories";
 const BEDS_COLLECTION = "beds";
@@ -350,6 +351,7 @@ export const bedService = {
       const activeAllotmentsQuery = query(
         collection(db, BED_ALLOTMENTS_COLLECTION),
         where("bedId", "==", id),
+        where("clinicId", "==", resolveClinicId()),
         where("status", "==", "active"),
       );
       const activeAllotmentsSnap = await getDocs(activeAllotmentsQuery);

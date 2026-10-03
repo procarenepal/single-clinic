@@ -15,6 +15,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { Enquiry, EnquiryStatus } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const ENQUIRIES_COLLECTION = "enquiries";
 
@@ -92,11 +93,11 @@ export const enquiryService = {
     filters?: EnquiryFilters,
   ): Promise<Enquiry[]> {
     try {
-      const constraints: QueryConstraint[] = [];
-
-      if (_clinicId) {
-        constraints.push(where("clinicId", "==", _clinicId));
-      }
+      // Always clinic-scoped: an unscoped read is refused for every
+      // non-admin caller, so the optional form could only fail, never widen.
+      const constraints: QueryConstraint[] = [
+        where("clinicId", "==", resolveClinicId(_clinicId)),
+      ];
 
       // Branch filter removed for standalone mode
 

@@ -308,11 +308,13 @@ export default function AppointmentsPage() {
       ? isExpertUser
         ? appointmentService.subscribeToExpertAppointments(
           currentDoctorId,
+          clinicId,
           handleSnapshot,
           handleError,
         )
         : appointmentService.subscribeToDoctorAppointments(
           currentDoctorId,
+          clinicId,
           handleSnapshot,
           handleError,
         )

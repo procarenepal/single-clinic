@@ -1599,6 +1599,7 @@ export const pharmacyService = {
             query(
               collection(db, BILLING_SYNC_OUTBOX_COLLECTION),
               where("returnRecordId", "==", returnId),
+              where("clinicId", "==", returnData.clinicId),
             ),
           );
 

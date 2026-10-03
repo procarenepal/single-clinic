@@ -13,6 +13,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { StaffMember, StaffAttendance, ClinicHoliday } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const STAFF_COLLECTION = "staff";
 const ATTENDANCE_COLLECTION = "staff_attendance";
@@ -85,6 +86,8 @@ export const hrService = {
     const q = query(
       collection(db, ATTENDANCE_COLLECTION),
       where("staffId", "==", attendance.staffId),
+      // Required for Firestore to authorise the read (see currentClinic.ts).
+      where("clinicId", "==", resolveClinicId(attendance.clinicId)),
     );
 
     const startOfDay = new Date(attendance.date);

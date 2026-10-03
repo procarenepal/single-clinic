@@ -13,6 +13,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { NotesSection } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION_NAME = "notes_sections";
 
@@ -46,7 +47,13 @@ export const notesSectionService = {
   async getSectionsByClinic(clinicId: string): Promise<NotesSection[]> {
     try {
       // Simplify query to avoid composite index requirement
-      const q = query(collection(db, COLLECTION_NAME));
+      // Scoped to the clinic: the rule matches resource.data.clinicId, so an
+      // unfiltered read is rejected for everyone except clinic-admin. This also
+      // fixes the clinicId argument having been ignored entirely.
+      const q = query(
+        collection(db, COLLECTION_NAME),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
 
       const querySnapshot = await getDocs(q);
 
@@ -77,7 +84,13 @@ export const notesSectionService = {
   async getActiveSectionsByClinic(clinicId: string): Promise<NotesSection[]> {
     try {
       // Simplify query to avoid composite index requirement
-      const q = query(collection(db, COLLECTION_NAME));
+      // Scoped to the clinic: the rule matches resource.data.clinicId, so an
+      // unfiltered read is rejected for everyone except clinic-admin. This also
+      // fixes the clinicId argument having been ignored entirely.
+      const q = query(
+        collection(db, COLLECTION_NAME),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
 
       const querySnapshot = await getDocs(q);
 
@@ -236,8 +249,8 @@ export const notesSectionService = {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-
         where("sectionKey", "==", key),
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
 
       const querySnapshot = await getDocs(q);

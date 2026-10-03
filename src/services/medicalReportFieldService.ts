@@ -13,6 +13,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { MedicalReportField } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION_NAME = "medical_report_fields";
 
@@ -46,7 +47,13 @@ export const medicalReportFieldService = {
   async getFieldsByClinic(clinicId: string): Promise<MedicalReportField[]> {
     try {
       // Simplify query to avoid composite index requirement
-      const q = query(collection(db, COLLECTION_NAME));
+      // Scoped to the clinic: the rule matches resource.data.clinicId, so an
+      // unfiltered read is rejected for everyone except clinic-admin. This also
+      // fixes the clinicId argument having been ignored entirely.
+      const q = query(
+        collection(db, COLLECTION_NAME),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
 
       const querySnapshot = await getDocs(q);
 
@@ -264,8 +271,8 @@ export const medicalReportFieldService = {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-
         where("fieldKey", "==", key),
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
 
       const querySnapshot = await getDocs(q);

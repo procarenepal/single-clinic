@@ -744,7 +744,7 @@ export default function App() {
                           />
                           <Route
                             element={
-                              <RbacProtectedRoute pagePath="/dashboard/front-office">
+                              <RbacProtectedRoute pagePath="/dashboard/follow-ups">
                                 <FollowupsPage />
                               </RbacProtectedRoute>
                             }

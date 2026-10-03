@@ -32,6 +32,7 @@ import { auditLogService, AuditLogFilters } from "@/services/auditLogService";
 import { AuditLog } from "@/types/models";
 import { clinicService } from "@/services/clinicService";
 import { Clinic } from "@/types/models";
+import { useAuthContext } from "@/context/AuthContext";
 
 const EVENT_TYPE_OPTIONS = [
   { key: "all", label: "All Events" },
@@ -80,9 +81,20 @@ export default function AdminLogsPage() {
   // Expanded log details
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
+  const { userData } = useAuthContext();
+
   // Load clinics for filter
   useEffect(() => {
     const loadClinics = async () => {
+      // Listing every clinic is an admin-only operation (the rules treat
+      // clinic-admin as the super admin in this single-clinic deployment).
+      // For any other role the filter has nothing to offer anyway, so skip
+      // the call rather than let it fail on every page load.
+      if (userData?.role !== "clinic-admin") {
+        setClinics([]);
+
+        return;
+      }
       try {
         const allClinics = await clinicService.getAllClinics();
 

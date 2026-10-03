@@ -1,5 +1,6 @@
 import {
   collection,
+  getDoc,
   addDoc,
   getDocs,
   doc,
@@ -12,6 +13,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { Visitor } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION_NAME = "visitors";
 
@@ -45,7 +47,13 @@ export const visitorService = {
   // Get all visitors for a clinic
   async getVisitorsByClinic(clinicId: string): Promise<Visitor[]> {
     try {
-      const q = query(collection(db, COLLECTION_NAME));
+      // Scoped to the clinic: the rule matches resource.data.clinicId, so an
+      // unfiltered read is rejected for everyone except clinic-admin. This also
+      // fixes the clinicId argument having been ignored entirely.
+      const q = query(
+        collection(db, COLLECTION_NAME),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
 
       const querySnapshot = await getDocs(q);
       const visitors: Visitor[] = [];
@@ -75,12 +83,11 @@ export const visitorService = {
   async getVisitorById(visitorId: string): Promise<Visitor | null> {
     try {
       const docRef = doc(db, COLLECTION_NAME, visitorId);
-      const docSnap = await getDocs(
-        query(
-          collection(db, COLLECTION_NAME),
-          where("__name__", "==", visitorId),
-        ),
-      );
+      // A direct document read, not a list: the rule checks this one
+      // document's own clinicId, whereas an unscoped list query is refused
+      // for every non-admin caller.
+      const single = await getDoc(docRef);
+      const docSnap = { empty: !single.exists(), docs: single.exists() ? [single] : [] };
 
       if (docSnap.empty) {
         return null;

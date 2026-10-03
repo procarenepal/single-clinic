@@ -26,6 +26,7 @@ import {
   SupplierPayment,
   SupplierPurchaseRecord,
 } from "../types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const MEDICINES_COLLECTION = "medicines";
 const MEDICINE_BRANDS_COLLECTION = "medicineBrands";
@@ -236,10 +237,12 @@ export const medicineService = {
         }
       }
 
-      const constraints: any[] = [];
-      if (clinicId) {
-        constraints.push(where("clinicId", "==", clinicId));
-      }
+      // Always clinic-scoped — an unscoped read on this collection is
+      // rejected for every non-admin caller, so making the filter optional
+      // meant "omit it and get permission-denied", never "get everything".
+      const constraints: any[] = [
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      ];
       if (typeof isActive === "boolean") {
         constraints.push(where("isActive", "==", isActive));
       }
@@ -288,9 +291,7 @@ export const medicineService = {
       const { pageSize, lastDoc, searchPrefix, branchId } = options;
       const baseConstraints: any[] = [];
 
-      if (clinicId) {
-        baseConstraints.push(where("clinicId", "==", clinicId));
-      }
+      baseConstraints.push(where("clinicId", "==", resolveClinicId(clinicId)));
 
       if (branchId) {
         baseConstraints.push(where("branchId", "==", branchId));
@@ -357,9 +358,7 @@ export const medicineService = {
     try {
       const baseConstraints: any[] = [];
 
-      if (clinicId) {
-        baseConstraints.push(where("clinicId", "==", clinicId));
-      }
+      baseConstraints.push(where("clinicId", "==", resolveClinicId(clinicId)));
 
       const q = query(collection(db, MEDICINES_COLLECTION), ...baseConstraints);
 
@@ -505,18 +504,13 @@ export const medicineService = {
     try {
       let q;
 
-      if (clinicId) {
-        q = query(
-          collection(db, MEDICINE_STOCK_COLLECTION),
-          where("medicineId", "==", medicineId),
-          where("clinicId", "==", clinicId),
-        );
-      } else {
-        q = query(
-          collection(db, MEDICINE_STOCK_COLLECTION),
-          where("medicineId", "==", medicineId),
-        );
-      }
+      // The unscoped branch could only ever fail: this collection's rule
+      // matches resource.data.clinicId, so always scope the read.
+      q = query(
+        collection(db, MEDICINE_STOCK_COLLECTION),
+        where("medicineId", "==", medicineId),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) return null;
@@ -589,18 +583,13 @@ export const medicineService = {
     try {
       let q;
 
-      if (clinicId) {
-        q = query(
-          collection(db, MEDICINE_STOCK_COLLECTION),
-          where("medicineId", "==", medicineId),
-          where("clinicId", "==", clinicId),
-        );
-      } else {
-        q = query(
-          collection(db, MEDICINE_STOCK_COLLECTION),
-          where("medicineId", "==", medicineId),
-        );
-      }
+      // The unscoped branch could only ever fail: this collection's rule
+      // matches resource.data.clinicId, so always scope the read.
+      q = query(
+        collection(db, MEDICINE_STOCK_COLLECTION),
+        where("medicineId", "==", medicineId),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
       const querySnapshot = await getDocs(q);
 
       return querySnapshot.docs.map((d) => {
@@ -757,7 +746,10 @@ export const medicineService = {
 
       for (let i = 0; i < medicineIds.length; i += BATCH_SIZE) {
         const batch = medicineIds.slice(i, i + BATCH_SIZE);
-        const constraints: any[] = [where("medicineId", "in", batch)];
+        const constraints: any[] = [
+          where("medicineId", "in", batch),
+          where("clinicId", "==", resolveClinicId(clinicId)),
+        ];
 
         const q = query(
           collection(db, MEDICINE_STOCK_COLLECTION),
@@ -1243,7 +1235,10 @@ export const medicineService = {
     limitCount: number = 50,
   ): Promise<StockTransaction[]> {
     try {
-      const constraints: any[] = [where("medicineId", "==", medicineId)];
+      const constraints: any[] = [
+        where("medicineId", "==", medicineId),
+        where("clinicId", "==", resolveClinicId()),
+      ];
 
       const q = query(
         collection(db, STOCK_TRANSACTIONS_COLLECTION),
@@ -1590,6 +1585,7 @@ export const medicineService = {
       const q = query(
         collection(db, PURCHASE_RECORDS_COLLECTION),
         where("supplierId", "==", supplierId),
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);
@@ -1624,6 +1620,7 @@ export const medicineService = {
         collection(db, PURCHASE_RECORDS_COLLECTION),
 
         where("paymentStatus", "in", ["pending", "partial"]),
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
 
       const querySnapshot = await getDocs(q);
@@ -1857,8 +1854,8 @@ export const medicineService = {
     try {
       const q = query(
         collection(db, SUPPLIER_LEDGER_ENTRIES_COLLECTION),
-
         where("supplierId", "==", supplierId),
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
 
       const snapshot = await getDocs(q);

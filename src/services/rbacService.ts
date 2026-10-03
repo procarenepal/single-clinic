@@ -982,7 +982,17 @@ export const rbacService = {
   ): Promise<UserRoleAssignment[]> {
     try {
       const assignmentsRef = collection(db, USER_ROLE_ASSIGNMENTS_COLLECTION);
-      const q = query(assignmentsRef, where("userId", "==", userId));
+      // clinicId must be part of the query, not just a parameter: the
+      // security rule authorises a list only when the query is provably
+      // limited to this clinic's assignments. Filtering on userId alone was
+      // rejected for every non-admin user — clinic-admin only worked because
+      // the rule short-circuits it as a super admin — so RBAC roles granted
+      // no access at all to the staff they were assigned to.
+      const q = query(
+        assignmentsRef,
+        where("userId", "==", userId),
+        where("clinicId", "==", clinicId),
+      );
       const querySnapshot = await getDocs(q);
 
       return querySnapshot.docs.map((doc) => doc.data() as UserRoleAssignment);

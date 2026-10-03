@@ -14,6 +14,7 @@ import {
 
 import { db, auth } from "../config/firebase";
 import { AuditLog } from "../types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const AUDIT_LOGS_COLLECTION = "audit_logs";
 
@@ -111,12 +112,14 @@ export const auditLogService = {
   }> {
     try {
       const logsRef = collection(db, AUDIT_LOGS_COLLECTION);
-      let q = query(logsRef);
-
-      // Apply filters
-      if (filters?.clinicId) {
-        q = query(q, where("clinicId", "==", filters.clinicId));
-      }
+      // Always clinic-scoped. Audit logs are readable only where
+      // resource.data.clinicId matches the caller's clinic, so leaving this
+      // to an optional filter meant any caller that omitted it got
+      // permission-denied rather than an unfiltered list.
+      let q = query(
+        logsRef,
+        where("clinicId", "==", resolveClinicId(filters?.clinicId)),
+      );
 
       if (filters?.branchId) {
         q = query(q, where("branchId", "==", filters.branchId));

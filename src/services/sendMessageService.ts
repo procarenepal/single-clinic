@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
+import { resolveClinicId } from "./currentClinic";
 
 // Collection names following the established project patterns
 const SMS_LOGS_COLLECTION = "smsLogs";
@@ -367,6 +368,7 @@ export const smsService = {
 
       const appointmentsQuery = query(
         collection(db, APPOINTMENTS_COLLECTION),
+        where("clinicId", "==", resolveClinicId()),
         where("appointmentDate", ">=", Timestamp.fromDate(tomorrow)),
         where("appointmentDate", "<=", Timestamp.fromDate(endOfTomorrow)),
         where("status", "==", "Waiting"),
@@ -590,7 +592,7 @@ export const smsService = {
     try {
       let q = query(
         collection(db, SMS_LOGS_COLLECTION),
-
+        where("clinicId", "==", resolveClinicId(clinicId)),
         limit(limitCount),
       );
 
@@ -672,6 +674,7 @@ export const smsService = {
         collection(db, SMS_TEMPLATES_COLLECTION),
 
         where("isActive", "==", true),
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
 
       const querySnapshot = await getDocs(q);
@@ -999,8 +1002,18 @@ export const smsService = {
     try {
       const [smsSettings, logsSnapshot, templatesSnapshot] = await Promise.all([
         this.getSMSSettings(clinicId),
-        getDocs(query(collection(db, SMS_LOGS_COLLECTION))),
-        getDocs(query(collection(db, SMS_TEMPLATES_COLLECTION))),
+        getDocs(
+          query(
+            collection(db, SMS_LOGS_COLLECTION),
+            where("clinicId", "==", resolveClinicId(clinicId)),
+          ),
+        ),
+        getDocs(
+          query(
+            collection(db, SMS_TEMPLATES_COLLECTION),
+            where("clinicId", "==", resolveClinicId(clinicId)),
+          ),
+        ),
       ]);
 
       const logs = logsSnapshot.docs.map((doc) => doc.data());

@@ -12,6 +12,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { MedicalReportResponse } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION_NAME = "medicalReportResponses";
 
@@ -61,8 +62,9 @@ export class MedicalReportResponseService {
       // Use a query instead of direct document access to avoid permission issues with non-existent docs
       const q = query(
         collection(db, COLLECTION_NAME),
-
         where("patientId", "==", patientId),
+        // Required for Firestore to authorise the read (see currentClinic.ts).
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);
@@ -104,7 +106,7 @@ export class MedicalReportResponseService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-
+        where("clinicId", "==", resolveClinicId(clinicId)),
         orderBy("updatedAt", "desc"),
       );
 

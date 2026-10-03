@@ -21,6 +21,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
+import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION = "patientFollowups";
 
@@ -193,6 +194,8 @@ export const followupService = {
     const q = query(
       collection(db, COLLECTION),
       where("patientId", "==", patientId),
+      // Required for Firestore to authorise the read (see currentClinic.ts).
+      where("clinicId", "==", resolveClinicId()),
     );
     const snap = await getDocs(q);
     const results = snap.docs.map((d) => mapDoc(d.id, d.data()));

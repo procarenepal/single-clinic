@@ -11,6 +11,7 @@ import {
 
 import { db } from "../config/firebase";
 import { TreatmentCategory } from "../types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const TREATMENT_CATEGORIES_COLLECTION = "treatment_categories";
 
@@ -29,18 +30,21 @@ export const treatmentCategoryService = {
       const categoriesRef = collection(db, TREATMENT_CATEGORIES_COLLECTION);
       let q;
 
+      // clinicId must be in the query for Firestore to authorise the read.
+      const scopedClinicId = resolveClinicId(clinicId);
+
       if (branchId) {
         q = query(
           categoriesRef,
-
           where("branchId", "==", branchId),
           where("isActive", "==", true),
+          where("clinicId", "==", scopedClinicId),
         );
       } else {
         q = query(
           categoriesRef,
-
           where("isActive", "==", true),
+          where("clinicId", "==", scopedClinicId),
         );
       }
 

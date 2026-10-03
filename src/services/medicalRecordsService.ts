@@ -15,6 +15,7 @@ import {
 import { db, auth } from "@/config/firebase";
 import { uploadFileToFirebase, deleteFileFromFirebase, getFileUrlFromFirebase } from "./firebaseStorageService";
 import { MedicalDocument, XrayRecord } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const DOCUMENTS_COLLECTION = "medical_documents";
 const XRAYS_COLLECTION = "xray_records";
@@ -222,6 +223,8 @@ export class MedicalRecordsService {
       const q = query(
         collection(db, DOCUMENTS_COLLECTION),
         where("patientId", "==", patientId),
+        // Required for Firestore to authorise the read (see currentClinic.ts).
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
 
       const querySnapshot = await getDocs(q);
@@ -504,6 +507,8 @@ export class MedicalRecordsService {
       const q = query(
         collection(db, XRAYS_COLLECTION),
         where("patientId", "==", patientId),
+        // Required for Firestore to authorise the read (see currentClinic.ts).
+        where("clinicId", "==", resolveClinicId(clinicId)),
       );
 
       const querySnapshot = await getDocs(q);

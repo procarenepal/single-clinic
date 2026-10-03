@@ -12,6 +12,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { PatientNoteEntry } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const COLLECTION_NAME = "patientNoteEntries";
 
@@ -62,8 +63,9 @@ export class PatientNoteEntriesService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-
         where("patientId", "==", patientId),
+        // Required for Firestore to authorise the read (see currentClinic.ts).
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);
@@ -102,9 +104,10 @@ export class PatientNoteEntriesService {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-
         where("patientId", "==", patientId),
         where("sectionKey", "==", sectionKey),
+        // Required for Firestore to authorise the read (see currentClinic.ts).
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);
@@ -178,7 +181,10 @@ export class PatientNoteEntriesService {
     clinicId: string,
   ): Promise<PatientNoteEntry[]> {
     try {
-      const q = query(collection(db, COLLECTION_NAME));
+      const q = query(
+        collection(db, COLLECTION_NAME),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
 
       const querySnapshot = await getDocs(q);
 

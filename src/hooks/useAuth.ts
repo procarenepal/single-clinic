@@ -17,6 +17,7 @@ import { auth, db } from "../config/firebase";
 import { User } from "../types/models";
 import { onInvalidation } from "../services/invalidationChannel";
 import { userService } from "../services/userService";
+import { setCurrentClinicId } from "@/services/currentClinic";
 
 // Extended user type that includes Firebase user and our custom user data
 interface ExtendedUser extends FirebaseUser {
@@ -386,6 +387,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
               setCurrentUser(null);
               setUserData(null);
               setClinicId(null);
+            setCurrentClinicId(null);
               setLoading(false);
 
               return;
@@ -414,6 +416,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
               userDataFromFirestore.clinicId || "default";
 
             setClinicId(effectiveClinicId);
+            setCurrentClinicId(effectiveClinicId);
 
             // STANDALONE MODE: Simplified permission preloading
             if (effectiveClinicId) {
@@ -450,6 +453,7 @@ export function useAuth(options: { dataOnly?: boolean } = {}) {
         setCurrentUser(null);
         setUserData(null);
         setClinicId(null);
+            setCurrentClinicId(null);
         setSubscriptionValid(null);
         setPermissionsReady(false);
       }

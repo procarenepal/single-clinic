@@ -14,6 +14,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { StaffCommission } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 class StaffCommissionService {
   private collectionName = "staffCommissions";
@@ -51,6 +52,8 @@ class StaffCommissionService {
           collection(db, this.collectionName),
           where("billingId", "==", billingId),
           where("staffId", "==", staffId),
+          // Required for Firestore to authorise the read (see currentClinic.ts).
+          where("clinicId", "==", resolveClinicId(clinicId)),
         );
         const existingDocs = await getDocs(existingQuery);
 

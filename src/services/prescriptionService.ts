@@ -15,6 +15,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { Prescription, PrescriptionItem } from "@/types/medical-records";
+import { resolveClinicId } from "./currentClinic";
 
 /**
  * Safely convert a Firestore field to a JavaScript Date object.
@@ -326,6 +327,8 @@ export const prescriptionService = {
       const q = query(
         prescriptionsCollection,
         where("patientId", "==", patientId),
+        // Required for Firestore to authorise the read (see currentClinic.ts).
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);
