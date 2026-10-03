@@ -313,12 +313,35 @@ export default function BillingCounterPage() {
     settings?.defaultCommission ??
     0;
 
+  /**
+   * A service line takes its price, tax treatment and commission from the
+   * appointment type, through the same resolver the other billing screens use.
+   * Reading only name and price here — which is what this did — meant a type
+   * configured as taxable was billed exempt unless staff remembered to tick
+   * the box, and a type with its own commission rate was ignored in favour of
+   * the clinician's.
+   */
+  const resolveServiceFields = (apptTypeId: string, clinicianId?: string) => {
+    const apptType = apptTypes.find((t) => t.id === apptTypeId);
+
+    if (!apptType) return null;
+
+    return appointmentBillingService.resolveItemFieldsFromAppointmentType(
+      apptType,
+      defaultCommissionFor(clinicianId),
+    );
+  };
+
   const addLine = () => {
     const entry = catalogue.find((c) => c.id === pickId);
 
     if (!entry) return;
 
     const doctor = doctors.find((d) => d.id === doctorId);
+    const isService = pickKind === "service";
+    const resolved = isService
+      ? resolveServiceFields(entry.id, doctorId)
+      : null;
 
     setItems((prev) => [
       ...prev,
@@ -327,20 +350,26 @@ export default function BillingCounterPage() {
         // The source catalogue id lives here, as it already does for every
         // other non-appointment charge on this model.
         appointmentTypeId: entry.id,
-        appointmentTypeName: entry.name,
-        price: entry.price,
+        appointmentTypeName: resolved?.appointmentTypeName ?? entry.name,
+        price: resolved?.price ?? entry.price,
         quantity: 1,
-        amount: entry.price,
-        commission: pickKind === "service" ? defaultCommissionFor(doctorId) : 0,
-        // Only a clinician's own service earns commission. A lab test or a
-        // box of tablets must not, or attaching a doctor to the visit would
-        // quietly pay them a percentage of the pharmacy bill.
-        calculateCommission: pickKind === "service",
-        doctorId: pickKind === "service" ? doctorId || undefined : undefined,
-        doctorName: pickKind === "service" ? doctor?.name : undefined,
+        amount: resolved?.price ?? entry.price,
+        categoryId: resolved?.categoryId,
+        commission: resolved ? resolved.commission : 0,
+        // Only a clinician's own service earns commission, and only when the
+        // appointment type is configured to pay one. A lab test or a box of
+        // tablets must not, or attaching a doctor to the visit would quietly
+        // pay them a percentage of the pharmacy bill.
+        calculateCommission: isService
+          ? resolved?.calculateCommission !== false
+          : false,
+        doctorId: isService ? doctorId || undefined : undefined,
+        doctorName: isService ? doctor?.name : undefined,
         stockType: pickKind === "medicine" ? "regular" : undefined,
-        isTaxable: entry.taxable,
-        taxRate: (entry as { taxRate?: number }).taxRate,
+        isTaxable: resolved ? resolved.isTaxable === true : entry.taxable,
+        taxRate: resolved
+          ? resolved.taxRate
+          : (entry as { taxRate?: number }).taxRate,
         lineKind: pickKind,
       },
     ]);
@@ -724,14 +753,20 @@ export default function BillingCounterPage() {
                                   (d) => d.id === e.target.value,
                                 );
 
+                                // The appointment type's own rate still wins
+                                // where it has one; the clinician's default
+                                // only fills in behind it.
+                                const rate = resolveServiceFields(
+                                  it.appointmentTypeId,
+                                  e.target.value,
+                                );
+
                                 patchLine(it.id, {
                                   doctorId: e.target.value || undefined,
                                   doctorName: picked?.name,
-                                  // Follow the newly chosen clinician's own
-                                  // rate, as the screen this replaced did.
-                                  commission: defaultCommissionFor(
-                                    e.target.value,
-                                  ),
+                                  commission:
+                                    rate?.commission ??
+                                    defaultCommissionFor(e.target.value),
                                 });
                               }}
                             >
