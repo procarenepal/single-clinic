@@ -34,6 +34,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import {
+  createDispensingBill,
+  hasDispensableLines,
+} from "@/services/unifiedBillingService";
 import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
@@ -303,13 +307,27 @@ export default function BillingCounterPage() {
         createdBy: currentUser.uid,
       } as Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt">;
 
-      const { id, invoiceNumber } =
-        await appointmentBillingService.createBilling(data);
+      // A bill that dispenses medicine cannot use the ledger-first path:
+      // stock leaving the shelf is irreversible, so it is committed together
+      // with the invoice and an outbox entry, and filed afterwards. See
+      // unifiedBillingService for why the two paths differ.
+      const dispensing = hasDispensableLines(items);
+      const { id, invoiceNumber, ...rest } = dispensing
+        ? await createDispensingBill(data)
+        : {
+            ...(await appointmentBillingService.createBilling(data)),
+            filedImmediately: true,
+          };
+
+      const queued =
+        (rest as { filedImmediately?: boolean }).filedImmediately === false;
 
       addToast({
         title: `Invoice ${invoiceNumber} created`,
-        description: `${items.length} line(s), NPR ${money(totals.totalAmount)}.`,
-        color: "success",
+        description: queued
+          ? `${items.length} line(s), NPR ${money(totals.totalAmount)}. Stock deducted; filing with IRD is queued and will complete automatically.`
+          : `${items.length} line(s), NPR ${money(totals.totalAmount)}.`,
+        color: queued ? "warning" : "success",
       });
       navigate(`/dashboard/appointments-billing/${id}`);
     } catch (error: any) {
@@ -623,10 +641,11 @@ export default function BillingCounterPage() {
               Apply {settings?.defaultTaxPercentage ?? 0}% VAT to taxable lines
             </label>
             {hasMedicineLine ? (
-              <p className="text-xs text-warning">
-                This bill includes medicines. Stock is not yet deducted from
-                this counter — dispense them through the Pharmacy screen so
-                batch stock and expiry stay correct.
+              <p className="text-xs text-text-muted">
+                This bill dispenses medicine, so stock is deducted when it is
+                created — earliest-expiring batches first. Medicine lines are
+                repriced from the batches they actually come out of, which can
+                differ from the catalogue price shown above.
               </p>
             ) : null}
           </CardBody>
