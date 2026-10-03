@@ -29,8 +29,16 @@ export const Schedule5Report: React.FC = () => {
       });
       setRecords(result.content);
 
+      // Schedule 5 asks for Entered_By and Printed_by. Both are stored as
+      // Firebase uids, and only enteredBy was being resolved — so the printed
+      // and exported report showed an auditor a raw uid like
+      // "riWMC7KI6Tf3WVkjNO4VBgBbRSM2" in the Printed By column.
       const uniqueUids = Array.from(
-        new Set(result.content.map((r) => r.enteredBy)),
+        new Set(
+          result.content.flatMap((r) =>
+            [r.enteredBy, r.printedBy].filter((uid): uid is string => Boolean(uid)),
+          ),
+        ),
       ).filter((uid) => !(uid in userNames));
 
       if (uniqueUids.length > 0) {
@@ -83,7 +91,7 @@ export const Schedule5Report: React.FC = () => {
       "Is Bill Active": r.billActive ? "Yes" : "No",
       "Printed Time": r.printedTime || "-",
       "Entered By": userNames[r.enteredBy] || r.enteredBy,
-      "Printed By": r.printedBy || "-",
+      "Printed By": r.printedBy ? userNames[r.printedBy] || r.printedBy : "-",
       "Is Realtime": r.realtime === null ? "-" : r.realtime ? "Yes" : "No",
       "Payment Method": r.paymentMethod || "-",
       "VAT Refund Amount": r.vatRefundAmount ?? "-",
@@ -117,8 +125,14 @@ export const Schedule5Report: React.FC = () => {
           <td class="num"><strong>${r.totalAmount.toFixed(2)}</strong></td>
           <td>${r.syncWithIrd ? "Yes" : "No"}</td>
           <td>${r.billActive ? "Active" : "Cancelled"}</td>
+          <td>${r.billPrinted === null ? "-" : r.billPrinted ? "Yes" : "No"}</td>
+          <td>${r.printedTime || "-"}</td>
           <td>${userNames[r.enteredBy] || r.enteredBy}</td>
+          <td>${r.printedBy ? userNames[r.printedBy] || r.printedBy : "-"}</td>
+          <td>${r.realtime === null ? "-" : r.realtime ? "Yes" : "No"}</td>
           <td>${r.paymentMethod || "-"}</td>
+          <td class="num">${r.vatRefundAmount != null ? r.vatRefundAmount.toFixed(2) : "-"}</td>
+          <td>${r.transactionId || "-"}</td>
         </tr>`,
       )
       .join("");
@@ -147,7 +161,9 @@ export const Schedule5Report: React.FC = () => {
         <th>Fiscal Year</th><th>Bill No</th><th>Customer</th><th>PAN</th><th>Date</th>
         <th class="num">Amount</th><th class="num">Discount</th><th class="num">Taxable</th>
         <th class="num">Tax</th><th class="num">Total</th><th>IRD Synced</th><th>Status</th>
-        <th>Entered By</th><th>Payment Method</th>
+        <th>Bill Printed</th><th>Printed Time</th><th>Entered By</th><th>Printed By</th>
+        <th>Is Realtime</th><th>Payment Method</th>
+        <th class="num">VAT Refund</th><th>Transaction Id</th>
       </tr>
     </thead>
     <tbody>${rowsHtml}</tbody>
@@ -224,9 +240,16 @@ export const Schedule5Report: React.FC = () => {
             <thead className="bg-default-100">
               <tr>
                 {[
+                  // The full Schedule 5 attribute list, in the schedule's own
+                  // order. Clause 6(ng) requires the whole table to be
+                  // viewable AND printable from the front end, and four
+                  // mandatory attributes (Is_Bill_Printed, Printed_Time,
+                  // Printed_by, Is_realtime) were present in the spreadsheet
+                  // export but missing from both the screen and the printout.
                   "Fiscal Year", "Bill No", "Customer", "PAN", "Date", "Amount",
                   "Discount", "Taxable", "Tax", "Total", "IRD Synced", "Active",
-                  "Entered By", "Payment Method",
+                  "Bill Printed", "Printed Time", "Entered By", "Printed By",
+                  "Is Realtime", "Payment Method", "VAT Refund", "Transaction Id",
                 ].map((h) => (
                   <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">
                     {h}
@@ -249,10 +272,24 @@ export const Schedule5Report: React.FC = () => {
                   <td className="px-2 py-1 text-right whitespace-nowrap font-semibold">{r.totalAmount.toFixed(2)}</td>
                   <td className="px-2 py-1 whitespace-nowrap">{r.syncWithIrd ? "✓" : "—"}</td>
                   <td className="px-2 py-1 whitespace-nowrap">{r.billActive ? "Active" : "Cancelled"}</td>
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    {r.billPrinted === null ? "—" : r.billPrinted ? "Yes" : "No"}
+                  </td>
+                  <td className="px-2 py-1 whitespace-nowrap">{r.printedTime || "—"}</td>
                   <td className="px-2 py-1 whitespace-nowrap" title={r.enteredBy}>
                     {userNames[r.enteredBy] || r.enteredBy}
                   </td>
+                  <td className="px-2 py-1 whitespace-nowrap" title={r.printedBy || undefined}>
+                    {r.printedBy ? userNames[r.printedBy] || r.printedBy : "—"}
+                  </td>
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    {r.realtime === null ? "—" : r.realtime ? "Yes" : "No"}
+                  </td>
                   <td className="px-2 py-1 whitespace-nowrap">{r.paymentMethod || "-"}</td>
+                  <td className="px-2 py-1 text-right whitespace-nowrap">
+                    {r.vatRefundAmount != null ? r.vatRefundAmount.toFixed(2) : "—"}
+                  </td>
+                  <td className="px-2 py-1 whitespace-nowrap">{r.transactionId || "—"}</td>
                 </tr>
               ))}
               {records.length === 0 && !error && (

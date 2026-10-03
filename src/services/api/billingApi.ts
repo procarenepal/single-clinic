@@ -256,9 +256,11 @@ export interface LedgerRecordDto {
 /**
  * One row of the master invoice/sales table required by IRD's Electronic
  * Billing Procedure, Schedule 5 (अनुसूची ५) — see billing-backend's
- * Schedule5RecordDto for field-by-field provenance. printedTime/printedBy
- * and vatRefundAmount/transactionId are always null for now (not yet
- * tracked in the Java backend / Schedule 8 not yet implemented).
+ * Schedule5RecordDto for field-by-field provenance. printedTime/printedBy are
+ * populated from the invoice's own last_printed_at/last_printed_by columns
+ * (see /record-print). Only vatRefundAmount/transactionId are always null:
+ * both are "(if any)" in the schedule and belong to the digital-payment VAT
+ * rebate flow, which this clinic does not participate in.
  */
 export interface Schedule5Record {
   fiscalYear: string;
