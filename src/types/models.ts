@@ -1761,6 +1761,22 @@ export interface AppointmentBillingItem {
    * lineKind is "medicine"; absent means regular.
    */
   stockType?: "regular" | "scheme";
+  /**
+   * Which stock batches a medicine line was actually dispensed from. Recorded
+   * so a credit note can put the quantity back on the SPECIFIC batch documents
+   * the sale drew down, instead of guessing at whichever medicineStock
+   * document a plain medicineId query happens to return first. Same field name
+   * and shape pharmacy persists on a sale item, so one restoration helper
+   * serves both.
+   */
+  batchAllocations?: Array<{
+    stockDocId: string;
+    quantity: number;
+    batchNumber?: string;
+    price?: number;
+    expiryDate?: any;
+    isSchemeStock?: boolean;
+  }>;
 }
 
 // Main appointment billing/invoice record

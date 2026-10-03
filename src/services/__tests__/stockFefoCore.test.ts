@@ -13,6 +13,7 @@ import { describe, it, expect } from "vitest";
 import {
   StockBatch,
   planStockDeduction,
+  planStockRestoration,
   selectDispensableBatches,
   toMillis,
 } from "../core/stockFefoCore";
@@ -258,5 +259,61 @@ describe("planStockDeduction", () => {
     expect(() => planStockDeduction(req(6), batches, NOW)).toThrow(
       /Requested: 6, Available: 4\./,
     );
+  });
+});
+
+describe("planStockRestoration", () => {
+  const alloc = (stockDocId: string, quantity: number, scheme = false) => ({
+    stockDocId,
+    quantity,
+    isSchemeStock: scheme,
+  });
+
+  it("puts a full return back on the exact batches the sale took it from", () => {
+    // Batches are not interchangeable — they carry their own expiry and their
+    // own cost — so a return has to go back where it came from.
+    expect(
+      planStockRestoration(5, [alloc("soon", 3), alloc("later", 2)]),
+    ).toEqual([
+      { stockDocId: "soon", quantity: 3, isSchemeStock: false },
+      { stockDocId: "later", quantity: 2, isSchemeStock: false },
+    ]);
+  });
+
+  it("fills a partial return from the earliest allocation onward", () => {
+    expect(
+      planStockRestoration(4, [alloc("soon", 3), alloc("later", 2)]),
+    ).toEqual([
+      { stockDocId: "soon", quantity: 3, isSchemeStock: false },
+      { stockDocId: "later", quantity: 1, isSchemeStock: false },
+    ]);
+  });
+
+  it("stops once the returned quantity is accounted for", () => {
+    expect(
+      planStockRestoration(2, [alloc("soon", 3), alloc("later", 2)]),
+    ).toEqual([{ stockDocId: "soon", quantity: 2, isSchemeStock: false }]);
+  });
+
+  it("returns scheme quantities to the scheme pool", () => {
+    expect(planStockRestoration(2, [alloc("a", 2, true)])).toEqual([
+      { stockDocId: "a", quantity: 2, isSchemeStock: true },
+    ]);
+  });
+
+  it("never drops a leftover quantity", () => {
+    // Should not arise once over-returns are refused, but the total on hand
+    // must still reconcile if it ever does.
+    expect(planStockRestoration(7, [alloc("a", 2), alloc("b", 2)])).toEqual([
+      { stockDocId: "a", quantity: 2, isSchemeStock: false },
+      { stockDocId: "b", quantity: 5, isSchemeStock: false },
+    ]);
+  });
+
+  it("returns nothing when the line recorded no allocations", () => {
+    // A sale made before allocations were persisted. The caller has to decide
+    // what to do — this must not be mistaken for "nothing to restore".
+    expect(planStockRestoration(3, undefined)).toEqual([]);
+    expect(planStockRestoration(3, [])).toEqual([]);
   });
 });

@@ -197,3 +197,71 @@ export function planStockDeduction(
 
   return { allocations, totalAmount };
 }
+
+/* ------------------------------------------------------------------ *
+ * Putting stock back
+ * ------------------------------------------------------------------ */
+
+/** One batch a sale drew from, as recorded on the sold line. */
+export interface RecordedAllocation {
+  stockDocId: string;
+  quantity: number;
+  isSchemeStock?: boolean;
+}
+
+export interface RestoreAllocation {
+  stockDocId: string;
+  quantity: number;
+  isSchemeStock: boolean;
+}
+
+/**
+ * Where a returned quantity goes back to.
+ *
+ * Stock is returned to the exact batches the sale took it from, in the order
+ * it took them, because batches are not interchangeable: they have their own
+ * expiry dates and their own cost and sale prices. Crediting a different batch
+ * would leave the shelf numerically correct but materially wrong — it can
+ * resurrect quantity against an expiry that has already passed, and it
+ * misstates the value of what is on hand.
+ *
+ * A quantity smaller than the sale (a partial return) is filled from the
+ * earliest recorded allocation onward. Anything left over after every recorded
+ * allocation is exhausted — which should not happen once the caller has
+ * refused to over-return, but is cheap to survive — goes onto the last batch
+ * rather than being silently dropped, so the total on hand still reconciles.
+ *
+ * Returns an empty array when the line has no recorded allocations (a sale
+ * made before they were persisted). The caller decides what to do about that;
+ * it must not be read as "nothing to restore".
+ */
+export function planStockRestoration(
+  quantity: number,
+  allocations: RecordedAllocation[] | undefined,
+): RestoreAllocation[] {
+  if (!allocations || allocations.length === 0) return [];
+
+  const plan: RestoreAllocation[] = [];
+  let remaining = quantity;
+
+  for (const alloc of allocations) {
+    if (remaining <= 0) break;
+
+    const take = Math.min(remaining, alloc.quantity);
+
+    if (take > 0) {
+      plan.push({
+        stockDocId: alloc.stockDocId,
+        quantity: take,
+        isSchemeStock: Boolean(alloc.isSchemeStock),
+      });
+      remaining -= take;
+    }
+  }
+
+  if (remaining > 0 && plan.length > 0) {
+    plan[plan.length - 1].quantity += remaining;
+  }
+
+  return plan;
+}

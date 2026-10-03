@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  addDoc,
   setDoc,
   updateDoc,
   query,
@@ -36,6 +35,10 @@ import {
   buildCreditNoteSkeleton,
 } from "./core/billingLifecycleCore";
 import { resolveClinicId } from "./currentClinic";
+import {
+  createDispensingCreditNote,
+  hasDispensableLines,
+} from "./unifiedBillingService";
 
 const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
@@ -83,9 +86,7 @@ export async function reverseCommissionsForBilling(
     const { referralCommissionService } = await import(
       "./referralCommissionService"
     );
-    const { staffCommissionService } = await import(
-      "./staffCommissionService"
-    );
+    const { staffCommissionService } = await import("./staffCommissionService");
 
     const [docComms, expComms, refComms, staffComms] = await Promise.all([
       doctorCommissionService.getCommissionsByBillingId(billingId),
@@ -100,16 +101,24 @@ export async function reverseCommissionsForBilling(
       await Promise.all([
         ...docComms
           .filter((c) => c.status !== "cancelled")
-          .map((c) => doctorCommissionService.updateCommissionStatus(c.id, "cancelled")),
+          .map((c) =>
+            doctorCommissionService.updateCommissionStatus(c.id, "cancelled"),
+          ),
         ...expComms
           .filter((c) => c.status !== "cancelled")
-          .map((c) => expertCommissionService.updateCommissionStatus(c.id, "cancelled")),
+          .map((c) =>
+            expertCommissionService.updateCommissionStatus(c.id, "cancelled"),
+          ),
         ...refComms
           .filter((c) => c.status !== "cancelled")
-          .map((c) => referralCommissionService.updateCommissionStatus(c.id, "cancelled")),
+          .map((c) =>
+            referralCommissionService.updateCommissionStatus(c.id, "cancelled"),
+          ),
         ...staffComms
           .filter((c) => c.status !== "cancelled")
-          .map((c) => staffCommissionService.updateCommissionStatus(c.id, "cancelled")),
+          .map((c) =>
+            staffCommissionService.updateCommissionStatus(c.id, "cancelled"),
+          ),
       ]);
     } else {
       await Promise.all([
@@ -179,7 +188,11 @@ async function refundWalletIfApplicable(
       createdBy,
     );
   } catch (error) {
-    console.error("Error refunding wallet payment for billing:", billing.id, error);
+    console.error(
+      "Error refunding wallet payment for billing:",
+      billing.id,
+      error,
+    );
   }
 }
 
@@ -278,7 +291,8 @@ export const appointmentBillingService = {
       // out-of-range values instead of writing them.
       if (
         settings.defaultTaxPercentage !== undefined &&
-        (settings.defaultTaxPercentage < 0 || settings.defaultTaxPercentage > 100)
+        (settings.defaultTaxPercentage < 0 ||
+          settings.defaultTaxPercentage > 100)
       ) {
         throw new Error("Default tax percentage must be between 0 and 100.");
       }
@@ -286,7 +300,9 @@ export const appointmentBillingService = {
         settings.defaultCommission !== undefined &&
         (settings.defaultCommission < 0 || settings.defaultCommission > 100)
       ) {
-        throw new Error("Default commission percentage must be between 0 and 100.");
+        throw new Error(
+          "Default commission percentage must be between 0 and 100.",
+        );
       }
       if (
         settings.defaultDiscountValue !== undefined &&
@@ -797,7 +813,10 @@ export const appointmentBillingService = {
           const alreadyThere = await getDoc(targetRef);
 
           if (alreadyThere.exists()) {
-            return { id: targetRef.id, invoiceNumber: javaResult.invoiceNumber };
+            return {
+              id: targetRef.id,
+              invoiceNumber: javaResult.invoiceNumber,
+            };
           }
         }
 
@@ -831,7 +850,10 @@ export const appointmentBillingService = {
               },
             });
           } catch (auditError) {
-            console.error("Error logging discount/tax audit event:", auditError);
+            console.error(
+              "Error logging discount/tax audit event:",
+              auditError,
+            );
           }
         }
 
@@ -924,7 +946,11 @@ export const appointmentBillingService = {
       console.log("Appointment billing updated:", id);
 
       if (existing) {
-        const discountTaxKeys = ["discountType", "discountValue", "taxPercentage"];
+        const discountTaxKeys = [
+          "discountType",
+          "discountValue",
+          "taxPercentage",
+        ];
         const discountTaxChanged = discountTaxKeys.some(
           (k) =>
             k in billingData &&
@@ -969,7 +995,10 @@ export const appointmentBillingService = {
               },
             });
           } catch (auditError) {
-            console.error("Error logging discount/tax audit event:", auditError);
+            console.error(
+              "Error logging discount/tax audit event:",
+              auditError,
+            );
           }
         }
       }
@@ -1015,9 +1044,7 @@ export const appointmentBillingService = {
   /**
    * Get all appointment billing records for a clinic.
    */
-  async getBillingByClinic(
-    clinicId: string,
-  ): Promise<AppointmentBilling[]> {
+  async getBillingByClinic(clinicId: string): Promise<AppointmentBilling[]> {
     try {
       if (!clinicId) {
         console.error("No clinicId provided to getBillingByClinic");
@@ -1183,10 +1210,7 @@ export const appointmentBillingService = {
         throw new Error("This invoice is already fully paid.");
       }
 
-      if (
-        discountAmount > 0 &&
-        isBillingLocked(billing)
-      ) {
+      if (discountAmount > 0 && isBillingLocked(billing)) {
         throw new Error(
           "IRD Tax Compliance Error: Financial fields of finalized or IRD-synced invoices cannot be modified. Issue a Credit Note instead.",
         );
@@ -1343,7 +1367,11 @@ export const appointmentBillingService = {
         );
 
         // 1. Try finding by billingId
-        let q = query(appointmentsRef, clinicFilter, where("billingId", "==", id));
+        let q = query(
+          appointmentsRef,
+          clinicFilter,
+          where("billingId", "==", id),
+        );
         let querySnapshot = await getDocs(q);
 
         // 1.5. Try finding by consultationBillingId
@@ -1462,7 +1490,10 @@ export const appointmentBillingService = {
                   createdBy: auth.currentUser?.uid || "system",
                 } as any);
               }
-              console.log("Auto-created/updated appointment followup for billing", id);
+              console.log(
+                "Auto-created/updated appointment followup for billing",
+                id,
+              );
             }
           } catch (e) {
             console.error("Failed to auto-create followup:", e);
@@ -1941,7 +1972,8 @@ export const appointmentBillingService = {
       defaultTaxPercentage: taxPercentage,
       // Same reasoning as createBilling() above: a category-taxable item
       // must be taxed regardless of the invoice-level "Apply Tax" toggle.
-      isTaxEnabled: taxPercentage > 0 || items.some((i) => i.isTaxable === true),
+      isTaxEnabled:
+        taxPercentage > 0 || items.some((i) => i.isTaxable === true),
     });
 
     return {
@@ -2186,7 +2218,9 @@ export const appointmentBillingService = {
       }
 
       if (original.hasCreditNote) {
-        throw new Error("A Credit Note has already been issued for this invoice.");
+        throw new Error(
+          "A Credit Note has already been issued for this invoice.",
+        );
       }
 
       const creditNoteData = buildCreditNoteSkeleton(original, {
@@ -2197,11 +2231,24 @@ export const appointmentBillingService = {
         extraNegatedFields: ["itemDiscountAmount", "mainDiscountAmount"],
       });
 
-      // createBilling already submitted this to the Java backend with
-      // isReturn: true (routed to IRD's /api/billreturn) — no separate
-      // sync call needed here.
+      // An invoice that dispensed medicine cannot be reversed by creating a
+      // negated invoice alone: that returns the money and leaves the stock
+      // gone, which no later stock count can tell apart from theft. Those go
+      // through a path that also puts the quantity back on the exact batches
+      // the sale drew it from, in one transaction with the credit note.
+      //
+      // Detected from the ORIGINAL rather than the skeleton on purpose: the
+      // skeleton negates amounts, and hasDispensableLines deliberately reads a
+      // negated line as "not a dispense" so a reversal can never be mistaken
+      // for a second sale.
+      const reversesStock = hasDispensableLines(original.items || []);
+
+      // Either way the filing carries isReturn: true and reaches IRD's
+      // /api/billreturn, so no separate sync call is needed here.
       const { id: newCreditNoteId, invoiceNumber: newCreditNoteInvoiceNumber } =
-      await this.createBilling(creditNoteData);
+        reversesStock
+          ? await createDispensingCreditNote(original, { reason, createdBy })
+          : await this.createBilling(creditNoteData);
 
       // Re-check hasCreditNote immediately before marking it, narrowing
       // (though not fully closing — createBilling above is a network round
@@ -2304,10 +2351,8 @@ export const appointmentBillingService = {
         extraNegatedFields: ["itemDiscountAmount", "mainDiscountAmount"],
       });
 
-      const {
-        id: newCreditNoteId,
-        invoiceNumber: newCreditNoteInvoiceNumber,
-      } = await this.createBilling(creditNoteData);
+      const { id: newCreditNoteId, invoiceNumber: newCreditNoteInvoiceNumber } =
+        await this.createBilling(creditNoteData);
 
       // Same narrow concurrent-issue guard as issueCreditNote.
       const recheck = await this.getBillingById(original.id);
