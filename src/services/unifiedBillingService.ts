@@ -48,10 +48,22 @@ const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const BILLING_SYNC_OUTBOX_COLLECTION = "billingSyncOutbox";
 const MEDICINE_STOCK_COLLECTION = "medicineStock";
 
-/** Does this invoice take anything off the shelf? */
+/**
+ * Does this invoice take anything off the shelf?
+ *
+ * A credit note must answer false even though it carries the original's
+ * medicine lines. buildCreditNoteSkeleton negates price and amount but leaves
+ * quantity positive, so a plain "medicine line with quantity > 0" test reads a
+ * reversal as a fresh dispense and would take the stock a SECOND time instead
+ * of putting it back. A reversal is recognised by its negated amount.
+ */
 export function hasDispensableLines(items: AppointmentBillingItem[]): boolean {
   return items.some(
-    (item) => item.lineKind === "medicine" && item.quantity > 0,
+    (item) =>
+      item.lineKind === "medicine" &&
+      item.quantity > 0 &&
+      (item.amount ?? 0) >= 0 &&
+      (item.price ?? 0) >= 0,
   );
 }
 

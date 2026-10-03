@@ -66,4 +66,16 @@ describe("hasDispensableLines", () => {
   it("is false for an empty bill", () => {
     expect(hasDispensableLines([])).toBe(false);
   });
+
+  it("does not mistake a credit note's reversed medicine line for a dispense", () => {
+    // buildCreditNoteSkeleton negates price and amount but leaves quantity
+    // positive, so a reversal still looks like a medicine line of quantity 2.
+    // Reading it as a dispense would deduct the stock a second time instead of
+    // putting it back.
+    expect(
+      hasDispensableLines([
+        line({ lineKind: "medicine", quantity: 2, price: -40, amount: -80 }),
+      ]),
+    ).toBe(false);
+  });
 });
