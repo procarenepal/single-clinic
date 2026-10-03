@@ -140,7 +140,7 @@ class TextEditorService {
     try {
       let q = query(
         collection(db, TEXT_DOCUMENTS_COLLECTION),
-
+        where("clinicId", "==", clinicId),
         limit(pageSize + 1), // fetch one extra to check hasMore
       );
 
@@ -186,7 +186,10 @@ class TextEditorService {
     try {
       // Note: This is a basic implementation. For better search functionality,
       // consider using Algolia or implementing full-text search with Firestore
-      let q = query(collection(db, TEXT_DOCUMENTS_COLLECTION));
+      let q = query(
+        collection(db, TEXT_DOCUMENTS_COLLECTION),
+        where("clinicId", "==", clinicId),
+      );
 
 
       // Sort client-side by updatedAt descending (avoids composite index requirement)

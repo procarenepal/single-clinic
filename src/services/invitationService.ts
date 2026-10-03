@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { db } from "../config/firebase";
 import { Invitation } from "../types/models";
+import { resolveClinicId } from "./currentClinic";
 
 const INVITATIONS_COLLECTION = "invitations";
 
@@ -41,7 +42,7 @@ export const invitationService = {
       const q = query(
         invitationsRef,
         where("email", "==", email),
-
+        where("clinicId", "==", clinicId),
         where("status", "==", "pending"),
       );
       const existingInvites = await getDocs(q);
@@ -117,7 +118,7 @@ export const invitationService = {
       const invitationsRef = collection(db, INVITATIONS_COLLECTION);
       const q = query(
         invitationsRef,
-
+        where("clinicId", "==", clinicId),
         where("status", "==", "pending"),
       );
       const querySnapshot = await getDocs(q);
@@ -150,6 +151,7 @@ export const invitationService = {
       const q = query(
         invitationsRef,
         where("email", "==", email),
+        where("clinicId", "==", resolveClinicId()),
         where("status", "==", "pending"),
       );
       const querySnapshot = await getDocs(q);
@@ -219,6 +221,7 @@ export const invitationService = {
 
       const q = query(
         invitationsRef,
+        where("clinicId", "==", resolveClinicId()),
         where("status", "==", "pending"),
         where("expiresAt", "<=", Timestamp.fromDate(now)),
       );

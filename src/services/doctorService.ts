@@ -14,6 +14,7 @@ import { db } from "../config/firebase";
 import { Doctor } from "../types/models";
 
 import { cacheService } from "@/services/cacheService";
+import { resolveClinicId } from "./currentClinic";
 
 const DOCTORS_COLLECTION = "doctors";
 
@@ -127,7 +128,8 @@ export const doctorService = {
    */
   async getDoctors(clinicId?: string): Promise<Doctor[]> {
     try {
-      const cacheKey = clinicId || "standalone";
+      const scopedClinicId = resolveClinicId(clinicId);
+      const cacheKey = scopedClinicId || "standalone";
       const cached = cacheService.getClinicDoctors(cacheKey);
 
       // An empty array is deliberately NOT treated as a cache hit — it's
@@ -137,19 +139,18 @@ export const doctorService = {
       if (cached && (cached as Doctor[]).length > 0) return cached as Doctor[];
 
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
-      const constraints: any[] = [];
 
-      // "default" was previously treated as a sentinel meaning "don't
-      // filter" — but it's this deployment's actual clinicId (a real
-      // clinic, not a placeholder), so that exclusion was a live
-      // cross-tenant leak: any clinic whose id happens to be "default"
-      // silently saw every clinic's doctors. Only "standalone" (the
-      // synthetic cache key used when no clinicId is passed at all) means
-      // "don't filter."
-      if (clinicId && clinicId !== "standalone") {
-        constraints.push(where("clinicId", "==", clinicId));
-      }
-      const q = query(doctorsRef, ...constraints);
+      // Always clinic-scoped. "default" was once treated as a sentinel meaning
+      // "don't filter" — but it is this deployment's actual clinicId, so that
+      // exclusion was a live cross-tenant leak. The remaining unfiltered
+      // branch (no clinicId passed at all) was no better: Firestore authorises
+      // a list only when the query proves its clinic scope, so for every
+      // non-admin it returned nothing rather than everything. Falling back to
+      // the signed-in user's clinic removes both failure modes at once.
+      const q = query(
+        doctorsRef,
+        where("clinicId", "==", scopedClinicId),
+      );
 
       const querySnapshot = await getDocs(q);
 
@@ -199,12 +200,11 @@ export const doctorService = {
   ): Promise<Doctor | null> {
     try {
       const doctorsRef = collection(db, DOCTORS_COLLECTION);
-      const constraints: any[] = [where("email", "==", email.toLowerCase())];
-
-      if (clinicId) {
-        constraints.push(where("clinicId", "==", clinicId));
-      }
-      const qy = query(doctorsRef, ...constraints);
+      const qy = query(
+        doctorsRef,
+        where("email", "==", email.toLowerCase()),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
       const snap = await getDocs(qy);
 
       if (snap.empty) return null;

@@ -239,7 +239,7 @@ export const itemService = {
       const itemsRef = collection(db, ITEMS_COLLECTION);
       const q = query(
         itemsRef,
-
+        where("clinicId", "==", clinicId),
         where("isActive", "==", true),
         orderBy("name"),
       );

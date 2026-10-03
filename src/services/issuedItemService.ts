@@ -323,7 +323,7 @@ export const issuedItemService = {
       const issuedItemsRef = collection(db, ISSUED_ITEMS_COLLECTION);
       const q = query(
         issuedItemsRef,
-
+        where("clinicId", "==", clinicId),
         where("status", "==", "issued"),
       );
 

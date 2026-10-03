@@ -506,10 +506,13 @@ export const patientService = {
       ];
       const doctorConstraints: any[] = [where("doctorId", "==", expertId)];
 
-      if (clinicId) {
-        expertConstraints.push(where("clinicId", "==", clinicId));
-        doctorConstraints.push(where("clinicId", "==", clinicId));
-      }
+      // Unconditional: Firestore authorises a list only when the query proves
+      // its clinic scope, so omitting this filter when no clinicId was passed
+      // returned nothing for every non-admin rather than "everything".
+      const scopedClinicId = resolveClinicId(clinicId);
+
+      expertConstraints.push(where("clinicId", "==", scopedClinicId));
+      doctorConstraints.push(where("clinicId", "==", scopedClinicId));
       const q1 = query(patientsRef, ...expertConstraints);
       const q2 = query(patientsRef, ...doctorConstraints);
 
@@ -608,7 +611,9 @@ export const patientService = {
 
     const baseConstraints: any[] = [];
 
-    if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
+    // Unconditional — see getPatientsByExpert: a query that cannot prove its
+    // clinic scope is rejected outright for every non-admin role.
+    baseConstraints.push(where("clinicId", "==", resolveClinicId(_clinicId)));
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
     if (expertId)
@@ -740,7 +745,9 @@ export const patientService = {
 
     const baseConstraints: any[] = [];
 
-    if (_clinicId) baseConstraints.push(where("clinicId", "==", _clinicId));
+    // Unconditional — see getPatientsByExpert: a query that cannot prove its
+    // clinic scope is rejected outright for every non-admin role.
+    baseConstraints.push(where("clinicId", "==", resolveClinicId(_clinicId)));
     if (branchId) baseConstraints.push(where("branchId", "==", branchId));
     if (doctorId) baseConstraints.push(where("doctorId", "==", doctorId));
     if (expertId)

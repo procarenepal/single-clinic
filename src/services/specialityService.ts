@@ -13,6 +13,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { DoctorSpeciality } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 /**
  * Service for managing doctor specialities in Firestore
@@ -194,7 +195,14 @@ export const specialityService = {
   async isKeyExists(key: string, _excludeId?: string): Promise<boolean> {
     try {
       const specialitiesCollection = collection(db, "doctor_specialities");
-      const q = query(specialitiesCollection, where("key", "==", key));
+      // Clinic-scoped: the security rule authorises a list only when the
+      // query itself proves it cannot return another clinic's rows, so a
+      // query without this predicate was rejected for every non-admin.
+      const q = query(
+        specialitiesCollection,
+        where("key", "==", key),
+        where("clinicId", "==", resolveClinicId()),
+      );
 
       const querySnapshot = await getDocs(q);
 

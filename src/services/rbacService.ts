@@ -589,7 +589,14 @@ export const rbacService = {
 
       // Fetch all orphaned assignments for this role BEFORE deleting
       const assignmentsRef = collection(db, USER_ROLE_ASSIGNMENTS_COLLECTION);
-      const orphanedQuery = query(assignmentsRef, where("roleId", "==", id));
+      // clinicId is required for the rule to authorise this list (see
+      // getUserRoleAssignments) — without it, deleting a role threw for every
+      // non-admin and left the role's assignments orphaned.
+      const orphanedQuery = query(
+        assignmentsRef,
+        where("roleId", "==", id),
+        where("clinicId", "==", clinicId),
+      );
       const orphanedSnapshot = await getDocs(orphanedQuery);
 
       // Atomically delete the role document and all its assignments in one batch
@@ -859,10 +866,14 @@ export const rbacService = {
       const batch = writeBatch(db);
       const assignmentsRef = collection(db, USER_ROLE_ASSIGNMENTS_COLLECTION);
 
-      // First, remove existing assignments for this user in this clinic
+      // First, remove existing assignments for this user in this clinic.
+      // The clinicId predicate is load-bearing twice over: the rule only
+      // authorises a list that proves its clinic scope, and without it this
+      // deleted the user's assignments in EVERY clinic, not just this one.
       const existingQuery = query(
         assignmentsRef,
         where("userId", "==", userId),
+        where("clinicId", "==", clinicId),
       );
       const existingSnapshot = await getDocs(existingQuery);
 
@@ -1077,7 +1088,13 @@ export const rbacService = {
     try {
       // Get all role assignments for this specific role in this clinic
       const assignmentsRef = collection(db, USER_ROLE_ASSIGNMENTS_COLLECTION);
-      const q = query(assignmentsRef, where("roleId", "==", roleId));
+      // The clinicId parameter was accepted but never applied — the comment
+      // above already claimed "in this clinic". Required for authorisation.
+      const q = query(
+        assignmentsRef,
+        where("roleId", "==", roleId),
+        where("clinicId", "==", clinicId),
+      );
       const querySnapshot = await getDocs(q);
 
       // Get user IDs from assignments

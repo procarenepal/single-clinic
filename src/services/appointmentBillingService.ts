@@ -34,6 +34,7 @@ import {
   runBlockingJavaSyncThenFirestoreWrite,
   buildCreditNoteSkeleton,
 } from "./core/billingLifecycleCore";
+import { resolveClinicId } from "./currentClinic";
 
 const APPOINTMENT_BILLING_COLLECTION = "appointmentBilling";
 const APPOINTMENT_BILLING_SETTINGS_COLLECTION = "appointmentBillingSettings";
@@ -1083,7 +1084,14 @@ export const appointmentBillingService = {
   ): Promise<AppointmentBilling[]> {
     try {
       const billingRef = collection(db, APPOINTMENT_BILLING_COLLECTION);
-      const q = query(billingRef, where("patientId", "==", patientId));
+      // The clinicId argument was accepted but never applied, so this list was
+      // unauthorised for every non-admin — a patient's invoice history came
+      // back empty for anyone but an admin.
+      const q = query(
+        billingRef,
+        where("patientId", "==", patientId),
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
 
       const querySnapshot = await getDocs(q);
       const billingRecords: AppointmentBilling[] = [];
@@ -1300,13 +1308,30 @@ export const appointmentBillingService = {
       // Also find and update the associated appointment in the appointments collection
       try {
         const appointmentsRef = collection(db, "appointments");
+        // Every query below must carry the clinicId filter: the security rule
+        // authorises a list only when the query itself proves it cannot return
+        // another clinic's appointments. Filtering on billingId/patientId alone
+        // was rejected for every non-admin user, so recording a payment left
+        // the linked appointment's status permanently stale — and silently, as
+        // the catch below only logs. clinic-admin was unaffected because the
+        // rule short-circuits it as a super admin, which is why this survived.
+        const clinicFilter = where(
+          "clinicId",
+          "==",
+          resolveClinicId(billing.clinicId),
+        );
+
         // 1. Try finding by billingId
-        let q = query(appointmentsRef, where("billingId", "==", id));
+        let q = query(appointmentsRef, clinicFilter, where("billingId", "==", id));
         let querySnapshot = await getDocs(q);
 
         // 1.5. Try finding by consultationBillingId
         if (querySnapshot.empty) {
-          q = query(appointmentsRef, where("consultationBillingId", "==", id));
+          q = query(
+            appointmentsRef,
+            clinicFilter,
+            where("consultationBillingId", "==", id),
+          );
           querySnapshot = await getDocs(q);
         }
 
@@ -1314,6 +1339,7 @@ export const appointmentBillingService = {
         if (querySnapshot.empty) {
           q = query(
             appointmentsRef,
+            clinicFilter,
             where("patientId", "==", billing.patientId),
             where("status", "==", "completed"),
           );

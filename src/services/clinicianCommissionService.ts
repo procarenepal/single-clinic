@@ -14,6 +14,7 @@ import {
 
 import { db } from "@/config/firebase";
 import { AppointmentBilling } from "@/types/models";
+import { resolveClinicId } from "./currentClinic";
 
 /**
  * Shared core behind doctorCommissionService / expertCommissionService.
@@ -158,6 +159,12 @@ export async function createCommissionGrouped(
         collection(db, config.collectionName),
         where("billingId", "==", billing.id),
         where(config.idField, "==", entityId),
+        // Required for Firestore to authorise the read — the same fix already
+        // applied to doctorCommissionService.createPathologyCommissions, which
+        // this shared core had not inherited. Without it the duplicate guard
+        // threw for every non-admin, so taking a payment as a receptionist
+        // recorded no clinician commission at all (the caller only logs).
+        where("clinicId", "==", resolveClinicId(billing.clinicId)),
       );
       const existingDocs = await getDocs(existingQuery);
 

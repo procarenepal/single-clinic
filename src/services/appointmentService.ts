@@ -99,6 +99,12 @@ export const appointmentService = {
 
         const conflictQuery = query(
           appointmentsCollection,
+          // Without the clinicId predicate this list is unauthorised for every
+          // non-admin, so the double-booking guard threw and took appointment
+          // creation down with it — and receptionists are precisely the role
+          // that books appointments. clinic-admin was unaffected because the
+          // rule short-circuits it as a super admin.
+          where("clinicId", "==", resolveClinicId(appointmentData.clinicId)),
           where(
             appointmentData.doctorId && appointmentData.doctorId !== "unassigned"
               ? "doctorId"
@@ -229,6 +235,7 @@ export const appointmentService = {
       const appointmentsCollection = collection(db, "appointments");
       const q = query(
         appointmentsCollection,
+        where("clinicId", "==", resolveClinicId()),
         orderBy("appointmentDate", "desc"),
       );
       const querySnapshot = await getDocs(q);

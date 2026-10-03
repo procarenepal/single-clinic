@@ -16,6 +16,8 @@ import { AppointmentType } from "../types/models";
 
 import { cacheService } from "@/services/cacheService";
 
+import { resolveClinicId } from "./currentClinic";
+
 const APPOINTMENT_TYPES_COLLECTION = "appointment_types";
 
 /**
@@ -96,10 +98,14 @@ export const appointmentTypeService = {
         return cached as AppointmentType[];
 
       const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
-      // For single clinic, we fetch all if clinicId is not provided or if we want to be inclusive
-      const q = clinicId
-        ? query(appointmentTypesRef, where("clinicId", "==", clinicId))
-        : query(appointmentTypesRef);
+      // Always clinic-scoped. Falling back to an unfiltered whole-collection
+      // read when no clinicId was passed did not "include more" — the rule
+      // rejects a list that cannot prove its clinic scope, so for every
+      // non-admin that branch returned nothing at all.
+      const q = query(
+        appointmentTypesRef,
+        where("clinicId", "==", resolveClinicId(clinicId)),
+      );
 
       const querySnapshot = await getDocs(q);
 

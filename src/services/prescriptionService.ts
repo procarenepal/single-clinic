@@ -220,7 +220,14 @@ export const prescriptionService = {
   async getPrescriptions(): Promise<Prescription[]> {
     try {
       const prescriptionsCollection = collection(db, "prescriptions");
-      const q = query(prescriptionsCollection, orderBy("createdAt", "desc"));
+      // Clinic-scoped because the rule authorises a list only when the query
+      // proves it cannot return another clinic's prescriptions — an
+      // unconstrained whole-collection read is rejected for every non-admin.
+      const q = query(
+        prescriptionsCollection,
+        where("clinicId", "==", resolveClinicId()),
+        orderBy("createdAt", "desc"),
+      );
       const querySnapshot = await getDocs(q);
 
       return querySnapshot.docs.map((docSnap) => {
@@ -296,6 +303,7 @@ export const prescriptionService = {
       const q = query(
         prescriptionsCollection,
         where("appointmentId", "==", appointmentId),
+        where("clinicId", "==", resolveClinicId()),
       );
 
       const querySnapshot = await getDocs(q);

@@ -478,7 +478,14 @@ export const bedService = {
   async getAllotmentsByBed(bedId: string): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      const q = query(allotmentsRef, where("bedId", "==", bedId));
+      // Clinic-scoped: the security rule authorises a list only when the
+      // query itself proves it cannot return another clinic's rows, so a
+      // query without this predicate was rejected for every non-admin.
+      const q = query(
+        allotmentsRef,
+        where("bedId", "==", bedId),
+        where("clinicId", "==", resolveClinicId()),
+      );
 
       const querySnapshot = await getDocs(q);
       const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {
@@ -521,7 +528,11 @@ export const bedService = {
   async getAllotmentsByPatient(patientId: string): Promise<BedAllotment[]> {
     try {
       const allotmentsRef = collection(db, BED_ALLOTMENTS_COLLECTION);
-      const q = query(allotmentsRef, where("patientId", "==", patientId));
+      const q = query(
+        allotmentsRef,
+        where("patientId", "==", patientId),
+        where("clinicId", "==", resolveClinicId()),
+      );
 
       const querySnapshot = await getDocs(q);
       const allotments: BedAllotment[] = querySnapshot.docs.map((doc) => {

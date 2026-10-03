@@ -229,7 +229,7 @@ export const auditLogService = {
       const logsRef = collection(db, AUDIT_LOGS_COLLECTION);
       const q = query(
         logsRef,
-
+        where("clinicId", "==", resolveClinicId(clinicId)),
         orderBy("timestamp", "desc"),
         limit(limitCount),
       );
@@ -256,7 +256,7 @@ export const auditLogService = {
 
         const fallbackQuery = query(
           collection(db, AUDIT_LOGS_COLLECTION),
-
+          where("clinicId", "==", resolveClinicId(clinicId)),
           limit(limitCount),
         );
 
