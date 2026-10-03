@@ -16,7 +16,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   IoReceiptOutline,
   IoAddOutline,
@@ -43,6 +43,7 @@ import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { pathologyService } from "@/services/pathologyService";
 import { medicineService } from "@/services/medicineService";
+import { suggestedDispenseQuantity } from "@/services/core/prescriptionDoseCore";
 import {
   AppointmentBilling,
   AppointmentBillingItem,
@@ -81,6 +82,11 @@ const money = (n: number) => n.toFixed(2);
 
 export default function BillingCounterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Dispensing against a prescription: the Pharmacy screen links here with the
+  // prescription id rather than opening its own sale form, so the medicines go
+  // on the same invoice as anything else the visit is being charged for.
+  const prescriptionId = searchParams.get("prescriptionId");
   const { currentUser, clinicId } = useAuthContext();
 
   const [loading, setLoading] = useState(true);
@@ -165,6 +171,93 @@ export default function BillingCounterPage() {
       }
     })();
   }, [clinicId]);
+
+  // Pre-fill from a prescription once the catalogues are in, so prices and
+  // names come from the medicine catalogue rather than from whatever the
+  // prescription happened to record.
+  useEffect(() => {
+    if (!prescriptionId || loading || medicines.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { prescriptionService } = await import(
+          "@/services/prescriptionService"
+        );
+        const rx =
+          await prescriptionService.getPrescriptionById(prescriptionId);
+
+        if (!rx || cancelled) return;
+
+        // Prescribed medicines live in their own collection, not on the
+        // prescription document.
+        const rxItems = await prescriptionService.getPrescriptionItems(rx.id);
+
+        if (cancelled) return;
+
+        if (rx.patientId) {
+          setCustomerType("patient");
+          setPatientId(rx.patientId);
+        }
+
+        const lines = (rxItems || [])
+          .map((item, index) => {
+            const med = medicines.find((m) => m.id === item.medicineId);
+
+            if (!med) return null;
+
+            // A suggestion, not a commitment — staff can correct the quantity
+            // before the invoice is created.
+            const quantity = item.quantity || suggestedDispenseQuantity(item);
+            const price = med.price || 0;
+
+            return {
+              id: `rx-${index}`,
+              appointmentTypeId: med.id,
+              appointmentTypeName: [med.name, med.strength]
+                .filter(Boolean)
+                .join(" "),
+              price,
+              quantity,
+              amount: price * quantity,
+              commission: 0,
+              calculateCommission: false,
+              isTaxable: Boolean(med.isVatApplied),
+              taxRate: med.vatPercentage || undefined,
+              lineKind: "medicine" as const,
+              stockType: "regular" as const,
+            };
+          })
+          .filter(Boolean) as AppointmentBillingItem[];
+
+        const missing = (rxItems || []).length - lines.length;
+
+        if (!cancelled) {
+          setItems(lines);
+          setPickKind("medicine");
+          addToast({
+            title: `Prescription loaded — ${lines.length} medicine line(s)`,
+            description:
+              missing > 0
+                ? `${missing} prescribed item(s) are not in the medicine catalogue and were skipped. Quantities are suggestions — check them before billing.`
+                : "Quantities are suggestions from the prescribed frequency and duration — check them before billing.",
+            color: missing > 0 ? "warning" : "success",
+          });
+        }
+      } catch (error: any) {
+        addToast({
+          title: "Could not load that prescription",
+          description: error?.message || "Please add the medicines manually.",
+          color: "danger",
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [prescriptionId, loading, medicines]);
 
   const taxPercentage = applyTax ? settings?.defaultTaxPercentage || 0 : 0;
 
