@@ -73,14 +73,20 @@ export const Select: React.FC<SelectProps> = ({
 }) => {
   const items: { key: React.Key; label: React.ReactNode }[] = [];
 
+  // Call sites use two conventions interchangeably — <SelectItem key="a"> and
+  // <SelectItem value="a"> — so both have to resolve to the same option key
+  // here. They previously did not: `value` was ignored by this pass and picked
+  // up by a second pass further down, which meant a `key`-style child was
+  // emitted by BOTH passes and every option appeared twice on screen.
   React.Children.forEach(children, (child) => {
     if (!React.isValidElement(child)) return;
-    if (child.type === SelectItem) {
-      const key = child.key ?? (child.props as any).itemKey;
+    if (child.type !== SelectItem) return;
 
-      if (key == null) return;
-      items.push({ key, label: child.props.children });
-    }
+    const props = child.props as SelectItemProps & { itemKey?: React.Key };
+    const key = child.key ?? props.itemKey ?? props.value;
+
+    if (key == null) return;
+    items.push({ key, label: child.props.children });
   });
 
   const initialKey =
@@ -148,17 +154,14 @@ export const Select: React.FC<SelectProps> = ({
               {item.label}
             </option>
           ))}
-          {React.Children.map(children, (child: any) => {
-            if (child?.type?.name === "SelectItem" || child?.props?.value) {
-              return (
-                <option key={child.props.value} value={child.props.value}>
-                  {child.props.children}
-                </option>
-              );
-            }
-
-            return child;
-          })}
+          {/* Anything that is not a SelectItem is passed through untouched;
+              SelectItem children are already rendered from `items` above and
+              must not be emitted a second time here. */}
+          {React.Children.map(children, (child) =>
+            React.isValidElement(child) && child.type === SelectItem
+              ? null
+              : child,
+          )}
         </select>
         <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted/50">
           <svg
