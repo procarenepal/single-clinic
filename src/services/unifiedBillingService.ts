@@ -164,7 +164,9 @@ export async function createDispensingBill(
         {
           medicineName: item.appointmentTypeName,
           quantity: item.quantity,
-          stockType: "regular",
+          // Scheme stock is a separate pool at a separate price, so the line
+          // has to say which one it came off.
+          stockType: item.stockType || "regular",
           fallbackPrice: item.price,
         },
         batches,
@@ -181,7 +183,11 @@ export async function createDispensingBill(
             schemeQty: 0,
           };
         }
-        parentTotals[item.appointmentTypeId].regularQty += alloc.qty;
+        if (alloc.isSchemeStock) {
+          parentTotals[item.appointmentTypeId].schemeQty += alloc.qty;
+        } else {
+          parentTotals[item.appointmentTypeId].regularQty += alloc.qty;
+        }
 
         stockWrites.push({
           docRef: batch.docRef,

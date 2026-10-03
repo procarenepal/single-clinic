@@ -95,8 +95,31 @@ export default function BillingCounterPage() {
     null,
   );
 
+  // Pharmacy sells to people who are not registered patients, so the counter
+  // has to as well or it cannot replace that screen. "walk-in" is the sentinel
+  // appointment billing already uses for a bill with no patient record.
+  const [customerType, setCustomerType] = useState<"patient" | "walk-in">(
+    "patient",
+  );
+  const [walkInName, setWalkInName] = useState("");
+  const [walkInPhone, setWalkInPhone] = useState("");
   const [patientId, setPatientId] = useState("");
   const [doctorId, setDoctorId] = useState("");
+  // Schedule 5 wants the buyer's PAN on the invoice, and a bill may be raised
+  // for a visit that happened earlier, so neither can be implied.
+  const [customerPan, setCustomerPan] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(
+    () => new Date().toISOString().split("T")[0],
+  );
+  const [notes, setNotes] = useState("");
+  // Whoever referred the patient and earns a cut. appointmentBilling already
+  // carries this as `referrals` and recordPayment already pays them out on
+  // payment, so this is the pathology screen's referring-doctor commission
+  // without any new service plumbing.
+  const [referrals, setReferrals] = useState<
+    NonNullable<AppointmentBilling["referrals"]>
+  >([]);
+  const [referrerId, setReferrerId] = useState("");
   const [items, setItems] = useState<AppointmentBillingItem[]>([]);
   const [discountType, setDiscountType] = useState<"flat" | "percent">("flat");
   const [discountValue, setDiscountValue] = useState(0);
@@ -213,6 +236,7 @@ export default function BillingCounterPage() {
         calculateCommission: pickKind === "service",
         doctorId: pickKind === "service" ? doctorId || undefined : undefined,
         doctorName: pickKind === "service" ? doctor?.name : undefined,
+        stockType: pickKind === "medicine" ? "regular" : undefined,
         isTaxable: entry.taxable,
         taxRate: (entry as { taxRate?: number }).taxRate,
         lineKind: pickKind,
@@ -245,14 +269,18 @@ export default function BillingCounterPage() {
 
   const patient = patients.find((p) => p.id === patientId);
   const hasMedicineLine = items.some((it) => it.lineKind === "medicine");
+  const isWalkIn = customerType === "walk-in";
+  const buyerName = isWalkIn ? walkInName.trim() : patient?.name || "";
 
   const submit = async () => {
     if (!currentUser || !clinicId) return;
 
-    if (!patient) {
+    if (!buyerName) {
       addToast({
-        title: "Select a patient",
-        description: "An invoice needs a patient before it can be issued.",
+        title: isWalkIn ? "Enter the customer's name" : "Select a patient",
+        description: isWalkIn
+          ? "IRD requires a buyer name on every invoice, including a walk-in sale."
+          : "An invoice needs a patient before it can be issued.",
         color: "danger",
       });
 
@@ -279,15 +307,32 @@ export default function BillingCounterPage() {
         invoiceNumber: "", // assigned by the Java ledger inside createBilling
         clinicId,
         branchId: "",
-        patientId: patient.id,
-        patientName: patient.name,
-        patientPanVat: "",
-        buyerPan: "",
+        // "walk-in" rather than a fabricated patient record: a counter sale to
+        // someone who is not a patient must not create one, or the patient
+        // list fills up with people who were never treated here.
+        patientId: isWalkIn ? "walk-in" : patient!.id,
+        patientName: buyerName,
+        patientMobile: isWalkIn ? walkInPhone.trim() : undefined,
+        // Both are populated from the one input: buyerPan is what the print
+        // and Java/IRD payload read, patientPanVat is what the UI displays.
+        patientPanVat: customerPan.trim(),
+        buyerPan: customerPan.trim(),
         doctorId: firstService?.doctorId || doctorId || "",
         doctorName: firstService?.doctorName || doctor?.name || "",
         doctorType: "regular",
         items,
-        invoiceDate: new Date(),
+        // Recomputed here, not trusted from the row state: lines can be added
+        // after a percentage was typed, and the payout must follow the invoice
+        // that is actually being issued.
+        referrals: referrals.length
+          ? referrals.map((r) => ({
+              ...r,
+              commissionAmount:
+                (totals.subtotal * r.commissionPercentage) / 100,
+            }))
+          : undefined,
+        notes: notes.trim() || undefined,
+        invoiceDate: new Date(invoiceDate),
         subtotal: totals.subtotal,
         discountType,
         discountValue,
@@ -359,47 +404,103 @@ export default function BillingCounterPage() {
       </p>
 
       <Card>
-        <CardHeader className="text-sm font-semibold">Patient</CardHeader>
-        <CardBody className="grid gap-3 md:grid-cols-3">
-          <Select
-            isRequired
-            label="Patient"
-            placeholder="Select a patient"
-            selectedKeys={patientId ? [patientId] : []}
-            onSelectionChange={(k) =>
-              setPatientId(String(Array.from(k)[0] ?? ""))
-            }
-          >
-            {patients.map((p) => (
-              <SelectItem
-                key={p.id}
-              >{`${p.name}${p.mobile ? ` — ${p.mobile}` : ""}`}</SelectItem>
+        <CardHeader className="text-sm font-semibold">Customer</CardHeader>
+        <CardBody className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["patient", "Registered patient"],
+                ["walk-in", "Walk-in"],
+              ] as Array<["patient" | "walk-in", string]>
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={customerType === value ? "solid" : "bordered"}
+                onClick={() => setCustomerType(value)}
+              >
+                {label}
+              </Button>
             ))}
-          </Select>
-          <Select
-            label="Attending clinician"
-            placeholder="Optional"
-            selectedKeys={doctorId ? [doctorId] : []}
-            onSelectionChange={(k) =>
-              setDoctorId(String(Array.from(k)[0] ?? ""))
-            }
-          >
-            {doctors.map((d) => (
-              <SelectItem key={d.id}>{d.name}</SelectItem>
-            ))}
-          </Select>
-          <Select
-            label="Payment method"
-            selectedKeys={[paymentMethod]}
-            onSelectionChange={(k) =>
-              setPaymentMethod(String(Array.from(k)[0] ?? "cash"))
-            }
-          >
-            <SelectItem key="cash">Cash</SelectItem>
-            <SelectItem key="card">Card</SelectItem>
-            <SelectItem key="cheque">Cheque</SelectItem>
-            <SelectItem key="credit">Credit</SelectItem>
-          </Select>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {isWalkIn ? (
+              <>
+                <Input
+                  isRequired
+                  label="Customer name"
+                  placeholder="Name for the invoice"
+                  value={walkInName}
+                  onValueChange={setWalkInName}
+                />
+                <Input
+                  label="Phone (optional)"
+                  placeholder="98…"
+                  value={walkInPhone}
+                  onValueChange={setWalkInPhone}
+                />
+              </>
+            ) : (
+              <Select
+                isRequired
+                label="Patient"
+                placeholder="Select a patient"
+                selectedKeys={patientId ? [patientId] : []}
+                onSelectionChange={(k) =>
+                  setPatientId(String(Array.from(k)[0] ?? ""))
+                }
+              >
+                {patients.map((p) => (
+                  <SelectItem
+                    key={p.id}
+                  >{`${p.name}${p.mobile ? ` — ${p.mobile}` : ""}`}</SelectItem>
+                ))}
+              </Select>
+            )}
+            <Input
+              label="Customer PAN (optional)"
+              placeholder="e.g. 601234567"
+              value={customerPan}
+              onValueChange={setCustomerPan}
+            />
+            <Select
+              label="Attending clinician"
+              placeholder="Optional — applied to new service lines"
+              selectedKeys={doctorId ? [doctorId] : []}
+              onSelectionChange={(k) =>
+                setDoctorId(String(Array.from(k)[0] ?? ""))
+              }
+            >
+              {doctors.map((d) => (
+                <SelectItem key={d.id}>{d.name}</SelectItem>
+              ))}
+            </Select>
+            <Select
+              label="Payment method"
+              selectedKeys={[paymentMethod]}
+              onSelectionChange={(k) =>
+                setPaymentMethod(String(Array.from(k)[0] ?? "cash"))
+              }
+            >
+              <SelectItem key="cash">Cash</SelectItem>
+              <SelectItem key="card">Card</SelectItem>
+              <SelectItem key="cheque">Cheque</SelectItem>
+              <SelectItem key="credit">Credit</SelectItem>
+            </Select>
+            <Input
+              label="Invoice date"
+              type="date"
+              value={invoiceDate}
+              onValueChange={setInvoiceDate}
+            />
+            <Input
+              label="Notes (optional)"
+              placeholder="Appears on the invoice"
+              value={notes}
+              onValueChange={setNotes}
+            />
+          </div>
         </CardBody>
       </Card>
 
@@ -475,6 +576,8 @@ export default function BillingCounterPage() {
                     {[
                       "Kind",
                       "Item",
+                      "Clinician / pool",
+                      "Comm. %",
                       "Qty",
                       "Rate",
                       "Discount",
@@ -505,14 +608,69 @@ export default function BillingCounterPage() {
                             {KIND_META[kind].label}
                           </span>
                         </td>
-                        <td className="px-2 py-1">
-                          {it.appointmentTypeName}
-                          {it.doctorName ? (
-                            <span className="text-text-muted">
-                              {" "}
-                              · {it.doctorName}
-                            </span>
-                          ) : null}
+                        <td className="px-2 py-1">{it.appointmentTypeName}</td>
+                        <td className="px-2 py-1 w-44">
+                          {kind === "service" ? (
+                            // Per line, not per invoice: one bill can carry two
+                            // clinicians' work, and each earns commission on
+                            // their own items only.
+                            <select
+                              className="w-full rounded border border-border-base bg-surface px-1 py-1 text-xs"
+                              value={it.doctorId || ""}
+                              onChange={(e) => {
+                                const picked = doctors.find(
+                                  (d) => d.id === e.target.value,
+                                );
+
+                                patchLine(it.id, {
+                                  doctorId: e.target.value || undefined,
+                                  doctorName: picked?.name,
+                                });
+                              }}
+                            >
+                              <option value="">— none —</option>
+                              {doctors.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : kind === "medicine" ? (
+                            <select
+                              className="w-full rounded border border-border-base bg-surface px-1 py-1 text-xs"
+                              value={it.stockType || "regular"}
+                              onChange={(e) =>
+                                patchLine(it.id, {
+                                  stockType: e.target.value as
+                                    | "regular"
+                                    | "scheme",
+                                })
+                              }
+                            >
+                              <option value="regular">Regular stock</option>
+                              <option value="scheme">Scheme stock</option>
+                            </select>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1 w-20">
+                          {kind === "service" ? (
+                            <Input
+                              min={0}
+                              size="sm"
+                              type="number"
+                              value={String(it.commission ?? 0)}
+                              onValueChange={(v) =>
+                                patchLine(it.id, {
+                                  commission: Number(v) || 0,
+                                  calculateCommission: (Number(v) || 0) > 0,
+                                })
+                              }
+                            />
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
                         </td>
                         <td className="px-2 py-1 w-20">
                           <Input
@@ -607,6 +765,106 @@ export default function BillingCounterPage() {
         </CardBody>
       </Card>
 
+      <Card>
+        <CardHeader className="text-sm font-semibold">
+          Referred by (optional)
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <p className="text-xs text-text-muted">
+            A referrer earns their commission when the invoice is paid, not when
+            it is raised — the same rule every other billing screen follows.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[240px] flex-1">
+              <Select
+                label="Referring clinician"
+                placeholder="Select who referred this patient"
+                selectedKeys={referrerId ? [referrerId] : []}
+                onSelectionChange={(k) =>
+                  setReferrerId(String(Array.from(k)[0] ?? ""))
+                }
+              >
+                {doctors
+                  .filter((d) => !referrals.some((r) => r.id === d.id))
+                  .map((d) => (
+                    <SelectItem key={d.id}>{d.name}</SelectItem>
+                  ))}
+              </Select>
+            </div>
+            <Button
+              isDisabled={!referrerId}
+              onClick={() => {
+                const d = doctors.find((x) => x.id === referrerId);
+
+                if (!d) return;
+                setReferrals((prev) => [
+                  ...prev,
+                  {
+                    type: "doctor",
+                    id: d.id,
+                    name: d.name,
+                    commissionPercentage: d.defaultCommission || 0,
+                    commissionAmount: 0,
+                  },
+                ]);
+                setReferrerId("");
+              }}
+            >
+              <span className="flex items-center gap-1.5">
+                <IoAddOutline /> Add referrer
+              </span>
+            </Button>
+          </div>
+
+          {referrals.length > 0 ? (
+            <div className="space-y-2">
+              {referrals.map((r, idx) => (
+                <div key={r.id} className="flex items-center gap-2 text-xs">
+                  <span className="min-w-[160px]">{r.name}</span>
+                  <div className="w-24">
+                    <Input
+                      min={0}
+                      size="sm"
+                      type="number"
+                      value={String(r.commissionPercentage)}
+                      onValueChange={(v) =>
+                        setReferrals((prev) =>
+                          prev.map((x, i) =>
+                            i === idx
+                              ? {
+                                  ...x,
+                                  commissionPercentage: Number(v) || 0,
+                                  commissionAmount:
+                                    (totals.subtotal * (Number(v) || 0)) / 100,
+                                }
+                              : x,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <span className="text-text-muted">
+                    % = NPR{" "}
+                    {money((totals.subtotal * r.commissionPercentage) / 100)}
+                  </span>
+                  <Button
+                    isIconOnly
+                    color="danger"
+                    size="sm"
+                    variant="light"
+                    onClick={() =>
+                      setReferrals((prev) => prev.filter((_, i) => i !== idx))
+                    }
+                  >
+                    <IoTrashOutline />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </CardBody>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="text-sm font-semibold">
@@ -675,7 +933,7 @@ export default function BillingCounterPage() {
               fullWidth
               className="mt-3"
               color="primary"
-              isDisabled={submitting || items.length === 0 || !patientId}
+              isDisabled={submitting || items.length === 0 || !buyerName}
               onClick={submit}
             >
               {submitting ? "Creating invoice…" : "Create one invoice"}

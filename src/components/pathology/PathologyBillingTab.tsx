@@ -339,7 +339,13 @@ export default function PathologyBillingTab({
   const paymentModal = useModalState(false);
   const settingsModal = useModalState(false);
 
-  const [activeTab, setActiveTab] = useState("create");
+  // Creation moved to the Billing Counter. The create form below is still the
+  // EDIT form for an existing invoice (hideTabBar + editingInvoiceId, used by
+  // the standalone edit route), so it stays — it is just no longer the way a
+  // new pathology invoice is raised.
+  const [activeTab, setActiveTab] = useState(
+    initialEditInvoiceId ? "create" : "manage",
+  );
   const [taxSettingsForm, setTaxSettingsForm] = useState({
     enableTax: false,
     defaultTaxPercentage: 0,
@@ -1712,11 +1718,17 @@ export default function PathologyBillingTab({
         {!hideTabBar && (
           <div className="flex border-b border-border-base bg-surface-2/50">
             {[
-              {
-                id: "create",
-                label: editingInvoiceId ? "Edit Invoice" : "Create Invoice",
-                icon: <IoAddOutline className="w-4 h-4" />,
-              },
+              // "Create" only appears while editing an existing invoice; a new
+              // one is raised at the Billing Counter.
+              ...(editingInvoiceId
+                ? [
+                    {
+                      id: "create",
+                      label: "Edit Invoice",
+                      icon: <IoAddOutline className="w-4 h-4" />,
+                    },
+                  ]
+                : []),
               {
                 id: "orders",
                 label: `Pending Orders${pendingPathologyOrders.length ? ` (${pendingPathologyOrders.length})` : ""}`,
@@ -1743,6 +1755,22 @@ export default function PathologyBillingTab({
                 {t.icon} {t.label}
               </button>
             ))}
+            {/* A new pathology invoice is raised at the Billing Counter, which
+                bills lab tests alongside the consultation and any medicines on
+                one invoice with one IRD number. This tab keeps the list,
+                payments, credit notes and settings. */}
+            {!editingInvoiceId && (
+              <div className="ml-auto flex items-center pr-3">
+                <Button
+                  color="primary"
+                  size="sm"
+                  onClick={() => navigate("/dashboard/billing-counter")}
+                >
+                  <IoAddOutline className="w-4 h-4 mr-1" />
+                  New Invoice
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

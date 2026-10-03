@@ -417,7 +417,8 @@ export default function AppointmentBillingPage() {
   const isClinicAdmin = userData?.role === "clinic-admin";
 
   // Tabs: 'create' | 'manage' | 'settings'
-  const [activeTab, setActiveTab] = useState(filterDate ? "manage" : "create");
+  // Creation moved to the Billing Counter, so this screen opens on the list.
+  const [activeTab, setActiveTab] = useState("manage");
 
   // Data
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -1526,11 +1527,6 @@ export default function AppointmentBillingPage() {
         <div className="flex border-b border-border-base bg-surface-2/50">
           {[
             {
-              id: "create",
-              label: "Create Invoice",
-              icon: <IoAddOutline className="w-4 h-4" />,
-            },
-            {
               id: "manage",
               label: "Manage Invoices",
               icon: <IoStatsChartOutline className="w-4 h-4" />,
@@ -1551,9 +1547,25 @@ export default function AppointmentBillingPage() {
               {t.icon} {t.label}
             </button>
           ))}
+          <div className="ml-auto flex items-center pr-3">
+            {/* Invoices are raised at the Billing Counter, which bills a whole
+                visit — consultation, lab tests and medicines — on one invoice
+                with one IRD number. This screen keeps the list, payments,
+                credit notes and settings. */}
+            <Button
+              color="primary"
+              size="sm"
+              onClick={() => navigate("/dashboard/billing-counter")}
+            >
+              <span className="flex items-center gap-1.5">
+                <IoAddOutline className="w-4 h-4" /> New Invoice
+              </span>
+            </Button>
+          </div>
         </div>
 
-        {/* Create Tab */}
+        {/* Create Tab — unreachable from the strip above; kept only so an
+            existing deep link to ?tab=create still renders rather than 404s. */}
         {activeTab === "create" && (
           <div className="p-5 flex flex-col gap-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

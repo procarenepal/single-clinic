@@ -1753,6 +1753,14 @@ export interface AppointmentBillingItem {
    * so no parallel id field is introduced.
    */
   lineKind?: "service" | "lab" | "medicine";
+  /**
+   * Which stock pool a medicine line is dispensed from. "scheme" is the
+   * doctor-received stock pharmacy tracks separately from stock it bought, and
+   * it is priced separately too — billing it as regular stock would both
+   * misprice the line and draw down the wrong pool. Only meaningful when
+   * lineKind is "medicine"; absent means regular.
+   */
+  stockType?: "regular" | "scheme";
 }
 
 // Main appointment billing/invoice record

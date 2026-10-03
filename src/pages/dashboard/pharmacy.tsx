@@ -3818,9 +3818,17 @@ export default function PharmacyPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             {activeTab === "purchased" && (
-              <Button color="primary" onClick={purchaseModalState.open}>
+              // A sale is raised at the Billing Counter, which bills medicines
+              // alongside consultations and lab tests on one invoice with one
+              // IRD number instead of a pharmacy-only receipt. The sale modal
+              // itself stays for dispensing against a prescription, which the
+              // counter cannot pre-fill from yet.
+              <Button
+                color="primary"
+                onClick={() => navigate("/dashboard/billing-counter")}
+              >
                 <IoAddOutline className="w-4 h-4 mr-1" />
-                New Record
+                New Sale
               </Button>
             )}
           </div>
@@ -4009,8 +4017,11 @@ export default function PharmacyPage() {
                     <p className="text-default-500 mb-4">
                       Start by recording your first medicine purchase.
                     </p>
-                    <Button color="primary" onPress={purchaseModalState.open}>
-                      Record Purchase
+                    <Button
+                      color="primary"
+                      onPress={() => navigate("/dashboard/billing-counter")}
+                    >
+                      Go to Billing Counter
                     </Button>
                   </div>
                 ) : paginatedPurchases.length === 0 &&
