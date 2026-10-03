@@ -134,7 +134,6 @@ export const RoleManagement: React.FC<RoleManagementProps> = ({ clinicId }) => {
           const nameValidation = await rbacService.validateRoleNameUnique(
             clinicId,
             formData.name,
-            undefined, // No branchId in standalone
           );
 
           if (!nameValidation.valid) {

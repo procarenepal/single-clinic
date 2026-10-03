@@ -210,7 +210,8 @@ export const rbacService = {
       const nameValidation = await this.validateRoleNameUnique(
         roleData.clinicId,
         roleData.name,
-        roleData.branchId,
+        // Nothing to exclude when creating. This previously passed branchId,
+        // which the function treats as excludeId.
       );
 
       if (!nameValidation.valid) {
@@ -430,13 +431,15 @@ export const rbacService = {
 
       // Validate role name uniqueness if name is being updated
       if (updateData.name !== undefined) {
+        // Only three parameters: (clinicId, name, excludeId). A branchId was
+        // being passed as the third argument and the role id as a fourth,
+        // so the id was silently dropped and the role collided with itself —
+        // every rename or permission edit failed with "already exists".
+        // Uniqueness is clinic-wide, so branch plays no part in it.
         const nameValidation = await this.validateRoleNameUnique(
           existingRole.clinicId,
           updateData.name,
-          updateData.branchId !== undefined
-            ? updateData.branchId
-            : existingRole.branchId,
-          id, // Exclude current role from uniqueness check
+          id, // Exclude the role being updated
         );
 
         if (!nameValidation.valid) {
