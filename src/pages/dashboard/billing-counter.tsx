@@ -304,6 +304,15 @@ export default function BillingCounterPage() {
     }));
   }, [pickKind, apptTypes, labTests, medicines]);
 
+  // A clinic configures commission per clinician, with a clinic-wide default
+  // behind it, and the billing screen this counter replaced applied that
+  // automatically. Starting every line at 0 instead would silently pay
+  // treating clinicians nothing, with nothing on screen to say so.
+  const defaultCommissionFor = (clinicianId: string | undefined) =>
+    doctors.find((d) => d.id === clinicianId)?.defaultCommission ??
+    settings?.defaultCommission ??
+    0;
+
   const addLine = () => {
     const entry = catalogue.find((c) => c.id === pickId);
 
@@ -322,7 +331,7 @@ export default function BillingCounterPage() {
         price: entry.price,
         quantity: 1,
         amount: entry.price,
-        commission: 0,
+        commission: pickKind === "service" ? defaultCommissionFor(doctorId) : 0,
         // Only a clinician's own service earns commission. A lab test or a
         // box of tablets must not, or attaching a doctor to the visit would
         // quietly pay them a percentage of the pharmacy bill.
@@ -718,6 +727,11 @@ export default function BillingCounterPage() {
                                 patchLine(it.id, {
                                   doctorId: e.target.value || undefined,
                                   doctorName: picked?.name,
+                                  // Follow the newly chosen clinician's own
+                                  // rate, as the screen this replaced did.
+                                  commission: defaultCommissionFor(
+                                    e.target.value,
+                                  ),
                                 });
                               }}
                             >
