@@ -3173,6 +3173,43 @@ export default function FrontOfficeDesk() {
     return "completed";
   };
 
+  /**
+   * Which of an appointment’s invoices (if any) is still unpaid.
+   *
+   * An appointment can carry TWO independent invoices — the consultation
+   * fee (consultationBillingId) and a separate procedure charge (billingId)
+   * — each settled independently. This file previously had SEVEN separate
+   * inline copies of "is there a pending bill" logic. Several checked only
+   * ONE of the two: either by picking one via `billingId ||
+   * consultationBillingId` (so a paid procedure charge masked an unpaid
+   * consultation fee, or vice versa), or by checking only
+   * consultationBillingId (so an appointment with only a procedure charge —
+   * no consultation bill at all — was never flagged, no matter how unpaid).
+   * One correct implementation, used everywhere a "pending bill" check is
+   * needed in this file.
+   *
+   * Returns the pending bill itself (not just a boolean) because several
+   * call sites need it — to read its line items, or navigate to it.
+   * Prefers the consultation bill when both are pending, matching this
+   * file’s existing "Settle Consultation Bill" UI copy.
+   */
+  const getPendingBillForAppointment = (appt: Appointment) => {
+    const isBillPaid = (bill: any) =>
+      !!bill && (bill.status === "paid" || bill.paymentStatus === "paid");
+
+    const consultationBill = (appt as any).consultationBillingId
+      ? billings.find((b) => b.id === (appt as any).consultationBillingId)
+      : null;
+    const procedureBill = appt.billingId
+      ? billings.find((b) => b.id === appt.billingId)
+      : null;
+
+    if (consultationBill && !isBillPaid(consultationBill)) return consultationBill;
+    if (procedureBill && !isBillPaid(procedureBill)) return procedureBill;
+
+    return null;
+  };
+
   // Which exclusive cabins are currently occupied, and by whom — used to
   // warn/block routing a second patient into the same physical room while
   // someone else is already there. Excludes the patient currently being
@@ -3215,19 +3252,14 @@ export default function FrontOfficeDesk() {
       }
     }
 
-    const consBill = (appt as any).consultationBillingId
-      ? billings.find((b) => b.id === (appt as any).consultationBillingId)
-      : null;
-    const isConsBillPaid = consBill
-      ? consBill.status === "paid" || consBill.paymentStatus === "paid"
-      : false;
-    const isConsBillPending = consBill && !isConsBillPaid;
+    const consBill = getPendingBillForAppointment(appt);
+    const isConsBillPending = Boolean(consBill);
 
     if (activeTab === "urgent") {
       if (appt.isUrgent) return true;
       if (stage === "billing") return true;
       if (stage === "lobby" || stage === "scheduled") {
-        if (consBill && !isConsBillPaid) return true;
+        if (consBill) return true;
       }
       if (
         !appt.onHold &&
@@ -5208,14 +5240,8 @@ export default function FrontOfficeDesk() {
     const hasExpert =
       appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
     const hasAnyClinician = hasDoctor || hasExpert;
-    const pendingBillId = appt.billingId || (appt as any).consultationBillingId;
-    const consBill = pendingBillId
-      ? billings.find((b) => b.id === pendingBillId)
-      : null;
-    const isConsBillPaid = consBill
-      ? consBill.status === "paid" || consBill.paymentStatus === "paid"
-      : false;
-    const isConsBillPending = consBill && !isConsBillPaid;
+    const consBill = getPendingBillForAppointment(appt);
+    const isConsBillPending = Boolean(consBill);
     const isExpertOnly = currentExpertId && !currentDoctorId;
 
     if (isConsBillPending && stage !== "expert") {
@@ -5392,13 +5418,8 @@ export default function FrontOfficeDesk() {
 
   const getStageBadge = (stage: string, appt?: Appointment) => {
     if (appt) {
-      const consBill = (appt as any).consultationBillingId
-        ? billings.find((b) => b.id === (appt as any).consultationBillingId)
-        : null;
-      const isConsBillPaid = consBill
-        ? consBill.status === "paid" || consBill.paymentStatus === "paid"
-        : false;
-      const isConsBillPending = consBill && !isConsBillPaid;
+      const consBill = getPendingBillForAppointment(appt);
+      const isConsBillPending = Boolean(consBill);
 
       if (isConsBillPending) {
         const isOnlyCons =
@@ -5604,16 +5625,8 @@ export default function FrontOfficeDesk() {
 
                   if (s === "scheduled") return true;
                   if (s !== "lobby") return false;
-                  const consBill = (a as any).consultationBillingId
-                    ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
-                    : null;
-                  const isConsBillPaid = consBill
-                    ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
-                    : false;
-                  const isConsBillPending = consBill && !isConsBillPaid;
+                  const consBill = getPendingBillForAppointment(a);
+                  const isConsBillPending = Boolean(consBill);
 
                   return isConsBillPending;
                 }).length
@@ -5817,21 +5830,9 @@ export default function FrontOfficeDesk() {
 
                   if (s === "billing") return true;
 
-                  const consBill = (a as any).consultationBillingId
-                    ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
-                    : null;
-                  const isConsBillPaid = consBill
-                    ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
-                    : false;
+                  const consBill = getPendingBillForAppointment(a);
 
-                  if (
-                    (s === "lobby" || s === "scheduled") &&
-                    consBill &&
-                    !isConsBillPaid
-                  )
+                  if ((s === "lobby" || s === "scheduled") && consBill)
                     return true;
 
                   if (
@@ -5867,16 +5868,8 @@ export default function FrontOfficeDesk() {
 
                   if (s === "scheduled") return true;
                   if (s !== "lobby") return false;
-                  const consBill = (a as any).consultationBillingId
-                    ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
-                    : null;
-                  const isConsBillPaid = consBill
-                    ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
-                    : false;
-                  const isConsBillPending = consBill && !isConsBillPaid;
+                  const consBill = getPendingBillForAppointment(a);
+                  const isConsBillPending = Boolean(consBill);
 
                   return isConsBillPending;
                 }).length,
@@ -5888,16 +5881,8 @@ export default function FrontOfficeDesk() {
                   const s = getPatientStage(a);
 
                   if (s !== "lobby") return false;
-                  const consBill = (a as any).consultationBillingId
-                    ? billings.find(
-                      (b) => b.id === (a as any).consultationBillingId,
-                    )
-                    : null;
-                  const isConsBillPaid = consBill
-                    ? consBill.status === "paid" ||
-                    consBill.paymentStatus === "paid"
-                    : false;
-                  const isConsBillPending = consBill && !isConsBillPaid;
+                  const consBill = getPendingBillForAppointment(a);
+                  const isConsBillPending = Boolean(consBill);
 
                   return !isConsBillPending;
                 }).length,
