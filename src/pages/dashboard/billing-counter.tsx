@@ -332,6 +332,41 @@ export default function BillingCounterPage() {
     );
   };
 
+  /**
+   * What a given referrer's commission is calculated on.
+   *
+   * Two rules, both standard commission practice and both already applied by
+   * the engine that actually pays this out — the screen was the only place
+   * disagreeing with it.
+   *
+   * Net of discount, never gross: a percentage of a list price the clinic
+   * never charged pays out on money that never arrived. Tax is excluded for
+   * the same reason — VAT is collected for the government, not earned.
+   * `item.amount` is already net of its own discount, and the bill-level
+   * discount is applied as a ratio exactly as clinicianCommissionService does.
+   *
+   * And never on lines the referrer treated themselves: a referral fee is for
+   * originating work somebody else performs. Earning it on your own work means
+   * being paid twice for one service, which is why recordPayment already drops
+   * those items before paying a doctor referrer.
+   */
+  const referralBaseFor = (referrerId: string) => {
+    const net = (list: AppointmentBillingItem[]) =>
+      list.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+    const allNet = net(items);
+
+    if (allNet <= 0) return 0;
+
+    const eligibleNet = net(
+      items.filter((item) => item.doctorId !== referrerId),
+    );
+    const billDiscountRatio =
+      (allNet - (totals.mainDiscountAmount || 0)) / allNet;
+
+    return Math.max(0, eligibleNet * billDiscountRatio);
+  };
+
   const addLine = () => {
     const entry = catalogue.find((c) => c.id === pickId);
 
@@ -459,7 +494,7 @@ export default function BillingCounterPage() {
           ? referrals.map((r) => ({
               ...r,
               commissionAmount:
-                (totals.subtotal * r.commissionPercentage) / 100,
+                (referralBaseFor(r.id) * r.commissionPercentage) / 100,
             }))
           : undefined,
         notes: notes.trim() || undefined,
@@ -914,7 +949,10 @@ export default function BillingCounterPage() {
         <CardBody className="space-y-3">
           <p className="text-xs text-text-muted">
             A referrer earns their commission when the invoice is paid, not when
-            it is raised — the same rule every other billing screen follows.
+            it is raised — the same rule every other billing screen follows. It
+            is calculated on the discounted amount excluding VAT, and never on
+            lines the referrer treated themselves, since that work already earns
+            them a treating commission.
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[240px] flex-1">
@@ -977,7 +1015,8 @@ export default function BillingCounterPage() {
                                   ...x,
                                   commissionPercentage: Number(v) || 0,
                                   commissionAmount:
-                                    (totals.subtotal * (Number(v) || 0)) / 100,
+                                    (referralBaseFor(r.id) * (Number(v) || 0)) /
+                                    100,
                                 }
                               : x,
                           ),
@@ -985,10 +1024,28 @@ export default function BillingCounterPage() {
                       }
                     />
                   </div>
-                  <span className="text-text-muted">
-                    % = NPR{" "}
-                    {money((totals.subtotal * r.commissionPercentage) / 100)}
-                  </span>
+                  {(() => {
+                    const base = referralBaseFor(r.id);
+                    const ownLines = items.filter(
+                      (it) => it.doctorId === r.id,
+                    ).length;
+
+                    return (
+                      <span className="text-text-muted">
+                        % of NPR {money(base)} ={" "}
+                        <strong>
+                          NPR {money((base * r.commissionPercentage) / 100)}
+                        </strong>
+                        {ownLines > 0 ? (
+                          <span className="text-warning">
+                            {" "}
+                            — excludes {ownLines} line
+                            {ownLines > 1 ? "s" : ""} they treated
+                          </span>
+                        ) : null}
+                      </span>
+                    );
+                  })()}
                   <Button
                     isIconOnly
                     color="danger"
