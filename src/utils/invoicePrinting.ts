@@ -492,34 +492,76 @@ export const generateUnifiedInvoiceHTML = (
         </table>
       </div>
       
-      <div style="margin-top: 4px; font-size: 13px; color: #000000;">
-        <strong>In words:</strong> Rupees ${numberToWords(invoice.totalAmount || 0)} Only
-      </div>
+      ${(() => {
+        // The amount in words restates the Total, so it belongs WITH the money
+        // rather than floating under it as an orphaned line — it reads as part
+        // of the summary now instead of as the start of the footer.
+        const words = `Rupees ${numberToWords(invoice.totalAmount || 0)} Only`;
 
-      <div style="margin-top: ${isThermal ? "10px" : "15px"}; display: flex; gap: 60px; font-size: 13px; color: #000000;">
-        <div>
-          <p style="margin: 0;">Authorized Signature</p>
-          <p style="margin: 5px 0 0 0;">___________________</p>
-        </div>
-        <div>
-          <p style="margin: 0;">Printed By</p>
-          <p style="margin: 5px 0 0 0;">${printedBy ? printedBy : "___________________"}</p>
-        </div>
-      </div>
+        if (isThermal) {
+          return `
+            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #0f172a;">
+              <span style="text-transform: uppercase; letter-spacing: 0.04em; color: #475569; font-size: 10px;">Amount in words</span><br/>
+              <strong>${words}</strong>
+            </div>
+            <div style="margin-top: 12px; font-size: 11px; color: #475569;">
+              Printed by: <strong style="color: #0f172a;">${printedBy || "—"}</strong>
+            </div>
+            <div style="margin-top: 18px; text-align: center; font-size: 11px; color: #475569;">
+              <div style="border-top: 1px solid #0f172a; width: 60%; margin: 0 auto 3px auto;"></div>
+              Authorized Signature
+            </div>`;
+        }
+
+        return `
+          <div style="margin-top: 6px; padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; font-size: 12.5px; color: #0f172a;">
+            <span style="text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-size: 10px; margin-right: 6px;">Amount in words</span>
+            <strong>${words}</strong>
+          </div>
+
+          <div style="margin-top: 34px; display: flex; justify-content: space-between; align-items: flex-end; gap: 40px;">
+            <!-- An audit field (Schedule 5 "Printed_by"), not a second
+                 signature — it was previously laid out identically to the
+                 signature block, so the two read as a matching pair. -->
+            <div style="font-size: 10.5px; color: #64748b; line-height: 1.5;">
+              Printed by <span style="color: #0f172a; font-weight: 600;">${printedBy || "—"}</span>
+            </div>
+            <!-- Rule first, label beneath: the conventional place to sign, and
+                 a real border rather than a row of underscores. -->
+            <div style="text-align: center; min-width: 210px;">
+              <div style="border-top: 1px solid #0f172a; margin-bottom: 4px;"></div>
+              <div style="font-size: 11px; color: #334155; letter-spacing: 0.03em;">Authorized Signature</div>
+            </div>
+          </div>`;
+      })()}
     </div>
     
     ${!isThermal && footerHTML
       ? footerHTML
       : `
-    <div style="margin-top: 15px; text-align: center; font-size: 0.85em; color: #000000; border-top: 1px solid #eee; padding-top: 5px;">
-      <p style="font-weight: bold; margin: 2px 0;">Computerized Billing System</p>
-      <p>${layoutConfig?.showFooter ? (
-        invoice.invoiceType === 'appointment' ? layoutConfig.appointmentFooterText :
-          invoice.invoiceType === 'pathology' ? layoutConfig.pathologyFooterText :
-            layoutConfig.footerText
-      ) || layoutConfig.footerText || "Thank you for choosing us" : "Thank you for choosing us"}</p>
-      ${isThermal ? `<p>${new Date().toLocaleString()}</p>` : ""}
+    ${(() => {
+      // "Computerized Billing System" is a statement ABOUT the document and
+      // belongs in the margin, not in bold competing with the content.
+      //
+      // The thank-you line used to be hardcoded as a fallback, so a clinic
+      // that had deliberately cleared its footer text still got marketing
+      // printed on a tax document. It now appears only when one is actually
+      // configured.
+      const configured =
+        (invoice.invoiceType === "appointment" ? layoutConfig?.appointmentFooterText : "") ||
+        (invoice.invoiceType === "pathology" ? layoutConfig?.pathologyFooterText : "") ||
+        layoutConfig?.footerText ||
+        "";
+      const message = layoutConfig?.showFooter ? String(configured).trim() : "";
+
+      return `
+    <div style="margin-top: ${isThermal ? "10px" : "18px"}; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 6px; line-height: 1.6;">
+      ${message ? `<p style="margin: 0 0 2px 0; font-size: 11px; color: #334155;">${message}</p>` : ""}
+      <p style="margin: 0; font-size: 9.5px; color: #94a3b8; letter-spacing: 0.06em; text-transform: uppercase;">Computerized Billing System</p>
+      ${isThermal ? `<p style="margin: 2px 0 0 0; font-size: 9.5px; color: #94a3b8;">${new Date().toLocaleString()}</p>` : ""}
     </div>
+    `;
+    })()}
     `
     }
   </div>
