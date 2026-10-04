@@ -195,8 +195,8 @@ export const generateUnifiedInvoiceHTML = (
             ${item.subtext ? `<div style="font-size: ${isThermal ? '0.9em' : '10px'}; color: #000000; font-weight: 600; margin-top: 2px;">${item.subtext}</div>` : ''}
           </td>
           <td class="text-center" style="text-align: center; white-space: nowrap;">${item.quantity}</td>
-          ${!isThermal ? `<td class="text-center" style="text-align: center; white-space: nowrap;">${item.price !== undefined ? formatCurrency(item.price) : '-'}</td>` : ""}
-          <td class="text-center" style="text-align: center; white-space: nowrap;">${formatCurrency(item.amount)}</td>
+          ${!isThermal ? `<td style="text-align: right; white-space: nowrap;">${item.price !== undefined ? formatCurrency(item.price) : '-'}</td>` : ""}
+          <td style="text-align: right; white-space: nowrap; font-weight: 600;">${formatCurrency(item.amount)}</td>
         </tr>`
     )
     .join("");
@@ -337,7 +337,7 @@ export const generateUnifiedInvoiceHTML = (
 <body>
   <div class="print-container">
     ${headerHTML}
-    ${copyNumber > 0 ? `<div style="text-align: center; font-weight: bold; font-size: 13px; margin-top: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">[ COPY OF ORIGINAL &ndash; ${copyNumber} ]</div>` : ""}
+    ${copyNumber > 0 ? `<div style="text-align: right; margin: 4px 0 0 0;"><span style="display: inline-block; border: 1px solid #94a3b8; border-radius: 3px; padding: 1px 7px; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.08em;">Copy of Original &ndash; ${copyNumber}</span></div>` : ""}
     
     <div class="content">
       <div class="document-title">
@@ -350,10 +350,38 @@ export const generateUnifiedInvoiceHTML = (
       </div>
 
       <div style="border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: ${isThermal ? "6px 0" : "8px 0"}; margin: 10px 0;">
-        <div style="display: flex; flex-direction: ${isThermal ? "column" : "row"}; justify-content: space-between; align-items: baseline; width: 100%; gap: ${isThermal ? "1px" : "16px"}; font-size: 13px; color: #000000; margin-bottom: ${isThermal ? "6px" : "8px"};">
-          <span style="font-weight: 700; color: #000000; white-space: nowrap; flex-shrink: 0;"># ${invoice.invoiceNumber}</span>
-          <span style="text-align: ${isThermal ? "left" : "right"};">Transaction Date: ${formatDateWithBS(invoice.invoiceDate)}${isThermal ? "" : " &nbsp;|&nbsp; "}${isThermal ? "<br/>" : ""}Invoice Issue Date: ${formatDateWithBS(invoice.invoiceDate)}</span>
-        </div>
+        ${(() => {
+          // IRD's format requires BOTH Transaction Date and Invoice Issue
+          // Date, so neither can be dropped. They were previously joined into
+          // one sentence, each rendered with its AD and BS form — about 110
+          // characters that wrapped onto a second line and became the most
+          // visually prominent thing on the invoice. Stacking them as a small
+          // label/value pair keeps both fields and gives the width back to
+          // the invoice number, which is what identifies the document.
+          const dated = formatDateWithBS(invoice.invoiceDate);
+
+          if (isThermal) {
+            return `<div style="font-size: 13px; color: #000000; margin-bottom: 6px;">
+              <div style="font-weight: 700;"># ${invoice.invoiceNumber}</div>
+              <div>Transaction Date: ${dated}</div>
+              <div>Invoice Issue Date: ${dated}</div>
+            </div>`;
+          }
+
+          return `<div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 16px; margin-bottom: 8px;">
+            <span style="font-size: 15px; font-weight: 700; color: #0f172a; white-space: nowrap; letter-spacing: 0.01em;">${invoice.invoiceNumber}</span>
+            <table style="border-collapse: collapse; font-size: 11px; color: #334155;">
+              <tr>
+                <td style="padding: 0 8px 1px 0; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;">Transaction Date</td>
+                <td style="padding: 0 0 1px 0; text-align: right; font-weight: 600; color: #0f172a; white-space: nowrap;">${dated}</td>
+              </tr>
+              <tr>
+                <td style="padding: 0 8px 0 0; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;">Invoice Issue Date</td>
+                <td style="padding: 0; text-align: right; font-weight: 600; color: #0f172a; white-space: nowrap;">${dated}</td>
+              </tr>
+            </table>
+          </div>`;
+        })()}
         ${(() => {
           const lbl = `padding: 1px 0; color: #000000; text-transform: uppercase; font-size: 12px; letter-spacing: 0.03em; vertical-align: top; white-space: nowrap;`;
           const val = `padding: 1px 8px 1px 0; font-weight: 600; vertical-align: top;`;
@@ -416,10 +444,10 @@ export const generateUnifiedInvoiceHTML = (
         <thead>
           <tr>
             <th style="width: 40px; text-align: center;">S.N.</th>
-            <th style="text-align: center;">Item / Service</th>
+            <th style="text-align: left;">Item / Service</th>
             <th style="width: 50px; text-align: center; white-space: nowrap;">Qty</th>
-            ${!isThermal ? `<th style="width: 100px; text-align: center; white-space: nowrap;">Price</th>` : ""}
-            <th style="width: 100px; text-align: center; white-space: nowrap;">Amount</th>
+            ${!isThermal ? `<th style="width: 100px; text-align: right; white-space: nowrap;">Price</th>` : ""}
+            <th style="width: 110px; text-align: right; white-space: nowrap;">Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -458,8 +486,8 @@ export const generateUnifiedInvoiceHTML = (
             return `<tr><td>VAT (${effectiveRate}%)</td><td class="text-right">${formatCurrency(invoice.taxAmount || 0)}</td></tr>`;
           })()}
           <tr class="font-bold">
-            <td>Total Amount</td>
-            <td class="text-right">${formatCurrency(invoice.totalAmount)}</td>
+            <td style="border-top: 2px solid #0f172a; padding-top: 6px; font-size: 14px; letter-spacing: 0.02em;">Total Amount</td>
+            <td class="text-right" style="border-top: 2px solid #0f172a; padding-top: 6px; font-size: 16px; font-weight: 800; color: #0f172a; white-space: nowrap;">${formatCurrency(invoice.totalAmount)}</td>
           </tr>
         </table>
       </div>

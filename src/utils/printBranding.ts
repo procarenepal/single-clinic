@@ -130,11 +130,15 @@ export const getPrintBrandingCSS = (
 
     .contact-row {
       display: flex;
+      /* Side by side needs roughly 90mm; a 58-80mm receipt does not have it,
+         so phone and email ran off the edge of the paper. Stack them there. */
+      flex-direction: ${isThermal ? "column" : "row"};
       align-items: center;
-      gap: 20px;
+      gap: ${isThermal ? "1px" : "20px"};
       margin-top: 4px;
       justify-content: center;
       width: 100%;
+      flex-wrap: wrap;
     }
 
     .contact-item {
@@ -167,13 +171,19 @@ export const getPrintBrandingCSS = (
       font-family: ${fontFamily};
     }
 
+    /* On a receipt the logo has to flow ABOVE the clinic name rather than be
+       positioned over it. .logo-container already asks for relative placement
+       when thermal, but this rule is later in the sheet and its unconditional
+       "absolute" won, so the logo was painted on top of the clinic name and
+       address — an 80mm receipt has no column to put it beside. */
     .pos-logo { 
-      position: absolute;
-      top: 20px;
+      position: ${isThermal ? "relative" : "absolute"};
+      top: ${isThermal ? "auto" : "20px"};
       transform: ${isThermal ? "none" : `translate(${config.logoPos?.x || 0}px, ${config.logoPos?.y || 0}px)`};
-      left: ${effectiveLogoPosition === "left" ? "40px" : effectiveLogoPosition === "right" ? "auto" : "50%"};
-      right: ${effectiveLogoPosition === "right" ? "40px" : "auto"};
-      margin-left: ${effectiveLogoPosition === "center" ? `-${(config.logoWidth || 80) / 2}px` : "0px"};
+      left: ${isThermal ? "auto" : effectiveLogoPosition === "left" ? "40px" : effectiveLogoPosition === "right" ? "auto" : "50%"};
+      right: ${isThermal ? "auto" : effectiveLogoPosition === "right" ? "40px" : "auto"};
+      margin-left: ${isThermal ? "auto" : effectiveLogoPosition === "center" ? `-${(config.logoWidth || 80) / 2}px` : "0px"};
+      margin-right: ${isThermal ? "auto" : "0"};
       z-index: 100;
     }
     /* Identity-stack items: x-nudge only. Y-offset is intentionally ignored to
@@ -217,20 +227,17 @@ export const getPrintHeaderHTML = (
   const formattedClinicName = rawClinicName.replace(/\s+(Pvt\.?\s*Ltd\.?)/i, "<br/>$1");
 
   const panValue = String(config.panNumber || clinic?.panNumber || "");
+  // Plain text rather than a grid of per-digit boxes. Those boxes exist on
+  // PAPER forms so a human can hand-write one digit per cell; reproducing them
+  // on a computer-generated invoice imitates a constraint that does not apply
+  // and competes with the clinic name for the top of the page. IRD's own
+  // format simply specifies a "Seller's PAN" field.
   const panBoxesHTML =
     !isThermal && config.showPan !== false && panValue
       ? `
-        <div style="position: absolute; top: 4px; right: 4px; text-align: right;">
-          <div style="font-size: 0.7em; color: #334155; font-weight: 600; margin-bottom: 2px; letter-spacing: 0.05em;">PAN / VAT No.</div>
-          <div style="display: flex; gap: 2px; justify-content: flex-end;">
-            ${panValue
-              .split("")
-              .map(
-                (ch) =>
-                  `<div style="border: 1px solid #1e293b; width: 18px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: 700; color: #1e293b;">${ch}</div>`,
-              )
-              .join("")}
-          </div>
+        <div style="position: absolute; top: 2px; right: 0; text-align: right; line-height: 1.3;">
+          <div style="font-size: 9px; color: #64748b; letter-spacing: 0.06em; text-transform: uppercase;">PAN / VAT</div>
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a; letter-spacing: 0.08em;">${panValue}</div>
         </div>
       `
       : "";
