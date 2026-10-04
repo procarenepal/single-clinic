@@ -623,18 +623,37 @@ export default function NewAppointmentPage() {
             : "Clinic";
           const clinicianCommission = clinicianToBill?.defaultCommission || 0;
 
+          // Resolved through the shared helper rather than read field by
+          // field. Reading only name and price here meant an appointment type
+          // configured as taxable was billed EXEMPT — createBilling requires
+          // isTaxable === true to tax a line, and nothing set it — and the
+          // type's own commission rate and calculateCommission flag were
+          // ignored in favour of the clinician's blanket default. Appointment
+          // billing, its edit page, PatientBillingTab and the front-office
+          // desk all already resolve through this helper; this screen was the
+          // one booking path that did not.
+          const resolved =
+            appointmentBillingService.resolveItemFieldsFromAppointmentType(
+              selApptType,
+              clinicianCommission,
+            );
+
           billingItems.push({
             id: crypto.randomUUID(),
             appointmentTypeId: selApptType.id,
-            appointmentTypeName: selApptType.name,
-            price: Number(selApptType.price),
+            appointmentTypeName: resolved.appointmentTypeName,
+            price: Number(resolved.price),
             quantity: 1,
-            commission: clinicianCommission,
+            categoryId: resolved.categoryId,
+            commission: resolved.commission,
+            calculateCommission: resolved.calculateCommission,
+            isTaxable: resolved.isTaxable,
+            taxRate: resolved.taxRate,
             doctorId: row.clinicianId,
             doctorName: clinicianName,
-            amount: Number(selApptType.price),
+            amount: Number(resolved.price),
           });
-          totalAmount += Number(selApptType.price);
+          totalAmount += Number(resolved.price);
         }
       }
 
