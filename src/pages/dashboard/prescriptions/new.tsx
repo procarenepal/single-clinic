@@ -362,13 +362,22 @@ export default function NewPrescriptionPage() {
     const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
 
     if (hasDoctor) {
-      const hasConsBill = apt.billingId || apt.consultationBillingStatus;
+      // This gate exists so a patient does not reach the doctor before the
+      // CONSULTATION fee is settled. An appointment can carry two independent
+      // invoices — the consultation fee and a separate procedure charge — so
+      // asking "is any linked invoice paid" lets a patient through on the
+      // strength of a paid procedure charge while the consultation is still
+      // owed. Gate on the invoice the rule is actually about.
+      const consultationTracked =
+        (apt as any).consultationBillingId || apt.consultationBillingStatus;
 
-      if (hasConsBill) {
+      if (consultationTracked) {
+        if (apt.consultationBillingStatus !== "paid") return false;
+      } else if (apt.billingId) {
+        // No separate consultation invoice: the appointment's single charge
+        // is what has to be settled.
         const isPaid =
-          apt.consultationBillingStatus === "paid" ||
-          apt.billingStatus === "paid" ||
-          apt.paymentStatus === "paid";
+          apt.billingStatus === "paid" || apt.paymentStatus === "paid";
 
         if (!isPaid) return false;
       }
