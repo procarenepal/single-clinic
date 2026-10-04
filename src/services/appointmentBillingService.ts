@@ -1396,24 +1396,36 @@ export const appointmentBillingService = {
         }
 
         if (!querySnapshot.empty) {
-          const isConsultationOnly =
-            billing.items &&
-            billing.items.some(
-              (item: any) =>
-                item.appointmentTypeId === "consultation-fee" ||
-                (item.appointmentTypeName &&
-                  item.appointmentTypeName.includes("Consultation Fee")),
-            );
-
           const updatePromises = querySnapshot.docs.map((docSnap) => {
             const apptDocRef = doc(db, "appointments", docSnap.id);
             const apptData = docSnap.data();
-            const apptUpdates: any = {
-              billingStatus: paymentStatus,
-              paymentStatus: paymentStatus,
-              consultationBillingStatus: paymentStatus,
-              updatedAt: Timestamp.now(),
-            };
+
+            // An appointment carries TWO independent invoices: the
+            // consultation fee (consultationBillingId) and a separate
+            // procedure/appointment-type charge (billingId). Marking all
+            // three status fields from whichever one was paid meant settling
+            // the consultation fee also reported the procedure charge as
+            // paid, and vice versa — money still owed on one invoice,
+            // recorded as collected. Attribute the payment to the invoice
+            // that was actually paid.
+            const paidTheConsultation = apptData.consultationBillingId === id;
+            const paidTheProcedure = apptData.billingId === id;
+
+            const apptUpdates: any = { updatedAt: Timestamp.now() };
+
+            if (paidTheConsultation) {
+              apptUpdates.consultationBillingStatus = paymentStatus;
+            }
+
+            // billingStatus/paymentStatus are two names for the state of the
+            // procedure charge and are kept in step. The fallback query above
+            // matches on patient rather than on an invoice id, so neither
+            // pointer is set on those — treat them as the appointment's
+            // general charge, which is what they were before this change.
+            if (paidTheProcedure || (!paidTheConsultation && !paidTheProcedure)) {
+              apptUpdates.billingStatus = paymentStatus;
+              apptUpdates.paymentStatus = paymentStatus;
+            }
 
             return updateDoc(apptDocRef, apptUpdates);
           });
