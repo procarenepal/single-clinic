@@ -4140,11 +4140,24 @@ export default function FrontOfficeDesk() {
               quickIntakeForm.discountType,
               quickIntakeForm.discountValue,
             );
-          } catch (billErr) {
+          } catch (billErr: any) {
+            // The appointment itself succeeded, so the intake is NOT rolled
+            // back — the patient really is checked in and queued. But the
+            // consultation charge does not exist, and this was previously
+            // logged and nothing else, so the desk saw the ordinary success
+            // notifications and the visit went unbilled with nobody aware.
             console.error(
               "Error generating quick intake consultation bill:",
               billErr,
             );
+            addToast({
+              title: "Patient checked in, but NOT billed",
+              description: `${billErr?.message || "The consultation invoice could not be created."} Raise the invoice at the Billing Counter before the patient leaves.`,
+              color: "danger",
+              // Longer than the default 4s: this one has to survive the
+              // other intake notifications and be acted on.
+              duration: 15000,
+            });
           }
         }
 
@@ -5159,17 +5172,33 @@ export default function FrontOfficeDesk() {
             navigate(
               `/dashboard/appointments-billing/${newBillingId}?from=front-office&tab=${activeTab}`,
             );
-          } catch (genErr) {
+          } catch (genErr: any) {
+            // Previously this logged and then navigated to the billing list,
+            // which is what the SUCCESS path does — so a failure looked like a
+            // success and staff moved on believing the patient had been
+            // billed. Say what went wrong and stay put, so the action can be
+            // retried from here.
             console.error(
               "Failed to generate procedure billing on fallback:",
               genErr,
             );
-            navigate("/dashboard/appointments-billing");
+            addToast({
+              title: "Could not generate the invoice",
+              description:
+                genErr?.message ||
+                "The invoice was not created. Please try again.",
+              color: "danger",
+            });
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error settling billing:", err);
-        navigate("/dashboard/appointments-billing");
+        addToast({
+          title: "Could not settle this billing",
+          description:
+            err?.message || "Nothing was charged. Please try again.",
+          color: "danger",
+        });
       }
     });
 
