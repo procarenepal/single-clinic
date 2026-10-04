@@ -505,15 +505,29 @@ export const QueueList: React.FC<QueueListProps> = ({
                       : "Time not set";
                     const stage = getPatientStage(appt);
                     const action = getGuidedAction(appt);
-                    const pendingBillId =
-                      appt.billingId || (appt as any).consultationBillingId;
-                    const consBill = pendingBillId
-                      ? billings.find((b) => b.id === pendingBillId)
-                      : null;
-                    const isConsBillPaid = consBill
-                      ? consBill.status === "paid" || consBill.paymentStatus === "paid"
-                      : false;
-                    const isConsBillPending = consBill && !isConsBillPaid;
+                    // An appointment can carry TWO independent invoices —
+                    // the consultation fee (consultationBillingId) and a
+                    // separate procedure charge (billingId), each settled
+                    // independently. Picking just one via `||` (procedure
+                    // charge preferred) meant that if the procedure happened
+                    // to be paid while the consultation fee was still owed,
+                    // this gate saw only the paid procedure bill and let
+                    // "Send to Doctor" show anyway — sending an
+                    // unpaid-consultation patient in. Every linked bill that
+                    // actually exists must be checked.
+                    const isBillUnpaid = (billId: string | null | undefined) => {
+                      if (!billId) return false;
+                      const bill = billings.find((b) => b.id === billId);
+
+                      if (!bill) return false;
+
+                      return (
+                        bill.status !== "paid" && bill.paymentStatus !== "paid"
+                      );
+                    };
+                    const isConsBillPending =
+                      isBillUnpaid(appt.billingId) ||
+                      isBillUnpaid((appt as any).consultationBillingId);
 
                     return (
                       <div key={appt.id} className="p-3 pl-4 md:pl-16 hover:bg-surface-2/30 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3">
