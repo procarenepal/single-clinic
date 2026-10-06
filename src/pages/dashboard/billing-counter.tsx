@@ -209,7 +209,19 @@ export default function BillingCounterPage() {
 
             // A suggestion, not a commitment — staff can correct the quantity
             // before the invoice is created.
-            const quantity = item.quantity || suggestedDispenseQuantity(item);
+            //
+            // Every prescription used to be written with a hardcoded
+            // quantity of 1, and `item.quantity || …` treated that as a real
+            // value — so this calculator never ran and the pharmacy handed
+            // over (and charged for) a single unit no matter what course was
+            // prescribed. A stored 1 is therefore treated as "no quantity
+            // recorded" and the course length is used instead; anything
+            // greater than 1 is a deliberate figure and is respected.
+            const courseQuantity = suggestedDispenseQuantity(item);
+            const quantity =
+              item.quantity && item.quantity > 1
+                ? item.quantity
+                : courseQuantity || item.quantity || 1;
             const price = med.price || 0;
 
             return {
@@ -532,6 +544,38 @@ export default function BillingCounterPage() {
 
       const queued =
         (rest as { filedImmediately?: boolean }).filedImmediately === false;
+
+      // Close out the prescription this sale fulfilled. Dispensing moved
+      // from the pharmacy screen to this counter, but the step that marked
+      // the prescription completed stayed behind — so a fulfilled
+      // prescription kept showing in "Prescriptions from Doctors" with a
+      // live Fulfill Sale button, could be dispensed and charged again
+      // (deducting stock each time), and kept the patient parked in the
+      // pharmacy queue on the front-office board.
+      if (prescriptionId) {
+        try {
+          const { prescriptionService } = await import(
+            "@/services/prescriptionService"
+          );
+
+          await prescriptionService.updatePrescription(prescriptionId, {
+            status: "completed",
+            notes: `Dispensed on invoice ${invoiceNumber} (${new Date().toLocaleDateString()})`,
+          } as any);
+        } catch (rxErr) {
+          // The sale is already filed and the stock already moved, so this
+          // must not fail the invoice — but it does need saying, or the
+          // prescription silently stays dispensable a second time.
+          console.error("Error closing out the fulfilled prescription:", rxErr);
+          addToast({
+            title: "Prescription still shows as pending",
+            description:
+              "The sale was completed, but this prescription could not be marked fulfilled — mark it manually so it isn't dispensed twice.",
+            color: "warning",
+            duration: 12000,
+          });
+        }
+      }
 
       addToast({
         title: `Invoice ${invoiceNumber} created`,
