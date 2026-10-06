@@ -761,6 +761,16 @@ export default function AppointmentBillingPage() {
             (app) =>
               !app.billingId && // Not already billed
               !(app as any).consultationBillingId && // Not already auto-billed at check-in/routing
+              // Front-office now accumulates a visit's charges on the
+              // appointment itself (pendingVisitItems) and files ONE
+              // invoice at checkout — during that window billingId is
+              // still null, so without these two checks an in-progress
+              // visit (often with a wallet deposit already collected)
+              // looks "unbilled" here and gets billed a second time from
+              // this screen while front-office still holds its charges.
+              !(app as any).pendingVisitItems?.length &&
+              !(app as any).billedOnAppointmentId &&
+              (app as any).checkoutCompleted !== true &&
               app.status !== "cancelled" &&
               app.status !== "no-show",
           );

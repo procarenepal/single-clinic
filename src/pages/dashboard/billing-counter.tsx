@@ -475,6 +475,50 @@ export default function BillingCounterPage() {
       return;
     }
 
+    // This counter had no awareness of front office at all. Front office
+    // now accumulates a visit's charges on the appointment and files ONE
+    // invoice at checkout — and for that whole window the appointment
+    // carries no invoice id, so billing the same patient here produced a
+    // second, independent IRD filing for charges that were already going
+    // to be billed (often with a deposit already collected against them).
+    if (!isWalkIn && patient) {
+      try {
+        const { appointmentService } = await import(
+          "@/services/appointmentService"
+        );
+        const { getVisitPaymentGate } = await import(
+          "@/services/core/visitBillingCore"
+        );
+        const patientAppointments =
+          await appointmentService.getAppointmentsByPatient(patient.id);
+        const openVisit = patientAppointments.find(
+          (a: any) =>
+            a.status !== "cancelled" &&
+            a.status !== "no-show" &&
+            !a.billingId &&
+            ((a.pendingVisitItems?.length || 0) > 0 ||
+              getVisitPaymentGate(a).owed > 0),
+        );
+
+        if (openVisit) {
+          addToast({
+            title: "This patient has an open visit at the front desk",
+            description:
+              "Their charges are already recorded on that visit and will be invoiced at checkout. Settle it from the Billing Counter queue instead of raising a separate invoice here, or this patient will be billed twice.",
+            color: "danger",
+            duration: 12000,
+          });
+          setSubmitting(false);
+
+          return;
+        }
+      } catch (guardErr) {
+        // A failed lookup must not block a legitimate counter sale; the
+        // duplicate risk is the lesser of the two failures here.
+        console.error("Could not check for an open front-office visit:", guardErr);
+      }
+    }
+
     try {
       setSubmitting(true);
 

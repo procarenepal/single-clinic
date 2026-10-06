@@ -684,31 +684,48 @@ export default function PatientBillingTab({
         return isToday && (a as any).status !== "cancelled";
       });
 
-      const duplicateAppt = todaysAppointments.find((a) => {
+      // A visit counts as already-covered if it carries a filed invoice OR
+      // is mid-flight in front office. Front office accumulates a visit's
+      // charges on the appointment (pendingVisitItems) and files ONE
+      // invoice at checkout — for that whole window billingId is still
+      // null, so checking only the invoice pointers let this guard pass
+      // silently on exactly the case it exists to catch: a visit that is
+      // already charged (often with a deposit collected) but not yet filed.
+      const coveredAppt = todaysAppointments.find((a) => {
         const existingBillId =
           (a as any).consultationBillingId || (a as any).billingId;
+        const hasPendingCharges = Boolean((a as any).pendingVisitItems?.length);
 
-        if (!existingBillId) return false;
+        if (!existingBillId && !hasPendingCharges) return false;
 
         return formData.items.some(
           (item) => item.appointmentTypeId === a.appointmentTypeId,
         );
       });
 
-      if (duplicateAppt) {
+      if (coveredAppt) {
         const existingBillId =
-          (duplicateAppt as any).consultationBillingId ||
-          (duplicateAppt as any).billingId;
-        const existingBilling =
-          await appointmentBillingService.getBillingById(existingBillId);
-        const existingInvoiceNumber =
-          existingBilling?.invoiceNumber || existingBillId;
+          (coveredAppt as any).consultationBillingId ||
+          (coveredAppt as any).billingId;
 
-        addToast({
-          title: "Duplicate invoice blocked",
-          description: `${formData.patientName} already has invoice ${existingInvoiceNumber} covering this same visit today. Edit that invoice instead of creating a new one.`,
-          color: "danger",
-        });
+        if (existingBillId) {
+          const existingBilling =
+            await appointmentBillingService.getBillingById(existingBillId);
+          const existingInvoiceNumber =
+            existingBilling?.invoiceNumber || existingBillId;
+
+          addToast({
+            title: "Duplicate invoice blocked",
+            description: `${formData.patientName} already has invoice ${existingInvoiceNumber} covering this same visit today. Edit that invoice instead of creating a new one.`,
+            color: "danger",
+          });
+        } else {
+          addToast({
+            title: "Duplicate invoice blocked",
+            description: `${formData.patientName} has an in-progress visit at the front desk that already includes this charge. Complete it from the Billing Counter instead of raising a separate invoice.`,
+            color: "danger",
+          });
+        }
 
         return;
       }
