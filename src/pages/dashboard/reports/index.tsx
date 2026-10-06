@@ -2553,8 +2553,67 @@ export default function ReportsPage() {
                       </div>
                     </div>
                     <Divider className="my-3" />
-                    <h4 className="clarity-section-header">Invoice Status</h4>
+                    {/* Document state and payment state are two independent
+                        axes stored in two fields: `status` is the document's
+                        own lifecycle (draft -> finalized, or cancelled) while
+                        `paymentStatus` tracks money (unpaid/partial/paid).
+                        Listing "Paid" alongside Draft/Finalized read them
+                        both off `status`, which nothing ever sets to "paid" —
+                        so that figure was always 0 while every invoice,
+                        including fully paid ones, sat under Draft. */}
+                    <h4 className="clarity-section-header">Payment Status</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="text-center">
+                        <p className="clarity-stat-value text-health-600">
+                          {
+                            filteredBillings.filter(
+                              (b) =>
+                                b.paymentStatus === "paid" &&
+                                b.status !== "cancelled",
+                            ).length
+                          }
+                        </p>
+                        <p className="clarity-stat-label">Paid</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="clarity-stat-value text-amber-600">
+                          {
+                            filteredBillings.filter(
+                              (b) =>
+                                b.paymentStatus === "partial" &&
+                                b.status !== "cancelled",
+                            ).length
+                          }
+                        </p>
+                        <p className="clarity-stat-label">Partial</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="clarity-stat-value text-rose-600">
+                          {
+                            filteredBillings.filter(
+                              (b) =>
+                                (!b.paymentStatus ||
+                                  b.paymentStatus === "unpaid") &&
+                                b.status !== "cancelled",
+                            ).length
+                          }
+                        </p>
+                        <p className="clarity-stat-label">Unpaid</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="clarity-stat-value text-mountain-500">
+                          {
+                            filteredBillings.filter(
+                              (b) => b.status === "cancelled",
+                            ).length
+                          }
+                        </p>
+                        <p className="clarity-stat-label">Cancelled</p>
+                      </div>
+                    </div>
+                    <Divider className="my-3" />
+                    <h4 className="clarity-section-header">Document Status</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       <div className="text-center">
                         <p className="clarity-stat-value text-mountain-600">
                           {
@@ -2577,21 +2636,11 @@ export default function ReportsPage() {
                       <div className="text-center">
                         <p className="clarity-stat-value text-health-600">
                           {
-                            filteredBillings.filter((b) => b.status === "paid")
+                            filteredBillings.filter((b) => b.irdSynced === true)
                               .length
                           }
                         </p>
-                        <p className="clarity-stat-label">Paid</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="clarity-stat-value text-rose-600">
-                          {
-                            filteredBillings.filter(
-                              (b) => b.status === "cancelled",
-                            ).length
-                          }
-                        </p>
-                        <p className="clarity-stat-label">Cancelled</p>
+                        <p className="clarity-stat-label">IRD Synced</p>
                       </div>
                     </div>
                     <Divider className="my-3" />
