@@ -250,7 +250,7 @@ export interface WalletTransaction {
   // (referenceId = patientPackage id, which has no invoice page at all).
   // Missing on old transactions predating this field — treat as "invoice"
   // for backward compatibility with existing deduction rows.
-  referenceType?: "invoice" | "package";
+  referenceType?: "invoice" | "package" | "appointment";
   notes?: string;
   createdAt: Date;
   createdBy: string;
@@ -400,6 +400,45 @@ export interface Appointment {
   paymentStatus?: "unpaid" | "partial" | "paid" | null;
   consultationBillingId?: string | null;
   consultationBillingStatus?: "unpaid" | "partial" | "paid" | null;
+  /**
+   * Charges accumulated during the visit (consultation fee, procedure items,
+   * booked-type fees) that have not yet been filed as a real invoice. Nothing
+   * is a locked, IRD-filed document until checkout runs calculateInvoiceTotals
+   * + createBilling once over this whole array — see
+   * "One Invoice Per Visit: Deposit at Check-in, Bill at Checkout".
+   */
+  pendingVisitItems?: AppointmentBillingItem[];
+  /** Referral commissions accumulated mid-visit alongside pendingVisitItems, merged at checkout. */
+  pendingVisitReferrals?: AppointmentBilling["referrals"];
+  /**
+   * Invoice-level discount staff entered during the visit (at check-in or
+   * when finalising a procedure) — there is no checkout-time UI to enter
+   * one, so this is the only way a discount set mid-visit reaches the real
+   * invoice. Last write wins: whichever of createConsultationBill/
+   * handleFinaliseProcedure ran most recently with a nonzero value.
+   */
+  pendingVisitDiscountType?: "flat" | "percent";
+  pendingVisitDiscountValue?: number;
+  /**
+   * Set on the sibling appointments Quick Intake creates for extra
+   * clinicians on a multi-clinician visit. Their charges are all appended
+   * to the PRIMARY appointment's pendingVisitItems, so these legitimately
+   * have none of their own — without this marker, checkout cannot tell
+   * them apart from a genuinely unbilled visit and would fabricate a
+   * duplicate catalogue-price invoice for a fee already billed.
+   */
+  billedOnAppointmentId?: string;
+  /**
+   * When triage vitals were recorded. Structured replacement for the
+   * "[Triage Vitals Recorded]" substring that used to live in `notes` and
+   * drive both the patient's stage and the checkout gate — a user-editable
+   * free-text field that other flows append to, so the marker could be
+   * erased by an unrelated edit or typed by hand to fake documentation.
+   */
+  triageCompletedAt?: Date;
+  triageRecordedBy?: string;
+  /** Running total deposited into the patient's wallet for this visit specifically. Derived cache — source of truth is the tagged wallet transactions. */
+  depositedAmount?: number;
   checkoutCompleted?: boolean;
   doctorConsultationCompleted?: boolean;
   cabinName?: string;

@@ -28,6 +28,12 @@ export const walletService = {
     paymentMethod: string,
     notes: string,
     createdBy: string,
+    // Optional tagging, same shape as deductFunds/refundFunds — lets a
+    // deposit be tied back to "this visit" (referenceId = appointment id,
+    // referenceType = "appointment") for the checkout-time payment gate and
+    // dedup. Omitted by the existing manual-top-up caller in PatientWalletTab.tsx.
+    referenceId?: string,
+    referenceType?: "invoice" | "package" | "appointment",
   ): Promise<string> {
     try {
       const now = new Date();
@@ -43,6 +49,8 @@ export const walletService = {
         notes,
         createdAt: now,
         createdBy,
+        ...(referenceId ? { referenceId } : {}),
+        ...(referenceType ? { referenceType } : {}),
       };
 
       const docRef = await addDoc(
@@ -191,6 +199,55 @@ export const walletService = {
       return docRef.id;
     } catch (error) {
       console.error("Error refunding funds to wallet:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Every wallet movement for a clinic within a date range.
+   *
+   * Front-desk cash now lands here before it ever reaches an invoice, so
+   * without a clinic-wide read this money was visible on exactly one
+   * screen — an individual patient's wallet tab — and in no report at all.
+   * Used by daily reporting to recognise cash on the day it arrived rather
+   * than the day the visit happened to check out.
+   */
+  async getClinicTransactionsInRange(
+    clinicId: string,
+    start: Date,
+    end: Date,
+  ): Promise<WalletTransaction[]> {
+    try {
+      // Filtered by clinic in the query (the security rule authorises a
+      // list only when it can prove its clinic scope) and narrowed by date
+      // in memory, which avoids requiring a composite index.
+      const q = query(
+        collection(db, WALLET_TRANSACTIONS_COLLECTION),
+        where("clinicId", "==", clinicId),
+      );
+
+      const snapshot = await getDocs(q);
+      const startTime = start.getTime();
+      const endTime = end.getTime();
+
+      return snapshot.docs
+        .map((docSnap) => {
+          const data = docSnap.data();
+
+          return {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+          } as WalletTransaction;
+        })
+        .filter((t) => {
+          const time = t.createdAt.getTime();
+
+          return time >= startTime && time <= endTime;
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    } catch (error) {
+      console.error("Error fetching clinic wallet transactions:", error);
       throw error;
     }
   },

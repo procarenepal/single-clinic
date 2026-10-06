@@ -13,6 +13,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Spinner } from "@/components/ui";
+import { getVisitPaymentGate } from "@/services/core/visitBillingCore";
 
 function formatTimeTo12Hour(timeStr: string) {
   const [h, m] = timeStr.split(":");
@@ -505,29 +506,16 @@ export const QueueList: React.FC<QueueListProps> = ({
                       : "Time not set";
                     const stage = getPatientStage(appt);
                     const action = getGuidedAction(appt);
-                    // An appointment can carry TWO independent invoices —
-                    // the consultation fee (consultationBillingId) and a
-                    // separate procedure charge (billingId), each settled
-                    // independently. Picking just one via `||` (procedure
-                    // charge preferred) meant that if the procedure happened
-                    // to be paid while the consultation fee was still owed,
-                    // this gate saw only the paid procedure bill and let
-                    // "Send to Doctor" show anyway — sending an
-                    // unpaid-consultation patient in. Every linked bill that
-                    // actually exists must be checked.
-                    const isBillUnpaid = (billId: string | null | undefined) => {
-                      if (!billId) return false;
-                      const bill = billings.find((b) => b.id === billId);
-
-                      if (!bill) return false;
-
-                      return (
-                        bill.status !== "paid" && bill.paymentStatus !== "paid"
-                      );
-                    };
-                    const isConsBillPending =
-                      isBillUnpaid(appt.billingId) ||
-                      isBillUnpaid((appt as any).consultationBillingId);
+                    // Nothing is a filed invoice between check-in and
+                    // checkout any more — gate on what the visit owes so
+                    // far (pendingVisitItems) against what's been deposited
+                    // (depositedAmount), same computation as
+                    // front-office-desk.tsx's getPendingBillForAppointment.
+                    // Same single definition every other gate uses, so the
+                    // queue, the desk and the doctor's list cannot disagree
+                    // about whether this patient may proceed.
+                    const isConsBillPending = getVisitPaymentGate(appt as any)
+                      .isDue;
 
                     return (
                       <div key={appt.id} className="p-3 pl-4 md:pl-16 hover:bg-surface-2/30 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3">

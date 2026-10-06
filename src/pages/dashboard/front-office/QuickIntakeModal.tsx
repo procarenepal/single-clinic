@@ -112,6 +112,10 @@ export interface QuickIntakeModalProps {
    * what appointmentBillingService.calculateInvoiceTotals will actually
    * apply when "Apply Tax to Invoice" is checked. */
   defaultTaxPercentage?: number;
+  /** Clinic-wide tax master switch — the preview must not show a nonzero
+   * tax when this is off, since calculateTaxBreakdown's isTaxEnabled gate
+   * (which actually governs what checkout bills) depends on it too. */
+  enableTax?: boolean;
 }
 
 export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
@@ -142,6 +146,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
   updateReferrerRow,
   removeReferrerRow,
   defaultTaxPercentage = 0,
+  enableTax = false,
 }) => {
   // Escape-to-close and focus-on-open — matches the pattern already
   // established on the app's other modal shells (appointments-billing.tsx's
@@ -761,46 +766,75 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                                 selectedKey={row.appointmentTypeId || ""}
                                 onSelectionChange={(key) => {
                                   if (key) {
-                                    setQuickIntakeForm((prev: any) => ({
-                                      ...prev,
-                                      clinicians: prev.clinicians.map((c: any) => {
-                                        if (c.id !== row.id) return c;
-                                        const updated = {
-                                          ...c,
-                                          appointmentTypeId: String(key),
-                                        };
-                                        // Previously "Charge Fee"/"Add
-                                        // Commission" defaulted purely from
-                                        // doctor-vs-expert, completely
-                                        // ignoring which specific service
-                                        // was picked. Now they default from
-                                        // the selected service's own
-                                        // settings instead — still editable
-                                        // by staff afterward for a one-off
-                                        // exception.
-                                        const at = appointmentTypes.find(
-                                          (t: any) => t.id === String(key),
-                                        );
-
-                                        if (at) {
-                                          updated.chargeConsultation = Boolean(
-                                            at.billAtFrontDesk,
+                                    setQuickIntakeForm((prev: any) => {
+                                      const updatedClinicians = prev.clinicians.map(
+                                        (c: any) => {
+                                          if (c.id !== row.id) return c;
+                                          const updated = {
+                                            ...c,
+                                            appointmentTypeId: String(key),
+                                          };
+                                          // Previously "Charge Fee"/"Add
+                                          // Commission" defaulted purely from
+                                          // doctor-vs-expert, completely
+                                          // ignoring which specific service
+                                          // was picked. Now they default from
+                                          // the selected service's own
+                                          // settings instead — still editable
+                                          // by staff afterward for a one-off
+                                          // exception.
+                                          const at = appointmentTypes.find(
+                                            (t: any) => t.id === String(key),
                                           );
-                                          updated.addCommission =
-                                            at.calculateCommission !== false;
-                                        }
 
-                                        return {
-                                          ...updated,
-                                          price: getDefaultRowPrice(
-                                            updated,
-                                            appointmentTypes,
-                                            packages,
-                                            doctors,
-                                          ),
-                                        };
-                                      }),
-                                    }));
+                                          if (at) {
+                                            updated.chargeConsultation = Boolean(
+                                              at.billAtFrontDesk,
+                                            );
+                                            updated.addCommission =
+                                              at.calculateCommission !== false;
+                                          }
+
+                                          return {
+                                            ...updated,
+                                            price: getDefaultRowPrice(
+                                              updated,
+                                              appointmentTypes,
+                                              packages,
+                                              doctors,
+                                            ),
+                                          };
+                                        },
+                                      );
+
+                                      // "Apply Tax to Invoice" is a GATE —
+                                      // calculateTaxBreakdown taxes nothing
+                                      // when it's off, even a row whose own
+                                      // Appointment Type is explicitly
+                                      // marked Taxable. Defaulting it off
+                                      // and leaving it there silently
+                                      // overrode that category setting.
+                                      // Auto-enable (never auto-disable, so
+                                      // a deliberate staff override stays
+                                      // respected) whenever any charging row
+                                      // is catalogue-taxable.
+                                      const anyRowTaxable = updatedClinicians.some(
+                                        (c: any) => {
+                                          if (!c.chargeConsultation) return false;
+                                          const at = appointmentTypes.find(
+                                            (t: any) => t.id === c.appointmentTypeId,
+                                          );
+
+                                          return at?.isTaxable === true;
+                                        },
+                                      );
+
+                                      return {
+                                        ...prev,
+                                        clinicians: updatedClinicians,
+                                        applyTax: prev.applyTax || anyRowTaxable,
+                                      };
+                                    });
                                   }
                                 }}
                               >
@@ -1026,7 +1060,7 @@ export const QuickIntakeModal: React.FC<QuickIntakeModalProps> = ({
                       discountType: quickIntakeForm.discountType,
                       discountValue: quickIntakeForm.discountValue || 0,
                       defaultTaxPercentage,
-                      isTaxEnabled: Boolean(quickIntakeForm.applyTax),
+                      isTaxEnabled: Boolean(quickIntakeForm.applyTax) && enableTax,
                     });
 
                     const subtotal = breakdown.subtotal;

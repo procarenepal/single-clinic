@@ -9,6 +9,7 @@ import {
   where,
   addDoc,
   serverTimestamp,
+  onSnapshot,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -153,6 +154,63 @@ export const appointmentTypeService = {
     _clinicId: string,
   ): Promise<AppointmentType[]> {
     return this.getAppointmentTypesByClinic(_clinicId);
+  },
+
+  /**
+   * Live-subscribe to a clinic's appointment types — bypasses
+   * cacheService entirely (unlike getAppointmentTypes/getAppointmentTypesByClinic)
+   * so a long-lived page (e.g. front-office, open all day) picks up an
+   * admin's edit to a category's tax rate, commission %, or price the
+   * moment it's saved, instead of silently billing against whatever was
+   * loaded at page open until someone manually reloads.
+   */
+  subscribeToClinicAppointmentTypes(
+    clinicId: string | undefined,
+    onData: (appointmentTypes: AppointmentType[]) => void,
+    onError?: (error: Error) => void,
+  ) {
+    if (!clinicId) {
+      console.error(
+        "subscribeToClinicAppointmentTypes called without a clinicId — refusing to subscribe unfiltered.",
+      );
+      onError?.(new Error("clinicId is required to subscribe to appointment types"));
+      onData([]);
+
+      return () => {};
+    }
+
+    const appointmentTypesRef = collection(db, APPOINTMENT_TYPES_COLLECTION);
+    const q = query(appointmentTypesRef, where("clinicId", "==", clinicId));
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const appointmentTypes: AppointmentType[] = [];
+
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const createdAt = data.createdAt
+            ? new Date(data.createdAt.seconds * 1000)
+            : new Date();
+          const updatedAt = data.updatedAt
+            ? new Date(data.updatedAt.seconds * 1000)
+            : new Date();
+
+          appointmentTypes.push({
+            id: docSnap.id,
+            ...data,
+            createdAt,
+            updatedAt,
+          } as AppointmentType);
+        });
+
+        onData(appointmentTypes);
+      },
+      (error) => {
+        console.error("Appointment types subscription error:", error);
+        onError?.(error as Error);
+      },
+    );
   },
 
   /**

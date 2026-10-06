@@ -188,6 +188,8 @@ export default function SellPackageModal({
         applyTax,
         defaultTaxPercentage: billingSettings?.defaultTaxPercentage,
         createdBy: currentUser.uid,
+        // Identity for this one sale — see buildPackageSaleBillingData.
+        saleId: crypto.randomUUID(),
       });
 
       const { id: billingId } =

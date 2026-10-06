@@ -15,15 +15,49 @@ import {
   DocumentData,
   QueryDocumentSnapshot,
   DocumentSnapshot,
+  runTransaction,
+  increment,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
 import { cacheService } from "@/services/cacheService";
 import { Appointment } from "@/types/models";
+import { computeVisitOwed } from "@/services/core/visitBillingCore";
 import { resolveClinicId } from "./currentClinic";
 
 type AppointmentSnapshotHandler = (appointments: Appointment[]) => void;
 type AppointmentErrorHandler = (error: Error) => void;
+
+// Firestore rejects `undefined` anywhere in a write, including nested
+// inside array elements (e.g. an AppointmentBillingItem whose optional
+// isTaxable/taxRate/calculateCommission were left unset) — a top-level-only
+// strip of undefined keys misses those. Mirrors
+// appointmentBillingService.deepClean, which exists for the same reason.
+const deepCleanUndefined = <T,>(value: T): T => {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => deepCleanUndefined(item)) as unknown as T;
+  }
+
+  if (value instanceof Date || value instanceof Timestamp) {
+    return value;
+  }
+
+  const cleaned: any = {};
+
+  Object.keys(value as object).forEach((key) => {
+    const v = (value as any)[key];
+
+    if (v !== undefined) {
+      cleaned[key] = deepCleanUndefined(v);
+    }
+  });
+
+  return cleaned;
+};
 
 const mapAppointmentDoc = (
   docSnap: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>,
@@ -175,17 +209,21 @@ export const appointmentService = {
       if (appointmentData.billingId) {
         firestoreData.billingId = appointmentData.billingId;
       }
-      if (appointmentData.billingStatus) {
+      // Tested against undefined rather than truthiness: these fields carry
+      // meaningful "empty" values (null to clear a stale invoice pointer),
+      // and a truthiness check silently dropped those writes — so a legacy
+      // consultationBillingId could never be cleared through this method.
+      if (appointmentData.billingStatus !== undefined) {
         firestoreData.billingStatus = appointmentData.billingStatus;
       }
-      if (appointmentData.paymentStatus) {
+      if (appointmentData.paymentStatus !== undefined) {
         firestoreData.paymentStatus = appointmentData.paymentStatus;
       }
-      if (appointmentData.consultationBillingId) {
+      if (appointmentData.consultationBillingId !== undefined) {
         firestoreData.consultationBillingId =
           appointmentData.consultationBillingId;
       }
-      if (appointmentData.consultationBillingStatus) {
+      if (appointmentData.consultationBillingStatus !== undefined) {
         firestoreData.consultationBillingStatus =
           appointmentData.consultationBillingStatus;
       }
@@ -442,14 +480,13 @@ export const appointmentService = {
         updatedAt: Timestamp.now(),
       };
 
-      // Remove undefined values
-      Object.keys(firestoreData).forEach((key) => {
-        if (firestoreData[key as keyof typeof firestoreData] === undefined) {
-          delete firestoreData[key as keyof typeof firestoreData];
-        }
-      });
+      // Remove undefined values, including inside nested arrays/objects
+      // (e.g. pendingVisitItems entries with optional fields left unset) —
+      // Firestore rejects undefined anywhere in the write, not just at the
+      // top level.
+      const cleanedFirestoreData = deepCleanUndefined(firestoreData);
 
-      await updateDoc(appointmentDoc, firestoreData);
+      await updateDoc(appointmentDoc, cleanedFirestoreData);
 
       const updatedSnap = await getDoc(appointmentDoc);
 
@@ -470,6 +507,93 @@ export const appointmentService = {
       console.error("Error updating appointment:", error);
       throw new Error("Failed to update appointment");
     }
+  },
+
+  /**
+   * Atomically claim an amount of this visit's outstanding deposit, BEFORE
+   * any money is actually moved.
+   *
+   * Collecting a deposit used to be a read-modify-write against a React
+   * snapshot: two staff (or two tabs) both read `depositedAmount: 0`, both
+   * decided the full amount was due, and both collected it — the wallet
+   * took the money twice while the appointment recorded it once, leaving
+   * untracked credit that no report surfaces.
+   *
+   * This re-reads the appointment inside a transaction and claims only what
+   * is genuinely still due, so the loser of a race claims 0 and its caller
+   * can stop instead of charging the patient again. Mirrors the "claim the
+   * payment atomically before side effects" pattern in
+   * appointmentBillingService.recordPayment.
+   *
+   * @returns the amount actually claimed — 0 means someone else already
+   *          collected it and NO money should be moved.
+   */
+  async claimVisitDeposit(
+    appointmentId: string,
+    requestedAmount: number,
+  ): Promise<number> {
+    if (!(requestedAmount > 0)) return 0;
+
+    const appointmentRef = doc(db, "appointments", appointmentId);
+
+    return runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(appointmentRef);
+
+      if (!snap.exists()) {
+        throw new Error("Appointment not found");
+      }
+
+      const data = snap.data();
+      const owed = computeVisitOwed(data.pendingVisitItems);
+      const alreadyDeposited = data.depositedAmount || 0;
+      const stillDue = Math.max(0, owed - alreadyDeposited);
+      const claimable = Math.min(requestedAmount, stillDue);
+
+      if (claimable <= 0) return 0;
+
+      transaction.update(appointmentRef, {
+        depositedAmount: alreadyDeposited + claimable,
+        updatedAt: Timestamp.now(),
+      });
+
+      return claimable;
+    });
+  },
+
+  /**
+   * Give back a previously claimed deposit amount when the money move that
+   * followed it failed, so the visit doesn't look paid for when nothing was
+   * collected. Uses an atomic decrement rather than a recomputed write so a
+   * concurrent legitimate collection isn't clobbered.
+   */
+  async releaseVisitDeposit(
+    appointmentId: string,
+    amount: number,
+  ): Promise<void> {
+    if (!(amount > 0)) return;
+
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      depositedAmount: increment(-amount),
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  /**
+   * Add to this visit's recorded deposit atomically. Used where the amount
+   * is already known to be legitimately collectable (e.g. a fee this call
+   * itself just appended), so no claim/re-check is needed — but the write
+   * must still not be a read-modify-write against stale state.
+   */
+  async addToVisitDeposit(
+    appointmentId: string,
+    amount: number,
+  ): Promise<void> {
+    if (!(amount > 0)) return;
+
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      depositedAmount: increment(amount),
+      updatedAt: Timestamp.now(),
+    });
   },
 
   /**

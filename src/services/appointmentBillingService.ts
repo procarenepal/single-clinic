@@ -9,6 +9,7 @@ import {
   where,
   Timestamp,
   runTransaction,
+  onSnapshot,
 } from "firebase/firestore";
 
 import { db, auth } from "../config/firebase";
@@ -275,6 +276,63 @@ export const appointmentBillingService = {
       console.error("Error getting billing settings:", error);
       throw error;
     }
+  },
+
+  /**
+   * Live-subscribe to a clinic's billing settings (enableTax,
+   * defaultTaxPercentage, etc.) — a long-lived page (e.g. front-office,
+   * open all day) must not keep billing against whatever the clinic's tax
+   * configuration was when the page first loaded; it has to pick up an
+   * admin's change (e.g. flipping the master tax toggle) immediately.
+   * Deliberately does not replicate getBillingSettings' auto-migration/
+   * auto-create logic — that's a one-time bootstrap concern handled by the
+   * first getBillingSettings() call elsewhere; this just reflects whatever
+   * the document currently holds.
+   */
+  subscribeToBillingSettings(
+    clinicId: string | undefined,
+    onData: (settings: AppointmentBillingSettings | null) => void,
+    onError?: (error: Error) => void,
+  ) {
+    if (!clinicId) {
+      console.error(
+        "subscribeToBillingSettings called without a clinicId — refusing to subscribe.",
+      );
+      onError?.(new Error("clinicId is required to subscribe to billing settings"));
+      onData(null);
+
+      return () => {};
+    }
+
+    const settingsRef = doc(
+      db,
+      APPOINTMENT_BILLING_SETTINGS_COLLECTION,
+      clinicId,
+    );
+
+    return onSnapshot(
+      settingsRef,
+      (snap) => {
+        if (!snap.exists()) {
+          onData(null);
+
+          return;
+        }
+
+        const data = snap.data();
+
+        onData({
+          id: snap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+        } as AppointmentBillingSettings);
+      },
+      (error) => {
+        console.error("Billing settings subscription error:", error);
+        onError?.(error as Error);
+      },
+    );
   },
 
   /**
@@ -758,6 +816,15 @@ export const appointmentBillingService = {
       invoicePrefix,
       sourceCollection: APPOINTMENT_BILLING_COLLECTION,
       sourceDocId: newBillingRef.id,
+      // Optional stable identity for this filing, supplied by callers that
+      // have one (front-office checkout passes the visit's appointment id).
+      // Without it the key falls back to content + a 10-minute time bucket,
+      // which cannot tell two genuinely distinct but identically-priced
+      // filings apart — the same collapse that was already observed in
+      // pharmacy and fixed there the same way. sourceDocId is NOT usable
+      // for this: it is freshly generated per attempt, so it would differ
+      // across a retry of the very same filing.
+      idempotencyDiscriminator: (billingData as any).idempotencyDiscriminator,
       items: invoiceItems,
     });
 
@@ -1880,6 +1947,15 @@ export const appointmentBillingService = {
     applyTax: boolean;
     defaultTaxPercentage?: number;
     createdBy: string;
+    /**
+     * Stable identity for this one sale. Without it the backend's
+     * idempotency key falls back to content plus a 10-minute time bucket,
+     * which cannot tell two genuinely distinct sales apart: selling the
+     * same package to the same patient twice inside that window produced
+     * one invoice while both sales created their own package records — the
+     * same collapse already found and fixed in pharmacy.
+     */
+    saleId?: string;
   }): Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt"> {
     const {
       pkg,
@@ -1891,6 +1967,7 @@ export const appointmentBillingService = {
       applyTax,
       defaultTaxPercentage,
       createdBy,
+      saleId,
     } = params;
     const taxPercentage = applyTax ? defaultTaxPercentage || 0 : 0;
 
@@ -1942,7 +2019,8 @@ export const appointmentBillingService = {
       paidAmount: 0,
       balanceAmount: totals.totalAmount,
       createdBy,
-    };
+      ...(saleId ? { idempotencyDiscriminator: `package-sale:${saleId}` } : {}),
+    } as Omit<AppointmentBilling, "id" | "createdAt" | "updatedAt">;
   },
 
   /**

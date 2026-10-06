@@ -48,12 +48,20 @@ import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService"
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { expertService } from "@/services/expertService";
 import { hrService } from "@/services/hrService";
-import {
-  appointmentBillingService,
-  isBillingLocked,
-} from "@/services/appointmentBillingService";
+import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { packageService } from "@/services/packageService";
 import { walletService } from "@/services/walletService";
+import {
+  computeVisitPayableTotal,
+  getVisitPaymentGate,
+  mergeVisitReferrals,
+  resolveVisitDiscount,
+  todayLocalDateString,
+} from "@/services/core/visitBillingCore";
+import {
+  canCompleteCheckout,
+  deriveVisitStage,
+} from "@/services/core/visitLifecycleCore";
 import { patientPackageService } from "@/services/patientPackageService";
 import {
   Appointment,
@@ -401,15 +409,31 @@ export default function FrontOfficeDesk() {
       try {
         const priorNotes = appt.notes || "";
         const marker = `[Marked No-Show by ${currentUser?.uid || "unknown"}]`;
+        // A no-show after check-in can already carry accumulated charges
+        // and a collected wallet deposit. Leaving those on the appointment
+        // strands them: the visit is never checked out, so the charges are
+        // never billed and the deposit never reconciled, with nothing in
+        // the UI surfacing either. Clear the pending visit state; the
+        // wallet balance itself is deliberately left alone and stays as
+        // usable patient credit (same as unused credit everywhere else —
+        // there is no cash-refund flow in this app to route it to).
+        const strandedDeposit = (appt as any).depositedAmount || 0;
 
         await appointmentService.updateAppointmentStatus(appt.id, "no-show");
         await appointmentService.updateAppointment(appt.id, {
           notes: priorNotes ? `${priorNotes}\n${marker}` : marker,
+          pendingVisitItems: [],
+          pendingVisitReferrals: [],
+          pendingVisitDiscountType: null,
+          pendingVisitDiscountValue: 0,
+          depositedAmount: 0,
           updatedAt: new Date(),
         } as any);
         addToast({
           title: "Marked No-Show",
-          description: `${getPatientName(appt.patientId)} did not check in for their appointment.`,
+          description: strandedDeposit > 0
+            ? `${getPatientName(appt.patientId)} did not complete their visit. NPR ${strandedDeposit.toFixed(2)} already collected stays as wallet credit on their account.`
+            : `${getPatientName(appt.patientId)} did not check in for their appointment.`,
           color: "warning",
         });
       } catch (err) {
@@ -691,7 +715,22 @@ export default function FrontOfficeDesk() {
       }
       setFinaliseDiscountType("percent");
       setFinaliseDiscountValue(0);
-      setFinaliseApplyTax(false);
+      // "Apply Tax" is a GATE — calculateInvoiceTotals taxes nothing when
+      // it's off, even an item whose own Appointment Type is explicitly
+      // marked Taxable. Defaulting to false regardless silently overrode
+      // that category setting. Default from whether any recommended item
+      // is catalogue-taxable instead (same fix as Quick Intake/Routing);
+      // still editable by staff for a one-off exception.
+      const anyItemTaxable =
+        rec?.items &&
+        Array.isArray(rec.items) &&
+        rec.items.some((i: any) => {
+          const at = appointmentTypes.find((t) => t.id === i.id);
+
+          return at?.isTaxable === true;
+        });
+
+      setFinaliseApplyTax(Boolean(anyItemTaxable));
     } else {
       setItemExperts({});
     }
@@ -804,7 +843,7 @@ export default function FrontOfficeDesk() {
     patientPanVat: "",
     age: "",
     gender: "male",
-    appointmentDate: new Date().toISOString().split("T")[0],
+    appointmentDate: todayLocalDateString(),
     doctorId: "",
     assignedExpertId: "",
     appointmentTypeId: "",
@@ -846,6 +885,14 @@ export default function FrontOfficeDesk() {
     // clinician row in QuickIntakeModal, so the very first row is
     // consistent with every row added after it.
     const doctorDefaults = getClinicianTypeDefaults("doctor", appointmentTypes);
+    // "Apply Tax to Invoice" is a GATE — defaulting it off regardless of
+    // the pre-selected category silently overrode a category explicitly
+    // marked Taxable (see the matching fix on the per-row selector in
+    // QuickIntakeModal.tsx). Default from the first row's own category,
+    // same as routing already does in handleSendToDoctor/handleSendToExpert.
+    const doctorDefaultType = appointmentTypes.find(
+      (t) => t.id === doctorDefaults.appointmentTypeId,
+    );
 
     // Reset the form strictly every time the modal is opened. doctorId/
     // clinicianId deliberately start blank — auto-picking doctors[0] here
@@ -858,7 +905,7 @@ export default function FrontOfficeDesk() {
       patientPanVat: "",
       age: "",
       gender: "male",
-      appointmentDate: new Date().toISOString().split("T")[0],
+      appointmentDate: todayLocalDateString(),
       doctorId: "",
       assignedExpertId: "unassigned",
       appointmentTypeId: doctorDefaults.appointmentTypeId,
@@ -868,7 +915,7 @@ export default function FrontOfficeDesk() {
       paymentMethod: "cash",
       paymentReference: "",
       generateConsultationBill: true,
-      applyTax: false,
+      applyTax: Boolean(doctorDefaultType?.isTaxable),
       discountType: "percent",
       discountValue: 0,
       startSessionInstantly: false,
@@ -926,21 +973,21 @@ export default function FrontOfficeDesk() {
     let isActive = true;
     const loadStaticData = async () => {
       try {
+        // appointmentTypes and billingSettings are NOT fetched here — they
+        // feed directly into tax/commission math on every invoice this
+        // desk creates, so they're live-subscribed instead (see the "Live
+        // Sync" effect below) rather than frozen at whatever they were
+        // when the page loaded.
         const [
           patientsData,
           doctorsData,
-          apptTypesData,
           pkgsData,
           referralPartnersData,
           expertsData,
           staffData,
-          billingSettingsData,
         ] = await Promise.all([
           patientService.getPatients(clinicId),
           doctorService.getDoctors(clinicId),
-          appointmentTypeService.getAppointmentTypesByClinic(
-            clinicId,
-          ),
           packageService.getPackagesByClinic(clinicId),
           referralPartnerService.getReferralPartnersByClinic(
             clinicId,
@@ -949,41 +996,21 @@ export default function FrontOfficeDesk() {
             clinicId || undefined,
           ),
           hrService.getStaffByClinic(clinicId!),
-          appointmentBillingService
-            .getBillingSettings(clinicId)
-            .catch(() => null),
         ]);
 
         if (isActive) {
           setPatients(patientsData);
           setDoctors(doctorsData);
-          setAppointmentTypes(apptTypesData);
           setPackages(pkgsData);
           setReferralPartners(referralPartnersData);
           setExperts(expertsData || []);
           setStaff(staffData || []);
-          setBillingSettings(billingSettingsData);
 
-          // Pre-select first doctor and first appointment type for quick walk-in intake
+          // Pre-select first doctor for quick walk-in intake
           if (doctorsData.length > 0) {
             setQuickIntakeForm((prev) => ({
               ...prev,
               doctorId: doctorsData[0].id,
-            }));
-          }
-          if (apptTypesData.length > 0) {
-            // Find consultation type, fallback to first available
-            const consultationType = apptTypesData.find(
-              (t) =>
-                t.id === "consultation-fee" ||
-                t.name.toLowerCase().includes("consultation"),
-            );
-
-            setQuickIntakeForm((prev) => ({
-              ...prev,
-              appointmentTypeId: consultationType
-                ? consultationType.id
-                : apptTypesData[0].id,
             }));
           }
         }
@@ -1006,6 +1033,31 @@ export default function FrontOfficeDesk() {
       isActive = false;
     };
   }, [clinicId, branchId]);
+
+  // Pre-select the consultation appointment type for Quick Intake once
+  // appointmentTypes first arrives from its live subscription — guarded so
+  // it only runs while the field is still blank, never overwriting a
+  // staff member's own in-progress selection on a later types update.
+  useEffect(() => {
+    if (appointmentTypes.length === 0) return;
+
+    setQuickIntakeForm((prev) => {
+      if (prev.appointmentTypeId) return prev;
+
+      const consultationType = appointmentTypes.find(
+        (t) =>
+          t.id === "consultation-fee" ||
+          t.name.toLowerCase().includes("consultation"),
+      );
+
+      return {
+        ...prev,
+        appointmentTypeId: consultationType
+          ? consultationType.id
+          : appointmentTypes[0].id,
+      };
+    });
+  }, [appointmentTypes]);
 
   // Live Sync Appointments & Billings
   useEffect(() => {
@@ -1110,10 +1162,48 @@ export default function FrontOfficeDesk() {
       },
     );
 
+    // Subscribe to Appointment Types in real-time — tax rate, commission %,
+    // and price on a category feed directly into the invoice this desk
+    // creates, so a one-time fetch here would keep billing against
+    // whatever an admin's settings looked like when the tab was opened.
+    const unsubscribeApptTypes =
+      appointmentTypeService.subscribeToClinicAppointmentTypes(
+        clinicId,
+        (data) => setAppointmentTypes(data),
+        (err) => {
+          console.error("Live appointment types subscription error:", err);
+          addToast({
+            title: "Live Updates Interrupted",
+            description:
+              "Lost connection to live service/category settings — tax and commission on new invoices may be stale. Please refresh.",
+            color: "danger",
+          });
+        },
+      );
+
+    // Subscribe to Billing Settings in real-time — the clinic-wide tax
+    // master switch (enableTax) and default rate, same reasoning as above.
+    const unsubscribeBillingSettings =
+      appointmentBillingService.subscribeToBillingSettings(
+        clinicId,
+        (data) => setBillingSettings(data),
+        (err) => {
+          console.error("Live billing settings subscription error:", err);
+          addToast({
+            title: "Live Updates Interrupted",
+            description:
+              "Lost connection to live billing settings — tax on new invoices may be stale. Please refresh.",
+            color: "danger",
+          });
+        },
+      );
+
     return () => {
       unsubscribeAppts?.();
       unsubscribeBillings?.();
       unsubscribePrescriptions?.();
+      unsubscribeApptTypes?.();
+      unsubscribeBillingSettings?.();
     };
   }, [clinicId, branchId, selectedDate]);
 
@@ -1229,38 +1319,9 @@ export default function FrontOfficeDesk() {
 
     try {
       const appt = appointments.find((a) => a.id === appointmentId);
+      const existingPendingItems: any[] =
+        (appt as any)?.pendingVisitItems || [];
 
-      if (appt && appt.consultationBillingId) {
-        // A cancelled invoice must not block re-billing — without this
-        // check, a cancelled consultation invoice permanently "occupies"
-        // consultationBillingId and every future routing attempt with
-        // "Charge Consultation Fee" checked would silently reopen the
-        // dead cancelled invoice instead of ever creating a fresh charge.
-        try {
-          const existingBilling = await appointmentBillingService.getBillingById(
-            appt.consultationBillingId,
-          );
-
-          if (existingBilling && existingBilling.status !== "cancelled") {
-            return appt.consultationBillingId;
-          }
-        } catch (err) {
-          console.error(
-            "Error checking existing consultation billing status:",
-            err,
-          );
-          addToast({
-            title: "Could Not Verify Existing Invoice",
-            description:
-              "Reusing the existing consultation invoice without confirming it isn't cancelled — please double-check billing for this patient.",
-            color: "warning",
-          });
-
-          // Can't confirm the existing invoice is safe to replace — fail
-          // safe and reuse it rather than risk creating a duplicate.
-          return appt.consultationBillingId;
-        }
-      }
       let pat = patients.find((p) => p.id === patientId);
 
       if (!pat && patientId) {
@@ -1274,15 +1335,6 @@ export default function FrontOfficeDesk() {
       let totalInvoiceAmount = 0;
       const items: any[] = [];
       // Tracks whether any item this loop builds is a package-session
-      // commission-only item (price 0 — patient already paid for the
-      // package — but still commission-bearing for the performing
-      // clinician). When true, the invoice is deliberately NOT
-      // auto-marked "paid" at creation (even though its total is 0) so
-      // that the explicit recordPayment(..., 0, "package") call below
-      // triggers the normal "commission generated when the invoice is
-      // paid" pipeline, instead of silently earning no commission.
-      let hasPackageSessionCommissionItem = false;
-
       // Only the Quick Intake modal's real "Charge Fee" checkboxes (one per
       // clinician row) reach here as a genuine multi-item cliniciansList —
       // every other call site (check-in, routing) builds the single-item
@@ -1306,6 +1358,23 @@ export default function FrontOfficeDesk() {
 
       for (const cl of cliniciansToProcess) {
         if (!cl.clinicianId || cl.clinicianId === "unassigned") continue;
+
+        // Idempotency: same clinician + appointment type already appended
+        // to this visit's pending items — skip rather than double-charge.
+        // Replaces the old "reuse the existing consultationBillingId
+        // invoice" guard, which no longer applies since nothing is filed
+        // as a real invoice until checkout.
+        const dedupeKey = cl.appointmentTypeId || "consultation-fee";
+
+        if (
+          existingPendingItems.some(
+            (it) =>
+              it.doctorId === cl.clinicianId &&
+              (it.appointmentTypeId || "consultation-fee") === dedupeKey,
+          )
+        ) {
+          continue;
+        }
 
         let docInfo = doctors.find((d) => d.id === cl.clinicianId);
         let expInfo = experts.find((e) => e.id === cl.clinicianId);
@@ -1410,6 +1479,7 @@ export default function FrontOfficeDesk() {
                 appointmentTypeName: `Package Session — ${pkg.name}`,
                 price: 0,
                 quantity: 1,
+                lineKind: "service",
                 commission: commissionPct,
                 calculateCommission: pkg.calculateCommission,
                 doctorId: cl.clinicianId,
@@ -1418,7 +1488,6 @@ export default function FrontOfficeDesk() {
                   : docInfo?.name || "GP",
                 amount: perSessionValue,
               };
-              hasPackageSessionCommissionItem = commissionPct > 0;
             }
           } else {
             console.warn(
@@ -1501,6 +1570,7 @@ export default function FrontOfficeDesk() {
                 appointmentTypeName: apptType.name,
                 price: finalPrice,
                 quantity: 1,
+                lineKind: "service",
                 commission:
                   cl.addCommission && apptType.calculateCommission !== false
                     ? resolvedFields.commission
@@ -1544,6 +1614,7 @@ export default function FrontOfficeDesk() {
                 }`,
             price: clConsultationPrice,
             quantity: 1,
+            lineKind: "service",
             commission: cl.addCommission
               ? fallbackClinician?.defaultCommission || 0
               : 0,
@@ -1562,132 +1633,181 @@ export default function FrontOfficeDesk() {
         return null;
       }
 
-      // Items are already built above in the array loop
+      // Nothing is filed as a real invoice at check-in any more — items
+      // accumulate on the appointment's pendingVisitItems, and the
+      // consultation fee (if any) is collected as a wallet deposit instead.
+      // Tax, discount and referral resolution now happen once, at checkout,
+      // over the full accumulated item set (see handleSettleBilling) —
+      // doing it here on a partial set and again at checkout would double
+      // up referral commission.
+      const updatedPendingItems = [...existingPendingItems, ...items];
 
-      // Apply the clinic's real tax settings instead of always billing
-      // untaxed — this invoice is created and IRD-synced immediately
-      // (see appointmentBillingService.createBilling), so it must be
-      // correct from the start, not "fixed later". `applyTax` (when the
-      // caller passes one) is a per-invoice override from the caller's own
-      // checkbox; defaults to OFF (not the clinic-wide setting) when the
-      // caller has no checkbox of its own, per the "tax off by default"
-      // policy applied everywhere in this session.
-      //
-      // Computed BEFORE resolving referral commissions (below) so referrer
-      // payouts are based on the same discount-adjusted, pre-tax amount the
-      // performing clinician's own commission already uses (doctorCommissionService/
-      // expertCommissionService) — previously this ran after, on the raw
-      // gross sum, so a referrer's cut could be computed on a bigger base
-      // than the performer's cut on the identical invoice.
-      const shouldApplyTax = applyTax !== undefined ? applyTax : false;
-      const taxPercentage = shouldApplyTax
-        ? billingSettings?.defaultTaxPercentage || 0
-        : 0;
-      const totals = appointmentBillingService.calculateInvoiceTotals(
-        items,
-        discountType || "percent",
-        discountValue || 0,
-        taxPercentage,
-      );
-
-      // 2. Resolve all referrers (polymorphic and multiple)
-      const referralCommissionBase = totals.taxableAmount + totals.exemptAmount;
-      const { processedReferrals, refPartnerId, refCommissionAmt } =
-        await resolvePatientReferrals(pat, referralCommissionBase);
-
-      const billingData = {
-        invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-        clinicId: clinicId!,
-        branchId: branchId || clinicId!,
-        patientId: patientId,
-        patientName: pat?.name || "Unknown Patient",
-        patientPanVat: pat?.patientPanVat || undefined,
-        doctorId: doctorId || "unassigned",
-        doctorName: "Multiple/System",
-        doctorType: "regular" as const,
-        appointmentId: appointmentId,
-        referralPartnerId: refPartnerId,
-        referralCommissionAmount:
-          refCommissionAmt && refCommissionAmt > 0
-            ? refCommissionAmt
-            : undefined,
-        referrals: processedReferrals, // Save complete polymorph referral ledger on invoice
-        invoiceDate: new Date(),
-        items: items,
-        subtotal: totals.subtotal,
-        itemDiscountAmount: totals.itemDiscountAmount,
-        mainDiscountAmount: totals.mainDiscountAmount,
-        discountType: discountType || ("percent" as const),
+      // What the patient actually owes for these lines — tax included, via
+      // the same engine checkout uses. Summing raw line amounts collected
+      // the pre-tax base and left exactly the tax outstanding on every
+      // visit, so the desk took NPR 700 against a 791 invoice and then had
+      // to chase 91 later. Package-session items are commission-only
+      // (price 0, already paid for at package sale) and are excluded.
+      const depositAmount = computeVisitPayableTotal(items as any, {
+        taxPercentage: billingSettings?.defaultTaxPercentage,
+        isTaxEnabled: Boolean(billingSettings?.enableTax),
+        discountType: discountType || "percent",
         discountValue: discountValue || 0,
-        discountAmount: totals.totalDiscount,
-        taxPercentage,
-        taxAmount: totals.taxAmount,
-        taxableAmount: totals.taxableAmount,
-        exemptAmount: totals.exemptAmount,
-        totalAmount: totals.totalAmount,
-        // A zero-total package-session-commission item is deliberately
-        // NOT auto-marked "paid" here — commission is only ever generated
-        // by recordPayment() on a genuine unpaid→paid transition (see the
-        // explicit recordPayment call below), so auto-paid-at-creation
-        // would silently skip commission for the performing clinician.
-        status:
-          totals.totalAmount === 0 && !hasPackageSessionCommissionItem
-            ? ("paid" as const)
-            : ("draft" as const),
-        paymentStatus:
-          totals.totalAmount === 0 && !hasPackageSessionCommissionItem
-            ? ("paid" as const)
-            : ("unpaid" as const),
-        paidAmount: 0,
-        balanceAmount: totals.totalAmount,
-        createdBy: currentUser?.uid || "system",
-      };
+      });
+      // Deposit FIRST, then persist — if the wallet call throws, the
+      // deposit bookkeeping below must not record depositedAmount as having
+      // grown, or the payment gate (owed vs deposited) would think this
+      // amount was collected when it wasn't and never let staff collect it
+      // for real. pendingVisitItems still gets the charge either way so
+      // it's still billed at checkout.
+      let depositSucceeded = false;
 
-      const { id: billingId } =
-        await appointmentBillingService.createBilling(billingData);
-
-      if (hasPackageSessionCommissionItem) {
+      if (depositAmount > 0) {
         try {
-          await appointmentBillingService.recordPayment(
-            billingId,
-            0,
-            "package",
-            undefined,
-            "Package session — covered by pre-paid package, no additional charge.",
+          await walletService.addFunds(
+            patientId,
+            clinicId!,
+            depositAmount,
+            "cash",
+            `Visit deposit — consultation fee (appointment ${appointmentId})`,
+            currentUser?.uid || "system",
+            appointmentId,
+            "appointment",
           );
-        } catch (payErr) {
-          console.error(
-            "Error recording zero-amount payment for package session commission:",
-            payErr,
-          );
+          depositSucceeded = true;
+        } catch (depErr) {
+          console.error("Error collecting visit deposit:", depErr);
+          addToast({
+            title: "Deposit Not Collected",
+            description:
+              "Consultation fee was added to the visit but the wallet deposit failed — please collect it manually.",
+            color: "warning",
+          });
         }
       }
 
-      // Link billing record to the appointment in Firestore
       await appointmentService.updateAppointment(appointmentId, {
-        consultationBillingId: billingId,
-        consultationBillingStatus: totals.totalAmount === 0 ? "paid" : "unpaid",
+        pendingVisitItems: updatedPendingItems,
+        // Carries forward to checkout, which has no discount UI of its own
+        // — without this, a discount entered here was silently dropped.
+        // Only overwrite the visit's standing discount when this call
+        // actually specified one, so an earlier (e.g. Finalise Procedure)
+        // discount isn't clobbered by a later call that passed none.
+        ...(discountValue
+          ? {
+            pendingVisitDiscountType: discountType || "percent",
+            pendingVisitDiscountValue: discountValue,
+          }
+          : {}),
         billingId: null,
         billingStatus: "unpaid",
-        paymentStatus: totals.totalAmount === 0 ? "paid" : "unpaid",
+        paymentStatus: "unpaid",
         updatedAt: new Date(),
       } as any);
 
-      // Log commissions
-      // Commission generation has been safely migrated to the `recordPayment` flow
-      // in appointments-billing.tsx so that they are strictly generated when the invoice is paid.
+      // Recorded as an atomic increment, separately from the item append
+      // above: a plain read-modify-write here lost one of two concurrent
+      // deposits, leaving the wallet credited twice but the visit showing
+      // only one collection.
+      if (depositSucceeded) {
+        await appointmentService.addToVisitDeposit(appointmentId, depositAmount);
+      }
 
       console.log(
-        "Doctor Consultation Bill automatically generated:",
-        billingId,
+        "Consultation charge appended to pending visit items for appointment:",
+        appointmentId,
       );
 
-      return billingId;
+      return appointmentId;
     } catch (err) {
       console.error("Error automatically generating consultation bill:", err);
       throw err;
     }
   };
+
+  // Collects the remaining owed-vs-deposited gap for a visit as a wallet
+  // deposit, right from the guided action — no navigation, since there is
+  // no invoice to navigate to until checkout (see
+  // "One Invoice Per Visit: Deposit at Check-in, Bill at Checkout").
+  const handleCollectDeposit = async (appt: Appointment) =>
+    runGuarded(`collect-deposit-${appt.id}`, async () => {
+      const gate = getVisitPaymentGate(appt as any, {
+      taxPercentage: billingSettings?.defaultTaxPercentage,
+      isTaxEnabled: Boolean(billingSettings?.enableTax),
+    });
+
+      if (!gate.isDue) return;
+
+      // Claim the amount against freshly-read state BEFORE taking any
+      // money. If another desk collected this visit a moment ago, the claim
+      // comes back 0 and we must not charge the patient a second time —
+      // the old code read the amount due from this browser's snapshot and
+      // would happily collect it again.
+      let claimed = 0;
+
+      try {
+        claimed = await appointmentService.claimVisitDeposit(
+          appt.id,
+          gate.dueAmount,
+        );
+      } catch (err) {
+        console.error("Error claiming visit deposit:", err);
+        addToast({
+          title: "Deposit Not Collected",
+          description: "Could not record the deposit. Please try again.",
+          color: "danger",
+        });
+
+        return;
+      }
+
+      if (claimed <= 0) {
+        addToast({
+          title: "Already Collected",
+          description:
+            "This visit's deposit was just collected elsewhere — nothing further is due.",
+          color: "warning",
+        });
+
+        return;
+      }
+
+      try {
+        await walletService.addFunds(
+          appt.patientId,
+          clinicId || appt.clinicId,
+          claimed,
+          "cash",
+          `Visit deposit — remaining balance (appointment ${appt.id})`,
+          currentUser?.uid || "system",
+          appt.id,
+          "appointment",
+        );
+
+        addToast({
+          title: "Deposit Collected",
+          description: `NPR ${claimed.toFixed(2)} collected for this visit.`,
+          color: "success",
+        });
+      } catch (err) {
+        // The claim is already recorded, so hand it back — otherwise the
+        // visit would look paid for when no money was actually taken.
+        console.error("Error collecting deposit:", err);
+        await appointmentService
+          .releaseVisitDeposit(appt.id, claimed)
+          .catch((releaseErr) =>
+            console.error(
+              "Failed to release an unfulfilled deposit claim:",
+              releaseErr,
+            ),
+          );
+        addToast({
+          title: "Deposit Not Collected",
+          description: "Could not record the deposit. Please try again.",
+          color: "danger",
+        });
+      }
+    });
 
   // Dynamic state machine triggers
   const handleCheckIn = async (appointmentId: string) =>
@@ -2061,15 +2181,7 @@ export default function FrontOfficeDesk() {
   ) => {
     if (!clinicId) return null;
 
-    const billingId = appt.consultationBillingId || appt.billingId;
-
-    if (!billingId) return null;
-
     try {
-      const billing = await appointmentBillingService.getBillingById(billingId);
-
-      if (!billing) return null;
-
       // Get the price of the booked appointment type first to check if it's a consultation
       const apptType = appointmentTypes.find(
         (t) => t.id === appt.appointmentTypeId,
@@ -2081,31 +2193,17 @@ export default function FrontOfficeDesk() {
         .toLowerCase()
         .includes("consult");
 
-      // Check if the booked appointment type is already in the billing items
-      const hasBookedItem = billing.items?.some(
+      const existingPendingItems: any[] = (appt as any).pendingVisitItems || [];
+
+      // Already appended for this visit — skip rather than double-charge.
+      const hasBookedItem = existingPendingItems.some(
         (item: any) =>
           item.appointmentTypeId === appt.appointmentTypeId ||
           (isApptTypeConsultation &&
             item.appointmentTypeId === "consultation-fee"),
       );
 
-      if (hasBookedItem) {
-        return billing.paymentStatus || "unpaid";
-      }
-
-      // This invoice may already be IRD-synced (sync happens at creation,
-      // not at a later "Finalize") — updateBilling would throw rather than
-      // silently patch a locked invoice's items. Check up front so the
-      // front-desk user gets a clear reason instead of nothing happening.
-      if (isBillingLocked(billing)) {
-        addToast({
-          title: "Invoice Already Locked",
-          description: `${apptType.name} could not be added — this invoice is already IRD-synced. Create a separate invoice for this charge from Appointment Billing.`,
-          color: "warning",
-        });
-
-        return billing.paymentStatus || "unpaid";
-      }
+      if (hasBookedItem) return null;
 
       const price = Number(apptType.price) || 0;
 
@@ -2139,6 +2237,7 @@ export default function FrontOfficeDesk() {
         appointmentTypeName: apptType.name || "Procedure/Service Fee",
         price: price,
         quantity: 1,
+        lineKind: "service" as const,
         commission: resolvedFields.commission,
         calculateCommission: resolvedFields.calculateCommission,
         isTaxable: resolvedFields.isTaxable,
@@ -2148,37 +2247,12 @@ export default function FrontOfficeDesk() {
         amount: price,
       };
 
-      const updatedItems = [...(billing.items || []), newItem];
-      const totals = appointmentBillingService.calculateInvoiceTotals(
-        updatedItems,
-        billing.discountType || "percent",
-        billing.discountValue || 0,
-        billing.taxPercentage || 0,
-      );
+      await appointmentService.updateAppointment(appt.id, {
+        pendingVisitItems: [...existingPendingItems, newItem],
+        updatedAt: new Date(),
+      } as any);
 
-      const newPaid = billing.paidAmount || 0;
-      const newTotal = totals.totalAmount;
-      const newBalance = newTotal - newPaid;
-      const newPaymentStatus =
-        newPaid >= newTotal ? "paid" : newPaid > 0 ? "partial" : "unpaid";
-      const newStatus = newPaymentStatus === "paid" ? "paid" : "draft";
-
-      await appointmentBillingService.updateBilling(billingId, {
-        items: updatedItems,
-        subtotal: totals.subtotal,
-        itemDiscountAmount: totals.itemDiscountAmount,
-        mainDiscountAmount: totals.mainDiscountAmount,
-        discountAmount: totals.totalDiscount,
-        taxAmount: totals.taxAmount,
-        taxableAmount: totals.taxableAmount,
-        exemptAmount: totals.exemptAmount,
-        totalAmount: totals.totalAmount,
-        balanceAmount: newBalance,
-        paymentStatus: newPaymentStatus,
-        status: newStatus,
-      });
-
-      return newPaymentStatus;
+      return null;
     } catch (err) {
       console.error("Error ensuring booked appointment type is billed:", err);
 
@@ -2318,36 +2392,30 @@ export default function FrontOfficeDesk() {
 
         if (!appt) return;
 
-        // 1. Enforce workflow gating to verify clinical documentation
         const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
-        const hasExpert =
-          appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
 
-        const isTriageCompleted = appt.notes?.includes(
-          "[Triage Vitals Recorded]",
-        );
+        // One definition of "may this visit close", shared with every other
+        // caller (see visitLifecycleCore). These checks used to live only
+        // inside this handler, so any other path that marked the visit
+        // complete skipped them entirely — which is exactly what the
+        // billing path did.
+        const eligibility = canCompleteCheckout(appt as any, {
+          invoice: appt.billingId
+            ? billings.find((b) => b.id === appt.billingId) || null
+            : null,
+        });
 
-        let isConsultationCompleted = true;
-
-        if (hasDoctor) {
-          isConsultationCompleted = appt.doctorConsultationCompleted === true;
-        }
-
-        // If there's an expert, we should also ensure they've completed it if it's dual-assigned
-        // However, usually doctorConsultationCompleted covers it, or the fact it reached billing stage.
-
-        if (!isTriageCompleted && hasDoctor) {
+        if (!eligibility.allowed) {
           addToast({
-            title: "Incomplete Clinical Documentation",
-            description:
-              "Cannot complete checkout. Patient triage vitals have not been recorded.",
-            color: "danger",
+            title: "Cannot Complete Checkout",
+            description: eligibility.reason,
+            color: "warning",
           });
 
           return;
         }
 
-        if (hasDoctor && !isConsultationCompleted) {
+        if (hasDoctor && appt.doctorConsultationCompleted !== true) {
           addToast({
             title: "Incomplete Clinical Documentation",
             description:
@@ -2355,62 +2423,6 @@ export default function FrontOfficeDesk() {
             color: "danger",
           });
 
-          return;
-        }
-
-        // Check state integrity to prevent premature settlement. An
-        // appointment can carry TWO independent billing links —
-        // consultationBillingId (doctor fee, set by createConsultationBill)
-        // and billingId (a separate procedure/appointment-type charge, set
-        // by ensureBookedAppointmentTypeBilled) — each updated by a
-        // different code path. Previously only ONE was checked here
-        // (whichever billingId happened to be truthy, or the single
-        // appt.billingStatus mirror field), so a patient with a paid
-        // consultation fee but an unpaid procedure charge (or vice versa)
-        // could be checked out with real money still owed on the OTHER
-        // invoice. Every linked bill that actually exists must be
-        // paid/zero before checkout proceeds.
-        const linkedBillIds = Array.from(
-          new Set(
-            [appt.billingId, (appt as any).consultationBillingId].filter(
-              (id): id is string => Boolean(id),
-            ),
-          ),
-        );
-
-        let hasOutstandingBalance: boolean;
-
-        if (linkedBillIds.length > 0) {
-          hasOutstandingBalance = linkedBillIds.some((id) => {
-            const matchingBill = billings.find((b) => b.id === id);
-
-            if (!matchingBill) return false; // can't find it — don't block on missing data
-            if (matchingBill.totalAmount <= 0) return false;
-
-            return !(
-              matchingBill.status === "paid" ||
-              matchingBill.paymentStatus === "paid"
-            );
-          });
-        } else {
-          // No linked bill at all — fall back to the appointment's own
-          // mirrored status fields (e.g. a legacy record).
-          hasOutstandingBalance = !(
-            appt.billingStatus === "paid" || appt.paymentStatus === "paid"
-          );
-        }
-
-        if (hasOutstandingBalance) {
-          addToast({
-            title: "Premature Settlement",
-            description:
-              "Cannot complete checkout. Outstanding balance exists on this appointment — record payment first.",
-            color: "warning",
-          });
-          // Actually block — this toast previously described a rule that
-          // was never enforced, letting a patient be checked out (and
-          // getPatientStage/downstream UI treat the visit as fully done)
-          // while still owing money, with no re-flag anywhere afterward.
           return;
         }
 
@@ -2597,6 +2609,14 @@ export default function FrontOfficeDesk() {
       const triageNoteLine = `[Triage Vitals Recorded] BP: ${formattedBP}, Temp: ${formattedTemp}\nComplaints: ${formattedComplaints}`;
       const updateData: any = {
         notes: priorNotes ? `${priorNotes}\n${triageNoteLine}` : triageNoteLine,
+        // Structured record of the same fact. Triage completion drove the
+        // patient's stage and the checkout gate purely from a magic
+        // substring inside this free-text field — which any unrelated notes
+        // edit could erase, and which could be typed by hand to pass the
+        // clinical-documentation gate with no vitals ever taken. The note
+        // line stays for readability; this is what the logic reads.
+        triageCompletedAt: new Date(),
+        triageRecordedBy: currentUser?.uid || "system",
         updatedAt: new Date(),
       };
 
@@ -3114,63 +3134,32 @@ export default function FrontOfficeDesk() {
     | "pharmacy"
     | "no-show"
     | "completed" => {
-    const status = appt.status?.toLowerCase();
+    // Delegates to visitLifecycleCore, which is the single definition of a
+    // visit's stage and is unit-tested in isolation. The inference used to
+    // live here and keyed off a STORED completion flag, which let the
+    // billing path mark a visit done without passing the clinical or
+    // balance checks — so a patient could vanish from the board still
+    // owing money, and a cancelled invoice left a visit stranded as
+    // "already billed" with nothing left to bill. Deriving it from the
+    // invoice's real state fixes both.
+    const hasPendingPrescription = prescriptions.some(
+      (p) =>
+        (p.appointmentId === appt.id || p.patientId === appt.patientId) &&
+        p.sendToPharmacy === true &&
+        p.status === "active",
+    );
+    const invoice = appt.billingId
+      ? billings.find((b) => b.id === appt.billingId) || null
+      : null;
 
-    // Previously fell through every branch to the default "completed" case
-    // below — a no-show appointment rendered identically to a genuinely
-    // completed visit anywhere the UI groups/filters by stage.
-    if (status === "no-show") return "no-show";
-    if (status === "scheduled") return "scheduled";
-    if (status === "confirmed") {
-      // Check if triage vitals note header prefix exists inside notes field
-      if (appt.notes?.includes("[Triage Vitals Recorded]")) {
-        return "triage-done";
-      }
+    const stage = deriveVisitStage(appt as any, {
+      invoice,
+      hasPendingPrescription,
+    });
 
-      return "lobby";
-    }
-    if (status === "in-progress") {
-      const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
-      const hasExpert =
-        appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
-
-      if (hasDoctor && hasExpert) {
-        return appt.doctorConsultationCompleted ? "expert" : "doctor";
-      }
-
-      return hasDoctor ? "doctor" : "expert";
-    }
-    if (status === "completed") {
-      let isCheckedOut =
-        appt.checkoutCompleted === true ||
-        appt.notes?.includes("[Checkout Completed]") ||
-        appt.billingStatus === "paid" ||
-        appt.paymentStatus === "paid";
-
-      if ((appt as any).recommendedProcedure) {
-        isCheckedOut = false;
-      }
-
-      if (isCheckedOut) {
-        // Check if there is an active prescription sent to pharmacy
-        const hasPendingPrescription = prescriptions.some(
-          (p) =>
-            (p.appointmentId === appt.id || p.patientId === appt.patientId) &&
-            p.sendToPharmacy === true &&
-            p.status === "active",
-        );
-
-        if (hasPendingPrescription) {
-          return "pharmacy";
-        }
-
-        return "completed";
-      }
-
-      return "billing"; // Waiting for invoice/checkout
-    }
-
-    return "completed";
+    // "cancelled" is a lifecycle state this board has never rendered; it
+    // groups with completed here so callers keep their existing union.
+    return stage === "cancelled" ? "completed" : stage;
   };
 
   /**
@@ -3193,21 +3182,24 @@ export default function FrontOfficeDesk() {
    * Prefers the consultation bill when both are pending, matching this
    * file’s existing "Settle Consultation Bill" UI copy.
    */
+  // Nothing is a filed invoice between check-in and checkout any more —
+  // this now compares what the visit owes so far (pendingVisitItems) against
+  // what's been deposited (depositedAmount), instead of looking up a real
+  // AppointmentBilling document. Returns null when there's nothing owed or
+  // the deposit already covers it; otherwise an object shaped enough like a
+  // bill (`items`, `owed`, `deposited`) for existing call sites to keep
+  // reading item-level detail (e.g. the "is this just the consultation fee"
+  // badge check) without needing a real invoice id.
   const getPendingBillForAppointment = (appt: Appointment) => {
-    const isBillPaid = (bill: any) =>
-      !!bill && (bill.status === "paid" || bill.paymentStatus === "paid");
+    const items: any[] = (appt as any).pendingVisitItems || [];
+    const gate = getVisitPaymentGate(appt as any, {
+      taxPercentage: billingSettings?.defaultTaxPercentage,
+      isTaxEnabled: Boolean(billingSettings?.enableTax),
+    });
 
-    const consultationBill = (appt as any).consultationBillingId
-      ? billings.find((b) => b.id === (appt as any).consultationBillingId)
-      : null;
-    const procedureBill = appt.billingId
-      ? billings.find((b) => b.id === appt.billingId)
-      : null;
+    if (!gate.isDue) return null;
 
-    if (consultationBill && !isBillPaid(consultationBill)) return consultationBill;
-    if (procedureBill && !isBillPaid(procedureBill)) return procedureBill;
-
-    return null;
+    return { items, owed: gate.owed, deposited: gate.deposited };
   };
 
   // Which exclusive cabins are currently occupied, and by whom — used to
@@ -3358,19 +3350,27 @@ export default function FrontOfficeDesk() {
     // it's already settled for the doctor currently selected, and show it
     // again if staff pick a different doctor who hasn't been billed yet.
     const routingExistingConsultationBill = routingAppointment
-      ? billings.find(
-        (b) =>
-          b.id ===
-          ((routingAppointment as any).consultationBillingId ||
-            (routingAppointment as any).billingId),
-      )
+      ? billings.find((b) => b.id === (routingAppointment as any).billingId)
       : null;
+    // A visit's consultation fee now lives on the appointment as a pending
+    // charge until checkout, so looking only at invoice pointers found
+    // nothing for any in-progress visit — "Charge Consultation Fee" was
+    // therefore offered as if nothing had been billed, and routing could
+    // append a second consultation fee to the same visit.
+    const routingPendingItems: any[] =
+      (routingAppointment as any)?.pendingVisitItems || [];
+    const routingPendingConsultationItem = routingPendingItems.find(
+      (it) =>
+        it.appointmentTypeId === "consultation-fee" ||
+        it.appointmentTypeName?.toLowerCase().includes("consult"),
+    );
     const routingConsultationBillPaid = routingExistingConsultationBill
       ? routingExistingConsultationBill.status === "paid" ||
       routingExistingConsultationBill.paymentStatus === "paid"
-      : false;
+      : Boolean(routingPendingConsultationItem);
     const routingConsultationBillDoctorId =
-      routingExistingConsultationBill?.doctorId;
+      routingExistingConsultationBill?.doctorId ||
+      routingPendingConsultationItem?.doctorId;
 
     return (
       <RoutingModal
@@ -3904,6 +3904,10 @@ export default function FrontOfficeDesk() {
           applyTax: quickIntakeForm.applyTax,
           defaultTaxPercentage: billingSettings?.defaultTaxPercentage,
           createdBy: currentUser?.uid || "system",
+          // Identity for this one sale, so two genuinely distinct sales of
+          // the same package to the same patient cannot collapse into a
+          // single invoice via the content-plus-time-bucket fallback.
+          saleId: crypto.randomUUID(),
         });
 
         const { id: billingId } =
@@ -3921,15 +3925,31 @@ export default function FrontOfficeDesk() {
         }
 
         // 4. Add Funds to Wallet
+        //
+        // The sale is already filed and paid by this point, so a failure
+        // here must not abort the whole check-in and report it as failed —
+        // that told staff nothing happened when money had in fact been
+        // taken. Surface precisely what is missing instead, so the credit
+        // can be added manually rather than silently never existing.
         if (pkg.walletCreditAmount > 0) {
-          await walletService.addFunds(
-            patientIdToUse,
-            clinicId!,
-            pkg.walletCreditAmount,
-            quickIntakeForm.paymentMethod,
-            `Package Credit: ${pkg.name}`,
-            currentUser?.uid || "system",
-          );
+          try {
+            await walletService.addFunds(
+              patientIdToUse,
+              clinicId!,
+              pkg.walletCreditAmount,
+              quickIntakeForm.paymentMethod,
+              `Package Credit: ${pkg.name}`,
+              currentUser?.uid || "system",
+            );
+          } catch (creditErr) {
+            console.error("Error granting package wallet credit:", creditErr);
+            addToast({
+              title: "Wallet Credit Not Added",
+              description: `The package was sold and paid, but the NPR ${pkg.walletCreditAmount} wallet credit could not be added — add it manually from the patient's Wallet tab.`,
+              color: "warning",
+              duration: 15000,
+            });
+          }
         }
 
         // 5. Create visual session tracker if it has total sessions
@@ -4146,8 +4166,6 @@ export default function FrontOfficeDesk() {
         const shouldGenerateConsFee =
           quickIntakeForm.generateConsultationBill && (hasDoctor || hasExpert);
 
-        let primaryBillId: string | null = null;
-
         if (shouldGenerateConsFee || hasApptFee) {
           const clinicianIdToBill = hasDoctor
             ? quickIntakeForm.doctorId
@@ -4159,7 +4177,7 @@ export default function FrontOfficeDesk() {
             : quickIntakeForm.addExpertCommission;
 
           try {
-            primaryBillId = await createConsultationBill(
+            await createConsultationBill(
               patientIdToUse,
               clinicianIdToBill,
               newApptId,
@@ -4274,7 +4292,14 @@ export default function FrontOfficeDesk() {
               assignedExpertId: extraExpId,
               appointmentTypeId:
                 extraClin.appointmentTypeId || apptData.appointmentTypeId,
-              consultationBillingId: primaryBillId || undefined,
+              // Marks this as a sibling whose charges live on the primary
+              // appointment, so checkout refuses to fabricate a duplicate
+              // invoice for it (see handleSettleBilling).
+              billedOnAppointmentId: newApptId,
+              // The extra clinician's charge was already appended to the
+              // PRIMARY appointment's pendingVisitItems inside the single
+              // createConsultationBill(cliniciansList) call above — this
+              // sibling appointment carries no billing pointer of its own.
               // Never let an extra clinician's sibling appointment inherit
               // the primary's "in-progress" (send-directly-to-cabin) status
               // — a patient can only be actively with one clinician/in one
@@ -4313,6 +4338,9 @@ export default function FrontOfficeDesk() {
         "doctor",
         appointmentTypes,
       );
+      const resetDoctorDefaultType = appointmentTypes.find(
+        (t) => t.id === resetDoctorDefaults.appointmentTypeId,
+      );
 
       setQuickIntakeForm({
         name: "",
@@ -4320,7 +4348,7 @@ export default function FrontOfficeDesk() {
         patientPanVat: "",
         age: "",
         gender: "male",
-        appointmentDate: new Date().toISOString().split("T")[0],
+        appointmentDate: todayLocalDateString(),
         doctorId: "",
         assignedExpertId: "",
         appointmentTypeId: resetDoctorDefaults.appointmentTypeId,
@@ -4330,7 +4358,7 @@ export default function FrontOfficeDesk() {
         paymentMethod: "cash",
         paymentReference: "",
         generateConsultationBill: true,
-        applyTax: false,
+        applyTax: Boolean(resetDoctorDefaultType?.isTaxable),
         discountType: "percent",
         discountValue: 0,
         addDoctorCommission: true,
@@ -4365,6 +4393,7 @@ export default function FrontOfficeDesk() {
         addReferrerRow={addReferrerRow}
         appointmentTypes={appointmentTypes}
         defaultTaxPercentage={billingSettings?.defaultTaxPercentage || 0}
+        enableTax={Boolean(billingSettings?.enableTax)}
         doctors={doctors}
         experts={experts}
         intakeMode={intakeMode}
@@ -4411,12 +4440,6 @@ export default function FrontOfficeDesk() {
       const clinician = docInfo || expInfo;
       const clinicianName = clinician?.name || "Clinician";
       const defaultComm = clinician?.defaultCommission || 0;
-      // Set when the invoice we'd normally patch turns out to be IRD-locked
-      // — instead of a dead-end toast, we fall through to the same "create
-      // a fresh draft invoice" logic used when there's no invoice at all,
-      // so staff get a working invoice for this procedure in one step
-      // instead of having to build one manually elsewhere.
-      let followUpAfterLock = false;
 
       if (accept && rec && rec.fee > 0) {
         let procedureItemsToAdd: any[] = [];
@@ -4469,6 +4492,7 @@ export default function FrontOfficeDesk() {
                     : `${i.name} (Procedure Fee)`,
                 price: shareFee,
                 quantity: 1,
+                lineKind: "service" as const,
                 commission: resolvedFields.commission,
                 calculateCommission: resolvedFields.calculateCommission,
                 isTaxable: resolvedFields.isTaxable,
@@ -4518,6 +4542,7 @@ export default function FrontOfficeDesk() {
               appointmentTypeName: `${rec.name} (Procedure Fee)`,
               price: rec.fee,
               quantity: 1,
+              lineKind: "service" as const,
               commission: resolvedProcFields.commission,
               calculateCommission: resolvedProcFields.calculateCommission,
               isTaxable: resolvedProcFields.isTaxable,
@@ -4533,261 +4558,108 @@ export default function FrontOfficeDesk() {
           totalFee = rec.fee;
         }
 
-        let billingId =
-          apptToFinalise.consultationBillingId || apptToFinalise.billingId;
+        // Nothing is filed as a real invoice mid-visit any more — the
+        // procedure items (and the recommending doctor's referral
+        // commission) append to the appointment's pending visit state,
+        // same as a late charge against an already-checked-out invoice,
+        // which stays on the separate credit-note-and-reissue path and is
+        // untouched here.
+        const existingPendingItems: any[] =
+          (apptToFinalise as any).pendingVisitItems || [];
+        const existingPendingReferrals: any[] =
+          (apptToFinalise as any).pendingVisitReferrals || [];
+        const updatedPendingItems = [
+          ...existingPendingItems,
+          ...procedureItemsToAdd,
+        ];
 
-        if (billingId) {
-          const billing =
-            await appointmentBillingService.getBillingById(billingId);
-
-          if (!billing) {
-            // billingId was set on the appointment but the invoice it
-            // points to no longer resolves (deleted, or a stale/orphaned
-            // reference) — previously this silently dropped the procedure
-            // fee (neither branch below ran, yet billingId stayed truthy so
-            // the "create fresh invoice" fallback further down never fired
-            // either). Treat it the same as a locked invoice: fall through
-            // to creating a new one instead of losing the charge.
-            console.warn(
-              `Billing record ${billingId} referenced by appointment ${apptToFinalise.id} was not found — creating a new invoice for this procedure instead.`,
-            );
-            followUpAfterLock = true;
-            billingId = null;
-          } else if (isBillingLocked(billing)) {
-            // This invoice may already be IRD-synced (sync happens at
-            // creation, not at a later "Finalize") — updateBilling would
-            // throw rather than silently patch a locked invoice's items.
-            followUpAfterLock = true;
-            billingId = null;
-          } else {
-            const updatedItems = [
-              ...(billing.items || []),
-              ...procedureItemsToAdd,
-            ];
-            // Discount/tax entered for THIS finalization take precedence
-            // over whatever the invoice already had — staff are explicitly
-            // setting them right now for the procedure being added.
-            const totals = appointmentBillingService.calculateInvoiceTotals(
-              updatedItems,
-              finaliseDiscountType,
-              finaliseDiscountValue,
-              finaliseApplyTax ? billingSettings?.defaultTaxPercentage || 0 : 0,
-            );
-
-            const newPaid = billing.paidAmount || 0;
-            const newTotal = totals.totalAmount;
-            const newBalance = newTotal - newPaid;
-
-            const newPaymentStatus =
-              newPaid >= newTotal ? "paid" : newPaid > 0 ? "partial" : "unpaid";
-            const newStatus = newPaymentStatus === "paid" ? "paid" : "draft";
-
-            // Append the recommending doctor to referrals for commission
-            let updatedReferrals = billing.referrals || [];
-
-            if (
-              apptToFinalise.doctorId &&
-              apptToFinalise.doctorId !== "unassigned"
-            ) {
-              const recommendingDoctor = doctors.find(
-                (d) => d.id === apptToFinalise.doctorId,
-              );
-
-              if (recommendingDoctor) {
-                const defaultComm = recommendingDoctor.defaultCommission || 0;
-
-                if (defaultComm > 0) {
-                  // Discount-adjusted, pre-tax base — same ratio formula
-                  // doctorCommissionService/expertCommissionService already
-                  // use for the performing clinician's own commission on
-                  // this invoice, so the referring doctor's bonus isn't
-                  // computed on a bigger (gross) base than the performer's.
-                  const validTotalForReferral = Math.max(
-                    totals.subtotal - totals.itemDiscountAmount,
-                    1,
-                  );
-                  const referralDiscountRatio =
-                    (validTotalForReferral - totals.mainDiscountAmount) /
-                    validTotalForReferral;
-                  const effectiveTotalFee = totalFee * referralDiscountRatio;
-
-                  // Only add if not already present
-                  const existingRef = updatedReferrals.find(
-                    (r) =>
-                      r.id === recommendingDoctor.id && r.type === "doctor",
-                  );
-
-                  if (!existingRef) {
-                    updatedReferrals = [
-                      ...updatedReferrals,
-                      {
-                        type: "doctor",
-                        id: recommendingDoctor.id,
-                        name: recommendingDoctor.name,
-                        commissionPercentage: defaultComm,
-                        commissionAmount: (effectiveTotalFee * defaultComm) / 100,
-                      },
-                    ];
-                  } else {
-                    // Update commission amount for the new total fee if they already exist
-                    updatedReferrals = updatedReferrals.map((r) =>
-                      r.id === recommendingDoctor.id && r.type === "doctor"
-                        ? {
-                          ...r,
-                          commissionAmount:
-                            r.commissionAmount +
-                            (effectiveTotalFee * defaultComm) / 100,
-                        }
-                        : r,
-                    );
-                  }
-                }
-              }
-            }
-
-            await appointmentBillingService.updateBilling(billingId, {
-              items: updatedItems,
-              referrals: updatedReferrals,
-              discountType: finaliseDiscountType,
-              discountValue: finaliseDiscountValue,
-              taxPercentage: finaliseApplyTax
-                ? billingSettings?.defaultTaxPercentage || 0
-                : 0,
-              subtotal: totals.subtotal,
-              itemDiscountAmount: totals.itemDiscountAmount,
-              mainDiscountAmount: totals.mainDiscountAmount,
-              discountAmount: totals.totalDiscount,
-              taxAmount: totals.taxAmount,
-              taxableAmount: totals.taxableAmount,
-              exemptAmount: totals.exemptAmount,
-              totalAmount: totals.totalAmount,
-              balanceAmount: newBalance,
-              paymentStatus: newPaymentStatus,
-              status: newStatus,
-            });
-
-            await appointmentService.updateAppointment(apptToFinalise.id, {
-              billingStatus: newPaymentStatus,
-              paymentStatus: newPaymentStatus,
-              updatedAt: new Date(),
-            } as any);
-          }
-        }
-
-        if (!billingId) {
-          // No invoice exists (or the existing one was locked, see above) —
-          // create a draft invoice for this procedure from scratch.
-          let pat = patients.find((p) => p.id === apptToFinalise.patientId);
-
-          if (!pat && apptToFinalise.patientId) {
-            pat =
-              (await patientService.getPatientById(apptToFinalise.patientId)) ||
-              undefined;
-          }
-
-          const isExpert =
-            apptToFinalise.assignedExpertId &&
-            apptToFinalise.assignedExpertId !== "unassigned";
-          const clinicianId = isExpert
-            ? apptToFinalise.assignedExpertId
-            : apptToFinalise.doctorId || "unassigned";
-          const docInfo =
-            doctors.find((d) => d.id === clinicianId) ||
-            experts.find((e) => e.id === clinicianId);
-
-          const draftBillingItems = procedureItemsToAdd;
-
-          // Computed BEFORE the referral block below so the recommending
-          // doctor's bonus can use the same discount-adjusted, pre-tax base
-          // the performing clinician's own commission is computed on.
-          const procTaxPercentage = finaliseApplyTax
+        // Referral math unchanged: discount-adjusted, pre-tax base, using
+        // this finalization's own discount/tax selection against the full
+        // accumulated item set so far (checkout will still be the final
+        // word once every charge for the visit is known). Gated on the
+        // clinic's master tax switch same as handleSettleBilling — without
+        // this, turning the clinic-wide toggle off wouldn't stop tax being
+        // applied here, since finaliseApplyTax defaults to true whenever
+        // any item is catalogue-taxable regardless of that master switch.
+        const totals = appointmentBillingService.calculateInvoiceTotals(
+          updatedPendingItems,
+          finaliseDiscountType,
+          finaliseDiscountValue,
+          finaliseApplyTax && billingSettings?.enableTax
             ? billingSettings?.defaultTaxPercentage || 0
-            : 0;
-          const procTotals = appointmentBillingService.calculateInvoiceTotals(
-            draftBillingItems,
-            finaliseDiscountType,
-            finaliseDiscountValue,
-            procTaxPercentage,
+            : 0,
+        );
+
+        let updatedPendingReferrals = existingPendingReferrals;
+
+        if (
+          apptToFinalise.doctorId &&
+          apptToFinalise.doctorId !== "unassigned"
+        ) {
+          const recommendingDoctor = doctors.find(
+            (d) => d.id === apptToFinalise.doctorId,
           );
 
-          const referrals: any[] = [];
+          if (recommendingDoctor) {
+            const defaultComm = recommendingDoctor.defaultCommission || 0;
 
-          // Automatically add the recommending doctor for commission
-          if (
-            apptToFinalise.doctorId &&
-            apptToFinalise.doctorId !== "unassigned"
-          ) {
-            const recommendingDoctor = doctors.find(
-              (d) => d.id === apptToFinalise.doctorId,
-            );
+            if (defaultComm > 0) {
+              const validTotalForReferral = Math.max(
+                totals.subtotal - totals.itemDiscountAmount,
+                1,
+              );
+              const referralDiscountRatio =
+                (validTotalForReferral - totals.mainDiscountAmount) /
+                validTotalForReferral;
+              const effectiveTotalFee = totalFee * referralDiscountRatio;
 
-            if (recommendingDoctor) {
-              const defaultComm = recommendingDoctor.defaultCommission || 0;
+              const existingRef = updatedPendingReferrals.find(
+                (r) => r.id === recommendingDoctor.id && r.type === "doctor",
+              );
 
-              if (defaultComm > 0) {
-                const validTotalForReferral = Math.max(
-                  procTotals.subtotal - procTotals.itemDiscountAmount,
-                  1,
+              if (!existingRef) {
+                updatedPendingReferrals = [
+                  ...updatedPendingReferrals,
+                  {
+                    type: "doctor",
+                    id: recommendingDoctor.id,
+                    name: recommendingDoctor.name,
+                    commissionPercentage: defaultComm,
+                    commissionAmount: (effectiveTotalFee * defaultComm) / 100,
+                  },
+                ];
+              } else {
+                updatedPendingReferrals = updatedPendingReferrals.map((r) =>
+                  r.id === recommendingDoctor.id && r.type === "doctor"
+                    ? {
+                      ...r,
+                      commissionAmount:
+                        r.commissionAmount +
+                        (effectiveTotalFee * defaultComm) / 100,
+                    }
+                    : r,
                 );
-                const referralDiscountRatio =
-                  (validTotalForReferral - procTotals.mainDiscountAmount) /
-                  validTotalForReferral;
-                const effectiveTotalFee = totalFee * referralDiscountRatio;
-
-                referrals.push({
-                  type: "doctor",
-                  id: recommendingDoctor.id,
-                  name: recommendingDoctor.name,
-                  commissionPercentage: defaultComm,
-                  commissionAmount: (effectiveTotalFee * defaultComm) / 100,
-                });
               }
             }
           }
-
-          const billingData = {
-            invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-            clinicId: clinicId,
-            branchId: branchId || clinicId,
-            patientId: apptToFinalise.patientId,
-            patientName: pat?.name || "Unknown Patient",
-            patientPanVat: pat?.patientPanVat || undefined,
-            doctorId: clinicianId,
-            doctorName: docInfo?.name || "Clinician",
-            doctorType: ((docInfo as any)?.doctorType || "regular") as
-              | "regular"
-              | "visitor",
-            invoiceDate: new Date(),
-            items: draftBillingItems,
-            referrals: referrals,
-            subtotal: procTotals.subtotal,
-            itemDiscountAmount: procTotals.itemDiscountAmount,
-            mainDiscountAmount: procTotals.mainDiscountAmount,
-            discountType: finaliseDiscountType,
-            discountValue: finaliseDiscountValue,
-            discountAmount: procTotals.totalDiscount,
-            taxPercentage: procTaxPercentage,
-            taxAmount: procTotals.taxAmount,
-            taxableAmount: procTotals.taxableAmount,
-            exemptAmount: procTotals.exemptAmount,
-            totalAmount: procTotals.totalAmount,
-            status: "draft" as const,
-            paymentStatus: "unpaid" as const,
-            paidAmount: 0,
-            balanceAmount: procTotals.totalAmount,
-            createdBy: currentUser?.uid || "system",
-          };
-
-          const { id: newBillingId } =
-            await appointmentBillingService.createBilling(billingData);
-
-          await appointmentService.updateAppointment(apptToFinalise.id, {
-            billingId: newBillingId,
-            billingStatus: "unpaid",
-            paymentStatus: "unpaid",
-            updatedAt: new Date(),
-          } as any);
         }
+
+        await appointmentService.updateAppointment(apptToFinalise.id, {
+          pendingVisitItems: updatedPendingItems,
+          pendingVisitReferrals: updatedPendingReferrals,
+          // Carries forward to checkout, which has no discount UI of its
+          // own — without this, a discount entered here was silently
+          // dropped. Only overwrite when this modal's own value is
+          // nonzero, so leaving it at 0 doesn't erase a discount already
+          // set at check-in.
+          ...(finaliseDiscountValue
+            ? {
+              pendingVisitDiscountType: finaliseDiscountType,
+              pendingVisitDiscountValue: finaliseDiscountValue,
+            }
+            : {}),
+          updatedAt: new Date(),
+        } as any);
       }
 
       let firstAssignedExpert = "";
@@ -4846,15 +4718,9 @@ export default function FrontOfficeDesk() {
       await appointmentService.updateAppointment(apptToFinalise.id, updates);
 
       addToast({
-        title: accept
-          ? followUpAfterLock
-            ? "Follow-up Invoice Created"
-            : "Procedure Billed"
-          : "Procedure Declined",
+        title: accept ? "Procedure Billed" : "Procedure Declined",
         description: accept
-          ? followUpAfterLock
-            ? "The original invoice was already IRD-synced, so a separate invoice was created for this procedure instead."
-            : "The procedure has been added to the invoice."
+          ? "The procedure has been added to this visit's pending charges."
           : "The recommended procedure was discarded.",
         color: accept ? "success" : "warning",
       });
@@ -4894,213 +4760,171 @@ export default function FrontOfficeDesk() {
         return;
       }
 
-      // 1. If the appointment already has a cached billingId, let's inspect it.
-      let targetBillingId = appt.billingId;
-
-      if (targetBillingId) {
-        // Find the bill in our local real-time billings state
-        const matchingBill = billings.find((b) => b.id === targetBillingId);
-
-        if (matchingBill) {
-          const isConsBill = matchingBill.items?.some(
-            (item: any) =>
-              item.appointmentTypeId === "consultation-fee" ||
-              item.appointmentTypeName?.includes("Consultation Fee"),
-          );
-          const isPaid =
-            matchingBill.status === "paid" ||
-            matchingBill.paymentStatus === "paid";
-
-          // If it's a paid consultation bill, only discard if there IS a pending procedure
-          // (in that case we'll find/create a separate procedure invoice below).
-          // If there is NO pending procedure, just navigate to the paid bill for review.
-          if (isConsBill && isPaid) {
-            const hasPendingProc =
-              !!(appt as any).recommendedProcedure?.fee &&
-              (appt as any).recommendedProcedure?.fee > 0;
-
-            if (!hasPendingProc) {
-              // No procedure pending — consultation is fully settled. Navigate to it.
-              navigate(
-                `/dashboard/appointments-billing/${targetBillingId}?from=front-office&tab=${activeTab}`,
-              );
-
-              return;
-            }
-
-            // Procedure IS pending — clear so we look for/create a procedure invoice
-            targetBillingId = null;
-          }
-        }
-      }
-
-      if (targetBillingId) {
-        navigate(
-          `/dashboard/appointments-billing/${targetBillingId}?from=front-office&tab=${activeTab}`,
-        );
-
-        return;
-      }
-
-      // 2. Fetch the draft invoices for this patient to find the matching billing record
+      // Checkout — the one point in the visit where a real, IRD-filed
+      // invoice is created. pendingVisitItems/pendingVisitReferrals carry
+      // everything accumulated since check-in (consultation fee, any
+      // mid-visit procedures); nothing before this was ever filed, so
+      // IRD's immutable-once-filed rule is never in tension with the
+      // front-desk workflow. See "One Invoice Per Visit: Deposit at
+      // Check-in, Bill at Checkout".
       try {
         if (!clinicId) return;
-        const patientBillings =
-          await appointmentBillingService.getBillingByPatient(
-            appt.patientId,
-            clinicId,
-          );
 
-        // Find the most recent draft billing record for this patient that is NOT a consultation bill
-        const draftBilling = patientBillings.find(
-          (b) =>
-            b.status === "draft" &&
-            !b.items?.some(
-              (item: any) =>
-                item.appointmentTypeId === "consultation-fee" ||
-                item.appointmentTypeName?.includes("Consultation Fee"),
-            ),
-        );
+        const existingPendingItems: any[] =
+          (appt as any).pendingVisitItems || [];
+        const existingPendingReferrals: any[] =
+          (appt as any).pendingVisitReferrals || [];
+        const depositedAmount = (appt as any).depositedAmount || 0;
+        // Whatever discount staff entered during the visit (check-in or
+        // Finalise Procedure) — checkout has no discount UI of its own, so
+        // this is the only place that decision can still take effect.
+        const {
+          discountType: settleDiscountType,
+          discountValue: settleDiscountValue,
+        } = resolveVisitDiscount(appt as any);
 
-        if (draftBilling) {
-          navigate(
-            `/dashboard/appointments-billing/${draftBilling.id}?from=front-office&tab=${activeTab}`,
-          );
-        } else {
-          const consultationBillingId = (appt as any).consultationBillingId;
-          const hasPendingProcedure =
-            !!(appt as any).recommendedProcedure?.fee &&
-            (appt as any).recommendedProcedure?.fee > 0;
+        const isExpert =
+          appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
+        const clinicianId = isExpert
+          ? appt.assignedExpertId
+          : appt.doctorId || "unassigned";
 
-          // ALWAYS navigate to consultationBillingId if it exists (paid or unpaid)
-          // to prevent creating a duplicate invoice for the same visit.
-          if (consultationBillingId) {
-            const consBilling = patientBillings.find(
-              (b) => b.id === consultationBillingId,
-            );
+        let docInfo = doctors.find((d) => d.id === clinicianId);
 
-            if (consBilling) {
-              navigate(
-                `/dashboard/appointments-billing/${consultationBillingId}`,
-              );
+        if (!docInfo && isExpert) {
+          docInfo = experts.find((e) => e.id === clinicianId) as any;
+        }
 
-              return;
-            }
-          }
-
-          // Also check any paid billing for this appointment as a fallback
-          if (!hasPendingProcedure) {
-            const paidBilling = patientBillings.find(
-              (b) =>
-                (b.status === "paid" || b.paymentStatus === "paid") &&
-                b.items?.some((item: any) =>
-                  item.appointmentTypeName
-                    ?.toLowerCase()
-                    .includes("consultation"),
-                ),
-            );
-
-            if (paidBilling) {
-              navigate(
-                `/dashboard/appointments-billing/${paidBilling.id}?from=front-office&tab=${activeTab}`,
-              );
-
-              return;
-            }
-          }
-
-          // Automatically create a draft billing invoice for the procedure/appointment type!
+        if (!docInfo && clinicianId && clinicianId !== "unassigned") {
           try {
-            const isExpert =
-              appt.assignedExpertId && appt.assignedExpertId !== "unassigned";
-            const clinicianId = isExpert
-              ? appt.assignedExpertId
-              : appt.doctorId || "unassigned";
+            const fetchedDoc = await doctorService.getDoctorById(clinicianId);
 
-            let docInfo = doctors.find((d) => d.id === clinicianId);
+            if (fetchedDoc) {
+              docInfo = fetchedDoc;
+            } else {
+              const dbExp = await expertService.getExpertById(clinicianId);
 
-            if (!docInfo && isExpert) {
-              docInfo = experts.find((e) => e.id === clinicianId) as any;
+              if (dbExp) docInfo = dbExp as any;
             }
-
-            if (!docInfo && clinicianId && clinicianId !== "unassigned") {
-              try {
-                const fetchedDoc = await doctorService.getDoctorById(clinicianId);
-
-                if (fetchedDoc) {
-                  docInfo = fetchedDoc;
-                } else {
-                  const dbExp = await expertService.getExpertById(clinicianId);
-
-                  if (dbExp) docInfo = dbExp as any;
-                }
-              } catch (err) {
-                console.error(
-                  "Error loading doctor/expert details dynamically:",
-                  err,
-                );
-              }
-            }
-
-            const apptType = appointmentTypes.find(
-              (t) => t.id === appt.appointmentTypeId,
+          } catch (err) {
+            console.error(
+              "Error loading doctor/expert details dynamically:",
+              err,
             );
+          }
+        }
 
-            let pat = patients.find((p) => p.id === appt.patientId);
+        let pat = patients.find((p) => p.id === appt.patientId);
 
-            if (!pat && appt.patientId) {
-              try {
-                pat =
-                  (await patientService.getPatientById(appt.patientId)) ||
-                  undefined;
-              } catch (err) {
-                console.error("Error loading patient details dynamically:", err);
-              }
-            }
+        if (!pat && appt.patientId) {
+          try {
+            pat =
+              (await patientService.getPatientById(appt.patientId)) ||
+              undefined;
+          } catch (err) {
+            console.error("Error loading patient details dynamically:", err);
+          }
+        }
 
-            let price = FALLBACK_GENERAL_FEE;
-            let appointmentTypeName = "General Consultation";
+        // An appointment that already carries a filed invoice must never
+        // reach the fabrication fallback below: with pendingVisitItems now
+        // empty (cleared at checkout), it would invent a fresh
+        // catalogue-price line item and file a SECOND IRD invoice for a
+        // visit that was already billed. Two ways in: clicking "Settle
+        // Billing Invoice" twice, and the sibling appointments created for
+        // extra clinicians in Quick Intake, whose charges all live on the
+        // primary appointment and which therefore legitimately have no
+        // pending items of their own.
+        if (existingPendingItems.length === 0 && appt.billingId) {
+          addToast({
+            title: "Already Billed",
+            description:
+              "This visit already has an invoice. Open it from Appointment Billing to collect any remaining balance.",
+            color: "warning",
+          });
+          navigate(
+            `/dashboard/appointments-billing/${appt.billingId}?from=front-office&tab=${activeTab}`,
+          );
 
-            if (apptType) {
-              if (Number(apptType.price)) {
-                price = Number(apptType.price);
-              } else {
-                console.warn(
-                  `Appointment type "${apptType.name}" (${apptType.id}) has no price set — falling back to NPR ${FALLBACK_GENERAL_FEE}. Set a real price on it.`,
-                );
-              }
-              appointmentTypeName = apptType.name || "General Consultation";
+          return;
+        }
+
+        const billedElsewhereOn = (appt as any).billedOnAppointmentId;
+
+        if (existingPendingItems.length === 0 && billedElsewhereOn) {
+          const primary = appointments.find((a) => a.id === billedElsewhereOn);
+
+          addToast({
+            title: "Billed on the Main Visit",
+            description:
+              "This clinician's fee is already included on this patient's main visit invoice — settle it there instead.",
+            color: "warning",
+          });
+
+          if (primary?.billingId) {
+            navigate(
+              `/dashboard/appointments-billing/${primary.billingId}?from=front-office&tab=${activeTab}`,
+            );
+          }
+
+          return;
+        }
+
+        // Nothing accumulated yet (e.g. a visit with no consultation fee
+        // and no mid-visit procedure) — fall back to today's single-item
+        // construction so checkout still produces a real invoice.
+        let billingItems = existingPendingItems;
+
+        if (billingItems.length === 0) {
+          const apptType = appointmentTypes.find(
+            (t) => t.id === appt.appointmentTypeId,
+          );
+
+          let price = FALLBACK_GENERAL_FEE;
+          let appointmentTypeName = "General Consultation";
+
+          if (apptType) {
+            if (Number(apptType.price)) {
+              price = Number(apptType.price);
             } else {
               console.warn(
-                `Settling billing for an appointment with no resolvable appointment type — falling back to NPR ${FALLBACK_GENERAL_FEE} "General Consultation".`,
+                `Appointment type "${apptType.name}" (${apptType.id}) has no price set — falling back to NPR ${FALLBACK_GENERAL_FEE}. Set a real price on it.`,
               );
             }
+            appointmentTypeName = apptType.name || "General Consultation";
+          } else {
+            console.warn(
+              `Settling billing for an appointment with no resolvable appointment type — falling back to NPR ${FALLBACK_GENERAL_FEE} "General Consultation".`,
+            );
+          }
 
-            if (
-              appointmentTypeName.toLowerCase().includes("consult") &&
-              docInfo?.consultationCharge !== undefined
-            ) {
-              price = Number(docInfo.consultationCharge);
-            }
+          if (
+            appointmentTypeName.toLowerCase().includes("consult") &&
+            docInfo?.consultationCharge !== undefined
+          ) {
+            price = Number(docInfo.consultationCharge);
+          }
 
-            const resolvedFields = apptType
-              ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
-                  apptType,
-                  docInfo?.defaultCommission,
-                )
-              : {
-                  commission: docInfo?.defaultCommission || 0,
-                  calculateCommission: undefined,
-                  isTaxable: undefined,
-                  taxRate: undefined,
-                };
+          const resolvedFields = apptType
+            ? appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                apptType,
+                docInfo?.defaultCommission,
+              )
+            : {
+                commission: docInfo?.defaultCommission || 0,
+                calculateCommission: undefined,
+                isTaxable: undefined,
+                taxRate: undefined,
+              };
 
-            const billingItem = {
+          billingItems = [
+            {
               id: crypto.randomUUID(),
               appointmentTypeId: appt.appointmentTypeId || "manual-gp-fee",
               appointmentTypeName: appointmentTypeName,
               price: price,
               quantity: 1,
+              lineKind: "service" as const,
               commission: resolvedFields.commission,
               calculateCommission: resolvedFields.calculateCommission,
               isTaxable: resolvedFields.isTaxable,
@@ -5114,116 +4938,209 @@ export default function FrontOfficeDesk() {
                   ? "Expert Cabin"
                   : "Unknown Doctor",
               amount: price,
-            };
+            },
+          ];
+        }
 
-            const settleTaxPercentage = billingSettings?.enableTax
-              ? billingSettings.defaultTaxPercentage || 0
-              : 0;
-            const settleTotals = appointmentBillingService.calculateInvoiceTotals(
-              [billingItem],
-              "percent",
-              0,
-              settleTaxPercentage,
+        const settleTaxPercentage = billingSettings?.enableTax
+          ? billingSettings.defaultTaxPercentage || 0
+          : 0;
+        const settleTotals = appointmentBillingService.calculateInvoiceTotals(
+          billingItems,
+          settleDiscountType,
+          settleDiscountValue,
+          settleTaxPercentage,
+        );
+
+        // Resolve a fresh consultation-fee referral and merge it with
+        // whatever referral commissions already accumulated mid-visit
+        // (handleFinaliseProcedure) — discount-adjusted, pre-tax base, same
+        // as every other referral computation in this file.
+        const settleReferralBase =
+          settleTotals.taxableAmount + settleTotals.exemptAmount;
+        const { processedReferrals, refPartnerId, refCommissionAmt } =
+          await resolvePatientReferrals(pat, settleReferralBase);
+        // Summing on id+type collision paid one person twice for the same
+        // procedure: the mid-visit entry is computed on the procedure fee,
+        // the checkout entry on the whole invoice that already contains it.
+        // See mergeVisitReferrals for the policy and its tests.
+        const mergedReferrals = mergeVisitReferrals(
+          existingPendingReferrals as any,
+          processedReferrals as any,
+        );
+
+        const billingData = {
+          invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
+          clinicId: clinicId,
+          branchId: branchId ?? clinicId,
+          patientId: appt.patientId,
+          patientName: pat?.name || "Unknown Patient",
+          patientPanVat: pat?.patientPanVat || undefined,
+          appointmentId: appt.id,
+          doctorId: clinicianId,
+          doctorName: docInfo
+            ? docInfo.name.startsWith("Dr.") || isExpert
+              ? docInfo.name
+              : `Dr. ${docInfo.name}`
+            : isExpert
+              ? "Expert Cabin"
+              : "Unknown Doctor",
+          doctorType: (docInfo?.doctorType || "regular") as
+            | "regular"
+            | "visitor",
+          referralPartnerId: refPartnerId,
+          referralCommissionAmount:
+            refCommissionAmt && refCommissionAmt > 0
+              ? refCommissionAmt
+              : undefined,
+          referrals: mergedReferrals,
+          // One visit files at most one invoice, so the appointment id is
+          // this filing's true identity. Without it the backend's
+          // idempotency key is content + a 10-minute time bucket, which
+          // both (a) lets two genuinely distinct same-priced visits for one
+          // patient collapse into a single invoice, and (b) fails to make a
+          // retry safe — a checkout whose Firestore follow-up failed, or a
+          // second staff member clicking Settle at the same moment, would
+          // file a duplicate IRD invoice. Keyed this way, a repeat attempt
+          // returns the already-filed invoice instead.
+          idempotencyDiscriminator: `visit:${appt.id}`,
+          invoiceDate: new Date(),
+          items: billingItems,
+          subtotal: settleTotals.subtotal,
+          itemDiscountAmount: settleTotals.itemDiscountAmount,
+          mainDiscountAmount: settleTotals.mainDiscountAmount,
+          discountType: settleDiscountType,
+          discountValue: settleDiscountValue,
+          discountAmount: settleTotals.totalDiscount,
+          taxPercentage: settleTaxPercentage,
+          taxAmount: settleTotals.taxAmount,
+          taxableAmount: settleTotals.taxableAmount,
+          exemptAmount: settleTotals.exemptAmount,
+          totalAmount: settleTotals.totalAmount,
+          status: "draft" as const,
+          paymentStatus: "unpaid" as const,
+          paidAmount: 0,
+          balanceAmount: settleTotals.totalAmount,
+          createdBy: currentUser?.uid || "system",
+        };
+
+        const { id: newBillingId } =
+          await appointmentBillingService.createBilling(billingData);
+
+        // Link the invoice to the appointment BEFORE recording any payment
+        // against it. appointmentBillingService.recordPayment looks up the
+        // appointment to update by matching its billingId/consultationBillingId
+        // against the invoice id; if nothing points to the new invoice yet,
+        // it falls back to a broad "any completed appointment for this
+        // patient" query and stamps billingStatus/paymentStatus onto EVERY
+        // one of them — silently corrupting unrelated past visits' payment
+        // status. Setting billingId first makes that lookup resolve to
+        // exactly this appointment.
+        await appointmentService.updateAppointment(appt.id, {
+          billingId: newBillingId,
+          pendingVisitItems: [],
+          pendingVisitReferrals: [],
+          pendingVisitDiscountType: null,
+          pendingVisitDiscountValue: 0,
+          depositedAmount: 0,
+          // Deliberately NOT setting checkoutCompleted here. Filing the
+          // invoice and closing the visit are two different facts, and
+          // conflating them let this path mark a visit done without the
+          // triage-vitals and outstanding-balance checks that
+          // canCompleteCheckout enforces — so a patient could drop off the
+          // board still owing money. The visit now leaves "billing" because
+          // deriveVisitStage can see a live, settled invoice, and only the
+          // checkout path records an explicit closure.
+          updatedAt: new Date(),
+        } as any);
+
+        // Apply the deposit collected over the course of the visit (capped
+        // at the invoice total — any excess stays as wallet credit, same as
+        // any other unused wallet balance in this app). Any shortfall is
+        // collected normally on the invoice page, same as any other
+        // partially-paid invoice. This also sets the appointment's own
+        // billingStatus/paymentStatus to match (recordPayment's own
+        // appointment-linking logic, now correctly scoped — see above).
+        const depositToApply = Math.min(
+          depositedAmount,
+          settleTotals.totalAmount,
+        );
+
+        if (depositToApply > 0) {
+          try {
+            await appointmentBillingService.recordPayment(
+              newBillingId,
+              depositToApply,
+              "wallet",
+              undefined,
+              "Visit deposit applied at checkout",
             );
-
-            // Resolve referrals — discount-adjusted, pre-tax base (see the
-            // same fix in createConsultationBill). No discount mechanism
-            // exists in this settle-billing path today, so this is
-            // numerically identical to using `price` directly, but keeps
-            // the same correct pattern if discount is ever added here.
-            const settleReferralBase =
-              settleTotals.taxableAmount + settleTotals.exemptAmount;
-            const { processedReferrals, refPartnerId, refCommissionAmt } =
-              await resolvePatientReferrals(pat, settleReferralBase);
-
-            const billingData = {
-              invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-              clinicId: clinicId,
-              branchId: branchId ?? clinicId,
-              patientId: appt.patientId,
-              patientName: pat?.name || "Unknown Patient",
-              patientPanVat: pat?.patientPanVat || undefined,
-              appointmentId: appt.id,
-              doctorId: clinicianId,
-              doctorName: docInfo
-                ? docInfo.name.startsWith("Dr.") || isExpert
-                  ? docInfo.name
-                  : `Dr. ${docInfo.name}`
-                : isExpert
-                  ? "Expert Cabin"
-                  : "Unknown Doctor",
-              doctorType: (docInfo?.doctorType || "regular") as
-                | "regular"
-                | "visitor",
-              referralPartnerId: refPartnerId,
-              referralCommissionAmount:
-                refCommissionAmt && refCommissionAmt > 0
-                  ? refCommissionAmt
-                  : undefined,
-              referrals: processedReferrals,
-              invoiceDate: new Date(),
-              items: [billingItem],
-              subtotal: settleTotals.subtotal,
-              itemDiscountAmount: 0,
-              mainDiscountAmount: 0,
-              discountType: "percent" as const,
-              discountValue: 0,
-              discountAmount: settleTotals.totalDiscount,
-              taxPercentage: settleTaxPercentage,
-              taxAmount: settleTotals.taxAmount,
-              taxableAmount: settleTotals.taxableAmount,
-              exemptAmount: settleTotals.exemptAmount,
-              totalAmount: settleTotals.totalAmount,
-              status: "draft" as const,
-              paymentStatus: "unpaid" as const,
-              paidAmount: 0,
-              balanceAmount: settleTotals.totalAmount,
-              createdBy: currentUser?.uid || "system",
-            };
-
-            const { id: newBillingId } =
-              await appointmentBillingService.createBilling(billingData);
-
-            // COMMISSIONS REMOVED: Commissions must only be generated by the billing engine
-            // when the invoice is actually settled (paid >= total), not when the draft is created.
-
-            // Link new billing to appointment
-            await appointmentService.updateAppointment(appt.id, {
-              billingId: newBillingId,
-              billingStatus: "unpaid",
-              paymentStatus: "unpaid",
-              updatedAt: new Date(),
-            } as any);
-
-            addToast({
-              title: "Invoice Generated",
-              description: `Generated appointment invoice for ${appointmentTypeName}.`,
-              color: "success",
-            });
-
-            navigate(
-              `/dashboard/appointments-billing/${newBillingId}?from=front-office&tab=${activeTab}`,
-            );
-          } catch (genErr: any) {
-            // Previously this logged and then navigated to the billing list,
-            // which is what the SUCCESS path does — so a failure looked like a
-            // success and staff moved on believing the patient had been
-            // billed. Say what went wrong and stay put, so the action can be
-            // retried from here.
+          } catch (payErr) {
             console.error(
-              "Failed to generate procedure billing on fallback:",
-              genErr,
+              "Error applying visit deposit at checkout:",
+              payErr,
             );
             addToast({
-              title: "Could not generate the invoice",
+              title: "Deposit Not Applied",
               description:
-                genErr?.message ||
-                "The invoice was not created. Please try again.",
-              color: "danger",
+                "The invoice was created, but the collected deposit could not be applied — apply it manually from the invoice page.",
+              color: "warning",
             });
           }
+        } else if (settleTotals.totalAmount <= 0) {
+          // A zero-total visit — a package session, whose line is
+          // commission-only (price 0, already paid for at package
+          // purchase). Nothing is owed, but commission and the patient
+          // follow-up are both generated by recordPayment's
+          // unpaid -> paid transition, which a zero-total invoice would
+          // otherwise never reach: the performing clinician silently
+          // earned nothing and no recall was created. Record an explicit
+          // zero payment to drive that transition, exactly as the
+          // pre-redesign code did.
+          try {
+            await appointmentBillingService.recordPayment(
+              newBillingId,
+              0,
+              "package",
+              undefined,
+              "Package session — covered by pre-paid package, no additional charge.",
+            );
+          } catch (payErr) {
+            console.error(
+              "Error closing out zero-total visit invoice:",
+              payErr,
+            );
+            addToast({
+              title: "Commission Not Generated",
+              description:
+                "The visit was invoiced, but its commission could not be recorded — check Commissions for this clinician.",
+              color: "warning",
+            });
+          }
+        } else {
+          // Nothing collected yet on a chargeable invoice — recordPayment
+          // (which would otherwise set these) never runs, so set them
+          // directly.
+          await appointmentService.updateAppointment(appt.id, {
+            billingStatus: "unpaid",
+            paymentStatus: "unpaid",
+            updatedAt: new Date(),
+          } as any);
         }
+
+        addToast({
+          title: "Invoice Generated",
+          description: "Generated the invoice for this visit.",
+          color: "success",
+        });
+
+        navigate(
+          `/dashboard/appointments-billing/${newBillingId}?from=front-office&tab=${activeTab}`,
+        );
       } catch (err: any) {
+        // Previously a failure here could be logged and then still
+        // navigate to a success-shaped path — say what went wrong and stay
+        // put so the action can be retried from here.
         console.error("Error settling billing:", err);
         addToast({
           title: "Could not settle this billing",
@@ -5263,15 +5180,10 @@ export default function FrontOfficeDesk() {
         );
 
       return {
-        label: isOnlyCons
-          ? "Settle Consultation Bill"
-          : "Settle Billing Invoice",
+        label: isOnlyCons ? "Collect Deposit" : "Collect Deposit (Billing)",
         icon: <IoCardOutline className="w-4 h-4" />,
         colorClass: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
-        onClick: () =>
-          navigate(
-            `/dashboard/appointments-billing/${consBill.id}?from=front-office&tab=${activeTab}`,
-          ),
+        onClick: () => handleCollectDeposit(appt),
       };
     }
 
@@ -6402,9 +6314,10 @@ export default function FrontOfficeDesk() {
                     : (rawFee * finaliseDiscountValue) / 100;
                 const afterDiscount = Math.max(0, rawFee - discountAmt);
                 const taxRate = billingSettings?.defaultTaxPercentage || 0;
-                const taxAmt = finaliseApplyTax
-                  ? (afterDiscount * taxRate) / 100
-                  : 0;
+                const taxAmt =
+                  finaliseApplyTax && billingSettings?.enableTax
+                    ? (afterDiscount * taxRate) / 100
+                    : 0;
                 const finalTotal = afterDiscount + taxAmt;
 
                 return (

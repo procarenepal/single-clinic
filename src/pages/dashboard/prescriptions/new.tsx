@@ -34,6 +34,9 @@ import { appointmentService } from "@/services/appointmentService";
 import { prescriptionService } from "@/services/prescriptionService";
 import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
+import { walletService } from "@/services/walletService";
+import { getVisitPaymentGate } from "@/services/core/visitBillingCore";
+import { suggestedDispenseQuantity } from "@/services/core/prescriptionDoseCore";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { expertService } from "@/services/expertService";
@@ -362,24 +365,24 @@ export default function NewPrescriptionPage() {
     const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
 
     if (hasDoctor) {
-      // This gate exists so a patient does not reach the doctor before the
-      // CONSULTATION fee is settled. An appointment can carry two independent
-      // invoices — the consultation fee and a separate procedure charge — so
-      // asking "is any linked invoice paid" lets a patient through on the
-      // strength of a paid procedure charge while the consultation is still
-      // owed. Gate on the invoice the rule is actually about.
-      const consultationTracked =
-        (apt as any).consultationBillingId || apt.consultationBillingStatus;
+      // This gate exists so a patient does not reach the doctor before what
+      // they owe for the visit has been collected.
+      //
+      // It used to read consultationBillingId/consultationBillingStatus,
+      // which the one-invoice-per-visit model never sets — so every branch
+      // fell through and the gate silently admitted everyone regardless of
+      // payment. It now uses the same owed-vs-deposited definition the
+      // front desk and queue use, so the three cannot disagree.
+      if (getVisitPaymentGate(apt as any).isDue) return false;
 
-      if (consultationTracked) {
-        if (apt.consultationBillingStatus !== "paid") return false;
-      } else if (apt.billingId) {
-        // No separate consultation invoice: the appointment's single charge
-        // is what has to be settled.
-        const isPaid =
-          apt.billingStatus === "paid" || apt.paymentStatus === "paid";
-
-        if (!isPaid) return false;
+      // Legacy records predating pendingVisitItems still carry their state
+      // on the invoice pointer alone.
+      if (
+        !(apt as any).pendingVisitItems?.length &&
+        apt.billingId &&
+        !(apt.billingStatus === "paid" || apt.paymentStatus === "paid")
+      ) {
+        return false;
       }
     }
 
@@ -1010,29 +1013,26 @@ export default function NewPrescriptionPage() {
     setSaving(true);
     try {
       const currentUser = userData?.id || "unknown-user";
-      let billingId: string | undefined = undefined;
-      let billingPaymentStatus: "unpaid" | "paid" | undefined = undefined;
       let isDualRoute = false;
+      let pendingItemsUpdate: any[] | undefined;
+      let depositedAmountUpdate: number | undefined;
 
       try {
         const apt = appointments.find((a) => a.id === appointmentId);
 
-        // Don't create a second consultation invoice for a visit that's
-        // already billed (e.g. by front-office's createConsultationBill at
-        // check-in) — reuse the existing one instead.
-        const existingBillId =
-          (apt as any)?.consultationBillingId || apt?.billingId;
-        const existingBilling = existingBillId
-          ? await appointmentBillingService
-              .getBillingById(existingBillId)
-              .catch(() => null)
-          : null;
+        if (apt) {
+          const existingPendingItems: any[] =
+            (apt as any).pendingVisitItems || [];
+          const dedupeKey = apt.appointmentTypeId || "manual-gp-fee";
+          // Already appended for this visit (e.g. by front-office's
+          // createConsultationBill at check-in) — skip rather than
+          // double-charge.
+          const alreadyBilled = existingPendingItems.some(
+            (it) =>
+              it.doctorId === doctorId &&
+              (it.appointmentTypeId || "manual-gp-fee") === dedupeKey,
+          );
 
-        if (existingBilling && existingBilling.status !== "cancelled") {
-          billingId = existingBilling.id;
-          billingPaymentStatus =
-            existingBilling.paymentStatus === "paid" ? "paid" : "unpaid";
-        } else if (apt) {
           const pat = patients.find((p) => p.id === patientId);
           const docInfo = doctors.find((d) => d.id === doctorId);
           const hasDoctor = apt.doctorId && apt.doctorId !== "unassigned";
@@ -1044,168 +1044,85 @@ export default function NewPrescriptionPage() {
             isDualRoute = true;
           }
 
-          let price = 500; // sensible GP fallback price in NPR
-          let appointmentTypeName = "General Consultation";
-          let apptTypeIsTaxable: boolean | undefined;
-          let apptTypeTaxRate: number | undefined;
-          let apptTypeCommission: number | undefined;
+          if (!alreadyBilled) {
+            let price = 500; // sensible GP fallback price in NPR
+            let appointmentTypeName = "General Consultation";
+            let apptTypeIsTaxable: boolean | undefined;
+            let apptTypeTaxRate: number | undefined;
+            let apptTypeCommission: number | undefined;
 
-          if (apt.appointmentTypeId) {
-            const apptType =
-              await appointmentTypeService.getAppointmentTypeById(
-                apt.appointmentTypeId,
-              );
-
-            if (apptType) {
-              const resolved =
-                appointmentBillingService.resolveItemFieldsFromAppointmentType(
-                  apptType,
-                  docInfo?.defaultCommission,
+            if (apt.appointmentTypeId) {
+              const apptType =
+                await appointmentTypeService.getAppointmentTypeById(
+                  apt.appointmentTypeId,
                 );
 
-              price = Number(resolved.price) || 500;
-              appointmentTypeName = resolved.appointmentTypeName || "General Consultation";
-              apptTypeIsTaxable = resolved.isTaxable;
-              apptTypeTaxRate = resolved.taxRate;
-              apptTypeCommission = resolved.commission;
+              if (apptType) {
+                const resolved =
+                  appointmentBillingService.resolveItemFieldsFromAppointmentType(
+                    apptType,
+                    docInfo?.defaultCommission,
+                  );
+
+                price = Number(resolved.price) || 500;
+                appointmentTypeName =
+                  resolved.appointmentTypeName || "General Consultation";
+                apptTypeIsTaxable = resolved.isTaxable;
+                apptTypeTaxRate = resolved.taxRate;
+                apptTypeCommission = resolved.commission;
+              }
             }
-          }
 
-          // Resolve all referrers (polymorphic and multiple)
-          const processedReferrals: Array<{
-            type: "referral-partner" | "doctor" | "expert" | "staff";
-            id: string;
-            name: string;
-            commissionPercentage: number;
-            commissionAmount: number;
-          }> = [];
+            const billingItem = {
+              id: crypto.randomUUID(),
+              appointmentTypeId: apt.appointmentTypeId || "manual-gp-fee",
+              appointmentTypeName: appointmentTypeName,
+              price: price,
+              quantity: 1,
+              lineKind: "service" as const,
+              commission:
+                apptTypeCommission ?? (docInfo?.defaultCommission || 0),
+              doctorId: doctorId,
+              doctorName: docInfo?.name || "Unknown Doctor",
+              amount: price,
+              isTaxable: apptTypeIsTaxable,
+              taxRate: apptTypeTaxRate,
+            };
 
-          if (
-            pat?.referrals &&
-            Array.isArray(pat.referrals) &&
-            pat.referrals.length > 0
-          ) {
-            for (const ref of pat.referrals) {
-              const pct = ref.commissionPercentage || 0;
-              const amt = (price * pct) / 100;
+            // Nothing is filed as a real invoice at this point — the
+            // consultation fee appends to the visit's pending items and is
+            // collected as a wallet deposit instead; the real invoice is
+            // created once, at checkout (see handleSettleBilling).
+            pendingItemsUpdate = [...existingPendingItems, billingItem];
 
-              processedReferrals.push({
-                type: ref.type,
-                id: ref.id,
-                name: ref.name,
-                commissionPercentage: pct,
-                commissionAmount: amt,
-              });
-            }
-          } else if (pat?.referralPartnerId) {
-            // Backward compatibility fallback: single referral partner ID
-            try {
-              const partner =
-                await referralPartnerService.getReferralPartnerById(
-                  pat.referralPartnerId,
+            if (price > 0) {
+              try {
+                await walletService.addFunds(
+                  patientId,
+                  clinicId!,
+                  price,
+                  "cash",
+                  `Visit deposit — consultation fee (appointment ${appointmentId})`,
+                  currentUser,
+                  appointmentId,
+                  "appointment",
                 );
-
-              if (partner) {
-                const pct = partner.defaultCommission || 0;
-                const amt = (price * pct) / 100;
-
-                processedReferrals.push({
-                  type: "referral-partner",
-                  id: partner.id,
-                  name: partner.name,
-                  commissionPercentage: pct,
-                  commissionAmount: amt,
+                // Must be recorded or the payment gate (owed vs deposited)
+                // never learns this was collected and keeps offering to
+                // collect the same amount again.
+                depositedAmountUpdate =
+                  ((apt as any).depositedAmount || 0) + price;
+              } catch (depErr) {
+                console.error("Error collecting visit deposit:", depErr);
+                addToast({
+                  title: "Deposit Not Collected",
+                  description:
+                    "Consultation fee was added to the visit but the wallet deposit failed — please collect it manually.",
+                  color: "warning",
                 });
               }
-            } catch (err) {
-              console.error(
-                "Error fetching fallback referral partner for automated billing:",
-                err,
-              );
             }
           }
-
-          // Keep primary partner values for legacy schema columns
-          const primaryPartner = processedReferrals.find(
-            (r) => r.type === "referral-partner",
-          );
-          const refPartnerId = primaryPartner
-            ? primaryPartner.id
-            : pat?.referralPartnerId || undefined;
-          const refCommissionAmt = primaryPartner
-            ? primaryPartner.commissionAmount
-            : undefined;
-
-          const billingItem = {
-            id: crypto.randomUUID(),
-            appointmentTypeId: apt.appointmentTypeId || "manual-gp-fee",
-            appointmentTypeName: appointmentTypeName,
-            price: price,
-            quantity: 1,
-            commission: apptTypeCommission ?? (docInfo?.defaultCommission || 0),
-            doctorId: doctorId,
-            doctorName: docInfo?.name || "Unknown Doctor",
-            amount: price,
-            // Sourced from the appointment's own Appointment Type — this
-            // used to be left unset entirely, so category-driven tax
-            // settings (e.g. a taxable procedure type) were silently
-            // ignored for invoices auto-created from this flow.
-            isTaxable: apptTypeIsTaxable,
-            taxRate: apptTypeTaxRate,
-          };
-
-          const taxPercentage1 = applyTax
-            ? appointmentBillingSettings?.defaultTaxPercentage || 0
-            : 0;
-          const totals1 = appointmentBillingService.calculateInvoiceTotals(
-            [billingItem] as any,
-            "percent",
-            0,
-            taxPercentage1,
-          );
-
-          const billingData = {
-            invoiceNumber: "", // resolved by the Java backend; overwritten in createBilling
-            clinicId: clinicId!,
-            branchId: effectiveBranchId ?? clinicId!,
-            patientId: patientId,
-            patientName: pat?.name || "Unknown Patient",
-            patientPanVat: pat?.patientPanVat || undefined,
-            doctorId: doctorId,
-            doctorName: docInfo?.name || "Unknown Doctor",
-            doctorType: (docInfo?.doctorType || "regular") as
-              | "regular"
-              | "visitor",
-            referralPartnerId: refPartnerId,
-            referralCommissionAmount:
-              refCommissionAmt && refCommissionAmt > 0
-                ? refCommissionAmt
-                : undefined,
-            referrals: processedReferrals,
-            invoiceDate: new Date(),
-            items: [billingItem],
-            subtotal: totals1.subtotal,
-            itemDiscountAmount: 0,
-            mainDiscountAmount: 0,
-            discountType: "percent" as const,
-            discountValue: 0,
-            discountAmount: totals1.totalDiscount,
-            taxPercentage: taxPercentage1,
-            taxAmount: totals1.taxAmount,
-            taxableAmount: totals1.taxableAmount,
-            exemptAmount: totals1.exemptAmount,
-            totalAmount: totals1.totalAmount,
-            status: "draft" as const,
-            paymentStatus: "unpaid" as const,
-            paidAmount: 0,
-            balanceAmount: totals1.totalAmount,
-            createdBy: currentUser,
-          };
-
-          ({ id: billingId } =
-            await appointmentBillingService.createBilling(billingData));
-
-          // Commission generation is now handled safely by appointmentBillingService.recordPayment when the invoice is actually paid.
         }
       } catch (billingErr) {
         console.error(
@@ -1221,9 +1138,12 @@ export default function NewPrescriptionPage() {
         ...(sendToExpert && selectedExpertId
           ? { assignedExpertId: selectedExpertId }
           : {}),
-        billingId: billingId || null,
-        billingStatus: billingId ? billingPaymentStatus || "unpaid" : "paid",
-        paymentStatus: billingId ? billingPaymentStatus || "unpaid" : "paid",
+        ...(depositedAmountUpdate !== undefined
+          ? { depositedAmount: depositedAmountUpdate }
+          : {}),
+        ...(pendingItemsUpdate
+          ? { pendingVisitItems: pendingItemsUpdate }
+          : {}),
         updatedAt: new Date(),
       } as any);
 
@@ -1287,7 +1207,16 @@ export default function NewPrescriptionPage() {
         instructions:
           notes ||
           `Take ${item.dosage} ${item.interval} ${item.time} for ${item.duration}`,
-        quantity: 1,
+        // The quantity the course actually requires (doses per day across
+        // the prescribed duration), not a hardcoded 1. Pharmacy reads this
+        // when dispensing, so a flat 1 meant "twice daily for 5 days" was
+        // handed over as a single unit — the prescribed course was never
+        // actually dispensed or charged for.
+        quantity:
+          suggestedDispenseQuantity({
+            frequency: item.interval,
+            duration: item.duration,
+          }) || 1,
         sendToPharmacy: finalSendToPharmacy,
       }));
 
@@ -1465,6 +1394,7 @@ export default function NewPrescriptionPage() {
               appointmentTypeName: appointmentTypeName,
               price: price,
               quantity: 1,
+              lineKind: "service" as const,
               commission: apptTypeCommission ?? (docInfo?.defaultCommission || 0),
               doctorId: doctorId,
               doctorName: docInfo?.name || "Unknown Doctor",
