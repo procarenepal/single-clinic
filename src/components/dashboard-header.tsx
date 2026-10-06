@@ -86,6 +86,12 @@ export const DashboardHeader = ({
   const notifContainerRef = useRef<HTMLDivElement>(null);
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
   const [currentExpertId, setCurrentExpertId] = useState<string | null>(null);
+  // The name on the clinical profile this login resolves to (by email), when
+  // it differs from the raw Auth account name. See the note on `displayName`
+  // below for why this exists.
+  const [clinicianDisplayName, setClinicianDisplayName] = useState<
+    string | null
+  >(null);
 
   // Fetch current user's matching doctor/expert ID if applicable
   useEffect(() => {
@@ -99,6 +105,7 @@ export const DashboardHeader = ({
 
       if (docMatch) {
         setCurrentDoctorId(docMatch.id);
+        if (docMatch.name) setClinicianDisplayName(docMatch.name);
       }
     });
 
@@ -110,6 +117,7 @@ export const DashboardHeader = ({
 
       if (expMatch) {
         setCurrentExpertId(expMatch.id);
+        if (expMatch.name) setClinicianDisplayName(expMatch.name);
       }
     });
   }, [clinicId, currentUser?.email]);
@@ -507,8 +515,23 @@ export const DashboardHeader = ({
     setShowResults(false);
   };
 
+  // A clinician's login is matched to their doctors/experts profile by
+  // email (see the effect above) purely for operational purposes —
+  // filtering their own queue, attributing notifications. Nothing keeps
+  // that profile's name in sync with the Firebase Auth account's
+  // displayName, which is typically set once at account creation and never
+  // revisited. Observed live: an account created with the placeholder
+  // "Dr. Clinic Doctor" stayed that way in the header after the doctor's
+  // real profile was named "Dr. Pratik Bhusal" — every patient row, invoice
+  // and queue the same login operates on shows the real name, so the
+  // header disagreeing with all of them reads as if a different person is
+  // logged in. The clinical profile is the actively-maintained name, so it
+  // wins when one is matched.
   const displayName =
-    currentUser?.displayName || currentUser?.email?.split("@")[0] || "User";
+    clinicianDisplayName ||
+    currentUser?.displayName ||
+    currentUser?.email?.split("@")[0] ||
+    "User";
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
