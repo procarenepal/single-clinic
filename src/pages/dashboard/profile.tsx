@@ -82,8 +82,23 @@ export default function ProfilePage() {
 
   const [doctorOrExpertTab, setDoctorOrExpertTab] = useState("overview");
 
+  // This page already looks up the matched doctors/experts profile by
+  // email below (`doctor`/`expert` state) to populate Speciality,
+  // Consultation Charge and Commission — the Professional Details section
+  // further down is built entirely from it. Nothing kept the account's own
+  // displayName in sync with that profile's name, which is actively
+  // maintained (it's what prints on every invoice and queue row this same
+  // login operates on) while the account name is typically set once at
+  // creation. Observed live: the heading read "Dr. Clinic Doctor" directly
+  // above Professional Details reading "General Practice" / "NPR 700" /
+  // "15%" — all Dr. Pratik Bhusal's real data under the wrong name. Same
+  // root cause and same fix as the header (dashboard-header.tsx).
   const displayName =
-    currentUser?.displayName || userData?.displayName || "User";
+    doctor?.name ||
+    expert?.name ||
+    currentUser?.displayName ||
+    userData?.displayName ||
+    "User";
   const email = currentUser?.email || userData?.email || "No email provided";
 
   const loadDoctorAppointments = async (docId: string) => {

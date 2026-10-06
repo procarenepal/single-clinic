@@ -1222,6 +1222,23 @@ export default function FrontOfficeDesk() {
     };
   }, [clinicId, branchId, selectedDate]);
 
+  // The name of whoever is logged in right now, for attribution written
+  // into permanent records — package-session consumption logs, procedure
+  // notes ("Written By: ..."). currentDoctorId/currentExpertId are already
+  // resolved (by email) against the SAME doctors/experts lists this page
+  // loads for routing, so this reuses that match rather than doing a
+  // second lookup. The account's own name is a placeholder set once at
+  // creation and never revisited (see dashboard-header.tsx's fix for the
+  // live example: "Dr. Clinic Doctor" logged in as, everywhere else on the
+  // app, "Dr. Pratik Bhusal") — the clinical profile is what's actively
+  // maintained, so it wins whenever one is matched.
+  const getLoggedInClinicianName = (fallback: string) =>
+    doctors.find((d) => d.id === currentDoctorId)?.name ||
+    experts.find((e) => e.id === currentExpertId)?.name ||
+    (userData as any)?.name ||
+    currentUser?.displayName ||
+    fallback;
+
   // Helpers to resolve names
   const getPatientName = (patientId: string) =>
     patients.find((p) => p.id === patientId)?.name || "Walk-In Patient";
@@ -2381,10 +2398,7 @@ export default function FrontOfficeDesk() {
               await patientPackageService.consumeSession(appt.patientPackageId, {
                 appointmentId: appt.id,
                 clinicianId: currentUser?.uid,
-                clinicianName:
-                  (userData as any)?.name ||
-                  currentUser?.displayName ||
-                  "Unknown Clinician",
+                clinicianName: getLoggedInClinicianName("Unknown Clinician"),
               });
               addToast({
                 title: "Session Consumed",
@@ -2483,10 +2497,7 @@ export default function FrontOfficeDesk() {
             await patientPackageService.consumeSession(appt.patientPackageId, {
               appointmentId: appt.id,
               clinicianId: currentUser?.uid,
-              clinicianName:
-                (userData as any)?.name ||
-                currentUser?.displayName ||
-                "System/Front Desk",
+              clinicianName: getLoggedInClinicianName("System/Front Desk"),
             });
           } catch (err) {
             console.error("Error consuming session during checkout:", err);
@@ -2786,8 +2797,7 @@ export default function FrontOfficeDesk() {
         actualProcedureName = pkg ? pkg.packageName : "Package Session";
       }
 
-      const clinicianName =
-        (userData as any)?.name || currentUser?.displayName || "Clinician";
+      const clinicianName = getLoggedInClinicianName("Clinician");
       const settingsStr = `Energy: ${procedure.energy || "N/A"} J/cm² | Spot: ${procedure.spotSize || "N/A"} mm | Pulse: ${procedure.pulseWidth || "N/A"} ms | Passes: ${procedure.passes || "N/A"}`;
       const procedureNoteContent = `Procedure: ${actualProcedureName}\nArea: ${procedure.area || "N/A"}\nLaser Settings: ${settingsStr}\nClinical Notes: ${procedure.notes || "None"}\nCharge: ${procedure.fee ? `${procedure.fee} NPR` : "Free/Included"}\nWritten By: ${clinicianName}`;
 
@@ -2967,10 +2977,7 @@ export default function FrontOfficeDesk() {
             await patientPackageService.consumeSession(packageIdToConsume, {
               appointmentId: selectedAppointment.id,
               clinicianId: currentUser?.uid,
-              clinicianName:
-                (userData as any)?.name ||
-                currentUser?.displayName ||
-                "Unknown Clinician",
+              clinicianName: getLoggedInClinicianName("Unknown Clinician"),
             });
             addToast({
               title: "Session Consumed",
@@ -3085,10 +3092,7 @@ export default function FrontOfficeDesk() {
           await patientPackageService.consumeSession(packageIdToConsume, {
             appointmentId: selectedAppointment.id,
             clinicianId: currentUser?.uid,
-            clinicianName:
-              (userData as any)?.name ||
-              currentUser?.displayName ||
-              "Unknown Clinician",
+            clinicianName: getLoggedInClinicianName("Unknown Clinician"),
           });
           addToast({
             title: "Session Consumed",
