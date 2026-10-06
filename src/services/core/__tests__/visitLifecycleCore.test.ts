@@ -6,6 +6,7 @@ import {
   isTriageComplete,
   hasOutstandingInvoice,
   hasLiveInvoice,
+  visitQueueCandidates,
   LEGACY_TRIAGE_MARKER,
 } from "../visitLifecycleCore";
 
@@ -258,5 +259,58 @@ describe("canCompleteCheckout", () => {
         { invoice: { paymentStatus: "paid", balanceAmount: 0 } },
       ).allowed,
     ).toBe(true);
+  });
+});
+
+describe("visitQueueCandidates", () => {
+  it("puts a doctor-only visit in the doctor queue alone", () => {
+    expect(visitQueueCandidates({ doctorId: "doc1" })).toEqual({
+      doctor: true,
+      expert: false,
+    });
+  });
+
+  it("puts an expert-only visit in the expert queue alone", () => {
+    expect(visitQueueCandidates({ assignedExpertId: "exp1" })).toEqual({
+      doctor: false,
+      expert: true,
+    });
+  });
+
+  it("puts a visit booked with BOTH in both queues", () => {
+    // The real regression: this patient used to appear only under Doctor,
+    // because the rule looked at doctorId and never at the expert, so staff
+    // who intended the expert could not find them.
+    expect(
+      visitQueueCandidates({ doctorId: "doc1", assignedExpertId: "exp1" }),
+    ).toEqual({ doctor: true, expert: true });
+  });
+
+  it("puts a visit with neither assigned in both, since the desk must choose", () => {
+    // Previously landed in the expert queue purely because the rule was the
+    // negation of "has a doctor" — nothing to do with experts at all.
+    expect(visitQueueCandidates({})).toEqual({ doctor: true, expert: true });
+  });
+
+  it("treats \"unassigned\" as not assigned", () => {
+    expect(
+      visitQueueCandidates({
+        doctorId: "unassigned",
+        assignedExpertId: "exp1",
+      }),
+    ).toEqual({ doctor: false, expert: true });
+
+    expect(
+      visitQueueCandidates({
+        doctorId: "unassigned",
+        assignedExpertId: "unassigned",
+      }),
+    ).toEqual({ doctor: true, expert: true });
+  });
+
+  it("treats null and empty ids as not assigned", () => {
+    expect(
+      visitQueueCandidates({ doctorId: null, assignedExpertId: "" }),
+    ).toEqual({ doctor: true, expert: true });
   });
 });

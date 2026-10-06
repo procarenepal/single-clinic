@@ -67,6 +67,7 @@ import {
 import {
   canCompleteCheckout,
   deriveVisitStage,
+  visitQueueCandidates,
 } from "@/services/core/visitLifecycleCore";
 import { patientPackageService } from "@/services/patientPackageService";
 import {
@@ -3256,7 +3257,6 @@ export default function FrontOfficeDesk() {
   // now, not to further narrow an already-selected tab).
   const filteredAppointments = appointments.filter((appt) => {
     const stage = getPatientStage(appt);
-    const hasDoctor = appt.doctorId && appt.doctorId !== "unassigned";
 
 
     // If logged-in user has clinician profiles, only show their own patients
@@ -3323,10 +3323,15 @@ export default function FrontOfficeDesk() {
     if (activeTab === "lobby")
       return stage === "scheduled" || (stage === "lobby" && isConsBillPending);
     if (activeTab === "triage") return stage === "lobby" && !isConsBillPending;
+    // An unrouted triage-done patient is a candidate for whichever
+    // clinicians the visit names — both, when it names none. See
+    // visitQueueCandidates.
+    const queues = visitQueueCandidates(appt);
+
     if (activeTab === "doctor")
-      return stage === "doctor" || (stage === "triage-done" && hasDoctor);
+      return stage === "doctor" || (stage === "triage-done" && queues.doctor);
     if (activeTab === "expert")
-      return stage === "expert" || (stage === "triage-done" && !hasDoctor);
+      return stage === "expert" || (stage === "triage-done" && queues.expert);
     if (activeTab === "billing") return stage === "billing";
     if (activeTab === "pharmacy") return stage === "pharmacy";
 
@@ -5233,17 +5238,27 @@ export default function FrontOfficeDesk() {
           colorClass: "bg-teal-500 text-white hover:bg-teal-600",
           onClick: () => handleOpenTriage(appt),
         };
-      case "triage-done":
+      case "triage-done": {
+        // An unrouted patient can be a candidate for both queues, so the
+        // offered action follows the queue being looked at. Previously this
+        // read "Send to Doctor Cabin" whenever a doctor was assigned — even
+        // while standing in the Expert Queue — so a patient booked with both
+        // could never be sent to the expert from the board at all.
+        const queues = visitQueueCandidates(appt);
+        const toExpert =
+          queues.expert && (activeTab === "expert" || !queues.doctor);
+
         return {
-          label: hasDoctor ? "Send to Doctor Cabin" : "Send to Expert Cabin",
+          label: toExpert ? "Send to Expert Cabin" : "Send to Doctor Cabin",
           icon: <IoPlayOutline className="w-4 h-4" />,
           colorClass:
             "bg-indigo-500 text-white hover:bg-indigo-600 animate-pulse",
           onClick: () =>
-            hasDoctor
-              ? handleSendToDoctor(appt.id)
-              : handleSendToExpert(appt.id),
+            toExpert
+              ? handleSendToExpert(appt.id)
+              : handleSendToDoctor(appt.id),
         };
+      }
       case "doctor": {
         if (currentExpertId && !currentDoctorId) {
           return {
@@ -5846,9 +5861,11 @@ export default function FrontOfficeDesk() {
                   )
                   .filter((a) => {
                     const s = getPatientStage(a);
-                    const hasDoc = a.doctorId && a.doctorId !== "unassigned";
 
-                    return s === "doctor" || (s === "triage-done" && hasDoc);
+                    return (
+                      s === "doctor" ||
+                      (s === "triage-done" && visitQueueCandidates(a).doctor)
+                    );
                   }).length,
               },
               {
@@ -5862,9 +5879,11 @@ export default function FrontOfficeDesk() {
                   )
                   .filter((a) => {
                     const s = getPatientStage(a);
-                    const hasDoc = a.doctorId && a.doctorId !== "unassigned";
 
-                    return s === "expert" || (s === "triage-done" && !hasDoc);
+                    return (
+                      s === "expert" ||
+                      (s === "triage-done" && visitQueueCandidates(a).expert)
+                    );
                   }).length,
               },
               {

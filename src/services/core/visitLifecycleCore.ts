@@ -238,3 +238,48 @@ export function canCompleteCheckout(
 
   return { allowed: true };
 }
+
+export interface VisitQueueCandidacy {
+  doctor: boolean;
+  expert: boolean;
+}
+
+/**
+ * Which clinician queues a patient who has finished triage but not yet been
+ * routed should appear in.
+ *
+ * "Save Vitals Only" on the triage modal means exactly one thing: vitals are
+ * recorded and NO routing decision has been made. The board used to make
+ * that decision anyway, off a single incidental field — a patient with a
+ * doctorId went to the doctor queue, everyone else to the expert queue. Two
+ * consequences, both bad:
+ *
+ *   - A patient booked with a doctor AND an expert never appeared in the
+ *     expert queue at all, even though the triage modal offers "Send to
+ *     Expert" as an equal choice. Staff looking there would not find them.
+ *   - A patient with neither assigned landed in the expert queue by
+ *     accident, because the rule was the negation of "has a doctor" rather
+ *     than anything about experts.
+ *
+ * An unrouted patient is a candidate for whichever clinicians the visit
+ * actually names, and for both when it names none — because then the desk
+ * genuinely has to choose. This mirrors the triage modal's own two buttons.
+ *
+ * Note this is candidacy, not location: once routed, the stage is "doctor"
+ * or "expert" and the patient appears in exactly one queue. The "In Doctor
+ * Cabin" / "In Expert Cabin" stat cards count only those routed stages, so
+ * they are unaffected by a patient being a candidate for both.
+ */
+export function visitQueueCandidates(
+  visit: Pick<VisitLifecycleInput, "doctorId" | "assignedExpertId">,
+): VisitQueueCandidacy {
+  const assigned = (id: string | null | undefined) =>
+    Boolean(id && id !== "unassigned");
+
+  const hasDoctor = assigned(visit.doctorId);
+  const hasExpert = assigned(visit.assignedExpertId);
+
+  if (!hasDoctor && !hasExpert) return { doctor: true, expert: true };
+
+  return { doctor: hasDoctor, expert: hasExpert };
+}
