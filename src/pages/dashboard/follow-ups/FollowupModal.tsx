@@ -26,6 +26,8 @@ import toast from "react-hot-toast";
 
 import { useAuthContext } from "@/context/AuthContext";
 import { useLoggedInClinicianName } from "@/hooks/useLoggedInClinicianName";
+import { useClinicianNameMap } from "@/hooks/useClinicianNameMap";
+import { resolveStaffDisplayName } from "@/services/core/clinicianDisplayCore";
 import { followupService } from "@/services/followupService";
 import { patientService } from "@/services/patientService";
 import { prescriptionService } from "@/services/prescriptionService";
@@ -59,6 +61,11 @@ export default function FollowupModal({
   // nothing resolves — callers below add their own visible "Staff"
   // fallback on top, matching what was there before.
   const loggedInClinicianName = useLoggedInClinicianName("");
+  // "Followed By" picks from the clinic's whole staff list, so every
+  // account needs the same real-name resolution, not just the logged-in
+  // one — see clinicianDisplayCore for why a plain users.displayName
+  // dropdown showed "Dr. Clinic Doctor" as an option.
+  const clinicianNameMap = useClinicianNameMap(clinicId);
   const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientHistory, setPatientHistory] = useState<any>(null);
@@ -893,16 +900,18 @@ export default function FollowupModal({
                         setFormData((prev) => ({
                           ...prev,
                           followedByUserId: e.target.value,
-                          followedBy:
-                            selectedUser?.displayName ||
-                            selectedUser?.email ||
-                            "",
+                          followedBy: selectedUser
+                            ? resolveStaffDisplayName(
+                              selectedUser,
+                              clinicianNameMap,
+                            )
+                            : "",
                         }));
                       }}
                     >
                       {users.map((u) => (
                         <SelectItem key={u.id}>
-                          {u.displayName || u.email}
+                          {resolveStaffDisplayName(u, clinicianNameMap)}
                         </SelectItem>
                       ))}
                     </Select>
