@@ -147,4 +147,65 @@ describe("Invoice Printing Utility Footer/Quote Tests", () => {
     );
     expect(html).toContain("General Footer Quote");
   });
+
+  describe("purchaser's PAN on an appointment invoice", () => {
+    const panInvoice = (extra: Record<string, unknown>): any => ({
+      invoiceNumber: "INV-2083.084-0096",
+      invoiceDate: new Date().toISOString(),
+      patientName: "Namita Giri",
+      items: [
+        {
+          appointmentTypeName: "Doctor Consultation",
+          quantity: 1,
+          price: 700,
+          amount: 700,
+        },
+      ],
+      subtotal: 700,
+      totalAmount: 700,
+      paidAmount: 700,
+      balanceAmount: 0,
+      ...extra,
+    });
+
+    const render = (invoice: any, patient: any = mockPatient) =>
+      generateAppointmentInvoiceHTML(
+        invoice,
+        mockClinic,
+        mockLayoutConfig,
+        patient,
+        "A4",
+      );
+
+    it("prints a PAN stored as patientPanVat", () => {
+      // Front-office checkout and the prescription fallback write only this
+      // field — it is also what the patient record uses and what is sent to
+      // Java/IRD. Reading buyerPan alone printed a blank Purchaser's PAN on
+      // every invoice those paths raised.
+      expect(render(panInvoice({ patientPanVat: "555555555" }))).toContain(
+        "555555555",
+      );
+    });
+
+    it("prints a PAN stored as buyerPan", () => {
+      expect(render(panInvoice({ buyerPan: "123456789" }))).toContain(
+        "123456789",
+      );
+    });
+
+    it("falls back to the patient record's PAN", () => {
+      const html = render(panInvoice({}), {
+        ...mockPatient,
+        patientPanVat: "777777777",
+      });
+
+      expect(html).toContain("777777777");
+    });
+
+    it("still renders the PAN row when nothing holds one", () => {
+      // Schedule 6 gives Purchaser's PAN a fixed slot, so it must print
+      // empty rather than vanish.
+      expect(render(panInvoice({}))).toContain("PAN");
+    });
+  });
 });

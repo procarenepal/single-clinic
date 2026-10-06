@@ -678,7 +678,17 @@ export const generateAppointmentInvoiceHTML = (
     invoiceNumber: invoice.invoiceNumber,
     invoiceDate: invoice.invoiceDate,
     patientName: patient?.name || (invoice.patientName && invoice.patientName !== "Unknown Patient" ? invoice.patientName : "Unknown Patient"),
-    patientPanVat: invoice.buyerPan,
+    // Two fields hold the buyer's PAN and different screens write
+    // different ones: the billing counter writes both, the "new
+    // appointment" screen writes only buyerPan, and front-office checkout
+    // (plus the prescription fallback) writes only patientPanVat — which is
+    // also the field the patient record itself uses and the one sent to
+    // Java/IRD. Reading buyerPan alone printed a blank Purchaser's PAN on
+    // every invoice raised anywhere but that one screen, even though the
+    // PAN was on both the invoice and the patient. The patient record is
+    // the last resort so print matches the on-screen preview exactly.
+    patientPanVat:
+      invoice.buyerPan || invoice.patientPanVat || patient?.patientPanVat,
     patientPhone: patient?.mobile,
     patientAddress: patient?.address,
     subtotal: invoice.subtotal || 0,
