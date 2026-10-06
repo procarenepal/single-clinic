@@ -24,6 +24,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
 import { NotificationService } from "@/services/notificationService";
+import { isNotificationForViewer } from "@/services/core/notificationTargetingCore";
 import { useAuthContext } from "@/context/AuthContext";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { patientService } from "@/services/patientService";
@@ -142,28 +143,14 @@ export const DashboardHeader = ({
             createdAt: data.createdAt?.toDate() || new Date(),
           };
 
-          // Filter by role / user
-          let isTargeted = false;
-
-          if (data.targetUserId) {
-            // Exact user match overrides role
-            isTargeted =
-              data.targetUserId === currentUser?.uid ||
-              data.targetUserId === currentDoctorId ||
-              data.targetUserId === currentExpertId;
-          } else if (data.targetRole) {
-            // Role match (fallback if exact user ID isn't used)
-            isTargeted = data.targetRole === userData?.role;
-          } else {
-            // General broadcast - hide from clinical staff
-            const isClinicalStaff =
-              !!currentDoctorId ||
-              !!currentExpertId ||
-              userData?.role === "doctor" ||
-              userData?.role === "expert";
-
-            isTargeted = !isClinicalStaff;
-          }
+          // See notificationTargetingCore — this exact rule is also what
+          // "Mark all read" clears, so the two can no longer disagree.
+          const isTargeted = isNotificationForViewer(data, {
+            userId: currentUser?.uid,
+            role: userData?.role,
+            doctorId: currentDoctorId,
+            expertId: currentExpertId,
+          });
 
           if (isTargeted) {
             list.push(notif);
@@ -770,6 +757,17 @@ export const DashboardHeader = ({
                   ))
                 )}
               </div>
+
+              <button
+                className="w-full px-4 py-2.5 text-[11.5px] font-semibold text-primary hover:bg-surface-2 border-t border-border-base transition-colors"
+                type="button"
+                onClick={() => {
+                  setIsNotifOpen(false);
+                  navigate("/dashboard/notifications");
+                }}
+              >
+                View all notifications
+              </button>
             </div>
           )}
         </div>

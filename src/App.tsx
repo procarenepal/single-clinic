@@ -220,6 +220,9 @@ const EditExpertPage = lazy(
   () => import("@/pages/dashboard/experts/[expertId]/edit"),
 );
 const ProfilePage = lazy(() => import("@/pages/dashboard/profile"));
+const NotificationsPage = lazy(
+  () => import("@/pages/dashboard/notifications"),
+);
 const ActivityLogPage = lazy(() => import("@/pages/dashboard/activity-log"));
 const HomepageSettingsPage = lazy(
   () => import("@/pages/dashboard/settings/homepage"),
@@ -770,6 +773,10 @@ export default function App() {
                             path="billing-help"
                           />
                           <Route element={<ProfilePage />} path="profile" />
+                          <Route
+                            element={<NotificationsPage />}
+                            path="notifications"
+                          />
                           <Route
                             element={<ActivityLogPage />}
                             path="activity-log"

@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
+import { isNotificationForViewer } from "@/services/core/notificationTargetingCore";
 
 export interface ClinicNotification {
   id?: string;
@@ -67,34 +68,25 @@ export class NotificationService {
     },
   ): Promise<void> {
     try {
+      // Scoped to this clinic — without it, every clinic's unread
+      // notifications were fetched (the bare-collection `list` rule allows
+      // that), relying entirely on the client-side filter below to narrow
+      // it back down. Harmless today with one clinic's data in the ledger,
+      // but a real correctness gap the moment that stops being true.
       const q = query(
         collection(db, this.COLLECTION_NAME),
-
+        where("clinicId", "==", clinicId),
         where("read", "==", false),
       );
 
       const snapshot = await getDocs(q);
       const batchPromises = snapshot.docs
-        .filter((docSnap) => {
-          const data = docSnap.data();
-
-          if (userIdOrRole.userId && data.targetUserId === userIdOrRole.userId)
-            return true;
-          if (
-            userIdOrRole.doctorId &&
-            data.targetUserId === userIdOrRole.doctorId
-          )
-            return true;
-          if (
-            userIdOrRole.expertId &&
-            data.targetUserId === userIdOrRole.expertId
-          )
-            return true;
-          if (userIdOrRole.role && data.targetRole === userIdOrRole.role)
-            return true;
-
-          return !data.targetUserId && !data.targetRole; // general notification
-        })
+        .filter((docSnap) =>
+          // Same rule the bell dropdown uses to decide what's unread — see
+          // notificationTargetingCore for why these must not be two
+          // separate reimplementations.
+          isNotificationForViewer(docSnap.data(), userIdOrRole),
+        )
         .map((docSnap) => {
           return updateDoc(doc(db, this.COLLECTION_NAME, docSnap.id), {
             read: true,
