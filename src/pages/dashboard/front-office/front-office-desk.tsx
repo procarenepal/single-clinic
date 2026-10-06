@@ -1940,16 +1940,31 @@ export default function FrontOfficeDesk() {
       (t) => t.id === appt.appointmentTypeId,
     );
 
+    // A doctor's own restricted dashboard only ever lists their own
+    // patients, so "which doctor is this?" has exactly one sensible
+    // answer. Without this, a patient with no prior doctor (a fresh
+    // walk-in, or one whose last-seen doctor was someone else) opened the
+    // modal with the field empty or pointing at a colleague — asking the
+    // doctor to find and select themselves from a clinic-wide dropdown on
+    // their own queue.
+    const restrictedToSelf = Boolean(currentDoctorId) && !hasFullFrontOfficeAccess;
+
     setRoutingAppointment(appt);
     setRoutingCabin(appt.cabinName || "");
-    setRoutingDoctorId(alreadyAssigned || lastSeenDoctorId || "");
+    setRoutingDoctorId(
+      alreadyAssigned ||
+      (restrictedToSelf ? currentDoctorId! : lastSeenDoctorId || ""),
+    );
     setRoutingChargeConsultation(false);
     setRoutingApplyTax(Boolean(apptType?.isTaxable));
     setRoutingAddCommission(apptType?.calculateCommission !== false);
     setRoutingTarget("doctor");
     setIsRoutingModalOpen(true);
 
-    if (lastSeenDoctorId) {
+    // Only true when last-seen actually drove the default — restrictedToSelf
+    // overrides it above, and this toast naming a possibly different doctor
+    // would be wrong (and pointless) in that case.
+    if (lastSeenDoctorId && !restrictedToSelf) {
       const docName =
         doctors.find((d) => d.id === lastSeenDoctorId)?.name || "their usual doctor";
 
@@ -3420,6 +3435,9 @@ export default function FrontOfficeDesk() {
         occupiedCabins={occupiedCabins}
         routingConsultationBillDoctorId={routingConsultationBillDoctorId}
         routingConsultationBillPaid={routingConsultationBillPaid}
+        lockedDoctorId={
+          currentDoctorId && !hasFullFrontOfficeAccess ? currentDoctorId : null
+        }
         patientName={
           routingAppointment ? getPatientName(routingAppointment.patientId) : ""
         }

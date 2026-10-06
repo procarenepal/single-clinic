@@ -44,6 +44,16 @@ interface RoutingModalProps {
    * currently selected, and show it again for a different doctor. */
   routingConsultationBillDoctorId?: string;
   routingConsultationBillPaid?: boolean;
+  /**
+   * Set when this modal was opened from a doctor's own restricted
+   * dashboard — that account only ever acts on its own patients, so
+   * letting it pick a DIFFERENT doctor from a clinic-wide dropdown would
+   * let a single-doctor login reroute a patient to a colleague, which is a
+   * front-desk decision, not theirs to make from their own queue. When
+   * set, "Select Doctor" renders as the doctor's own name instead of a
+   * dropdown.
+   */
+  lockedDoctorId?: string | null;
 }
 
 export const RoutingModal: React.FC<RoutingModalProps> = ({
@@ -75,6 +85,7 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
   occupiedCabins = {},
   routingConsultationBillDoctorId,
   routingConsultationBillPaid = false,
+  lockedDoctorId = null,
 }) => {
   // Already settled for the doctor currently selected in this dropdown —
   // hide the charge checkbox so staff can't re-charge a fee that's already
@@ -160,20 +171,39 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
             <div className="space-y-4 border-b border-border-base pb-4">
               <div>
                 <label className="block text-[11.5px] font-semibold text-text-muted mb-1.5">
-                  Select Doctor <span className="text-red-500">*</span>
+                  {lockedDoctorId ? (
+                    "Doctor"
+                  ) : (
+                    <>
+                      Select Doctor <span className="text-red-500">*</span>
+                    </>
+                  )}
                 </label>
-                <select
-                  className="w-full h-10 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
-                  value={routingDoctorId}
-                  onChange={(e) => setRoutingDoctorId(e.target.value)}
-                >
-                  <option value="">-- Select Doctor --</option>
-                  {doctors.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {clinicianLabel(d)}
-                    </option>
-                  ))}
-                </select>
+                {lockedDoctorId ? (
+                  // This is the doctor's own restricted dashboard — only
+                  // their own patients ever reach it, so there is nothing to
+                  // choose. A free dropdown here would let a single-doctor
+                  // login hand a patient to a colleague, which is a
+                  // front-desk decision.
+                  <p className="h-10 px-3 flex items-center text-[13px] border rounded border-border-base bg-surface-2 text-text-main font-medium">
+                    {doctors.find((d) => d.id === lockedDoctorId)?.name ||
+                      clinicianName ||
+                      "You"}
+                  </p>
+                ) : (
+                  <select
+                    className="w-full h-10 px-3 text-[13px] border rounded outline-none transition-colors border-border-base focus:border-primary bg-surface text-text-main"
+                    value={routingDoctorId}
+                    onChange={(e) => setRoutingDoctorId(e.target.value)}
+                  >
+                    <option value="">-- Select Doctor --</option>
+                    {doctors.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {clinicianLabel(d)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {alreadySettledForSelectedDoctor ? (
