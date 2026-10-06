@@ -20,7 +20,12 @@ import { useAuthContext } from "@/context/AuthContext";
 import {
   dailyReportService,
   DailyReportData,
+  DailyBillingSummary,
 } from "@/services/dailyReportService";
+import {
+  shareOfInvoiceForKind,
+  type RevenueByKind,
+} from "@/services/core/cashLedgerCore";
 import {
   exportDailyReportToExcel,
   exportDailyReportToPDF,
@@ -29,6 +34,43 @@ import { patientService } from "@/services/patientService";
 import { doctorService } from "@/services/doctorService";
 import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { Patient, Doctor, AppointmentType } from "@/types/models";
+import { todayLocalDateString } from "@/services/core/visitBillingCore";
+
+/**
+ * What each revenue card should count, by what was actually sold.
+ *
+ * These cards used to filter on `b.type`, i.e. on which collection the
+ * invoice came from. That stopped being the same question once the billing
+ * counter started putting a consultation, lab tests and medicines on ONE
+ * invoice: all three ended up in the appointment collection, so medicines
+ * and lab tests sold there were reported as clinical revenue and the
+ * Pharmacy and Pathology cards read zero.
+ *
+ * `revenueByKind` is computed per invoice from its own lines. The fallback
+ * below reproduces the old behaviour for any record that lacks it.
+ */
+const kindSplitOf = (b: DailyBillingSummary): RevenueByKind =>
+  b.revenueByKind || {
+    clinical: b.type === "appointment" ? b.totalAmount || 0 : 0,
+    pathology: b.type === "pathology" ? b.totalAmount || 0 : 0,
+    pharmacy: b.type === "pharmacy" ? b.totalAmount || 0 : 0,
+  };
+
+const revenueOf = (b: DailyBillingSummary) => b.totalAmount || 0;
+const paidOf = (b: DailyBillingSummary) => b.paidAmount || 0;
+const balanceOf = (b: DailyBillingSummary) => b.balanceAmount || 0;
+
+const sumByKind = (
+  invoices: DailyBillingSummary[],
+  kind: keyof RevenueByKind,
+  pick: (b: DailyBillingSummary) => number,
+): number =>
+  invoices.reduce(
+    (sum, b) =>
+      sum +
+      shareOfInvoiceForKind(b.totalAmount || 0, kindSplitOf(b)[kind], pick(b)),
+    0,
+  );
 
 // Helper function to format date
 const formatDate = (date: Date | string): string => {
@@ -71,14 +113,25 @@ const formatCurrency = (amount: number): string => {
 export default function DailyReportPage() {
   const { clinicId, userData } = useAuthContext();
   const navigate = useNavigate();
+  // Local calendar date, not toISOString() — that returns the UTC date, so
+  // in Nepal (UTC+5:45) the report defaulted to YESTERDAY between midnight
+  // and 05:45 local.
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    todayLocalDateString(),
   );
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<DailyReportData>({
     patients: [],
     appointments: [],
     billing: [],
+    walletTransactions: [],
+    cash: {
+      depositsCollected: 0,
+      directInvoicePayments: 0,
+      walletApplied: 0,
+      totalCollected: 0,
+      byMethod: {},
+    },
   });
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -215,6 +268,8 @@ export default function DailyReportPage() {
   const invoicesCreatedToday = reportData.billing.filter((b) =>
     isCreatedOnSelectedDate(b.date),
   );
+  // Invoices raised on an earlier day whose dues were collected today.
+  const oldInvoices = reportData.billing.filter((b) => !b.isCreatedToday);
 
   const summaryStats = {
     totalPatients: reportData.patients.length,
@@ -265,45 +320,31 @@ export default function DailyReportPage() {
       (sum, b) => sum + (b.balanceAmount || 0),
       0,
     ),
-    clinicalRevenue: invoicesCreatedToday
-      .filter((b) => b.type === "appointment")
-      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    clinicalRevenueCollected: invoicesCreatedToday
-      .filter((b) => b.type === "appointment")
-      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    clinicalDueCollected: reportData.billing
-      .filter((b) => b.type === "appointment" && !b.isCreatedToday)
-      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    clinicalCashCollected: reportData.billing
-      .filter((b) => b.type === "appointment")
-      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    clinicalDue: invoicesCreatedToday
-      .filter((b) => b.type === "appointment")
-      .reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
-    pathologyRevenue: invoicesCreatedToday
-      .filter((b) => b.type === "pathology")
-      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    pathologyRevenueCollected: invoicesCreatedToday
-      .filter((b) => b.type === "pathology")
-      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    pathologyDueCollected: reportData.billing
-      .filter((b) => b.type === "pathology" && !b.isCreatedToday)
-      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    pathologyDue: invoicesCreatedToday
-      .filter((b) => b.type === "pathology")
-      .reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
-    pharmacyRevenue: invoicesCreatedToday
-      .filter((b) => b.type === "pharmacy")
-      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    pharmacyRevenueCollected: invoicesCreatedToday
-      .filter((b) => b.type === "pharmacy")
-      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    pharmacyDueCollected: reportData.billing
-      .filter((b) => b.type === "pharmacy" && !b.isCreatedToday)
-      .reduce((sum, b) => sum + (b.paidAmount || 0), 0),
-    pharmacyDue: invoicesCreatedToday
-      .filter((b) => b.type === "pharmacy")
-      .reduce((sum, b) => sum + (b.balanceAmount || 0), 0),
+    clinicalRevenue: sumByKind(invoicesCreatedToday, "clinical", revenueOf),
+    clinicalRevenueCollected: sumByKind(
+      invoicesCreatedToday,
+      "clinical",
+      paidOf,
+    ),
+    clinicalDueCollected: sumByKind(oldInvoices, "clinical", paidOf),
+    clinicalCashCollected: sumByKind(reportData.billing, "clinical", paidOf),
+    clinicalDue: sumByKind(invoicesCreatedToday, "clinical", balanceOf),
+    pathologyRevenue: sumByKind(invoicesCreatedToday, "pathology", revenueOf),
+    pathologyRevenueCollected: sumByKind(
+      invoicesCreatedToday,
+      "pathology",
+      paidOf,
+    ),
+    pathologyDueCollected: sumByKind(oldInvoices, "pathology", paidOf),
+    pathologyDue: sumByKind(invoicesCreatedToday, "pathology", balanceOf),
+    pharmacyRevenue: sumByKind(invoicesCreatedToday, "pharmacy", revenueOf),
+    pharmacyRevenueCollected: sumByKind(
+      invoicesCreatedToday,
+      "pharmacy",
+      paidOf,
+    ),
+    pharmacyDueCollected: sumByKind(oldInvoices, "pharmacy", paidOf),
+    pharmacyDue: sumByKind(invoicesCreatedToday, "pharmacy", balanceOf),
   };
 
   // Handle export
@@ -786,18 +827,36 @@ export default function DailyReportPage() {
                     <p className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 mb-1">
                       Cash Collection
                     </p>
+                    {/* Money that physically arrived today. Summing invoice
+                        payments alone missed front-desk cash taken for a
+                        visit that checks out later (or never), and counted
+                        a wallet-funded payment as a fresh collection on the
+                        day it was applied rather than the day it was
+                        taken. See cashLedgerCore. */}
                     <p className="text-[16px] font-bold text-emerald-900 leading-none">
-                      {formatCurrency(summaryStats.totalCashCollected)}
+                      {formatCurrency(reportData.cash.totalCollected)}
                     </p>
                   </div>
                   <div className="bg-emerald-100 p-1.5 rounded flex items-center justify-center">
                     <IoWalletOutline className="w-4 h-4 text-emerald-700" />
                   </div>
                 </div>
-                <div>
+                <div className="space-y-1">
                   <span className="inline-flex items-center text-[9px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded uppercase tracking-widest">
                     Actual Received
                   </span>
+                  {reportData.cash.depositsCollected > 0 && (
+                    <p className="text-[10px] text-emerald-800">
+                      incl. {formatCurrency(reportData.cash.depositsCollected)}{" "}
+                      taken as visit deposits
+                    </p>
+                  )}
+                  {reportData.cash.walletApplied > 0 && (
+                    <p className="text-[10px] text-emerald-700/80">
+                      {formatCurrency(reportData.cash.walletApplied)} applied
+                      from wallet (counted when deposited, not today)
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

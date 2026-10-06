@@ -2,8 +2,15 @@ import { patientService } from "./patientService";
 import { appointmentService } from "./appointmentService";
 import { appointmentBillingService } from "./appointmentBillingService";
 import { pharmacyService } from "./pharmacyService";
+import { walletService } from "./walletService";
 
-import { Patient, Appointment } from "@/types/models";
+import { Patient, Appointment, WalletTransaction } from "@/types/models";
+import {
+  summariseCashCollections,
+  splitRevenueByLineKind,
+  type CashCollectionSummary,
+  type RevenueByKind,
+} from "@/services/core/cashLedgerCore";
 
 export interface DailyBillingSummary {
   id: string;
@@ -26,12 +33,34 @@ export interface DailyBillingSummary {
    * number that silently mixes today's sales with old-due clearance.
    */
   isCreatedToday: boolean;
+  /**
+   * The individual payments recorded against this invoice on the selected
+   * date, with how each was funded. `paidAmount` is their sum; this keeps
+   * the funding method so wallet-funded payments (internal transfers of
+   * money already recognised at deposit time) can be excluded from the
+   * day's cash collections instead of being counted a second time.
+   */
+  paymentsToday?: Array<{ amount: number; method?: string }>;
+  /**
+   * This invoice's revenue attributed to what was actually sold. A single
+   * billing-counter invoice can contain a consultation, lab tests and
+   * medicines, so categorising by the collection it came from reported all
+   * of it as clinical and left pharmacy/pathology at zero.
+   */
+  revenueByKind?: RevenueByKind;
 }
 
 export interface DailyReportData {
   patients: Patient[];
   appointments: Appointment[];
   billing: DailyBillingSummary[];
+  /** Wallet movements on this date — where front-desk cash first lands. */
+  walletTransactions: WalletTransaction[];
+  /**
+   * What the clinic actually collected today, reconciled so that a deposit
+   * applied to an invoice the same day is not counted twice.
+   */
+  cash: CashCollectionSummary;
 }
 
 /**
@@ -150,6 +179,13 @@ export const dailyReportService = {
         createdDate: Date | null,
         paymentHistory: any[] | undefined,
         status?: string,
+        /**
+         * The invoice's own lines. A unified counter invoice can carry
+         * services, lab tests and medicines together, so revenue has to be
+         * attributed by what was sold rather than by which collection the
+         * invoice happens to live in.
+         */
+        lineItems?: Array<{ amount?: number; lineKind?: string | null }>,
       ) => {
         // A cancelled invoice never counts as revenue — matches how the
         // Reports > Pathology tab already excludes cancelled invoices;
@@ -159,6 +195,11 @@ export const dailyReportService = {
 
         let paidToday = 0;
         let hasPaymentToday = false;
+        // Each payment taken today, with how it was funded. A payment whose
+        // method is "wallet" is an internal transfer of money already
+        // recognised on the day its deposit was taken, so cash reporting
+        // must be able to tell the two apart (see cashLedgerCore).
+        const paymentsToday: Array<{ amount: number; method?: string }> = [];
 
         // Sum payments made exactly on this date
         if (paymentHistory && paymentHistory.length > 0) {
@@ -179,6 +220,7 @@ export const dailyReportService = {
             if (pTime >= startOfDay && pTime <= endOfDay) {
               paidToday += p.amount;
               hasPaymentToday = true;
+              paymentsToday.push({ amount: p.amount, method: p.method });
             }
           });
         } else {
@@ -212,6 +254,18 @@ export const dailyReportService = {
             paymentStatus: paymentStatus || "unpaid",
             doctorName,
             isCreatedToday,
+            paymentsToday,
+            // Pharmacy and pathology module invoices are wholly their own
+            // kind; an appointment invoice is split by its lines, because
+            // the billing counter can put all three on one bill.
+            revenueByKind:
+              type === "appointment"
+                ? splitRevenueByLineKind(lineItems, totalAmount)
+                : {
+                  clinical: 0,
+                  pathology: type === "pathology" ? totalAmount : 0,
+                  pharmacy: type === "pharmacy" ? totalAmount : 0,
+                },
           });
         }
       };
@@ -229,6 +283,7 @@ export const dailyReportService = {
           billing.invoiceDate ? new Date(billing.invoiceDate) : null,
           billing.paymentHistory,
           (billing as any).status,
+          (billing as any).items,
         );
       });
 
@@ -291,26 +346,86 @@ export const dailyReportService = {
   },
 
   /**
-   * Get all daily report data for a specific date
-   * @param {string} clinicId - ID of the clinic
-   * @param {Date} date - Date to get report for
-   * @returns {Promise<DailyReportData>} - Complete daily report data
+   * Wallet movements for the day — where front-desk cash first lands,
+   * before any invoice exists for it.
    */
+  async getDailyWalletActivity(
+    clinicId: string,
+    date: Date,
+  ): Promise<WalletTransaction[]> {
+    const startOfDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+    );
+    const endOfDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+
+    try {
+      return await walletService.getClinicTransactionsInRange(
+        clinicId,
+        startOfDay,
+        endOfDay,
+      );
+    } catch (error) {
+      // Never let the wallet read break the rest of the report.
+      console.error("Error fetching daily wallet activity:", error);
+
+      return [];
+    }
+  },
+
   async getDailyReportData(
     clinicId: string,
     date: Date,
   ): Promise<DailyReportData> {
     try {
-      const [patients, appointments, billing] = await Promise.all([
-        this.getDailyPatients(clinicId, date),
-        this.getDailyAppointments(clinicId, date),
-        this.getDailyBilling(clinicId, date),
-      ]);
+      const [patients, appointments, billing, walletTransactions] =
+        await Promise.all([
+          this.getDailyPatients(clinicId, date),
+          this.getDailyAppointments(clinicId, date),
+          this.getDailyBilling(clinicId, date),
+          this.getDailyWalletActivity(clinicId, date),
+        ]);
+
+      // Front-desk cash goes into a wallet at check-in and only reaches an
+      // invoice at checkout, so invoice payment history alone misses money
+      // taken today for a visit that checks out later (or never). Deposits
+      // are recognised on the day they arrive; invoice payments funded FROM
+      // wallet are treated as internal transfers so nothing is counted
+      // twice. See cashLedgerCore for the rule and its tests.
+      const deposits = walletTransactions
+        .filter((t) => t.type === "deposit")
+        .map((t) => ({
+          amount: t.amount,
+          paymentMethod: t.paymentMethod,
+          patientId: t.patientId,
+        }));
+
+      const cash = summariseCashCollections({
+        walletDeposits: deposits,
+        invoicePayments: billing.flatMap((b) =>
+          (b.paymentsToday || []).map((p) => ({
+            amount: p.amount,
+            method: p.method,
+            invoiceId: b.id,
+          })),
+        ),
+      });
 
       return {
         patients,
         appointments,
         billing,
+        walletTransactions,
+        cash,
       };
     } catch (error) {
       console.error("Error fetching daily report data:", error);
