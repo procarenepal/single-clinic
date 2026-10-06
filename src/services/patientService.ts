@@ -15,6 +15,7 @@ import {
   startAfter,
   getCountFromServer,
   deleteDoc,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
@@ -25,6 +26,22 @@ import { sendWelcomeSMS } from "@/services/sendMessageService";
 import { resolveClinicId } from "./currentClinic";
 
 const PATIENTS_COLLECTION = "patients";
+/**
+ * Uniqueness keys for patient mobile numbers, one document per
+ * clinic+mobile. Firestore has no unique constraints, so uniqueness is
+ * enforced by creating this key inside the same transaction as the patient:
+ * the second of two concurrent registrations finds the key already taken
+ * and fails instead of creating a duplicate record.
+ *
+ * This matters beyond tidiness — a duplicated patient splits their wallet,
+ * so a deposit taken at check-in can land on one record while the invoice
+ * is raised against the other, and paying from wallet then fails with
+ * "Insufficient balance" while the collected cash sits on the twin.
+ */
+const PATIENT_MOBILE_KEYS_COLLECTION = "patientMobileKeys";
+
+const mobileKeyId = (clinicId: string, mobile: string) =>
+  `${clinicId}__${normalizeMobile(mobile)}`;
 
 /**
  * Strips country code (+977 / 977) and non-digit chars so that
@@ -140,7 +157,7 @@ export const patientService = {
         }
       });
 
-      const docRef = await addDoc(patientsRef, {
+      const payload = {
         ...cleanData,
         ...(regNumberNumeric && !isNaN(regNumberNumeric)
           ? { regNumberNumeric }
@@ -148,7 +165,48 @@ export const patientService = {
         isActive: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      // Claim the mobile number and create the patient in one transaction.
+      // The pre-submit "is this mobile taken" check is a read followed much
+      // later by a write, so two staff registering the same walk-in at once
+      // both passed it and both created a record.
+      const canEnforceUniqueMobile = Boolean(
+        patientData.mobile && patientData.clinicId,
+      );
+      let docRef;
+
+      if (canEnforceUniqueMobile) {
+        const patientRef = doc(patientsRef);
+        const keyRef = doc(
+          db,
+          PATIENT_MOBILE_KEYS_COLLECTION,
+          mobileKeyId(patientData.clinicId!, patientData.mobile!),
+        );
+
+        await runTransaction(db, async (transaction) => {
+          const existingKey = await transaction.get(keyRef);
+
+          if (existingKey.exists()) {
+            throw new Error(
+              "A patient with this mobile number already exists. Search for them instead of registering again.",
+            );
+          }
+
+          transaction.set(patientRef, payload);
+          transaction.set(keyRef, {
+            patientId: patientRef.id,
+            clinicId: patientData.clinicId,
+            mobile: normalizeMobile(patientData.mobile!),
+            createdAt: serverTimestamp(),
+          });
+        });
+
+        docRef = patientRef;
+      } else {
+        // No mobile recorded (or no clinic scope) — nothing to make unique.
+        docRef = await addDoc(patientsRef, payload);
+      }
 
       // Invalidate cache to ensure new patient appears in search immediately
       if (patientData.clinicId) {
