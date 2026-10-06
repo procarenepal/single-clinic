@@ -1246,11 +1246,19 @@ match /appointments/{appointmentId} {
                   belongsToClinic(resource.data.clinicId) &&
                   request.resource.data.clinicId == resource.data.clinicId));
   
-  // Allow clinic users to delete their own clinic's appointments
-  allow delete: if isAuthenticated() && 
-                (isSuperAdmin() || 
-                 (resource.data.clinicId != null && 
-                  belongsToClinic(resource.data.clinicId)));
+  // An appointment now carries this visit's pre-invoice financial state —
+  // pendingVisitItems (the priced lines that become an IRD invoice at
+  // checkout), pendingVisitDiscount*, and depositedAmount (money already
+  // collected). Deleting one therefore destroys the record of charges and
+  // the link to a collected deposit, with no audit trail — the same reason
+  // appointmentBilling is already `allow delete: if false`.
+  //
+  // Restricted to admins rather than forbidden outright: no ordinary
+  // workflow deletes an appointment (cancellation is a status update, and
+  // the only deleteAppointment* calls in the app target appointmentTypes),
+  // but the admin DatabaseCleaner tool does bulk-delete this collection
+  // when wiping a clinic, so a blanket deny would silently break it.
+  allow delete: if isSuperAdmin();
 }
 
 // Appointments collection-level rules for queries
@@ -3514,6 +3522,35 @@ match /doctorAppointmentReminders/{reminderId} {
   allow read: if isAuthenticated();
 }
 
+// Uniqueness keys for patient mobile numbers — one document per
+// clinic+mobile, written in the same transaction as the patient it claims.
+// Firestore has no unique constraints, so this document IS the constraint:
+// the second of two concurrent registrations finds it taken and fails,
+// instead of creating a duplicate patient whose wallet is then split from
+// the original's.
+match /patientMobileKeys/{keyId} {
+  function belongsToClinic(clinicId) {
+    return isAuthenticated() &&
+           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId;
+  }
+
+  allow read: if isAuthenticated() &&
+              (isSuperAdmin() ||
+               (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
+
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  belongsToClinic(request.resource.data.clinicId)));
+
+  // The claim must not be silently re-pointed at a different patient; an
+  // update would defeat the constraint it exists to enforce. Deletion is
+  // left to admins so a genuinely freed number can be reclaimed.
+  allow update: if false;
+  allow delete: if isSuperAdmin();
+}
+
 match /walletTransactions/{transactionId} {
   function belongsToClinic(clinicId) {
     return isAuthenticated() &&
@@ -3525,10 +3562,23 @@ match /walletTransactions/{transactionId} {
               (isSuperAdmin() ||
                (resource.data.clinicId != null && belongsToClinic(resource.data.clinicId))) || (isAuthenticated() && resource == null);
 
-  allow write: if isAuthenticated() &&
-               (isSuperAdmin() ||
-                (request.resource.data.clinicId != null &&
-                 belongsToClinic(request.resource.data.clinicId)));
+  // APPEND-ONLY LEDGER. This collection is the only record that money was
+  // physically taken at the front desk before any invoice exists, so it has
+  // to be tamper-evident: a blanket `write` also granted update and delete,
+  // which let any clinic user rewrite or erase a record of collected cash
+  // (and, combined with a directly-writable patients.walletBalance, set a
+  // balance and delete the entries that would contradict it).
+  //
+  // Safe to restrict: walletService only ever creates these documents
+  // (addDoc / transaction.set). Nothing in the app updates or deletes one.
+  // Corrections are made by writing a compensating transaction, exactly as
+  // refundFunds already does.
+  allow create: if isAuthenticated() &&
+                (isSuperAdmin() ||
+                 (request.resource.data.clinicId != null &&
+                  belongsToClinic(request.resource.data.clinicId)));
+  allow update: if false;
+  allow delete: if false;
 }
 
 match /walletTransactions {
