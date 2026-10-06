@@ -47,6 +47,12 @@ import { appointmentTypeService } from "@/services/appointmentTypeService";
 import { PatientNoteEntriesService } from "@/services/patientNoteEntriesService";
 import { referralPartnerService } from "@/services/referralPartnerService";
 import { expertService } from "@/services/expertService";
+import { specialityService } from "@/services/specialityService";
+import {
+  resolveSpecialityLabel,
+  looksLikeUnresolvedId,
+  type SpecialityOption,
+} from "@/services/core/specialityDisplayCore";
 import { hrService } from "@/services/hrService";
 import { appointmentBillingService } from "@/services/appointmentBillingService";
 import { packageService } from "@/services/packageService";
@@ -250,6 +256,7 @@ export default function FrontOfficeDesk() {
     [],
   );
   const [experts, setExperts] = useState<Expert[]>([]);
+  const [specialities, setSpecialities] = useState<SpecialityOption[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [billingSettings, setBillingSettings] =
@@ -985,6 +992,7 @@ export default function FrontOfficeDesk() {
           referralPartnersData,
           expertsData,
           staffData,
+          specialitiesData,
         ] = await Promise.all([
           patientService.getPatients(clinicId),
           doctorService.getDoctors(clinicId),
@@ -996,6 +1004,11 @@ export default function FrontOfficeDesk() {
             clinicId || undefined,
           ),
           hrService.getStaffByClinic(clinicId!),
+          // A clinician's `speciality` can hold a speciality's document id,
+          // so the list is needed to render a name instead of that id.
+          // Never let it break the desk — the resolver falls back to the
+          // stored value when the list is empty.
+          specialityService.getSpecialities(true, clinicId).catch(() => []),
         ]);
 
         if (isActive) {
@@ -1005,6 +1018,7 @@ export default function FrontOfficeDesk() {
           setReferralPartners(referralPartnersData);
           setExperts(expertsData || []);
           setStaff(staffData || []);
+          setSpecialities(specialitiesData || []);
 
           // Pre-select first doctor for quick walk-in intake
           if (doctorsData.length > 0) {
@@ -1256,22 +1270,39 @@ export default function FrontOfficeDesk() {
         ? experts.find((e) => e.id === appt.assignedExpertId)
         : null;
 
+    // A clinician's `speciality` may hold a speciality's document id rather
+    // than its name (see specialityDisplayCore), so it is never printed raw.
+    // An id that resolves to nothing is dropped entirely instead of being
+    // shown to staff as a meaningless string.
+    const label = (stored: string | undefined, fallback: string) => {
+      const resolved = resolveSpecialityLabel(stored, specialities);
+
+      return resolved && !looksLikeUnresolvedId(resolved) ? resolved : fallback;
+    };
+
     if (doc && exp) {
       if (stage === "doctor") {
-        return doc.speciality || "Dermatology";
+        return label(doc.speciality, "Dermatology");
       } else if (stage === "expert") {
-        return exp.speciality || "Skin & Laser Consultant";
+        return label(exp.speciality, "Skin & Laser Consultant");
       } else {
-        return `${doc.speciality || "Dermatology"} & ${exp.speciality || "Laser Consultant"}`;
+        const docLabel = label(doc.speciality, "Dermatology");
+        const expLabel = label(exp.speciality, "Laser Consultant");
+
+        // A doctor and an expert on the same visit often share a speciality
+        // — once ids resolve to names this printed it twice ("General
+        // Practice & General Practice").
+        return docLabel === expLabel ? docLabel : `${docLabel} & ${expLabel}`;
       }
     }
 
-    if (exp) return exp.speciality || "Skin & Laser Consultant";
-    if (doc) return doc.speciality || "Dermatology";
+    if (exp) return label(exp.speciality, "Skin & Laser Consultant");
+    if (doc) return label(doc.speciality, "Dermatology");
 
     const fallbackExp = experts.find((e) => e.id === appt.doctorId);
 
-    if (fallbackExp) return fallbackExp.speciality || "Skin & Laser Consultant";
+    if (fallbackExp)
+      return label(fallbackExp.speciality, "Skin & Laser Consultant");
 
     return appt.doctorId === "unassigned"
       ? "Skin & Laser Consultant"
@@ -5801,7 +5832,14 @@ export default function FrontOfficeDesk() {
               },
               {
                 id: "doctor",
-                name: "👨‍⚕️ DOCTOR CABINS",
+                // "Queue", not "Cabins". This tab deliberately holds both
+                // the patients physically in a cabin AND the ones who have
+                // finished triage and are waiting to be sent in — there is
+                // no triage-done tab, so naming it for the cabin made it
+                // contradict the "In Doctor Cabin" stat card sitting beside
+                // it, which counts only those actually in one. Same for
+                // Expert below.
+                name: "👨‍⚕️ DOCTOR QUEUE",
                 count: appointments
                   .filter(
                     (a) => !currentDoctorId || a.doctorId === currentDoctorId,
@@ -5815,7 +5853,7 @@ export default function FrontOfficeDesk() {
               },
               {
                 id: "expert",
-                name: "👥 EXPERT CABINS",
+                name: "👥 EXPERT QUEUE",
                 count: appointments
                   .filter(
                     (a) =>
