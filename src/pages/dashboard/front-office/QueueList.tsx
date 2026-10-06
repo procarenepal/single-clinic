@@ -619,19 +619,43 @@ export const QueueList: React.FC<QueueListProps> = ({
                                     </button>
                                   </>
                                 ) : (
-                                  <button
-                                    className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
-                                    disabled={isActionPending?.(
-                                      `complete-consultation-${appt.id}`,
-                                    )}
-                                    type="button"
-                                    onClick={() => handleCompleteConsultation(appt.id)}
-                                  >
-                                    {isActionPending?.(
-                                      `complete-consultation-${appt.id}`,
-                                    ) && <ButtonSpinner />}
-                                    Complete (No Log)
-                                  </button>
+                                  <>
+                                    {/* The doctor stage can route a patient
+                                        onward to the expert, but the expert
+                                        stage had no way back: the only
+                                        backward action was "Send Back", which
+                                        returns the patient all the way to the
+                                        lobby and clears doctorId,
+                                        assignedExpertId and triage state. So
+                                        "the expert is done, the doctor needs
+                                        to review" meant destroying the visit's
+                                        routing history and starting over.
+                                        Routing to doctor already resets
+                                        doctorConsultationCompleted, which is
+                                        exactly what moves the stage back — the
+                                        action simply was never offered. */}
+                                    <button
+                                      className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-purple-500/50 text-purple-600 hover:text-purple-700 hover:bg-purple-50 transition-colors outline-none flex items-center gap-1.5"
+                                      type="button"
+                                      onClick={() => handleSendToDoctor(appt.id)}
+                                    >
+                                      <IoPeopleOutline className="w-3.5 h-3.5" />
+                                      Back to Doctor
+                                    </button>
+                                    <button
+                                      className="h-8 px-2.5 rounded text-[11.5px] font-medium border border-border-base text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors outline-none disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                      disabled={isActionPending?.(
+                                        `complete-consultation-${appt.id}`,
+                                      )}
+                                      type="button"
+                                      onClick={() => handleCompleteConsultation(appt.id)}
+                                    >
+                                      {isActionPending?.(
+                                        `complete-consultation-${appt.id}`,
+                                      ) && <ButtonSpinner />}
+                                      Complete (No Log)
+                                    </button>
+                                  </>
                                 )}
                                 {stage === "doctor" &&
                                   appt.assignedExpertId &&
