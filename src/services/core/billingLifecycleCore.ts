@@ -298,8 +298,14 @@ export function buildCreditNoteSkeleton<T extends CreditNotableBilling>(
     id: _originalId,
     createdAt: _originalCreatedAt,
     updatedAt: _originalUpdatedAt,
+    // An idempotency discriminator identifies ONE filing. Inheriting the
+    // original's would make this credit note claim to be that same filing —
+    // harmless only by luck today (negated amounts change the content hash),
+    // but it would silently collapse any future same-amount document built
+    // from an invoice into the original instead of filing it.
+    idempotencyDiscriminator: _originalDiscriminator,
     ...originalWithoutId
-  } = original;
+  } = original as T & { idempotencyDiscriminator?: string };
 
   const reversedTotalAmount = reverse(original.totalAmount);
   const pct = Math.round(scale * 100);
