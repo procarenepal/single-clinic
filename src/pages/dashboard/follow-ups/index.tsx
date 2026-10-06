@@ -31,6 +31,7 @@ import toast from "react-hot-toast";
 import FollowupModal from "./FollowupModal";
 
 import { useAuthContext } from "@/context/AuthContext";
+import { useLoggedInClinicianName } from "@/hooks/useLoggedInClinicianName";
 import { followupService, isFollowupOpen } from "@/services/followupService";
 import { rbacService } from "@/services/rbacService";
 
@@ -68,6 +69,10 @@ const renderServiceProduct = (item: PatientFollowup, filter: string) => {
 
 export default function FollowupsPage() {
   const { currentUser, clinicId } = useAuthContext();
+  // See FollowupModal.tsx / useLoggedInClinicianName — the same log entries
+  // written there are written here too (quick status changes, "Marked
+  // complete"), so the attribution needs the same fix.
+  const loggedInClinicianName = useLoggedInClinicianName("");
   const [followups, setFollowups] = useState<PatientFollowup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -370,7 +375,7 @@ export default function FollowupsPage() {
     const newLog = {
       date: new Date(),
       note: `${field === "session" ? "Session" : field === "category" ? "Category" : field === "initStatus" ? "Initial Status" : "Updated Status"} changed to '${value}'`,
-      user: currentUser?.displayName || "Staff",
+      user: loggedInClinicianName || "Staff",
     };
 
     payload.logs = [...(item.logs || []), newLog];
@@ -423,7 +428,8 @@ export default function FollowupsPage() {
           {
             date: new Date(),
             note: "Marked complete",
-            user: currentUser?.displayName || currentUser?.email || undefined,
+            user:
+              loggedInClinicianName || currentUser?.email || undefined,
           },
         ],
       });

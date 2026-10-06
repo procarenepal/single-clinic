@@ -25,6 +25,7 @@ import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import toast from "react-hot-toast";
 
 import { useAuthContext } from "@/context/AuthContext";
+import { useLoggedInClinicianName } from "@/hooks/useLoggedInClinicianName";
 import { followupService } from "@/services/followupService";
 import { patientService } from "@/services/patientService";
 import { prescriptionService } from "@/services/prescriptionService";
@@ -48,6 +49,16 @@ export default function FollowupModal({
   onSaved,
 }: FollowupModalProps) {
   const { clinicId, currentUser } = useAuthContext();
+  // The real clinical-profile name for whoever is logged in, when they
+  // have one — not the Auth account's own name, which can go stale (see
+  // useLoggedInClinicianName). Every noteHistory/log entry and the
+  // "Followed By" default below is a permanent attribution on the
+  // patient's follow-up record, not just a label, so getting the name
+  // right here matters more than on a screen that's merely displayed.
+  // Empty-string fallback preserves this file's existing behaviour where
+  // nothing resolves — callers below add their own visible "Staff"
+  // fallback on top, matching what was there before.
+  const loggedInClinicianName = useLoggedInClinicianName("");
   const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientHistory, setPatientHistory] = useState<any>(null);
@@ -153,7 +164,7 @@ export default function FollowupModal({
           nextFollowupDate: followup.nextFollowupDate
             ? new Date(followup.nextFollowupDate).toISOString().split("T")[0]
             : "",
-          followedBy: followup.followedBy || currentUser?.displayName || "",
+          followedBy: followup.followedBy || loggedInClinicianName,
           followedByUserId:
             followup.followedByUserId || currentUser?.uid || "",
           noteHistory: followup.noteHistory || [],
@@ -182,7 +193,7 @@ export default function FollowupModal({
           logs: [],
           sessionStatuses: {},
           nextFollowupDate: "",
-          followedBy: currentUser?.displayName || "",
+          followedBy: loggedInClinicianName,
           followedByUserId: currentUser?.uid || "",
           noteHistory: [],
           newNote: "",
@@ -313,7 +324,7 @@ export default function FollowupModal({
         finalNoteHistory.push({
           date: new Date(),
           note: formData.newNote.trim(),
-          user: currentUser?.displayName || "Staff",
+          user: loggedInClinicianName || "Staff",
         });
       }
 
@@ -361,13 +372,13 @@ export default function FollowupModal({
             newLog = {
               date: new Date(),
               note: `Status changed to '${formData.updatedStatus || "None"}'`,
-              user: currentUser?.displayName || "Staff",
+              user: loggedInClinicianName || "Staff",
             };
           } else if (formData.session !== followup.session) {
             newLog = {
               date: new Date(),
               note: `Session updated to '${formData.session}'`,
-              user: currentUser?.displayName || "Staff",
+              user: loggedInClinicianName || "Staff",
             };
           }
         }
@@ -1037,7 +1048,7 @@ export default function FollowupModal({
                                   {
                                     date: new Date(),
                                     note: prev.newNote.trim(),
-                                    user: currentUser?.displayName || "Staff",
+                                    user: loggedInClinicianName || "Staff",
                                   },
                                 ],
                                 newNote: "",
@@ -1058,7 +1069,7 @@ export default function FollowupModal({
                                 {
                                   date: new Date(),
                                   note: prev.newNote.trim(),
-                                  user: currentUser?.displayName || "Staff",
+                                  user: loggedInClinicianName || "Staff",
                                 },
                               ],
                               newNote: "",
