@@ -2239,7 +2239,14 @@ export const appointmentBillingService = {
     });
 
     await reverseCommissionsForBilling(id);
-    await refundWalletIfApplicable(billing, cancellationNote, "system");
+    // The signed-in user, not "system": the wallet ledger rule requires the
+    // row's actor to be the caller, and a refund triggered from a browser
+    // was never performed by "system" anyway.
+    await refundWalletIfApplicable(
+      billing,
+      cancellationNote,
+      auth.currentUser?.uid || "system",
+    );
   },
 
   /**

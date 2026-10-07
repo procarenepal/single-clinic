@@ -15,7 +15,8 @@
     "migrate:auto-assign": "tsx src/scripts/migrate-auto-assign.ts",
     "seed:pages": "tsx src/scripts/seed-pages.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:rules": "npx -y firebase-tools@13.35.1 emulators:exec --only firestore --project demo-procare --config firebase.emulator.json \"node tests/firestore.rules.test.mjs\""
   },
   "npmrc": ".npmrc",
   "dependencies": {
@@ -83,6 +84,7 @@
     "@eslint/compat": "1.2.8",
     "@eslint/eslintrc": "3.3.1",
     "@eslint/js": "9.25.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "20.5.7",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",

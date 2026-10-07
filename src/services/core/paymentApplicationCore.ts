@@ -65,10 +65,18 @@ export interface PaymentInput {
 }
 
 export interface AppliedPayment {
-  /** Fields to write — only the ones a payment legitimately changes. */
+  /**
+   * Fields to write — only the ones a payment legitimately changes.
+   * totalAmount / discountAmount / mainDiscountAmount are present only when
+   * a checkout discount was applied: rewriting an unchanged total with a
+   * re-rounded value would register as a change on a filed invoice, whose
+   * amounts the security rules (correctly) refuse to let a client touch —
+   * and a legacy total carrying float drift would then make the invoice
+   * impossible to collect on.
+   */
   updateData: {
-    totalAmount: number;
-    discountAmount: number;
+    totalAmount?: number;
+    discountAmount?: number;
     mainDiscountAmount?: number;
     paidAmount: number;
     balanceAmount: number;
@@ -138,8 +146,6 @@ export function applyPayment(
   if (notes) event.notes = notes;
 
   const updateData: AppliedPayment["updateData"] = {
-    totalAmount,
-    discountAmount,
     paidAmount,
     balanceAmount,
     paymentStatus,
@@ -148,8 +154,15 @@ export function applyPayment(
     paymentHistory: [...(current.paymentHistory || []), event],
   };
 
-  if (input.trackMainDiscount) {
-    updateData.mainDiscountAmount = round2((current.mainDiscountAmount || 0) + discount);
+  // Only a checkout discount changes the invoice's amounts; a plain payment
+  // leaves them exactly as stored. See the note on AppliedPayment.updateData.
+  if (discount > 0) {
+    updateData.totalAmount = totalAmount;
+    updateData.discountAmount = discountAmount;
+
+    if (input.trackMainDiscount) {
+      updateData.mainDiscountAmount = round2((current.mainDiscountAmount || 0) + discount);
+    }
   }
 
   if (reference) updateData.paymentReference = reference;

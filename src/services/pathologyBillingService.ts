@@ -941,7 +941,12 @@ export const pathologyBillingService = {
     });
 
     await reverseCommissionsForBilling(id);
-    await refundWalletIfApplicable(billing, cancellationNote, "system");
+    // The signed-in user, not "system" — see appointmentBillingService.
+    await refundWalletIfApplicable(
+      billing,
+      cancellationNote,
+      auth.currentUser?.uid || "system",
+    );
   },
 
   /**

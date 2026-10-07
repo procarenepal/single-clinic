@@ -111,6 +111,12 @@ export const walletService = {
         });
         dbTransaction.update(patientRef, {
           walletBalance: increment(amount),
+          // Names the ledger row this movement belongs to. The patients
+          // security rule refuses any walletBalance change that does not
+          // point at a row created in the same transaction for exactly
+          // this amount, and the walletTransactions rule checks the inverse
+          // — so the ledger is enforced, not merely kept.
+          lastWalletTxnId: transactionRef.id,
           updatedAt: Timestamp.now(),
         });
       });
@@ -219,6 +225,8 @@ export const walletService = {
     });
     transaction.update(patientSnap.ref, {
       walletBalance: increment(-input.amount),
+      // See addFunds — the rules require the movement to name its row.
+      lastWalletTxnId: transactionRef.id,
       updatedAt: Timestamp.now(),
     });
 
@@ -272,6 +280,8 @@ export const walletService = {
         });
         dbTransaction.update(patientRef, {
           walletBalance: increment(amount),
+          // See addFunds — the rules require the movement to name its row.
+          lastWalletTxnId: transactionRef.id,
           updatedAt: Timestamp.now(),
         });
       });

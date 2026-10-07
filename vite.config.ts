@@ -73,6 +73,8 @@ export default defineConfig(({ mode }) => ({
     // in the repo) — without this, a leftover worktree gets picked up by
     // vitest's default glob and its tests run (and can fail) alongside the
     // real suite, which has nothing to do with any actual code change.
-    exclude: [...configDefaults.exclude, ".claude/**"],
+    // tests/** holds the Firestore security-rules suite, which needs the
+    // Firestore emulator and is run by `npm run test:rules`, not vitest.
+    exclude: [...configDefaults.exclude, ".claude/**", "tests/**"],
   },
 }));
