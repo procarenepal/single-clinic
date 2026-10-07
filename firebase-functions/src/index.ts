@@ -19,6 +19,9 @@ import { SMSService, db } from "./smsService";
 // which accepted any `endpoint` from an unauthenticated caller (an open
 // SSRF proxy that would forward arbitrary payloads to any URL).
 // ==========================================
+// Nightly Firestore export — IRD procedure §6(ग)/§8(घ). See firestoreBackup.ts.
+export { firestoreBackup } from "./firestoreBackup";
+
 const ALLOWED_IRD_HOSTS = ["https://cbapi.ird.gov.np"];
 
 export const irdProxy = onRequest({ cors: true }, async (req, res) => {
