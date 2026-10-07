@@ -5,6 +5,22 @@ import { configDefaults } from "vitest/config";
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tsconfigPaths()],
+  server: {
+    watch: {
+      // The dev server watches the whole repo by default, which includes
+      // the Java backend's build output. Maven rewrites target/ during
+      // every compile, and chokidar's watcher died with EBUSY on a
+      // migration file mid-write — taking the frontend down every time
+      // `mvnw test` ran. Nothing under billing-backend is a frontend
+      // source. The backup dumps at the repo root are large and inert.
+      ignored: [
+        "**/billing-backend/**",
+        "**/firestore-backup-*/**",
+        "**/full-wipe-backup-*/**",
+        "**/*.sql",
+      ],
+    },
+  },
   build: {
     sourcemap: false,
     chunkSizeWarningLimit: 1000,
